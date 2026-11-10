@@ -149,6 +149,70 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 self.assertEqual(contracts[name].result_phase,
                                  ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
 
+    def test_classmethod_guards_capture_before_pair_acquisition(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        output = self.generate(source, runtime=True)
+        start = output.index("TARGET(LOAD_ATTR_CLASSMETHOD) {")
+        end = output.find("TARGET(", start + 1)
+        handler = output[start:end]
+        positions = [handler.index(text) for text in (
+            "#ifdef Py_GIL_DISABLED", "Py_TYPE(owner_o) != &PyType_Type",
+            "class_version = fb->class_version", "tp_version_tag",
+            "_PyValueGuarded_Load(class_value)",
+            "Py_IS_TYPE(cm, &PyClassMethod_Type)",
+            "_PyClassMethod_GetFunc(cm)",
+            "target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)",
+            "attr = PyValue_DUP(PyValue_FromObjectBorrow(target))",
+            "self =", "STAT_INC(LOAD_ATTR, hit)",
+        )]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("_PyValueGuarded class_value = fb->class_value;", handler)
+        self.assertIn("const bool gil_disabled = true;", handler)
+        self.assertIn("const bool gil_disabled = false;", handler)
+        self.assertLess(handler.index("if (gil_disabled)"),
+                        handler.index("_PyValueGuarded_Load(class_value)"))
+        self.assertNotIn("retire_published_values(", handler)
+        self.assertNotIn("_PUSH_NULL_CONDITIONAL", handler)
+        self.assertNotIn("PyObject *class_value", handler)
+
+    def test_classmethod_family_extent_and_number(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c")
+        with cases.handle_stderr():
+            analysis = cases.analyzer.analyze_files([str(source)])
+        with cases.test_tools.imports_under_tool("cases_generator"):
+            from opcode_metadata_generator import feedback_fields
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        name = "LOAD_ATTR_CLASSMETHOD"
+        self.assertEqual(analysis.opmap[name], 111)
+        self.assertEqual(analysis.instructions[name].family.name, "LOAD_ATTR")
+        self.assertEqual(feedback_fields(analysis.instructions[name]),
+                         [(2, 2, "class_version"), (6, 4, "class_value")])
+        self.assertEqual(formats[name].roles, formats["LOAD_ATTR"].roles)
+        self.assertEqual(formats[name].fb_layout, "_PyFbAttr")
+        self.assertEqual(contracts["LOAD_ATTR"].writes, (1, ir_generator.EXT_BIT0))
+        self.assertEqual(contracts[name].writes, (2, ir_generator.EXT_FIXED))
+
+    def test_classmethod_unknown_target_reader_still_escapes(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        source = source.replace("_PyClassMethod_GetFunc(cm)", "unknown_getter(cm)")
+        with self.assertRaisesRegex(SyntaxError, "view 'owner' is read after a call"):
+            self.generate(source, runtime=True)
+
+    def test_classmethod_capture_requires_audited_readers(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        for reader in ("_PyClassMethod_GetFunc", "_PyValueGuarded_Load"):
+            with self.subTest(reader=reader):
+                remaining = tuple(name for name in cases.analyzer.NON_ESCAPING_FUNCTIONS
+                                  if name != reader)
+                with mock.patch.object(cases.analyzer, "NON_ESCAPING_FUNCTIONS", remaining):
+                    with self.assertRaisesRegex(SyntaxError, "view 'owner' is read after a call"):
+                        self.generate(source, runtime=True)
+
 
 if __name__ == "__main__":
     unittest.main()

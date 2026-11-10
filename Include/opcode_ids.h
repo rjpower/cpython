@@ -117,6 +117,7 @@ extern "C" {
 #define STORE_ATTR                             108
 #define STORE_DEREF                            109
 #define STORE_FAST                             110
+#define LOAD_ATTR_CLASSMETHOD                  111
 #define STORE_GLOBAL                           113
 #define STORE_NAME                             114
 #define SWAP                                   115

@@ -12692,6 +12692,101 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_CLASSMETHOD) {
+            int opcode = LOAD_ATTR_CLASSMETHOD;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_CLASSMETHOD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            assert(!IR_IS_LOCAL(IR_A(ir_word)) && IR_A(ir_word) != IR_NO_DST);
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue self;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_BUILTIN_METACLASS
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                #ifdef Py_GIL_DISABLED
+                const bool gil_disabled = true;
+                #else
+                const bool gil_disabled = false;
+                #endif
+                if (gil_disabled) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                if (Py_TYPE(owner_o) != &PyType_Type) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _CHECK_ATTR_CLASS
+            {
+                uint32_t class_version = fb->class_version;
+                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                if (!PyType_Check(owner_o)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                assert(class_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_CLASSMETHOD
+            {
+                _PyValueGuarded class_value = fb->class_value;
+                assert(oparg & 1);
+                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                assert(PyValue_IsObject(descriptor));
+                PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
+                if (!Py_IS_TYPE(cm, &PyClassMethod_Type)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                PyObject *target = _PyClassMethod_GetFunc(cm);
+                if (target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
+                self = IR_TAKE(owner, ir_own_B);
+                STAT_INC(LOAD_ATTR, hit);
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) {
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
             (void)(opcode);

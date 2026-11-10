@@ -2581,6 +2581,7 @@ dummy_func(
             LOAD_ATTR_SLOT,
             LOAD_ATTR_CLASS,
             LOAD_ATTR_CLASS_WITH_METACLASS_CHECK,
+            LOAD_ATTR_CLASSMETHOD,
             LOAD_ATTR_PROPERTY,
             LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN,
             LOAD_ATTR_METHOD_WITH_VALUES,
@@ -2823,6 +2824,39 @@ dummy_func(
             _CHECK_ATTR_CLASS +
             _LOAD_ATTR_CLASS +
             _PUSH_NULL_CONDITIONAL;
+
+        op(_GUARD_BUILTIN_METACLASS, (owner -- owner)) {
+            #ifdef Py_GIL_DISABLED
+            const bool gil_disabled = true;
+            #else
+            const bool gil_disabled = false;
+            #endif
+            EXIT_IF(gil_disabled);
+            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+            EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
+        }
+
+        op(_LOAD_ATTR_CLASSMETHOD, (class_value/4, owner -- attr, self)) {
+            assert(oparg & 1);
+            PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+            assert(PyValue_IsObject(descriptor));
+            PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
+            EXIT_IF(!Py_IS_TYPE(cm, &PyClassMethod_Type));
+            // __init__ can replace the wrapped callable without invalidating
+            // the class version. Capture it before explicit argument evaluation.
+            PyObject *target = _PyClassMethod_GetFunc(cm);
+            EXIT_IF(target == NULL || !Py_IS_TYPE(target, &PyFunction_Type));
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
+            self = TAKE(owner);
+            STAT_INC(LOAD_ATTR, hit);
+        }
+
+        macro(LOAD_ATTR_CLASSMETHOD) =
+            unused/1 +
+            _GUARD_BUILTIN_METACLASS +
+            _CHECK_ATTR_CLASS +
+            unused/2 +
+            _LOAD_ATTR_CLASSMETHOD;
 
         op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, fget/4, owner -- new_frame)) {
             assert((oparg & 1) == 0);

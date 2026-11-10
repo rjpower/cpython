@@ -404,6 +404,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
                 case LOAD_ATTR_CLASS:
                 case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
+                case LOAD_ATTR_CLASSMETHOD:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -1607,6 +1608,8 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             return -1;
         }
     }
+    uint8_t opcode = metaclass_check ? LOAD_ATTR_CLASS_WITH_METACLASS_CHECK
+                                    : LOAD_ATTR_CLASS;
     switch (kind) {
         case MUTABLE:
             // special case for enums which has Py_TYPE(descr) == cls
@@ -1630,17 +1633,29 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
                 maybe_enable_deferred_ref_count(descr);
             }
 #endif
-            fb->class_value = _PyValueGuarded_FromBorrow(PyValue_Borrow(descriptor));
-            fb->class_version = tp_version;
-            if (metaclass_check) {
-                fb->type_version = meta_version;
-                specialize(instr, LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
-            }
-            else {
-                specialize(instr, LOAD_ATTR_CLASS);
-            }
+            break;
+        case PYTHON_CLASSMETHOD: {
+#ifdef Py_GIL_DISABLED
+            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
             PyValue_XCLOSE(descriptor);
-            return 0;
+            return -1;
+#else
+            if (!(instr_oparg(instr) & 1) || Py_TYPE(cls) != &PyType_Type) {
+                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
+                PyValue_XCLOSE(descriptor);
+                return -1;
+            }
+            assert(Py_IS_TYPE(descr, &PyClassMethod_Type));
+            PyObject *target = _PyClassMethod_GetFunc(descr);
+            if (target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)) {
+                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
+                PyValue_XCLOSE(descriptor);
+                return -1;
+            }
+            opcode = LOAD_ATTR_CLASSMETHOD;
+            break;
+#endif
+        }
 #ifdef Py_STATS
         case ABSENT:
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
@@ -1652,6 +1667,14 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             PyValue_XCLOSE(descriptor);
             return -1;
     }
+    fb->class_value = _PyValueGuarded_FromBorrow(PyValue_Borrow(descriptor));
+    fb->class_version = tp_version;
+    if (metaclass_check) {
+        fb->type_version = meta_version;
+    }
+    specialize(instr, opcode);
+    PyValue_XCLOSE(descriptor);
+    return 0;
 }
 
 // Please collect stats carefully before and after modifying. A subtle change

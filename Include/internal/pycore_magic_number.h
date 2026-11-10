@@ -345,8 +345,9 @@ Known values:
    64414: delegated throw has an explicit absolute completion target
    64415: source boundaries respect generator resume barriers
    64416: fused branch source coverage follows the encoded control edge
-   64417: attribute feedback separates guarded values in 48-byte entries */
-#define PYC_MAGIC_NUMBER 64417
+   64417: attribute feedback separates guarded values in 48-byte entries
+   64418: class-receiver classmethod forwarding reuses retired opcode 111 */
+#define PYC_MAGIC_NUMBER 64418
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

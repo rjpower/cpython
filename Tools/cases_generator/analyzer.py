@@ -583,6 +583,8 @@ NON_ESCAPING_FUNCTIONS = (
     "PyFloat_FromDouble",
     "PyFunction_GET_CODE",
     "PyFunction_GET_GLOBALS",
+    "_PyClassMethod_GetFunc",
+    "_PyValueGuarded_Load",
     "PyList_GET_ITEM",
     "PyList_GET_VALUE",
     "PyList_GET_SIZE",

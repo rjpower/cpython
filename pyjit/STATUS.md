@@ -1,9 +1,20 @@
 # Project status
 
-Candidate46 **b8e7e1bee66** is committed and reviewed. **Hold performance
-promotion; golden39 stays unchanged.** The [current report](issues/object-call-20261109/checkpoint46-report.md),
-[complete tables](issues/object-call-20261109/checkpoint46-tables.md) and
-[next plan](issues/object-call-20261109/plan.md) own this checkpoint.
+The active round targets **DeltaBlue ordinary call setup and teardown**, using
+committed candidate46 `b8e7e1bee66` as its development baseline. See the
+[new plan](issues/deltablue-call-model-20261110/plan.md) and
+[grouped design](issues/deltablue-call-model-20261110/design-overview.md). One broad
+Astra review is complete; it selected uniform canonical class reads, classmethod
+pair forwarding and complete conditional leaf-region elision. Sol approved the
+first lookup proposal and is implementing it while checking leaf observation
+and completion contracts. No new runtime change has landed yet.
+
+The user permits useful incremental progress with documented tradeoffs. Earlier46
+was held under the previous performance policy; its
+[report](issues/object-call-20261109/checkpoint46-report.md) and
+[tables](issues/object-call-20261109/checkpoint46-tables.md) remain historical
+results, not a requirement to finish CPI investigations before improving calls.
+Golden39 remains an immutable comparison control.
 
 | Elapsed candidate/control | /frozen39 | /upstream |
 | --- | ---: | ---: |
@@ -18,7 +29,8 @@ Full29 uses two balanced pairs per kernel; micros six longer pairs. Class is
 near upstream in aggregate with substantial pair variation. Six-pair golden
 confirmations show coroutines +5.78%, spectral norm +8.11%, comprehensions
 +9.48%, all pairs slower. Logging improves 2.68% and DeltaBlue 1.42% in every
-confirmation pair. The near-flat mean does not waive repeated losses.
+confirmation pair. These repeated losses remain reported under the revised
+incremental landing policy; they do not block structural call work.
 
 Matched current/golden PMU shows nearly equal instructions and branches but
 5–10% more cycles in the three regressions. Aggregate CPI is higher; branch-miss
@@ -55,9 +67,8 @@ the current report. No candidate performance result replaces those controls.
 Universal PyValues are integrated across frames, containers, attributes and
 rebuilt extensions. Native method/tracing JIT tiers remain unfinished. Keep
 initialized reusable storage, overlap, explicit recipients and real continuations.
-Next: isolate the CPI regressions; remove reviewed immutable keyword-plan work;
-prove/census direct owning coroutine entry; weight actual lookup sites; centralize
-IR effect facts. A wholesale object-layout rewrite is not justified. See
+Next: canonical class-value reads, classmethod target forwarding and a reviewed
+complete leaf-region certificate for conditional accessors. A wholesale object-layout rewrite is not justified. See
 [IR](design/register-ir.md), [interpreter](design/interpreter.md),
 [frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md)
 and [handoff](HANDOFF.md).

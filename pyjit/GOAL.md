@@ -6,19 +6,26 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
+The active target is **DeltaBlue ordinary calls**, starting from committed46.
+Review the [whole call model](issues/deltablue-call-model-20261110/design-overview.md),
+then implement general language-pattern improvements. Astra supplies one broad
+architecture review; Sol owns the inner loop. Accept incremental mostly-beneficial
+checkpoints with explicit tradeoffs. CPI/layout perfection and the prior strict
+promotion hold do not block this work.
+
 Frozen runtime39 `4d666e1b482` meets logging parity; broad upstream parity
 remains open. The [object/call checkpoint](issues/object-call-20261109/checkpoint46-report.md)
 is reviewed at **b8e7e1bee66**. Class lookup and keyword binding improve markedly,
 while the full29 mean is 1.18120/upstream and material golden-relative regressions
-remain. Promotion is held. [Status](STATUS.md) records full diagnostic limits,
+remain. That prior promotion decision is retained as history. [Status](STATUS.md) records full diagnostic limits,
 API/fixture repairs, current counters and actual source identities.
 
 Keep golden39, combined snapshot `cb906f9bc52`, and both generations of immutable
-controls unchanged. The [next plan](issues/object-call-20261109/plan.md) targets
-confirmed CPI regressions, repeated immutable keyword checks, direct owning
-coroutine construction, weighted lookup sites and authoritative IR effects.
-The [entry-scope calibration](issues/object-call-20261109/entry-scope-calibration.md)
-keeps that larger experiment bounded. The coordinator owns merged validation,
+controls unchanged. The [next plan](issues/deltablue-call-model-20261110/plan.md) targets
+canonical class values, direct classmethod targets and compiler-certified
+leaf regions that avoid whole call activations, supported by authoritative IR effects.
+The grouped ordinary-call review governs this round; coroutine entry and keyword
+micro work are deferred. The coordinator owns merged validation,
 measurement and promotion.
 
 The current target is lower object/call execution cost and a smaller broad
@@ -50,10 +57,10 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 
 | Read | Purpose |
 | --- | --- |
-| [Plan](issues/object-call-20261109/plan.md) | Active object/call round and integration gates |
+| [Plan](issues/deltablue-call-model-20261110/plan.md) | Active object/call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
 | [Report](issues/object-call-20261109/checkpoint46-report.md) | Current results, profiling and analysis |
-| [Next priorities](issues/object-call-20261109/plan.md#next-work-in-evidence-order) | Evidence, risks and bounded experiments |
+| [Next priorities](issues/deltablue-call-model-20261110/plan.md) | Evidence, risks and bounded experiments |
 | [Architecture](design/runtime-architecture.md) | Runtime and intended compiler tiers |
 | [Register IR](design/register-ir.md) | Executable encoding, effects and lowering |
 | [Interpreter](design/interpreter.md) | Dispatch, execution and completion |

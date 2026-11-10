@@ -45,9 +45,9 @@ representations merely to preserve optionality.
      debug and release, the lint, then the step's own test list plus a fixed
      smoke set on both builds. Breakage in a core area (bytecode, the
      compiler, the value API) shows up in that set; it is not subtle.
-   - The full suites (`tools/full.sh`, 25 to 40 minutes for both) run only at
-     integration points: after a batch of landings, before a measurement or
-     the checkpoint recap, and before the status pages call a HEAD clean. A
+  - The full suites (`tools/full.sh`, 25 to 40 minutes for both) run only at
+     coherent batch integration points and before the checkpoint recap. Focused
+     tests and basic performance checks follow individual landings. A
      full-suite failure is bisected over the batch's commits.
 
 Designs and reviews are short markdown files. Git commits are the identity of
@@ -59,6 +59,13 @@ mechanisms inside them; they do not repeatedly vote on whether an unfinished
 universal-value runtime or JIT should exist.
 
 ## Model roles
+
+Current user direction (2026-11-10): Astra reviews a broad architecture or group
+of designs once; Sol handles component proposal/code review, implementation and
+debugging. Do not use Astra in the inner loop. Terra/Luna may handle bounded
+mechanical ports and documentation. DeltaBlue is the next ordinary-call target;
+incremental mostly-beneficial landings may proceed with documented tradeoffs.
+Cycle/layout investigations are secondary to removing structural work.
 
 Current packet direction (2026-11-08): use **Sol 6.1, medium effort** for bulk
 work and implementation, with independent proposal/code review and coordinator

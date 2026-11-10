@@ -4,17 +4,14 @@ We are rebuilding CPython around canonical eight-byte PyValues, a register
 interpreter, reference counting with cyclic collection, and a shared method
 and tracing JIT. Extensions are rebuilt and ported.
 
-Start with the [goal](GOAL.md), [current plan](issues/object-call-20261109/plan.md)
-and [status](STATUS.md). The frame/call round is closed at a frozen
-candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
-separates measured performance, Python behavior and optional tooling/capability
-limits. Its [historical priorities](issues/frame-call-model-20261109/next-steps.md)
-record the reviews before this round. The active plan incorporates the
-[Astra survey](issues/object-call-20261109/astra-survey.md) of object lookup and
-calling conventions; its implemented lanes are canonical class values and keyword
-binding plans. The [current report](issues/object-call-20261109/checkpoint46-report.md)
-records local gains, repeated application regressions and the held promotion. The current plan ranks regression diagnosis, immutable plan proofs
-and direct owning-frame entry ahead of broader object-layout work.
+Start with the [goal](GOAL.md), [current plan](issues/deltablue-call-model-20261110/plan.md)
+and [status](STATUS.md). The active round targets DeltaBlue by improving
+ordinary call resolution, execution and teardown. The [grouped design](issues/deltablue-call-model-20261110/design-overview.md)
+compares canonical class lookup, classmethod forwarding and complete leaf-region
+call elimination. Astra reviews the group once; Sol handles implementation and
+component review. Useful incremental improvements may land with documented
+tradeoffs. The [previous checkpoint](issues/object-call-20261109/checkpoint46-report.md)
+retains measured results and limits.
 Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
 
 The universal-value register interpreter is implemented. Native method/tracing

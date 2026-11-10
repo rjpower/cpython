@@ -1,5 +1,16 @@
 # Coordinator handoff
 
+## Active round
+
+User direction2026-11-10: target DeltaBlue and review ordinary calls holistically.
+Astra performs one broad grouped architecture review; Sol handles implementation,
+peer review and debugging. Incremental mostly-beneficial landings are allowed with
+explicit tradeoffs. CPI/annotation experiments, coroutine entry and keyword micros
+are deferred. The single [Astra review](issues/deltablue-call-model-20261110/astra-architecture-review.md)
+is complete: canonical class reads first, classmethod pair forwarding second,
+conditional leaf-region elision next. Runtime remains46 until the first landing.
+Sol handles all subsequent component reviews.
+
 ## Closed checkpoint
 
 Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40` is the frozen checkpoint.
@@ -8,7 +19,7 @@ object/call integration worktree, at committed candidate `b8e7e1bee66`; use the 
 detached golden source below for immutable comparisons. Production changes are
 `24f4d270ced`; the final commit adds reviewed debugger tests. No unfinished
 coroutine, owner-bundle or GDB port is included. Root owns current native jobs; consult the active packet before running more.
-The next round starts from the [current priorities](issues/object-call-20261109/plan.md),
+The next round starts from the [current priorities](issues/deltablue-call-model-20261110/plan.md),
 not historical rankings, numbered integration reports or unqualified drafts.
 
 Logging confirmations pass at 0.906735/0.897500 upstream. Full29 means are
@@ -59,8 +70,10 @@ or benchmark mutation during timing. Full suites belong at coherent checkpoints.
 
 ## Evidence and deferred source
 
-The active packet is [object/call](issues/object-call-20261109/plan.md), evidence
-`BASE/pyjit-link-wave1/object-call-20261109`. Current source46 adds lookup/keyword/default guards, two shared-frame inline
+The active packet is [DeltaBlue calls](issues/deltablue-call-model-20261110/plan.md),
+evidence `BASE/pyjit-link-wave1/deltablue-call-model-20261110`.
+The prior packet's evidence remains `BASE/pyjit-link-wave1/object-call-20261109`.
+Source46 adds lookup/keyword/default guards, two shared-frame inline
 declarations, independent guarded cache storage, magic64417 and the disassembly
 fixture repair. All three builds identify46/check117 modules. Focused45 passed
 564 tests each; API45 covers identical production C,306 units/zero failing
@@ -71,8 +84,9 @@ No full46 suite was run. All native jobs are closed; source/builds are frozen.
 
 Current [report](issues/object-call-20261109/checkpoint46-report.md),
 [tables](issues/object-call-20261109/checkpoint46-tables.md) and
-[next plan](issues/object-call-20261109/plan.md) own admission: HOLD performance
-promotion. Full29 means1.00382/39 and1.18120/upstream; coro/spectral/comprehension
+[prior plan](issues/object-call-20261109/plan.md) record the historical HOLD
+decision. The active incremental policy supersedes its blanket performance veto.
+Full29 means1.00382/39 and1.18120/upstream; coro/spectral/comprehension
 regressions repeat. Matched39 counters now prove higher aggregate CPI with
 near-equal instructions/branches and near-equal branch-miss rates; exact mechanism
 remains open. Golden stays39. Do not add a broad object-layout change or another

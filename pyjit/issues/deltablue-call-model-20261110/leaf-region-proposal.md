@@ -1,0 +1,82 @@
+# Conditional accessor elimination: bounded options
+
+Read-only proposal from frozen runtime46 `b8e7e1bee6611eeda320ce163cd3ce89323da877`. No implementation commitment, native jobs or source edits. This follows the [ordinary call ledger](ordinary-call-audit.md) and [grouped design](design-overview.md). Astra's early direction is class-scalar lookup first, classmethod pair forwarding second, then one complete leaf-region certificate. This document prepares the later Sol review; it does not replace that sequence.
+
+## Opportunity and boundary
+
+`E/baseline46-semantic-calls.json`, where `E` is `build/pyjit-link-wave1/deltablue-call-model-20261110` under `python-boil-the-ocean`, observes 51,422 Python calls in one unchanged run loop. `BinaryConstraint.output` and `input` account for 25,424 (49.44%). Their nine original IR words form a read-only conditional: read a receiver field, load a global class and its scalar attribute, compare/branch, then return one of two receiver fields. This is family exposure, not measured optimized coverage or cost. Constant/no-op plus the observed single getter cover only 800 calls (1.56%); do not spend a separate round implementing them as the presumed main optimization.
+
+Scope: complete acyclic ordinary exact-call bodies with a scalar predicate and two read-only result arms. No calls, writes, loops, exception handlers, cells/freevars, variadics, generators, allocation or unguarded Python operations. Unsupported names/providers/types/observations continue through the ordinary owning activation. The certificate describes general IR expressions; it never recognizes a benchmark/function/class name.
+
+## Compare the three mechanisms
+
+| Option | What executes | Saved work | Main cost/risk | Judgment |
+| --- | --- | --- | --- | --- |
+| 1. Final-IR expression/effect certificate with structured native lowering | A small generated C compare/select operation using shared guarded readers; no child frame | Entire activation/setup/RESUME/RETURN/clear plus body dispatch | Complete certificate, mutable guards, shared completion; supported grammar must stay explicit | Smallest credible follow-on if the bounded lowering is accepted |
+| 2. Guarded executable-IR inline region in caller | Remapped callee IR in caller scratch slots, guarded entry and cold recovery | Activation/header and some call dispatch | New executable layout/operand namespaces/source maps, roots and recovery | Broader; reject for first scope |
+| 3. Lean ordinary activation | Existing callee body with cheaper resolved entry/header/return | Repeated setup/teardown work for all ordinary calls | Broad frame-reader/materialization migration; retains body/return dispatch | Useful fallback architecture, not first selected lane |
+
+An abstract DAG alone supplies no execution engine. A runtime `eval_node` recursion, instruction-PC loop, operation bytecode array or second generic dispatcher would be a new interpreter and is not proposed. Conversely, arbitrary native lowering requires a JIT backend that this packet does not yet supply. Option 1 must therefore name a **bounded structured lowering**, below, rather than pretend an arbitrary DAG is executable for free. If that lowering is judged too narrow or too complex, stop this lane; do not quietly grow a mini-interpreter.
+
+## Option 1: one bounded final-IR certificate
+
+Build a def-use/CFG certificate once from immutable `co_words`, using `_PyCode_InstrHandler/Oparg`, format roles/extents, branch targets and the existing effect model. Normalize it to `select(compare(read, read), read, read)`, where each read is an argument/constant/global root with a bounded guarded attribute path. A direct returned comparison is a natural simpler result form in the same representation, not a separately dispatched tiny-recipe family. Choose explicit read-path/node/metadata limits for implementation budget; do not set them from the benchmark's nine-word length.
+
+Prove all reachable words belong to that graph; entry RESUME and certified copies/loads are accounted for, terminal arms agree on the return contract, no unsupported effect or exception region is hidden before a return, and no unbound argument is read. Reject extra operations or uncertain aliases. `_PyCode_ReturnsOnlyNone` is insufficient because it permits arbitrary preceding effects. Existing LOAD_ATTR/COMPARE effects are conservatively callback-capable: the immutable certificate records a **conditional obligation** that a runtime guarded primitive must discharge; it must not simply relabel those generic effects as pure.
+
+### Metadata home and lifecycle
+
+Use an optional **derived `_PyCodeExec` summary** built alongside `make_exec`, rather than a serialized code field or site-owned target pointer. A compact scalar header says absent/rejected/compare-select and points to optional bounded scalar storage containing original word/name/constant/argument indices and graph positions. An embedded small record versus optional allocation is an explicit size tradeoff for Sol review. Account for it in `_PyCode_ExecSizeOf`, initialize the static `_PyIR_InitCleanup` exec, and free optional storage in `_PyCode_ClearExec`. Classification failure is ordinary “unsupported”; an optional allocation failure may decline optimization without making code execution fail.
+
+The summary owns no Python objects, cache payload pointers or back-reference to its owning code. Names/constants remain indices into the current selected code; mutable proofs remain in existing typed feedback or a separately reviewed scalar proof record. This avoids a code→summary→code reference cycle and keeps the NoScan allocation truthful. Decode the immutable words, not warmed/instrumented handler bytes; instrumentation does not invalidate the syntax certificate. Code construction/replacement receives its own exec/certificate; no marshal or magic change is needed solely for a derived summary.
+
+### Structured lowering, not a DAG interpreter
+
+One out-of-line generated native helper follows a fixed control shape: resolve the two predicate read paths, perform a certified exact scalar comparison, follow the selected arm, resolve its result read path, acquire the result, then complete the call. Read-path helpers perform only their bounded root/guard/load operations; they do not interpret arbitrary IR, dispatch Python operations, allocate or recurse through general graph nodes. A small finite root/path classification is data selection, not permission to add an opcode execution loop. Unsupported expression graphs decline at certificate construction.
+
+Generate/extract the **guard-and-read portion** of existing global/shape/class-value operations into shared C semantic primitives. Their success returns a canonical borrowed view under documented current roots; result acquisition uses the same home-dup operation as normal IR. Their failure returns MISS without an exception or input mutation. The ordinary opcode still owns its publication/receiver retirement. Do not copy the current whole opcode including `IR_RETIRE_PUBLISHED_RESULT`, which can run callbacks. The planned class-scalar increment should supply its shared class guard/read semantics before this region consumes them.
+
+Supported comparisons initially require exact callback-free canonical scalar operands and use shared comparison semantics, with explicit handling of booleans/numeric kinds and branch sense. A substituted object with `__eq__`/ordering behavior misses to the real callee. Do not route a speculative comparison through `PyObject_RichCompare`, or a read through generic `getattr`, hoping it stays cheap.
+
+This fixed grammar is a general compare/select accessor family, not an opcode named for a method or workload. It is nevertheless deliberately narrower than arbitrary leaf inlining. Sol review must approve that architecture and its actual reusable semantic primitives before implementation; AST spelling alone is not the interface.
+
+## Mutable proof and owner ledger
+
+| Fact | Guard/read obligation | Lifetime |
+| --- | --- | --- |
+| Selected function/code | Function type, valid cached version, standard vectorcall, exact effective arity/self, compatible ordinary flags; obtain code from current owned callable | Callable window anchors code until the last pre-effect metadata read; no cached mortal target pointer |
+| Global root | Read current function globals/builtins using exact dictionary/key-version/index rules; load the **current value** at the validated index | Same-code functions can have different globals; key version does not prove unchanged dictionary values |
+| Class scalar | Validate actual class/MRO/metaclass/provider version proof, then load/acquire through canonical guarded storage | Global/argument owner keeps actual class reachable; its current proof, not function version, guards value |
+| Instance field | Validate receiver object/type version, supported layout, current shape and filled field before direct load | Original argument window owns receiver; intermediate read path remains rooted without callbacks |
+| Scalar predicate | Prove exact noncallback scalar kinds and supported comparison | Borrowed inputs remain protected throughout no-allocation/no-callback phase |
+| Selected result | Acquire canonical owner before any window retirement | Result survives receiver, function, code and class/global-related releases |
+
+Reusing existing feedback means checking its **current handler/proof kind**, not retaining a stale pointer to a formerly active union/shape view. Validate live entry after any warmup/preparation that can allocate; region hits must not allocate, specialize, emit callbacks or rebuild proofs. A failed mutable proof falls back before effects; the real callee then owns errors and tracebacks. The branch not selected need not be read. Conservative failure of an unchosen-arm preguard may decline, but cannot execute an unchosen Python effect.
+
+No new persistent mortal borrows are introduced. All speculative reads occur under the GIL while original window/global/class roots remain intact; no user code or collector runs. Acquired intermediate owners, if needed, must be bounded and drain on MISS while their protecting original roots still exist. If a shared primitive needs boxing, allocation or a release that can be final, it cannot serve this first region and must return MISS.
+
+## Admission and complete ordinary completion
+
+Admission must make the skipped entry observationally inert: PEP 523 absent; no trace/profile callbacks; no relevant global/local monitoring or instruction/line wrappers; no DTrace/LLTrace entry work; no pending eval-breaker work; current instrumentation epoch; ordinary entry/no cells/freevars. Audit `RESUME`, `IR_SKIP_RESUME` and instrumentation version/event masks together. Exact epoch equality alone is not proof of no observers; no active CALL wrapper alone is also insufficient. Initial GIL-only conservative declines are acceptable. Keep recursion admission and initially retain normal stack-space admission, so resource-error behavior is not silently changed as part of this experiment.
+
+There is no callback in evaluation, so a stable pre-effect observation check plus the existing GIL/instrumentation synchronization protects the region. Recheck pending/epoch state before commit as needed by the selected admission primitive. A pending event discovered here misses, leaving inputs and caller locals unchanged; do not process an event and continue using stale target/proof pointers. Hook enablement by a later retirement callback applies after the logical call has completed, never by replaying it.
+
+Extract a **shared ordinary-call result/continuation primitive**, not the native vectorcall adapter. It takes an owned result plus numeric call-site/window/destination facts, establishes caller continuation, detaches/NULLs consumed homes, retires those owners with caller current, refreshes PC/exec/redirect state and publishes/discards exactly once. Preserve the initial ordinary policy of holding the result through input retirement; displaced LOCAL release follows replacement. No accidental native periodic-at-end check, no delayed generated move from `window[0]`, no borrowed code/proof use after the first release.
+
+Use an existing two-word status/next representation or equivalent typed terminal outcome for **MISS before effects**, **DONE with actual continuation**, and **ERROR after cleanup**. `_PyCallResult {status, child}` by itself does not specify callback-updated continuation for this new entry point. The producer must validate the exact checked prefix/window/terminal form and dispatch the returned/current real continuation; after commit it may never take generic fallback. Do not create a fictitious child or expose a half-constructed frame to satisfy an old output shape.
+
+All errors from reads/comparisons are avoided by before-effect guards; post-commit errors are retirement/revalidation errors and use the explicit result parking/drain recipe. Observation that requires a callee frame must decline before effects. If asynchronous/public frame observation cannot be excluded under supported semantics, provide the reviewed recovery contract before enabling that configuration; “no Python callback” alone is not an observer contract.
+
+## Why defer the other two options
+
+**Caller executable-IR splicing** would need callee slots remapped into caller scratch, constants/names/globals/feedback relocated or a new execution namespace, branch/return rewrites, code/root lifetime and active source/error maps. Warm handler fields alone are not enough. A cold side exit after executing an effect needs callee locals/PC/exception state reconstructed and no replay; this is substantially more than whole-body before-effect decline. Even a pure region needs mixed-context GC/source/remote-stack rules. No existing coldframe recovery implementation was identified that makes this the smaller first increment.
+
+**Lean activation** preserves ordinary body semantics and covers unsupported call families, but migrating header readers, lazy observation state, frame escape and return maps is broad. The exact route already overlaps argument homes, reuses initialized storage and skips temporary sweeping on successful return. Independent function/code roots remain necessary for a real running frame because `__code__` can change. Removing redundant header stores may help; it is not the same structural saving as eliminating 25,424 eligible-family activations, and it cannot borrow that frequency as predicted benefit.
+
+## Sol review and experiment gate
+
+First finish the class-scalar and classmethod pair A/B work. Then review one complete compare/select certificate, shared reader interfaces, observation predicate and ordinary completion extraction. Suggested file boundaries: `Python/ir.c`/`pycore_ir.h` derived metadata; existing bytecode/generator semantic reader factoring; `ceval.c` region/completion; generator prefix/terminal validation; focused leaf/call ownership tests. No global frame migration, arbitrary inlining, JIT backend or serialized format change belongs in that patch.
+
+Required negatives: extra side effect before a return, unsupported/cyclic CFG, exception handler, missing field, descriptor/custom getter, changed globals value with unchanged keys, same-code functions with different globals/defaults, code/provider replacement, class/metaclass/shape mutation, scalar substituted with callback-capable comparison, every observer/epoch/pending-work state, recursion, aliases, inline/mortal results, callback-driven local writes/redirects, discard/local/temporary/overlap destinations and post-effect error cleanup. Normal calls must execute once on every guard miss. No relaxation of API representation or ownership rules.
+
+Measure actual certified-family hits and guard-fallback reasons, metadata bytes and complete instructions per call before interpreting application elapsed time. Compare unchanged DeltaBlue against frozen46 and controls, separate from already-landed lookup gains; no multiplicative projected speedup. The conditional family provides credible exposure, not guaranteed profitability. Reject or cut scope if mutable guards plus structured execution/cleanup approach normal call cost, if observation requires broad recovery, or if expression support starts growing into another interpreter. Preserve a small net-beneficial landing with documented limits; do not lock this design before the broad review's final recommendation.

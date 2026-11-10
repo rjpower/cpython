@@ -1,5 +1,11 @@
 # Object lookup and calls: integration and next work
 
+**Closed historical packet.** The user selected the [DeltaBlue ordinary-call round](../deltablue-call-model-20261110/plan.md)
+and a single grouped Astra review, followed by Sol inner-loop work. The prior
+CPI-first ranking and blanket regression veto below are superseded for active
+work. Retain this page as the checkpoint46 decision record.
+
+
 Lower repeated execution work while keeping one canonical value model, one
 owning-frame ABI and useful observation. Universal PyValues and the register
 interpreter are integrated; native method/tracing JIT tiers remain unfinished.

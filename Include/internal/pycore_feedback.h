@@ -135,7 +135,9 @@ typedef struct {
         uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
     // A guarded word must not share storage with native pointer/shape fields.
-    _PyValueGuarded class_value;     // unshadowed class value, guarded by type_version
+    // Instance class values use type_version; direct class values use
+    // class_version and, when required, the metaclass type_version guard.
+    _PyValueGuarded class_value;
 } _PyFbAttr;
 
 static_assert(sizeof(_PyFbAttr) == 48,

@@ -2801,11 +2801,13 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
-        op(_LOAD_ATTR_CLASS, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_CLASS, (class_value/4, owner -- attr)) {
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
-            DECREF_INPUTS();
+            PyValueBorrow found = _PyValueGuarded_Load(class_value);
+            assert(!PyValue_IsNull(found));
+            attr = IR_CANONICAL_HOME_DUP(found);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_CLASS) =

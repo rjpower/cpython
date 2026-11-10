@@ -98,12 +98,13 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                   "Python" / "bytecodes.c").read_text()
         output = self.generate(source, runtime=True)
         for name in ("LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES",
-                     "LOAD_ATTR_NONDESCRIPTOR_NO_DICT"):
+                     "LOAD_ATTR_NONDESCRIPTOR_NO_DICT", "LOAD_ATTR_CLASS",
+                     "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK"):
             with self.subTest(name=name):
                 start = output.index(f"TARGET({name}) {{")
                 end = output.find("TARGET(", start + 1)
                 handler = output[start:end]
-                guard = handler.index("tp->tp_version_tag")
+                guard = handler.index("tp_version_tag")
                 load = handler.index("_PyValueGuarded_Load(class_value)")
                 acquire = handler.index("attr = IR_CANONICAL_HOME_DUP(found)")
                 publish = handler.index("IR_STORE_CANONICAL_TEMP_DST(")
@@ -118,6 +119,35 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 self.assertNotIn("_PyIRWord* const this_instr", handler)
                 self.assertIn("this_instr = frame->instr_ptr;", handler[retire:])
                 self.assertNotIn("PyObject *class_value", handler)
+                if name.startswith("LOAD_ATTR_CLASS"):
+                    self.assertIn("class_version = fb->class_version", handler)
+                    self.assertNotIn("fb->descr", handler)
+                    self.assertIn("if (oparg & 1)", handler)
+                if name == "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK":
+                    self.assertLess(handler.index("type_version = fb->type_version"),
+                                    handler.index("class_version = fb->class_version"))
+
+    def test_direct_class_selectors_and_result_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c")
+        with cases.handle_stderr():
+            analysis = cases.analyzer.analyze_files([str(source)])
+        with cases.test_tools.imports_under_tool("cases_generator"):
+            from opcode_metadata_generator import feedback_fields
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name, number, versions in (
+            ("LOAD_ATTR_CLASS", 189, [(2, 2, "class_version")]),
+            ("LOAD_ATTR_CLASS_WITH_METACLASS_CHECK", 190,
+             [(2, 2, "type_version"), (4, 2, "class_version")]),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(analysis.opmap[name], number)
+                self.assertEqual(feedback_fields(analysis.instructions[name]),
+                                 versions + [(6, 4, "class_value")])
+                self.assertEqual(formats[name].fb_layout, "_PyFbAttr")
+                self.assertEqual(contracts[name].result_phase,
+                                 ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
 
 
 if __name__ == "__main__":

@@ -402,6 +402,8 @@ fb_row_of(_PyFbHeader *h, int opcode)
             switch (opcode) {
                 case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
                 case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
+                case LOAD_ATTR_CLASS:
+                case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -413,8 +415,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN:
                     row.payload.descr = ((_PyFbAttr *)h)->getattribute;
                     break;
-                case LOAD_ATTR_CLASS:
-                case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
                 case LOAD_ATTR_METHOD_WITH_VALUES:
                 case LOAD_ATTR_METHOD_NO_DICT:
                 case LOAD_ATTR_METHOD_LAZY_DICT:
@@ -1624,10 +1624,13 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             _Py_FALLTHROUGH;
         case METHOD:
         case NON_DESCRIPTOR:
+        case INLINE_VALUE:
 #ifdef Py_GIL_DISABLED
-            maybe_enable_deferred_ref_count(descr);
+            if (descr != NULL) {
+                maybe_enable_deferred_ref_count(descr);
+            }
 #endif
-            fb->descr = descr;
+            fb->class_value = _PyValueGuarded_FromBorrow(PyValue_Borrow(descriptor));
             fb->class_version = tp_version;
             if (metaclass_check) {
                 fb->type_version = meta_version;

@@ -12613,7 +12613,7 @@
             (void)(opcode);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -12652,12 +12652,27 @@
             }
             // _LOAD_ATTR_CLASS
             {
-                PyObject *descr = (PyObject *)fb->descr;
+                _PyValueGuarded class_value = fb->class_value;
                 STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+                PyValueBorrow found = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(found));
+                attr = IR_CANONICAL_HOME_DUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PyValue receiver = ir_own_B;
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
+                {
+                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    if (!retire_needed) {
+                        PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
+                    }
+                    if (retire_needed) {
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
+                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                    }
+                }
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -12666,7 +12681,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -12680,7 +12697,7 @@
             (void)(opcode);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -12730,12 +12747,27 @@
             }
             // _LOAD_ATTR_CLASS
             {
-                PyObject *descr = (PyObject *)fb->descr;
+                _PyValueGuarded class_value = fb->class_value;
                 STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+                PyValueBorrow found = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(found));
+                attr = IR_CANONICAL_HOME_DUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PyValue receiver = ir_own_B;
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
+                {
+                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    if (!retire_needed) {
+                        PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
+                    }
+                    if (retire_needed) {
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
+                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                    }
+                }
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -12744,7 +12776,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

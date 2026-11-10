@@ -28,6 +28,157 @@ def handlers(read):
 
 @cpython_only
 @requires_specialization
+class TestDirectClassValue(unittest.TestCase):
+    def assert_cached(self, read, *, metaclass=False):
+        expected = ("LOAD_ATTR_CLASS_WITH_METACLASS_CHECK" if metaclass else
+                    "LOAD_ATTR_CLASS")
+        self.assertIn(expected, handlers(read))
+
+    def test_canonical_and_object_values(self):
+        class Meta(type):
+            pass
+
+        for meta in (type, Meta):
+            for value in (1, -2147483648, 2147483647, 3.25, True, False,
+                          None, [], {}, (1, 2)):
+                with self.subTest(meta=meta, value=value):
+                    cls = meta("Receiver", (), {"selected": value})
+                    read = make_reader()
+                    warm(read, cls)
+                    self.assert_cached(read, metaclass=meta is Meta)
+                    self.assertIs(read(cls), value)
+
+    def test_inherited_mutation_and_descriptor_replacement(self):
+        class Base:
+            selected = 1
+
+        class Other:
+            selected = 2
+
+        class Receiver(Base):
+            pass
+
+        class Descriptor:
+            def __get__(self, owner, cls):
+                return 23
+
+        read = make_reader()
+        warm(read, Receiver)
+        self.assert_cached(read)
+        Base.selected = [3]
+        self.assertIs(read(Receiver), Base.selected)
+        warm(read, Receiver)
+        self.assert_cached(read)
+        Receiver.__bases__ = (Other,)
+        self.assertEqual(read(Receiver), 2)
+        Other.selected = Descriptor()
+        self.assertEqual(read(Receiver), 23)
+        del Other.selected
+        with self.assertRaises(AttributeError):
+            read(Receiver)
+
+    def test_metaclass_precedence_after_warmup(self):
+        class Meta(type):
+            pass
+
+        class Receiver(metaclass=Meta):
+            selected = 1
+
+        class Descriptor:
+            def __get__(self, owner, cls):
+                return 24
+
+            def __set__(self, owner, value):
+                raise AssertionError("unexpected store")
+
+        read = make_reader()
+        warm(read, Receiver)
+        self.assert_cached(read, metaclass=True)
+        Meta.selected = Descriptor()
+        self.assertEqual(read(Receiver), 24)
+        del Meta.selected
+        warm(read, Receiver)
+        self.assert_cached(read, metaclass=True)
+        Meta.__getattribute__ = lambda self, name: 25
+        self.assertEqual(read(Receiver), 25)
+
+    def test_plain_function_call_keeps_null_self(self):
+        class Receiver:
+            def selected(value):
+                return value
+
+        def invoke(cls, value):
+            return cls.selected(value)
+
+        reset_code(invoke)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(invoke(Receiver, 31), 31)
+        self.assert_cached(invoke)
+        Receiver.selected = 1
+        with self.assertRaises(TypeError):
+            invoke(Receiver, 31)
+
+    def test_polymorphic_class_value_snapshots(self):
+        class Meta(type):
+            pass
+
+        classes = [type("One", (), {"selected": 1}),
+                   Meta("Two", (), {"selected": []}),
+                   type("Three", (), {"selected": 3.25})]
+        read = make_reader()
+        warm(read, classes[0])
+        for cls in classes[1:]:
+            for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
+                self.assertIs(read(cls), cls.selected)
+            self.assert_cached(read, metaclass=type(cls) is Meta)
+        [site] = [i for i in dis.get_instructions(read) if i.opname == "LOAD_ATTR"]
+        kind, state, _, _, rows = _testinternalcapi.get_feedback(
+            read.__code__, site.offset)
+        self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
+        self.assertEqual({row[2] for row in rows}, {
+            dis._specialized_opmap["LOAD_ATTR_CLASS"],
+            dis._specialized_opmap["LOAD_ATTR_CLASS_WITH_METACLASS_CHECK"],
+        })
+        for cls in classes:
+            cls.selected = [42]
+            self.assertIs(read(cls), cls.selected)
+
+    def test_result_survives_displaced_local_reentry(self):
+        events = []
+
+        class Payload:
+            def __del__(self):
+                events.append("payload-retired")
+
+        class Receiver:
+            selected = [Payload()]
+
+        class Other:
+            selected = [43]
+
+        def read(cls, prior):
+            prior = cls.selected
+            return prior
+
+        class Displaced:
+            def __del__(self):
+                del Receiver.selected
+                events.append(read(Other, None)[0])
+
+        reset_code(read)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            read(Receiver, None)
+        self.assert_cached(read)
+        result = read(Receiver, Displaced())
+        self.assertEqual(events, [43])
+        self.assertIsInstance(result[0], Payload)
+        del result
+        gc_collect()
+        self.assertEqual(events, [43, "payload-retired"])
+
+
+@cpython_only
+@requires_specialization
 class TestGuardedClassValue(unittest.TestCase):
     def assert_cached(self, read, *, slots=False):
         expected = ("LOAD_ATTR_NONDESCRIPTOR_NO_DICT" if slots else

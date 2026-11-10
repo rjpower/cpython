@@ -17,7 +17,7 @@ reuse initialized storage. Normal thread teardown already clears locals rather
 than sweeping every temporary. Removing another imagined argument copy or full
 scratch sweep is not the structural opportunity.
 
-The latest DeltaBlue screen is1.63233 times upstream elapsed time. Profiles
+The latest DeltaBlue screen is 1.63233 times upstream elapsed time. Profiles
 locate ordinary exact calls, method/shape/type lookup and frame retirement.
 They do not assign removable fractions of the gap. No2× claim follows from a
 handler count, a sample share or the proposals below. The eventual target is
@@ -27,9 +27,9 @@ accepted along the way.
 The [ordinary-call audit](ordinary-call-audit.md) maps the full owner/frame path.
 The [lookup audit](method-lookup-audit.md) covers method/descriptor transitions.
 One observed semantic census (`baseline46-semantic-calls.json` under the new
-evidence directory) counts51,422 Python calls in one unchanged workload iteration.
-Two conditional field selectors account for25,424 calls, about49.4%; three
-classmethod functions account for2,717, about5.3%. These are call frequencies,
+evidence directory) counts 51,422 Python calls in one unchanged workload iteration.
+Two conditional field selectors account for 25,424 calls, about 49.4%; three
+classmethod functions account for 2,717, about 5.3%. These are call frequencies,
 not costs or optimized-path hit counts. Instrumentation changes execution.
 
 ## One call representation and contract

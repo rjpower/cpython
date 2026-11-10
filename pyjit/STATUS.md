@@ -4,9 +4,10 @@ The active round targets **DeltaBlue ordinary call setup and teardown**, using
 committed candidate46 `b8e7e1bee66` as its development baseline. The first
 [integration](issues/deltablue-call-model-20261110/integration47.md), runtime47
 `986c65ee5ab`, is committed and pushed: unified guarded class-value reads.
-Release/debug pass571 focused tests each; API306 units has zero failing findings
-or parse errors. A short two-pair screen gives DeltaBlue1.26303/upstream and
-logging0.91755/upstream; logging is5.53% slower than the rebuilt46 control.
+Release and debug each pass 571 focused tests. The API check covers 306 units
+with zero failing findings or parse errors. A short two-pair screen gives
+DeltaBlue 1.26303/upstream and logging 0.91755/upstream; logging is 5.53% slower
+than the rebuilt46 control.
 Full qualification and repeated target timings belong at the batch boundary.
 See the
 [new plan](issues/deltablue-call-model-20261110/plan.md) and
@@ -14,7 +15,8 @@ See the
 Astra review is complete; it selected uniform canonical class reads, classmethod
 pair forwarding and complete conditional leaf-region elision. Sol approved the
 first lookup proposal and post-reviewed its implementation. Classmethod forwarding
-is being implemented; the conditional leaf prototype is under component review.
+is being implemented in the main runtime worktree; the conditional leaf prototype
+is under implementation in an isolated worktree after proposal review.
 
 The user permits useful incremental progress with documented tradeoffs. The
 following table records the earlier46 checkpoint, not the newer47 screen. Earlier46
@@ -55,13 +57,14 @@ fields; the API checker stays strict. Attr/poly sizes are 48/120 bytes and magic
 64417 versions serialized feedback geometry. Four scoped censuses retain private
 site admission; warm entry storage grows about 8% in logging and 10% in DeltaBlue.
 
-Release/debug/stats builds identify46 and check 117 modules. The production45
-checkpoint passed 564 focused tests per release/debug build, clean API checks
-(306 units, zero failing findings/parse errors), and full diagnostics of 54,674
-tests each. Full runs retain known GDB display failures16/21, nine frame-jump
-errors each, one debug trace-format failure, plus eight stale disassembly checks.
-The fixture-only46 correction passes all 143 disassembly tests on both builds;
-stats46 smoke passes 150. Production C/checker inputs are unchanged from45.
+Release, debug and stats builds identify46 and check 117 modules. The production45
+checkpoint passed 564 focused tests in each release and debug build, with clean
+API checks (306 units, zero failing findings or parse errors) and full diagnostic
+runs of 54,674 tests each. Full runs retain known GDB display failures (16/21),
+nine frame-jump errors in each build, one debug trace-format failure, and eight
+stale disassembly checks. The fixture-only46 correction passes all 143
+disassembly tests on both builds; the stats46 smoke run passes 150. Production
+C/checker inputs are unchanged from45.
 These are failed full diagnostic records plus a verified fixture repair, not an
 all-green or newly executed full46 suite.
 
@@ -75,8 +78,9 @@ the current report. No candidate performance result replaces those controls.
 Universal PyValues are integrated across frames, containers, attributes and
 rebuilt extensions. Native method/tracing JIT tiers remain unfinished. Keep
 initialized reusable storage, overlap, explicit recipients and real continuations.
-Next: canonical class-value reads, classmethod target forwarding and a reviewed
-complete leaf-region certificate for conditional accessors. A wholesale object-layout rewrite is not justified. See
+Next: finish classmethod target forwarding and implement the reviewed complete
+leaf-region certificate for conditional accessors. A wholesale object-layout
+rewrite is not justified. See
 [IR](design/register-ir.md), [interpreter](design/interpreter.md),
 [frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md)
 and [handoff](HANDOFF.md).

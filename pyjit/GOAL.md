@@ -25,7 +25,8 @@ API/fixture repairs, current counters and actual source identities.
 Keep golden39, combined snapshot `cb906f9bc52`, and both generations of immutable
 controls unchanged. The [next plan](issues/deltablue-call-model-20261110/plan.md) targets
 canonical class values, direct classmethod targets and compiler-certified
-leaf regions that avoid whole call activations, supported by authoritative IR effects.
+leaf regions that avoid whole call activations, supported by authoritative IR
+effects.
 The grouped ordinary-call review governs this round; coroutine entry and keyword
 micro work are deferred. The coordinator owns merged validation,
 measurement and promotion.
@@ -59,7 +60,7 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 
 | Read | Purpose |
 | --- | --- |
-| [Plan](issues/deltablue-call-model-20261110/plan.md) | Active object/call round and integration gates |
+| [Plan](issues/deltablue-call-model-20261110/plan.md) | Active ordinary-call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
 | [Report](issues/object-call-20261109/checkpoint46-report.md) | Current results, profiling and analysis |
 | [Next priorities](issues/deltablue-call-model-20261110/plan.md) | Evidence, risks and bounded experiments |

@@ -2,21 +2,23 @@
 
 ## Active round
 
-User direction2026-11-10: target DeltaBlue and review ordinary calls holistically.
+User direction, 2026-11-10: target DeltaBlue and review ordinary calls
+holistically.
 Astra performs one broad grouped architecture review; Sol handles implementation,
 peer review and debugging. Incremental mostly-beneficial landings are allowed with
 explicit tradeoffs. CPI/annotation experiments, coroutine entry and keyword micros
 are deferred. The single [Astra review](issues/deltablue-call-model-20261110/astra-architecture-review.md)
 is complete: canonical class reads first, classmethod pair forwarding second,
 conditional leaf-region elision next. First landing47 `986c65ee5ab` is pushed;
-release/debug117-module builds and571 focused tests each pass, API306 units is
-clean. Basic two-pair DeltaBlue/upstream1.26303, logging/upstream0.91755. See
+Release and debug builds check 117 modules and each pass 571 focused tests. The
+API check covers 306 units and is clean. Basic two-pair results are
+DeltaBlue/upstream 1.26303 and logging/upstream 0.91755. See
 [integration47](issues/deltablue-call-model-20261110/integration47.md).
-Sol implements A classmethod forwarding in the main runtime worktree. A separate
-`BASE/worktrees/deltablue-leaf-prototype` holds the C conditional leaf experiment
-at base47; code is held for independent proposal review. Root owns native jobs,
-including frozen intermediate control builds. Stats remains46. Sol handles all
-subsequent component reviews.
+Sol is implementing A, classmethod forwarding, in the main runtime worktree and
+is host-testing it. In isolated `BASE/worktrees/deltablue-leaf-prototype`, C, the
+conditional leaf experiment, is under implementation at base47. Its proposal
+review is complete. Root owns native jobs, including frozen intermediate
+control builds. Stats remains46. Sol handles all subsequent component reviews.
 
 ## Closed checkpoint
 

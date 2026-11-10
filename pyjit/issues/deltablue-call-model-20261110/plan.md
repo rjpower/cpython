@@ -8,17 +8,18 @@ transcripts, startup RSS and instruction-scheduling perfection are not gates.
 
 ## Outcome and design
 
-Reduce complete ordinary call cost and drive unchanged DeltaBlue toward upstream
-parity. Baseline46 screen is1.63233/upstream. Keep one canonical value model,
+Reduce complete ordinary call cost and move unchanged DeltaBlue toward upstream
+parity. The baseline46 screen is 1.63233/upstream. Keep one canonical value model,
 owned call window, in-place binding, result/continuation and observation contract.
 See the [grouped design](design-overview.md), [ordinary call audit](ordinary-call-audit.md)
 and [lookup audit](method-lookup-audit.md). Source implements argument overlap and
 initialized storage already; do not budget savings from nonexistent copies or
 full temporary sweeps.
 
-One bounded semantic census counts51,422 calls per workload iteration. Conditional
-field selectors account for49.4%; classmethods5.3%; constant/single-getter recipe
-candidates only1.56%. These are frequencies, not time shares. The larger structural
+One bounded semantic census counts 51,422 calls per workload iteration.
+Conditional field selectors account for 49.4%, classmethods for 5.3%, and
+constant/single-getter recipe candidates for only 1.56%. These are frequencies,
+not time shares. The larger structural
 lane is complete guarded leaf-region call elimination including comparison/select,
 not many low-coverage tiny recipes or a new frame ABI.
 
@@ -67,15 +68,18 @@ from this round. No benchmark/source-name specialization or altered workload.
 
 ## Status and reporting
 
-Last update:2026-11-10 22:52UTC. First [integration47](integration47.md) is
-committed/pushed: canonical class reads, release/debug117-module builds,
-571 focused tests each, API306 units clean. Two-pair screens give DeltaBlue
-0.72080/rebuilt46 and1.26303/upstream, logging1.05526/rebuilt46 and0.91755/upstream.
-Sol implements reviewed A classmethod forwarding in the main runtime worktree.
-Sol prepares C in an isolated managed worktree; its concrete proposal is under
-independent review. The narrowed first C scope requires callback-free complete
-operation admission, including aggregate nonfinal-release checks, so general
-callback recovery is deferred. Next report follows the batch checkpoint;
+Last update: 2026-11-10 22:52 UTC. First [integration47](integration47.md) is
+committed and pushed: canonical class reads, release and debug builds of
+117 modules,
+571 focused tests each, and a clean API check covering 306 units. Two-pair
+screens give DeltaBlue 0.72080/rebuilt46 and 1.26303/upstream, and logging
+1.05526/rebuilt46 and 0.91755/upstream. Sol is implementing A, classmethod
+forwarding, in the main runtime worktree and is host-testing it. Sol is
+implementing C in an isolated managed worktree. The [proposal review](C-proposal-review.md)
+is complete, and the [implementation proposal](C-implementation-proposal.md)
+records the current scope. The narrowed first C experiment requires callback-free
+complete-operation admission, including aggregate nonfinal-release checks, so
+general callback recovery is deferred. Next report follows the batch checkpoint;
 no timer or unattended delivery is promised.
 
 Evidence: `BASE/pyjit-link-wave1/deltablue-call-model-20261110`, BASE as in

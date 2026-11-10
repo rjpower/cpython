@@ -7280,7 +7280,7 @@
             {
                 {
                     PyCodeObject *leaf_code = (PyCodeObject *)((PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable))->func_code;
-                    if (leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {
+                    if (0 && leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {
                         _PyIRStepResult leaf = ir_try_complete_leaf_call(tstate, frame, this_instr, fb->func_version);
                         if (leaf.status) {
                             slots = _PyFrame_Slots(frame);

@@ -2922,7 +2922,7 @@ class IREmitter(Emitter):
         self.macro_args(tkn, tkn_iter, 0)
         self.emit("{\n")
         self.emit("PyCodeObject *leaf_code = (PyCodeObject *)((PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable))->func_code;\n")
-        self.emit("if (leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {\n")
+        self.emit("if (0 && leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {\n")
         self.emit("_PyIRStepResult leaf = ir_try_complete_leaf_call(tstate, frame, this_instr, fb->func_version);\n")
         self.emit("if (leaf.status) {\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")

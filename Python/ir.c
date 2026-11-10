@@ -20,6 +20,7 @@
 #include "pycore_interpframe.h"     // _PyFrame_GetCode()
 #include "pycore_ir.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
+#include "pycore_opcode_utils.h" // NUM_COMMON_CONSTANTS
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_value.h"
@@ -460,6 +461,11 @@ leaf_format(int handler)
             effects = _PyIR_ALLOCATES |
                 (handler == LOAD_SMALL_INT ? _PyIR_PURE : _PyIR_RAISES);
             break;
+        case LOAD_COMMON_CONSTANT:
+            roles[1] = _PyIR_ROLE_IMM;
+            imm = _PyIR_LOC_B;
+            effects = _PyIR_PURE;
+            break;
         case LOAD_GLOBAL:
             roles[1] = _PyIR_ROLE_FB;
             roles[2] = roles[3] = _PyIR_ROLE_IMM;
@@ -670,6 +676,13 @@ leaf_body(PyCodeObject *co, int pc, LeafBindings bindings,
             }
             value = (LeafDefinition){.path = {
                 .kind = _PY_IR_LEAF_SMALL_INT, .root = IR_B(word)}};
+        }
+        else if (handler == LOAD_COMMON_CONSTANT) {
+            if (IR_B(word) >= NUM_COMMON_CONSTANTS) {
+                return 0;
+            }
+            value = (LeafDefinition){.path = {
+                .kind = _PY_IR_LEAF_COMMON_CONSTANT, .root = IR_B(word)}};
         }
         else if (handler == LOAD_GLOBAL) {
             if ((IR_CD(word) & 1) ||

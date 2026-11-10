@@ -371,6 +371,7 @@ enum {
     _PY_IR_LEAF_CONSTANT,
     _PY_IR_LEAF_GLOBAL,
     _PY_IR_LEAF_SMALL_INT,
+    _PY_IR_LEAF_COMMON_CONSTANT,
 };
 
 typedef struct {

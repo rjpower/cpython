@@ -6,7 +6,7 @@ import types
 import unittest
 import weakref
 
-from test.support import import_helper, reset_code
+from test.support import import_helper, requires_subprocess, reset_code, script_helper
 from test.support.bytecode_helper import encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
@@ -34,9 +34,24 @@ def info(function):
     return _testinternalcapi.ir_leaf_info(function.__code__)
 
 
+def fresh_function(code, namespace):
+    """Create a versioned target through MAKE_FUNCTION, preserving its code."""
+    assert not code.co_freevars
+
+    def make():
+        def target():
+            pass
+        return target
+
+    constants = tuple(code if isinstance(value, types.CodeType) else value
+                      for value in make.__code__.co_consts)
+    factory = types.FunctionType(make.__code__.replace(co_consts=constants), namespace)
+    return factory()
+
+
 def fresh_record():
     record = Record()
-    target = types.FunctionType(Record.select.__code__.replace(), globals())
+    target = fresh_function(Record.select.__code__.replace(), globals())
     return record, target
 
 
@@ -92,7 +107,7 @@ class LeafCallTests(unittest.TestCase):
                         break
                 else:
                     self.fail("missing comparison initializer")
-                target = types.FunctionType(code.replace(co_fbinit=bytes(initializers)), globals())
+                target = fresh_function(code.replace(co_fbinit=bytes(initializers)), globals())
                 call = make_caller(target)
                 for direction in (1, 2):
                     record.direction = direction
@@ -134,7 +149,9 @@ class LeafCallTests(unittest.TestCase):
             return "leaf constant"
 
         value = object()
-        for target in (reset_code(identity), reset_code(constant)):
+        identity = fresh_function(identity.__code__.replace(), globals())
+        constant = fresh_function(constant.__code__.replace(), globals())
+        for target in (identity, constant):
             self.require_hits(target)
             call = make_caller(target)
             expected = value if target is identity else "leaf constant"
@@ -176,13 +193,44 @@ class LeafCallTests(unittest.TestCase):
         self.assertEqual(effect(3), 3)
         self.assertEqual(calls, [3])
 
+    def test_common_constant_roots_and_bounds(self):
+        def constant(value):
+            return None
+
+        code = constant.__code__
+        rows = _testinternalcapi.get_ir(code)
+        pc = next(i for i, row in enumerate(rows)
+                  if row[0] == "LOAD_COMMON_CONSTANT")
+        _, destination, _, c, d = rows[pc]
+
+        def replace_index(index):
+            word = encode_words((opcode.opmap["LOAD_COMMON_CONSTANT"],
+                                 destination, index, c, d))
+            return code.replace(co_code=(code.co_code[:8 * pc] + word +
+                                         code.co_code[8 * (pc + 1):]))
+
+        argument = object()
+        for index, expected in enumerate(opcode._common_constants):
+            with self.subTest(index=index):
+                target = fresh_function(replace_index(index), globals())
+                self.require_hits(target)
+                self.assertTrue(info(target)[0])
+                self.assertIs(warm(make_caller(target), argument), expected)
+                self.assertGreater(info(target)[1], 0)
+        # Malformed immutable IR is never executed.
+        try:
+            invalid = replace_index(len(opcode._common_constants))
+        except ValueError:
+            pass
+        else:
+            self.assertFalse(_testinternalcapi.ir_leaf_info(invalid)[0])
+
     def test_same_code_distinct_globals_and_existing_key_rebind(self):
         record, first = fresh_record()
         self.require_hits(first)
         class OtherLimit:
             selected = 2
-        second = types.FunctionType(first.__code__,
-                                    {**globals(), "Limit": OtherLimit})
+        second = fresh_function(first.__code__, {**globals(), "Limit": OtherLimit})
         call = make_caller(first)
         before = info(first)[1]
         self.assertIs(warm(call, record), record.first)
@@ -230,7 +278,7 @@ class LeafCallTests(unittest.TestCase):
         class Changed(Record):
             pass
         record = Changed()
-        target = types.FunctionType(Record.select.__code__.replace(), globals())
+        target = fresh_function(Record.select.__code__.replace(), globals())
         call = make_caller(target)
         warm(call, record)
         events = []
@@ -251,7 +299,13 @@ class LeafCallTests(unittest.TestCase):
                 self.assertIs(warm(call, record),
                               record.first if expected else record.second)
 
+    @requires_subprocess()
     def test_local_monitoring_and_trace_decline(self):
+        script_helper.assert_python_ok(
+            "-m", "unittest",
+            f"{__name__}.LeafCallTests._check_local_monitoring_and_trace_decline")
+
+    def _check_local_monitoring_and_trace_decline(self):
         record, target = fresh_record()
         call = make_caller(target)
         warm(call, record)
@@ -283,7 +337,13 @@ class LeafCallTests(unittest.TestCase):
             sys.settrace(old)
         self.assertEqual(info(target)[1], before)
 
+    @requires_subprocess()
     def test_profile_observes_real_callee(self):
+        script_helper.assert_python_ok(
+            "-m", "unittest",
+            f"{__name__}.LeafCallTests._check_profile_observes_real_callee")
+
+    def _check_profile_observes_real_callee(self):
         record, target = fresh_record()
         call = make_caller(target)
         warm(call, record)
@@ -321,7 +381,7 @@ class LeafCallTests(unittest.TestCase):
     def test_alias_multiplicity_and_discard_nonfinal_guard(self):
         def ignore(first, second):
             return None
-        ignore = reset_code(ignore)
+        ignore = fresh_function(ignore.__code__.replace(), globals())
         self.require_hits(ignore)
         events = []
         class Owned:
@@ -345,7 +405,7 @@ class LeafCallTests(unittest.TestCase):
 
         def identity(value):
             return value
-        identity = reset_code(identity)
+        identity = fresh_function(identity.__code__.replace(), globals())
         def discard_last(items):
             identity(items.pop())
         for _ in range(ROUNDS):
@@ -361,7 +421,7 @@ class LeafCallTests(unittest.TestCase):
     def test_old_local_and_window_alias_guard(self):
         def constant(value):
             return None
-        constant = reset_code(constant)
+        constant = fresh_function(constant.__code__.replace(), globals())
         self.require_hits(constant)
         events = []
         class Owned:
@@ -385,7 +445,7 @@ class LeafCallTests(unittest.TestCase):
     def test_function_argument_alias_and_retained_caller(self):
         def identity(value):
             return value
-        identity = reset_code(identity)
+        identity = fresh_function(identity.__code__.replace(), globals())
         self.require_hits(identity)
         frames = []
         def call():

@@ -1920,6 +1920,11 @@ ir_leaf_read_path(PyFunctionObject *function, PyCodeObject *code,
         case _PY_IR_LEAF_SMALL_INT:
             value = PyValue_Borrow(PyValue_FromInlineInt(path->root));
             break;
+        case _PY_IR_LEAF_COMMON_CONSTANT:
+            /* Interpreter initialization immortalizes these canonical roots;
+             * admission excludes the phase that clears their homes. */
+            value = PyValue_Borrow(_PyInterpreterState_GET()->common_consts[path->root]);
+            break;
         case _PY_IR_LEAF_GLOBAL: {
             uint32_t pc = path->root;
             int handler = IR_HANDLER(exec->words[pc]);

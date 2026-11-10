@@ -580,7 +580,7 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame 
  * The remaining caller homes from base + nargs to its slot end are NULL,
  * and the callee leaves the overlap NULL on retirement. Must be guarded by
  * _PyThreadState_HasStackSpace(), for co_framesize. Consumes func. */
-static inline _PyInterpreterFrame *
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
                          PyValue *base, int nargs,
                          _PyInterpreterFrame *previous)

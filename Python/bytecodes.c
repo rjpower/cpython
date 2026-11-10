@@ -4052,12 +4052,14 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_NO_DICT;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            PyValue_CLOSE(owner);
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+            PyValueBorrow found = _PyValueGuarded_Load(class_value);
+            assert(!PyValue_IsNull(found));
+            attr = IR_CANONICAL_HOME_DUP(found);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
@@ -4067,13 +4069,15 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (descr/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            PyValue_CLOSE(owner);
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+            PyValueBorrow found = _PyValueGuarded_Load(class_value);
+            assert(!PyValue_IsNull(found));
+            attr = IR_CANONICAL_HOME_DUP(found);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
@@ -5010,6 +5014,10 @@ dummy_func(
             IR_INVOKE_CALL();
         }
 
+        inline_ok op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
+            IR_INVOKE_GUARDED_PYTHON_CALL();
+        }
+
         op(_CHECK_FUNCTION_VERSION_KW, (func_version/2, callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused)) {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
@@ -5022,7 +5030,7 @@ dummy_func(
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION_KW +
             _CHECK_RECURSION_REMAINING +
-            _PY_FRAME_KW +
+            _PY_FRAME_KW_GUARDED +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
@@ -5052,13 +5060,13 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
+        specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], kwnames -- callable, self_or_null, unused[oparg], kwnames)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallKw(callable, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
                 IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }

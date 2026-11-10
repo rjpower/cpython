@@ -16,6 +16,25 @@ extern "C" {
 
 #include <stdbool.h>              // bool
 
+/* Non-owning cache metadata. A version/owner proof must still hold when a
+   guarded word is loaded as a transient borrow. Unlike PyValueBorrow, this
+   metadata may outlive the C call that recorded it; it never roots an object. */
+typedef struct { uintptr_t bits; } _PyValueGuarded;
+
+static inline _PyValueGuarded
+_PyValueGuarded_FromBorrow(PyValueBorrow value)
+{
+    _PyValueGuarded guarded = {value.bits};
+    return guarded;
+}
+
+static inline PyValueBorrow
+_PyValueGuarded_Load(_PyValueGuarded guarded)
+{
+    PyValueBorrow value = {guarded.bits};
+    return value;
+}
+
 /* The box argument (pyjit/design/proposals/value-api-g.md, section 1.1).
  * In stats builds every box primitive takes a _PyBoxAt: the site class
  * (BOX_SITE_*), the kind (BOX_KIND_*) and the owner, the code that the box

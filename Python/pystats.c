@@ -222,6 +222,7 @@ print_call_stats(FILE *out, CallStats *stats)
 {
     fprintf(out, "Calls to PyEval_EvalDefault: %" PRIu64 "\n", stats->pyeval_calls);
     fprintf(out, "Calls to Python functions inlined: %" PRIu64 "\n", stats->inlined_py_calls);
+    fprintf(out, "Keyword binding plan hits: %" PRIu64 "\n", stats->keyword_plan_hits);
     fprintf(out, "Frames pushed: %" PRIu64 "\n", stats->frames_pushed);
     fprintf(out, "Frame objects created: %" PRIu64 "\n", stats->frame_objects_created);
     for (int i = 0; i < EVAL_CALL_KINDS; i++) {
@@ -396,6 +397,7 @@ static void
 merge_call_stats(CallStats *dest, const CallStats *src)
 {
     dest->inlined_py_calls += src->inlined_py_calls;
+    dest->keyword_plan_hits += src->keyword_plan_hits;
     dest->pyeval_calls += src->pyeval_calls;
     dest->frames_pushed += src->frames_pushed;
     dest->frame_objects_created += src->frame_objects_created;

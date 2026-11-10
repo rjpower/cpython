@@ -2980,9 +2980,9 @@ class IREmitter(Emitter):
         argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
         if run_override:
             self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
-                      f"call_base, call_destination, {argc}fb);\n")
+                      f"call_base, call_destination, {argc}{self.call_kind}, fb);\n")
             self.emit("if (call_result.status > 0) {\n")
-            self.emit(f"call_result = call_transaction_run_vector(tstate, frame, "
+            self.emit(f"call_result = {self.call_run}(tstate, frame, "
                       f"call_base, call_destination, {argc}"
                       f"{self.call_flags} | call_state | CALL_PREPARED);\n")
             self.emit("}\n")
@@ -4025,7 +4025,17 @@ def write_uop(
     storage = Storage.for_uop(stack, uop, emitter.out)
     for cache in uop.caches:
         if cache.name != "unused":
-            if cache.size == 4:
+            if cache.name == "class_value":
+                if cache.size != 4:
+                    raise analysis_error(
+                        "guarded class_value cache operand must use four units",
+                        inst.where)
+                if emitter.format_of(inst).fb_layout != "_PyFbAttr":
+                    raise analysis_error(
+                        "guarded class_value requires attribute feedback",
+                        inst.where)
+                value = f"_PyValueGuarded {cache.name} = fb->{cache.name};"
+            elif cache.size == 4:
                 value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
             else:
                 value = f"uint32_t {cache.name} = fb->{cache.name};"
@@ -4153,8 +4163,11 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
                if t.text == "IR_INVOKE_GUARDED_PYTHON_CALL"]
     if not markers:
         return
-    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION",
-                "_CHECK_RECURSION_REMAINING", "_PY_FRAME_GENERAL_GUARDED",
+    keyword = inst.name == "CALL_KW_PY"
+    expected = ["_CHECK_PEP_523",
+                "_CHECK_FUNCTION_VERSION_KW" if keyword else "_CHECK_FUNCTION_VERSION",
+                "_CHECK_RECURSION_REMAINING",
+                "_PY_FRAME_KW_GUARDED" if keyword else "_PY_FRAME_GENERAL_GUARDED",
                 "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
     if len(markers) != 1 or [p.name for p in parts] != expected:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
@@ -4171,6 +4184,10 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
                     ([], [])]
     invoke_shape = ([("callable", False, ""), ("self_or_null", False, ""),
                      ("args", False, "oparg")], [("new_frame", False, "")])
+    if keyword:
+        guard_shapes[1][0].append(("unused", True, ""))
+        guard_shapes[1][1].append(("unused", True, ""))
+        invoke_shape[0].append(("kwnames", False, ""))
     def statements(part):
         return [" ".join(t.text for t in stmt.tokens())
                 for stmt in part.body.body]
@@ -4178,10 +4195,13 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
     # These guards' semantics are a shared contract with this optimization.
     # The source primitives establish the PEP 523, version/provider and
     # recursion facts; their shape and nonescaping prefix are checked here.
-    if (inst.name != "CALL_PY_GENERAL" or not fmt.window or not fmt.store_dst
+    if (inst.name not in ("CALL_PY_GENERAL", "CALL_KW_PY") or
+            not fmt.window or not fmt.store_dst
             or fmt.field_of(ROLE_BASE) is None or fmt.field_of(ROLE_DST) is None
-            or fmt.group != "CALL" or not inst.properties.oparg
-            or [(i.size) for i in inputs] != ["", "", "oparg"]
+            or fmt.group != ("CALL_KW" if keyword else "CALL")
+            or not inst.properties.oparg
+            or [(i.size) for i in inputs] !=
+                (["", "", "oparg", ""] if keyword else ["", "", "oparg"])
             or len(outputs) != 1 or outputs[0].item.size
             or [(shape(p.stack.inputs), shape(p.stack.outputs))
                 for p in prefix] != guard_shapes
@@ -4588,7 +4608,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -4602,7 +4622,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({canonical_handler(name)});\n")
     if is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
+        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if record:

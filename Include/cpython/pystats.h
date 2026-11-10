@@ -108,6 +108,7 @@ typedef struct _opcode_stats {
 
 typedef struct _call_stats {
     uint64_t inlined_py_calls;
+    uint64_t keyword_plan_hits;
     uint64_t pyeval_calls;
     uint64_t frames_pushed;
     uint64_t frame_objects_created;

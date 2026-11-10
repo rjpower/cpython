@@ -392,6 +392,53 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
 
+    def test_guarded_keyword_call_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def generate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            out = io.StringIO()
+            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+            return out.getvalue()
+
+        output = generate(source)
+        body = self.handler(output, "CALL_KW_PY")
+        success, fallback = body.split("call_transaction_fallback_CALL_KW_PY:;")
+        self.assertIn("call_bind_known_python(", success)
+        self.assertIn("CALL_TRANSACTION_KEYWORDS, fb)", success)
+        self.assertIn("if (call_result.status > 0)", success)
+        self.assertIn("call_transaction_run_keywords(", success)
+        self.assertNotIn("call_transaction_run_vector(", body)
+        self.assertIn("CALL_PREPARED", success)
+        self.assertIn("call_transaction_run_keywords(", fallback)
+        self.assertNotIn("call_bind_known_python(", fallback)
+        for name in ("CALL_KW_BOUND_METHOD", "INSTRUMENTED_CALL_KW"):
+            with self.subTest(name=name):
+                self.assertNotIn("call_bind_known_python(", self.handler(output, name))
+
+        changes = (
+            ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION_KW +",
+             "_CHECK_FUNCTION_VERSION_KW +"),
+            ("_CHECK_FUNCTION_VERSION_KW +\n            _CHECK_RECURSION_REMAINING +",
+             "_CHECK_RECURSION_REMAINING +"),
+            ("_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_KW_GUARDED +",
+             "_PY_FRAME_KW_GUARDED +"),
+            ("op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg], kwnames -- new_frame))",
+             "op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg] -- new_frame))"),
+            ("_CHECK_METHOD_VERSION_KW +\n            _EXPAND_METHOD_KW +",
+             "_CHECK_METHOD_VERSION_KW +\n            _PY_FRAME_KW_GUARDED +"),
+            ("_MONITOR_CALL_KW +\n            _DO_CALL_KW;",
+             "_MONITOR_CALL_KW +\n            _PY_FRAME_KW_GUARDED;"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                with self.assertRaises(SyntaxError):
+                    generate(source.replace(old, new, 1))
+
     def test_terminal_observer_ownership_and_composition(self):
         source = """
         inst(OP, (value -- res)) {
@@ -3071,6 +3118,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
         for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",
                      "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL", "_PY_FRAME_GENERAL",
                      "_PY_FRAME_GENERAL_GUARDED", "_DO_CALL_KW", "_PY_FRAME_KW",
+                     "_PY_FRAME_KW_GUARDED",
                      "_DO_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 uop = self.analysis.uops[name]
@@ -3080,7 +3128,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertTrue(uop.properties.sync_sp)
                 self.assertTrue(uop.properties.needs_this)
                 self.assertFalse(uop.is_viable())
-        for name in ("_DO_CALL", "_PY_FRAME_GENERAL_GUARDED"):
+        for name in ("_DO_CALL", "_PY_FRAME_GENERAL_GUARDED", "_PY_FRAME_KW_GUARDED"):
             invoke = self.analysis.uops[name].properties
             self.assertTrue(invoke.always_exits)
             self.assertTrue(invoke.switches_frame)

@@ -218,8 +218,8 @@ PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValueBorrow container, PyValueBorr
     (_Py_Specialize_StoreSubscr)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 PyAPI_FUNC(void) _Py_Specialize_Call(PyValue callable, PyValue self_or_null,
                                 _PyInstr *instr, int nargs);
-PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, _PyInstr *instr,
-                                  int nargs);
+PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, PyValue self_or_null,
+                                  PyValue kwnames, _PyInstr *instr, int nargs);
 PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValueBorrow lhs, PyValueBorrow rhs, _PyInstr *instr,
                                     int oparg, PyValue *locals);
 #define _Py_Specialize_BinaryOp(V0, V1, V2, V3, V4) \

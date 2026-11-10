@@ -1810,7 +1810,8 @@ done:
 static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static inline _PyCallResult call_bind_known_python(
-    PyThreadState *, _PyInterpreterFrame *, int, int, int, const _PyFbCall *);
+    PyThreadState *, _PyInterpreterFrame *, int, int, int,
+    _PyCallTransactionKind, const _PyFbCall *);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
@@ -3575,12 +3576,113 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline _PyCallResult
 call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        int base, int destination, int argument_count,
-                       const _PyFbCall *binding)
+                       _PyCallTransactionKind kind, const _PyFbCall *binding)
 {
 #ifdef Py_GIL_DISABLED
     return (_PyCallResult){1, NULL};
 #else
-    if ((binding->binding_flags & _Py_CALL_BIND_DIRECT) &&
+    if (kind == CALL_TRANSACTION_KEYWORDS &&
+        (binding->binding_flags & _Py_CALL_BIND_KEYWORDS) &&
+        frame->owner == FRAME_OWNED_BY_THREAD)
+    {
+        int kwcount = (binding->binding_flags & _Py_CALL_BIND_KEYWORD_COUNT_MASK)
+            >> _Py_CALL_BIND_KEYWORD_COUNT_SHIFT;
+        PyValue *homes = frame->base + base;
+        PyFunctionObject *func = (PyFunctionObject *)
+            PyValue_AsKnownObjectBorrow(homes[0]);
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        int has_self = !PyValue_IsNull(homes[1]);
+        int offset = has_self ? 1 : 2;
+        int positional = argument_count + has_self - kwcount;
+        PyValueBorrow names_value = PyValue_Borrow(homes[argument_count + 2]);
+        if (kwcount < 1 || kwcount > _Py_CALL_BIND_KEYWORD_CAPACITY ||
+            has_self != !!(binding->binding_flags & _Py_CALL_BIND_SELF) ||
+            positional < 0 || positional > code->co_argcount ||
+            !PyValue_IsObject(names_value) ||
+            !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names_value)) ||
+            func->vectorcall != _PyFunction_Vectorcall ||
+            code->_co_exec == NULL ||
+            !_PyThreadState_HasStackSpace(tstate, code->co_framesize))
+        {
+            return (_PyCallResult){1, NULL};
+        }
+        PyObject *names = PyValue_AsKnownObjectBorrow(names_value);
+        if (PyTuple_GET_SIZE(names) != kwcount) {
+            return (_PyCallResult){1, NULL};
+        }
+        int total = code->co_argcount + code->co_kwonlyargcount;
+        for (int i = 0; i < kwcount; i++) {
+            int slot = binding->binding.keyword_dest[i];
+            PyValueBorrow name = PyTuple_GET_VALUE(names, i);
+            if (slot < code->co_posonlyargcount || slot < positional ||
+                slot >= total || !PyValue_IsObject(name) ||
+                !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(name)) ||
+                PyValue_AsKnownObjectBorrow(name) !=
+                    _PyTuple_GET_OBJECT(code->co_localsplusnames, slot))
+            {
+                return (_PyCallResult){1, NULL};
+            }
+            for (int j = 0; j < i; j++) {
+                if (binding->binding.keyword_dest[j] == slot) {
+                    return (_PyCallResult){1, NULL};
+                }
+            }
+        }
+
+        /* Functions created from the same code share a version. Read their
+         * current default shape before relying on the cached coverage proof. */
+        PyObject *defaults = func->func_defaults;
+        Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+        Py_ssize_t first_default = code->co_argcount - ndefaults;
+        if (ndefaults > UINT16_MAX || first_default - positional > kwcount) {
+            return (_PyCallResult){1, NULL};
+        }
+        for (int slot = positional; slot < first_default; slot++) {
+            int i;
+            for (i = 0; i < kwcount; i++) {
+                if (binding->binding.keyword_dest[i] == slot) {
+                    break;
+                }
+            }
+            if (i == kwcount) {
+                return (_PyCallResult){1, NULL};
+            }
+        }
+
+        /* All guards precede this transfer. Detach the keyword suffix and
+         * names before initialization can fill overlapping constant slots. */
+        PyValue keywords[_Py_CALL_BIND_KEYWORD_CAPACITY];
+        for (int i = 0; i < kwcount; i++) {
+            keywords[i] = homes[offset + positional + i];
+            homes[offset + positional + i] = PyValue_NULL;
+        }
+        PyValue names_owner = homes[argument_count + 2];
+        homes[argument_count + 2] = PyValue_NULL;
+        PyValue function = homes[0];
+        homes[0] = PyValue_NULL;
+        /* No failure, callback or release until the child is complete. */
+        _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
+            tstate, function, homes + offset, positional, frame);
+        for (int i = 0; i < kwcount; i++) {
+            child->base[binding->binding.keyword_dest[i]] = keywords[i];
+        }
+        for (int i = positional; i < code->co_argcount; i++) {
+            if (PyValue_IsNull(child->base[i])) {
+                assert(i >= first_default);
+                child->base[i] = PyValue_XDUP(
+                    _PyTuple_ITEMS(defaults)[i - first_default]);
+            }
+        }
+        frame->return_slot = (uint16_t)destination;
+        frame->return_pc = frame->instr_ptr + 1;
+        tstate->current_frame = child;
+        CALL_STAT_INC(keyword_plan_hits);
+        /* Exact strings in an exact tuple cannot invoke Python finalizers. */
+        PyValue_CLOSE(names_owner);
+        return (_PyCallResult){0, child};
+    }
+    if (kind == CALL_TRANSACTION_VECTOR &&
+        (binding->binding_flags & _Py_CALL_BIND_DIRECT) &&
         frame->owner == FRAME_OWNED_BY_THREAD)
     {
         PyValue *homes = frame->base + base;
@@ -3589,11 +3691,23 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyCodeObject *code = (PyCodeObject *)func->func_code;
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
         int supplied = argument_count + 2 - offset;
-        if (supplied == binding->bound_count && code->_co_exec != NULL &&
+        if (supplied == binding->binding.positional.bound_count && code->_co_exec != NULL &&
             _PyThreadState_HasStackSpace(tstate, code->co_framesize))
         {
+            if (supplied < code->co_argcount) {
+                /* A same-code function can share this version but have a
+                 * different defaults tuple. Validate the cached offset. */
+                PyObject *defaults = func->func_defaults;
+                Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+                Py_ssize_t first_default = code->co_argcount - ndefaults;
+                if (ndefaults > UINT16_MAX || supplied < first_default ||
+                    binding->binding.positional.default_start != supplied - first_default)
+                {
+                    return (_PyCallResult){1, NULL};
+                }
+            }
             PyObject *kwargs = NULL;
-            if (binding->kwargs_slot != IR_NO_DST &&
+            if (binding->binding.positional.kwargs_slot != IR_NO_DST &&
                 !(binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS))
             {
                 /* Empty-dict allocation schedules GC; it does not run
@@ -3611,19 +3725,19 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
                 for (int i = supplied; i < code->co_argcount; i++) {
                     child->base[i] = PyValue_XDUP(
-                        defaults[binding->default_start + i - supplied]);
+                        defaults[binding->binding.positional.default_start + i - supplied]);
                 }
             }
             if (binding->binding_flags & _Py_CALL_BIND_VARARGS) {
                 child->base[code->co_argcount] =
                     (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
             }
-            if (binding->kwargs_slot != IR_NO_DST) {
+            if (binding->binding.positional.kwargs_slot != IR_NO_DST) {
                 if (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) {
-                    child->pending_kwargs = binding->kwargs_slot;
+                    child->pending_kwargs = binding->binding.positional.kwargs_slot;
                 }
                 else {
-                    child->base[binding->kwargs_slot] = PyValue_FromObjectSteal(kwargs);
+                    child->base[binding->binding.positional.kwargs_slot] = PyValue_FromObjectSteal(kwargs);
                 }
             }
             frame->return_slot = (uint16_t)destination;

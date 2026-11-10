@@ -368,7 +368,7 @@ typedef struct {
     uint32_t type_version;
     uint32_t aux;
     uint32_t index;
-    const void *descr;
+    _PyFbPayload payload;
 } fb_row;
 
 static _PyFbBlock *
@@ -380,7 +380,7 @@ fb_block(_PyInstr *instr)
 }
 
 static fb_row
-fb_row_of(_PyFbHeader *h)
+fb_row_of(_PyFbHeader *h, int opcode)
 {
     fb_row row = {0};
     switch (h->kind) {
@@ -391,13 +391,38 @@ fb_row_of(_PyFbHeader *h)
         case FB_BINARY:
             row.type_version = ((_PyFbBinary *)h)->lhs_version;
             row.aux = ((_PyFbBinary *)h)->rhs_version;
-            row.descr = ((_PyFbBinary *)h)->descr;
+            row.payload.descr = ((_PyFbBinary *)h)->descr;
             break;
         case FB_ATTR:
             row.type_version = ((_PyFbAttr *)h)->type_version;
             row.aux = ((_PyFbAttr *)h)->dict_version;
             row.index = ((_PyFbAttr *)h)->index;
-            row.descr = ((_PyFbAttr *)h)->descr;
+            /* A historical observation copies metadata, never a live borrow.
+             * The recorded handler identifies the active payload member. */
+            switch (opcode) {
+                case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
+                case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
+                    row.payload.class_value = ((_PyFbAttr *)h)->class_value;
+                    break;
+                case STORE_ATTR_SHAPE_ADD:
+                    row.payload.shape_to = ((_PyFbAttr *)h)->shape_to;
+                    break;
+                case LOAD_ATTR_PROPERTY:
+                    row.payload.descr = ((_PyFbAttr *)h)->fget;
+                    break;
+                case LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN:
+                    row.payload.descr = ((_PyFbAttr *)h)->getattribute;
+                    break;
+                case LOAD_ATTR_CLASS:
+                case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
+                case LOAD_ATTR_METHOD_WITH_VALUES:
+                case LOAD_ATTR_METHOD_NO_DICT:
+                case LOAD_ATTR_METHOD_LAZY_DICT:
+                    row.payload.descr = ((_PyFbAttr *)h)->descr;
+                    break;
+                default:
+                    break;
+            }
             break;
         case FB_CALL:
             row.type_version = ((_PyFbCall *)h)->func_version;
@@ -415,7 +440,7 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->type_version[i] = row.type_version;
     poly->aux[i] = row.aux;
     poly->index[i] = row.index;
-    poly->descr[i] = row.descr;
+    poly->payload[i] = row.payload;
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
@@ -441,7 +466,7 @@ fb_save_mono(_PyInstr *instr, _PyFbHeader *h, int opcode, bool may_allocate)
         block->poly = poly;
     }
     memset(&block->poly[n], 0, sizeof(_PyFbPoly));
-    fb_put_row(&block->poly[n], 0, fb_row_of(h), opcode);
+    fb_put_row(&block->poly[n], 0, fb_row_of(h, opcode), opcode);
     block->npoly = n + 1;
     h->poly = n + 1;
 }
@@ -550,7 +575,7 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
         return;
     }
     _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
-    fb_row row = fb_row_of(h);
+    fb_row row = fb_row_of(h, opcode);
     int i = 0;
     while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
            (poly->type_version[i] != row.type_version ||
@@ -1074,7 +1099,7 @@ specialize_dict_access(
 
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
-                              PyObject *name, PyObject *descr,
+                              PyObject *name, PyValueBorrow descriptor,
                               unsigned int tp_version,
                               DescriptorClassification kind, bool is_method,
                               uint32_t shared_keys_version);
@@ -1140,7 +1165,8 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 goto try_instance;
             }
             if (oparg & 1) {
-                if (specialize_attr_loadclassattr(owner, instr, name, descr,
+                if (specialize_attr_loadclassattr(owner, instr, name,
+                                                  PyValue_Borrow(descriptor),
                                                   tp_version, kind, true,
                                                   shared_keys_version)) {
                     return 0;
@@ -1271,16 +1297,13 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             }
             return -1;
         case INLINE_VALUE:
-            if (shadow) {
-                goto try_instance;
-            }
-            return -1;
         case NON_DESCRIPTOR:
             if (shadow) {
                 goto try_instance;
             }
             if ((oparg & 1) == 0) {
-                if (specialize_attr_loadclassattr(owner, instr, name, descr,
+                if (specialize_attr_loadclassattr(owner, instr, name,
+                                                  PyValue_Borrow(descriptor),
                                                   tp_version, kind, false,
                                                   shared_keys_version)) {
                     return 0;
@@ -1633,7 +1656,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
 // python.exe -m test_typing test_re test_dis test_zlib.
 static int
 specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
-                              PyObject *name, PyObject *descr,
+                              PyObject *name, PyValueBorrow descriptor,
                               unsigned int tp_version,
                               DescriptorClassification kind, bool is_method,
                               uint32_t shared_keys_version)
@@ -1641,11 +1664,13 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     _PyFbAttr *fb = instr_entry(instr);
     PyTypeObject *owner_cls = Py_TYPE(owner);
 
-    assert(descr != NULL);
-    assert((is_method && kind == METHOD) || (!is_method && kind == NON_DESCRIPTOR));
+    assert(!PyValue_IsNull(descriptor));
+    assert((is_method && kind == METHOD) ||
+           (!is_method && (kind == NON_DESCRIPTOR || kind == INLINE_VALUE)));
 
     #ifdef Py_GIL_DISABLED
-    if (!_PyObject_HasDeferredRefcount(descr)) {
+    if (PyValue_IsObject(descriptor) &&
+        !_PyObject_HasDeferredRefcount(PyValue_AsKnownObjectBorrow(descriptor))) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
         return 0;
     }
@@ -1697,22 +1722,17 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
             return 0;
         }
     }
-    /* `descr` is borrowed. This is safe for methods (even inherited ones from
-    *  super classes!) as long as tp_version_tag is validated for two main reasons:
-    *
-    *  1. The class will always hold a reference to the method so it will
-    *  usually not be GC-ed. Should it be deleted in Python, e.g.
-    *  `del obj.meth`, tp_version_tag will be invalidated, because of reason 2.
-    *
-    *  2. The pre-existing type method cache (MCACHE) uses the same principles
-    *  of caching a borrowed descriptor. The MCACHE infrastructure does all the
-    *  heavy lifting for us. E.g. it invalidates tp_version_tag on any MRO
-    *  modification, on any type object change along said MRO, etc. (see
-    *  PyType_Modified usages in typeobject.c). The MCACHE has been
-    *  working since Python 2.6 and it's battle-tested.
-    */
+    /* The class or an MRO base owns this non-owning payload. Type mutation
+     * invalidates the receiver's version before releasing that owner. Adding
+     * an absent shared instance key also invalidates its owning type first.
+     * A hit must acquire its result before receiver retirement can reenter. */
     fb->type_version = tp_version;
-    fb->descr = descr;
+    if (is_method) {
+        fb->descr = PyValue_AsKnownObjectBorrow(descriptor);
+    }
+    else {
+        fb->class_value = _PyValueGuarded_FromBorrow(descriptor);
+    }
     specialize(instr, opcode);
     return 1;
 }
@@ -2193,15 +2213,16 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         supplied >= first_default && ndefaults <= UINT16_MAX &&
         supplied - first_default <= UINT16_MAX)
     {
-        fb->bound_count = (uint16_t)supplied;
-        fb->default_start = (uint16_t)(supplied - first_default);
+        fb->binding.positional.bound_count = (uint16_t)supplied;
+        fb->binding.positional.default_start = (uint16_t)(supplied - first_default);
         int extra = code->co_argcount;
         fb->binding_flags = _Py_CALL_BIND_DIRECT;
         if (code->co_flags & CO_VARARGS) {
             fb->binding_flags |= _Py_CALL_BIND_VARARGS;
             extra++;
         }
-        fb->kwargs_slot = code->co_flags & CO_VARKEYWORDS ? extra : IR_NO_DST;
+        fb->binding.positional.kwargs_slot =
+            code->co_flags & CO_VARKEYWORDS ? extra : IR_NO_DST;
         if ((code->co_flags & (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS)) ==
             (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS))
         {
@@ -2221,9 +2242,88 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
 }
 
 
+/* Cache only destinations: names and defaults remain owned by the guarded
+ * function/code. Three destinations reuse the positional plan's payload. */
+static void
+specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
+                           int nargs, bool has_self, PyValueBorrow names)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!(code->co_flags & CO_OPTIMIZED) ||
+        (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR |
+                           CO_VARARGS | CO_VARKEYWORDS)) ||
+        !PyValue_IsObject(names) ||
+        !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)))
+    {
+        return;
+    }
+    PyObject *kwnames = PyValue_AsKnownObjectBorrow(names);
+    Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
+    if (kwcount < 1 || kwcount > _Py_CALL_BIND_KEYWORD_CAPACITY) {
+        return;
+    }
+    int positional = nargs + has_self - (int)kwcount;
+    int total = code->co_argcount + code->co_kwonlyargcount;
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    if (positional < 0 || positional > code->co_argcount ||
+        total > UINT16_MAX || ndefaults > UINT16_MAX)
+    {
+        return;
+    }
+    uint16_t destinations[_Py_CALL_BIND_KEYWORD_CAPACITY];
+    for (int i = 0; i < kwcount; i++) {
+        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
+        if (!PyValue_IsObject(name) ||
+            !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(name)))
+        {
+            return;
+        }
+        int destination;
+        for (destination = code->co_posonlyargcount; destination < total;
+             destination++)
+        {
+            if (PyValue_AsKnownObjectBorrow(name) ==
+                _PyTuple_GET_OBJECT(code->co_localsplusnames, destination))
+            {
+                break;
+            }
+        }
+        if (destination == total || destination < positional) {
+            return;
+        }
+        for (int j = 0; j < i; j++) {
+            if (destinations[j] == destination) {
+                return;
+            }
+        }
+        destinations[i] = (uint16_t)destination;
+    }
+    Py_ssize_t first_default = code->co_argcount - ndefaults;
+    for (int slot = positional; slot < total; slot++) {
+        int i;
+        for (i = 0; i < kwcount; i++) {
+            if (destinations[i] == slot) {
+                break;
+            }
+        }
+        if (i == kwcount &&
+            (slot >= code->co_argcount || slot < first_default))
+        {
+            return;
+        }
+    }
+    for (int i = 0; i < kwcount; i++) {
+        fb->binding.keyword_dest[i] = destinations[i];
+    }
+    fb->binding_flags = _Py_CALL_BIND_KEYWORDS |
+        ((uint16_t)kwcount << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT) |
+        (has_self ? _Py_CALL_BIND_SELF : 0);
+}
+
 static int
 specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
-                   bool bound_method)
+                     bool bound_method, bool has_self, PyValueBorrow kwnames)
 {
     _PyFbCall *fb = instr_entry(instr);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -2247,6 +2347,10 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
+    fb->binding_flags = 0;
+    if (!bound_method) {
+        specialize_keyword_binding(func, fb, nargs, has_self, kwnames);
+    }
     specialize(instr, bound_method ? CALL_KW_BOUND_METHOD : CALL_KW_PY);
     return 0;
 }
@@ -2368,7 +2472,8 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
 }
 
 Py_NO_INLINE void
-_Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
+_Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
+                     PyValue kwnames, _PyInstr *instr, int nargs)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_KW] == INLINE_CACHE_ENTRIES_CALL_KW);
@@ -2385,12 +2490,15 @@ _Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
     PyObject *callable = PyValue_AsKnownObjectBorrow(callable_st);
     int fail;
     if (PyFunction_Check(callable)) {
-        fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs, false);
+        fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs,
+                                    false, !PyValue_IsNull(self_or_null),
+                                    PyValue_Borrow(kwnames));
     }
     else if (PyMethod_Check(callable)) {
         PyObject *func = ((PyMethodObject *)callable)->im_func;
         if (PyFunction_Check(func)) {
-            fail = specialize_py_call_kw((PyFunctionObject *)func, instr, nargs, true);
+            fail = specialize_py_call_kw((PyFunctionObject *)func, instr, nargs,
+                                        true, false, PyValue_Borrow(kwnames));
         }
         else {
             SPECIALIZATION_FAIL(CALL_KW, SPEC_FAIL_CALL_BOUND_METHOD);

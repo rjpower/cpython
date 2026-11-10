@@ -10,6 +10,7 @@ extern "C" {
 
 #include "pycore_backoff.h"     // _Py_BackoffCounter
 #include "pycore_pymem.h"       // _PyMem_NoScanFree()
+#include "pycore_value.h"       // _PyValueGuarded
 #include "opcode_ids.h"         // RESUME, LOAD_ATTR, ...
 
 /* Typed feedback.
@@ -127,13 +128,17 @@ typedef struct {
         uint32_t dictoffset;
     };
     uint32_t _pad;
-    union {                         // borrowed; valid while the versions match
+    union {                         // non-owning; valid while the versions match
         PyObject *descr;
+        _PyValueGuarded class_value; // unshadowed class value, guarded by type_version
         PyObject *fget;
         PyObject *getattribute;
         uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
 } _PyFbAttr;
+
+static_assert(sizeof(_PyFbAttr) == sizeof(_PyFbHeader) + 24,
+              "attribute feedback size changed");
 
 // LOAD_GLOBAL
 typedef struct {
@@ -145,6 +150,8 @@ typedef struct {
 } _PyFbGlobal;
 
 // CALL, CALL_KW, CALL_FUNCTION_EX
+#define _Py_CALL_BIND_KEYWORD_CAPACITY 3
+
 typedef struct {
     _PyFbHeader h;
     union {
@@ -152,28 +159,48 @@ typedef struct {
         uint32_t type_version;      // CALL_ALLOC_AND_ENTER_INIT: the class
     };
     uint32_t callable_type_version; // recorded but not guarded
-    uint16_t bound_count;          // supplied positionals for the direct plan
-    uint16_t default_start;        // index in current func_defaults
-    uint16_t kwargs_slot;          // IR_NO_DST when no **kwargs binding
+    union {
+        struct {
+            uint16_t bound_count;
+            uint16_t default_start;
+            uint16_t kwargs_slot;
+        } positional;
+        uint16_t keyword_dest[_Py_CALL_BIND_KEYWORD_CAPACITY];
+    } binding;
     uint16_t binding_flags;        // _Py_CALL_BIND_*; scalar-only guarded plan
 } _PyFbCall;
+
+static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 16,
+              "keyword destinations reuse the positional binding payload");
 
 #define _Py_CALL_BIND_DIRECT 1
 #define _Py_CALL_BIND_VARARGS 2
 #define _Py_CALL_BIND_VIRTUAL_KWARGS 4
+#define _Py_CALL_BIND_KEYWORDS 8
+#define _Py_CALL_BIND_KEYWORD_COUNT_SHIFT 4
+#define _Py_CALL_BIND_KEYWORD_COUNT_MASK (3 << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT)
+#define _Py_CALL_BIND_SELF 64
 
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the
  * receiver type and the dict, function or class version for ATTR, the
- * function and callable type versions for CALL.  index[i] and descr[i] are
- * the entry's index and descr fields, handler[i] the specialised opcode. */
+ * function and callable type versions for CALL. index[i] and payload[i] hold
+ * the entry's index and non-owning payload, interpreted by handler[i]. */
+typedef union {
+    const void *descr;
+    _PyValueGuarded class_value;
+    uint32_t shape_to;
+} _PyFbPayload;
+
 typedef struct {
     uint32_t type_version[FB_POLY_SIZE];
     uint32_t aux[FB_POLY_SIZE];
     uint32_t index[FB_POLY_SIZE];
     uint16_t handler[FB_POLY_SIZE];
-    const void *descr[FB_POLY_SIZE];    // borrowed, as in the entry
+    _PyFbPayload payload[FB_POLY_SIZE];
 } _PyFbPoly;
+
+static_assert(sizeof(_PyFbPoly) == 88, "polymorphic feedback size changed");
 
 typedef struct _PyFbBlock {
     uint32_t size;          // bytes from the start of the block to the end of the last entry

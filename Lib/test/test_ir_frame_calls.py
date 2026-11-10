@@ -1,8 +1,11 @@
 """Direct Python binding and materialization of virtual empty kwargs."""
 
+import gc
+import itertools
 import sys
 import types
 import unittest
+import weakref
 from test import support
 from test.support import import_helper
 
@@ -19,6 +22,12 @@ def positional_caller(target):
     return call
 
 
+def keyword_caller(target, arguments):
+    namespace = {"target": target}
+    exec(f"def call():\n    return target({arguments})", namespace)
+    return namespace["call"]
+
+
 def warm(call):
     for _ in range(ROUNDS):
         result = call()
@@ -27,6 +36,268 @@ def warm(call):
 
 @unittest.skipIf(support.Py_GIL_DISABLED, "direct binding requires the GIL")
 class FrameCallTests(unittest.TestCase):
+    def test_keyword_permutations_and_positional_prefix(self):
+        def target(a, b, c):
+            return a, b, c
+
+        for names in itertools.permutations("abc"):
+            arguments = ", ".join(f"{name}={i}" for i, name in enumerate(names))
+            call = keyword_caller(target, arguments)
+            with self.subTest(names=names):
+                expected = tuple(names.index(name) for name in "abc")
+                self.assertEqual(warm(call), expected)
+                self.assertIn("CALL_KW_PY", [w[0] for w in
+                    _testinternalcapi.get_ir(call.__code__, True)])
+
+        for arguments in ("0, 1, c=2", "0, c=2, b=1"):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(warm(keyword_caller(target, arguments)), (0, 1, 2))
+
+    def test_keyword_defaults_holes_and_explicit_kwonly(self):
+        default = object()
+
+        def target(a, b=default, c=default, d=default, *, e):
+            return a, b, c, d, e
+
+        for arguments in ("0, c=2, e=4", "a=0, e=4, c=2"):
+            with self.subTest(arguments=arguments):
+                result = warm(keyword_caller(target, arguments))
+                self.assertEqual((result[0], result[2], result[4]), (0, 2, 4))
+                self.assertIs(result[1], default)
+                self.assertIs(result[3], default)
+
+        def positional_only(a, /, b=default, *, c):
+            return a, b, c
+
+        result = warm(keyword_caller(positional_only, "0, c=2"))
+        self.assertEqual((result[0], result[2]), (0, 2))
+        self.assertIs(result[1], default)
+
+    def test_keyword_defaults_and_code_mutation(self):
+        first = object()
+        second = object()
+
+        def target(a, b=first, c=first):
+            return a, b, c
+
+        call = keyword_caller(target, "a=0, c=2")
+        self.assertIs(warm(call)[1], first)
+        target.__defaults__ = (second, second)
+        self.assertIs(call()[1], second)
+        target.__defaults__ = tuple(range(70000))
+        self.assertEqual(warm(call), (0, 69998, 2))
+        target.__defaults__ = None
+        with self.assertRaisesRegex(TypeError, "missing.*'b'"):
+            call()
+
+        def replacement(a, *, c):
+            return c, a
+
+        target.__code__ = replacement.__code__
+        self.assertEqual(warm(call), (2, 0))
+        call.__globals__["target"] = lambda a, c: (a + c,)
+        self.assertEqual(warm(call), (2,))
+
+    def test_keyword_kwdefaults_mutation_with_explicit_value(self):
+        def target(a, *, b=1):
+            return a, b
+
+        call = keyword_caller(target, "b=2, a=0")
+        self.assertEqual(warm(call), (0, 2))
+        target.__kwdefaults__["b"] = object()
+        self.assertEqual(call(), (0, 2))
+        target.__kwdefaults__ = None
+        self.assertEqual(call(), (0, 2))
+
+    def test_keyword_same_code_different_default_count(self):
+        def factory():
+            def target(a, b=10, c=20):
+                return a, b, c
+            return target
+
+        first = factory()
+        call = keyword_caller(first, "a=0, c=2")
+        self.assertEqual(warm(call), (0, 10, 2))
+        constants = tuple(() if value == (10, 20) else value
+                          for value in factory.__code__.co_consts)
+        factory.__code__ = factory.__code__.replace(co_consts=constants)
+        second = factory()
+        self.assertIs(first.__code__, second.__code__)
+        self.assertEqual(second.__defaults__, ())
+        call.__globals__["target"] = second
+        with self.assertRaisesRegex(TypeError, "missing.*'b'"):
+            call()
+
+    def test_positional_same_code_different_default_count(self):
+        def factory():
+            def target(a, b=10, c=20):
+                return a, b, c
+            return target
+
+        first = factory()
+        factory_code = factory.__code__
+        cases = (
+            ((30, 40), (1, 30, 40)),
+            ((30, 40, 50), (1, 40, 50)),
+            ((30,), None),
+            ((), None),
+            (tuple(range(70000)), (1, 69998, 69999)),
+        )
+        for defaults, expected in cases:
+            with self.subTest(default_count=len(defaults)):
+                target = first
+
+                def call():
+                    return target(1)
+
+                call.__code__ = call.__code__.replace()
+                self.assertEqual(warm(call), (1, 10, 20))
+                self.assertIn("CALL_PY_GENERAL", [w[0] for w in
+                    _testinternalcapi.get_ir(call.__code__, True)])
+                constants = tuple(defaults if value == (10, 20) else value
+                                  for value in factory_code.co_consts)
+                factory.__code__ = factory_code.replace(co_consts=constants)
+                target = factory()
+                self.assertIs(target.__code__, first.__code__)
+                self.assertEqual(target.__defaults__, defaults)
+                if expected is None:
+                    with self.assertRaisesRegex(TypeError, "missing.*'b'"):
+                        call()
+                else:
+                    self.assertEqual(call(), expected)
+
+    def test_keyword_method_and_generator_caller(self):
+        class Target:
+            def method(self, a, b=1, *, c):
+                return self, a, b, c
+
+        target = Target()
+
+        def call():
+            return target.method(0, c=2)
+
+        self.assertEqual(warm(call), (target, 0, 1, 2))
+        self.assertEqual(warm(keyword_caller(target.method, "0, c=2")),
+                         (target, 0, 1, 2))
+
+        def generator():
+            for _ in range(ROUNDS):
+                yield target.method(0, c=2)
+
+        self.assertEqual(list(generator()), [(target, 0, 1, 2)] * ROUNDS)
+
+    def test_keyword_profile_observes_complete_child(self):
+        def target(a, b=1, *, c):
+            return a, b, c
+
+        call = keyword_caller(target, "c=2, a=0")
+        self.assertEqual(warm(call), (0, 1, 2))
+        seen = []
+
+        def observe(frame, event, arg):
+            if event == "call" and frame.f_code is target.__code__:
+                seen.append(tuple(frame.f_locals[name] for name in "abc"))
+
+        previous = sys.getprofile()
+        try:
+            sys.setprofile(observe)
+            self.assertEqual(call(), (0, 1, 2))
+        finally:
+            sys.setprofile(previous)
+        self.assertEqual(seen, [(0, 1, 2)])
+
+    def test_keyword_retirement_reenters_after_child_publication(self):
+        events = []
+
+        def target(a, b, c):
+            return a
+
+        call = keyword_caller(target, "a=0, b=1, c=2")
+        self.assertEqual(warm(call), 0)
+
+        class Value:
+            def __del__(self):
+                events.append(call())
+
+        def retire():
+            return target(c=Value(), b=Value(), a=0)
+
+        for _ in range(ROUNDS):
+            self.assertEqual(retire(), 0)
+        gc.collect()
+        self.assertEqual(events, [0] * (2 * ROUNDS))
+
+    def test_keyword_owners_and_observed_locals(self):
+        class Value:
+            pass
+
+        def target(a, b, c):
+            frame = sys._getframe()
+            return frame.f_locals, (a, b, c)
+
+        def call(a, b, c):
+            return target(c=c, a=a, b=b)
+
+        values = [Value() for _ in range(3)]
+        for _ in range(ROUNDS):
+            observed, result = call(*values)
+        for name, value, returned in zip("abc", values, result):
+            self.assertIs(observed[name], value)
+            self.assertIs(returned, value)
+        refs = [weakref.ref(value) for value in values]
+        del observed, result, values, value, returned
+        gc.collect()
+        self.assertEqual([ref() for ref in refs], [None] * 3)
+
+        def failing(a, b, c):
+            raise RuntimeError("keyword child")
+
+        target = failing
+        for _ in range(ROUNDS):
+            try:
+                call(0, 1, 2)
+            except RuntimeError as exc:
+                tb = exc.__traceback__
+                while tb.tb_next is not None:
+                    tb = tb.tb_next
+                self.assertEqual(tuple(tb.tb_frame.f_locals[n] for n in "abc"),
+                                 (0, 1, 2))
+
+    def test_keyword_unsupported_shapes_and_errors(self):
+        def target(a, b, c, d):
+            return a, b, c, d
+
+        self.assertEqual(warm(keyword_caller(target, "d=3, c=2, b=1, a=0")),
+                         (0, 1, 2, 3))
+
+        def variadic(a, *args, **kwargs):
+            return a, args, kwargs
+
+        self.assertEqual(warm(keyword_caller(variadic, "0, extra=2")),
+                         (0, (), {"extra": 2}))
+
+        def kwonly(a, *, b=1):
+            return a, b
+
+        self.assertEqual(warm(keyword_caller(kwonly, "a=0")), (0, 1))
+
+        def positional_only(a, /, b):
+            return a, b
+
+        cases = (
+            (target, "a=0, b=1, c=2", "missing.*'d'"),
+            (target, "0, a=1, b=2, c=3, d=4", "multiple values.*'a'"),
+            (target, "a=0, b=1, c=2, extra=3", "unexpected keyword.*'extra'"),
+            (target, "0, 1, 2, 3, 4, a=5", "multiple values.*'a'"),
+            (positional_only, "a=0, b=1", "positional-only"),
+        )
+        for function, arguments, message in cases:
+            call = keyword_caller(function, arguments)
+            with self.subTest(arguments=arguments):
+                for _ in range(ROUNDS):
+                    with self.assertRaisesRegex(TypeError, message):
+                        call()
+
     def test_discarded_slot_attribute_and_method_window(self):
         events = []
 

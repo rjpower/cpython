@@ -1368,8 +1368,10 @@ class DisTests(DisTestBase):
                     instructions, text = self.get_feedback(quickened, adaptive)
                     with_fb = [instr for instr in instructions
                                if instr.fb is not None]
+                    # Loop entries precede the other entries; the attribute
+                    # entry occupies six eight-byte feedback units.
                     self.assertEqual([instr.fb for instr in with_fb],
-                                     [14, 18, 22, 2, 5, 10])
+                                     [15, 19, 23, 2, 5, 11])
                     for instr in instructions:
                         self.assertEqual(instr.cache_info is not None,
                                          instr.fb is not None)

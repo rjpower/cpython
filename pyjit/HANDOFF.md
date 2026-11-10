@@ -14,8 +14,11 @@ Release and debug builds check 117 modules and each pass 571 focused tests. The
 API check covers 306 units and is clean. Basic two-pair results are
 DeltaBlue/upstream 1.26303 and logging/upstream 0.91755. See
 [integration47](issues/deltablue-call-model-20261110/integration47.md).
-Sol is implementing A, classmethod forwarding, in the main runtime worktree and
-is host-testing it. In isolated `BASE/worktrees/deltablue-leaf-prototype`, C, the
+Classmethod forwarding is integrated and pushed at `5559f60093e`; both builds
+check 117 modules, corrected release import/classmethod tests pass 147, debug
+focus passes 867, and API306 is clean. See [integration48](issues/deltablue-call-model-20261110/integration48.md).
+Its fresh-build full29 screen gives mean 1.18014/upstream, DeltaBlue1.20915 and
+logging0.75865. In isolated `BASE/worktrees/deltablue-leaf-prototype`, C, the
 conditional leaf experiment, is under implementation at base47. Its proposal
 review is complete. Root owns native jobs, including frozen intermediate
 control builds. Stats remains46. Sol handles all subsequent component reviews.
@@ -53,7 +56,7 @@ Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
 
 | Role | Source below BASE | Build below BASE | Full HEAD |
 | --- | --- | --- | --- |
-| Candidate release/debug | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug} | 986c65ee5ab6433ea80ab3d385abfe5ca8dd7675 |
+| Candidate release/debug | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug} | 5559f60093e8216d9399bea74d0f10c8cdfb9a6b |
 | Stats, previous round | worktrees/execution-boundaries-20261108 | execution-boundaries-stats | b8e7e1bee6611eeda320ce163cd3ce89323da877 |
 | Previous golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
 | Current golden | worktrees/golden-20261109-runtime | golden-20261109-release | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |

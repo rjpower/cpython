@@ -8,15 +8,20 @@ Release and debug each pass 571 focused tests. The API check covers 306 units
 with zero failing findings or parse errors. A short two-pair screen gives
 DeltaBlue 1.26303/upstream and logging 0.91755/upstream; logging is 5.53% slower
 than the rebuilt46 control.
-Full qualification and repeated target timings belong at the batch boundary.
+The second [integration](issues/deltablue-call-model-20261110/integration48.md),
+`5559f60093e`, adds classmethod pair forwarding and is committed/pushed.
+Its cold review is clear, release/debug builds check 117 modules, debug passes
+867 focused tests, corrected release import/classmethod tests pass 147, and the
+API check is clean. A fresh-build full29 screen gives mean 1.18014/upstream,
+DeltaBlue 1.20915 and logging 0.75865. Full suites and repeated target timings
+belong at the batch boundary.
 See the
 [new plan](issues/deltablue-call-model-20261110/plan.md) and
 [grouped design](issues/deltablue-call-model-20261110/design-overview.md). One broad
 Astra review is complete; it selected uniform canonical class reads, classmethod
 pair forwarding and complete conditional leaf-region elision. Sol approved the
-first lookup proposal and post-reviewed its implementation. Classmethod forwarding
-is being implemented in the main runtime worktree; the conditional leaf prototype
-is under implementation in an isolated worktree after proposal review.
+first lookup proposal and post-reviewed both integrations. The conditional leaf
+prototype is being corrected after actual-code review in an isolated worktree.
 
 The user permits useful incremental progress with documented tradeoffs. The
 following table records the earlier46 checkpoint, not the newer47 screen. Earlier46
@@ -57,7 +62,8 @@ fields; the API checker stays strict. Attr/poly sizes are 48/120 bytes and magic
 64417 versions serialized feedback geometry. Four scoped censuses retain private
 site admission; warm entry storage grows about 8% in logging and 10% in DeltaBlue.
 
-Release, debug and stats builds identify46 and check 117 modules. The production45
+At that historical checkpoint, release, debug and stats builds identified46 and
+checked 117 modules. The production45
 checkpoint passed 564 focused tests in each release and debug build, with clean
 API checks (306 units, zero failing findings or parse errors) and full diagnostic
 runs of 54,674 tests each. Full runs retain known GDB display failures (16/21),
@@ -78,7 +84,7 @@ the current report. No candidate performance result replaces those controls.
 Universal PyValues are integrated across frames, containers, attributes and
 rebuilt extensions. Native method/tracing JIT tiers remain unfinished. Keep
 initialized reusable storage, overlap, explicit recipients and real continuations.
-Next: finish classmethod target forwarding and implement the reviewed complete
+Next: integrate and qualify the reviewed complete
 leaf-region certificate for conditional accessors. A wholesale object-layout
 rewrite is not justified. See
 [IR](design/register-ir.md), [interpreter](design/interpreter.md),

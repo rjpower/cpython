@@ -8,7 +8,8 @@ The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remai
 the [baseline](../bench/results/interpreter-parity-20261108.md).
 The guarded keyword-call extension below is implemented in the current
 [object/call packet](../issues/object-call-20261109/plan.md). Its current source
-is `b8e7e1bee66`; [status](../STATUS.md) owns qualification and performance
+is `b8e7e1bee66`. Direct canonical class reads and classmethod pair forwarding
+extend it at `5559f60093e`; [status](../STATUS.md) owns qualification and performance
 admission. Historical candidate measurements are not transferable across builds.
 
 The [archive](archive/register-ir-20261108.md) retains earlier designs.
@@ -159,6 +160,20 @@ owner transfer, and no preparation or callback is replayed. Both hit and
 fallback use the same child-dispatch and error completion protocol. These
 checked producer facts authorize a bounded interpreter binding optimization;
 they do not define a native-JIT recovery map.
+
+### Classmethod pairs
+
+`LOAD_ATTR_CLASSMETHOD` is an executing specialization of ordinary `LOAD_ATTR`,
+with A as the first output TEMP, B the class receiver, C attribute feedback and
+D the original name/method operand. It admits method-form access only and writes
+the existing two-home function/receiver window. Its canonical base is LOAD_ATTR;
+the generic family retains its conditional one/two-output extent.
+
+Guarded feedback holds the descriptor. The live wrapped function is acquired
+before transferring the receiver; all misses precede either ownership change.
+Subsequent argument evaluation and ordinary CALL remain distinct boundaries.
+Handler111 intentionally reuses a retired number under format magic64418;
+serialized compiler output remains generic. See the [interpreter contract](interpreter.md#classmethod-capture).
 
 ## Semantic completion and generated contracts
 

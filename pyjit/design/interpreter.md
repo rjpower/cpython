@@ -3,8 +3,10 @@
 This page describes the register interpreter integrated at `4d666e1b482`.
 The closing report records full diagnostics and the remaining observer/tooling
 capability limits. The guarded-attribute and keyword increments below are
-implemented in source `b8e7e1bee66`; [status](../STATUS.md) records their checks
-and performance admission separately.
+implemented in source `b8e7e1bee66`. Canonical direct class reads and owned
+classmethod pairs extend them at `5559f60093e`; see the [integration report](../issues/deltablue-call-model-20261110/integration48.md).
+[Status](../STATUS.md) records checks and performance separately. Conditional
+leaf activation elision remains an unintegrated experiment.
 See [status](../STATUS.md), the
 [round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
@@ -104,8 +106,13 @@ the owning type before publishing a new name; dictionary replacement invalidates
 inline values. Type/MRO changes invalidate the class-value proof. Descriptor and
 custom-hook classification remains unchanged. Polymorphic snapshots copy inert
 metadata according to the recorded handler; they never turn stale payloads into
-borrows or owners. Direct class-object scalar loads and new dictionary lookup
-recipes remain outside this increment.
+borrows or owners.
+
+Direct class-object reads use the same guarded canonical payload for admitted
+objects and inline scalars. The existing class/MRO version and, when required,
+metaclass version protect it. Descriptor precedence and custom-provider
+classification remain in specialization. The ordinary reader acquires a result
+before receiver retirement through the same checked publication contract.
 
 Guarded words occupy independent fields beside native-only pointer/shape
 unions. Attribute feedback is 48 bytes; snapshot payloads are 16 bytes and the
@@ -114,6 +121,31 @@ rule without a checker exemption. Allocation, reset and accounting use actual
 type sizes. Larger records reduce optional private feedback capacity; overflow
 must retain generic execution. This footprint is a measured performance
 tradeoff, not a change in value encoding or cache ownership.
+
+## Classmethod capture
+
+An eligible method-form class lookup supplies the ordinary owned
+`(function, accessed_class)` pair. Its cache stores the exact builtin classmethod
+descriptor, not its mutable wrapped function. A hit checks the builtin metaclass
+and class version, reads the current exact Python function, acquires it, and
+transfers the actual accessed class. No receiver retirement occurs in this split.
+Inherited lookups bind the subclass. Attribute-form retrieval still produces a
+bound method; unsupported receivers/descriptors retain generic lookup.
+
+```mermaid
+flowchart LR
+    proof[Validate class and descriptor] --> capture[Acquire live function and accessed class]
+    capture --> arguments[Evaluate explicit arguments]
+    arguments --> admission[Ordinary current-function binding and entry guards]
+    admission --> activation[Overlapping owning activation]
+    activation --> completion[Ordinary result and continuation]
+```
+
+`classmethod.__init__` can replace its callable without invalidating the class
+version. Capture therefore happens at lookup, before later arguments can mutate
+the descriptor. CALL uses that captured pair and checks the function's current
+code/default/provider facts; it never resolves the descriptor again. See the
+[proposal and tests](../issues/deltablue-call-model-20261110/A-implementation-proposal.md).
 
 ## Python calls and ordinary return
 

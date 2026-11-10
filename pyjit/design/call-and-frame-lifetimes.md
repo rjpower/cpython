@@ -15,7 +15,8 @@ implementation does not imply golden promotion.
 The active [DeltaBlue call round](../issues/deltablue-call-model-20261110/plan.md)
 selects canonical class reads, classmethod forwarding as an owned callable/receiver
 pair, and complete conditional leaf-region elision. Canonical class reads are
-implemented in candidate47 `986c65ee5ab`; the two call changes remain proposals.
+implemented at `986c65ee5ab`, and classmethod pairs at `5559f60093e`.
+Complete conditional leaf activation elision remains an unintegrated experiment.
 See the [grouped review](../issues/deltablue-call-model-20261110/astra-architecture-review.md),
 [leaf contract](../issues/deltablue-call-model-20261110/leaf-contract-review.md)
 and [retirement-scope review](../issues/deltablue-call-model-20261110/leaf-no-callback-scope-review.md).

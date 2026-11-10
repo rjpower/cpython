@@ -68,14 +68,13 @@ from this round. No benchmark/source-name specialization or altered workload.
 
 ## Status and reporting
 
-Last update: 2026-11-10 22:52 UTC. First [integration47](integration47.md) is
-committed and pushed: canonical class reads, release and debug builds of
-117 modules,
-571 focused tests each, and a clean API check covering 306 units. Two-pair
-screens give DeltaBlue 0.72080/rebuilt46 and 1.26303/upstream, and logging
-1.05526/rebuilt46 and 0.91755/upstream. Sol is implementing A, classmethod
-forwarding, in the main runtime worktree and is host-testing it. Sol is
-implementing C in an isolated managed worktree. The [proposal review](C-proposal-review.md)
+Last update: 2026-11-10 23:25 UTC. Both [class reads](integration47.md) and
+[classmethod forwarding](integration48.md) are committed and pushed. Source
+`5559f60093e` builds 117 modules per role; focused tests and API306 are clear.
+Its fresh-build full29 screen gives mean 1.18014/upstream, DeltaBlue1.20915 and
+logging0.75865. Sol is correcting C in an isolated managed worktree after cold
+review found repeated ordinary guards; integration waits for that correction
+and final source review. The [proposal review](C-proposal-review.md)
 is complete, and the [implementation proposal](C-implementation-proposal.md)
 records the current scope. The narrowed first C experiment requires callback-free
 complete-operation admission, including aggregate nonfinal-release checks, so

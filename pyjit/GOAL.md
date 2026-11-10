@@ -12,8 +12,9 @@ then implement general language-pattern improvements. Astra supplies one broad
 architecture review; Sol owns the inner loop. Accept incremental mostly-beneficial
 checkpoints with explicit tradeoffs. CPI/layout perfection and the prior strict
 promotion hold do not block this work. The first [landing](issues/deltablue-call-model-20261110/integration47.md)
-unifies canonical class loads at47; classmethod forwarding and conditional
-leaf-call elimination follow as separate reviewed increments.
+unifies canonical class loads at47. [Classmethod forwarding](issues/deltablue-call-model-20261110/integration48.md)
+is also integrated at `5559f60093e`; conditional leaf-call elimination follows as
+a separately reviewed experiment.
 
 Frozen runtime39 `4d666e1b482` meets logging parity; broad upstream parity
 remains open. The [object/call checkpoint](issues/object-call-20261109/checkpoint46-report.md)

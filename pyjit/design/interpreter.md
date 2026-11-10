@@ -2,9 +2,9 @@
 
 This page describes the register interpreter integrated at `4d666e1b482`.
 The closing report records full diagnostics and the remaining observer/tooling
-capability limits. The guarded-attribute increment below is implemented in candidate
-`0a35a382909`, with focused release/debug checks passing. Performance admission
-remains pending.
+capability limits. The guarded-attribute and keyword increments below are
+implemented in source `b8e7e1bee66`; [status](../STATUS.md) records their checks
+and performance admission separately.
 See [status](../STATUS.md), the
 [round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
@@ -107,15 +107,24 @@ metadata according to the recorded handler; they never turn stale payloads into
 borrows or owners. Direct class-object scalar loads and new dictionary lookup
 recipes remain outside this increment.
 
+Guarded words occupy independent fields beside native-only pointer/shape
+unions. Attribute feedback is 48 bytes; snapshot payloads are 16 bytes and the
+four-row polymorphic record is 120. This satisfies the existing word/union API
+rule without a checker exemption. Allocation, reset and accounting use actual
+type sizes. Larger records reduce optional private feedback capacity; overflow
+must retain generic execution. This footprint is a measured performance
+tradeoff, not a change in value encoding or cache ownership.
+
 ## Python calls and ordinary return
 
 Exact calls guard their standard Python provider and transfer argument owners
 into a child. A versioned known-call plan lets guarded CALL_PY_GENERAL bind
 common positional calls directly through `call_bind_known_python`; no generic
 transaction record is built on that hit. It fills defaults and empty variadic
-bindings under the same owning-frame ABI. A pre-effect miss uses the existing
-transaction/provider path. Keyword, extended, instrumented and unsupported
-shapes retain their complete provider handling, not a second execution model.
+bindings under the same owning-frame ABI. Fixed 1–3-keyword plans use that
+same overlap primitive and move only their bounded suffix through C-local
+owners. A pre-effect miss uses the existing transaction/provider path.
+Extended, instrumented and unsupported shapes retain complete provider handling.
 
 Compiler-proven empty kwargs may remain a pending local until a materialization
 barrier. Folded reads, cell/alias hazards and frame publication are covered by

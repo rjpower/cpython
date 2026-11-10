@@ -334,3 +334,5 @@ that remote copy remains at revision 7. No alternate export was attempted.
 - 2026-11-09 forward37 (`d7abf803c60`): same-caught normal PRE survival; both profiles136 focused +4selected tests; basic logging.907800/upstream, generator1.006499/golden needs repeat. [Follow-up](issues/frame-call-model-20261109/thirteenth-integration-report.md).
 
 - 2026-11-09 — [Frame/call round closed](issues/frame-call-model-20261109/closing-report.md): frozen 4d666e1b482, logging 0.907/0.898 upstream; all 29 kernels 0.934/golden,1.175/upstream; complete 65-micro/6-memory coverage, current profiles, explicit qualification limits and five measured next priorities.
+
+- 2026-11-10 — [Object/call checkpoint46](issues/object-call-20261109/checkpoint46-report.md): reviewed canonical lookup/keyword/default/frame/cache-format changes; full diagnostics with known limits and fixture repair, all29GM1.00382/39 and1.18120/upstream, repeated CPI regressions; golden promotion held.

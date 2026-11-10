@@ -119,11 +119,21 @@ Actual warmed handler and hit weights still require root's profiles/counters;
 source eligibility alone is not evidence that every site hits.
 
 The coroutine kernel recursively awaits `fibonacci(n - 1)` and
-`fibonacci(n - 2)` without keywords or defaults. The direct plan excludes
-CO_COROUTINE. Recursive callers are coroutine/generator-owned frames, so the
-generic overlap gate also declines before frame construction. Only an outer
-thread-owned entry can take overlap. Therefore the new helper call and missing-
-defaults guard are not executed by the dominant recursive call route.
+`fibonacci(n - 2)` without keywords or defaults. My initial attribution to the
+general-call fallback was incorrect. The coordinator's retained41 profile
+instead shows CALL_PY_EXACT_ARGS at 10.28% self, RETURN_GENERATOR 8.25%,
+GET_AWAITABLE 6.09%, CompleteGeneratorReturn 5.89%, make_gen 5.88% and SEND_GEN
+5.52%, with no YIELD samples. `function_kind()` admits optimized simple
+signatures regardless of CO_COROUTINE; its exact-argument opcode selection is
+separate from the general direct plan's coroutine exclusion.
+
+For generator-owned callers, the exact-argument handler uses
+`_PyFrame_PushUnchecked`, copies argument owners and clears the caller window.
+Thread-owned callers use overlap. The entire exact-argument handler is
+instruction-identical in frozen39 and candidate41 after relocation removal.
+Thus the dominant observed call route does not execute the newly outlined
+general-call helper or its defaults guard. Profiles, not benchmark-name or
+specializer-plan assumptions, determine which path needs explanation.
 
 For a valid function/version with DIRECT clear and a successful generic child
 push, a static traversal from handler entry through that fallback into
@@ -131,11 +141,12 @@ start_frame visits **67 frozen39 versus 65 candidate instructions**, with four
 versus two rbp-relative home accesses. Both call the same normalized vector
 transaction. Conditional version/type/error exits were held false; the DIRECT
 miss and successful child outcome were selected explicitly. This is a path
-ledger, not measured frequencies or cycles. It supplies no added-executed-work
-explanation for the coroutine regression. Code placement, cache effects or an
-uninspected hot path remain possible pending PMU.
+ledger for an alternative general-call path, not a ledger of the profiled
+dominant coroutine route. It supplies no added-executed-work explanation for
+the coroutine regression. Code placement, cache effects or an uninspected hot
+path remain hypotheses to test with the retained PMU/profile evidence.
 
-### Complete generator-owner early fallback
+### Complete generator-owner early fallback, when a general call is used
 
 The 67→65 ledger above counts the handler only, including its call instruction;
 it does not count generic helper internals. Those were inspected separately
@@ -221,3 +232,14 @@ Root's small-first decision ladder:
 
 Do not fold in keyword scratch redesign, default-cache changes or layout padding
 in the same experiment. Those would obscure which mechanism was tested.
+
+## Experiment prepared
+
+After root closed frozen41's six-pair repeats, 18 stat captures, six profiles and
+three-role instruction campaign, the independent
+[inline-policy review](inline-policy-review41.md) approved this bounded test.
+The worker applied only `Py_ALWAYS_INLINE` to the shared overlapping helper's
+declaration. Its body, callers, guards and ABI remain unchanged. No regeneration,
+build, native run or commit was performed by this lane. Root owns the successor
+identity, release/debug compilation, emitted-code inspection and paired
+measurements; all experiment outcomes remain pending.

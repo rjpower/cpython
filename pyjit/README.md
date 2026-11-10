@@ -8,11 +8,13 @@ Start with the [goal](GOAL.md), [current plan](issues/object-call-20261109/plan.
 and [status](STATUS.md). The frame/call round is closed at a frozen
 candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
 separates measured performance, Python behavior and optional tooling/capability
-limits. The [next five priorities](issues/frame-call-model-20261109/next-steps.md)
-come from independent architectural reviews. The active round follows the
+limits. Its [historical priorities](issues/frame-call-model-20261109/next-steps.md)
+record the reviews before this round. The active plan incorporates the
 [Astra survey](issues/object-call-20261109/astra-survey.md) of object lookup and
-calling conventions; its first lanes are canonical class values and keyword
-binding plans.
+calling conventions; its implemented lanes are canonical class values and keyword
+binding plans. The [current report](issues/object-call-20261109/checkpoint46-report.md)
+records local gains, repeated application regressions and the held promotion. The current plan ranks regression diagnosis, immutable plan proofs
+and direct owning-frame entry ahead of broader object-layout work.
 Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
 
 The universal-value register interpreter is implemented. Native method/tracing

@@ -1,92 +1,113 @@
-# Object lookup and call binding: active plan
+# Object lookup and calls: integration and next work
 
-Reduce repeated runtime work while preserving one canonical value model and one
-frame/call ABI. Baseline runtime39 (`4d666e1b482`) meets logging parity but uses
-1.175 times upstream elapsed time across 29 application kernels. Native JIT tiers
-remain unfinished. Startup RSS and zero-box totals are not admission gates.
+Lower repeated execution work while keeping one canonical value model, one
+owning-frame ABI and useful observation. Universal PyValues and the register
+interpreter are integrated; native method/tracing JIT tiers remain unfinished.
+Logging has reached upstream parity. Broad parity remains open. Startup RSS and
+zero-box totals are not gates.
 
-## Current checkpoint
+## Current integration
 
-Candidate `0a35a382909` implements canonical class-value caches, reusable fixed
-keyword binding and a current-default-shape repair for positional calls.
-Release/debug/stats builds pass, each checking 117 modules. Focused release/debug
-checks pass 464 tests per build; stats smoke passes 150. Standalone lifetime tests
-pass both receiver layouts. Five admitted keyword shapes each record 1,000 binder
-hits; four unsupported shapes each record zero. Astra's
-[post-review](final-post-review41.md) has no blocking finding.
+Current source is **b8e7e1bee66** (candidate46). It integrates canonical class
+lookup, fixed-keyword binding, current-default guards, bounded shared-frame
+inlining, separate guarded feedback and magic64417. [Qualification and report](checkpoint46-report.md)
+are closed with explicit full-suite tooling/capability limits. All native jobs
+are complete. No new runtime feature was mixed into final measurements.
 
-The frozen comparison source is published as `pyjit-golden-20261109-runtime`;
-combined golden `cb906f9bc52` includes canonical docs. Earlier immutable golden
-controls remain unchanged. See [publication](../golden-20261109/README.md) and
-[handoff](../../HANDOFF.md) for exact paths and qualification limits.
+**Hold promotion.** Full29 elapsed means are 1.00382/frozen39 and 1.18120/upstream.
+Six-pair golden-relative regressions are coroutines 5.78%, spectral norm 8.11% and
+comprehensions 9.48%, every pair slower. Logging and DeltaBlue improve. Long class/
+keyword micros are 0.16013/0.60957 versus39, but those gains do not waive the losses.
+The [complete tables](checkpoint46-tables.md) and [independent final review](final-review46.md)
+retain source identities, raw evidence and measurement limits.
 
-## Workstreams and ownership
+Golden stays **4d666e1b482**. Its immutable tags/builds and earlier controls remain
+unchanged; [publication](../golden-20261109/README.md) records remote identities.
+Historical43 is [API rejected](checkpoint43-report.md); later storage/format and
+fixture repairs are reviewed separately. Current attr/poly sizes 48/120 bytes
+preserve scoped private-site admission at a measurable metadata cost.
 
-| Owner | Delivered/current work | Next boundary |
+## Delegation and admission
+
+| Owner | Current responsibility | Admission boundary |
 | --- | --- | --- |
-| Sol lookup lane | Canonical guarded cache; acquire/publish before retirement; value/interpreter docs | Read-only generator-cycle census proposal; no further runtime edits |
-| Sol call lane | 1–3-keyword plans over overlap ABI; defaults guard; frame/IR docs | Reviewed typed cell-getset proposal; implementation waits for current measurements |
-| Astra medium | Proposal reviews, actual-diff review, measurement audit | Critique future lanes and audit measured evidence independently |
-| Coordinator | Regeneration, builds, native tests, commits and measurement | Finish balanced timings, combined diagnostics and performance report |
+| Sol lookup agent | Delivered storage/capacity, census and current profile analysis | Next: weighted application lookup sites; no broad layout change |
+| Sol call agent | Delivered keyword/default/frame work, fixture repair and invariant audit | Next: approved immutable keyword-check reduction, focused tests and measured work |
+| Astra medium | Completed independent design/source/evidence reviews | Next: peer-review direct-entry proofs and compiled regression experiments |
+| Coordinator | Integrated/qualified/measured46 and published current state | Next: isolate CPI regressions, integrate reviewed lanes and own promotion |
 
-The contract is propose → independent review → implement → focused tests →
-post-review → integrate → basic performance. Root serializes native work and
-owns source/build identities. Bulk testing belongs at coherent checkpoints.
+Follow propose → independent review → implement → focused tests → post-review →
+integrate → basic performance. Mechanical future ports may use Terra/Luna medium;
+Sol owns significant call/IR changes and debugging. Do not spend full suites on
+each opcode or fixture. Run them at coherent runtime checkpoints, then use
+focused checks for subsequent test-only corrections.
 
-## Remaining admission work
+The integration milestone is complete: both full45 diagnostics, the focused
+fixture-only46 repair, current builds/API provenance/stats, all29 kernels,
+long micros, regression confirmations, scoped metadata census, current profiles
+and matched golden/upstream PMU. Known GDB display, frame-jump and debug trace
+limits remain explicit. The next implementation checkpoint requires fewer
+executed instructions in targeted paths and no unexplained material application
+regression. Do not rerun full suites for an unchanged runtime/test-only fixture.
 
-The first full29 screen is 1.01024/frozen39 and 1.18105/upstream. Micro gains
-are real but do not justify promotion. Repeat logging/coroutines/DeltaBlue losses,
-retain current41 PMU evidence, and review the shared frame-inline experiment
-before further features. See [current report](checkpoint41-report.md) and
-[triage](regression-triage41.md).
+## Next work, in evidence order
 
-1. Complete: six balanced long-interval micro rounds against frozen39 and upstream:
-   class reads at 20,000 loops and keyword calls at 2,000. Keep the unchanged bodies,
-   identical work per role, GCC, CPU 15, hash 0 and JIT disabled. Brief initial
-   class samples show order sensitivity against upstream; do not call parity.
-2. Complete: run the unchanged 29-kernel roster in two balanced rounds against both controls.
-   Inspect individual material regressions and repeat them before deciding.
-3. Collect current instruction/cycle counters and retained-ELF profiles after
-   valid timing calibration. Attribute application improvements from evidence,
-   not microbenchmark names or sample shares alone.
-4. Run combined full release/debug diagnostics and the value API check. Separate
-   known GDB display/frame-jump/trace-format limitations from new runtime failures.
-   Preserve all failed preflights and rejected captures; exclude them from claims.
-5. Publish a concise checkpoint report, update status/design qualification and
-   Loom mirrors, then choose the next implementation from current evidence.
+1. **Isolate and remove the confirmed CPI regressions.** Root owns one-GCC
+   bounded component experiments and compiled-path inspection; Sol investigates
+   the three kernels. Matched46/39 cycles increase 5.4–9.6% while instructions
+   and branches remain nearly equal. Branch-miss rates barely change. This now
+   proves higher aggregate CPI, but not a front-end, locality or dependency cause.
+   Use counter/assembly evidence to select one ablation; do not patch padding or
+   change compilers by intuition. Keep correctness repairs separable from the
+   performance packet if promotion cannot be justified. Astra's first suggested
+   experiment removes only the two inline declarations, retaining lookup,
+   binding/default, storage and format fixes. Review emitted call boundaries and
+   paired regression/logging/keyword controls against a frozen46 reference. The
+   earlier41 results are not that controlled ablation. Do not adopt the change
+   merely because it shortens text or makes a helper disappear.
+2. **Move immutable keyword-plan checks to construction where proved.** The Sol call
+   audit and [Astra review](keyword-plan-invariants-review.md) approve a bounded
+   experiment after checking every writer/reset/history path. Prove bounded,
+   distinct destinations and positional-only exclusion once; retain hit-time code,
+   provider, observation, current-name/default and call-shape guards. Gate with
+   supported/fallback hit controls, same-code/default mutation, instruction counts
+   and elapsed 1–3-keyword cases. The46 keyword micro still runs about 1.50× upstream
+   raw instructions despite only 1.05× elapsed. Do not delete guards by intuition.
+3. **Construct eligible generator/coroutine frames directly in their owner.**
+   Sol designs/censuses the actual exact-call route; Astra reviews the shell,
+   allocator and callback proof before implementation. Share binding/storage and
+   result-publication semantics; avoid temporary thread-frame construction and
+   immediate copying. The [scope calibration](entry-scope-calibration.md) supersedes
+   broader first-scope machinery in earlier drafts: MISS/ERROR/COMPLETE suffice
+   if preparation/commit cannot callback or poll. A universal native success
+   publisher and precommit redirect framework are not prerequisites. Postcommit
+   retirement still needs a valid continuation. Gate on actual eligible hits and
+   total creation/call/completion benefit, with decline/error/GC/observer controls.
+4. **Specialize lookup from weighted application evidence.** Sol lookup agent
+   counts DeltaBlue receiver/layout/descriptor/miss routes before extending a
+   proof.46 uses about 1.87× upstream instructions there. Class-micro gains do not
+   measure those remaining sites. Prefer canonical results and guarded current
+   hash-entry hints within existing storage. Interned names and shared keys
+   already exist; neither a wholesale hidden-class rewrite nor a second object
+   model is justified by the present data.
+5. **Make IR effects authoritative and simplify boundaries.** First migrate one
+   ownership/publication/reload proof to structured facts with equivalent generated
+   behavior, then reuse those facts in lowering, generation and verification.
+   Do not add a generic dispatcher or mode product. The value-native cell getter/
+   setter pair is a small Terra/Luna port only after measured closure exposure;
+   preserve the public owned-box boundary and test both directions together.
 
-Source/builds and measurement helpers remain frozen during campaigns. No new
-feature is admitted solely from host generator tests, an opcode name or a
-source-level prediction. Actual fast-path hits, mutation/error/owner coverage
-and balanced elapsed measurements are distinct requirements.
+Keep initialized reusable storage, overlapping call windows, explicit recipients
+and real continuations. A register IR does not require a temporary stack frame for
+object construction, repeated immutable-plan validation, or repeated lookup proof
+work. Those are implementation/lowering choices to improve under one contract.
+Python does not require CPython's exact finalizer schedule or debugger transcripts.
 
-## Next design changes, in evidence order
+## References
 
-Keep initialized reusable homes, overlapping call windows and explicit result
-recipients/real continuations. Canonical lookup and keyword plans remove repeated
-preparation under those contracts; they do not create another object or call ABI.
-
-- **Generator resume convention:** obtain a whole-cycle census and one contract
-  map for SEND, FOR and native entry. Share commit/completion semantics while
-  choosing producer policies at generation time. The reviewed
-  [generator proposal](generator-cycle-proposal.md) does not yet justify its
-  EMPTY_TEMP experiment: count added updates/decoding as well as saved delivery
-  work. A SEND-only improvement cannot fix the FOR-only resume micro.
-- **Value-native boundaries:** the reviewed [cell proposal](value-native-cell-proposal.md)
-  converts getter and setter together using existing typed callbacks, keeping
-  public object getters' owned-box contract. Verify actual removed bridge work
-  before broadening to other descriptors.
-- **Structured IR effects:** derive ownership, publication, reload and recovery
-  facts once for lowering, generation and validation. Migrate one proof with
-  equivalent generated behavior first. The current declaration fix already
-  derives mutability from the checked publication fact rather than opcode names.
-- **Lookup coverage:** measure guarded-path/miss frequencies in real workloads.
-  Guarded current hash-entry hints are bounded experiments within the existing
-  layout. A wholesale table/hidden-class rewrite is not justified. Names are
-  already interned; that alone does not remove repeated binding searches.
-
-The [Astra survey](astra-survey.md), [future-lane review](future-lanes-review.md)
-and [initial performance audit](performance-audit41.md) explain the ranking and
-limits. Follow Python's data model and the selected ownership contract; exact
-CPython destruction timing and developer-tool transcripts are not design goals.
+[Current status](../../STATUS.md), [handoff](../../HANDOFF.md),
+[Astra object/call survey](astra-survey.md), [cold43 review](final-cold-review43.md),
+[storage/format post-review](post-review44.md),
+[IR](../../design/register-ir.md), [interpreter](../../design/interpreter.md),
+[frames/calls](../../design/call-and-frame-lifetimes.md),
+[values](../../design/pyvalue.md). Repository pages own state; Loom mirrors them.

@@ -6,8 +6,9 @@ golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
 The keyword-plan extension below is implemented in the current
-[object/call packet](../issues/object-call-20261109/plan.md); focused release/debug validation passes on candidate `0a35a382909`;
-performance admission remains pending.
+[object/call packet](../issues/object-call-20261109/plan.md), current source
+`b8e7e1bee66`. [Status](../STATUS.md) records qualification and performance;
+implementation does not imply golden promotion.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -96,6 +97,13 @@ keyword-only parameters when all are explicitly supplied. Variadics, omitted
 keyword-only defaults, bound-method wrappers and unsupported frame/provider
 shapes retain the generic path.
 
+Release builds keep `_PyFrame_PushOverlapping` and `_PyFrame_Initialize`
+visible to their optimized callers using the existing `Py_ALWAYS_INLINE`
+policy. This preserves one reservation/initialization implementation as binding
+plans grow. The compiler may still outline conditional constant-slot filling;
+the policy does not promise an entirely call-free constructor. Compiled stack,
+code-size and application effects must be reviewed with source changes.
+
 Before effects, the keyword hit checks function/code version, standard provider,
 executable and capacity, cached self/count shape, an exact keyword tuple and exact
 Unicode entries. Each current name must be identical to the guarded code's name
@@ -141,6 +149,33 @@ callbacks or fallible preparation. Its consuming binder can use copies when
 required by that provider's ownership contract. No callback is replayed after
 a miss, and no fallback begins after child commit. Errors retire the published
 owner state. This is one ABI with guarded fast binding, not two frame models.
+
+## Proposed direct owning entry
+
+Direct generator/coroutine entry is future work, separate from the implemented
+binding contract. See the [minimal entry scope](../issues/object-call-20261109/entry-scope-calibration.md).
+Its aim is to construct eligible frames directly in their owning object instead
+of constructing and immediately moving a thread-stack frame.
+
+```mermaid
+flowchart TD
+    window[Caller owns evaluated arguments] --> admit{Compiler-proved entry and current guards}
+    admit -->|ordinary or unsupported| existing[Existing call and frame path]
+    admit -->|eligible creation| shell[Allocate clearable owning shell]
+    shell --> move[Initialize final homes and transfer owners once]
+    move --> publish[Publish complete object to caller recipient]
+    publish --> resume[Dispatch real caller continuation]
+    shell -->|precommit failure| error[Keep caller inputs owning; established error edge]
+```
+
+First-scope preparation/commit must have no callback or interpreter poll,
+including allocator/arena hooks and failed-shell cleanup. Then existing
+MISS/ERROR/COMPLETE outcomes suffice. Publish completed state before any displaced
+local or discarded result can finalize, and respect the authoritative continuation
+after that release. Share binding and return-publication semantics; a universal
+native-call publisher and a new precommit reentry protocol are not prerequisites.
+Pinned-code, shell/GC, exact-handler, error and eligibility proofs remain
+admission work. No direct-owning provider is implemented in current source.
 
 ## Deferred empty kwargs
 

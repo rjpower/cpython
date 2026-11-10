@@ -6,18 +6,20 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
-The frame/call round is closed at runtime `4d666e1b482`. Full diagnostics,
-the complete benchmark set, current profiles and independent reviews are
-published in the [report](issues/frame-call-model-20261109/closing-report.md).
-Logging meets the round's parity gate; broad upstream parity remains open.
-The active [object/call plan](issues/object-call-20261109/plan.md), reviewed by
-[Astra](issues/object-call-20261109/astra-survey.md), selects canonical attribute
-lookup and reusable keyword binding as the next bounded improvements. The frozen checkpoint is published as `pyjit-golden-20261109-runtime`; the
-combined golden snapshot is `cb906f9bc52`. Preserve both generations of immutable
-tags and native controls. Candidate `0a35a382909` implements the reviewed lookup/keyword lanes and repairs
-the positional defaults guard. Focused native checks pass. The initial full29 screen regresses against
-frozen39 despite strong micro gains; promotion is on hold while repeats, PMU
-evidence and the reviewed shared-frame inline experiment resolve it. The coordinator owns integration and measured outcomes.
+Frozen runtime39 `4d666e1b482` meets logging parity; broad upstream parity
+remains open. The [object/call checkpoint](issues/object-call-20261109/checkpoint46-report.md)
+is reviewed at **b8e7e1bee66**. Class lookup and keyword binding improve markedly,
+while the full29 mean is 1.18120/upstream and material golden-relative regressions
+remain. Promotion is held. [Status](STATUS.md) records full diagnostic limits,
+API/fixture repairs, current counters and actual source identities.
+
+Keep golden39, combined snapshot `cb906f9bc52`, and both generations of immutable
+controls unchanged. The [next plan](issues/object-call-20261109/plan.md) targets
+confirmed CPI regressions, repeated immutable keyword checks, direct owning
+coroutine construction, weighted lookup sites and authoritative IR effects.
+The [entry-scope calibration](issues/object-call-20261109/entry-scope-calibration.md)
+keeps that larger experiment bounded. The coordinator owns merged validation,
+measurement and promotion.
 
 The current target is lower object/call execution cost and a smaller broad
 upstream gap, while retaining logging parity. Use unchanged kernels,
@@ -50,8 +52,8 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 | --- | --- |
 | [Plan](issues/object-call-20261109/plan.md) | Active object/call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
-| [Report](issues/frame-call-model-20261109/closing-report.md) | Full results, profiling and analysis |
-| [Next five priorities](issues/frame-call-model-20261109/next-steps.md) | Evidence, risks and first experiments |
+| [Report](issues/object-call-20261109/checkpoint46-report.md) | Current results, profiling and analysis |
+| [Next priorities](issues/object-call-20261109/plan.md#next-work-in-evidence-order) | Evidence, risks and bounded experiments |
 | [Architecture](design/runtime-architecture.md) | Runtime and intended compiler tiers |
 | [Register IR](design/register-ir.md) | Executable encoding, effects and lowering |
 | [Interpreter](design/interpreter.md) | Dispatch, execution and completion |

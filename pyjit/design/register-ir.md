@@ -7,8 +7,9 @@ authorize every source transfer.
 The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
 the [baseline](../bench/results/interpreter-parity-20261108.md).
 The guarded keyword-call extension below is implemented in the current
-[object/call packet](../issues/object-call-20261109/plan.md); focused release/debug validation passes on candidate `0a35a382909`;
-performance admission remains pending.
+[object/call packet](../issues/object-call-20261109/plan.md). Its current source
+is `b8e7e1bee66`; [status](../STATUS.md) owns qualification and performance
+admission. Historical candidate measurements are not transferable across builds.
 
 The [archive](archive/register-ir-20261108.md) retains earlier designs.
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
@@ -65,7 +66,7 @@ metadata in `pycore_ir_metadata.h` and generated dispatch in
   offset. Call preparation and unpack operations use this form.
 - An immediate may be a count or local index in one field, or a constant/name
   index in CD. A feedback index points into the executing copy's feedback
-  vector. Some operations store an operation argument in feedback metadata.
+vector. Some operations store an operation argument in feedback metadata.
 - Ordinary jumps carry an absolute word index in CD. `FOR_ITER`, `SEND`, and
   fused compare-and-jump handlers carry a signed word distance in D from the next
   instruction. `FOR_ITER` and `SEND` use forward distances; fused
@@ -100,6 +101,13 @@ patch its handlers; pristine code words remain the template. A frame owns its
 code, keeping both code and executing allocation alive. Feedback contains
 borrowed predictions and counters, not owning GC edges. Entry zero is the
 shared header-only entry. Free-threaded specialization remains disabled.
+
+The serialized `co_fbinit` records include feedback sizes and offsets. Changes
+to their geometry require a new bytecode magic, even when handler numbers and
+the eight-byte word encoding stay unchanged. Current magic **64417** identifies
+48-byte attribute entries with independent guarded-value storage. At the
+4096-unit limit, optional sites without private capacity use shared entry zero;
+the compiler must preserve required feedback and valid generic execution.
 
 Compiler source-only operations occupy no executable word. Pristine streams
 admit semantic operations and real control transfers; source-only line events live in the versioned

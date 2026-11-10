@@ -1,5 +1,6 @@
 """Reuse the reviewed FIFO PMU protocol for the object/call checkpoint."""
 
+import argparse
 import importlib.util
 from pathlib import Path
 import sys
@@ -12,7 +13,11 @@ def main():
     capture = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = capture
     spec.loader.exec_module(capture)
-    capture.HEADS['candidate'] = '0a35a382909ca169ce3f381cb38206b1725001b3'
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--candidate-head', default='0a35a382909ca169ce3f381cb38206b1725001b3')
+    args, remaining = parser.parse_known_args()
+    capture.HEADS['candidate'] = args.candidate_head
+    sys.argv[1:] = remaining
     capture.CASES = ('deltablue', 'generators', 'nbody', 'logging_silent', 'coroutines')
     capture.REPEAT = capture.BUILD / 'pyjit-link-wave1/object-call-20261109/measure41-all29-upstream'
     previous_snapshot = capture.snapshot

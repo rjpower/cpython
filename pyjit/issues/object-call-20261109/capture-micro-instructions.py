@@ -1,5 +1,6 @@
 """Capture unchanged lookup/call instruction workloads with frozen identities."""
 
+import argparse
 import hashlib
 import importlib.util
 import json
@@ -15,7 +16,14 @@ def main():
     root = packet.parents[1]
     base = Path('/home/power/code/cpython/.worktrees/python-boil-the-ocean/build')
     evidence = base / 'pyjit-link-wave1/object-call-20261109'
-    output = evidence / 'instructions41'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--candidate-head', default='0a35a382909ca169ce3f381cb38206b1725001b3')
+    parser.add_argument('--output', type=Path, default=evidence / 'instructions41')
+    parser.add_argument('--candidate-module-log', type=Path, default=evidence / 'object41-release-build.log')
+    parser.add_argument('--group', choices=('micro', 'kernels'), default='micro')
+    parser.add_argument('--cases', default='class_attr_load,call_py_kw')
+    args = parser.parse_args()
+    output = args.output.resolve()
     output.mkdir(exist_ok=False)
     source = root / 'issues/checkpoint-closure/measure.py'
     spec = importlib.util.spec_from_file_location('micro_checkpoint', source)
@@ -32,7 +40,7 @@ def main():
     logs = {
         'upstream': base / 'pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log',
         'golden': evidence / 'golden39-build-sysroot.log',
-        'candidate': evidence / 'object41-release-build.log',
+        'candidate': args.candidate_module_log.resolve(),
     }
     env = {key: value for key, value in os.environ.items()
            if not key.startswith('PYTHON') and key != 'LD_PRELOAD'}
@@ -47,7 +55,7 @@ def main():
             role: hashlib.sha256((build / 'python').read_bytes()).hexdigest()
             for role, build in builds.items()}
         if result['builds']['candidate']['git'] != {
-                'head': '0a35a382909ca169ce3f381cb38206b1725001b3', 'status': ''}:
+                'head': args.candidate_head, 'status': ''}:
             result['errors'].append('candidate revision or cleanliness changed')
         return result
 
@@ -61,7 +69,7 @@ def main():
         for role, build in builds.items():
             command = ['taskset', '-c', '15', 'uv', 'run', '--no-project', 'python', '-B',
                        str(root / 'bench/run.py'), '--build', str(build), '--label', role,
-                       '--set', 'micro', '--only', 'class_attr_load,call_py_kw',
+                       '--set', args.group, '--only', args.cases,
                        '--metric', 'instr', '--instr-runs', '4', '--max-load', '3',
                        '--perf-records', str(output / f'{role}-perf.jsonl'),
                        '--output', str(output / f'{role}.json')]
@@ -76,7 +84,9 @@ def main():
             records = [json.loads(line) for line in
                        (output / f'{role}-perf.jsonl').read_text().splitlines()]
             finished = [record for record in records if record['phase'] == 'finish']
-            assert finished and len(records) == 2 * len(finished)
+            report = json.loads((output / f'{role}.json').read_text())
+            expected = 1 + len(report['results']['instr']) * 9
+            assert len(finished) == expected and len(records) == 2 * expected
             for record in finished:
                 assert record['returncode'] == 0 and 'error' not in record
                 events = [fields for fields in csv.reader(record['perf_text'].splitlines())

@@ -14,6 +14,17 @@ after separate skeleton subtraction. Neither instruction ratio is a speedup
 budget. Sources: [closing counters](../frame-call-model-20261109/closing-report.md),
 [measured review](../frame-call-model-20261109/closing39-measured-priority-review.md).
 
+Current41 calibration changes the ordering **for recursive coroutines**. Its
+[retained profile](current41-profile-analysis.md) executes Fibonacci(25) through
+awaits without a source yield or external asynchronous suspension; no YIELD_VALUE
+self samples appear. Calls, coroutine construction/allocation and terminal
+completion are prominent. Its 1.379018× upstream instructions and 1.342659× cycles
+do not establish a yield-delivery bottleneck. The bounded
+[direct-owning entry proposal](owning-generator-entry-proposal.md) can therefore
+precede SEND-recipient work for that kernel, subject to creation-shape counts and
+compiler-proven call-time prologue semantics. The simple resume micro and the
+yield-forwarding tree below remain different evidence cases.
+
 ## What one traversal actually does
 
 `bench/internal/micro/generator_resume.py` creates one generator per 1,000 yields.
@@ -54,9 +65,9 @@ terminally, and the generated handler ends there. Do not count source macros as
 native operations. Release/debug branches and compile-time tracing macros also
 need the retained ELF, not a source-line tally.
 
-## Three bounded changes, in order
+## Three bounded changes: ordering depends on the workload
 
-1. **Preferred first experiment: a producer-proven empty SEND recipient.**
+1. **First yield/delegation candidate: a proven empty SEND recipient.**
    SEND resume detaches B+2 before entering the child, yet the yielded-result
    sink uses the general old-owner load/test/close path. Represent EMPTY_TEMP
    versus GENERAL/DISCARD in the existing recipient descriptor, with no frame
@@ -100,6 +111,10 @@ need the retained ELF, not a source-line tally.
    does not establish allocation/copy's cost share. Require measured creation
    counts and retained samples in reservation/copy/allocation before designing
    the complete bounded entry contract. Do not bundle it with recipient work.
+   For current41's creation-heavy recursive coroutine kernel, this is now the
+   preferred first design candidate; [its bounded contract](owning-generator-entry-proposal.md)
+   starts with compiler-proven empty-prologue, exact-positional entries and
+   preserves the existing binder, owning storage and immediate-result ABI.
 
 ## Evidence gate before choosing implementation
 
@@ -124,7 +139,9 @@ state before retirement. Python's lack of an immediate-finalization guarantee
 does not weaken lifetime safety, and exact CPython destruction timing is not a
 performance or semantics requirement.
 
-The first executable milestone is the census and a complete recipient read/write
-map. An independently reviewed EMPTY_TEMP packet is justified only if its
-whole-cycle ledger predicts a net saving. No optimization is authorized by this
-proposal, and no fraction of the 1.416× gap has been attributed to it.
+The first executable milestone is a workload-specific census. Yield/delegation
+work needs a complete recipient read/write map; recursive-coroutine entry work
+needs validated prologue/argument/caller-owner counts and a construction ledger.
+An independently reviewed packet is justified only if its complete ledger
+predicts a net saving. No optimization is authorized by this proposal, and no
+fraction of either instruction gap has been attributed to a proposed change.

@@ -4,12 +4,12 @@
 
 Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40` is the frozen checkpoint.
 Its original source branch `pyjit/frame-call-model-20261109` is now the active
-object/call integration worktree, at committed candidate `0a35a382909`; use the new
+object/call integration worktree, at committed candidate `b8e7e1bee66`; use the new
 detached golden source below for immutable comparisons. Production changes are
 `24f4d270ced`; the final commit adds reviewed debugger tests. No unfinished
 coroutine, owner-bundle or GDB port is included. Root owns current native jobs; consult the active packet before running more.
-The next round starts from [the five priorities](issues/frame-call-model-20261109/next-steps.md),
-not the older numbered integration reports or unqualified drafts.
+The next round starts from the [current priorities](issues/object-call-20261109/plan.md),
+not historical rankings, numbered integration reports or unqualified drafts.
 
 Logging confirmations pass at 0.906735/0.897500 upstream. Full29 means are
 0.934192/golden and 1.174985/upstream. All 65 micro instruction and six timed memory
@@ -33,7 +33,7 @@ Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
 
 | Role | Source below BASE | Build below BASE | Full HEAD |
 | --- | --- | --- | --- |
-| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | 0a35a382909ca169ce3f381cb38206b1725001b3 |
+| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | b8e7e1bee6611eeda320ce163cd3ce89323da877 |
 | Previous golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
 | Current golden | worktrees/golden-20261109-runtime | golden-20261109-release | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
 | Upstream | worktrees/upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695615e9fd9912342b79cdd54fced0d2 |
@@ -44,7 +44,7 @@ snapshot `cb906f9bc52` at `pyjit-golden-20261109` and the existing moving golden
 branch. [Publication receipt](issues/golden-20261109/publication.json) records
 remote readback. New frozen release build checks 117 modules and contains 79
 current DSOs; historical physical file counts are not admission gates. Candidate magic is
-64416; all three builds identify the current full source and check 117 modules.
+64417; all three builds identify the current full source and check 117 modules.
 Upstream checks 116 modules. Physical DSO counts 78 upstream/213 value builds
 include historical ABI files and are not checked-module counts.
 
@@ -60,13 +60,33 @@ or benchmark mutation during timing. Full suites belong at coherent checkpoints.
 ## Evidence and deferred source
 
 The active packet is [object/call](issues/object-call-20261109/plan.md), evidence
-`BASE/pyjit-link-wave1/object-call-20261109`. Lookup/keyword lanes plus the reviewed positional-default guard are committed.
-Release/debug/stats builds and focused checks pass; Astra actual-diff review is
-complete. Measured performance admission and full diagnostics remain pending.
-`object41*` logs, `lookup-lifetime-after41.json` and `keyword-hits41.json` retain
-evidence. Five supported keyword shapes hit1000 times each; four fallback
-controls hit zero. Before-witness crashes affected both frozen39 and upstream.
-The active release/debug/stats builds are mutable; do not measure during builds.
+`BASE/pyjit-link-wave1/object-call-20261109`. Current source46 adds lookup/keyword/default guards, two shared-frame inline
+declarations, independent guarded cache storage, magic64417 and the disassembly
+fixture repair. All three builds identify46/check117 modules. Focused45 passed
+564 tests each; API45 covers identical production C,306 units/zero failing
+findings/parse errors. Full45 release/debug each ran54,674 tests with known GDB
+16/21, nine frame-jump errors each, debug trace-format1, and disassembly8. The
+fixture-only46 successor passes143 disassembly tests each; stats46 smoke150passes.
+No full46 suite was run. All native jobs are closed; source/builds are frozen.
+
+Current [report](issues/object-call-20261109/checkpoint46-report.md),
+[tables](issues/object-call-20261109/checkpoint46-tables.md) and
+[next plan](issues/object-call-20261109/plan.md) own admission: HOLD performance
+promotion. Full29 means1.00382/39 and1.18120/upstream; coro/spectral/comprehension
+regressions repeat. Matched39 counters now prove higher aggregate CPI with
+near-equal instructions/branches and near-equal branch-miss rates; exact mechanism
+remains open. Golden stays39. Do not add a broad object-layout change or another
+compiler to diagnose it.
+
+Evidence: measure46-all29-{golden,upstream}, measure46-regressions-golden39,
+four measure46-*-long, instructions46-micro-v2, gap46-perf-{stat,record},
+gap46-golden-{cycles-instructions,branches}, gap46-profile-decoded, coverage46-*.
+Two closing46 command journals distinguish the first load-guard rejection from
+accepted retry/profile/counter captures. All seven elapsed campaigns and accepted
+counter groups have stable identity. Earlier41/43 records stay historical;
+43 failed the union API rule. Initial44/45 stale-format build failures and the
+mistaken first focus module name remain. Build45b succeeds after magic64417.
+Do not delete failed evidence or silently pool it with accepted measurements.
 
 E11=`BASE/pyjit-link-wave1/frame-call-model-20261109`.
 

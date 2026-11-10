@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-11-10T10:57:12.177890+00:00",
+  "remote": "origin",
+  "candidate_branch": "pyjit/frame-call-model-20261109",
+  "candidate_head": "b8e7e1bee6611eeda320ce163cd3ce89323da877",
+  "promotion": "HOLD",
+  "golden_branch": "pyjit/golden-20261108",
+  "golden_branch_head": "cb906f9bc524f5151d03bd3cbb08e8a4bc13367b",
+  "immutable_runtime_tag": "pyjit-golden-20261109-runtime",
+  "tag_object": "27ebac9910337becd18ba31e3acb0c8d967c5682",
+  "peeled_runtime_head": "4d666e1b482cb4983c7683f91c5922af14d0ab40",
+  "verification": "Successful normal candidate push and independent git ls-remote readback; golden branch and peeled tag remain unchanged."
+}

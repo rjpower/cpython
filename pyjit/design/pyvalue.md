@@ -5,9 +5,9 @@ is 38 `24f4d270ced`). PyValue is the canonical eight-byte word in interpreter
 frames, core containers, cells, instance fields and value-native C APIs.
 Qualification and measurements belong to the [closing report](../issues/frame-call-model-20261109/closing-report.md)
 and [status](../STATUS.md), not this representation reference.
-The lookup-cache extension below is implemented in candidate `0a35a382909`
-and passes focused release/debug checks. Its performance admission is pending;
-the frozen baseline identity above remains unchanged.
+The lookup-cache extension below is implemented in current source
+`b8e7e1bee66`. [Status](../STATUS.md) separates its qualification from performance
+admission; the frozen baseline identity above remains unchanged.
 
 The [complete pre-cleanup page](archive/pyvalue-before-close-20261109.md)
 retains rollout history, old measurements and design comparisons unchanged.
@@ -45,6 +45,12 @@ the protecting owner. The approved lookup increment shares the existing type
 and helpers in `pycore_value.h` between the C type cache and attribute feedback.
 Historical feedback snapshots copy guarded metadata without loading a borrow.
 This adds no value encoding, owning cache or exception to the C-local borrow rule.
+
+Guarded words also obey the value API's union restriction. Attribute feedback
+stores its guarded word independently from the native pointer/shape union;
+polymorphic snapshot payloads do the same. No raw-bit or tagged-union exception
+was added. The larger serialized attribute entry has bytecode magic 64417;
+older source-backed caches are rejected and regenerated through normal import.
 
 `Include/internal/pycore_pyvalue.h` requires the 64-bit GIL private runtime.
 The qualified platform is Linux x86-64 with GCC. Pointers must fit below 2^48;

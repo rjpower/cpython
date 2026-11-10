@@ -1,55 +1,63 @@
 # Project status
 
-Candidate `0a35a382909` is committed and passes focused checks, but **performance
-promotion is on hold**. It makes class reads and fixed keyword calls much faster
-than frozen39 while the full application screen is slightly slower. Start with
-the [current report](issues/object-call-20261109/checkpoint41-report.md),
-[tables](issues/object-call-20261109/checkpoint41-tables.md) and
-[active plan](issues/object-call-20261109/plan.md).
+Candidate46 **b8e7e1bee66** is committed and reviewed. **Hold performance
+promotion; golden39 stays unchanged.** The [current report](issues/object-call-20261109/checkpoint46-report.md),
+[complete tables](issues/object-call-20261109/checkpoint46-tables.md) and
+[next plan](issues/object-call-20261109/plan.md) own this checkpoint.
 
-| Current41 elapsed ratio | /frozen39 | /upstream |
+| Elapsed candidate/control | /frozen39 | /upstream |
 | --- | ---: | ---: |
-| 29-kernel geometric mean | 1.01024 | 1.18105 |
-| logging_silent | 1.05443 | 0.94493 |
-| coroutines | 1.06442 | 1.35166 |
-| DeltaBlue | 1.03889 | 1.67115 |
-| Class-read micro, long confirmation | 0.16914 | 1.02406 |
-| Keyword-call micro, long confirmation | 0.63626 | 1.12412 |
+| All29 geometric mean | 1.00382 | 1.18120 |
+| Logging silent, full29 | 0.96472 | 0.88807 |
+| Coroutines, full29 | 1.05458 | 1.34524 |
+| DeltaBlue, full29 | 0.99291 | 1.63233 |
+| Long class-read micro | 0.16013 | 1.00434 |
+| Long keyword-call micro | 0.60957 | 1.05220 |
 
-Kernel screens use two balanced rounds; micros use six, with fixed longer loop
-counts and unchanged bodies. Identities/configuration/affinity/hash/JIT gates
-pass. Class/upstream variation does not establish parity. Material application
-regressions are being repeated. Static disassembly finds newly outlined frame
-construction on three call paths; its bounded inline-policy proposal awaits
-review and measurement. It does not explain dominant coroutine recursion.
-No new golden promotion is authorized by these results.
+Full29 uses two balanced pairs per kernel; micros six longer pairs. Class is
+near upstream in aggregate with substantial pair variation. Six-pair golden
+confirmations show coroutines +5.78%, spectral norm +8.11%, comprehensions
++9.48%, all pairs slower. Logging improves 2.68% and DeltaBlue 1.42% in every
+confirmation pair. The near-flat mean does not waive repeated losses.
 
-The candidate implements guarded canonical class-value caches, safe result
-publication, reusable 1–3-keyword binding plans and current-default-shape guards.
-Release/debug/stats builds check 117 modules. Focused release/debug runs pass
-464 tests each; stats smoke passes 150. Five supported keyword shapes each show
-1,000 fast-path hits; four fallback controls show zero. A lifetime witness that
-crashes frozen39 and upstream now passes both receiver layouts on release/debug.
-Astra's proposal, implementation and post-review find no remaining source blocker.
-Full diagnostics and the API checker have not yet rerun on this candidate.
+Matched current/golden PMU shows nearly equal instructions and branches but
+5–10% more cycles in the three regressions. Aggregate CPI is higher; branch-miss
+rates barely change. The exact locality/layout/dependency mechanism is open.
+Against upstream, coroutine/DeltaBlue instruction ratios remain 1.384/1.871.
+Profiles locate exact calls, coroutine creation/copy/completion and several
+lookup routes. The [cold review](issues/object-call-20261109/final-review46.md)
+separates measured cost from hypotheses.
 
-Runtime39 `4d666e1b482` is published as `pyjit-golden-20261109-runtime`; combined
-golden `cb906f9bc52` adds canonical docs. The previous golden `0765e9be47f` and
-both generations of immutable tags/builds remain unchanged. The
-[publication receipt](issues/golden-20261109/publication.json) records remote
-readback. The [previous closing report](issues/frame-call-model-20261109/closing-report.md)
-owns runtime39's 0.934× previous-golden and 1.175× upstream full29 results,
-two logging confirmations around 0.90× upstream, 65 micro workloads and six
-allocation/collector workloads. Its full release/debug runs each executed
-54,645 tests with known GDB display, nine frame-jump and debug trace-format
-failures. They were not green suites and do not qualify current41.
+The candidate integrates canonical guarded class-value feedback, safe result
+acquisition, fixed 1–3-keyword plans over the existing overlap ABI, current-default
+shape guards and bounded shared-frame inlining. Guarded words now occupy separate
+fields; the API checker stays strict. Attr/poly sizes are 48/120 bytes and magic
+64417 versions serialized feedback geometry. Four scoped censuses retain private
+site admission; warm entry storage grows about 8% in logging and 10% in DeltaBlue.
 
-Universal PyValues are integrated across interpreter homes, containers,
-attributes and rebuilt extensions. Calls use initialized reusable storage,
-overlapping windows, explicit recipients and real continuations. Native
-method/tracing JIT tiers remain unfinished. The next design work is a measured
-generator-cycle contract, value-native descriptor bridges and structured IR
-ownership/effect facts. A global object-layout rewrite is not justified. See
+Release/debug/stats builds identify46 and check 117 modules. The production45
+checkpoint passed 564 focused tests per release/debug build, clean API checks
+(306 units, zero failing findings/parse errors), and full diagnostics of 54,674
+tests each. Full runs retain known GDB display failures16/21, nine frame-jump
+errors each, one debug trace-format failure, plus eight stale disassembly checks.
+The fixture-only46 correction passes all 143 disassembly tests on both builds;
+stats46 smoke passes 150. Production C/checker inputs are unchanged from45.
+These are failed full diagnostic records plus a verified fixture repair, not an
+all-green or newly executed full46 suite.
+
+Golden39 **4d666e1b482** is published as `pyjit-golden-20261109-runtime`; combined
+snapshot is `cb906f9bc52`. Both generations of immutable controls remain unchanged.
+The [receipt](issues/golden-20261109/publication.json) and
+[baseline closing report](issues/frame-call-model-20261109/closing-report.md)
+retain known limits, including the shared lookup lifetime witness discussed in
+the current report. No candidate performance result replaces those controls.
+
+Universal PyValues are integrated across frames, containers, attributes and
+rebuilt extensions. Native method/tracing JIT tiers remain unfinished. Keep
+initialized reusable storage, overlap, explicit recipients and real continuations.
+Next: isolate the CPI regressions; remove reviewed immutable keyword-plan work;
+prove/census direct owning coroutine entry; weight actual lookup sites; centralize
+IR effect facts. A wholesale object-layout rewrite is not justified. See
 [IR](design/register-ir.md), [interpreter](design/interpreter.md),
-[frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md),
-and [handoff](HANDOFF.md) for exact contracts, paths and evidence.
+[frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md)
+and [handoff](HANDOFF.md).

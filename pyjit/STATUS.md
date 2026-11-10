@@ -1,15 +1,23 @@
 # Project status
 
 The active round targets **DeltaBlue ordinary call setup and teardown**, using
-committed candidate46 `b8e7e1bee66` as its development baseline. See the
+committed candidate46 `b8e7e1bee66` as its development baseline. The first
+[integration](issues/deltablue-call-model-20261110/integration47.md), runtime47
+`986c65ee5ab`, is committed and pushed: unified guarded class-value reads.
+Release/debug pass571 focused tests each; API306 units has zero failing findings
+or parse errors. A short two-pair screen gives DeltaBlue1.26303/upstream and
+logging0.91755/upstream; logging is5.53% slower than the rebuilt46 control.
+Full qualification and repeated target timings belong at the batch boundary.
+See the
 [new plan](issues/deltablue-call-model-20261110/plan.md) and
 [grouped design](issues/deltablue-call-model-20261110/design-overview.md). One broad
 Astra review is complete; it selected uniform canonical class reads, classmethod
 pair forwarding and complete conditional leaf-region elision. Sol approved the
-first lookup proposal and is implementing it while checking leaf observation
-and completion contracts. No new runtime change has landed yet.
+first lookup proposal and post-reviewed its implementation. Classmethod forwarding
+is being implemented; the conditional leaf prototype is under component review.
 
-The user permits useful incremental progress with documented tradeoffs. Earlier46
+The user permits useful incremental progress with documented tradeoffs. The
+following table records the earlier46 checkpoint, not the newer47 screen. Earlier46
 was held under the previous performance policy; its
 [report](issues/object-call-20261109/checkpoint46-report.md) and
 [tables](issues/object-call-20261109/checkpoint46-tables.md) remain historical

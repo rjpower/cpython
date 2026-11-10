@@ -1,0 +1,38 @@
+# B handwritten implementation review
+
+**No correctness blocker found in the handwritten B diff.** Approved to proceed to coordinator regeneration, release/debug compile and focused/API qualification. This is not the completed generated/native post-review. Base is runtime46 `b8e7e1bee6611eeda320ce163cd3ce89323da877`; reviewed the uncommitted five-file diff in the execution-boundaries runtime worktree.
+
+## Actual changes match the approved scope
+
+- `specialize_class_load_attr` adds `INLINE_VALUE` only beside the existing successful object cases. Its shared class/MRO/metaclass/provider/descriptor preamble and mutable enum-like restrictions are unchanged. It writes canonical `descriptor` to `class_value`, then versions, then publishes the same189/190 handlers. `descr != NULL` correctly limits the free-threaded deferred-refcount helper to object descriptors; it is derived from `PyValue_IsObject` immediately above.
+- `_LOAD_ATTR_CLASS` now reads `_PyValueGuarded`, acquires through `IR_CANONICAL_HOME_DUP`, captures the consumed receiver owner, and uses the checked retirement marker. Both macros retain original guards, padding and optional NULL self suffix. No generic object conversion, raw-bit cast or cache-owned reference is added.
+- `fb_row_of` moves both class handlers to guarded payload copying and removes them from native `descr` copying. `fb_put_row`, reset and fresh execution initialization remain correct without edits. Field comment now distinguishes instance type-version protection from direct class/metaclass protection.
+- No handler IDs, magic, storage layout, frame/call ABI, checker policy or generator proof exemptions changed. The no-magic rationale in [proposal review](B-proposal-review.md) still applies: immutable serialized words/fbinit and ATTR48/POLY120 geometry are unchanged; specialized payloads are execution state.
+
+The result owner exists before receiver retirement, so class dictionary invalidation or last-class destruction cannot invalidate the returned object. Both guards run before conversion of metadata into a transient borrow. Metaclass data-descriptor precedence and mutable-metaclass provider mutation remain independently guarded. A plain function on a class still receives a NULL self suffix; this increment does not implement classmethod binding.
+
+## Test review and limits
+
+`TestDirectClassValue` covers canonical scalar/object identity under builtin and mutable metaclasses; base mutation, changed bases, descriptor replacement and deletion; metaclass data-descriptor insertion and provider override; plain-function method-form NULL self; mixed direct-class handler observations; and mortal result survival through displaced-local reentry.
+
+The three-row polymorphic expectation is consistent with the implementation: the first class starts MONO, subsequent distinct class versions/handler combinations are recorded after cooldown, and FB_POLY_SIZE is four. The two ordinary-metaclass classes remain distinct through `row.aux = class_version`, even when `row.type_version` is zero. The mixed mutable-metaclass row also selects handler190. This test establishes historical recording/state transitions and correct current lookup after mutation. It does **not** prove historical guarded-payload replay: no such live replay path exists, and the inspection helper exposes versions/handler rather than payload bits. Source inspection verifies the correct snapshot field.
+
+The displaced-local test exercises the intended hazard. `prior` owns `Displaced`; replacing that local releases it after acquiring the class result. Its finalizer deletes `Receiver.selected` and reenters the same reader with `Other`. The returned list independently owns its `Payload`, so deletion cannot retire that payload until the returned owner is dropped and collection runs. This is a coherent ownership witness, not a claim that Python mandates every incidental CPython destructor order. The reentrant call need not itself trigger respecialization for the deletion/lifetime witness to be valid.
+
+The host source tests inspect actual generated bodies for guard/load/acquire/publish/retire order, reloadable `this_instr`, NULL suffix and no native-pointer view. The added selector/contract test verifies IDs189/190, legacy selector6 now naming `class_value`, attribute feedback type and the checked result phase. Author reports all six host codegen tests pass. The earlier independent in-memory actual-DSL probe also passed both proposed handlers under the unchanged strict suffix validator; no new native tests were run by this reviewer.
+
+## Remaining integration gate
+
+Review coordinator-regenerated products for both selector offsets, typed reads, acquired result publication before retirement, instruction/handler refresh, eventual local/temporary destination write and unchanged NULL self suffix. Verify all affected generated products, not just the IR cases. Compile release/debug, run the new direct-class tests plus existing cache/call/ownership/monitoring coverage, retain API/geometry assertions and inspect actual failures. The full diff/native outcome may reveal issues that a handwritten review cannot establish.
+
+No runtime edits, native jobs, regeneration, builds or commits were performed during this review. Ready to inspect generated and native evidence when available.
+
+## Generated/native follow-up: candidate47
+
+Inspected committed `986c65ee5ab6433ea80ab3d385abfe5ca8dd7675` and its eight-file diff. Regenerated changes are exactly the two class handlers' IR C bodies, their opcode selector/effect metadata and IR effect/result-phase rows; no generator exemption or handwritten generated product was added. Selector6 names `class_value` for both189/190. Formats, IDs, feedback sizes, source operands and `writes={1, BIT0}` are unchanged. New RAISES/error/sync flags reflect retirement revalidation's error path; they are not an accidental new descriptor operation.
+
+Both actual generated bodies validate versions before guarded load, acquire the canonical result before consuming the receiver, and publish a temporary destination before callback-capable retirement. A non-final receiver takes the direct close; a potentially final receiver uses `retire_published_values` with an explicitly protected LOCAL/discard result. On success the handler reloads `this_instr`, `ir_word` and slots; on failure the helper closes the held result and the handler takes the error path. The unchanged effect-free NULL suffix then uses refreshed slot addressing. LOCAL/discard destination publication remains deferred appropriately, and displaced-local retirement follows replacement. Existing helpers keep scratch owners in their own out-of-line frame.
+
+Read `E/delta47-{regen,build,focus}-checks.json`, with E under `build/pyjit-link-wave1/deltablue-call-model-20261110`. Coordinator regeneration returned0 before committing the generated products. Release and debug builds returned0 at clean candidate47; retained logs report117 checked modules. The focus receipts and log tails both report SUCCESS: ten modules, **571 tests,13 skipped per build**, at the matching clean identity. The new source/selector tests and displaced-local/mixed-class tests are included in that completed module list. This reviewer executed no native commands.
+
+**No generated/source correctness blocker found; the real release compile and both focused suites now support the review.** API qualification and application measurements are still coordinator gates; no full candidate47 suite or performance improvement is claimed here. Ready to append those retained results when available.

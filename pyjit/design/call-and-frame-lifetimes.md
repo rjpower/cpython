@@ -5,10 +5,31 @@ observer and debugger qualification limits are recorded in status. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
-The keyword-plan extension below is implemented in the current
+The keyword-plan extension below is implemented in the closed
 [object/call packet](../issues/object-call-20261109/plan.md), current source
 `b8e7e1bee66`. [Status](../STATUS.md) records qualification and performance;
 implementation does not imply golden promotion.
+
+## Reviewed call-model improvements
+
+The active [DeltaBlue call round](../issues/deltablue-call-model-20261110/plan.md)
+selects canonical class reads, classmethod forwarding as an owned callable/receiver
+pair, and complete conditional leaf-region elision. Canonical class reads are
+implemented in candidate47 `986c65ee5ab`; the two call changes remain proposals.
+See the [grouped review](../issues/deltablue-call-model-20261110/astra-architecture-review.md),
+[leaf contract](../issues/deltablue-call-model-20261110/leaf-contract-review.md)
+and [retirement-scope review](../issues/deltablue-call-model-20261110/leaf-no-callback-scope-review.md).
+The leaf reviews describe a proposed experiment, not implemented frame elision.
+
+Exact calls already use the owning-frame ABI with overlapping argument windows.
+That existing transfer is not frame elision: the proposed leaf path would skip
+the entire callee activation only when a complete final-IR certificate covers
+the operation. Its first experiment is narrower still: admit only a callback-free
+whole operation whose aggregate release multiset passes the nonfinal-release
+check after result acquisition. Any failed certificate, observer/provider guard
+or ownership admission falls back to the ordinary activation. This bounded proof
+does not claim general recovery across callback-capable retirement or general
+debugger redirects; those remain outside the first experiment.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization

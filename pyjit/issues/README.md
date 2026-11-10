@@ -6,7 +6,8 @@ hold detailed experiments; their presence does not mean they are active.
 
 | Record family | Parent workstream |
 | --- | --- |
-| [Current object/call performance checkpoint](object-call-20261109/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
+| [DeltaBlue ordinary-call round](deltablue-call-model-20261110/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
+| [Closed object/call performance checkpoint](object-call-20261109/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
 | [Frame/call model and logging parity](frame-call-model-20261109/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
 | [Execution boundaries and static operand modes](execution-boundaries-20261108/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
 | [Golden checkpoint, cold review and next steps](golden-20261108/README.md) | [Interpreter baseline](../stages/02-baseline/README.md) |

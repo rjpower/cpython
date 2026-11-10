@@ -67,12 +67,16 @@ from this round. No benchmark/source-name specialization or altered workload.
 
 ## Status and reporting
 
-Last update:2026-11-10 22:35UTC. The grouped review, preparatory audits and semantic
-census are complete. Sol approved the first concrete lookup proposal, including
-its generated publication contract and unchanged serialized format. Baseline46
-timing has completed; Sol is implementing class-value reads. Another Sol reviewer
-is resolving leaf entry/observation and ordinary completion interfaces. Next
-report follows first integration; no timer or unattended delivery is promised.
+Last update:2026-11-10 22:52UTC. First [integration47](integration47.md) is
+committed/pushed: canonical class reads, release/debug117-module builds,
+571 focused tests each, API306 units clean. Two-pair screens give DeltaBlue
+0.72080/rebuilt46 and1.26303/upstream, logging1.05526/rebuilt46 and0.91755/upstream.
+Sol implements reviewed A classmethod forwarding in the main runtime worktree.
+Sol prepares C in an isolated managed worktree; its concrete proposal is under
+independent review. The narrowed first C scope requires callback-free complete
+operation admission, including aggregate nonfinal-release checks, so general
+callback recovery is deferred. Next report follows the batch checkpoint;
+no timer or unattended delivery is promised.
 
 Evidence: `BASE/pyjit-link-wave1/deltablue-call-model-20261110`, BASE as in
 [HANDOFF](../../HANDOFF.md). Prior [checkpoint46](../object-call-20261109/checkpoint46-report.md)

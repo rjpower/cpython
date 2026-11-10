@@ -8,8 +8,15 @@ peer review and debugging. Incremental mostly-beneficial landings are allowed wi
 explicit tradeoffs. CPI/annotation experiments, coroutine entry and keyword micros
 are deferred. The single [Astra review](issues/deltablue-call-model-20261110/astra-architecture-review.md)
 is complete: canonical class reads first, classmethod pair forwarding second,
-conditional leaf-region elision next. Runtime remains46 until the first landing.
-Sol handles all subsequent component reviews.
+conditional leaf-region elision next. First landing47 `986c65ee5ab` is pushed;
+release/debug117-module builds and571 focused tests each pass, API306 units is
+clean. Basic two-pair DeltaBlue/upstream1.26303, logging/upstream0.91755. See
+[integration47](issues/deltablue-call-model-20261110/integration47.md).
+Sol implements A classmethod forwarding in the main runtime worktree. A separate
+`BASE/worktrees/deltablue-leaf-prototype` holds the C conditional leaf experiment
+at base47; code is held for independent proposal review. Root owns native jobs,
+including frozen intermediate control builds. Stats remains46. Sol handles all
+subsequent component reviews.
 
 ## Closed checkpoint
 
@@ -44,7 +51,8 @@ Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
 
 | Role | Source below BASE | Build below BASE | Full HEAD |
 | --- | --- | --- | --- |
-| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | b8e7e1bee6611eeda320ce163cd3ce89323da877 |
+| Candidate release/debug | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug} | 986c65ee5ab6433ea80ab3d385abfe5ca8dd7675 |
+| Stats, previous round | worktrees/execution-boundaries-20261108 | execution-boundaries-stats | b8e7e1bee6611eeda320ce163cd3ce89323da877 |
 | Previous golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
 | Current golden | worktrees/golden-20261109-runtime | golden-20261109-release | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
 | Upstream | worktrees/upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695615e9fd9912342b79cdd54fced0d2 |

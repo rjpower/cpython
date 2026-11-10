@@ -9,8 +9,15 @@ optimizes storage, binding, ownership and semantic completion. Its frozen
 candidate, full qualification, logging target and complete benchmark matrix
 are recorded in [status](../../STATUS.md) and the
 [closing report](../../issues/frame-call-model-20261109/closing-report.md).
-The [ranked next work](../../issues/frame-call-model-20261109/next-steps.md)
-replaces earlier experiment orderings.
+The [prior ranked work](../../issues/frame-call-model-20261109/next-steps.md)
+records the closed logging round; the active packet below owns current priorities.
+
+The active [DeltaBlue ordinary-call round](../../issues/deltablue-call-model-20261110/plan.md)
+reviews call resolution, execution and teardown as one model. Its first
+implementation sequence is canonical class reads, classmethod pair forwarding,
+then a complete conditional leaf-region experiment. The [grouped review](../../issues/deltablue-call-model-20261110/astra-architecture-review.md)
+and [leaf contract reviews](../../issues/deltablue-call-model-20261110/leaf-contract-review.md)
+record the current proposal and admission limits; no leaf elision is implemented.
 
 The deliverable is one trustworthy register interpreter with canonical values,
 measured with the JIT disabled against matched immutable controls. Retain raw

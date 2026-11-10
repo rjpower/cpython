@@ -1,6 +1,7 @@
 """Guarded canonical class values and their result-retirement transaction."""
 
 import dis
+import sys
 import unittest
 import weakref
 
@@ -213,6 +214,35 @@ class TestGuardedClassValue(unittest.TestCase):
             "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"] for row in rows))
         for owner in owners:
             self.assertIs(read(owner), type(owner).selected)
+
+    def test_guarded_attribute_feedback_capacity(self):
+        class Receiver:
+            selected = 1
+
+        namespace = {}
+        exec("def read(owner):\n" +
+             "    selected = owner.selected\n" * 700 +
+             "    return selected\n", namespace)
+        read = namespace["read"]
+        sites = [instruction for instruction in dis.get_instructions(read)
+                 if instruction.opname == "LOAD_ATTR"]
+        private = [site for site in sites if site.fb != 0]
+        shared = [site for site in sites if site.fb == 0]
+        # Two header units, then 682 six-unit attr entries. The remaining
+        # two units cannot hold another attr entry in the 4096-unit vector.
+        self.assertEqual([site.fb for site in private], list(range(2, 4094, 6)))
+        self.assertEqual(len(shared), 18)
+        total = int.from_bytes(read.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        self.assertEqual(total, 4094)
+        owner = Receiver()
+        warm(read, owner)
+        words = handlers(read)
+        self.assertEqual({words[site.offset] for site in private},
+                         {"LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"})
+        self.assertEqual({words[site.offset] for site in shared}, {"LOAD_ATTR"})
+        self.assertEqual(len(read.__code__._co_feedback), total * 8)
+        Receiver.selected = 2
+        self.assertEqual(read(owner), 2)
 
     def test_reentrant_retirement_rewrites_feedback(self):
         armed = False

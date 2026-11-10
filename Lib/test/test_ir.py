@@ -664,7 +664,7 @@ class AssemblerTest(unittest.TestCase):
             def __init__(self):
                 self.attr = 5
                 self.other = 7
-        nsites = 1000     # attribute entries are 40 bytes: 817 fit after the compares
+        nsites = 1000     # attribute entries are 48 bytes: 681 fit after the compares
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
                   + "    return (o.attr - o.other, o.other // n,\n"
@@ -681,10 +681,10 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual([i.fb for i in compares], [2, 6])
         load_attrs = [i for i in instrs if i.opname == "LOAD_ATTR"]
         self.assertEqual(load_attrs[0].fb, 10)
-        self.assertEqual(load_attrs[1].fb, 15)
+        self.assertEqual(load_attrs[1].fb, 16)
         shared = [i for i in load_attrs if i.fb == 0]
         owned = [i for i in load_attrs if i.fb != 0]
-        self.assertEqual(len(owned), 817)
+        self.assertEqual(len(owned), 681)
         self.assertEqual(len(shared), nsites + 6 - len(owned))
         self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
@@ -852,7 +852,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         # Entries are in order of unit, without gaps; entry 0 gives the total
         total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
-        sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (40,),
+        sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
                  "GLOBAL": (32,), "CALL": (32,), "BRANCH": (16, 24)}
         for kind, unit, arg, units in entries[1:]:
             self.assertEqual(unit, position)
@@ -1013,14 +1013,14 @@ class FeedbackLayoutTest(unittest.TestCase):
         def word(kind, unit, arg):
             return kind << 28 | unit << 16 | arg
         attr = dis._FEEDBACK_KINDS.index("ATTR")
-        good = table(word(0, 0, 7), word(attr, 2, 0))
+        good = table(word(0, 0, 8), word(attr, 2, 0))
         self.assertEqual(c.replace(co_fbinit=good).co_fbinit, good)
         bad = {
-            "entry 0 is not a counter": table(word(attr, 0, 7), word(attr, 2, 0)),
-            "unit out of order": table(word(0, 0, 12), word(attr, 7, 0),
+            "entry 0 is not a counter": table(word(attr, 0, 8), word(attr, 2, 0)),
+            "unit out of order": table(word(0, 0, 14), word(attr, 8, 0),
                                        word(attr, 2, 0)),
-            "entry does not fit": table(word(0, 0, 6), word(attr, 2, 0)),
-            "entry in the header": table(word(0, 0, 7), word(attr, 1, 0)),
+            "entry does not fit": table(word(0, 0, 7), word(attr, 2, 0)),
+            "entry in the header": table(word(0, 0, 8), word(attr, 1, 0)),
             "past the limit": table(word(0, 0, 5000), word(attr, 2, 0)),
             "no entry 0 units": table(word(0, 0, 1), word(attr, 2, 0)),
         }

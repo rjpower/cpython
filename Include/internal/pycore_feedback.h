@@ -130,14 +130,15 @@ typedef struct {
     uint32_t _pad;
     union {                         // non-owning; valid while the versions match
         PyObject *descr;
-        _PyValueGuarded class_value; // unshadowed class value, guarded by type_version
         PyObject *fget;
         PyObject *getattribute;
         uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
+    // A guarded word must not share storage with native pointer/shape fields.
+    _PyValueGuarded class_value;     // unshadowed class value, guarded by type_version
 } _PyFbAttr;
 
-static_assert(sizeof(_PyFbAttr) == sizeof(_PyFbHeader) + 24,
+static_assert(sizeof(_PyFbAttr) == 48,
               "attribute feedback size changed");
 
 // LOAD_GLOBAL
@@ -186,11 +187,15 @@ static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 16,
  * receiver type and the dict, function or class version for ATTR, the
  * function and callable type versions for CALL. index[i] and payload[i] hold
  * the entry's index and non-owning payload, interpreted by handler[i]. */
-typedef union {
-    const void *descr;
+typedef struct {
+    union {
+        const void *descr;
+        uint32_t shape_to;
+    };
     _PyValueGuarded class_value;
-    uint32_t shape_to;
 } _PyFbPayload;
+
+static_assert(sizeof(_PyFbPayload) == 16, "feedback payload size changed");
 
 typedef struct {
     uint32_t type_version[FB_POLY_SIZE];
@@ -200,7 +205,7 @@ typedef struct {
     _PyFbPayload payload[FB_POLY_SIZE];
 } _PyFbPoly;
 
-static_assert(sizeof(_PyFbPoly) == 88, "polymorphic feedback size changed");
+static_assert(sizeof(_PyFbPoly) == 120, "polymorphic feedback size changed");
 
 typedef struct _PyFbBlock {
     uint32_t size;          // bytes from the start of the block to the end of the last entry

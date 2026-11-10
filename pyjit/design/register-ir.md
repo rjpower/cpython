@@ -7,8 +7,8 @@ authorize every source transfer.
 The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
 the [baseline](../bench/results/interpreter-parity-20261108.md).
 The guarded keyword-call extension below is implemented in the current
-[object/call packet](../issues/object-call-20261109/plan.md); native validation
-and integration remain pending.
+[object/call packet](../issues/object-call-20261109/plan.md); focused release/debug validation passes on candidate `0a35a382909`;
+performance admission remains pending.
 
 The [archive](archive/register-ir-20261108.md) retains earlier designs.
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the

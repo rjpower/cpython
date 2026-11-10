@@ -4,7 +4,7 @@
 
 Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40` is the frozen checkpoint.
 Its original source branch `pyjit/frame-call-model-20261109` is now the active
-object/call integration worktree, with pending producer changes; use the new
+object/call integration worktree, at committed candidate `0a35a382909`; use the new
 detached golden source below for immutable comparisons. Production changes are
 `24f4d270ced`; the final commit adds reviewed debugger tests. No unfinished
 coroutine, owner-bundle or GDB port is included. Root owns current native jobs; consult the active packet before running more.
@@ -33,7 +33,7 @@ Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
 
 | Role | Source below BASE | Build below BASE | Full HEAD |
 | --- | --- | --- | --- |
-| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
+| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | 0a35a382909ca169ce3f381cb38206b1725001b3 |
 | Previous golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
 | Current golden | worktrees/golden-20261109-runtime | golden-20261109-release | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
 | Upstream | worktrees/upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695615e9fd9912342b79cdd54fced0d2 |
@@ -60,9 +60,12 @@ or benchmark mutation during timing. Full suites belong at coherent checkpoints.
 ## Evidence and deferred source
 
 The active packet is [object/call](issues/object-call-20261109/plan.md), evidence
-`BASE/pyjit-link-wave1/object-call-20261109`. Lookup and keyword lanes have stable
-producer edits, root regenerated and started release compilation. Astra is
-reviewing actual code; native behavior and performance are not yet admitted.
+`BASE/pyjit-link-wave1/object-call-20261109`. Lookup/keyword lanes plus the reviewed positional-default guard are committed.
+Release/debug/stats builds and focused checks pass; Astra actual-diff review is
+complete. Measured performance admission and full diagnostics remain pending.
+`object41*` logs, `lookup-lifetime-after41.json` and `keyword-hits41.json` retain
+evidence. Five supported keyword shapes hit1000 times each; four fallback
+controls hit zero. Before-witness crashes affected both frozen39 and upstream.
 The active release/debug/stats builds are mutable; do not measure during builds.
 
 E11=`BASE/pyjit-link-wave1/frame-call-model-20261109`.

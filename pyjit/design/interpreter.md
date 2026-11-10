@@ -2,8 +2,9 @@
 
 This page describes the register interpreter integrated at `4d666e1b482`.
 The closing report records full diagnostics and the remaining observer/tooling
-capability limits. The approved guarded-attribute increment below is implemented
-in producers and awaits merged native validation and integration.
+capability limits. The guarded-attribute increment below is implemented in candidate
+`0a35a382909`, with focused release/debug checks passing. Performance admission
+remains pending.
 See [status](../STATUS.md), the
 [round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).

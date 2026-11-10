@@ -6,8 +6,8 @@ golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
 The keyword-plan extension below is implemented in the current
-[object/call packet](../issues/object-call-20261109/plan.md); native validation
-and integration remain pending.
+[object/call packet](../issues/object-call-20261109/plan.md); focused release/debug validation passes on candidate `0a35a382909`;
+performance admission remains pending.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -79,6 +79,13 @@ version/provider guards establish the plan; it checks supplied count, executable
 and capacity, fills missing defaults, and installs empty variadic bindings.
 Overlong defaults that cannot fit plan scalars decline the plan rather than
 truncate. Defaults are duplicated from canonical tuple homes.
+When positional defaults are needed, the hit also checks the current tuple's
+count and required-argument coverage and confirms that its computed offset
+matches the cached `default_start` before effects. A function created from the
+same code can share its version while carrying a different default count;
+that shape change must miss before the cached offset is used. Calls supplying
+every positional parameter need no defaults-offset check. This guard is
+implemented and its new native regression passes on release and debug.
 
 CALL_KW_PY uses the same primitive for one to three fixed keywords, independently
 of function arity. A union reuses the positional plan's six-byte payload for

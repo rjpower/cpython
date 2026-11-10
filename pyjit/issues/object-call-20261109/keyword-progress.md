@@ -57,3 +57,20 @@ UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B -c 'import sys,
 Next: root regenerates,
 compiles real release/debug builds and runs focused native tests. Independent
 actual-diff review and measurements precede integration. Root owns all of these.
+
+## Positional default-shape repair
+
+Astra's source review found the same shared-code/version issue in the preexisting
+positional binder: it reads current defaults with a cached `default_start`.
+The [repair proposal](positional-default-guard-proposal.md) was independently
+approved and root assigned its positional region. The binder now checks current
+default count, required positional coverage and cached-offset agreement before
+allocation or owner detach when defaults are needed. A miss uses the existing
+transaction; no ABI, feedback layout or generated product changes are needed.
+
+Added a same-code factory regression that first asserts warm CALL_PY_GENERAL,
+then changes to equal-size, larger, shorter, empty and overlong defaults tuples.
+It checks current values/right alignment or ordinary missing-argument errors.
+AST parse and diff checks pass. No native run or commit was performed by this
+lane; root's earlier native checks predate this repair, so its new native
+validation remains pending. The design page records that limit.

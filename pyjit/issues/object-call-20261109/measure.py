@@ -39,8 +39,10 @@ def main():
     parser.add_argument('--group', choices=['kernels', 'micro'], default='kernels')
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--cpu', type=int, default=15)
+    parser.add_argument('--loops', type=int, help='fixed micro loop count for both roles')
     args = parser.parse_args()
     assert args.rounds > 0 and args.rounds % 2 == 0
+    assert args.loops is None or (args.group == 'micro' and args.loops > 0)
     assert args.cpu in os.sched_getaffinity(0)
     args.output.mkdir(parents=True, exist_ok=False)
     checkpoint = load('checkpoint_measure', ROOT / 'issues/checkpoint-closure/measure.py')
@@ -99,6 +101,7 @@ def main():
         for round_index in range(args.rounds):
             for name in names:
                 item = roster[name]
+                loops = item.loops if args.loops is None else args.loops
                 order = tuple(builds) if round_index % 2 == 0 else tuple(reversed(builds))
                 means = {}
                 for role in order:
@@ -110,7 +113,7 @@ def main():
                     assert time.monotonic() < deadline
                     python = Path(before['builds'][role]['python'])
                     command = ['taskset', '-c', str(args.cpu), str(python), '-S', '-B',
-                               str(driver_path), 'time', str(item.path), str(item.loops),
+                               str(driver_path), 'time', str(item.path), str(loops),
                                '7', *([item.variant] if item.variant is not None else [])]
                     stem = f'r{round_index + 1}-{name}-{role}'
                     row = {'round': round_index + 1, 'case': name, 'role': role,
@@ -139,7 +142,7 @@ def main():
                     assert metadata['hash_randomization'] == 0
                     assert len(values) == 7 and all(value > 0 for value in values)
                     means[role] = statistics.mean(values)
-                    row.update(metadata=metadata, values_ns=values, loops=item.loops, mean_ns=means[role])
+                    row.update(metadata=metadata, values_ns=values, loops=loops, mean_ns=means[role])
                     (args.output / 'commands.json').write_text(json.dumps(journal, indent=2))
                 pairs[name].append(means['candidate'] / means[args.control_role])
             print(f'round {round_index + 1} complete', flush=True)

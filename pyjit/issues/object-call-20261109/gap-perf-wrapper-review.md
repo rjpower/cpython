@@ -1,0 +1,13 @@
+# Gap PMU wrapper review
+
+Approved `capture-gap-perf.py` for the planned capture after a valid all-29 timing campaign. This is a narrow source review, not execution or approval of future results. No runtime changes or native workloads were run.
+
+The wrapper imports the existing `frame-call-model-20261109/capture-closing39-gap-perf.py`, changes the candidate revision to `0a35a382909ca169ce3f381cb38206b1725001b3`, and changes the default repeat directory to `measure41-all29-upstream`. Both assignments occur before the imported `main()` constructs its parser or starts capture, so they affect the intended revision checks and default input selection.
+
+The wrapper saves the original `snapshot` function and installs a delegating function that appends its own resolved path to the input list. The original snapshot still hashes the closing39 script, sealed FIFO protocol, checkpoint helper, matched timing records and driver inputs, benchmark and library sources, configuration, extensions, and executable identities. Both preflight and postflight calls resolve the replacement through the imported module's globals. Thus the new wrapper is included in the same before/after identity comparison without dropping the original script or creating recursive snapshot calls.
+
+The imported capture and sealed FIFO implementation remain unchanged. Cases, PMU events, interval protocol, calibration calculation, role ordering, native checks, record build-ID/lost-event checks, retained executable handling, and completion criteria are inherited. Default scheduling remains 18 stat invocations **per selected event group** and six record invocations for the three cases and two roles. A single default stat capture uses cycles/instructions; branches require the existing explicit stat-group selection.
+
+The inherited repeat reader requires exactly two rounds of all 29 kernels (116 timed rows), seven samples per invocation, registry loop counts, clean matching revisions, unchanged recorded input hashes, and successful equal timing identity snapshots. A longer-round campaign, an incomplete capture, a changed helper, or the rejected basic capture will fail this input gate. The planned all-29 directory must therefore be complete and retained unchanged before PMU capture. The CLI's existing explicit `--repeat` override remains subject to these checks.
+
+PMU loop counts remain calibrated separately per role to the sealed target interval; count comparisons must retain the existing workload normalization. The wrapper does not make raw totals comparable by itself. Admission still depends on the resulting invocation and final status records; this review makes no claim about their future contents.

@@ -14,8 +14,10 @@ The active [object/call plan](issues/object-call-20261109/plan.md), reviewed by
 [Astra](issues/object-call-20261109/astra-survey.md), selects canonical attribute
 lookup and reusable keyword binding as the next bounded improvements. The frozen checkpoint is published as `pyjit-golden-20261109-runtime`; the
 combined golden snapshot is `cb906f9bc52`. Preserve both generations of immutable
-tags and native controls. The coordinator owns integration
-and measured outcomes.
+tags and native controls. Candidate `0a35a382909` implements the reviewed lookup/keyword lanes and repairs
+the positional defaults guard. Focused native checks pass. The initial full29 screen regresses against
+frozen39 despite strong micro gains; promotion is on hold while repeats, PMU
+evidence and the reviewed shared-frame inline experiment resolve it. The coordinator owns integration and measured outcomes.
 
 The current target is lower object/call execution cost and a smaller broad
 upstream gap, while retaining logging parity. Use unchanged kernels,

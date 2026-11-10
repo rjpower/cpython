@@ -5,8 +5,9 @@ is 38 `24f4d270ced`). PyValue is the canonical eight-byte word in interpreter
 frames, core containers, cells, instance fields and value-native C APIs.
 Qualification and measurements belong to the [closing report](../issues/frame-call-model-20261109/closing-report.md)
 and [status](../STATUS.md), not this representation reference.
-The approved lookup-cache extension described below awaits merged native
-validation and integration; it does not change this frozen runtime identity.
+The lookup-cache extension below is implemented in candidate `0a35a382909`
+and passes focused release/debug checks. Its performance admission is pending;
+the frozen baseline identity above remains unchanged.
 
 The [complete pre-cleanup page](archive/pyvalue-before-close-20261109.md)
 retains rollout history, old measurements and design comparisons unchanged.

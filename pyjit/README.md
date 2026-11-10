@@ -16,7 +16,8 @@ binding plans.
 Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
 
 The universal-value register interpreter is implemented. Native method/tracing
-JIT tiers remain unfinished. The published
+JIT tiers remain unfinished. The current [2026-11-09 golden](issues/golden-20261109/README.md) freezes
+runtime39 for the active round. The earlier published
 [2026-11-08 golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261108-runtime)
 remains an immutable comparison control; its
 [manifest](issues/golden-20261108/README.md) retains qualification and identities.

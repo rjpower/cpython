@@ -296,7 +296,7 @@ _PyFrame_CodeHome(PyCodeObject *code)
 }
 
 /* Consumes func and locals. The caller supplies initialized value storage. */
-static inline void
+static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
     PyObject *locals, PyCodeObject *code, PyValue *base,

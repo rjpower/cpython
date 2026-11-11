@@ -2134,12 +2134,12 @@ enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
 
 void
 _PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                          uint32_t record)
+                          _PyExceptionHandler handler)
 {
     _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
     assert(activation != NULL);
+    activation->source_error_handler = handler;
     activation->source_error_frame = frame;
-    activation->source_error_record = record;
 }
 
 void
@@ -2149,7 +2149,7 @@ _PyEval_InvalidateSourceErrors(PyThreadState *tstate, _PyInterpreterFrame *frame
     for (; activation != NULL; activation = activation->previous) {
         if (activation->source_error_frame == frame) {
             activation->source_error_frame = NULL;
-            activation->source_error_record = 0;
+            activation->source_error_handler = (_PyExceptionHandler){0};
         }
     }
 }
@@ -2232,7 +2232,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     _PyEvalActivation activation;
     activation.previous = tstate_impl->eval_activation;
     activation.source_error_frame = NULL;
-    activation.source_error_record = 0;
+    activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN

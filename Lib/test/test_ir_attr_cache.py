@@ -2,6 +2,7 @@
 
 import dis
 import sys
+import types
 import unittest
 import weakref
 
@@ -53,6 +54,44 @@ class TestCanonicalMethodCapture(unittest.TestCase):
             self.assertEqual(invoke(owner, lambda: 40), 41)
         self.assertIn(expected, handlers(invoke))
         return owner, invoke
+
+    def test_method_call_without_source_positions(self):
+        def factory():
+            class Owner:
+                def selected(self):
+                    return 42
+
+            def invoke(owner):
+                return owner.selected()
+
+            return Owner, invoke
+
+        def strip_positions(original):
+            constants = tuple(strip_positions(value)
+                              if isinstance(value, types.CodeType) else value
+                              for value in original.co_consts)
+            stripped = original.replace(co_consts=constants, co_linetable=b'')
+            self.assertEqual(stripped.co_code, original.co_code)
+            self.assertEqual(stripped.co_fbinit, original.co_fbinit)
+            self.assertEqual(stripped.co_exceptiontable, original.co_exceptiontable)
+            positions = list(stripped.co_positions())
+            self.assertTrue(positions)
+            self.assertEqual(positions, [(None, None, None, None)] * len(positions))
+            return stripped
+
+        # Assigning __code__ to a function clears its call specialization
+        # version. Strip positions before MAKE_FUNCTION creates the targets.
+        make = types.FunctionType(strip_positions(factory.__code__), globals())
+        Owner, invoke = make()
+        for function in (Owner.selected, invoke):
+            self.assertTrue(all(position == (None, None, None, None)
+                                for position in function.__code__.co_positions()))
+        owner = Owner()
+        for _ in range(4 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(invoke(owner), 42)
+        self.assertIn('LOAD_ATTR_METHOD_WITH_VALUES', handlers(invoke))
+        self.assertIn('CALL_PY_EXACT_ARGS', handlers(invoke))
+        self.assertEqual(invoke(owner), 42)
 
     def test_method_replacement_and_instance_shadowing(self):
         for cls, expected in self.receiver_types():

@@ -12,7 +12,6 @@
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"
-#include "pycore_ir_source.h"
 #include "pycore_function.h"
 #include "pycore_genobject.h"     // _PyCoro_GetAwaitableIter()
 #include "pycore_gc_trace.h"      // _PyGC_CHECK_NOT_SWEEPING()
@@ -325,15 +324,6 @@ static void monitor_throw(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _PyInstr *instr);
 
-/* The result of a handler lookup: four ints, which the x86-64 SysV ABI
-   returns in rax:rdx, so the unwinder needs no addressable locals. */
-typedef struct {
-    int handled;
-    int exc_slot;
-    int handler;
-    int lasti;
-} _PyExceptionHandler;
-
 static _PyExceptionHandler get_exception_handler(PyCodeObject *, int);
 
 #ifdef HAVE_ERRNO_H
@@ -357,7 +347,7 @@ typedef struct _PyEvalActivation {
     /* A nested C entry must not consume its parent's pending source error.
      * This storage also covers failure to allocate an observer frame object. */
     _PyInterpreterFrame *source_error_frame;
-    uint32_t source_error_record;
+    _PyExceptionHandler source_error_handler;
     const _PyIRObserverSpec *observer_context;
 } _PyEvalActivation;
 
@@ -541,18 +531,15 @@ get_frame_exception_handler(_PyInterpreterFrame *frame, int offset)
         object->f_line_next = -1;
     }
     if (activation != NULL && activation->source_error_frame == frame) {
-        PyCodeObject *code = _PyFrame_GetCode(frame);
-        _PyIRSourceMap map = _PyIRSource_Stored(code->co_linetable);
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&map, activation->source_error_record, &event);
+        _PyExceptionHandler handler = activation->source_error_handler;
         activation->source_error_frame = NULL;
+        activation->source_error_handler = (_PyExceptionHandler){0};
         if (object != NULL) {
             object->f_source_event_error = -1;
             object->f_source_event = -1;
             object->f_lineno = 0;
         }
-        return (_PyExceptionHandler){event.handler >= 0, event.exc_slot,
-                                     event.handler, event.lasti};
+        return handler;
     }
     return get_exception_handler(_PyFrame_GetCode(frame), offset);
 }

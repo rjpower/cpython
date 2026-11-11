@@ -44,6 +44,92 @@ class InnerError(Exception):
 
 
 class SourceReentryTests(unittest.TestCase):
+    def test_source_recipe_is_consumed_before_later_ordinary_error(self):
+        events = []
+
+        def target():
+            try:
+                try:
+                    pass
+                except OuterError as error:
+                    events.append(('caught', error.__traceback__.tb_lineno))
+                raise InnerError('ordinary')
+            finally:
+                events.append('cleanup')
+
+        first = target.__code__.co_firstlineno
+        source_line = first + 3
+        self.assertTrue(any(start == end and line == source_line
+                            for start, end, line in target.__code__.co_lines()))
+
+        def callback(code, line):
+            if line == source_line:
+                raise OuterError('source callback')
+
+        mon, tool = sys.monitoring, 2
+        mon.use_tool_id(tool, 'source-recipe-consumption')
+        try:
+            mon.register_callback(tool, mon.events.LINE, callback)
+            for enabled in (True, False, True):
+                with self.subTest(enabled=enabled):
+                    events.clear()
+                    mon.set_local_events(
+                        tool, target.__code__, mon.events.LINE if enabled else 0)
+                    try:
+                        target()
+                    except InnerError as error:
+                        traceback = error.__traceback__
+                    else:
+                        self.fail('ordinary error did not propagate')
+                    while traceback.tb_frame.f_code is not target.__code__:
+                        traceback = traceback.tb_next
+                    self.assertEqual(traceback.tb_lineno, first + 6)
+                    expected = [('caught', source_line)] if enabled else []
+                    self.assertEqual(events, expected + ['cleanup'])
+        finally:
+            mon.set_local_events(tool, target.__code__, 0)
+            mon.register_callback(tool, mon.events.LINE, None)
+            mon.free_tool_id(tool)
+
+    def test_unhandled_source_recipe_preserves_callback_attribution(self):
+        def target():
+            value = 42
+            pass
+            return value
+
+        source_line = target.__code__.co_firstlineno + 2
+        self.assertTrue(any(start == end and line == source_line
+                            for start, end, line in target.__code__.co_lines()))
+
+        def callback(code, line):
+            if line == source_line:
+                raise OuterError('uncaught source callback')
+
+        mon, tool = sys.monitoring, 2
+        mon.use_tool_id(tool, 'source-recipe-unhandled')
+        try:
+            mon.register_callback(tool, mon.events.LINE, callback)
+            for enabled in (True, False, True):
+                with self.subTest(enabled=enabled):
+                    mon.set_local_events(
+                        tool, target.__code__, mon.events.LINE if enabled else 0)
+                    if not enabled:
+                        self.assertEqual(target(), 42)
+                        continue
+                    try:
+                        target()
+                    except OuterError as error:
+                        traceback = error.__traceback__
+                    else:
+                        self.fail('source callback did not raise')
+                    while traceback.tb_frame.f_code is not target.__code__:
+                        traceback = traceback.tb_next
+                    self.assertEqual(traceback.tb_lineno, source_line)
+        finally:
+            mon.set_local_events(tool, target.__code__, 0)
+            mon.register_callback(tool, mon.events.LINE, None)
+            mon.free_tool_id(tool)
+
     def test_same_pc_source_redirect_replays_selected_instruction(self):
         for warmup in (0, _testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             for action in ('none', 'getter', 'redirect'):

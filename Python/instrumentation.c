@@ -1569,7 +1569,9 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 error:
     if (!observer_redirected(frame, before)) {
-        _PyEval_RecordSourceError(tstate, frame, index);
+        _PyExceptionHandler handler = {
+            event.handler >= 0, event.exc_slot, event.handler, event.lasti};
+        _PyEval_RecordSourceError(tstate, frame, handler);
         if (frame->frame_obj) {
             frame->frame_obj->f_source_event_error = (int)index;
             frame->frame_obj->f_lineno = event.line;

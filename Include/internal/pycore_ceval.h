@@ -41,9 +41,19 @@ extern int _PyEval_SetTraceValueAllThreads(PyInterpreterState *interp, _Py_value
 
 extern int _PyEval_SetOpcodeTrace(PyFrameObject *f, bool enable);
 
+/* Semantic exception recovery, independent of source attribution. Four ints
+ * are returned in rax:rdx on x86-64 SysV without addressable result storage. */
+typedef struct {
+    int handled;
+    int exc_slot;
+    int handler;
+    int lasti;
+} _PyExceptionHandler;
+
 /* Retain a failed source event's handler recipe across cleanup reentry. */
 extern void _PyEval_RecordSourceError(PyThreadState *tstate,
-                                    _PyInterpreterFrame *frame, uint32_t record);
+                                    _PyInterpreterFrame *frame,
+                                    _PyExceptionHandler handler);
 
 // Helper to look up a builtin object
 // Export for 'array' shared extension

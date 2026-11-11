@@ -13327,7 +13327,10 @@
                     IR_STORE_CANONICAL_TEMP(call_window[1], self);
                     STAT_INC(CALL, hit);
                     STAT_INC(LOAD_ATTR_METHOD_WITH_VALUES_CALL0, hit);
-                    _PyInterpreterFrame *call_child = _PyFrame_PushExact(tstate, attr, self, call_window + 2, 0, frame);
+                    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+                    assert(!PyValue_IsNull(self));
+                    assert(PyValue_IsNull(call_window[0]));
+                    _PyInterpreterFrame *call_child = _PyFrame_PushOverlapping(tstate, attr, call_window + 1, 1, frame);
                     IR_SAVE_CALL_CONTINUATION(IR_A(call_word), next_instr + 1);
                     assert(!IS_PEP523_HOOKED(tstate));
                     assert(call_child->previous == frame || call_child->previous->previous == frame);

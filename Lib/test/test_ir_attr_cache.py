@@ -634,6 +634,28 @@ class TestAdjacentMethodCall(unittest.TestCase):
         self.assertNotEqual(words[method].positions, words[method + 1].positions)
         self.assertEqual(invoke(owner), 42)
 
+    def test_refinement_without_source_positions(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        for function in (Owner.selected, invoke):
+            original = function.__code__
+            stripped = original.replace(co_linetable=b'')
+            self.assertEqual(stripped.co_code, original.co_code)
+            self.assertEqual(stripped.co_fbinit, original.co_fbinit)
+            self.assertEqual(stripped.co_exceptiontable, original.co_exceptiontable)
+            positions = list(stripped.co_positions())
+            self.assertTrue(positions)
+            self.assertEqual(positions, [(None, None, None, None)] * len(positions))
+            function.__code__ = stripped
+        owner = Owner()
+        self.ready(invoke, owner)
+        self.assertEqual(invoke(owner), 42)
+
     def test_live_target_and_instance_shadowing(self):
         class Owner:
             def selected(self):

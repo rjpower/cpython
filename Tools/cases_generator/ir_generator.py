@@ -2829,8 +2829,11 @@ class IREmitter(Emitter):
         self.emit(f"IR_STORE_CANONICAL_TEMP(call_window[1], {receiver});\n")
         self.emit("STAT_INC(CALL, hit);\n")
         self.emit("STAT_INC(LOAD_ATTR_METHOD_WITH_VALUES_CALL0, hit);\n")
-        self.emit(f"_PyInterpreterFrame *call_child = _PyFrame_PushExact("
-                  f"tstate, {function}, {receiver}, call_window + 2, 0, frame);\n")
+        self.emit("assert(frame->owner == FRAME_OWNED_BY_THREAD);\n")
+        self.emit(f"assert(!PyValue_IsNull({receiver}));\n")
+        self.emit("assert(PyValue_IsNull(call_window[0]));\n")
+        self.emit(f"_PyInterpreterFrame *call_child = _PyFrame_PushOverlapping("
+                  f"tstate, {function}, call_window + 1, 1, frame);\n")
         self.emit("IR_SAVE_CALL_CONTINUATION(IR_A(call_word), next_instr + 1);\n")
         emit_python_frame_entry(self.out, "call_child")
         self.emit("DISPATCH();\n")

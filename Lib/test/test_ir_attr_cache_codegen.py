@@ -322,7 +322,7 @@ class TestAdjacentMethodCallCodegen(unittest.TestCase):
             'FT_ATOMIC_LOAD_UINT8',
             'attr = PyValue_DUP', 'self = IR_TAKE',
             'frame->instr_ptr = next_instr', 'call_func->func_version',
-            '_PyFrame_PushExact', 'IR_SAVE_CALL_CONTINUATION',
+            '_PyFrame_PushOverlapping', 'IR_SAVE_CALL_CONTINUATION',
             'frame = tstate->current_frame = call_child')]
         self.assertEqual(positions, sorted(positions))
         self.assertIn('INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES_CALL0)', handler)
@@ -330,6 +330,8 @@ class TestAdjacentMethodCallCodegen(unittest.TestCase):
         self.assertNotIn('IR_STORE_TEMP(', handler)
         self.assertNotIn('IR_STORE_CANONICAL_TEMP(IR_SLOT(', handler)
         self.assertNotIn('finish_displaced_local', handler)
+        self.assertNotIn('_PyFrame_PushExact', handler)
+        self.assertIn('tstate, attr, call_window + 1, 1, frame', handler)
         self.assertIn('DISPATCH();', handler[handler.index('call_code->co_argcount'):])
         start = output.index('TARGET(CALL_PY_EXACT_ARGS)')
         end = output.index('\n        TARGET(', start + 1)

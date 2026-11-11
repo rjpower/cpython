@@ -7,11 +7,31 @@ and links the completed measurement report and tables.
 
 ## Select the work
 
-Astra supplies five evidence-based options, including expected benefit, affected
-hot paths, semantic and ownership risks, and a discriminating measurement for
-each. The coordinator selects bounded, independent subtrees for Sol work after
-reviewing those options. The hot benchmark set is pending that selection; choose
-it to expose the predicted benefit and likely regressions.
+Astra's [grouped review](astra-options.md) defines five evidence-based options.
+Each starts independently from runtime `bf810ec1a33` with the same GCC release
+configuration. Sol owns implementation and independent component review.
+
+| Option | Experiment | Current state |
+| --- | --- | --- |
+| 1 | Cached inline-values layout displacement | Proposal peer-reviewed; implementing in option1 subtree |
+| 2 | Canonical list/tuple iteration publication | Proposal peer-reviewed; implementing in option2 subtree |
+| 3 | One reservation and shared exact-call initialization | Sol preparing bounded proposal in option3 subtree |
+| 4 | Canonical ADD/SUB result joins | Queued for Sol after option2 |
+| 5 | Normal-return empty-scratch proof in generator cleanup | Queued for Sol after option1 |
+
+The hot set is **DeltaBlue, Richards, comprehensions, generators, coroutines,
+spectral_norm**, with **logging_silent** as a mandatory guard. Run two balanced
+pairs to screen each candidate, then six on claimed improvements and suspicious
+regressions. Require repeatable benefit on at least two unchanged kernels; inspect
+all 29 before promotion. Performance loss discards a candidate even if its native
+code is smaller. Composition is measured directly, never by multiplying ratios.
+
+The bf810 control is frozen in `round51-baseline{-release}`; the original bf810
+image is retained as a final direct comparison as well. An initial two-pair
+control calibration has small differences despite identical source/configuration
+(roughly -3.6% to +0.9% across the hot set); it is not an optimization result.
+Final admission must include the actual previous selected image. Upstream and
+older golden controls remain immutable.
 
 ## Execute each selected subtree
 

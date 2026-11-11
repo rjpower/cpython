@@ -1,17 +1,11 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter and call paths integrated through
-runtime 48, `5559f60093e`.
-The [checkpoint report](../issues/deltablue-call-model-20261110/checkpoint-report.md)
-records diagnostics and remaining observer/tooling capability limits. The guarded-attribute and keyword increments below are
-implemented in source `b8e7e1bee66`. Canonical direct class reads and owned
-classmethod pairs extend them at `5559f60093e`; see the [integration report](../issues/deltablue-call-model-20261110/integration48.md).
-[Status](../STATUS.md) records qualification and performance separately. The
-conditional leaf-call work is an experimental, rejected candidate and is not
-part of the selected runtime design.
-See [status](../STATUS.md), the
-[round plan](../issues/deltablue-call-model-20261110/plan.md), and the immutable
-[baseline report](../bench/results/interpreter-parity-20261108.md).
+This page describes the register interpreter and call paths in selected runtime
+`bf810ec1a33`. The
+[current report](../issues/deltablue-call-model-20261110/report50.md) owns
+measurements and observer/tooling limits; [status](../STATUS.md) owns admission.
+See the [round plan](../issues/deltablue-call-model-20261110/plan.md) for the next
+bounded work. Historical implementation details remain in the experiment packets.
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
 and [observer contract](handler-and-observer-contract.md) describe the same
@@ -149,21 +143,17 @@ the descriptor. CALL uses that captured pair and checks the function's current
 code/default/provider facts; it never resolves the descriptor again. See the
 [proposal and tests](../issues/deltablue-call-model-20261110/A-implementation-proposal.md).
 
-### Experimental canonical method capture
+### Canonical method capture
 
-Candidate A50 `e014965013b` extends guarded canonical capture to the three
-ordinary method layouts. After the existing lookup guards, it acquires the
+Guarded canonical capture covers the three ordinary method layouts.
+After the existing lookup guards, it acquires the
 descriptor owner and transfers a temporary receiver or duplicates a local one.
 The generator proves each output is canonical and publishes it without numeric
-recanonicalization. The guarded cache word remains borrowed; canonicality does
-not prove that the descriptor is a Python function. This candidate is not yet
-selected; see the [round report](../issues/deltablue-call-model-20261110/report50.md).
-
-Implementation of the reviewed adjacent method/CALL refinement has started;
-it is not yet complete or measured. It retains both instruction positions for
-errors and observation, and must prove control flow, exception handling and
-observer eligibility directly. A post-capture miss publishes the captured owners
-and resumes the ordinary CALL without repeating lookup.
+recanonicalization. The cache word is non-owning metadata; a transient borrow
+is valid only after the live guards. Canonicality does not prove that the
+descriptor is a Python function. The adjacent method/CALL
+experiment was rejected on performance; see the
+[round report](../issues/deltablue-call-model-20261110/report50.md).
 
 ## Python calls and ordinary return
 
@@ -211,64 +201,10 @@ ownership commit begins, failure retires the published child instead of falling
 back to a second call. Code remains a separate owner because function.__code__
 can change while a child executes.
 
-## Experimental conditional leaf-call design (not selected)
-
-The rejected candidate stored an optional bounded leaf certificate on `_PyCodeExec`,
-built from immutable final IR. It describes a complete body as up to four value
-paths rooted in arguments, constants, small integers or guarded globals, with up
-to two guarded attribute steps per path, an optional inline scalar comparison,
-and a selected return. Certification is limited to 32 words and rejects
-unaccounted words, dead raising reads, unsupported control flow, effects,
-handlers, cells/free variables and unsupported argument shapes. The record
-contains indices and scalar metadata, no Python-object owner.
-
-Admission also requires all arguments supplied, split-self arity to match, and
-the thread-owned caller and current captured function/code to pass their exact
-version and provider checks. Only plain `CALL_PY_EXACT_ARGS` has the terminal
-marker. Positive generator validation binds it to the exact PEP 523, version,
-arity, stack-space and
-recursion checks, before initialization and any effect. Bound-method and generic
-calls do not inherit it. A cheap absent-certificate check avoids the out-of-line
-helper. The helper rechecks function, code, providers, caller and observation
-state, then probes through the same guarded global, shape and class readers used
-by ordinary handlers. It computes only the selected branch and reads only that
-result path.
-
-Every decline is a MISS with original call homes unchanged. After acquiring the
-canonical result, an identity-based release multiset covers the consumed window
-and either the old LOCAL or discarded result. An overlapping temporary's old
-value is counted only in the window; a nonoverlapping temporary destination
-must already be NULL. Each count-owning object must
-have `Py_REFCNT > releases` after acquisition. This GIL-held proof excludes
-finalization across the complete callback-free body and retirement interval;
-the helper adds no temporary pins to force admission. It detaches and NULLs the
-window, performs only preflighted nonfinal closes, then publishes with the
-ordinary `_PyFrame_SetReturnValue` path. DONE returns the real next word and
-bypasses child setup; no fallback or error edge follows commit.
-
-Admission declines with trace/profile/PEP 523, monitoring, pending evaluation
-work, nonstandard providers, redirects or unsupported runtime configurations.
-Free-threaded, debug, DTrace and Emscripten builds currently decline; debug
-qualification therefore exercises fallback, not leaf hits. Remote optimized
-stacks may omit the elided callee. Runtime `24d97fa8c3b` integrated this
-experiment and was rejected as a performance candidate; gate-off ablation
-`af60e5eb43e` was also rejected. Neither is the selected or default
-implementation. See the [rejection report](../issues/deltablue-call-model-20261110/integration49.md)
-and [next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md),
-which has peer approval as a future direction; implementation is unproved. These mechanics are retained as experimental design
-context, not a runtime qualification or performance claim.
-
-```mermaid
-flowchart TD
-    call[Checked plain exact call] --> cert{Certificate present?}
-    cert -->|no| frame[Ordinary frame initialization]
-    cert -->|yes| probe[Recheck admission and probe full body]
-    probe -->|MISS, homes untouched| frame
-    probe -->|result acquired| owners{Aggregate releases nonfinal?}
-    owners -->|no, close duplicate| frame
-    owners -->|yes| commit[Detach window and close preflighted owners]
-    commit --> publish[Ordinary return setter; dispatch real next]
-```
+The complete [leaf-call replacement](../issues/deltablue-call-model-20261110/integration49.md)
+and [adjacent method-to-frame refinement](../issues/deltablue-call-model-20261110/report50.md)
+were evaluated and rejected on performance. Their certificates, owner ledgers,
+entry gates and alternate completion paths are not part of this interpreter.
 
 ## Iteration, delegation and resume
 
@@ -336,10 +272,24 @@ Implicit RERAISE anchors may be semantically unread, while saved locals that a
 handler restores remain required. This preserves the selected PEP479 and
 inlined-comprehension error semantics without a second unwind engine.
 
-Each C evaluator activation owns its pending source-error frame/record. Nested
-Python entry during retirement has a separate activation, so its error cannot
-replace the outer source handler. The frame-object cursor serves display; it
-is not the sole error storage and need not exist on allocation failure.
+When a source observer fails, it copies the resolved semantic exception recipe
+to the evaluator activation with its frame identity. The unwinder consumes and
+clears that recipe for the matching frame without decoding the source map.
+Nested Python entry has a separate activation. The frame object's source ordinal
+serves display independently and need not exist on allocation failure. Compiler
+line predicates and the mixed serialized observer container remain separate
+limitations; this change does not eliminate them.
+
+```mermaid
+flowchart LR
+    ordinary[Ordinary instruction error] --> table[Execution PC and exception table]
+    table --> unwind[Unwind using semantic recipe]
+    observer[Observed source event] --> display[Source position for display]
+    observer --> failed{Callback fails without redirect?}
+    failed -->|yes| recipe[Copy semantic recipe and frame identity]
+    recipe --> pending[Activation-local pending recovery]
+    pending -->|consume once| unwind
+```
 
 Observer scopes pair actual frame, site, physical continuation, event, owner
 edge and redirect generation. Completed source providers grant SOURCE_POST;

@@ -1,6 +1,9 @@
 # C50: checked adjacent method entry into ordinary activation
 
-Status: component proposal for independent review; no runtime implementation yet.
+Status: implemented, reviewed and tested, then rejected on performance. The
+direct-overlap follow-up also loses to A; neither is selected. This document
+retains the experiment's design. See [final review](final-review50.md) and
+[report](report50.md) for the admission decision.
 Implements C in proposal50 and Astra's approved two-live-word contract. A owns
 canonical method capture/publication; coordinate its actual identifiers before
 editing shared sources. Source anchors refer to selected runtime48 `5559f60093e`.
@@ -56,10 +59,11 @@ always-on counter. Collect stats separately from timing.
 1. **Before capture, original LOAD_ATTR PC.** Check thread owner, GIL build,
    no pending redirect, trace/profile/debug observers excluded, matching current
    instrumentation epoch, current next handler exactly plain
-   CALL_PY_EXACT_ARGS, current geometry/arity and no instrumented wrapper.
-   Perform existing receiver pointer/type-version and inline-validity guards.
-   Under that proof read A's guarded canonical descriptor and require exact
-   PyFunction kind. METHOD_DESCRIPTOR alone is insufficient. All misses still
+   CALL_PY_EXACT_ARGS and no instrumented wrapper. Immutable geometry/arity is
+   nomination work with debug assertions on hits. Perform existing receiver
+   pointer/type-version and inline-validity guards. Nomination established exact
+   PyFunction kind under those same guards; METHOD_DESCRIPTOR alone is
+   insufficient. There is no repeated dynamic kind check. All misses still
    own the original receiver home and jump to ordinary LOAD_ATTR.
 2. **Capture, no callback.** Duplicate guarded function once. For a LOCAL
    receiver duplicate its canonical owner and preserve the local; for a TEMP
@@ -145,21 +149,23 @@ duplicate and position one to the unchanged receiver TAKE. Reuse A's checked
 sole-assignment/source-expression helpers, or expose their validated source
 kinds; do not infer roles from C variable spelling. Reject reordered canonical
 sources or two unrelated canonical outputs even if their representation is
-valid. Exact Python function kind is established by the pre-capture hook on
-that same guarded payload.
+valid. Exact Python function kind is established during nomination under current
+receiver type/version/inline-validity guards on that same guarded payload. The
+method hook reads its intact input; the CALL hook reads captured self. Reject
+NULL/nonobject self before pointer conversion. The installed refinement carries
+this kind fact until the same lookup guards invalidate it; no duplicate payload
+or runtime kind flag is stored.
 
-The consumer descriptor has three compile-time hooks, with fixed validated
-placement. Its entry preflight runs after ordinary handler declarations but
-before the lookup chain and checks current geometry/neighbor/observers without
-touching the receiver. Its target-kind hook runs after the existing lookup
-guards and immediately before the canonical producer's first statement; it
-reads the guarded descriptor and checks exact Python function kind without
-acquiring or retiring anything. Both failures go to ordinary LOAD_ATTR with
-the original receiver intact. The marker hook runs only after the existing
-function duplicate and receiver TAKE and therefore must never replay lookup.
-The validator binds the two earlier hook locations to the actual proven
-producer and prefix; it rejects any capture, escaping operation or owner change
-before those hooks. No post-capture guard may use the pre-capture miss target.
+The consumer descriptor has two compile-time hooks with validated placement.
+Entry preflight runs after ordinary handler declarations but before the lookup
+chain and checks current neighbor/observers without touching the receiver.
+Failure goes to ordinary LOAD_ATTR with the original receiver intact. The
+terminal marker hook runs only after function duplicate and receiver TAKE and
+therefore must never replay lookup. The validator proves the actual unchanged
+type/version and inline-validity prefix, including pointer-check-affecting
+annotations and cache bindings, before trusting the installed kind fact. No
+post-capture guard may use the pre-capture miss target. This replaces the draft
+per-hit kind hook with the reviewed nomination fact; mutable guards remain.
 
 At `IR_CANONICAL_OUTPUTS(attr, self)`, the normal emitter remains a no-op for A.
 For a validated terminal consumer, its emitter accesses exactly those produced
@@ -183,11 +189,11 @@ the terminal validator must explicitly prove the exact live output vector and
 order, each `Local.in_local`, absence of publication/spills/extra owners, and
 consumption of the original input. Never call `storage.flush`, `prepare_flush`
 or `_push_defined_outputs` at this boundary: they publish the pair and lose
-the intended saving. The kind hook runs after cache binding (so class_value is
-available) and existing receiver guards, before the first capture assignment.
+the intended saving. Nomination performs its kind proof only after current
+receiver lookup guards, before installing the refinement.
 
 A read-only in-memory generation of committed A confirmed marker storage for
-all three ordinary method producers: `spilled == 0`, `peeks == []`; the consumed
+all three ordinary method producers: `spilled == 0`, `peeks == 0`; the consumed
 input has `in_local == False`, `memory_offset is None`, `ir_inplace == 'B'`,
 `ir_input == -1`; attr/self each have `in_local == True`, no memory offset,
 `ir_inplace is None` and `ir_input is None`. C's bounded validator will require
@@ -274,3 +280,19 @@ materialized dict, method replacement, and normal traceback pointing at CALL
 when the callee raises. Observe both original source positions when tracing or
 instruction monitoring disables refinement. Keep no-dict/lazy-dict and explicit
 argument methods as ordinary A paths in the first component.
+
+
+## Worker handoff
+
+C source is frozen atop A `e014965013b`. Shared exact push, generated entry and
+continuation keep one ordinary activation implementation. The new variant is
+handler326. Both nomination orders verify current nonnull object self, type
+version and inline validity before exact-function payload nomination; hits
+repeat only mutable lookup/observer/neighbor/CALL guards. Existing Py_STATS
+counts refinement entries and successful commits separately. Coordinate and
+same-line equality are absent from implementation.
+
+Host `test_ir_attr_cache_codegen` and `test_generated_cases` pass all 113 tests
+(73.792s); `git diff --check` passes. Runtime tests were added but not executed
+by the worker. No shared generation, native build, benchmark or commit was
+performed by the worker. Coordinator owns these remaining admission gates.

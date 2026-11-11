@@ -6,28 +6,23 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
-The active [proposal50](issues/deltablue-call-model-20261110/proposal50.md)
-uses fresh DeltaBlue profiles to target repeated work at method-to-call
-boundaries. Its grouped Astra review selects canonical method output facts,
-then adjacent producer/consumer specialization sharing ordinary activation.
-Both real instruction positions and the frame/call ownership model remain.
-This takes priority over the earlier C2 experiment queue below.
+The round-50 checkpoint preserves canonical method owners through
+guarded lookup and publication, and passes explicit semantic recovery from an
+observer to the unwinder. Execution does not depend on source coordinates.
+The adjacent method-to-frame experiment was implemented and tested, then
+rejected because it slowed DeltaBlue relative to the simpler method change.
+The [report](issues/deltablue-call-model-20261110/report50.md) distinguishes the
+selected checkpoint from rejected experiments; [status](STATUS.md) owns final
+qualification and performance admission.
 
-The selected DeltaBlue checkpoint is runtime48: canonical class values and owned
-classmethod forwarding. The complete leaf experiment was tested and rejected
-on performance. Keep useful incremental progress and report its tradeoffs.
-The [report](issues/deltablue-call-model-20261110/checkpoint-report.md) and
-[status](STATUS.md) own results and qualification limits.
-
-The next target remains DeltaBlue ordinary call setup/execution/teardown, while
-retaining logging parity. The reviewed [C2 proposal](issues/deltablue-call-model-20261110/C2-proposal.md)
-selects eligible CALLs during specialization, resolves immutable feedback once,
-consumes checked-prefix facts and simplifies common ownership completion.
-The [completion review](issues/deltablue-call-model-20261110/C2-completion-review.md)
-asks how to publish a coherent caller before callback-capable retirement; a
-nonfinal reference-count ledger is an implementation choice, not Python semantics.
-Its performance is unproved. Do not expand syntax or add a miniature evaluator
-to justify activation omission. See the [work plan](issues/deltablue-call-model-20261110/plan.md).
+The target remains unchanged DeltaBlue performance toward upstream parity,
+while retaining logging parity and useful broad progress. Preserve one frame
+stack, overlapping argument homes, explicit owners and ordinary activation and
+completion. Carry established value/layout facts through the generator rather
+than rediscovering them at each boundary. Source attribution belongs to the
+observation layer; control flow and exception recovery use semantic state.
+Compiler line restrictions need an explicit observer reconstruction contract
+before removal. See the [work plan](issues/deltablue-call-model-20261110/plan.md).
 
 Astra performs broad grouped reviews; Sol handles the inner loop and independent
 actual-code review. Luna/Terra handle bounded mechanical work and documentation.
@@ -60,7 +55,7 @@ Python value/control behavior and explicit ownership are required.
 | --- | --- |
 | [Plan](issues/deltablue-call-model-20261110/plan.md) | Active ordinary-call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
-| [Report](issues/deltablue-call-model-20261110/checkpoint-report.md) | Current results, profiling and analysis |
+| [Report](issues/deltablue-call-model-20261110/report50.md) | Current results, profiling and analysis |
 | [Next priorities](issues/deltablue-call-model-20261110/plan.md) | Evidence, risks and bounded experiments |
 | [Architecture](design/runtime-architecture.md) | Runtime and intended compiler tiers |
 | [Register IR](design/register-ir.md) | Executable encoding, effects and lowering |

@@ -5,14 +5,15 @@ interpreter, reference counting with cyclic collection, and a shared method
 and tracing JIT. Extensions are rebuilt and ported.
 
 Start with the [goal](GOAL.md), [current plan](issues/deltablue-call-model-20261110/plan.md)
-and [status](STATUS.md). The active round targets DeltaBlue by improving
-ordinary call resolution, execution and teardown. The [grouped design](issues/deltablue-call-model-20261110/design-overview.md)
-compares canonical class lookup, classmethod forwarding and complete leaf-region
-call elimination. Astra reviews the group once; Sol handles implementation and
-component review. Useful incremental improvements may land with documented
-tradeoffs. The [current checkpoint report](issues/deltablue-call-model-20261110/checkpoint-report.md)
-separates landed class reads/classmethod forwarding from the rejected leaf
-experiment and reviewed next design.
+and [status](STATUS.md). The active round targets DeltaBlue by preserving
+canonical value/ownership facts through method lookup and ordinary calls, and
+separating semantic recovery from source attribution. Astra reviewed the
+[grouped proposal](issues/deltablue-call-model-20261110/proposal50.md) once;
+Sol handles implementation and independent component review. The
+[current report](issues/deltablue-call-model-20261110/report50.md) and
+[full benchmark tables](issues/deltablue-call-model-20261110/benchmark-tables50.md)
+distinguish the selected increment, rejected call experiments and remaining
+performance regressions.
 Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
 
 The universal-value register interpreter is implemented. Native method/tracing

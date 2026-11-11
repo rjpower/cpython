@@ -1,79 +1,79 @@
 # Project status
 
-Active 2026-11-11: the [proposal50](issues/deltablue-call-model-20261110/proposal50.md)
-has received [Astra review](issues/deltablue-call-model-20261110/astra-proposal50-review.md).
-Fresh matched DeltaBlue PMU runs show 1.42137 native instructions and 1.17719
-cycles per unchanged iteration versus upstream. Work now preserves canonical
-method output facts and then carries eligible adjacent method capture into
-ordinary activation. Runtime48 remains selected pending measured admission.
-
-The selected DeltaBlue checkpoint is runtime 48 `5559f60093e`: canonical guarded
-class values and owned classmethod pairs. Both improvements are committed and
-pushed. Source is restored to 48 on `pyjit/deltablue-checkpoint-20261110`.
-[Report](issues/deltablue-call-model-20261110/checkpoint-report.md) →
-[tables](issues/deltablue-call-model-20261110/benchmark-tables.md) →
-[next plan](issues/deltablue-call-model-20261110/plan.md).
+The selected round-50 checkpoint is runtime `bf810ec1a33`: canonical guarded
+method owners plus explicit observer-error recovery. Release/debug/stats builds,
+focused checks and the API gate pass. Both full diagnostics are complete, with
+the established failure groups and counts. [Report](issues/deltablue-call-model-20261110/report50.md)
+→ [all benchmark tables](issues/deltablue-call-model-20261110/benchmark-tables50.md)
+→ [next plan](issues/deltablue-call-model-20261110/plan.md).
+[HANDOFF](HANDOFF.md) owns exact source, build and job state.
 
 ## Performance
 
-Final confirmations use six balanced pairs per target; the full 29-kernel upstream
-screen uses two per unchanged kernel. GCC 15.2, CPU 15, hash 0 and JIT disabled.
-Lower elapsed ratio is better:
+Six balanced pairs confirm targets; all 29 unchanged kernels have two pairs
+against each control. GCC 15.2, CPU 15, hash 0, JIT disabled. Lower elapsed
+candidate/control ratio is better.
 
-| Case | Selected 48 / starting checkpoint 46, six pairs | Selected 48 / upstream |
-| --- | ---: | ---: |
-| DeltaBlue | 0.739181 | 1.225425, six pairs |
-| Logging silent | 0.872129 | 0.758002, six pairs |
-| All 29-kernel geometric mean | not measured | 1.179430, two pairs |
+| Case | / golden39 | / upstream | / preceding checkpoint48 |
+| --- | ---: | ---: | ---: |
+| DeltaBlue, six pairs | 0.685934 | 1.123299 | 0.927374 |
+| Logging silent, six pairs | 0.895185 | 0.804557 | 1.043134 |
+| All 29 kernels, geometric mean | 0.996588 | 1.177045 | 0.997971 |
 
-DeltaBlue takes 26.1% less time than starting checkpoint 46 but 22.5% more
-than upstream. Logging parity holds in every confirmation pair. Broad upstream
-parity remains open; the mean is essentially flat against the earlier checkpoint 46 screen.
-Separate campaigns do not provide an exact causal decomposition. See the
-[full tables](issues/deltablue-call-model-20261110/benchmark-tables.md).
+DeltaBlue takes 31.4% less time than golden39 and 7.3% less than checkpoint48,
+but remains 12.3% slower than upstream. Logging parity holds in every upstream
+confirmation pair. Broad upstream parity remains open: the suite mean is
+essentially flat against golden39, and 17.7% slower than upstream.
 
-The complete conditional leaf experiment is **rejected**, not selected. It
-elides 25,504 real activations per DeltaBlue iteration yet runs 15.2% slower on
-that target and 21.3% slower on logging than frozen 48. Its generic transaction
-repeats facts/decoding and builds a dynamic owner ledger. Compiling away its
-call-site gate/execution leaves DeltaBlue +2.0% and logging +9.0%; the ordinary
-residual is open. The [experiment report](issues/deltablue-call-model-20261110/integration49.md)
-retains counters, matched profiles, failures and ablation results.
+The mean hides material losses. Spectral norm is 37.1% slower than golden39
+(six pairs) and 10.6% slower than checkpoint48 (screen); coroutines are 11.0%
+slower than golden39 (six pairs). Logging is 4.3% slower than checkpoint48,
+despite its upstream headroom. Direct selected/A also reports a 7.4% logging
+cost. The report separates inherited and incremental gaps; do not describe
+this as an across-the-board speedup.
+
+Matched PMU diagnostics show DeltaBlue at 1.35310 native instructions and
+1.12964 user cycles per upstream iteration; logging at 0.95748 and 0.79973.
+The selected/A logging comparison executes effectively the same instruction
+count but uses more cycles. Its cause remains unproved; source-map decoding
+or added dynamic instructions cannot explain that measured difference.
+
+## Changes and design
+
+Guarded method capture retains canonical function and receiver ownership facts
+through publication for with-values, no-dict and lazy-dict layouts. Native
+numeric recanonicalization is removed while lookup/mutation and owner guards
+remain. The ordinary exact CALL implementation is unchanged.
+
+Source coordinates do not control ordinary dispatch or call admission. A failed
+observer publishes its explicit semantic exception recipe into activation-local
+state; the unwinder consumes it without reading a source map. Attribution and
+the frame's display ordinal remain observation data. Compiler line predicates
+and serialized observer metadata still need a separate reconstruction design.
+
+The adjacent method-to-frame experiment and its direct-overlap follow-up were
+implemented, reviewed and tested, then rejected: the final follow-up loses 2.8%
+on DeltaBlue and 14.0% on logging versus A. It is retained on an experimental
+branch; no optional refinement gate or second evaluator remains selected.
+Earlier leaf/C2 experiments remain deferred historical evidence.
 
 ## Qualification
 
-Selected release/debug build 117 modules. Component focused checks and the
-306-unit strict value API gate pass. Both coherent full diagnostics
-run 54,697 tests. Release/debug report the established 16/21 GDB display failures,
-nine unsupported debugger-jump errors per role, and one debug trace-format
-failure. The stale disassembly failures are absent. Do not
-call the full suite green. GDB formatting and exact CPython frame/finalizer
-transcripts are separate from Python behavior and throughput.
+Merged release/debug focused checks each pass 804 tests; stats smoke passes 150.
+All three builds check 117 modules. The strict value API gate passes 306 units,
+with zero failing findings or parse errors. Source/native, performance and final
+diagnostic review approve this increment with the stated tradeoffs.
 
-The rejected experiment separately passes 908 focused tests in each role and
-the API gate; its debug path declines elision. No full promotion run was warranted
-after its performance screen failed. Stats identifies48, builds 117 modules and passes 150 smoke tests.
-Exact commands, identities and evidence are in [HANDOFF](HANDOFF.md).
+Full release/debug diagnostics each run 54,708 tests. Release has 16 GDB display
+failures and nine debugger-jump errors; debug has 21 display failures, one trace-
+format failure and nine debugger-jump errors. These are failed diagnostics with
+the same module groups and counts as checkpoint48; no additional modules fail.
+Quiet logs do not establish individual failing-case identity. Python behavior
+and explicit ownership govern admission, separate from exact CPython display
+and finalizer transcripts.
 
-## Next decision
-
-The single [Astra review](issues/deltablue-call-model-20261110/astra-architecture-review.md)
-is complete. Sol reviews the inner loop; Luna/Terra own bounded mechanical
-updates. The [C2 design](issues/deltablue-call-model-20261110/C2-proposal.md) has
-peer approval as a future direction: select leaf CALLs during specialization,
-cache immutable feedback units, consume checked-entry facts and simplify common
-unary retirement. The [completion review](issues/deltablue-call-model-20261110/C2-completion-review.md)
-identifies the shared committed-caller/observer boundary required to remove the
-ledger entirely. C2 is unimplemented and has no measured speedup. Do not expand
-grammar or change the frame ABI before that execution contract beats ordinary
-calls. The coordinator owns integration and matched measurements.
-
-Universal PyValues are integrated across runtime/containers/frames and rebuilt
-extensions. Native method/tracing JIT tiers remain unfinished. Historical
-runtime39 `4d666e1b482`, combined snapshot `cb906f9bc52`, upstream and previous
-golden controls remain unchanged. Prior
-[object/call46](issues/object-call-20261109/checkpoint46-report.md) and
-[logging closure](issues/frame-call-model-20261109/closing-report.md) retain their
-historical results and limits. Current contracts:
+Universal PyValues are integrated throughout runtime and rebuilt extensions.
+Native method/tracing JIT tiers remain unfinished. Golden39, upstream and all
+historical comparison controls remain immutable. Current contracts:
 [IR](design/register-ir.md), [interpreter](design/interpreter.md),
 [frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md).

@@ -1,88 +1,66 @@
-# DeltaBlue: next call-model work
+# DeltaBlue: integration and next work
 
-Active 2026-11-11 work follows the [profile-backed proposal50](proposal50.md)
-and its [Astra review](astra-proposal50-review.md): preserve canonical method
-outputs, then specialize adjacent method capture into shared ordinary exact
-activation. The previous C2 queue below remains deferred. Fresh matched PMU
-campaigns are complete; A passed focused qualification and its initial two-pair
-screen (0.922656 DeltaBlue/frozen48); C implementation is underway after review.
-No candidate has yet replaced selected48. The coordinator owns builds, timing
-and promotion; component review remains independent.
+The round-50 candidate preserves canonical method owners and separates observer
+recovery from source attribution. Its [report](report50.md) and
+[tables](benchmark-tables50.md) own measurements; [status](../../STATUS.md) owns
+qualification. Exact source/build/job state is in [HANDOFF](../../HANDOFF.md).
+Golden `4d666e1b482`, frozen48 and upstream remain immutable.
 
-Selected checkpoint: runtime 48 `5559f60093e`, canonical class values and owned
-classmethod forwarding. Both are committed/pushed. Read the
-[report](checkpoint-report.md), [tables](benchmark-tables.md) and
-[status](../../STATUS.md) before resuming. This plan is the future queue, not a
-list of completed agents. The single [Astra review](astra-architecture-review.md)
-is complete; do not request another inner-loop review.
+## Current integration
 
-## Outcome and boundaries
+Astra's [grouped review](astra-proposal50-review.md) preceded implementation.
+A preserves guarded canonical function/receiver facts through all three method
+layouts. The cold [recovery change](source-error-recipe50-proposal.md) copies an
+explicit exception recipe into the current evaluator activation; unwinding does
+not decode source maps. A regression requires canonical method and exact CALL
+specialization with all caller/callee source positions absent.
 
-Move unchanged DeltaBlue toward upstream parity while retaining logging parity
-and broad useful progress. Accept incremental mostly-beneficial checkpoints
-with explicit regressions. Preserve Python value/control protocols and explicit
-ownership. Exact CPython display/finalization timing, startup RSS, zero-box counts,
-CPI/layout perfection and hard extension compatibility are not gates.
+The adjacent method-to-frame C experiment and its direct-overlap follow-up were
+implemented, reviewed and tested. Both lose to A on DeltaBlue; the final follow-up
+also loses on logging. They remain rejected experimental commits. Do not expand
+their arity/layout coverage or restart the older C2/leaf queue to rescue them.
 
-Ordinary exact calls already overlap argument homes and use initialized storage;
-there is no full argument copy or full temporary sweep to remove. Keep one owned
-call window, frame ABI, return recipient/continuation and observation model.
-See the [grouped design](design-overview.md), [ordinary call audit](ordinary-call-audit.md),
-[IR](../../design/register-ir.md) and [interpreter](../../design/interpreter.md).
+The batch is complete: release/debug/stats builds, focused semantic/observer
+checks, strict value API checks, all 29 kernels against three controls, six-pair
+target confirmations and matched post-warmup PMU captures. Both full diagnostic
+runs execute 54,708 tests with the established failing module groups and counts;
+these remain failed diagnostics, not all-green suites. Independent final review
+admits the increment with explicit performance losses. The report owns details.
 
-The complete [leaf experiment](integration49.md) is rejected: 25,504 real elisions
-but DeltaBlue +15.2% and logging +21.3% against frozen 48. Its gate-off control
-retains shared probes and gives +2.0%/+9.0%; ordinary logging cost remains open.
-Do not promote either source or expand its syntax. The
-[C2 proposal](C2-proposal.md) has [peer approval](C2-proposal-review.md) as a future
-direction; no implementation or speedup is claimed.
+One GCC configuration, CPU 15, hash seed 0, JIT off and fixed workloads govern
+the comparison. Keep quiet timing separate from builds and tests.
 
-## Delegation and sequence
+## Next performance lanes
 
-| Owner | Bounded deliverable | Evidence before integration |
+Choose the next lane from the final profile, rather than implementing all of
+them together.
+
+| Priority | Hypothesis and bounded deliverable | Admission evidence |
 | --- | --- | --- |
-| Sol design/debug | Isolate the ordinary shared-probe residual, using installed-cache invariants documented in the [audit](C-performance-audit49.md) | Preserve current mutable guards and canonical inputs; one reviewed neutral/profitable refactor against runtime 48 before layering leaf execution |
-| Sol implementation | Select eligible leaf calls during specialization; leave ordinary exact calls without a leaf gate; store validated feedback units and consume checked-prefix facts | Independent review of shared exact-prefix uops, current handler/provider guards, format identity/deopt/instrumentation maps and untouched MISS |
-| Sol completion design and independent ownership reviewer | Define the [common committed-state boundary](C2-completion-review.md) for publication, callback retirement and redirects; consider scalar unary retirement only as a bounded fallback | Explicit observer/phase authority, detached owners before callbacks, actual continuation after redirects, overlap-safe publication, no borrowed callee state after release; no fabricated child or second evaluator |
-| Luna/Terra medium | Mechanical generated call-site/fixture updates and design synchronization after reviewed interfaces settle | Exact file ownership and minimal applicable checks; no speculative parallel edits to shared runtime files |
-| Coordinator | Merge, regenerate, build, review, measure and land each useful increment | Focused native/API gates, independent actual-code post-review and basic matched performance; full diagnostics only at coherent useful batch boundaries |
+| Attribute lookup | Cache the inline-values displacement already established by the exact type-version proof, using existing feedback padding. Preserve current shape/validity/mutation guards and payload geometry. This is B in the reviewed proposal; it is unimplemented. | Sol proposal and independent review of layout invalidation, every payload copier and overflow; minimal cache/descriptor tests; actual dependent load removal and matched DeltaBlue/broad screen. |
+| Broad regressions | Isolate spectral_norm, coroutines and output logging against frozen48 before attributing losses to this increment. Follow the expensive value/control paths; prefer shared representation or completion fixes. | Direct balanced confirmation and workload profiles; one general fix with focused tests, then a broad screen. No benchmark-specific behavior. |
+| Value facts | Extend positive canonical/kind/ownership facts through existing generated boundaries only where native evidence shows repeated work. Avoid optional guards on unrelated ordinary calls. | A concrete producer/consumer proof, fail-closed generator negatives, owner/reentry review and measured benefit over the simpler path. |
 
-1. Propose the smallest concrete source/contract change and obtain peer review.
-   Separate experiments with exact source identities; keep golden/upstream fixed.
-2. Implement only the reviewed scope. Use the existing DSL composites and narrow
-   true effect facts; do not add a macroframework, per-handler exemption or second
-   ABI. Format/opcode changes update all producers, consumers and pinned fixtures.
-3. Run focused semantic/codegen tests and strict value-API checks. Review the
-   actual generated/native composition. Debug fallback is not optimized coverage.
-4. Integrate, count real admissions/misses without instrumentation, and compare
-   DeltaBlue plus logging/nbody directly against frozen 48. If the ordinary path
-   regresses, resolve it before expanding coverage. Stop if complexity outgrows
-   measured benefit; keeping runtime 48 is a valid result.
-5. At a useful batch boundary run release/debug full diagnostics, the unchanged
-   29-kernel upstream screen and six-pair target confirmations. Publish failures
-   and broad losses separately from the geometric mean. Update status/designs,
-   report, handoff and Loom mirrors, then land the concrete checkpoint.
+Ordinary exact calls already overlap arguments and reuse initialized storage.
+They do not copy every argument or sweep every temporary on successful return.
+Keep one owned call window, frame ABI, recipient and continuation. Do not add a
+second evaluator or owner ledger. Native method/tracing JIT tiers remain later
+work; interpreter improvements must stand on their own.
 
-The nonfinal ledger is an implementation choice, not Python semantics. Removing
-it needs the common completed-state proof above; existing PC equality and native
-callback ancestry cannot establish it. This is a reviewed design lane, not an
-approved implementation or speedup.
+## Source-independent lowering
 
-Direct scalar-comparison returns and bounded predicate composition may improve
-coverage later. They are not remedies for an expensive execution contract.
-Property/native adapters, keyword micros, coroutine entry, frame-layout migration,
-object-layout replacement and instruction-scheduling work remain deferred.
-Astra is reserved for the next genuinely broad grouped design review.
+Ordinary dispatch and call admission have no coordinate lookup or equality gate.
+The unwinder now consumes semantic recovery directly. Compiler line predicates
+and the serialized observer container remain separate limitations.
 
-## Reproduction and source state
+A future lowering increment must define logical origin composition and
+late-observer/frame-state reconstruction for one transform, then remove that
+transform's line restriction. Preserve actual exception edges and ownership
+proofs; do not substitute line equality for them or delete observer behavior.
+Compare equivalent source with different wrapping while checking execution,
+callbacks, redirects and attribution separately. This is a design lane, not a
+claimed DeltaBlue speedup.
 
-Source/build/control paths and current job state are in [HANDOFF](../../HANDOFF.md).
-Evidence: `BASE/pyjit-link-wave1/deltablue-call-model-20261110`.
-The selected source is runtime 48 on `pyjit/deltablue-checkpoint-20261110`; rejected C49
-`24d97fa8c3b` and gate-off `af60e5eb43e` are committed/pushed experimental refs.
-Full runtime 48 release/debug diagnostics and the stats smoke run are complete; known
-debugger/tooling limits remain. The quiet full 29-kernel screen and six-pair target confirmation are complete; the report owns
-results and next source admission.
-Historical golden39 and upstream stay immutable. Prior
-[checkpoint46](../object-call-20261109/checkpoint46-report.md) remains historical
-rather than a permanent landing veto or an active CPI work queue.
+Sol handles bounded design/debug and independent review; Terra/Luna handle
+mechanical/documentation updates. Astra is reserved for a genuinely new grouped
+architecture review. The coordinator integrates, measures and owns admission.

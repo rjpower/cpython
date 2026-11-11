@@ -1,16 +1,11 @@
 # Register IR: current contract
 
-The baseline register interpreter was integrated at `4d666e1b482`.
-It defines the executable and ownership contract; [status](../STATUS.md)
-tracks qualification. The bounded observer and debugger rules below do not
-authorize every source transfer.
-The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
-the [baseline](../bench/results/interpreter-parity-20261108.md).
-The guarded keyword-call extension below is implemented in the current
-[object/call packet](../issues/object-call-20261109/plan.md). Its current source
-is `b8e7e1bee66`. Direct canonical class reads and classmethod pair forwarding
-extend it at `5559f60093e`; [status](../STATUS.md) owns qualification and performance
-admission. Historical candidate measurements are not transferable across builds.
+This page defines the executable and ownership contract in selected runtime
+`bf810ec1a33`. [Status](../STATUS.md) owns qualification and performance
+admission; the [current report](../issues/deltablue-call-model-20261110/report50.md)
+owns measurements. Historical results and rejected experiments are not
+transferable to this build. The bounded observer and debugger rules below do
+not authorize every source transfer.
 
 The [archive](archive/register-ir-20261108.md) retains earlier designs.
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
@@ -132,15 +127,13 @@ family, statistics and feedback mappings cover the physical handler domain.
 Adaptive disassembly names the specialization; internal executing-IR inspection
 can expose an ownership variant. This does not create a product of every mode.
 
-Candidate A50 adds `IR_CANONICAL_OUTPUTS` for a checked terminal producer of
+Round 50 adds `IR_CANONICAL_OUTPUTS` for a checked terminal producer of
 multiple owning canonical outputs. Its bounded proof accepts guarded-home
 duplication and unchanged canonical-input transfer, and rejects unproved
 transformations or escaping prefixes. Output provenance is independent of the
 existing receiver-retirement proof; ownership transfers still occur normally.
-This candidate is not yet selected. Implementation of the reviewed adjacent
-method/CALL design has started; it is not yet complete or measured. Both real
-words and their source positions remain, with no source
-coordinate equality or same-line admission rule. See the
+The adjacent method/CALL experiment was rejected on performance; it is not
+part of the selected candidate. See the
 [round report](../issues/deltablue-call-model-20261110/report50.md).
 
 ## Guarded Python calls
@@ -241,6 +234,12 @@ and neutral JUMP borrow exact site rows. A non-neutral view copies that site's
 context, saved bindings and origins, applies the selected normal transfer, then
 cuts old input provenance independently of replacement values. Token-creating
 transfers are excluded from this copied-row path.
+
+On source-observer failure, the observer passes the resolved semantic recovery
+recipe into activation-local pending state; the unwinder consumes it for the
+matching frame without decoding a source map. The frame display ordinal remains
+separate. Compiler line predicates and the serialized container that combines
+observer recovery with source positions remain future work.
 
 The new non-neutral permission requires exact scope/site/edge/continuation and
 redirect generation, inherited handled context, empty stopped and target

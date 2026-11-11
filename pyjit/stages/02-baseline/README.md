@@ -13,12 +13,12 @@ The [prior ranked work](../../issues/frame-call-model-20261109/next-steps.md)
 records the closed logging round; the active packet below owns current priorities.
 
 The [DeltaBlue round](../../issues/deltablue-call-model-20261110/plan.md)
-lands canonical class reads and classmethod pair forwarding. Its complete
-conditional leaf experiment was implemented and rejected on performance.
-The [report](../../issues/deltablue-call-model-20261110/checkpoint-report.md)
-records that decision; the reviewed
-[C2 proposal](../../issues/deltablue-call-model-20261110/C2-proposal.md) is the
-next bounded call-model experiment, not an implemented speedup.
+preserves canonical method owners through lookup/publication and passes explicit
+semantic recovery from observers to the unwinder. The
+[report](../../issues/deltablue-call-model-20261110/report50.md) records the
+selected increment, measured tradeoffs and rejected adjacent-call and leaf
+experiments. The current plan owns the next evidence-backed priorities; the
+older C2 queue is deferred.
 
 The deliverable is one trustworthy register interpreter with canonical values,
 measured with the JIT disabled against matched immutable controls. Retain raw

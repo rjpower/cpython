@@ -369,6 +369,11 @@ class TestAdjacentMethodCallCodegen(unittest.TestCase):
                          contracts['LOAD_ATTR_METHOD_WITH_VALUES'].effects)
         self.assertNotIn('_PyIR_ESCAPES', contracts['CALL_PY_EXACT_ARGS'].effects)
         self.assertTrue(analysis.uops['_PUSH_FRAME'].is_viable())
+        insts = ir_generator.handler_instructions(analysis)
+        for name, expected in (('LOAD_ATTR_METHOD_WITH_VALUES_CALL0', True),
+                               ('LOAD_ATTR_METHOD_WITH_VALUES', False)):
+            self.assertEqual(ir_generator.handler_runs_code(
+                name, insts[name], formats[name]), expected)
 
 
 if __name__ == "__main__":

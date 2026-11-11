@@ -567,6 +567,12 @@ class ContractTests(unittest.TestCase):
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "RETURN_GENERATOR"})
+        refined = BY_NAME["LOAD_ATTR_METHOD_WITH_VALUES_CALL0"].effects
+        base = BY_NAME["LOAD_ATTR_METHOD_WITH_VALUES"].effects
+        self.assertTrue(refined & _opcode.IR_RUNS_PYTHON)
+        self.assertTrue(refined & _opcode.IR_PUSHES_FRAME)
+        self.assertFalse(base & _opcode.IR_RUNS_PYTHON)
+        self.assertFalse(base & _opcode.IR_PUSHES_FRAME)
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
@@ -624,6 +630,7 @@ class AnalyzerTests(unittest.TestCase):
             self.assertIsNotNone(CONTRACT[h], name)
 
     def test_properties(self):
+        formats = self.ir_generator.compute_formats(self.analysis)
         for name, inst in self.insts.items():
             p = inst.properties
             effects = CONTRACT[self.ids[name]].effects
@@ -639,7 +646,8 @@ class AnalyzerTests(unittest.TestCase):
                 self.assertEqual(bool(effects & _opcode.IR_DEOPTS),
                                  p.deopts or p.side_exit)
                 self.assertEqual(bool(effects & _opcode.IR_RUNS_PYTHON),
-                                 self.ir_generator.runs_code(inst))
+                                 self.ir_generator.handler_runs_code(
+                                     name, inst, formats[name]))
 
     def test_runs_code(self):
         # The format's RUNS_CODE is the union of RUNS_PYTHON over the

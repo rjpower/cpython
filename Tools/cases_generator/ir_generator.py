@@ -5863,6 +5863,15 @@ def writes_suspended_frame_state(inst: Instruction) -> bool:
             r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
 
 
+def handler_runs_code(name: str, inst: Instruction, fmt: IRFormat) -> bool:
+    """Include a checked execution consumer beyond its semantic base word."""
+    variant = EXECUTION_VARIANTS.get(name)
+    if variant is not None and variant.consumer is not None:
+        validate_canonical_consumer(inst, fmt, variant.consumer)
+        return True
+    return runs_code(inst)
+
+
 def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
                     boxes: bool) -> list[str]:
     "The _PyIR_* effect bits of handler name, which runs inst"
@@ -5886,7 +5895,7 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
             ("_PyIR_RAISES", not p.infallible
                              or fmt.fused and name.startswith("INSTRUMENTED_")),
             ("_PyIR_ESCAPES", p.escapes),
-            ("_PyIR_RUNS_PYTHON", runs_code(inst) or pushes_frame),
+            ("_PyIR_RUNS_PYTHON", handler_runs_code(name, inst, fmt)),
             ("_PyIR_DEOPTS", p.deopts or p.side_exit),
             ("_PyIR_SUSPENDS", suspends),
             ("_PyIR_PUSHES_FRAME", pushes_frame),

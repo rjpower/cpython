@@ -4329,55 +4329,18 @@ dummy_func(
         }
 
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
-            int has_self = !PyValue_IsNull(self_or_null);
             STAT_INC(CALL, hit);
-            // The window: callable, self_or_null, then the arguments
-            PyValue *window_base = args - 2;
-            _PyInterpreterFrame *pushed_frame;
-            if (frame->owner == FRAME_OWNED_BY_THREAD) {
-                // The callee's slots start at its first argument, which is
-                // self_or_null if there is a self: no copy.
-                pushed_frame = _PyFrame_PushOverlapping(
-                    tstate, callable, args - has_self, oparg + has_self, frame);
-            }
-            else {
-                // A generator's slots are in the generator object, not on
-                // the value stack.
-                pushed_frame = _PyFrame_PushUnchecked(tstate, callable, frame);
-                PyValue *first_non_self_local = pushed_frame->base + has_self;
-                // Without a self, slot 0 may be a constant slot that
-                // _PyFrame_Initialize filled: it is not ours to write
-                if (has_self) {
-                    pushed_frame->base[0] = self_or_null;
-                }
-                for (int i = 0; i < oparg; i++) {
-                    first_non_self_local[i] = args[i];
-                }
-                for (int i = 1; i < 2 + oparg; i++) {
-                    window_base[i] = PyValue_NULL;
-                }
-            }
-            // The callee holds callable as its f_funcobj
-            window_base[0] = PyValue_NULL;
+            _PyInterpreterFrame *pushed_frame = _PyFrame_PushExact(
+                tstate, callable, self_or_null, args, oparg, frame);
             INPUTS_DEAD();
             IR_WINDOW_TAKEN();
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
         op(_PUSH_FRAME, (new_frame -- )) {
-            assert(!IS_PEP523_HOOKED(tstate));
             _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
             DEAD(new_frame);
-            SAVE_STACK();
-            assert(temp->previous == frame || temp->previous->previous == frame);
-            CALL_STAT_INC(inlined_py_calls);
-            frame = tstate->current_frame = temp;
-            tstate->py_recursion_remaining--;
-            RELOAD_STACK();
-            LOAD_IP(0);
-            IR_SKIP_RESUME();
-            DTRACE_FUNCTION_ENTRY();
-            LLTRACE_RESUME_FRAME();
+            IR_ENTER_PYTHON_FRAME(temp);
         }
 
         macro(CALL_BOUND_METHOD_EXACT_ARGS) =
@@ -5567,8 +5530,7 @@ dummy_func(
         }
 
         op(_SAVE_RETURN_SLOT, (--)) {
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
-            frame->return_pc = next_instr;
+            IR_SAVE_CALL_CONTINUATION(IR_DST_SLOT, next_instr);
         }
 
         label(error) {

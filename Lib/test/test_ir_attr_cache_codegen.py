@@ -302,5 +302,74 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                         self.generate(source, runtime=True)
 
 
+
+class TestAdjacentMethodCallCodegen(unittest.TestCase):
+    setUp = TestGuardedAttributeCodegen.setUp
+    generate = TestGuardedAttributeCodegen.generate
+
+    def runtime_source(self):
+        return (Path(__file__).resolve().parents[2] /
+                'Python' / 'bytecodes.c').read_text()
+
+    def test_terminal_owner_transfer_and_shared_entry(self):
+        output = self.generate(self.runtime_source(), runtime=True)
+        start = output.index('TARGET(LOAD_ATTR_METHOD_WITH_VALUES_CALL0)')
+        end = output.index('\n        TARGET(', start + 1)
+        handler = output[start:end]
+        positions = [(handler.rindex(text) if text == 'frame->instr_ptr = next_instr'
+                      else handler.index(text)) for text in (
+            'ir_method_call0_preflight', 'tp->tp_version_tag',
+            'FT_ATOMIC_LOAD_UINT8',
+            'attr = PyValue_DUP', 'self = IR_TAKE',
+            'frame->instr_ptr = next_instr', 'call_func->func_version',
+            '_PyFrame_PushExact', 'IR_SAVE_CALL_CONTINUATION',
+            'frame = tstate->current_frame = call_child')]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES_CALL0)', handler)
+        self.assertEqual(handler.count('IR_STORE_CANONICAL_TEMP(call_window[0], attr)'), 1)
+        self.assertNotIn('IR_STORE_TEMP(', handler)
+        self.assertNotIn('IR_STORE_CANONICAL_TEMP(IR_SLOT(', handler)
+        self.assertNotIn('finish_displaced_local', handler)
+        self.assertIn('DISPATCH();', handler[handler.index('call_code->co_argcount'):])
+        start = output.index('TARGET(CALL_PY_EXACT_ARGS)')
+        end = output.index('\n        TARGET(', start + 1)
+        ordinary = output[start:end]
+        self.assertIn('_PyFrame_PushExact', ordinary)
+        self.assertIn('IR_SAVE_CALL_CONTINUATION', ordinary)
+        self.assertNotIn('ir_method_call0_preflight', ordinary)
+        self.assertIn('slots = _PyFrame_Slots(frame)', ordinary)
+
+    def test_terminal_consumer_rejects_changed_guard_or_origin(self):
+        source = self.runtime_source()
+        changes = (
+            ('op(_GUARD_TYPE_VERSION,', 'inline_ok op(_GUARD_TYPE_VERSION,'),
+            ('tp->tp_version_tag) != type_version',
+             'tp->tp_version_tag) == type_version'),
+            ('EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));',
+             'assert(FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));'),
+            ('attr = PyValue_DUP(_PyValueGuarded_Load(class_value));\n            self = TAKE(owner);',
+             'self = PyValue_DUP(_PyValueGuarded_Load(class_value));\n            attr = TAKE(owner);'),
+        )
+        for old, new in changes:
+            with self.subTest(change=new):
+                self.assertIn(old, source)
+                with self.assertRaises(SyntaxError):
+                    self.generate(source.replace(old, new, 1), runtime=True)
+
+    def test_terminal_consumer_effects(self):
+        self.source.write_text(self.runtime_source())
+        with cases.handle_stderr():
+            analysis = cases.analyzer.analyze_files([str(self.source)], None)
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        effects = contracts['LOAD_ATTR_METHOD_WITH_VALUES_CALL0'].effects
+        for effect in ('_PyIR_PUSHES_FRAME', '_PyIR_RUNS_PYTHON', '_PyIR_ALLOCATES'):
+            self.assertIn(effect, effects)
+        self.assertNotIn('_PyIR_PUSHES_FRAME',
+                         contracts['LOAD_ATTR_METHOD_WITH_VALUES'].effects)
+        self.assertNotIn('_PyIR_ESCAPES', contracts['CALL_PY_EXACT_ARGS'].effects)
+        self.assertTrue(analysis.uops['_PUSH_FRAME'].is_viable())
+
+
 if __name__ == "__main__":
     unittest.main()

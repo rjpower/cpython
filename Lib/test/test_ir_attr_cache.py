@@ -2,10 +2,12 @@
 
 import dis
 import sys
+import sysconfig
 import unittest
 import weakref
 
-from test.support import cpython_only, requires_specialization, reset_code, gc_collect
+from test.support import (cpython_only, requires_specialization, reset_code,
+                          gc_collect, requires_gil_enabled, infinite_recursion)
 from test.support.import_helper import import_module
 
 _testinternalcapi = import_module("_testinternalcapi")
@@ -597,6 +599,245 @@ class TestGuardedClassValue(unittest.TestCase):
         gc_collect()
         self.assertIsNone(reference())
         self.assertEqual(events, [("receiver-retired", True), "payload-retired"])
+
+
+
+@cpython_only
+@requires_specialization
+@requires_gil_enabled()
+@unittest.skipIf(sysconfig.get_config_var("WITH_DTRACE"), "DTrace build")
+class TestAdjacentMethodCall(unittest.TestCase):
+    refined = 'LOAD_ATTR_METHOD_WITH_VALUES_CALL0'
+
+    def ready(self, invoke, owner):
+        reset_code(invoke)
+        for _ in range(4 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(invoke(owner), 42)
+        self.assertIn(self.refined, handlers(invoke))
+
+    def test_two_live_words_and_distinct_source_spans(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return (
+                owner.selected
+                ()
+            )
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        words = list(dis.get_instructions(invoke, adaptive=False))
+        method = next(i for i, word in enumerate(words) if word.opname == 'LOAD_ATTR')
+        self.assertEqual(words[method + 1].opname, 'CALL')
+        self.assertNotEqual(words[method].positions, words[method + 1].positions)
+        self.assertEqual(invoke(owner), 42)
+
+    def test_live_target_and_instance_shadowing(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        Owner.selected = lambda self: 43
+        self.assertEqual(invoke(owner), 43)
+        owner.selected = lambda: 44
+        self.assertEqual(invoke(owner), 44)
+        del owner.selected
+        self.assertEqual(invoke(owner), 43)
+
+    def test_captured_call_fallback_after_code_arity_change(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        def changed(self, missing):
+            return missing
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        Owner.selected.__code__ = changed.__code__
+        with self.assertRaises(TypeError):
+            invoke(owner)
+
+    def test_temporary_receiver_has_one_owner(self):
+        references = []
+
+        class Owner:
+            def selected(self):
+                return 42
+
+        def make():
+            owner = Owner()
+            references.append(weakref.ref(owner))
+            return owner
+
+        def invoke(unused):
+            return make().selected()
+
+        self.ready(invoke, None)
+        gc_collect()
+        self.assertTrue(all(ref() is None for ref in references))
+
+    def test_trace_after_refinement_uses_ordinary_words(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        calls = []
+
+        def trace(frame, event, arg):
+            if event == 'call':
+                calls.append(frame.f_code.co_name)
+            return trace
+
+        old = sys.gettrace()
+        try:
+            sys.settrace(trace)
+            self.assertEqual(invoke(owner), 42)
+        finally:
+            sys.settrace(old)
+        self.assertIn('invoke', calls)
+        self.assertIn('selected', calls)
+        self.assertEqual(invoke(owner), 42)
+
+
+    def test_builtin_descriptor_declines_refinement(self):
+        class Owner:
+            selected = object.__repr__
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        for _ in range(4 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(invoke(owner), repr(owner))
+        self.assertNotIn(self.refined, handlers(invoke))
+        self.assertIn('LOAD_ATTR_METHOD_WITH_VALUES', handlers(invoke))
+        # CALL can specialize for a shadow function while the preceding raw
+        # method specialization still describes the old builtin descriptor.
+        owner.selected = lambda: 42
+        for _ in range(2 * _testinternalcapi.SPECIALIZATION_COOLDOWN):
+            self.assertEqual(invoke(owner), 42)
+
+    def test_null_self_after_shadow_call_respecialization(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        owner.selected = lambda: 43
+        for _ in range(2 * _testinternalcapi.SPECIALIZATION_COOLDOWN):
+            self.assertEqual(invoke(owner), 43)
+
+    def test_callee_error_has_original_call_pc(self):
+        failure = [False]
+
+        class Owner:
+            def selected(self):
+                if failure[0]:
+                    raise RuntimeError('callee failure')
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        [call] = [word for word in dis.get_instructions(invoke)
+                  if word.opname == 'CALL']
+        failure[0] = True
+        self.assertIn(self.refined, handlers(invoke))
+        try:
+            invoke(owner)
+        except RuntimeError as error:
+            trace = error.__traceback__
+            while trace.tb_frame.f_code is not invoke.__code__:
+                trace = trace.tb_next
+            self.assertEqual(trace.tb_lasti, call.offset)
+        else:
+            self.fail('callee did not raise')
+
+    def test_instruction_monitor_observes_both_live_words(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        offsets = {word.offset for word in dis.get_instructions(invoke)
+                   if word.opname in ('LOAD_ATTR', 'CALL')}
+        seen = []
+        mon, tool = sys.monitoring, sys.monitoring.DEBUGGER_ID
+
+        def instruction(code, offset):
+            if code is invoke.__code__:
+                seen.append(offset)
+
+        mon.use_tool_id(tool, 'adjacent method call')
+        try:
+            mon.register_callback(tool, mon.events.INSTRUCTION, instruction)
+            mon.set_local_events(tool, invoke.__code__, mon.events.INSTRUCTION)
+            self.assertEqual(invoke(owner), 42)
+        finally:
+            mon.set_local_events(tool, invoke.__code__, 0)
+            mon.free_tool_id(tool)
+        self.assertTrue(offsets <= set(seen))
+
+
+    def test_dict_replacement_declines_inline_values(self):
+        class Owner:
+            def selected(self):
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        owner.__dict__ = {'extra': object()}
+        self.assertEqual(invoke(owner), 42)
+
+    def test_recursion_admission_after_capture(self):
+        recursive = [False]
+
+        class Owner:
+            def selected(self):
+                if recursive[0]:
+                    return invoke(self)
+                return 42
+
+        def invoke(owner):
+            return owner.selected()
+
+        owner = Owner()
+        self.ready(invoke, owner)
+        recursive[0] = True
+        with infinite_recursion(max_depth=50):
+            with self.assertRaises(RecursionError):
+                invoke(owner)
+        recursive[0] = False
+        self.assertEqual(invoke(owner), 42)
 
 
 if __name__ == "__main__":

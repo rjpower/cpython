@@ -620,6 +620,37 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
+/* Consumes the exact positional call window. Argument homes already overlap
+ * for a thread caller; generators require independent storage. */
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
+_PyFrame_PushExact(PyThreadState *tstate, PyValue callable,
+                   PyValue self_or_null, PyValue *args, int nargs,
+                   _PyInterpreterFrame *previous)
+{
+    int has_self = !PyValue_IsNull(self_or_null);
+    PyValue *window = args - 2;
+    _PyInterpreterFrame *child;
+    if (previous->owner == FRAME_OWNED_BY_THREAD) {
+        child = _PyFrame_PushOverlapping(tstate, callable,
+                                        args - has_self, nargs + has_self,
+                                        previous);
+    }
+    else {
+        child = _PyFrame_PushUnchecked(tstate, callable, previous);
+        if (has_self) {
+            child->base[0] = self_or_null;
+        }
+        for (int i = 0; i < nargs; i++) {
+            child->base[has_self + i] = args[i];
+        }
+        for (int i = 1; i < 2 + nargs; i++) {
+            window[i] = PyValue_NULL;
+        }
+    }
+    window[0] = PyValue_NULL;
+    return child;
+}
+
 /* Pushes a trampoline frame without checking for space.
  * Must be guarded by _PyThreadState_HasStackSpace() */
 static inline _PyInterpreterFrame *

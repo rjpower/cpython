@@ -979,6 +979,42 @@ value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
 
 #include "ceval_macros.h"
 
+/* The GIL-held interval from this check through method capture and exact entry
+ * contains no callbacks, releases or allocation. Only the live handler and
+ * observer epoch can invalidate the nomination's immutable pair geometry. */
+static inline Py_ALWAYS_INLINE int
+ir_method_call0_preflight(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *call)
+{
+#if defined(Py_GIL_DISABLED) || defined(WITH_DTRACE)
+    return 0;
+#else
+    if (frame->owner != FRAME_OWNED_BY_THREAD || frame->pending_redirect ||
+        tstate->c_tracefunc != NULL || tstate->c_profilefunc != NULL ||
+        IS_PEP523_HOOKED(tstate) ||
+        _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) !=
+            FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+                _PyFrame_GetCode(frame)->_co_instrumentation_version))
+    {
+        return 0;
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace) {
+        return 0;
+    }
+#endif
+    if (IR_HANDLER(*call) != CALL_PY_EXACT_ARGS) {
+        return 0;
+    }
+    /* Nomination proves immutable operand/feedback geometry; quickening and
+     * instrumentation only replace the handler bits. */
+    assert(IR_C(*call) == 0);
+    assert(IR_A(call[-1]) == IR_B(*call));
+    assert(IR_D(call[-1]) & 1);
+    return 1;
+#endif
+}
+
 
 /* Helper functions to keep the size of the largest uops down */
 

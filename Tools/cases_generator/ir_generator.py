@@ -146,14 +146,25 @@ FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
 
 
 @dataclass(frozen=True)
+class CanonicalOutputConsumer:
+    """A terminal transfer of a guarded callable and canonical receiver owner."""
+    sources: tuple[str, ...] = ("guarded", "input")
+    installed_kind: str = "python_function"
+
+
+@dataclass(frozen=True)
 class ExecutionVariant:
     base: str
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
+    consumer: CanonicalOutputConsumer | None = None
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
 EXECUTION_VARIANTS = {
+    "LOAD_ATTR_METHOD_WITH_VALUES_CALL0": ExecutionVariant(
+        "LOAD_ATTR_METHOD_WITH_VALUES", temp_fields=("A",),
+        consumer=CanonicalOutputConsumer()),
     "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
         "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
 }
@@ -2561,6 +2572,24 @@ class IRStack(Stack):
         pass
 
 
+def emit_python_frame_entry(out: CWriter, child: str,
+                            storage: Storage | None = None) -> None:
+    """One ordinary entry sequence, including the IR stack-state transition."""
+    out.emit("assert(!IS_PEP523_HOOKED(tstate));\n")
+    out.emit(f"assert({child}->previous == frame || {child}->previous->previous == frame);\n")
+    out.emit("CALL_STAT_INC(inlined_py_calls);\n")
+    out.emit(f"frame = tstate->current_frame = {child};\n")
+    out.emit("tstate->py_recursion_remaining--;\n")
+    if storage is None:
+        out.emit("slots = _PyFrame_Slots(frame);\n")
+    else:
+        storage.full_reload(out)
+    out.emit("LOAD_IP(0);\n")
+    out.emit("IR_SKIP_RESUME();\n")
+    out.emit("DTRACE_FUNCTION_ENTRY();\n")
+    out.emit("LLTRACE_RESUME_FRAME();\n")
+
+
 class IREmitter(Emitter):
     "Emits handler bodies for the register IR"
 
@@ -2585,6 +2614,7 @@ class IREmitter(Emitter):
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
         self._replacers["IR_CANONICAL_OUTPUTS"] = self.canonical_outputs
+        self._replacers["IR_ENTER_PYTHON_FRAME"] = self.enter_python_frame
         self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
         self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
         self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
@@ -2754,11 +2784,58 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         return names
 
-    def canonical_outputs(self, tkn, tkn_iter, uop, storage, inst):
-        # canonical_output_sources validates the complete declaration before
-        # emission. It describes output provenance, not a runtime operation.
-        self.macro_args(tkn, tkn_iter, len(uop.stack.outputs))
+    def enter_python_frame(self, tkn, tkn_iter, uop, storage, inst):
+        [child] = self.macro_args(tkn, tkn_iter, 1)
+        storage.flush(self.out)
+        emit_python_frame_entry(self.out, child, storage)
         return True
+
+    def canonical_outputs(self, tkn, tkn_iter, uop, storage, inst):
+        names = self.macro_args(tkn, tkn_iter, len(uop.stack.outputs))
+        variant = self.execution_variant
+        if variant is None or variant.consumer is None:
+            return True
+        # Terminal transfer bypasses the usual push_outputs liveness checks.
+        # Verify actual C-owned locals, not only source representation facts.
+        if (storage.spilled or storage.peeks or len(storage.inputs) != 1
+                or len(storage.outputs) != len(names)
+                or [v.name for v in storage.outputs] != names
+                or any(not v.in_local or v.memory_offset is not None
+                       or v.ir_inplace is not None or v.ir_input is not None
+                       for v in storage.outputs)
+                or any(v.in_local or v.memory_offset is not None
+                       or v.ir_input != -1 for v in storage.inputs)):
+            raise analysis_error("canonical terminal transfer needs live owned outputs "
+                                 "and a consumed input", tkn)
+        function, receiver = names
+        self.out.start_line()
+        self.emit("{\n")
+        self.emit("_PyIRWord call_word = *next_instr;\n")
+        self.emit("_PyFb_CALL *call_fb = (_PyFb_CALL *)IR_FB(IR_D(call_word));\n")
+        self.emit(f"PyFunctionObject *call_func = (PyFunctionObject *)"
+                  f"PyValue_AsKnownObjectBorrow({function});\n")
+        self.emit("PyCodeObject *call_code = (PyCodeObject *)call_func->func_code;\n")
+        self.emit("PyValue *call_window = &IR_SLOT(IR_B(call_word));\n")
+        self.emit("frame->instr_ptr = next_instr;\n")
+        self.emit("if (IS_PEP523_HOOKED(tstate) || "
+                  "call_func->func_version != call_fb->func_version || "
+                  "call_code->co_argcount != 1 || "
+                  "!_PyThreadState_HasStackSpace(tstate, call_code->co_framesize) || "
+                  "tstate->py_recursion_remaining <= 1) {\n")
+        self.emit(f"IR_STORE_CANONICAL_TEMP(call_window[0], {function});\n")
+        self.emit(f"IR_STORE_CANONICAL_TEMP(call_window[1], {receiver});\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        self.emit(f"IR_STORE_CANONICAL_TEMP(call_window[1], {receiver});\n")
+        self.emit("STAT_INC(CALL, hit);\n")
+        self.emit("STAT_INC(LOAD_ATTR_METHOD_WITH_VALUES_CALL0, hit);\n")
+        self.emit(f"_PyInterpreterFrame *call_child = _PyFrame_PushExact("
+                  f"tstate, {function}, {receiver}, call_window + 2, 0, frame);\n")
+        self.emit("IR_SAVE_CALL_CONTINUATION(IR_A(call_word), next_instr + 1);\n")
+        emit_python_frame_entry(self.out, "call_child")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
 
     def input_slot(self, inst: Instruction, index: int) -> str:
         """The slot of input index, from the handler's word as read before
@@ -2880,7 +2957,8 @@ class IREmitter(Emitter):
         self.reader_error()
         self.emit("}\n")
         self.emit("next_instr = frame->instr_ptr;\n")
-        self.emit("DISPATCH();\n}\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
         return False
 
     def unpack_to_locals(self, fmt, count, canonical=False):
@@ -4271,6 +4349,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+    if emitter.execution_variant is not None and emitter.execution_variant.consumer is not None:
+        validate_canonical_consumer(inst, fmt, emitter.execution_variant.consumer)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -4440,6 +4520,64 @@ def canonical_output_sources(inst: Instruction, fmt: IRFormat) -> frozenset[str]
                     and not any(t.kind in ASSIGNMENTS for t in stmt.contents)):
                 reject("producer values cannot escape or change after assignment")
     return frozenset(names)
+
+
+def validate_canonical_consumer(inst: Instruction, fmt: IRFormat,
+                                consumer: CanonicalOutputConsumer) -> Uop:
+    """Bind terminal consumer roles to A's complete owning-source proof."""
+    outputs = canonical_output_sources(inst, fmt)
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    producer = parts[-1]
+    names = tuple(item.name for item in producer.stack.outputs)
+    def reject():
+        raise analysis_error("canonical terminal consumer needs guarded callable "
+                             "and receiver owners", inst.where)
+    if (consumer.sources != ("guarded", "input")
+            or consumer.installed_kind != "python_function" or len(names) != 2
+            or set(names) != outputs or fmt.window or fmt.n_inputs != 1
+            or fmt.borrow_mask != 1 or fmt.fb_layout != "_PyFbAttr"
+            or fmt.field_of(ROLE_DST) != "A" or fmt.input_field(0) != "B"
+            or fmt.field_of(ROLE_FB) != "C" or fmt.field_of(ROLE_IMM) != "D"):
+        reject()
+    # These exact nonescaping guards establish the lifetime/layout proof for
+    # the guarded callable read. A canonical owner declaration alone does not.
+    owner = producer.stack.inputs[0].name
+    expected_guards = [
+        ("{ PyTypeObject * tp = Py_TYPE ( PyValue_AsKnownObjectBorrow ( INPUT ) ) ; "
+         "assert ( type_version != 0 ) ; EXIT_IF ( FT_ATOMIC_LOAD_UINT_RELAXED "
+         "( tp -> tp_version_tag ) != type_version ) ; }"),
+        ("{ PyObject * owner_o = PyValue_AsKnownObjectBorrow ( INPUT ) ; "
+         "assert ( Py_TYPE ( owner_o ) -> tp_dictoffset < 0 ) ; "
+         "assert ( Py_TYPE ( owner_o ) -> tp_flags & Py_TPFLAGS_INLINE_VALUES ) ; "
+         "EXIT_IF ( ! FT_ATOMIC_LOAD_UINT8 ( _PyObject_InlineValues "
+         "( owner_o ) -> valid ) ) ; }"),
+    ]
+    if len(parts) != 3:
+        reject()
+    for index, (guard, expected) in enumerate(zip(parts[:-1], expected_guards)):
+        caches = [(cache.name, cache.size) for cache in guard.caches]
+        if (not guard.is_guard() or guard.properties.inline_ok
+                or guard.properties.escapes or guard.properties.eval_breaker
+                or guard.properties.switches_frame or guard.properties.sync_sp
+                or caches != ([("type_version", 2)] if index == 0 else [])
+                or canonical_body_tokens(guard) !=
+                expected.replace("INPUT", owner).split()
+                or tuple(item.name for item in guard.stack.inputs) != (owner,)
+                or tuple(item.name for item in guard.stack.outputs) != (owner,)):
+            reject()
+    for name, kind in zip(names, consumer.sources):
+        assignment = _sole_top_level_assignment(producer, name)
+        if assignment is None:
+            reject()
+        text = _statement_text(assignment)
+        if kind == "guarded":
+            if text != [name, "=", "PyValue_DUP", "(", "_PyValueGuarded_Load",
+                        "(", "class_value", ")", ")", ";"]:
+                reject()
+        elif text != [name, "=", "TAKE", "(", producer.stack.inputs[0].name,
+                      ")", ";"]:
+            reject()
+    return producer
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -4776,7 +4914,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({canonical_handler(name)});\n")
+    stats_name = (name if emitter.execution_variant is not None
+                  and emitter.execution_variant.consumer is not None
+                  else canonical_handler(name))
+    out.emit(f"INSTRUCTION_STATS({stats_name});\n")
     if is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
@@ -4895,6 +5036,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     stack: Stack = IRStack(layout, roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
+    consumer = (emitter.execution_variant.consumer
+                if emitter.execution_variant is not None else None)
+    if consumer:
+        validate_canonical_consumer(inst, fmt, consumer)
+        out.emit("if (!ir_method_call0_preflight(tstate, frame, next_instr)) {\n")
+        out.emit("JUMP_TO_PREDICTED(LOAD_ATTR);\n")
+        out.emit("}\n")
     for part in inst.parts:
         try:
             reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
@@ -5728,13 +5876,17 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
     allocates = (not p.infallible or p.escapes or boxes or pushes_frame
                  or any(CONSTRUCTOR.search(t) for t in tokens))
     effects = []
+    variant = EXECUTION_VARIANTS.get(name)
+    if variant is not None and variant.consumer is not None:
+        pushes_frame = True
+        allocates = True
     for bit, present in (
             # INSTRUMENTED_JUMP() leaves for the error label when the
             # callback raises, which the analysis does not see in a macro
             ("_PyIR_RAISES", not p.infallible
                              or fmt.fused and name.startswith("INSTRUMENTED_")),
             ("_PyIR_ESCAPES", p.escapes),
-            ("_PyIR_RUNS_PYTHON", runs_code(inst)),
+            ("_PyIR_RUNS_PYTHON", runs_code(inst) or pushes_frame),
             ("_PyIR_DEOPTS", p.deopts or p.side_exit),
             ("_PyIR_SUSPENDS", suspends),
             ("_PyIR_PUSHES_FRAME", pushes_frame),

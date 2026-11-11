@@ -790,6 +790,12 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
 #else
 #  define IR_SKIP_RESUME_TLBC() 1
 #endif
+#define IR_SAVE_CALL_CONTINUATION(DST, PC) \
+    do { \
+        frame->return_slot = (uint16_t)(DST); \
+        frame->return_pc = (PC); \
+    } while (0)
+
 #define IR_SKIP_RESUME() \
     do { \
         if (IR_HANDLER(*next_instr) == RESUME && \

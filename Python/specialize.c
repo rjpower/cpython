@@ -406,6 +406,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
                 case LOAD_ATTR_CLASSMETHOD:
                 case LOAD_ATTR_METHOD_WITH_VALUES:
+                case LOAD_ATTR_METHOD_WITH_VALUES_CALL0:
                 case LOAD_ATTR_METHOD_NO_DICT:
                 case LOAD_ATTR_METHOD_LAZY_DICT:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
@@ -442,6 +443,9 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->payload[i] = row.payload;
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
+    }
+    if (opcode == LOAD_ATTR_METHOD_WITH_VALUES_CALL0) {
+        opcode = LOAD_ATTR_METHOD_WITH_VALUES;
     }
     poly->handler[i] = (uint16_t)opcode;
 }
@@ -566,6 +570,9 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
+    if (opcode == LOAD_ATTR_METHOD_WITH_VALUES_CALL0) {
+        opcode = LOAD_ATTR_METHOD_WITH_VALUES;
+    }
     if (h->poly == 0) {
         h->state = FB_MONO;
         return;
@@ -617,6 +624,76 @@ instr_is_fused(_PyInstr *instr)
     return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
 }
 
+/* Refine the producer only after both ordinary handlers are installed. The
+ * CALL word stays live; immutable operands/feedback units are never rewritten
+ * by quickening or instrumentation, which only replace its handler field. */
+static void
+specialize_method_call0(_PyInstr *instr)
+{
+#if !defined(Py_GIL_DISABLED) && !defined(WITH_DTRACE)
+    _PyInterpreterFrame *frame = current_frame();
+    if (frame->owner != FRAME_OWNED_BY_THREAD) {
+        return;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int index = (int)_PyFrame_InstrOffset(frame, instr);
+    int handler = IR_HANDLER(*instr);
+    int from_call = handler == CALL_PY_EXACT_ARGS;
+    if (from_call) {
+        if (index == 0) {
+            return;
+        }
+        instr--;
+        index--;
+    }
+    else if (handler != LOAD_ATTR_METHOD_WITH_VALUES) {
+        return;
+    }
+    if (index + 1 >= Py_SIZE(code) ||
+        IR_HANDLER(*instr) != LOAD_ATTR_METHOD_WITH_VALUES ||
+        IR_HANDLER(instr[1]) != CALL_PY_EXACT_ARGS ||
+        PyBytes_GET_SIZE(code->co_exceptiontable) != 0)
+    {
+        return;
+    }
+    _PyIRWord method = *instr;
+    _PyIRWord call = instr[1];
+    uint32_t base = IR_A(method);
+    if (!(IR_D(method) & 1) || IR_C(call) != 0 ||
+        base != IR_B(call) || base < (uint32_t)code->co_nlocalsplus ||
+        base == IR_NO_DST || base + 1 >= (uint32_t)_PyFrame_NumSlotsForCodeObject(code))
+    {
+        return;
+    }
+    for (int i = 0; i < Py_SIZE(code); i++) {
+        if (_PyCode_InstrTarget(code, i) == index + 1) {
+            return;
+        }
+    }
+    /* Both nomination sites still own the receiver: lookup has its input,
+     * while CALL has the captured self. Guard the payload before reading it. */
+    PyValueBorrow receiver = PyValue_Borrow(frame->base[
+        from_call ? IR_B(call) + 1 : IR_B(method)]);
+    if (!PyValue_IsObject(receiver)) {
+        return;
+    }
+    PyObject *owner = PyValue_AsKnownObjectBorrow(receiver);
+    _PyFbAttr *fb = instr_entry(instr);
+    if (fb->type_version == 0 ||
+        Py_TYPE(owner)->tp_version_tag != fb->type_version ||
+        !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner)->valid))
+    {
+        return;
+    }
+    if (!PyFunction_Check(PyValue_AsKnownObjectBorrow(
+            _PyValueGuarded_Load(fb->class_value))))
+    {
+        return;
+    }
+    set_opcode(instr, LOAD_ATTR_METHOD_WITH_VALUES_CALL0);
+#endif
+}
+
 static inline void
 specialize(_PyInstr *instr, uint8_t specialized_opcode)
 {
@@ -646,6 +723,7 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!is_shared_entry(h));
     set_counter(h, adaptive_counter_cooldown());
     fb_record(instr, h, handler);
+    specialize_method_call0(instr);
 }
 
 static inline void

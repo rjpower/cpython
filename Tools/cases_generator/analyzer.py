@@ -523,6 +523,7 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 CALL_INVOKE_MARKERS = frozenset(("IR_INVOKE_CALL", "IR_INVOKE_GUARDED_PYTHON_CALL"))
 
 IR_MARKER_EFFECTS = {
+    "IR_ENTER_PYTHON_FRAME": frozenset(("sync", "frame")),
     "IR_OBSERVE_COMMITTED_BRANCH": frozenset(("escapes", "error", "sync", "pc")),
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
@@ -654,6 +655,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_IsIncomplete",
     "_PyFrame_PushUnchecked",
     "_PyFrame_PushOverlapping",
+    "_PyFrame_PushExact",
     "_PyFrame_SetReturnValue",
     "_PyFrame_Slots",
     "_PyFrame_AssertTemporariesClear",

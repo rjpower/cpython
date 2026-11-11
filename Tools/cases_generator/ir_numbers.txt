@@ -369,3 +369,6 @@ LOAD_ATTR_SHAPE_LOCAL_TEMP 319
 
 # Materialize a compiler-proven virtual local binding on its first read.
 # removed: MATERIALIZE_KWARGS 325
+
+# Execute an adjacent live CALL0 directly after guarded method capture.
+LOAD_ATTR_METHOD_WITH_VALUES_CALL0 326

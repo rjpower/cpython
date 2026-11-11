@@ -187,6 +187,66 @@ class FunctionCalls(unittest.TestCase):
         del result
         self.assertEqual(events, ["released"])
 
+    def test_exact_arguments_from_generator_frame(self):
+        released = []
+
+        class Value:
+            def __del__(self):
+                released.append("released")
+
+        def target(first, second):
+            return sys._getframe(), first, second
+
+        class Receiver:
+            def method(self, first, second):
+                return target(first, second)
+
+        receiver = Receiver()
+
+        def caller(value):
+            for _ in range(100):
+                yield target(value, value)
+                yield receiver.method(value, value)
+
+        value = Value()
+        gen = caller(value)
+        for frame, first, second in gen:
+            self.assertIs(first, value)
+            self.assertIs(second, value)
+            self.assertIs(frame.f_locals["first"], value)
+            self.assertIs(frame.f_locals["second"], value)
+            frame.clear()
+        self.assertEqual(released, [])
+        del frame, first, second, value, gen
+        gc.collect()
+        self.assertEqual(released, ["released"])
+
+    def test_exact_frame_growth_with_finalizer_reentry(self):
+        released = []
+
+        class Value:
+            def __del__(self):
+                released.append(narrow(2, False))
+
+        def narrow(depth, own):
+            if depth:
+                return wide(depth - 1, own)
+            return 17
+
+        # Keep many physical local homes across each recursive call so that
+        # recursion grows chunks and later reuses cells that held headers.
+        names = ", ".join(f"local{i}" for i in range(80))
+        namespace = {"Value": Value, "narrow": narrow}
+        exec("def wide(depth, own):\n"
+             f"    {names} = (None,) * 80\n"
+             "    held = Value() if own else None\n"
+             "    return narrow(depth, own)\n", namespace)
+        wide = namespace["wide"]
+        with set_recursion_limit(1000):
+            for _ in range(3):
+                self.assertEqual(narrow(80, True), 17)
+        self.assertEqual(released, [17] * 240)
+
     def test_type_non_string_kwargs_keep_vectorcall_validation(self):
         bad_kwargs = {None: 1}
         for call in (

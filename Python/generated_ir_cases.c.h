@@ -4931,23 +4931,18 @@
                 int has_self = !PyValue_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
-                _PyInterpreterFrame *pushed_frame;
-                if (frame->owner == FRAME_OWNED_BY_THREAD) {
-                    pushed_frame = _PyFrame_PushOverlapping(
-                        tstate, callable, args - has_self, oparg + has_self, frame);
+                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                PyValue *base = args - has_self;
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    base = _PyDataStack_Slots(tstate->datastack_top);
                 }
-                else {
-                    pushed_frame = _PyFrame_PushUnchecked(tstate, callable, frame);
-                    PyValue *first_non_self_local = pushed_frame->base + has_self;
-                    if (has_self) {
-                        pushed_frame->base[0] = self_or_null;
-                    }
-                    for (int i = 0; i < oparg; i++) {
-                        first_non_self_local[i] = args[i];
-                    }
-                    for (int i = 1; i < 2 + oparg; i++) {
-                        window_base[i] = PyValue_NULL;
-                    }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
+                    tstate, code, base, oparg + has_self, frame);
+                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                code, base, frame);
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    call_transfer_exact_args(base, window_base, oparg);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -7282,23 +7277,18 @@
                 int has_self = !PyValue_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
-                _PyInterpreterFrame *pushed_frame;
-                if (frame->owner == FRAME_OWNED_BY_THREAD) {
-                    pushed_frame = _PyFrame_PushOverlapping(
-                        tstate, callable, args - has_self, oparg + has_self, frame);
+                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                PyValue *base = args - has_self;
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    base = _PyDataStack_Slots(tstate->datastack_top);
                 }
-                else {
-                    pushed_frame = _PyFrame_PushUnchecked(tstate, callable, frame);
-                    PyValue *first_non_self_local = pushed_frame->base + has_self;
-                    if (has_self) {
-                        pushed_frame->base[0] = self_or_null;
-                    }
-                    for (int i = 0; i < oparg; i++) {
-                        first_non_self_local[i] = args[i];
-                    }
-                    for (int i = 1; i < 2 + oparg; i++) {
-                        window_base[i] = PyValue_NULL;
-                    }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
+                    tstate, code, base, oparg + has_self, frame);
+                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                code, base, frame);
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    call_transfer_exact_args(base, window_base, oparg);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);

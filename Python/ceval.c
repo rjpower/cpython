@@ -1805,6 +1805,24 @@ done:
     return failed;
 }
 
+/* Exact calls from heap-owned frames cannot overlap thread-stack homes.
+ * Move their arguments after initialization, preserving any constant homes
+ * beyond the actual arguments. No owner is retired and no callback can run. */
+static Py_NO_INLINE void
+call_transfer_exact_args(PyValue *base, PyValue *window, int nargs)
+{
+    int has_self = !PyValue_IsNull(window[1]);
+    if (has_self) {
+        base[0] = window[1];
+    }
+    for (int i = 0; i < nargs; i++) {
+        base[has_self + i] = window[2 + i];
+    }
+    for (int i = 1; i < 2 + nargs; i++) {
+        window[i] = PyValue_NULL;
+    }
+}
+
 /* The handlers' calls (call_transaction_run_*), after
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(

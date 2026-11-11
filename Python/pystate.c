@@ -3110,6 +3110,20 @@ chunk_frames_end(_PyStackChunk *chunk)
     return (PyObject **)((char *)chunk + chunk->size) - 1;
 }
 
+/* The initialized hit stays inline; only newly exposed storage needs this
+ * fill. Reservation has already truncated the frontier before the header. */
+Py_NO_INLINE void
+_PyStackChunk_ExtendInitialized(_PyStackChunk *chunk, PyObject **value_end)
+{
+    assert(chunk->initialized < value_end);
+    PyValue *first = _PyDataStack_Slots(chunk->initialized);
+    PyValue *end = _PyDataStack_Slots(value_end);
+    while (first < end) {
+        *first++ = PyValue_NULL;
+    }
+    chunk->initialized = value_end;
+}
+
 /* Push a frame header and nslots slots onto a new chunk */
 static _PyInterpreterFrame *
 push_chunk(PyThreadState *tstate, int nslots)

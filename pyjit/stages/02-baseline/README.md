@@ -1,36 +1,20 @@
 # Stage 2: register-interpreter baseline
 
-The universal-value baseline is qualified and frozen as the
-[golden checkpoint](../../issues/golden-20261108/README.md). It is an immutable
-control, not a claim of broad upstream performance parity.
+The deliverable is a trustworthy register interpreter with canonical values,
+explicit ownership and useful observation APIs. Measure unchanged workloads
+with the JIT disabled against matched immutable controls. Assess throughput,
+Python behavior and tooling separately; exact CPython display or destruction
+timing is not a performance gate.
 
-The [frame/call round](../../issues/frame-call-model-20261109/README.md)
-optimizes storage, binding, ownership and semantic completion. Its frozen
-candidate, full qualification, logging target and complete benchmark matrix
-are recorded in [status](../../STATUS.md) and the
-[closing report](../../issues/frame-call-model-20261109/closing-report.md).
-The [prior ranked work](../../issues/frame-call-model-20261109/next-steps.md)
-records the closed logging round; the active packet below owns current priorities.
+The [current packet](../../issues/interpreter-round51/plan.md) evaluates bounded
+interpreter improvements and their composition. [Status](../../STATUS.md) records
+the selected runtime, qualification, performance and limits. Native method and
+tracing JIT tiers belong to later stages; owning bridges support incremental
+extension ports.
 
-The [DeltaBlue round](../../issues/deltablue-call-model-20261110/plan.md)
-preserves canonical method owners through lookup/publication and passes explicit
-semantic recovery from observers to the unwinder. The
-[report](../../issues/deltablue-call-model-20261110/report50.md) records the
-selected increment, measured tradeoffs and rejected adjacent-call and leaf
-experiments. The current plan owns the next evidence-backed priorities; the
-older C2 queue is deferred.
-
-The deliverable is one trustworthy register interpreter with canonical values,
-measured with the JIT disabled against matched immutable controls. Retain raw
-workload vectors, compiler/build identities and native conditions. Separate
-measured throughput, runtime correctness, supported observation APIs and developer
-tooling. Exact CPython display or release timing is not an interpreter gate.
-
-The native method/tracing tiers remain a later stage. Existing owning bridges
-are incremental extension ports; a boxed-heap interim image cannot replace the
-canonical-value baseline.
-
-References: [IR](../../design/register-ir.md),
-[interpreter](../../design/interpreter.md), [frames/calls](../../design/call-and-frame-lifetimes.md),
-[measurement](../../design/measurement.md), [benchmark registry](../../bench/README.md),
+The durable contracts are [register IR](../../design/register-ir.md),
+[interpreter](../../design/interpreter.md), and
+[calls and frames](../../design/call-and-frame-lifetimes.md). See also
+[measurement](../../design/measurement.md), the
+[benchmark registry](../../bench/README.md), and
 [validation](../../design/validation.md).

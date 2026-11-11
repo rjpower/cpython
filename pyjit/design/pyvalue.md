@@ -1,25 +1,13 @@
 # PyValue: current representation and ownership
 
-This page specifies frozen runtime 39 `4d666e1b482` (the runtime implementation
-is 38 `24f4d270ced`). PyValue is the canonical eight-byte word in interpreter
-frames, core containers, cells, instance fields and value-native C APIs.
-Qualification and measurements belong to the [closing report](../issues/frame-call-model-20261109/closing-report.md)
-and [status](../STATUS.md), not this representation reference.
-The lookup-cache extension below is implemented in current source
-`b8e7e1bee66`. [Status](../STATUS.md) separates its qualification from performance
-admission; the frozen baseline identity above remains unchanged.
-
-The [complete pre-cleanup page](archive/pyvalue-before-close-20261109.md)
-retains rollout history, old measurements and design comparisons unchanged.
-Historical rationale is also in the [representation review](reviews/pyvalue-review-1.md),
-[typed-borrow proposal](proposals/register-ir-v2-a5b.md) and
-[call-scratch contract](proposals/value-api-m3.md). Those dated proposals do
-not override the current source contracts below.
+PyValue is the canonical eight-byte word in interpreter frames, core containers,
+cells, instance fields and value-native C APIs. This page defines the selected
+representation; [status](../STATUS.md) owns qualification and measurements.
 
 Related specifications: [call/frame lifetimes](call-and-frame-lifetimes.md),
 [native boundary](native-boundary.md), [extension API](extension-api.md),
 [register IR](register-ir.md) and [language/lifetime policy](lifetimes-and-language-semantics.md).
-Source paths below refer to the frozen runtime checkout.
+Source paths below refer to the selected runtime checkout recorded in status.
 
 ## Types and supported profile
 
@@ -30,7 +18,7 @@ typedef struct { uintptr_t bits; } PyValue;
 typedef struct { uintptr_t bits; } PyValueBorrow;
 ```
 
-The implemented typed-ownership contract (D4) distinguishes the two forms.
+The typed ownership contract distinguishes the two forms.
 PyValue represents an owner: a home or an owning C local. PyValueBorrow is a
 C-local view of that owner's exact bits and owns no reference. The separate
 C types prevent implicit conversion from borrow to owner. They do not prove
@@ -41,7 +29,7 @@ that owns no reference and is not a typed borrow. Its bits may outlive the C
 call that recorded them. Only after validating the cache's version and live
 owner proof may a reader call `_PyValueGuarded_Load` to create a transient
 `PyValueBorrow`, then duplicate it into an owner before any callback can retire
-the protecting owner. The approved lookup increment shares the existing type
+the protecting owner. The runtime shares the existing type
 and helpers in `pycore_value.h` between the C type cache and attribute feedback.
 Historical feedback snapshots copy guarded metadata without loading a borrow.
 This adds no value encoding, owning cache or exception to the C-local borrow rule.
@@ -49,8 +37,7 @@ This adds no value encoding, owning cache or exception to the C-local borrow rul
 Guarded words also obey the value API's union restriction. Attribute feedback
 stores its guarded word independently from the native pointer/shape union;
 polymorphic snapshot payloads do the same. No raw-bit or tagged-union exception
-was added. The larger serialized attribute entry has bytecode magic 64417;
-older source-backed caches are rejected and regenerated through normal import.
+was added. The serialized attribute entry uses bytecode magic 64418.
 
 `Include/internal/pycore_pyvalue.h` requires the 64-bit GIL private runtime.
 The qualified platform is Linux x86-64 with GCC. Pointers must fit below 2^48;
@@ -58,7 +45,7 @@ allocator pointer-space checks and constructor assertions enforce the selected
 encoding's assumptions. Free-threaded and 32-bit builds are not this profile.
 There is one encoding, without an alternate frame-only or boxed-heap mode.
 
-Only the representation readers listed in [the value API's R26 boundary](value-api.md)
+Only the representation readers listed in [the value API](value-api.md)
 may interpret these bits directly. Other code uses the typed value APIs.
 
 ## Encoding
@@ -300,10 +287,6 @@ belong to the current IR/cache format, not to this representation page.
 `pycore_debug_offsets.h` exports the value encoding and frame layout through a
 cookie/schema/ABI-checked descriptor. In-tree remote readers validate the target
 layout before reading values. External readers must port to that contract.
-The unfinished GDB reader port is retained separately; it is not integrated in
-frozen 39 and no GDB qualification is claimed here. Source-aware callback display
-must remain distinct from compact executable f_lasti.
-
-Historical cross-engine comparisons, migration findings and measurements are
-in the archived page. Current supported behavior, remaining reader/API gaps and
-qualification decisions are recorded in the closing report and status.
+GDB pretty-printer diagnostics remain quarantined; other reader checks stay
+enabled. [Status](../STATUS.md) records their qualification. Source-aware callback
+display remains distinct from compact executable f_lasti.

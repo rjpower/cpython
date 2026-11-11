@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--build', required=True, action='append', metavar='ROLE=PATH')
     parser.add_argument('--evidence', required=True, type=Path)
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--match', action='append', default=[],
+                        help='run only matching test cases (repeatable regrtest glob)')
     parser.add_argument('--seed', type=int)
     parser.add_argument('--include-gdb-pretty-print', action='store_true',
                         help='include the quarantined GDB display diagnostics')
@@ -60,6 +62,8 @@ def main():
             command.append('-v')
         if args.seed is not None:
             command += ['--randseed', str(args.seed)]
+        for pattern in args.match:
+            command += ['--match', pattern]
         for pattern in ignored:
             command += ['--ignore', pattern]
         command += args.tests

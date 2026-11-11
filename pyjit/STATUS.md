@@ -1,13 +1,15 @@
 # Project status
 
-Round 51 is in architecture review. Astra is preparing five cross-benchmark
-experiments; Sol will implement and review them in isolated runtime subtrees.
-The proposed hot set covers DeltaBlue, Richards, generators, coroutines and
-comprehensions, with spectral norm and silent logging as regression guards.
+Round 51 is measuring five peer-reviewed candidates in isolated runtime
+subtrees. Release builds and focused checks pass; final debug and merged
+qualification remain pending. The hot set covers DeltaBlue, Richards,
+generators, coroutines, comprehensions and spectral norm, with silent logging
+as a mandatory guard.
 The [active plan](issues/interpreter-round51/plan.md) records selection and
 integration decisions. No round-51 performance changes have landed yet.
-Known GDB pretty-printer diagnostics will be quarantined in the qualification
-runner; the other GDB groups and Python behavior checks remain enabled.
+Known GDB pretty-printer diagnostics are quarantined in the qualification
+runner; a focused check confirms the other four GDB groups still pass. Python
+behavior and observer checks remain enabled.
 
 The selected round-50 checkpoint is runtime `bf810ec1a33`: canonical guarded
 method owners plus explicit observer-error recovery. Release/debug/stats builds,

@@ -1,58 +1,7 @@
 # Calls, frame homes and observation
 
-The baseline frame/call contract was integrated at `4d666e1b482`. Its bounded
-observer and debugger qualification limits are recorded in status. The immutable
-golden `0765e9be47f` retains its functional qualification at `0267d428808`.
-See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
-and the [baseline report](../bench/results/interpreter-parity-20261108.md).
-The keyword-plan extension below is implemented in the closed
-[object/call packet](../issues/object-call-20261109/plan.md), current source
-`b8e7e1bee66`. [Status](../STATUS.md) records qualification and performance;
-implementation does not imply golden promotion.
-
-## Reviewed call-model improvements
-
-The active [DeltaBlue call round](../issues/deltablue-call-model-20261110/plan.md)
-selects canonical class reads and classmethod forwarding as an owned
-callable/receiver pair. It explored complete conditional leaf-region elision
-separately; that candidate was rejected. Canonical class reads are
-implemented at `986c65ee5ab`, and classmethod pairs at `5559f60093e`. The leaf
-call path was tested in a separate candidate and rejected; it is not part of
-selected runtime 48 or the default call path.
-See the [grouped review](../issues/deltablue-call-model-20261110/astra-architecture-review.md),
-[leaf contract](../issues/deltablue-call-model-20261110/leaf-contract-review.md)
-and [retirement-scope review](../issues/deltablue-call-model-20261110/leaf-no-callback-scope-review.md),
-the [rejection report](../issues/deltablue-call-model-20261110/integration49.md)
-and [next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md),
-which has peer approval as a future direction; implementation is unproved.
-
-Exact calls use the owning-frame ABI with overlapping argument windows; that
-transfer constructs an activation. The rejected experimental leaf path skipped
-the entire activation only for a complete certified body. Its optional `_PyCodeExec`
-record describes at most 32 final-IR words, four complete value paths, two
-guarded attribute steps per path, one inline comparison and two return arms.
-Admitted paths use shared guarded global, shape and class reads and shared inline
-numeric comparison computation. The exact-only terminal marker follows the
-validated PEP 523, version, arity, stack and recursion prefix. A missing
-certificate bypasses the helper cheaply; a failed later probe or admission
-returns MISS without changing the original call homes.
-
-The body, read probes and retirement interval are callback-free under the GIL.
-After acquiring the result, the helper counts planned releases by object
-identity and admits only when each count-owning object has `Py_REFCNT` greater
-than the aggregate release multiplicity. An overlapping temporary's old value
-is counted in the window; a nonoverlapping temporary must be NULL. It adds no
-pins. It then sets the real continuation, detaches and NULLs the window,
-performs the proved nonfinal closes and publishes through
-`_PyFrame_SetReturnValue`. The generated DONE edge dispatches the actual next word
-without constructing a child; no fallback
-follows commit. Unsupported observers, providers, pending work and runtime
-configurations decline. Free-threaded, debug, DTrace and Emscripten builds
-currently decline. Remote optimized stacks may omit the callee. This does not
-claim general callback-time recovery or debugger redirects. This rejected
-implementation is retained as experimental design context; it does not define
-the selected call model. The next proposal awaits review before any
-implementation is selected.
+This page defines frame ownership, call completion and observation in the
+selected runtime. [Status](../STATUS.md) records qualification and limits.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -197,7 +146,7 @@ owner state. This is one ABI with guarded fast binding, not two frame models.
 ## Proposed direct owning entry
 
 Direct generator/coroutine entry is future work, separate from the implemented
-binding contract. See the [minimal entry scope](../issues/object-call-20261109/entry-scope-calibration.md).
+binding contract.
 Its aim is to construct eligible frames directly in their owning object instead
 of constructing and immediately moving a thread-stack frame.
 
@@ -256,18 +205,15 @@ describe normal return.
 Window-to-local moves likewise transfer already canonical home bits instead of
 repeating exact-number publication checks. Tuple/list unpack has a separately
 proved canonical source path; generic value-slot/native providers retain
-publication unless their producer contract proves it. The
-[canonical transfer audit](../issues/frame-call-model-20261109/canonical-transfer-proof.md)
-records those bounded producer chains. It does not authorize blanket removal
-of normalization from raw results.
+publication unless their producer contract proves it. These bounded producer
+chains do not authorize blanket removal of normalization from raw results.
 
 Pure local duplication uses the same canonical final store. The generator
 requires the exact local-index read and owned duplicate, with no input owner,
 callback, result mutation or named cache. This applies to LOAD_FAST and
 LOAD_FAST_BORROW by source proof, independently of their names. It removes
 redundant publication checks while retaining the duplicate owner and the shared
-local/temporary/discard destination protocol. See the
-[source review](../issues/frame-call-model-20261109/canonical-home-post-review.md).
+local/temporary/discard destination protocol.
 
 Four float arithmetic producers also transfer their final constructor result
 without normalizing it again. The generator checks the direct canonical
@@ -276,8 +222,7 @@ retirement chain. Named cache bindings, preprocessing, changed result identity
 or unsupported suffixes prevent the optimization. Local, temporary and discard
 destinations share one final-store implementation; only the value expression
 differs. This proof neither moves publication across callbacks nor applies to
-conditional integer constructors. See the
-[constructor contract](../issues/frame-call-model-20261109/numeric-canonical-result-proposal.md).
+conditional integer constructors.
 
 ## Semantic iteration, delegation and input resume
 
@@ -402,12 +347,8 @@ store. It preserves the temporary NULL/same-value assertion and debug home
 check. Folded locals still use `_PyValue_Publish` on final publication after
 receiver retirement, so callbacks can mutate the local and success replaces
 the current home. Error exits, result cleanup, refresh, companion outputs,
-and other producers retain their previous paths. The R5 change does not add
-frame state, error root maps, recovery protocols, or a method/tracing backend;
-native JIT recovery remains future work. The bounded design and proposal
-history are in the
-[canonical-output proposal](../issues/interpreter-architecture-20261107/canonical-output-boundary-proposal.md)
-and [RHS refinement](../issues/interpreter-architecture-20261107/canonical-output-rhs-review.md).
+and other producers retain their previous paths. Native JIT recovery remains
+future work.
 
 ## First-output publication phase
 
@@ -441,13 +382,7 @@ producer sequence and effect-free, disjoint suffix; it rejects conditional or
 ambiguous result assignments, reassignment, result escape, suffix overlap,
 frame access, and releases before any later uop.
 
-## History and boundaries
-
-The [2026-11-08 candidate report](../issues/execution-boundaries-20261108/report.md)
-retains the prior implementation and its qualification limits. Golden and
-earlier integration receipts remain historical evidence. The active
-[frame/call packet](../issues/frame-call-model-20261109/plan.md) records source
-reviews, native failures and repairs without qualifying unfinished work.
+## Native JIT boundary
 
 Machine registers, typed SSA, OSR and native deoptimization snapshots belong to
 the future method/tracing tiers. They must recover this interpreter's owning

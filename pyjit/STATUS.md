@@ -1,11 +1,20 @@
 # Project status
 
+Round 51 is in architecture review. Astra is preparing five cross-benchmark
+experiments; Sol will implement and review them in isolated runtime subtrees.
+The proposed hot set covers DeltaBlue, Richards, generators, coroutines and
+comprehensions, with spectral norm and silent logging as regression guards.
+The [active plan](issues/interpreter-round51/plan.md) records selection and
+integration decisions. No round-51 performance changes have landed yet.
+Known GDB pretty-printer diagnostics will be quarantined in the qualification
+runner; the other GDB groups and Python behavior checks remain enabled.
+
 The selected round-50 checkpoint is runtime `bf810ec1a33`: canonical guarded
 method owners plus explicit observer-error recovery. Release/debug/stats builds,
 focused checks and the API gate pass. Both full diagnostics are complete, with
 the established failure groups and counts. [Report](issues/deltablue-call-model-20261110/report50.md)
 → [all benchmark tables](issues/deltablue-call-model-20261110/benchmark-tables50.md)
-→ [next plan](issues/deltablue-call-model-20261110/plan.md).
+→ [active plan](issues/interpreter-round51/plan.md).
 [HANDOFF](HANDOFF.md) owns exact source, build and job state.
 
 ## Performance

@@ -2,6 +2,15 @@
 
 ## Current execution, 2026-11-11
 
+Round 51 started at 22:28 UTC. Active packet:
+`pyjit/issues/interpreter-round51`; evidence:
+`BASE/pyjit-link-wave1/interpreter-round51`.
+Astra owns five grouped options; Terra is simplifying current documentation;
+Sol is preparing reusable subtree qualification and the narrow GDB diagnostic
+quarantine. Coordinator is building immutable `round51-baseline` source/build
+from `bf810ec1a33` using the existing release configuration. No new runtime
+feature is integrated. The completed round-50 state below remains the baseline.
+
 Canonical documentation: `/home/power/code/cpython/.worktrees/python-jit`,
 branch `weaver/python-jit`. Its C files are not the measured runtime.
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.

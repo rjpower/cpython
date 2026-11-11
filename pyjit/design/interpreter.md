@@ -1,11 +1,7 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter and call paths in selected runtime
-`bf810ec1a33`. The
-[current report](../issues/deltablue-call-model-20261110/report50.md) owns
-measurements and observer/tooling limits; [status](../STATUS.md) owns admission.
-See the [round plan](../issues/deltablue-call-model-20261110/plan.md) for the next
-bounded work. Historical implementation details remain in the experiment packets.
+This page describes the selected register interpreter and its call paths.
+[Status](../STATUS.md) records qualification, measurements and limits.
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
 and [observer contract](handler-and-observer-contract.md) describe the same
@@ -87,9 +83,8 @@ moving every home. See the [frame ABI](call-and-frame-lifetimes.md).
 
 ## Guarded attribute values
 
-The [approved lookup increment](../issues/object-call-20261109/lookup-proposal.md)
-extends the existing non-descriptor instance-load handlers to canonical inline
-class values. Feedback stores `_PyValueGuarded` metadata, not a persistent
+Non-descriptor instance-load handlers support canonical inline class values.
+Feedback stores `_PyValueGuarded` metadata, not a persistent
 `PyValueBorrow` or an owning home. A hit checks the receiver type version and
 its admitted layout, creates a transient borrow, then acquires an owned canonical
 result. It publishes that result through the existing result-retirement
@@ -140,8 +135,7 @@ flowchart LR
 `classmethod.__init__` can replace its callable without invalidating the class
 version. Capture therefore happens at lookup, before later arguments can mutate
 the descriptor. CALL uses that captured pair and checks the function's current
-code/default/provider facts; it never resolves the descriptor again. See the
-[proposal and tests](../issues/deltablue-call-model-20261110/A-implementation-proposal.md).
+code/default/provider facts; it never resolves the descriptor again.
 
 ### Canonical method capture
 
@@ -151,9 +145,7 @@ descriptor owner and transfers a temporary receiver or duplicates a local one.
 The generator proves each output is canonical and publishes it without numeric
 recanonicalization. The cache word is non-owning metadata; a transient borrow
 is valid only after the live guards. Canonicality does not prove that the
-descriptor is a Python function. The adjacent method/CALL
-experiment was rejected on performance; see the
-[round report](../issues/deltablue-call-model-20261110/report50.md).
+descriptor is a Python function.
 
 ## Python calls and ordinary return
 
@@ -200,11 +192,6 @@ after effects; a completed callback is not replayed on a guard miss. Once
 ownership commit begins, failure retires the published child instead of falling
 back to a second call. Code remains a separate owner because function.__code__
 can change while a child executes.
-
-The complete [leaf-call replacement](../issues/deltablue-call-model-20261110/integration49.md)
-and [adjacent method-to-frame refinement](../issues/deltablue-call-model-20261110/report50.md)
-were evaluated and rejected on performance. Their certificates, owner ledgers,
-entry gates and alternate completion paths are not part of this interpreter.
 
 ## Iteration, delegation and resume
 

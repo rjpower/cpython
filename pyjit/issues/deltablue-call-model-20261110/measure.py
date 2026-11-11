@@ -138,6 +138,9 @@ def main():
                     (args.output / f'{stem}-stderr.txt').write_text(stderr)
                     assert child.returncode == 0 and row['load_after'][0] < 4, row
                     lines = stdout.strip().splitlines()
+                    assert len(lines) == 2, (
+                        f"{name}/{role}: unexpected benchmark output; "
+                        f"see {args.output / (stem + '-stdout.txt')}")
                     metadata, values = map(json.loads, lines[-2:])
                     assert metadata['git'] == before['builds'][role]['probe']['git']
                     assert metadata['affinity'] == [args.cpu] and not metadata['jit_enabled']

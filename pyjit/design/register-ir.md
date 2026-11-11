@@ -1,13 +1,9 @@
 # Register IR: current contract
 
-This page defines the executable and ownership contract in selected runtime
-`bf810ec1a33`. [Status](../STATUS.md) owns qualification and performance
-admission; the [current report](../issues/deltablue-call-model-20261110/report50.md)
-owns measurements. Historical results and rejected experiments are not
-transferable to this build. The bounded observer and debugger rules below do
-not authorize every source transfer.
+This page defines the executable and ownership contract of the selected runtime.
+[Status](../STATUS.md) owns qualification and performance. The observer and
+debugger rules below do not authorize every source transfer.
 
-The [archive](archive/register-ir-20261108.md) retains earlier designs.
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
 [observer contract](handler-and-observer-contract.md) define ownership and
 observation. Release points implement the selected RC runtime; they are not a
@@ -100,7 +96,7 @@ shared header-only entry. Free-threaded specialization remains disabled.
 
 The serialized `co_fbinit` records include feedback sizes and offsets. Changes
 to their geometry require a new bytecode magic, even when handler numbers and
-the eight-byte word encoding stay unchanged. Current magic **64417** identifies
+the eight-byte word encoding stay unchanged. Current magic **64418** identifies
 48-byte attribute entries with independent guarded-value storage. At the
 4096-unit limit, optional sites without private capacity use shared entry zero;
 the compiler must preserve required feedback and valid generic execution.
@@ -127,14 +123,11 @@ family, statistics and feedback mappings cover the physical handler domain.
 Adaptive disassembly names the specialization; internal executing-IR inspection
 can expose an ownership variant. This does not create a product of every mode.
 
-Round 50 adds `IR_CANONICAL_OUTPUTS` for a checked terminal producer of
-multiple owning canonical outputs. Its bounded proof accepts guarded-home
+`IR_CANONICAL_OUTPUTS` marks a checked terminal producer of multiple owning
+canonical outputs. Its bounded proof accepts guarded-home
 duplication and unchanged canonical-input transfer, and rejects unproved
 transformations or escaping prefixes. Output provenance is independent of the
 existing receiver-retirement proof; ownership transfers still occur normally.
-The adjacent method/CALL experiment was rejected on performance; it is not
-part of the selected candidate. See the
-[round report](../issues/deltablue-call-model-20261110/report50.md).
 
 ## Guarded Python calls
 
@@ -249,36 +242,10 @@ pre-site survivor recipe or a source-only fallback. Existing PRE restoration
 and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
 transfers require separate stopped-state authority.
 
-## Experimental leaf-call metadata (not selected)
-
-The rejected leaf candidate added an optional `_PyCodeExec` certificate for a
-complete conditional body. It is derived from immutable final words and is neither
-serialized bytecode metadata nor a rooted runtime value. The bounded form has
-at most 32 words, four complete value paths, two guarded attribute steps per
-path, one inline comparison and two return arms. Paths start from arguments,
-current constants (including common-constant roots), small integers or guarded
-globals. Every executable word must be accounted for and feed the predicate or selected result; unsupported
-effects, reads, joins, loops and handlers reject certification.
-
-Runtime execution is attached to plain `CALL_PY_EXACT_ARGS` after its checked
-prefix. A zero-shape terminal marker is accepted only by positive generator
-validation of the exact guard sequence and untouched call window. The
-no-certificate gate skips the helper. Admitted reads share the ordinary guarded
-global, shape and class probes, and numeric computation shares the ordinary
-inline comparison semantics. A MISS preserves all original homes and continues
-through the existing initializer. A hit requires callback-free, GIL-held
-execution and an identity-counted nonfinal-release proof before detaching
-inputs; it returns the actual continuation without creating a frame. The
-[experimental interpreter design](interpreter.md#experimental-conditional-leaf-call-design-not-selected),
-[rejection report](../issues/deltablue-call-model-20261110/integration49.md) and
-[next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md) record
-its restrictions and status. This mechanism is not selected or enabled by the
-current runtime design; the next proposal has peer approval as a future direction and remains unimplemented.
-
 ## Explicit boundary
 
 The baseline IR is an executable register instruction stream, not optimizing
 SSA. It has no machine-register allocation, deoptimization state, OSR protocol,
 or general native-JIT recovery map. The current method/tracing JIT recovery
-contract remains future work. The [checkpoint report](../bench/results/interpreter-parity-20261108.md)
-and [status](../STATUS.md) record qualification and open work.
+contract remains future work. [Status](../STATUS.md) records qualification
+and open work.

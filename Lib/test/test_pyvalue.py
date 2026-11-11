@@ -201,21 +201,24 @@ class PyValueTests(unittest.TestCase):
             left - right
 
         cases = (
-            ((add_local, add_temporary, add_discard), (
+            ("BINARY_OP_ADD_INT", (add_local, add_temporary, add_discard), (
                 (low, 0, low), (high, 0, high), (low, -1, low - 1),
                 (high, 1, high + 1), (low, low, 2 * low),
                 (high, high, 2 * high), (low, high, -1), (1, -1, 0),
             )),
-            ((subtract_local, subtract_temporary, subtract_discard), (
+            ("BINARY_OP_SUBTRACT_INT", (subtract_local, subtract_temporary, subtract_discard), (
                 (low, 0, low), (high, 0, high), (low, 1, low - 1),
                 (high, -1, high + 1), (low, high, low - high),
                 (high, low, high - low), (low, low, 0), (0, 1, -1),
             )),
         )
-        for (local, temporary, discard), values in cases:
+        for handler, (local, temporary, discard), values in cases:
             for _ in range(100):
                 self.assertEqual(local(3, 2), temporary(3, 2))
                 discard(3, 2)
+            for function in (local, temporary, discard):
+                self.assertIn(handler, [word[0] for word in
+                              capi.get_ir(function.__code__, True)])
             for left, right, expected in values:
                 with self.subTest(operation=local.__name__, left=left, right=right):
                     self.assertEqual(local(left, right), expected)
@@ -256,6 +259,10 @@ class PyValueTests(unittest.TestCase):
         for _ in range(100):
             self.assertEqual(add(3, 2), 5)
             self.assertEqual(subtract(3, 2), 1)
+        for function, handler in ((add, "BINARY_OP_ADD_INT"),
+                                  (subtract, "BINARY_OP_SUBTRACT_INT")):
+            self.assertIn(handler, [word[0] for word in
+                          capi.get_ir(function.__code__, True)])
         ledger.clear()
         high = 2**50 - 1
         low = -2**50
@@ -275,9 +282,13 @@ class PyValueTests(unittest.TestCase):
         def subtract():
             return low - one
 
-        for function, expected in ((add, high + 1), (subtract, low - 1)):
+        for function, expected, handler in (
+                (add, high + 1, "BINARY_OP_ADD_INT"),
+                (subtract, low - 1, "BINARY_OP_SUBTRACT_INT")):
             for _ in range(100):
                 self.assertEqual(function(), expected)
+            self.assertIn(handler, [word[0] for word in
+                          capi.get_ir(function.__code__, True)])
             with self.assertRaises(MemoryError):
                 testcapi.call_with_nomemory(0, 1, function)
             self.assertEqual(function(), expected)

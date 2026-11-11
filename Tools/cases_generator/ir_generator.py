@@ -4507,6 +4507,66 @@ def canonical_list_child_source(parts: list[Uop]) -> CanonicalResult | None:
     return CanonicalResult(parts[2], "res")
 
 
+def canonical_inline_int_source(parts: list[Uop]) -> CanonicalResult | None:
+    "Prove guarded ADD/SUB's overflow join and unchanged input retirement."
+    shapes = (
+        (("value",), ("value",)),
+        (("left", "unused"), ("left", "unused")),
+        (("left", "right"), ("res", "l", "r")),
+        (("value",), ()),
+        (("value",), ()),
+    )
+    if len(parts) != len(shapes):
+        return None
+    for part, (inputs, outputs) in zip(parts, shapes):
+        if (tuple(item.name for item in part.stack.inputs) != inputs
+                or tuple(item.name for item in part.stack.outputs) != outputs
+                or any(item.is_array() for item in
+                       (*part.stack.inputs, *part.stack.outputs))
+                or any(cache.name != "unused" for cache in part.caches)):
+            return None
+    pop = """{
+        assert(PyValue_LongCheckExact(value));
+        PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+    }"""
+    fixed = (
+        "{ EXIT_IF(!PyValue_IsInlineInt(value)); }",
+        "{ EXIT_IF(!PyValue_IsInlineInt(left)); }",
+        pop, pop,
+    )
+    for part, body in zip((*parts[:2], *parts[3:]), fixed):
+        if canonical_body_tokens(part) != [t.text for t in tokenize(body)]:
+            return None
+    # Scaled overflow proves the unscaled result is outside the inline range,
+    # exactly the precondition of BoxInt64. The sum/difference of two inline
+    # ints fits int64; the nonoverflow arm is already a canonical inline value.
+    for builtin, operator, result in (
+        ("__builtin_add_overflow", "+", "sum"),
+        ("__builtin_sub_overflow", "-", "difference"),
+    ):
+        body = f"""{{
+            int64_t a = _PyValue_IntScaled(left);
+            int64_t b = _PyValue_IntScaled(right);
+            int64_t {result};
+            STAT_INC(BINARY_OP, hit);
+            if ({builtin}(a, b, &{result})) {{
+                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) {operator} PyValue_InlineInt64(right));
+            }}
+            else {{
+                res = _PyValue_FromIntScaled({result});
+            }}
+            if (PyValue_IsNull(res)) {{
+                ERROR_NO_POP();
+            }}
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }}"""
+        if canonical_body_tokens(parts[2]) == [t.text for t in tokenize(body)]:
+            return CanonicalResult(parts[2], "res")
+    return None
+
+
 def canonical_result_source(inst: Instruction, fmt: IRFormat
                             ) -> CanonicalResult | None:
     "Recognize bounded source proofs, independently of instruction names."
@@ -4527,6 +4587,10 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
     if (list_child is not None and len(inputs) == 2 and fmt.n_inputs == 2
             and outputs[0].item.name == list_child.result):
         return list_child
+    inline_int = canonical_inline_int_source(parts)
+    if (inline_int is not None and len(inputs) == 2 and fmt.n_inputs == 2
+            and outputs[0].item.name == inline_int.result):
+        return inline_int
     producer = parts[0]
     if not producer.stack.outputs:
         return None

@@ -176,6 +176,112 @@ class PyValueTests(unittest.TestCase):
         self.assertEqual(work(), 257)
         self.assertEqual(ledger, [257])
 
+    def test_inline_integer_add_subtract_boundaries(self):
+        low = -2**50
+        high = 2**50 - 1
+
+        def add_local(left, right):
+            result = left + right
+            return result
+
+        def add_temporary(left, right):
+            return (left + right,)[0]
+
+        def add_discard(left, right):
+            left + right
+
+        def subtract_local(left, right):
+            result = left - right
+            return result
+
+        def subtract_temporary(left, right):
+            return (left - right,)[0]
+
+        def subtract_discard(left, right):
+            left - right
+
+        cases = (
+            ((add_local, add_temporary, add_discard), (
+                (low, 0, low), (high, 0, high), (low, -1, low - 1),
+                (high, 1, high + 1), (low, low, 2 * low),
+                (high, high, 2 * high), (low, high, -1), (1, -1, 0),
+            )),
+            ((subtract_local, subtract_temporary, subtract_discard), (
+                (low, 0, low), (high, 0, high), (low, 1, low - 1),
+                (high, -1, high + 1), (low, high, low - high),
+                (high, low, high - low), (low, low, 0), (0, 1, -1),
+            )),
+        )
+        for (local, temporary, discard), values in cases:
+            for _ in range(100):
+                self.assertEqual(local(3, 2), temporary(3, 2))
+                discard(3, 2)
+            for left, right, expected in values:
+                with self.subTest(operation=local.__name__, left=left, right=right):
+                    self.assertEqual(local(left, right), expected)
+                    self.assertEqual(temporary(left, right), expected)
+                    self.assertIsNone(discard(left, right))
+
+        sentinel = object()
+
+        class Number(int):
+            def __add__(self, other):
+                return sentinel
+
+            def __sub__(self, other):
+                return sentinel
+
+        for operation in (add_local, subtract_local):
+            self.assertIs(operation(Number(1), 2), sentinel)
+            self.assertIs(type(operation(1, 2.5)), float)
+
+    def test_inline_integer_result_before_finalizer_reentry(self):
+        ledger = []
+
+        class Owner:
+            def __del__(self):
+                frame = sys._getframe(1)
+                ledger.append((frame.f_locals["result"], sum((1, 2, 3))))
+
+        def add(left, right):
+            result = Owner()
+            result = left + right
+            return result
+
+        def subtract(left, right):
+            result = Owner()
+            result = left - right
+            return result
+
+        for _ in range(100):
+            self.assertEqual(add(3, 2), 5)
+            self.assertEqual(subtract(3, 2), 1)
+        ledger.clear()
+        high = 2**50 - 1
+        low = -2**50
+        self.assertEqual(add(high, 1), high + 1)
+        self.assertEqual(subtract(low, 1), low - 1)
+        self.assertEqual(ledger, [(high + 1, 6), (low - 1, 6)])
+
+    def test_inline_integer_overflow_allocation_failure(self):
+        testcapi = import_helper.import_module("_testcapi")
+        high = 2**50 - 1
+        low = -2**50
+        one = 1
+
+        def add():
+            return high + one
+
+        def subtract():
+            return low - one
+
+        for function, expected in ((add, high + 1), (subtract, low - 1)):
+            for _ in range(100):
+                self.assertEqual(function(), expected)
+            with self.assertRaises(MemoryError):
+                testcapi.call_with_nomemory(0, 1, function)
+            self.assertEqual(function(), expected)
+
     def test_real_calls_exceptions_and_operand_lifetime(self):
         ledger = []
 

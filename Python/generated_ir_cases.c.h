@@ -221,7 +221,7 @@
                 assert(PyValue_LongCheckExact(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
-            IR_STORE_DST(IR_A(ir_word), res);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -3795,7 +3795,7 @@
                 assert(PyValue_LongCheckExact(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
-            IR_STORE_DST(IR_A(ir_word), res);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

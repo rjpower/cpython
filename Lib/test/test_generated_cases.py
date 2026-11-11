@@ -596,7 +596,8 @@ class TestIRCases(unittest.TestCase):
             analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
         names = ('BINARY_OP_MULTIPLY_FLOAT', 'BINARY_OP_ADD_FLOAT',
-                 'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT')
+                 'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT',
+                 'BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT')
         for name in names:
             contract = ir_generator.canonical_result_source(
                 analysis.instructions[name], formats[name])
@@ -608,7 +609,7 @@ class TestIRCases(unittest.TestCase):
             handler = self.handler(output.getvalue(), name)
             self.assertIn('IR_STORE_CANONICAL_DST(IR_A(ir_word), res);', handler)
             self.assertNotIn('IR_STORE_DST(IR_A(ir_word), res);', handler)
-        for name in ('BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT'):
+        for name in ('BINARY_OP_MULTIPLY_INT',):
             self.assertIsNone(ir_generator.canonical_result_source(
                 analysis.instructions[name], formats[name]))
             self.assertIn('IR_STORE_DST(IR_A(ir_word), res);',
@@ -676,6 +677,79 @@ class TestIRCases(unittest.TestCase):
                 self.assertIsNone(ir_generator.canonical_result_source(
                     analysis.instructions['BINARY_OP_MULTIPLY_FLOAT'],
                     formats['BINARY_OP_MULTIPLY_FLOAT']))
+
+    def test_canonical_inline_int_mutations_fail_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        start = source.index('inline_ok pure op(_BINARY_OP_ADD_INT,')
+        end = source.index('inline_ok pure op(_BINARY_OP_SUBTRACT_INT,', start)
+        producer = source[start:end]
+        box = ('res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + '
+               'PyValue_InlineInt64(right));')
+        changes = (
+            ('__builtin_add_overflow(a, b, &sum)',
+             '__builtin_sub_overflow(a, b, &sum)'),
+            ('__builtin_add_overflow(a, b, &sum)',
+             '!__builtin_add_overflow(a, b, &sum)'),
+            (box, box.replace(' + ', ' - ')),
+            (box, box.replace('PyValue_InlineInt64(right)', '1')),
+            ('_PyValue_FromIntScaled(sum)', '_PyValue_FromIntScaled(a)'),
+            ('if (PyValue_IsNull(res)) {\n                ERROR_NO_POP();\n            }', ''),
+            (box, box + ' res = PyValue_None;'),
+            (box, box + ' opaque(&res);'),
+            (box, 'callback(); ' + box),
+            (box, 'PyValue (*_PyValue_BoxInt64)(int64_t) = replacement; ' + box),
+            (box, '#define _PyValue_BoxInt64 replacement\n' + box +
+             '\n#undef _PyValue_BoxInt64'),
+            ('l = left;', 'l = res;'),
+            ('(left, right -- res, l, r)',
+             '(_PyValue_BoxInt64/1, left, right -- res, l, r)'),
+        )
+        variants = [source[:start] + producer.replace(old, new, 1) + source[end:]
+                    for old, new in changes]
+        for old, _ in changes:
+            self.assertIn(old, producer)
+        variants.extend(source.replace(old, new, 1) for old, new in (
+            ('EXIT_IF(!PyValue_IsInlineInt(left));',
+             'EXIT_IF(!PyValue_LongCheckExact(left));'),
+            ('PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);',
+             'PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc); callback();'),
+            ('_BINARY_OP_ADD_INT + _POP_TOP_INT + _POP_TOP_INT;',
+             '_BINARY_OP_ADD_INT + flush + _POP_TOP_INT + _POP_TOP_INT;'),
+        ))
+        for index, changed in enumerate(variants):
+            with self.subTest(variant=index):
+                Path(self.temp_input_filename).write_text(changed)
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                self.assertIsNone(ir_generator.canonical_result_source(
+                    analysis.instructions['BINARY_OP_ADD_INT'],
+                    formats['BINARY_OP_ADD_INT']))
+
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instruction = analysis.instructions['BINARY_OP_ADD_INT']
+        body = analysis.uops['_BINARY_OP_ADD_INT'].body
+        body.body.append(body.body[-1])
+        self.assertIsNone(ir_generator.canonical_result_source(
+            instruction, formats['BINARY_OP_ADD_INT']))
+
+    def test_canonical_inline_int_renamed_source(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        source = source.replace('BINARY_OP_ADD_INT', 'RENAMED_INT_SUM')
+        source = source.replace('BINARY_OP_SUBTRACT_INT', 'RENAMED_INT_DIFFERENCE')
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files(
+                [self.temp_input_filename], SequentialNumbers())
+        formats = ir_generator.compute_formats(analysis)
+        for name in ('RENAMED_INT_SUM', 'RENAMED_INT_DIFFERENCE'):
+            self.assertIsNotNone(ir_generator.canonical_result_source(
+                analysis.instructions[name], formats[name]))
 
     def test_canonical_numeric_direct_int64_boundary(self):
         source = '''

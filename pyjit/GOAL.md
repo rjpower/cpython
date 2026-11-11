@@ -6,6 +6,13 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
+The active [proposal50](issues/deltablue-call-model-20261110/proposal50.md)
+uses fresh DeltaBlue profiles to target repeated work at method-to-call
+boundaries. Its grouped Astra review selects canonical method output facts,
+then adjacent producer/consumer specialization sharing ordinary activation.
+Both real instruction positions and the frame/call ownership model remain.
+This takes priority over the earlier C2 experiment queue below.
+
 The selected DeltaBlue checkpoint is runtime48: canonical class values and owned
 classmethod forwarding. The complete leaf experiment was tested and rejected
 on performance. Keep useful incremental progress and report its tradeoffs.

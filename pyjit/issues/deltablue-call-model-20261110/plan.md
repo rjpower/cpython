@@ -1,5 +1,14 @@
 # DeltaBlue: next call-model work
 
+Active 2026-11-11 work follows the [profile-backed proposal50](proposal50.md)
+and its [Astra review](astra-proposal50-review.md): preserve canonical method
+outputs, then specialize adjacent method capture into shared ordinary exact
+activation. The previous C2 queue below remains deferred. Fresh matched PMU
+campaigns are complete; A passed focused qualification and its initial two-pair
+screen (0.922656 DeltaBlue/frozen48); C implementation is underway after review.
+No candidate has yet replaced selected48. The coordinator owns builds, timing
+and promotion; component review remains independent.
+
 Selected checkpoint: runtime 48 `5559f60093e`, canonical class values and owned
 classmethod forwarding. Both are committed/pushed. Read the
 [report](checkpoint-report.md), [tables](benchmark-tables.md) and

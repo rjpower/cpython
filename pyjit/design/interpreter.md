@@ -149,6 +149,22 @@ the descriptor. CALL uses that captured pair and checks the function's current
 code/default/provider facts; it never resolves the descriptor again. See the
 [proposal and tests](../issues/deltablue-call-model-20261110/A-implementation-proposal.md).
 
+### Experimental canonical method capture
+
+Candidate A50 `e014965013b` extends guarded canonical capture to the three
+ordinary method layouts. After the existing lookup guards, it acquires the
+descriptor owner and transfers a temporary receiver or duplicates a local one.
+The generator proves each output is canonical and publishes it without numeric
+recanonicalization. The guarded cache word remains borrowed; canonicality does
+not prove that the descriptor is a Python function. This candidate is not yet
+selected; see the [round report](../issues/deltablue-call-model-20261110/report50.md).
+
+Implementation of the reviewed adjacent method/CALL refinement has started;
+it is not yet complete or measured. It retains both instruction positions for
+errors and observation, and must prove control flow, exception handling and
+observer eligibility directly. A post-capture miss publishes the captured owners
+and resumes the ordinary CALL without repeating lookup.
+
 ## Python calls and ordinary return
 
 Exact calls guard their standard Python provider and transfer argument owners

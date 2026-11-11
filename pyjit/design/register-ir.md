@@ -132,6 +132,17 @@ family, statistics and feedback mappings cover the physical handler domain.
 Adaptive disassembly names the specialization; internal executing-IR inspection
 can expose an ownership variant. This does not create a product of every mode.
 
+Candidate A50 adds `IR_CANONICAL_OUTPUTS` for a checked terminal producer of
+multiple owning canonical outputs. Its bounded proof accepts guarded-home
+duplication and unchanged canonical-input transfer, and rejects unproved
+transformations or escaping prefixes. Output provenance is independent of the
+existing receiver-retirement proof; ownership transfers still occur normally.
+This candidate is not yet selected. Implementation of the reviewed adjacent
+method/CALL design has started; it is not yet complete or measured. Both real
+words and their source positions remain, with no source
+coordinate equality or same-line admission rule. See the
+[round report](../issues/deltablue-call-model-20261110/report50.md).
+
 ## Guarded Python calls
 
 CALL_PY_GENERAL and CALL_KW_PY can invoke `call_bind_known_python` through

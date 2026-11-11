@@ -1,5 +1,12 @@
 # Project status
 
+Active 2026-11-11: the [proposal50](issues/deltablue-call-model-20261110/proposal50.md)
+has received [Astra review](issues/deltablue-call-model-20261110/astra-proposal50-review.md).
+Fresh matched DeltaBlue PMU runs show 1.42137 native instructions and 1.17719
+cycles per unchanged iteration versus upstream. Work now preserves canonical
+method output facts and then carries eligible adjacent method capture into
+ordinary activation. Runtime48 remains selected pending measured admission.
+
 The selected DeltaBlue checkpoint is runtime 48 `5559f60093e`: canonical guarded
 class values and owned classmethod pairs. Both improvements are committed and
 pushed. Source is restored to 48 on `pyjit/deltablue-checkpoint-20261110`.

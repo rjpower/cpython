@@ -1,5 +1,31 @@
 # Coordinator handoff
 
+## Active 2026-11-11 execution
+
+Runtime source is now on task branch `pyjit/deltablue-proof50-20261111` at
+`e014965013b` (A: canonical guarded method capture/publication). This is an
+experimental candidate, not yet selected. Release/debug builds each check 117
+modules; generation and the 306-unit API gate pass. Both focused runs pass
+1,405 tests (10 release skips, 8 debug skips). Coordinator native evidence
+is `BASE/pyjit-link-wave1/deltablue-call-model-20261110/native50a`.
+
+The [proposal50](issues/deltablue-call-model-20261110/proposal50.md) has received
+the requested grouped Astra review. A is committed and pushed; C has component
+design approval and implementation is underway. It will specialize two real adjacent method/
+CALL words into shared ordinary activation, preserving both source positions.
+Source-coordinate equality and same-line proxies are not correctness guards.
+Canonical docs remain in this checkout. Frozen48 is the unchanged comparison;
+do not confuse the candidate build with selected48 until measurement admits it.
+
+Fresh matched PMU runs `baseline50-perf-record` and `baseline50-perf-stat` are
+complete with stable identities and no lost samples. DeltaBlue executes 1.42137
+instructions and 1.17719 cycles/upstream; these explain the target, not a speedup.
+A's completed two-pair screen `measure50a-call-pair48` gives elapsed ratios
+0.922656 DeltaBlue, 0.976941 logging and 0.971432 nbody against frozen48.
+Next: C implementation by `delta_static_paths`; `delta50_peer` owns independent
+source/native review. Coordinator alone mutates build products. C source changes
+may be uncommitted; native products still identify A until the next build.
+
 ## Selected checkpoint and next work
 
 The DeltaBlue round selects runtime 48 `5559f60093e8216d9399bea74d0f10c8cdfb9a6b`:

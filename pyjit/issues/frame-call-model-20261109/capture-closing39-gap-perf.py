@@ -25,6 +25,7 @@ CASES = ('deltablue', 'generators', 'nbody')
 ROLES = ('upstream', 'candidate')
 HEADS = {'upstream': '3a440b65695615e9fd9912342b79cdd54fced0d2',
          'candidate': '4d666e1b482cb4983c7683f91c5922af14d0ab40'}
+EXTENSION_COUNTS = {'upstream': 78, 'candidate': 213}
 sys.dont_write_bytecode = True
 
 
@@ -150,7 +151,7 @@ def snapshot(identity, checkpoint, env, retained, input_files):
                 and log['missing'] == log['failed_import'] == 0,
                 f'{role} module gate changed')
         extensions = sorted(build.glob('build/lib*/*.so'))
-        require(len(extensions) == (78 if role == 'upstream' else 213),
+        require(len(extensions) == EXTENSION_COUNTS[role],
                 f'{role} extension set changed')
         roles[role] = {'source': actual_git, 'probe': probe,
                        'build_id': build_id, 'executable_sha256': digest(executable),

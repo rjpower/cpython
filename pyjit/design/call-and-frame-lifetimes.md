@@ -41,7 +41,10 @@ initialized frontier: below it, inactive value cells are NULL; live frame homes
 have canonical values. The common reservation helper establishes capacity and
 valid cells before a header is written. It truncates the frontier before a new
 header overwrites value-capable storage, initializes only a newly exposed suffix,
-then constructs the header and commits stack pointers without callbacks.
+then constructs the header and commits stack pointers without callbacks. Exact
+calls select the final base and saved top, reserve once, and initialize one
+header. Cold helpers fill an uncertain frontier suffix and transfer arguments
+from a non-thread caller; neither allocates, releases owners or calls Python.
 
 ```mermaid
 flowchart TD
@@ -143,32 +146,12 @@ required by that provider's ownership contract. No callback is replayed after
 a miss, and no fallback begins after child commit. Errors retire the published
 owner state. This is one ABI with guarded fast binding, not two frame models.
 
-## Proposed direct owning entry
+## Generator entry
 
-Direct generator/coroutine entry is future work, separate from the implemented
-binding contract.
-Its aim is to construct eligible frames directly in their owning object instead
-of constructing and immediately moving a thread-stack frame.
-
-```mermaid
-flowchart TD
-    window[Caller owns evaluated arguments] --> admit{Compiler-proved entry and current guards}
-    admit -->|ordinary or unsupported| existing[Existing call and frame path]
-    admit -->|eligible creation| shell[Allocate clearable owning shell]
-    shell --> move[Initialize final homes and transfer owners once]
-    move --> publish[Publish complete object to caller recipient]
-    publish --> resume[Dispatch real caller continuation]
-    shell -->|precommit failure| error[Keep caller inputs owning; established error edge]
-```
-
-First-scope preparation/commit must have no callback or interpreter poll,
-including allocator/arena hooks and failed-shell cleanup. Then existing
-MISS/ERROR/COMPLETE outcomes suffice. Publish completed state before any displaced
-local or discarded result can finalize, and respect the authoritative continuation
-after that release. Share binding and return-publication semantics; a universal
-native-call publisher and a new precommit reentry protocol are not prerequisites.
-Pinned-code, shell/GC, exact-handler, error and eligibility proofs remain
-admission work. No direct-owning provider is implemented in current source.
+Generator and coroutine creation moves the frame into its owning object. The
+copy preserves all homes, including live scratch: generator-expression GET_ITER
+can run before RETURN_GENERATOR and retain scratch ownership. The code owner
+and all transferred values remain valid through the move.
 
 ## Deferred empty kwargs
 
@@ -221,8 +204,12 @@ constructor assignment, its exact error path and the full non-reentrant input
 retirement chain. Named cache bindings, preprocessing, changed result identity
 or unsupported suffixes prevent the optimization. Local, temporary and discard
 destinations share one final-store implementation; only the value expression
-differs. This proof neither moves publication across callbacks nor applies to
-conditional integer constructors.
+differs. This proof does not move publication across callbacks. A separate
+bounded proof covers guarded integer ADD and SUB: it validates both inline
+input guards, the scaled overflow test, the boxed overflow result and error
+path, and unchanged input retirement. Both success arms produce canonical
+owners. This does not whitelist boxing as canonical at arbitrary call sites or
+cover other arithmetic producers.
 
 ## Semantic iteration, delegation and input resume
 

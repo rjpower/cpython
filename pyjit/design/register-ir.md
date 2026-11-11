@@ -57,8 +57,9 @@ metadata in `pycore_ir_metadata.h` and generated dispatch in
 - Window-form operations name a base slot and access consecutive inputs by
   offset. Call preparation and unpack operations use this form.
 - An immediate may be a count or local index in one field, or a constant/name
-  index in CD. A feedback index points into the executing copy's feedback
-vector. Some operations store an operation argument in feedback metadata.
+  index in CD. A feedback field gives an eight-byte-unit offset into the
+  executing copy's directly addressed feedback pool. Some operations store an
+  operation argument in feedback metadata.
 - Ordinary jumps carry an absolute word index in CD. `FOR_ITER`, `SEND`, and
   fused compare-and-jump handlers carry a signed word distance in D from the next
   instruction. `FOR_ITER` and `SEND` use forward distances; fused
@@ -128,6 +129,11 @@ canonical outputs. Its bounded proof accepts guarded-home
 duplication and unchanged canonical-input transfer, and rejects unproved
 transformations or escaping prefixes. Output provenance is independent of the
 existing receiver-retirement proof; ownership transfers still occur normally.
+
+Guarded integer ADD and SUB use a separate whole-producer proof to preserve
+canonical ownership across their inline and boxed-overflow result join. The
+proof covers the input guards, overflow predicate, error path and retirement;
+it does not whitelist arbitrary boxing calls or other arithmetic operations.
 
 ## Guarded Python calls
 

@@ -6,78 +6,86 @@ are not the measured runtime. Start with [goal](GOAL.md),
 [report](issues/interpreter-round51/report.md) and
 [designs](design/runtime-architecture.md).
 
-## Active round, 2026-11-11
+## Runtime and evidence
 
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 D=`pyjit/issues/interpreter-round51`.
 E=`BASE/pyjit-link-wave1/interpreter-round51`.
 
-Astra completed one grouped review with five options. Sol implemented each in
-an isolated subtree, obtained independent component review, and root compiled
-and tested them. All five have clean release identities and passing focused
-checks. Two-pair hot-set screens and selective six-pair confirmations are
-complete; `E/run-screens51.sh` and `E/run-confirmations51.sh` record commands.
-The unchanged hot set is DeltaBlue, Richards, comprehensions, generators,
-coroutines and spectral norm, with silent logging as the mandatory guard.
+The selected round-51 source is `BASE/worktrees/round51-golden`, branch
+`pyjit/round51-golden`, commit
+`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`.
+It is pushed to origin with tag `pyjit-golden-20261111-runtime`.
+Builds are `BASE/round51-golden-{release,debug}`. Both check 117 modules,
+regeneration leaves source clean, focused checks pass 821 tests with nine skips
+plus five generator tests in each role, and value API checks pass 306 units.
+No stats-layout change is claimed. The value checker uses a reference release
+compilation database with paths rebased to the identically configured new
+checkout; both native candidate builds are real, separate compilations.
 
-Options 1 (cached layout offset) and 5 (normal generator cleanup) are rejected.
-Option 2 (canonical iteration) is held for an incremental comparison. The trial
-combination contains only 3 (shared exact-call setup) and 4 (canonical ADD/SUB).
-It is not yet promoted. Source:
-`BASE/worktrees/round51-golden`, branch `pyjit/round51-golden`,
-HEAD `0e5e61f4c6b`. Builds: `BASE/round51-golden-{release,debug}`.
-Both check 117 modules. Regeneration leaves the source clean. Independent merged
-source review has no blocker; focused release/debug checks and the value API
-gate are running. No timing may overlap those jobs. Full diagnostics have not
-started for this candidate.
+Astra gave one grouped review of five options. Independent Sol proposals,
+reviews and subtree implementations are complete. Only options 3 (shared exact
+call setup) and 4 (canonical ADD/SUB publication) are selected. Options 1 and 5
+failed measured breadth or regression gates; adding option 2 to 3+4 regressed
+multiple cases despite a comprehensions gain. Do not revive rejected variants
+or call Astra in the inner loop.
 
-The strict value checker uses the reference release compilation database with
-only source/build paths rebased to the identically configured new checkout.
-Both candidate native builds are real, separate builds; the database is a
-command plan, not a claim of a new compiler-interception run.
+## Controls
 
-## Controls and component identities
-
-All paths below are relative to BASE. Controls are immutable during comparisons.
-One GCC 15.2 release configuration, CPU 15, hash 0, JIT disabled; magic 64418,
-ATTR/polymorphic geometry 48/120 bytes.
+All paths below are relative to BASE. Controls are immutable. One GCC 15.2
+release configuration, CPU15, hash0, JIT disabled; magic64418,
+ATTR/polymorphic geometry48/120 bytes.
 
 | Role | Source under worktrees/ | Release build | Commit |
 | --- | --- | --- | --- |
-| Actual prior checkpoint | execution-boundaries-20261108 | execution-boundaries-release | bf810ec1a33 |
-| Frozen round control | round51-baseline | round51-baseline-release | bf810ec1a33 |
-| Option 1, rejected | round51-option1 | round51-option1-release | 22f4ce1508e |
-| Option 2, held | round51-option2 | round51-option2-release | 0d0dbb5fbc9 |
-| Option 3 | round51-option3 | round51-option3-release | d1353a16f3d |
-| Option 4 | round51-option4 | round51-option4-release | 4bb16138d64 |
-| Option 5, rejected | round51-option5 | round51-option5-release | e9886d5b1c3 |
+| Prior checkpoint50 | execution-boundaries-20261108 | execution-boundaries-release | bf810ec1a33 |
 | Golden39 | golden-20261109-runtime | golden-20261109-release | 4d666e1b482 |
 | Upstream | upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695 |
 
 The earlier golden, frozen46/47/48 and all preexisting worktrees remain intact.
-Root will remove task-created experiment controls/worktrees after retaining
-necessary evidence. The final selected source/build stays available.
+Task-created option/control/trial worktrees and builds were removed. Local
+branch commits and `E/retired-experiments` retain patches, native binaries,
+configurations and the removal manifest. Do not confuse a removed experiment directory with selected source.
 
-## Qualification and next gate
+## Completed qualification and next work
 
-`D/run-checks.py` accepts explicit source/build paths, unique tags and optional
-regrtest match globs. It quarantines only
-`test.test_gdb.test_pretty_print.PrettyPrintTests.*`; the opt-in flag restores
-those diagnostics. The other four GDB groups passed the filtered control check.
-Debugger-jump and LLTrace checks remain enabled with their established failures;
-they are not quarantined or silently counted as passes.
+All29 two-pair campaigns against upstream, actual prior50 and golden39 are
+complete with stable source/native identities. Their elapsed geometric means
+are 1.156535, 0.985700 and 0.982829 respectively. Six-pair direct target
+comparisons and the 2+3+4 increment are complete. Keep DeltaBlue/generator
+regressions and logging pair spread visible; do not multiply campaign ratios.
+Fresh post-warmup PMU records 24 valid counter intervals and four zero-loss
+sampled profiles. `final51-perf-stat` is an excluded pre-interval failure from
+an old hardcoded extension count; `final51-perf-stat-clean` is the accepted
+campaign. New clean builds have 79 current-ABI shared extensions; upstream has
+78. The independently reviewed wrapper checks exact counts and hashes every
+extension before/after, retaining all prior module/config/native gates.
 
-Next: finish merged focus, inspect direct combined hot-set results and decide
-whether option 2 warrants an incremental test. Final admission requires direct
-comparisons with the actual prior image and upstream, all 29 kernels, applicable
-release/debug full diagnostics and independent review. Never multiply separate
-campaign ratios. Keep DeltaBlue/generator losses visible. No further Astra
-inner-loop call or rejected-option rescue queue is planned.
+Full diagnostics and deepcopy_memo confirmation are complete. Both builds run
+54,689 filtered tests; release retains nine debugger-jump errors, debug those
+nine plus one LLTrace failure. No additional module fails. The other four GDB
+groups pass. Exact current case IDs are retained in verbose logs and independent
+review; prior50 quiet logs establish only groups/counts. Independent final
+review approves this incremental checkpoint with its explicit performance losses
+and diagnostic limits. No native job or runtime edit remains pending.
+Timing/profiling finished before full tests; never overlap quiet campaigns with
+builds, tests or bulk cleanup.
+
+`D/run-checks.py` quarantines only
+`test.test_gdb.test_pretty_print.PrettyPrintTests.*`; the explicit opt-in restores
+it. Other four GDB groups passed the filtered control check and remain enabled.
+Debugger-jump and LLTrace retain their established failures; report actual
+remaining failures rather than calling filtered full diagnostics green.
+
+Next round first attributes selected-image generator creation/resume/yield/
+completion costs. Constant operands need a weighted hidden-home cost census
+before proposal. Feedback already uses a directly addressed scaled byte offset,
+not an entry-pointer table. The source assessment records rejected premises.
 
 Host scripts use `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
 Root owns builds, tests, timing, integration, commits and publication. Workers
-leave changes for review. All project state is in canonical docs; Loom mirrors
-it under `http://127.0.0.1:7878/s/xzzlxx17/artifacts/`.
+leave changes for review. Loom mirrors canonical docs under
+`http://127.0.0.1:7878/s/xzzlxx17/artifacts/`.
 
 ## Preserve unrelated work
 

@@ -35,6 +35,13 @@ concrete commands, configuration, exclusions and finite limits in the experiment
 do not import obsolete tracing-root counters or a fixed historical stress count
 as universal gates. Preserve skips/failures and explain unsupported modules.
 
+The current qualification runner temporarily excludes the GDB
+`PrettyPrintTests` class at the user's request. Its explicit opt-in restores
+those diagnostics; other GDB groups, debugger-jump checks and LLTrace remain
+enabled. The [qualification policy](../issues/interpreter-round51/qualification-policy.md)
+defines the exact filter. This is a declared coverage gap, not a repair or a
+green full-suite claim; report all remaining failures.
+
 Reuse unchanged valid evidence explicitly. Rerun affected checks when code,
 configuration or integration changes; do not rerun expensive suites merely to
 accumulate receipts. Fix real failures rather than suppressing diagnostics,

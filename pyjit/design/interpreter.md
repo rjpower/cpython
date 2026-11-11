@@ -81,6 +81,11 @@ reentry paths must leave reusable value cells NULL. Separate heap frames are
 initialized once, while full ownership copies initialize their destination by
 moving every home. See the [frame ABI](call-and-frame-lifetimes.md).
 
+Guarded integer ADD and SUB use a whole-producer proof of canonical output
+across their inline and boxed-overflow arms. The proof checks the guards,
+overflow predicate, error path and input retirement; it does not generalize to
+other arithmetic or arbitrary boxing calls.
+
 ## Guarded attribute values
 
 Non-descriptor instance-load handlers support canonical inline class values.
@@ -149,9 +154,11 @@ descriptor is a Python function.
 
 ## Python calls and ordinary return
 
-Exact calls guard their standard Python provider and transfer argument owners
-into a child. A versioned known-call plan lets guarded CALL_PY_GENERAL bind
-common positional calls directly through `call_bind_known_python`; no generic
+Exact calls guard their standard Python provider, select the final base and
+saved top, reserve initialized storage once and initialize one child header.
+Cold helpers handle frontier growth and argument transfer from a non-thread
+caller; owners transfer into the resulting child. A versioned known-call plan
+lets guarded CALL_PY_GENERAL bind common positional calls directly through `call_bind_known_python`; no generic
 transaction record is built on that hit. It fills defaults and empty variadic
 bindings under the same owning-frame ABI. Fixed 1–3-keyword plans use that
 same overlap primitive and move only their bounded suffix through C-local

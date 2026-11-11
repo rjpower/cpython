@@ -3,16 +3,16 @@
 Each option uses a separate source checkout and release/debug build directories.
 Workers leave unrelated subtrees and frozen controls unchanged. The coordinator
 owns source commits, builds, generated products, tests and quiet measurements.
-Use the existing GCC15.2 configuration and shared uv/cache locations. No builds
-or measurements were launched while preparing these entrypoints.
+Use the existing GCC15.2 configuration and shared uv/cache locations.
 
 ## Frozen comparison
 
 `BASE=/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
-The frozen source is `BASE/worktrees/round51-baseline`, build
-`BASE/round51-baseline-release`, commit
-`bf810ec1a33cacb94102c73779d015c18f85aa8d`. Root is preparing this control;
-its named path is not evidence that the build has completed qualification.
+The retained prior50 source is `BASE/worktrees/execution-boundaries-20261108`,
+build `BASE/execution-boundaries-release`, commit
+`bf810ec1a33cacb94102c73779d015c18f85aa8d`. Final direct comparisons use this
+actual selected image. A separate rebuilt bf810 control served the component
+experiments; its task-created source/build directories have been retired.
 Upstream remains `BASE/upstream-release-devlibs-3a440b6` at
 `3a440b65695`. Never rebuild or modify either during measurements.
 
@@ -81,7 +81,7 @@ remain required.
 Reserve quiet host access with the coordinator before running either command.
 
 ```sh
-UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B pyjit/issues/interpreter-round51/measure.py --control /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/round51-baseline-release --control-role golden --control-head bf810ec1a33cacb94102c73779d015c18f85aa8d --candidate "$ROUND51_RELEASE" --module-log "golden=$FROZEN_MODULE_LOG" --module-log "candidate=$CANDIDATE_MODULE_LOG" --output "$ROUND51_EVIDENCE/target-vs-bf810" --cases deltablue,logging_silent --rounds 6 --cpu 15
+UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B pyjit/issues/interpreter-round51/measure.py --control /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/execution-boundaries-release --control-role golden --control-head bf810ec1a33cacb94102c73779d015c18f85aa8d --candidate "$ROUND51_RELEASE" --module-log "golden=$FROZEN_MODULE_LOG" --module-log "candidate=$CANDIDATE_MODULE_LOG" --output "$ROUND51_EVIDENCE/target-vs-bf810" --cases deltablue,logging_silent --rounds 6 --cpu 15
 UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B pyjit/issues/interpreter-round51/measure.py --control /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/upstream-release-devlibs-3a440b6 --candidate "$ROUND51_RELEASE" --module-log "upstream=$UPSTREAM_MODULE_LOG" --module-log "candidate=$CANDIDATE_MODULE_LOG" --output "$ROUND51_EVIDENCE/target-vs-upstream" --cases deltablue,logging_silent --rounds 6 --cpu 15
 ```
 

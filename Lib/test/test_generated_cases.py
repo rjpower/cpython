@@ -3134,6 +3134,12 @@ class TestCallTransactionMarkers(unittest.TestCase):
             self.assertTrue(invoke.switches_frame)
         self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
 
+    def test_exact_activation_does_not_escape(self):
+        properties = self.analysis.uops["_INIT_CALL_PY_EXACT_ARGS"].properties
+        self.assertFalse(properties.escapes)
+        self.assertFalse(properties.error_without_pop)
+        self.assertFalse(properties.sync_sp)
+
     def test_pure_latch_and_unrelated_uppercase_macro(self):
         for marker in ("IR_BEGIN_CALL_EFFECTS", "UNRELATED_MACRO"):
             node, = parse_src(f"op(_OP, (--)) {{ {marker}(); }}")

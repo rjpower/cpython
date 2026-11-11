@@ -28,6 +28,117 @@ def handlers(read):
 
 @cpython_only
 @requires_specialization
+class TestCanonicalMethodCapture(unittest.TestCase):
+    def receiver_types(self):
+        receivers = []
+        for name, base, namespace, handler in (
+            ("WithValues", object, {}, "LOAD_ATTR_METHOD_WITH_VALUES"),
+            ("NoDict", object, {"__slots__": ()}, "LOAD_ATTR_METHOD_NO_DICT"),
+            ("LazyDict", Exception, {}, "LOAD_ATTR_METHOD_LAZY_DICT"),
+        ):
+            def selected(self, value):
+                return value + 1
+
+            namespace["selected"] = selected
+            receivers.append((type(name, (base,), namespace), handler))
+        return receivers
+
+    def invoker(self, cls, expected):
+        def invoke(owner, argument):
+            return owner.selected(argument())
+
+        reset_code(invoke)
+        owner = cls()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(invoke(owner, lambda: 40), 41)
+        self.assertIn(expected, handlers(invoke))
+        return owner, invoke
+
+    def test_method_replacement_and_instance_shadowing(self):
+        for cls, expected in self.receiver_types():
+            with self.subTest(expected=expected):
+                owner, invoke = self.invoker(cls, expected)
+                cls.selected = lambda self, value: value + 2
+                self.assertEqual(invoke(owner, lambda: 40), 42)
+                if expected != "LOAD_ATTR_METHOD_NO_DICT":
+                    owner.__dict__["selected"] = lambda value: value + 3
+                    self.assertEqual(invoke(owner, lambda: 40), 43)
+                    del owner.selected
+                    self.assertEqual(invoke(owner, lambda: 40), 42)
+                del cls.selected
+                with self.assertRaises(AttributeError):
+                    invoke(owner, lambda: 40)
+
+    def test_target_owner_survives_argument_reentry(self):
+        for cls, expected in self.receiver_types():
+            with self.subTest(expected=expected):
+                owner, invoke = self.invoker(cls, expected)
+                original = weakref.ref(cls.selected)
+
+                def replace():
+                    cls.selected = lambda self, value: value + 2
+                    gc_collect()
+                    self.assertIsNotNone(original())
+                    return 40
+
+                self.assertEqual(invoke(owner, replace), 41)
+                gc_collect()
+                self.assertIsNone(original())
+                self.assertEqual(invoke(owner, lambda: 40), 42)
+
+    def test_temporary_receiver_remains_owned_until_call(self):
+        for slots in (None, ("__weakref__",)):
+            with self.subTest(slots=slots):
+                references = []
+
+                def selected(self, value):
+                    return value
+
+                namespace = {"selected": selected}
+                if slots is not None:
+                    namespace["__slots__"] = slots
+                cls = type("Receiver", (), namespace)
+
+                def make():
+                    owner = cls()
+                    references.append(weakref.ref(owner))
+                    return owner
+
+                def argument():
+                    gc_collect()
+                    self.assertIsNotNone(references[-1]())
+                    return 40
+
+                def invoke():
+                    return make().selected(argument())
+
+                reset_code(invoke)
+                for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                    self.assertEqual(invoke(), 40)
+                expected = ("LOAD_ATTR_METHOD_WITH_VALUES" if slots is None else
+                            "LOAD_ATTR_METHOD_NO_DICT")
+                self.assertIn(expected, handlers(invoke))
+                gc_collect()
+                self.assertTrue(all(ref() is None for ref in references))
+
+    def test_polymorphic_method_snapshots(self):
+        variants = self.receiver_types()
+        owner, invoke = self.invoker(*variants[0])
+        for cls, expected in variants[1:]:
+            for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
+                self.assertEqual(invoke(cls(), lambda: 40), 41)
+            self.assertIn(expected, handlers(invoke))
+        [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
+        kind, state, _, _, rows = _testinternalcapi.get_feedback(
+            invoke.__code__, site.offset)
+        self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
+        for cls, _ in variants:
+            cls.selected = lambda self, value: value + 2
+            self.assertEqual(invoke(cls(), lambda: 40), 42)
+
+
+@cpython_only
+@requires_specialization
 class TestDirectClassValue(unittest.TestCase):
     def assert_cached(self, read, *, metaclass=False):
         expected = ("LOAD_ATTR_CLASS_WITH_METACLASS_CHECK" if metaclass else

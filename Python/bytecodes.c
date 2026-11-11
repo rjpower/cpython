@@ -4055,14 +4055,17 @@ dummy_func(
             DEAD(exc);
         }
 
-        op(_LOAD_ATTR_METHOD_WITH_VALUES, (descr/4, owner -- attr, self)) {
+        op(_LOAD_ATTR_METHOD_WITH_VALUES, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             /* Cached method object */
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+            assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+            assert(_PyType_HasFeature(
+                Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                Py_TPFLAGS_METHOD_DESCRIPTOR));
+            attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_WITH_VALUES) =
@@ -4072,14 +4075,17 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_WITH_VALUES;
 
-        op(_LOAD_ATTR_METHOD_NO_DICT, (descr/4, owner -- attr, self)) {
+        op(_LOAD_ATTR_METHOD_NO_DICT, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+            assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+            assert(_PyType_HasFeature(
+                Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                Py_TPFLAGS_METHOD_DESCRIPTOR));
+            attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_NO_DICT) =
@@ -4129,13 +4135,16 @@ dummy_func(
             EXIT_IF(dict != NULL);
         }
 
-        op(_LOAD_ATTR_METHOD_LAZY_DICT, (descr/4, owner -- attr, self)) {
+        op(_LOAD_ATTR_METHOD_LAZY_DICT, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             STAT_INC(LOAD_ATTR, hit);
-            assert(descr != NULL);
-            assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+            assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+            assert(_PyType_HasFeature(
+                Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                Py_TPFLAGS_METHOD_DESCRIPTOR));
+            attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_LAZY_DICT) =

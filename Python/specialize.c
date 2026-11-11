@@ -405,6 +405,9 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_CLASS:
                 case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
                 case LOAD_ATTR_CLASSMETHOD:
+                case LOAD_ATTR_METHOD_WITH_VALUES:
+                case LOAD_ATTR_METHOD_NO_DICT:
+                case LOAD_ATTR_METHOD_LAZY_DICT:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -415,11 +418,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
                     break;
                 case LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN:
                     row.payload.descr = ((_PyFbAttr *)h)->getattribute;
-                    break;
-                case LOAD_ATTR_METHOD_WITH_VALUES:
-                case LOAD_ATTR_METHOD_NO_DICT:
-                case LOAD_ATTR_METHOD_LAZY_DICT:
-                    row.payload.descr = ((_PyFbAttr *)h)->descr;
                     break;
                 default:
                     break;
@@ -1753,12 +1751,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
      * an absent shared instance key also invalidates its owning type first.
      * A hit must acquire its result before receiver retirement can reenter. */
     fb->type_version = tp_version;
-    if (is_method) {
-        fb->descr = PyValue_AsKnownObjectBorrow(descriptor);
-    }
-    else {
-        fb->class_value = _PyValueGuarded_FromBorrow(descriptor);
-    }
+    fb->class_value = _PyValueGuarded_FromBorrow(descriptor);
     specialize(instr, opcode);
     return 1;
 }

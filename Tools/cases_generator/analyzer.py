@@ -601,6 +601,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_DUP",
     "PyValue_XDUP",
     "IR_CANONICAL_HOME_DUP",
+    "IR_CANONICAL_OUTPUTS",
     "PyValue_FromObjectBorrow",
     "PyValue_DupImmortal",
     "PyValue_False",

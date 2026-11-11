@@ -13129,17 +13129,19 @@
             }
             // _LOAD_ATTR_METHOD_LAZY_DICT
             {
-                PyObject *descr = (PyObject *)fb->descr;
+                _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                assert(_PyType_HasFeature(
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), attr);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13188,18 +13190,20 @@
             }
             // _LOAD_ATTR_METHOD_NO_DICT
             {
-                PyObject *descr = (PyObject *)fb->descr;
+                _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                assert(_PyType_HasFeature(
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), attr);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13259,17 +13263,19 @@
             }
             // _LOAD_ATTR_METHOD_WITH_VALUES
             {
-                PyObject *descr = (PyObject *)fb->descr;
+                _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(descr != NULL);
-                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
+                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                assert(_PyType_HasFeature(
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), attr);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

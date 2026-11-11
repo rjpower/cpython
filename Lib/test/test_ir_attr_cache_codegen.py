@@ -47,6 +47,94 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         self.assertLess(acquire, publish)
         self.assertLess(publish, retire)
 
+    def test_canonical_pair_declaration(self):
+        output = self.generate("""
+        inst(LOAD_ATTR, (class_value/4, owner -- first, second)) {
+            first = PyValue_DUP(_PyValueGuarded_Load(class_value));
+            second = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(first, second);
+        }
+        """)
+        self.assertNotIn("IR_CANONICAL_OUTPUTS(", output)
+        self.assertIn("IR_STORE_CANONICAL_TEMP(", output)
+        self.assertNotIn("IR_STORE_TEMP(", output)
+        self.assertIn("IR_TAKE(owner, ir_own_B)", output)
+        self.assertNotIn("_PyValue_Publish", output)
+
+    def test_canonical_pair_false_declarations(self):
+        source = """
+        inst(LOAD_ATTR, (class_value/4, owner -- attr, self)) {
+            attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+            self = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(attr, self);
+        }
+        """
+        changes = (
+            ("IR_CANONICAL_OUTPUTS(attr, self)", "IR_CANONICAL_OUTPUTS(self, attr)"),
+            ("IR_CANONICAL_OUTPUTS(attr, self)", "IR_CANONICAL_OUTPUTS(attr)"),
+            ("attr = PyValue_DUP(_PyValueGuarded_Load(class_value));",
+             "attr = PyValue_DUP(owner);"),
+            ("self = TAKE(owner);", "self = owner;"),
+            ("self = TAKE(owner);", "self = unknown(owner);"),
+            ("self = TAKE(owner);", "self = TAKE(owner); self = unknown();"),
+            ("self = TAKE(owner);", "self = TAKE(owner); mutate(&attr);"),
+            ("self = TAKE(owner);", "self = TAKE(owner); assert(++attr.bits);"),
+            ("self = TAKE(owner);", "self = TAKE(owner); assert(mutate(&self));"),
+            ("attr = PyValue_DUP", "PyValue (*PyValue_DUP)(PyValueBorrow) = replacement; attr = PyValue_DUP"),
+            ("attr = PyValue_DUP", "#define PyValue_DUP replacement\nattr = PyValue_DUP"),
+            ("owner -- attr, self", "owner -- attr, owner"),
+            ("IR_CANONICAL_OUTPUTS(attr, self);",
+             "IR_CANONICAL_OUTPUTS(attr, self); self = unknown();"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                with self.assertRaises(SyntaxError):
+                    self.generate(source.replace(old, new, 1))
+
+    def test_real_method_outputs_are_canonical_owners(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        output = self.generate(source, runtime=True)
+        for name in ("LOAD_ATTR_METHOD_WITH_VALUES", "LOAD_ATTR_METHOD_NO_DICT",
+                     "LOAD_ATTR_METHOD_LAZY_DICT"):
+            with self.subTest(name=name):
+                start = output.index(f"TARGET({name}) {{")
+                end = output.find("TARGET(", start + 1)
+                handler = output[start:end]
+                self.assertIn("_PyValueGuarded class_value = fb->class_value;", handler)
+                self.assertIn("attr = PyValue_DUP(_PyValueGuarded_Load(class_value));", handler)
+                self.assertNotIn("PyValue_FromObjectBorrow", handler)
+                self.assertNotIn("IR_STORE_TEMP(", handler)
+                self.assertIn("IR_STORE_CANONICAL_TEMP(", handler)
+                self.assertLess(handler.index("tp->tp_version_tag"),
+                                handler.index("_PyValueGuarded_Load(class_value)"))
+
+    def test_canonical_pair_prefix_must_preserve_inputs(self):
+        source = """
+        op(_GUARD, (owner -- owner)) {
+            assert(PyValue_IsObject(owner));
+            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+            assert(tp != NULL);
+        }
+        op(_CAPTURE, (class_value/4, owner -- attr, self)) {
+            attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+            self = TAKE(owner);
+            IR_CANONICAL_OUTPUTS(attr, self);
+        }
+        macro(LOAD_ATTR) = _GUARD + _CAPTURE;
+        """
+        self.assertIn("IR_STORE_CANONICAL_TEMP(", self.generate(source))
+        for mutation in ("owner = unknown();", "tp->tp_version_tag += 1;",
+                         "tp->tp_version_tag = 1;", "owner.bits ^= 1;",
+                         "assert(mutate(&owner));",
+                         "PyTypeObject *other = tp = NULL;",
+                         "PyObject *other = (*callback)(owner);",
+                         "PyObject *other = (callback)(owner);",
+                         "PyObject *other = callback[0](owner);"):
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(SyntaxError):
+                    self.generate(source.replace("assert(tp != NULL);", mutation))
+
     def test_guarded_operand_rejects_wrong_width(self):
         for size in (1, 2):
             with self.subTest(size=size):

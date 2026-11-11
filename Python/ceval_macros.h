@@ -545,6 +545,20 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
+/* The generator has proved that V already owns canonical bits. */
+#define IR_STORE_CANONICAL_TEMP(SLOT, V) \
+    do { \
+        assert(PyValue_IsNull(SLOT)); \
+        (SLOT) = (V); \
+        _PyValue_CheckTemp(SLOT); \
+    } while (0)
+
+#define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
+    do { \
+        (SLOT) = (V); \
+        _PyValue_CheckTemp(SLOT); \
+    } while (0)
+
 /* A handler writes V into SLOT, a temporary of its window or one that it
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \

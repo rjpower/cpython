@@ -6,42 +6,32 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
-The active target is **DeltaBlue ordinary calls**, starting from committed46.
-Review the [whole call model](issues/deltablue-call-model-20261110/design-overview.md),
-then implement general language-pattern improvements. Astra supplies one broad
-architecture review; Sol owns the inner loop. Accept incremental mostly-beneficial
-checkpoints with explicit tradeoffs. CPI/layout perfection and the prior strict
-promotion hold do not block this work. The first [landing](issues/deltablue-call-model-20261110/integration47.md)
-unifies canonical class loads at47. [Classmethod forwarding](issues/deltablue-call-model-20261110/integration48.md)
-is also integrated at `5559f60093e`; conditional leaf-call elimination follows as
-a separately reviewed experiment.
+The selected DeltaBlue checkpoint is runtime48: canonical class values and owned
+classmethod forwarding. The complete leaf experiment was tested and rejected
+on performance. Keep useful incremental progress and report its tradeoffs.
+The [report](issues/deltablue-call-model-20261110/checkpoint-report.md) and
+[status](STATUS.md) own results and qualification limits.
 
-Frozen runtime39 `4d666e1b482` meets logging parity; broad upstream parity
-remains open. The [object/call checkpoint](issues/object-call-20261109/checkpoint46-report.md)
-is reviewed at **b8e7e1bee66**. Class lookup and keyword binding improve markedly,
-while the full29 mean is 1.18120/upstream and material golden-relative regressions
-remain. That prior promotion decision is retained as history. [Status](STATUS.md) records full diagnostic limits,
-API/fixture repairs, current counters and actual source identities.
+The next target remains DeltaBlue ordinary call setup/execution/teardown, while
+retaining logging parity. The reviewed [C2 proposal](issues/deltablue-call-model-20261110/C2-proposal.md)
+selects eligible CALLs during specialization, resolves immutable feedback once,
+consumes checked-prefix facts and simplifies common ownership completion.
+The [completion review](issues/deltablue-call-model-20261110/C2-completion-review.md)
+asks how to publish a coherent caller before callback-capable retirement; a
+nonfinal reference-count ledger is an implementation choice, not Python semantics.
+Its performance is unproved. Do not expand syntax or add a miniature evaluator
+to justify activation omission. See the [work plan](issues/deltablue-call-model-20261110/plan.md).
 
-Keep golden39, combined snapshot `cb906f9bc52`, and both generations of immutable
-controls unchanged. The [next plan](issues/deltablue-call-model-20261110/plan.md) targets
-canonical class values, direct classmethod targets and compiler-certified
-leaf regions that avoid whole call activations, supported by authoritative IR
-effects.
-The grouped ordinary-call review governs this round; coroutine entry and keyword
-micro work are deferred. The coordinator owns merged validation,
-measurement and promotion.
+Astra performs broad grouped reviews; Sol handles the inner loop and independent
+actual-code review. Luna/Terra handle bounded mechanical work and documentation.
+The coordinator integrates and measures. Use one GCC configuration, unchanged
+kernels, fixed affinity/hash and JIT disabled. Startup RSS, zero-box counts,
+CPI/layout perfection and exact CPython destruction/display are not gates.
 
-The current target is lower object/call execution cost and a smaller broad
-upstream gap, while retaining logging parity. Use unchanged kernels,
-GCC, JIT disabled, fixed affinity/hash seed and verified native/source identities.
-Report broad results and repeat material regressions; do not hide them in a
-geometric mean. Startup/import RSS and zero-box totals are not promotion gates.
-
-GDB display tooling and exact CPython transcripts are separate from interpreter
-semantics and throughput. Report tooling failures and unsupported frame-jump
-capabilities explicitly. They do not justify an open-ended compatibility port.
-Python does not guarantee prompt finalization or CPython's internal frame layout.
+Historical golden39 and upstream stay immutable. Universal PyValues are
+integrated; native method/tracing JIT tiers remain unfinished. Broad upstream
+parity remains open. Hard extension source/binary compatibility is not required;
+Python value/control behavior and explicit ownership are required.
 
 ## Standing decisions
 
@@ -63,7 +53,7 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 | --- | --- |
 | [Plan](issues/deltablue-call-model-20261110/plan.md) | Active ordinary-call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
-| [Report](issues/object-call-20261109/checkpoint46-report.md) | Current results, profiling and analysis |
+| [Report](issues/deltablue-call-model-20261110/checkpoint-report.md) | Current results, profiling and analysis |
 | [Next priorities](issues/deltablue-call-model-20261110/plan.md) | Evidence, risks and bounded experiments |
 | [Architecture](design/runtime-architecture.md) | Runtime and intended compiler tiers |
 | [Register IR](design/register-ir.md) | Executable encoding, effects and lowering |

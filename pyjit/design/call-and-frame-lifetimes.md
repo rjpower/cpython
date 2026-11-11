@@ -13,24 +13,46 @@ implementation does not imply golden promotion.
 ## Reviewed call-model improvements
 
 The active [DeltaBlue call round](../issues/deltablue-call-model-20261110/plan.md)
-selects canonical class reads, classmethod forwarding as an owned callable/receiver
-pair, and complete conditional leaf-region elision. Canonical class reads are
-implemented at `986c65ee5ab`, and classmethod pairs at `5559f60093e`.
-Complete conditional leaf activation elision remains an unintegrated experiment.
+selects canonical class reads and classmethod forwarding as an owned
+callable/receiver pair. It explored complete conditional leaf-region elision
+separately; that candidate was rejected. Canonical class reads are
+implemented at `986c65ee5ab`, and classmethod pairs at `5559f60093e`. The leaf
+call path was tested in a separate candidate and rejected; it is not part of
+selected runtime 48 or the default call path.
 See the [grouped review](../issues/deltablue-call-model-20261110/astra-architecture-review.md),
 [leaf contract](../issues/deltablue-call-model-20261110/leaf-contract-review.md)
-and [retirement-scope review](../issues/deltablue-call-model-20261110/leaf-no-callback-scope-review.md).
-The leaf reviews describe a proposed experiment, not implemented frame elision.
+and [retirement-scope review](../issues/deltablue-call-model-20261110/leaf-no-callback-scope-review.md),
+the [rejection report](../issues/deltablue-call-model-20261110/integration49.md)
+and [next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md),
+which has peer approval as a future direction; implementation is unproved.
 
-Exact calls already use the owning-frame ABI with overlapping argument windows.
-That existing transfer is not frame elision: the proposed leaf path would skip
-the entire callee activation only when a complete final-IR certificate covers
-the operation. Its first experiment is narrower still: admit only a callback-free
-whole operation whose aggregate release multiset passes the nonfinal-release
-check after result acquisition. Any failed certificate, observer/provider guard
-or ownership admission falls back to the ordinary activation. This bounded proof
-does not claim general recovery across callback-capable retirement or general
-debugger redirects; those remain outside the first experiment.
+Exact calls use the owning-frame ABI with overlapping argument windows; that
+transfer constructs an activation. The rejected experimental leaf path skipped
+the entire activation only for a complete certified body. Its optional `_PyCodeExec`
+record describes at most 32 final-IR words, four complete value paths, two
+guarded attribute steps per path, one inline comparison and two return arms.
+Admitted paths use shared guarded global, shape and class reads and shared inline
+numeric comparison computation. The exact-only terminal marker follows the
+validated PEP 523, version, arity, stack and recursion prefix. A missing
+certificate bypasses the helper cheaply; a failed later probe or admission
+returns MISS without changing the original call homes.
+
+The body, read probes and retirement interval are callback-free under the GIL.
+After acquiring the result, the helper counts planned releases by object
+identity and admits only when each count-owning object has `Py_REFCNT` greater
+than the aggregate release multiplicity. An overlapping temporary's old value
+is counted in the window; a nonoverlapping temporary must be NULL. It adds no
+pins. It then sets the real continuation, detaches and NULLs the window,
+performs the proved nonfinal closes and publishes through
+`_PyFrame_SetReturnValue`. The generated DONE edge dispatches the actual next word
+without constructing a child; no fallback
+follows commit. Unsupported observers, providers, pending work and runtime
+configurations decline. Free-threaded, debug, DTrace and Emscripten builds
+currently decline. Remote optimized stacks may omit the callee. This does not
+claim general callback-time recovery or debugger redirects. This rejected
+implementation is retained as experimental design context; it does not define
+the selected call model. The next proposal awaits review before any
+implementation is selected.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization

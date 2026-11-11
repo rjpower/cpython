@@ -336,3 +336,6 @@ that remote copy remains at revision 7. No alternate export was attempted.
 - 2026-11-09 — [Frame/call round closed](issues/frame-call-model-20261109/closing-report.md): frozen 4d666e1b482, logging 0.907/0.898 upstream; all 29 kernels 0.934/golden,1.175/upstream; complete 65-micro/6-memory coverage, current profiles, explicit qualification limits and five measured next priorities.
 
 - 2026-11-10 — [Object/call checkpoint46](issues/object-call-20261109/checkpoint46-report.md): reviewed canonical lookup/keyword/default/frame/cache-format changes; full diagnostics with known limits and fixture repair, all29GM1.00382/39 and1.18120/upstream, repeated CPI regressions; golden promotion held.
+
+
+- 2026-11-10 — [DeltaBlue checkpoint 48](issues/deltablue-call-model-20261110/checkpoint-report.md): class values and owned classmethod pairs; DeltaBlue uses 26.1% less time than checkpoint 46 and 22.5% more than upstream; logging uses 24.2% less than upstream. Full29 mean 1.179430; both full diagnostics run 54,697 tests with known limits; stats smoke 150 and API 306 pass. Leaf candidate rejected; C2 and common completion remain reviewed future work.

@@ -1,14 +1,16 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `4d666e1b482`.
-The closing report records full diagnostics and the remaining observer/tooling
-capability limits. The guarded-attribute and keyword increments below are
+This page describes the register interpreter and call paths integrated through
+runtime 48, `5559f60093e`.
+The [checkpoint report](../issues/deltablue-call-model-20261110/checkpoint-report.md)
+records diagnostics and remaining observer/tooling capability limits. The guarded-attribute and keyword increments below are
 implemented in source `b8e7e1bee66`. Canonical direct class reads and owned
 classmethod pairs extend them at `5559f60093e`; see the [integration report](../issues/deltablue-call-model-20261110/integration48.md).
-[Status](../STATUS.md) records checks and performance separately. Conditional
-leaf activation elision remains an unintegrated experiment.
+[Status](../STATUS.md) records qualification and performance separately. The
+conditional leaf-call work is an experimental, rejected candidate and is not
+part of the selected runtime design.
 See [status](../STATUS.md), the
-[round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
+[round plan](../issues/deltablue-call-model-20261110/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
@@ -192,6 +194,65 @@ after effects; a completed callback is not replayed on a guard miss. Once
 ownership commit begins, failure retires the published child instead of falling
 back to a second call. Code remains a separate owner because function.__code__
 can change while a child executes.
+
+## Experimental conditional leaf-call design (not selected)
+
+The rejected candidate stored an optional bounded leaf certificate on `_PyCodeExec`,
+built from immutable final IR. It describes a complete body as up to four value
+paths rooted in arguments, constants, small integers or guarded globals, with up
+to two guarded attribute steps per path, an optional inline scalar comparison,
+and a selected return. Certification is limited to 32 words and rejects
+unaccounted words, dead raising reads, unsupported control flow, effects,
+handlers, cells/free variables and unsupported argument shapes. The record
+contains indices and scalar metadata, no Python-object owner.
+
+Admission also requires all arguments supplied, split-self arity to match, and
+the thread-owned caller and current captured function/code to pass their exact
+version and provider checks. Only plain `CALL_PY_EXACT_ARGS` has the terminal
+marker. Positive generator validation binds it to the exact PEP 523, version,
+arity, stack-space and
+recursion checks, before initialization and any effect. Bound-method and generic
+calls do not inherit it. A cheap absent-certificate check avoids the out-of-line
+helper. The helper rechecks function, code, providers, caller and observation
+state, then probes through the same guarded global, shape and class readers used
+by ordinary handlers. It computes only the selected branch and reads only that
+result path.
+
+Every decline is a MISS with original call homes unchanged. After acquiring the
+canonical result, an identity-based release multiset covers the consumed window
+and either the old LOCAL or discarded result. An overlapping temporary's old
+value is counted only in the window; a nonoverlapping temporary destination
+must already be NULL. Each count-owning object must
+have `Py_REFCNT > releases` after acquisition. This GIL-held proof excludes
+finalization across the complete callback-free body and retirement interval;
+the helper adds no temporary pins to force admission. It detaches and NULLs the
+window, performs only preflighted nonfinal closes, then publishes with the
+ordinary `_PyFrame_SetReturnValue` path. DONE returns the real next word and
+bypasses child setup; no fallback or error edge follows commit.
+
+Admission declines with trace/profile/PEP 523, monitoring, pending evaluation
+work, nonstandard providers, redirects or unsupported runtime configurations.
+Free-threaded, debug, DTrace and Emscripten builds currently decline; debug
+qualification therefore exercises fallback, not leaf hits. Remote optimized
+stacks may omit the elided callee. Runtime `24d97fa8c3b` integrated this
+experiment and was rejected as a performance candidate; gate-off ablation
+`af60e5eb43e` was also rejected. Neither is the selected or default
+implementation. See the [rejection report](../issues/deltablue-call-model-20261110/integration49.md)
+and [next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md),
+which has peer approval as a future direction; implementation is unproved. These mechanics are retained as experimental design
+context, not a runtime qualification or performance claim.
+
+```mermaid
+flowchart TD
+    call[Checked plain exact call] --> cert{Certificate present?}
+    cert -->|no| frame[Ordinary frame initialization]
+    cert -->|yes| probe[Recheck admission and probe full body]
+    probe -->|MISS, homes untouched| frame
+    probe -->|result acquired| owners{Aggregate releases nonfinal?}
+    owners -->|no, close duplicate| frame
+    owners -->|yes| commit[Detach window and close preflighted owners]
+    commit --> publish[Ordinary return setter; dispatch real next]
+```
 
 ## Iteration, delegation and resume
 

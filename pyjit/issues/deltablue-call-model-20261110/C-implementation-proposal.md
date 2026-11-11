@@ -1,5 +1,10 @@
 # C: complete conditional leaf prototype implementation brief
 
+**Final integration decision:** this is a rejected performance experiment, not
+selected runtime48. Source-review GO means proceed to qualification, not promote.
+See the [rejection report](integration49.md), [checkpoint report](checkpoint-report.md)
+and reviewed, unimplemented [next design](C2-proposal.md).
+
 **Implement one complete conditional family with callback-free retirement.**
 Use the approved [nonfinal-release scope](leaf-no-callback-scope-review.md),
 not a general ordinary-completion/debugger redesign. The implementation is held
@@ -36,10 +41,13 @@ Use internal static primitives in `ceval.c`, with typed local borrowed outputs:
 
 ```
 PyValueBorrow ir_probe_global_value(PyObject *globals, PyObject *builtins,
-                                    int live_handler, const _PyFbGlobal *);
-PyValueBorrow ir_probe_shape_value(PyValueBorrow owner, const _PyFbAttr *);
-PyValueBorrow ir_probe_class_value(PyValueBorrow owner, const _PyFbAttr *,
-                                  bool check_metaclass);
+                                    int live_handler, uint32_t globals_version,
+                                    uint32_t builtins_version, uint32_t index);
+PyValueBorrow ir_probe_shape_value(PyValueBorrow owner, uint32_t type_version,
+                                   uint32_t shape, uint32_t offset);
+PyValueBorrow ir_probe_class_value(PyValueBorrow owner, uint32_t type_version,
+                                   uint32_t class_version, _PyValueGuarded value,
+                                   bool check_metaclass);
 int ir_probe_inline_compare(int mask, PyValueBorrow left, PyValueBorrow right);
 ```
 
@@ -150,6 +158,8 @@ finalizer timings/debug transcripts are not gates.
 Introduce a generator-recognized terminal marker after the exact checked prefix
 and before frame initialization. Prefer a dedicated plain-exact initializer
 wrapper/marker over enabling shared bound-method initialization by accident.
+The marker uop has zero input/output shape and accesses the already checked
+window through numeric operands, so it cannot perturb peek-array geometry.
 Positive generator validation checks PEP523/version/arity/stack/recursion guards,
 untouched physical window/destination and no prior effect. A two-word
 `{next,status}` outcome has MISS and DONE: MISS runs the existing initializer;
@@ -184,6 +194,18 @@ new modules and existing `test_ir_frame_calls`, `test_ir_attr_cache`,
 host syntax/generator validation only through configured-cache
 `uv run --no-project python -B`; no regeneration/native build/test or commit.
 The strict `Tools/build/check_value_api.py` remains intact.
+
+The stable implementation uses complete typed ordinary probe uops, replacing
+their redundant guard prefixes while retaining cache field positions. Plain and
+metaclass class-value producers use separately checked literal guard selections.
+The certificate has a bounded positive generated-format obligation check, and
+the second admission check only rechecks asynchronous epoch/pending state.
+Private current proof guards support historical MONO/POLY/MEGA state without
+executing poly-table rows. `ir_leaf_info` reports certified/hits/probe/owner/entry
+misses plus build support. Current static signature admission is at most six
+formal positional arguments; COPY, shared-return joins and direct comparison
+returns are cut from this first implementation. Those are explicit limits, not
+unhooked metadata or partial-body execution.
 
 After independent review/root greenlight, implementation budget is 40 minutes.
 First finish a hooked, correct single conditional family and its negative

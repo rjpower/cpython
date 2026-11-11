@@ -12,12 +12,13 @@ are recorded in [status](../../STATUS.md) and the
 The [prior ranked work](../../issues/frame-call-model-20261109/next-steps.md)
 records the closed logging round; the active packet below owns current priorities.
 
-The active [DeltaBlue ordinary-call round](../../issues/deltablue-call-model-20261110/plan.md)
-reviews call resolution, execution and teardown as one model. Its first
-implementation sequence is canonical class reads, classmethod pair forwarding,
-then a complete conditional leaf-region experiment. The [grouped review](../../issues/deltablue-call-model-20261110/astra-architecture-review.md)
-and [leaf contract reviews](../../issues/deltablue-call-model-20261110/leaf-contract-review.md)
-record the current proposal and admission limits; no leaf elision is implemented.
+The [DeltaBlue round](../../issues/deltablue-call-model-20261110/plan.md)
+lands canonical class reads and classmethod pair forwarding. Its complete
+conditional leaf experiment was implemented and rejected on performance.
+The [report](../../issues/deltablue-call-model-20261110/checkpoint-report.md)
+records that decision; the reviewed
+[C2 proposal](../../issues/deltablue-call-model-20261110/C2-proposal.md) is the
+next bounded call-model experiment, not an implemented speedup.
 
 The deliverable is one trustworthy register interpreter with canonical values,
 measured with the JIT disabled against matched immutable controls. Retain raw

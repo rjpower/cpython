@@ -239,6 +239,32 @@ pre-site survivor recipe or a source-only fallback. Existing PRE restoration
 and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
 transfers require separate stopped-state authority.
 
+## Experimental leaf-call metadata (not selected)
+
+The rejected leaf candidate added an optional `_PyCodeExec` certificate for a
+complete conditional body. It is derived from immutable final words and is neither
+serialized bytecode metadata nor a rooted runtime value. The bounded form has
+at most 32 words, four complete value paths, two guarded attribute steps per
+path, one inline comparison and two return arms. Paths start from arguments,
+current constants (including common-constant roots), small integers or guarded
+globals. Every executable word must be accounted for and feed the predicate or selected result; unsupported
+effects, reads, joins, loops and handlers reject certification.
+
+Runtime execution is attached to plain `CALL_PY_EXACT_ARGS` after its checked
+prefix. A zero-shape terminal marker is accepted only by positive generator
+validation of the exact guard sequence and untouched call window. The
+no-certificate gate skips the helper. Admitted reads share the ordinary guarded
+global, shape and class probes, and numeric computation shares the ordinary
+inline comparison semantics. A MISS preserves all original homes and continues
+through the existing initializer. A hit requires callback-free, GIL-held
+execution and an identity-counted nonfinal-release proof before detaching
+inputs; it returns the actual continuation without creating a frame. The
+[experimental interpreter design](interpreter.md#experimental-conditional-leaf-call-design-not-selected),
+[rejection report](../issues/deltablue-call-model-20261110/integration49.md) and
+[next proposal](../issues/deltablue-call-model-20261110/C2-proposal.md) record
+its restrictions and status. This mechanism is not selected or enabled by the
+current runtime design; the next proposal has peer approval as a future direction and remains unimplemented.
+
 ## Explicit boundary
 
 The baseline IR is an executable register instruction stream, not optimizing

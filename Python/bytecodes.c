@@ -4328,6 +4328,10 @@ dummy_func(
             DEOPT_IF(tstate->py_recursion_remaining <= 1);
         }
 
+        inline_ok op(_TRY_CALL_GENERATOR, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+            IR_TRY_CALL_GENERATOR();
+        }
+
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
             int has_self = !PyValue_IsNull(self_or_null);
             STAT_INC(CALL, hit);
@@ -4390,6 +4394,7 @@ dummy_func(
             _CHECK_FUNCTION_EXACT_ARGS +
             _CHECK_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
+            _TRY_CALL_GENERATOR +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;

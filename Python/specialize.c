@@ -2227,7 +2227,9 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
     Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
     Py_ssize_t first_default = code->co_argcount - ndefaults;
     if (!bound_method && (code->co_flags & CO_OPTIMIZED) &&
-        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
+        !(code->co_flags & CO_ASYNC_GENERATOR) &&
+        (!(code->co_flags & (CO_GENERATOR | CO_COROUTINE)) ||
+         _PyCode_HasDirectGeneratorEntry(code)) &&
         code->co_kwonlyargcount == 0 && supplied <= code->co_argcount &&
         supplied >= first_default && ndefaults <= UINT16_MAX &&
         supplied - first_default <= UINT16_MAX)

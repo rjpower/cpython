@@ -2580,6 +2580,7 @@ class IREmitter(Emitter):
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
+        self._replacers["IR_TRY_CALL_GENERATOR"] = self.try_call_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -2907,6 +2908,31 @@ class IREmitter(Emitter):
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
 
+    def try_call_generator(self, tkn, tkn_iter, uop, storage, inst):
+        self.macro_args(tkn, tkn_iter, 0)
+        assert inst is not None
+        fmt = self.format_of(inst)
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit("{\n")
+        self.emit(f"PyValue *ir_gen_homes = slots + {base};\n")
+        self.emit("PyFunctionObject *ir_gen_func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(ir_gen_homes[0]);\n")
+        self.emit("PyCodeObject *ir_gen_code = (PyCodeObject *)ir_gen_func->func_code;\n")
+        self.emit("if (ir_gen_code->co_flags & (CO_GENERATOR | CO_COROUTINE)) {\n")
+        self.emit("int ir_gen_offset = PyValue_IsNull(ir_gen_homes[1]) ? 2 : 1;\n")
+        self.emit("_PyStatusValue ir_gen_result = _PyEval_TryMakeGenerator(tstate, ir_gen_homes, ir_gen_code, ir_gen_homes + ir_gen_offset, oparg + 2 - ir_gen_offset, NULL);\n")
+        self.emit("if (ir_gen_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("if (ir_gen_result.status > 0) {\n")
+        self.emit("STAT_INC(CALL, hit);\n")
+        self.emit(f"call_finish_generator(frame, next_instr, {dst}, ir_gen_result.value);\n")
+        self.emit("next_instr = frame->return_pc;\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        self.emit("}\n")
+        self.emit("}\n")
+        return True
+
     def try_dict_first_probe(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
         self.emit("{\n")
@@ -2995,6 +3021,11 @@ class IREmitter(Emitter):
         if run_override:
             self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
                       f"call_base, call_destination, {argc}{self.call_kind}, fb);\n")
+            self.emit("if (call_result.status == 0 && call_result.child == NULL) {\n")
+            self.emit("next_instr = frame->return_pc;\n")
+            self.emit("slots = _PyFrame_Slots(frame);\n")
+            self.emit("DISPATCH();\n")
+            self.emit("}\n")
             self.emit("if (call_result.status > 0) {\n")
             self.emit(f"call_result = {self.call_run}(tstate, frame, "
                       f"call_base, call_destination, {argc}"
@@ -4171,6 +4202,57 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
                              "dictionary reader prefix and scalar format", inst.where)
 
 
+def validate_generator_call(inst: Instruction, fmt: IRFormat) -> None:
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    markers = [p for p in parts if any(t.text == "IR_TRY_CALL_GENERATOR"
+                                     for t in p.body.tokens())]
+    if not markers:
+        return
+    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION",
+                "_CHECK_FUNCTION_EXACT_ARGS", "_CHECK_STACK_SPACE",
+                "_CHECK_RECURSION_REMAINING", "_TRY_CALL_GENERATOR",
+                "_INIT_CALL_PY_EXACT_ARGS", "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
+    producer = markers[0]
+    guard_bodies = [
+        "{ DEOPT_IF(IS_PEP523_HOOKED(tstate)); }",
+        """{ PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+        EXIT_IF(!PyFunction_Check(callable_o));
+        PyFunctionObject *func = (PyFunctionObject *)callable_o;
+        EXIT_IF(func->func_version != func_version); }""",
+        """{ PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+        assert(PyFunction_Check(callable_o));
+        PyFunctionObject *func = (PyFunctionObject *)callable_o;
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        EXIT_IF(code->co_argcount != oparg + (!PyValue_IsNull(self_or_null))); }""",
+        """{ PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+        PyFunctionObject *func = (PyFunctionObject *)callable_o;
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize)); }""",
+        "{ DEOPT_IF(tstate->py_recursion_remaining <= 1); }",
+    ]
+    def shape(items):
+        return [(item.name, item.peek, item.size) for item in items]
+    expected_shape = [("callable", True, ""), ("self_or_null", True, ""),
+                      ("args", True, "oparg")]
+    if (inst.name != "CALL_PY_EXACT_ARGS" or len(markers) != 1
+            or [p.name for p in parts] != expected
+            or not fmt.window or not fmt.store_dst
+            or fmt.group != "CALL" or fmt.field_of(ROLE_BASE) != "B"
+            or fmt.field_of(ROLE_DST) != "A"
+            or shape(producer.stack.inputs) != expected_shape
+            or shape(producer.stack.outputs) != expected_shape
+            or any(canonical_body_tokens(part) !=
+                   [token.text for token in tokenize(body)]
+                   for part, body in zip(parts[:5], guard_bodies))
+            or " ".join(t.text for t in producer.body.tokens()) !=
+               "{ IR_TRY_CALL_GENERATOR ( ) ; }"
+            or any(not p.is_guard() or p.properties.escapes
+                   or p.properties.eval_breaker or p.properties.switches_frame
+                   or p.properties.error_with_pop or p.properties.error_without_pop
+                   for p in parts[:5])):
+        raise analysis_error("generator construction requires the checked exact-call prefix", inst.where)
+
+
 def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
     parts = [p for p in inst.parts if isinstance(p, Uop)]
     markers = [(p, t) for p in parts for t in p.body.tokens()
@@ -4272,6 +4354,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
     validate_dict_first_probe(inst, fmt)
+    validate_generator_call(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out

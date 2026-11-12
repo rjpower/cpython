@@ -342,6 +342,46 @@ class TestIRCases(unittest.TestCase):
             with self.assertRaisesRegex(SyntaxError, "cannot use a value record"):
                 generate(source)
 
+    def test_generator_constructor_exact_terminal_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def generate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            out = io.StringIO()
+            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+            return out.getvalue()
+
+        body = self.handler(generate(source), "CALL_PY_EXACT_ARGS")
+        attempt = body.index("_PyEval_TryMakeGenerator(")
+        initialize = body.index("_PyFrame_ReserveForCall(")
+        self.assertLess(attempt, initialize)
+        success = body[attempt:initialize]
+        self.assertIn("if (ir_gen_result.status < 0) { JUMP_TO_LABEL(error); }", success)
+        self.assertIn("call_finish_generator(", success)
+        self.assertIn("next_instr = frame->return_pc;", success)
+        self.assertIn("DISPATCH();", success)
+        self.assertNotIn("IR_CLEAR", success)
+        self.assertNotIn("PyValue_CLOSE", success)
+        self.assertEqual(body.count("_PyFrame_Initialize("), 1)
+        for old, new in (
+            ("_TRY_CALL_GENERATOR +\n            _INIT_CALL_PY_EXACT_ARGS +",
+             "_INIT_CALL_PY_EXACT_ARGS +\n            _TRY_CALL_GENERATOR +"),
+            ("IR_TRY_CALL_GENERATOR();", "IR_TRY_CALL_GENERATOR(); spam();"),
+            ("DEOPT_IF(tstate->py_recursion_remaining <= 1);",
+             "DEOPT_IF(tstate->py_recursion_remaining < 0);"),
+            ("DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));",
+             "DEOPT_IF(false);"),
+            ("args[oparg] -- callable, self_or_null, args[oparg]",
+             "args[oparg] -- callable, self_or_null, args[1]"),
+        ):
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                with self.assertRaises(SyntaxError):
+                    generate(source.replace(old, new, 1))
+
     def test_guarded_python_call_contract(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -3207,6 +3247,15 @@ class TestCallTransactionMarkers(unittest.TestCase):
             self.assertTrue(invoke.always_exits)
             self.assertTrue(invoke.switches_frame)
         self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
+
+    def test_generator_constructor_exposes_conditional_effects(self):
+        properties = self.analysis.uops["_TRY_CALL_GENERATOR"].properties
+        self.assertTrue(properties.escapes)
+        self.assertTrue(properties.error_without_pop)
+        self.assertTrue(properties.sync_sp)
+        self.assertFalse(properties.pure)
+        self.assertFalse(properties.always_exits)
+        self.assertFalse(properties.switches_frame)
 
     def test_exact_activation_does_not_escape(self):
         properties = self.analysis.uops["_INIT_CALL_PY_EXACT_ARGS"].properties

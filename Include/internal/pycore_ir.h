@@ -371,6 +371,18 @@ typedef struct _PyCodeExec {
     _PyFbBlock *feedback;   // the header before entries, or NULL
 } _PyCodeExec;
 
+/* Immutable construction shape only; observers and the executing copy still
+ * need current admission before bypassing word zero. Creation prefixes must
+ * retain the ordinary frame route. */
+static inline bool
+_PyCode_HasDirectGeneratorEntry(PyCodeObject *code)
+{
+    int flags = code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
+    return (flags == CO_GENERATOR || flags == CO_COROUTINE) &&
+        Py_SIZE(code) > 1 && IR_HANDLER(code->co_words[0]) == RETURN_GENERATOR &&
+        IR_A(code->co_words[0]) == IR_NO_DST;
+}
+
 /* The feedback table of a code object, which follows its words: per entry,
  * entry 0 included, in order of unit, a word of the kind (4 bits), the unit
  * where the entry starts (12 bits) and its arg (16 bits): the operation of

@@ -372,9 +372,31 @@ _PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
     if (!(((PyCodeObject *)f->func_code)->co_flags & CO_OPTIMIZED)) {
         locals = Py_NewRef(f->func_globals);
     }
+    PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(func));
+    PyCodeObject *code = (PyCodeObject *)f->func_code;
+    if (locals == NULL && kwnames == NULL && nargs <= INT_MAX &&
+        (code->co_flags & (CO_GENERATOR | CO_COROUTINE)) &&
+        !_Py_ReachedRecursionLimitWithMargin(tstate, 1))
+    {
+        _PyStatusValue made = _PyEval_TryMakeGenerator(
+            tstate, &function, code, owners, (int)nargs, NULL);
+        if (made.status != 0) {
+            if (made.status < 0) {
+                PyObject *error = PyErr_GetRaisedException();
+                for (Py_ssize_t i = 0; i < total; i++) {
+                    PyValue_CLOSE(owners[i]);
+                }
+                PyValue_CLOSE(function);
+                PyErr_SetRaisedException(error);
+            }
+            if (owners != small) {
+                PyMem_Free(owners);
+            }
+            return made.value;
+        }
+    }
     _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        owners, nargs, kwnames, NULL);
+        tstate, function, locals, owners, nargs, kwnames, NULL);
     if (owners != small) {
         PyMem_Free(owners);
     }

@@ -11,6 +11,7 @@ extern "C" {
 #include "dynamic_annotations.h"  // _Py_ANNOTATE_RWLOCK_CREATE
 
 #include "pycore_borrow.h"        // _PyBorrowScope_Exit()
+#include "pycore_feedback.h"     // _PyFbCall
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
 #include "pycore_interp.h"        // PyInterpreterState.eval_frame
 #include "pycore_ir_observer.h"   // Scoped callback ownership phase
@@ -284,6 +285,15 @@ extern int _PyEval_EnsureBuiltinsWithModule(
     PyObject **p_builtins);
 
 PyAPI_FUNC(PyObject *)_Py_MakeCoro(PyFunctionObject *func);
+/* Origin-free CLEARED shell, sized from the explicitly pinned code. */
+PyAPI_FUNC(PyObject *)_Py_MakeCoroFromCode(PyFunctionObject *func,
+                                         PyCodeObject *code);
+/* MISS (0) and ERROR (-1) preserve every input home. SUCCESS (1) moves
+ * function and supplied arguments into the returned canonical owner. A
+ * non-NULL binding is an already validated positional plan. */
+PyAPI_FUNC(_PyStatusValue) _PyEval_TryMakeGenerator(
+    PyThreadState *tstate, PyValue *function, PyCodeObject *code,
+    PyValue *args, int supplied, const _PyFbCall *binding);
 
 /* Handle signals, pending calls, GIL drop request
    and asynchronous exception */

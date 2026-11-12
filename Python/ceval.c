@@ -1823,6 +1823,20 @@ call_transfer_exact_args(PyValue *base, PyValue *window, int nargs)
     }
 }
 
+/* A completed constructor has consumed its whole input window. Publish the
+ * recipient and continuation before closing a displaced or discarded owner,
+ * but retain CALL as the actual executed site. A callback can install LINE
+ * observation, whose next landing still needs that previous site. A setter
+ * can update return_pc during close; the terminal reloads it afterward. */
+static void
+call_finish_generator(_PyInterpreterFrame *frame, _PyInstr *next,
+                      int destination, PyValue result)
+{
+    frame->return_slot = (uint16_t)destination;
+    frame->return_pc = next;
+    _PyFrame_SetReturnValue(frame, result);
+}
+
 /* The handlers' calls (call_transaction_run_*), after
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(
@@ -3589,6 +3603,120 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 CALL_TRANSACTION_VECTOR, flags);
 }
 
+/* Only a physical word-zero RETURN_GENERATOR can be skipped: prefixes can
+ * bind cells, run an iterator callback or deliver entry observations. This
+ * GIL-only transaction allocates without polling or releasing mortal owners. */
+_PyStatusValue
+_PyEval_TryMakeGenerator(PyThreadState *tstate, PyValue *function,
+                         PyCodeObject *code, PyValue *args, int supplied,
+                         const _PyFbCall *binding)
+{
+#ifdef Py_GIL_DISABLED
+    return (_PyStatusValue){0, PyValue_NULL};
+#else
+    _PyCodeExec *exec = code->_co_exec;
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(*function);
+    if (!_PyCode_HasDirectGeneratorEntry(code) ||
+        !(code->co_flags & CO_OPTIMIZED) || exec == NULL || exec->nwords < 2 ||
+        IR_HANDLER(exec->words[0]) != RETURN_GENERATOR ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        tstate->interp->eval_frame != NULL || tstate->c_tracefunc != NULL ||
+        tstate->c_profilefunc != NULL || code->_co_monitoring != NULL ||
+        tstate->interp->ceval.instrumentation_version != 0 ||
+        tstate->coroutine_origin_tracking_depth != 0 ||
+        tstate->py_recursion_remaining <= 1 ||
+        !_PyThreadState_HasStackSpace(tstate, code->co_framesize) ||
+        _Py_ReachedRecursionLimit(tstate))
+    {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+#ifdef WITH_DTRACE
+    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED() ||
+        PyDTrace_LINE_ENABLED()) {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+#endif
+#ifdef Py_DEBUG
+    /* The unicode-key table makes this lookup nonescaping even when a
+     * user inserted custom non-string keys into an ordinary globals dict. */
+    if (Py_GETENV("PYTHON_LLTRACE") != NULL ||
+        !DK_IS_UNICODE(((PyDictObject *)func->func_globals)->ma_keys)) {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+    int lltrace = PyDict_Contains(func->func_globals, &_Py_ID(__lltrace__));
+    if (lltrace != 0) {
+        return (_PyStatusValue){lltrace < 0 ? -1 : 0, PyValue_NULL};
+    }
+#endif
+    if (binding == NULL) {
+        if (supplied != code->co_argcount || code->co_kwonlyargcount != 0 ||
+            (code->co_flags & (CO_VARARGS | CO_VARKEYWORDS))) {
+            return (_PyStatusValue){0, PyValue_NULL};
+        }
+    }
+    else if (!(binding->binding_flags & _Py_CALL_BIND_DIRECT) ||
+             (binding->binding_flags & _Py_CALL_BIND_KEYWORDS) ||
+             supplied != binding->binding.positional.bound_count) {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+    Py_INCREF(code);
+    PyObject *kwargs = NULL;
+    if (binding != NULL && binding->binding.positional.kwargs_slot != IR_NO_DST &&
+        !(binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS)) {
+        kwargs = PyDict_New();
+        if (kwargs == NULL) {
+            Py_DECREF(code);
+            return (_PyStatusValue){-1, PyValue_NULL};
+        }
+    }
+    PyGenObject *gen = (PyGenObject *)_Py_MakeCoroFromCode(func, code);
+    if (gen == NULL) {
+        Py_XDECREF(kwargs);
+        Py_DECREF(code);
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    _PyInterpreterFrame *child = &gen->gi_iframe;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    memset(child->owned_slots, 0, (size_t)nslots * sizeof(PyValue));
+    _PyFrame_Initialize(tstate, child, *function, NULL, code,
+                        child->owned_slots, NULL);
+    *function = PyValue_NULL;
+    for (int i = 0; i < supplied; i++) {
+        child->base[i] = args[i];
+        args[i] = PyValue_NULL;
+    }
+    if (binding != NULL) {
+        if (supplied < code->co_argcount) {
+            PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
+            for (int i = supplied; i < code->co_argcount; i++) {
+                child->base[i] = PyValue_XDUP(
+                    defaults[binding->binding.positional.default_start + i - supplied]);
+            }
+        }
+        if (binding->binding_flags & _Py_CALL_BIND_VARARGS) {
+            child->base[code->co_argcount] =
+                (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+        }
+        if (binding->binding.positional.kwargs_slot != IR_NO_DST) {
+            if (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) {
+                child->pending_kwargs = binding->binding.positional.kwargs_slot;
+            }
+            else {
+                child->base[binding->binding.positional.kwargs_slot] =
+                    PyValue_FromObjectSteal(kwargs);
+            }
+        }
+    }
+    child->instr_ptr = exec->words + 1;
+    child->return_slot = (uint16_t)IR_A(code->co_words[0]);
+    child->owner = FRAME_OWNED_BY_GENERATOR;
+    gen->gi_frame_state = FRAME_CREATED;
+    /* The frame now independently owns code, so this cannot finalize it. */
+    Py_DECREF(code);
+    return (_PyStatusValue){1, PyValue_FromObjectSteal((PyObject *)gen)};
+#endif
+}
+
 /* The checked prefix proves the function version and standard provider.
  * Return 1 before effects on a miss; no transaction record exists on a hit. */
 static inline _PyCallResult
@@ -3724,6 +3852,18 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     return (_PyCallResult){1, NULL};
                 }
             }
+            if (code->co_flags & (CO_GENERATOR | CO_COROUTINE)) {
+                _PyStatusValue made = _PyEval_TryMakeGenerator(
+                    tstate, homes, code, homes + offset, supplied, binding);
+                if (made.status < 0) {
+                    return (_PyCallResult){-1, NULL};
+                }
+                if (made.status > 0) {
+                    call_finish_generator(frame, frame->instr_ptr + 1,
+                                          destination, made.value);
+                    return (_PyCallResult){0, NULL};
+                }
+            }
             PyObject *kwargs = NULL;
             if (binding->binding.positional.kwargs_slot != IR_NO_DST &&
                 !(binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS))
@@ -3819,9 +3959,31 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
             arguments[i+argcount] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i+argcount]));
         }
     }
+    PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(func));
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (locals == NULL && kwnames == NULL && argcount <= INT_MAX &&
+        (code->co_flags & (CO_GENERATOR | CO_COROUTINE)) &&
+        !_Py_ReachedRecursionLimitWithMargin(tstate, 1))
+    {
+        _PyStatusValue made = _PyEval_TryMakeGenerator(
+            tstate, &function, code, arguments, (int)argcount, NULL);
+        if (made.status != 0) {
+            if (made.status < 0) {
+                PyObject *error = PyErr_GetRaisedException();
+                for (size_t i = 0; i < total_args; i++) {
+                    PyValue_CLOSE(arguments[i]);
+                }
+                PyValue_CLOSE(function);
+                PyErr_SetRaisedException(error);
+            }
+            if (total_args > 8) {
+                PyMem_Free(arguments);
+            }
+            return made.status > 0 ? PyValue_AsKnownObjectSteal(made.value) : NULL;
+        }
+    }
     _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        arguments, argcount, kwnames, NULL);
+        tstate, function, locals, arguments, argcount, kwnames, NULL);
     if (total_args > 8) {
         PyMem_Free(arguments);
     }

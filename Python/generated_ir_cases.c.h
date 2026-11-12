@@ -6399,6 +6399,11 @@
                 assert(frame->instr_ptr == this_instr);
                 {
                     _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_KEYWORDS, fb);
+                    if (call_result.status == 0 && call_result.child == NULL) {
+                        next_instr = frame->return_pc;
+                        slots = _PyFrame_Slots(frame);
+                        DISPATCH();
+                    }
                     if (call_result.status > 0) {
                         call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
@@ -7271,6 +7276,26 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _TRY_CALL_GENERATOR
+            {
+                {
+                    PyValue *ir_gen_homes = slots + IR_B(ir_word);
+                    PyFunctionObject *ir_gen_func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(ir_gen_homes[0]);
+                    PyCodeObject *ir_gen_code = (PyCodeObject *)ir_gen_func->func_code;
+                    if (ir_gen_code->co_flags & (CO_GENERATOR | CO_COROUTINE)) {
+                        int ir_gen_offset = PyValue_IsNull(ir_gen_homes[1]) ? 2 : 1;
+                        _PyStatusValue ir_gen_result = _PyEval_TryMakeGenerator(tstate, ir_gen_homes, ir_gen_code, ir_gen_homes + ir_gen_offset, oparg + 2 - ir_gen_offset, NULL);
+                        if (ir_gen_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_gen_result.status > 0) {
+                            STAT_INC(CALL, hit);
+                            call_finish_generator(frame, next_instr, IR_A(ir_word), ir_gen_result.value);
+                            next_instr = frame->return_pc;
+                            slots = _PyFrame_Slots(frame);
+                            DISPATCH();
+                        }
+                    }
+                }
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
                 args = &window[2];
@@ -7392,6 +7417,11 @@
                 assert(frame->instr_ptr == this_instr);
                 {
                     _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_VECTOR, fb);
+                    if (call_result.status == 0 && call_result.child == NULL) {
+                        next_instr = frame->return_pc;
+                        slots = _PyFrame_Slots(frame);
+                        DISPATCH();
+                    }
                     if (call_result.status > 0) {
                         call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }

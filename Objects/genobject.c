@@ -1143,9 +1143,8 @@ PyTypeObject PyGen_Type = {
 };
 
 static PyObject *
-make_gen(PyTypeObject *type, PyFunctionObject *func)
+make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
 {
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
     int slots = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
     if (gen == NULL) {
@@ -1167,17 +1166,31 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
 }
 
 PyObject *
+_Py_MakeCoroFromCode(PyFunctionObject *func, PyCodeObject *code)
+{
+    int flags = code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
+    assert(flags == CO_GENERATOR || flags == CO_COROUTINE);
+    PyObject *result = make_gen(flags == CO_GENERATOR ? &PyGen_Type : &PyCoro_Type,
+                                func, code);
+    if (result != NULL && flags == CO_COROUTINE) {
+        ((PyCoroObject *)result)->cr_origin_or_finalizer = NULL;
+    }
+    return result;
+}
+
+PyObject *
 _Py_MakeCoro(PyFunctionObject *func)
 {
-    int coro_flags = ((PyCodeObject *)func->func_code)->co_flags &
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    int coro_flags = code->co_flags &
         (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
     assert(coro_flags);
     if (coro_flags == CO_GENERATOR) {
-        return make_gen(&PyGen_Type, func);
+        return make_gen(&PyGen_Type, func, code);
     }
     if (coro_flags == CO_ASYNC_GENERATOR) {
         PyAsyncGenObject *ag;
-        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func);
+        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func, code);
         if (ag == NULL) {
             return NULL;
         }
@@ -1189,7 +1202,7 @@ _Py_MakeCoro(PyFunctionObject *func)
     }
 
     assert (coro_flags == CO_COROUTINE);
-    PyObject *coro = make_gen(&PyCoro_Type, func);
+    PyObject *coro = make_gen(&PyCoro_Type, func, code);
     if (!coro) {
         return NULL;
     }

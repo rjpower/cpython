@@ -5,6 +5,8 @@
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_EvalFrameValue()
+#include "pycore_dict.h"          // DK_IS_UNICODE(), PyDict_ContainsValue()
+#include "pycore_function.h"      // _PyFunction_Vectorcall
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_gc.h"            // _PyGC_CLEAR_FINALIZED()
@@ -24,6 +26,7 @@
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
+#include "pydtrace.h"
 #include "opcode_ids.h"           // RESUME, etc
 
 // Forward declarations
@@ -1143,9 +1146,8 @@ PyTypeObject PyGen_Type = {
 };
 
 static PyObject *
-make_gen(PyTypeObject *type, PyFunctionObject *func)
+make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
 {
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
     int slots = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
     if (gen == NULL) {
@@ -1166,18 +1168,101 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     return (PyObject *)gen;
 }
 
+/* A native caller already owns an argument array. If the first physical
+ * word only creates the generator, build directly in its final homes instead
+ * of entering the evaluator with a temporary thread frame. GIL allocation
+ * schedules GC but does not call Python; no poll or owner close intervenes. */
+_PyStatusValue
+_PyGen_TryMakeFromFunction(PyThreadState *tstate, PyValue *function,
+                          PyCodeObject *code, PyValue *args, int supplied)
+{
+#ifdef Py_GIL_DISABLED
+    return (_PyStatusValue){0, PyValue_NULL};
+#else
+    int flags = code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
+    _PyCodeExec *exec = code->_co_exec;
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(*function);
+    if ((flags != CO_GENERATOR && flags != CO_COROUTINE) ||
+        !(code->co_flags & CO_OPTIMIZED) || Py_SIZE(code) < 2 ||
+        IR_HANDLER(code->co_words[0]) != RETURN_GENERATOR ||
+        IR_A(code->co_words[0]) != IR_NO_DST ||
+        exec == NULL || exec->nwords < 2 ||
+        IR_HANDLER(exec->words[0]) != RETURN_GENERATOR ||
+        supplied != code->co_argcount || code->co_kwonlyargcount != 0 ||
+        (code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        tstate->interp->eval_frame != NULL || tstate->c_tracefunc != NULL ||
+        tstate->c_profilefunc != NULL || code->_co_monitoring != NULL ||
+        tstate->interp->ceval.instrumentation_version != 0 ||
+        tstate->coroutine_origin_tracking_depth != 0 ||
+        tstate->py_recursion_remaining <= 1 ||
+        !_PyThreadState_HasStackSpace(tstate, code->co_framesize) ||
+        _Py_ReachedRecursionLimit(tstate))
+    {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+#ifdef WITH_DTRACE
+    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED() ||
+        PyDTrace_LINE_ENABLED()) {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+#endif
+#ifdef Py_DEBUG
+    /* Avoid equality callbacks from arbitrary globals keys during this
+     * nonescaping admission. Ordinary unicode-key dictionaries are safe. */
+    if (Py_GETENV("PYTHON_LLTRACE") != NULL ||
+        !DK_IS_UNICODE(((PyDictObject *)func->func_globals)->ma_keys)) {
+        return (_PyStatusValue){0, PyValue_NULL};
+    }
+    int lltrace = PyDict_ContainsValue(
+        func->func_globals, _PyValue_FromObjectKnown(&_Py_ID(__lltrace__)));
+    if (lltrace != 0) {
+        return (_PyStatusValue){lltrace < 0 ? -1 : 0, PyValue_NULL};
+    }
+#endif
+    Py_INCREF(code);
+    PyGenObject *gen = (PyGenObject *)make_gen(
+        flags == CO_GENERATOR ? &PyGen_Type : &PyCoro_Type, func, code);
+    if (gen == NULL) {
+        Py_DECREF(code);
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    if (flags == CO_COROUTINE) {
+        ((PyCoroObject *)gen)->cr_origin_or_finalizer = NULL;
+    }
+    _PyInterpreterFrame *child = &gen->gi_iframe;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    memset(child->owned_slots, 0, (size_t)nslots * sizeof(PyValue));
+    _PyFrame_Initialize(tstate, child, *function, NULL, code,
+                        child->owned_slots, NULL);
+    *function = PyValue_NULL;
+    for (int i = 0; i < supplied; i++) {
+        child->base[i] = args[i];
+        args[i] = PyValue_NULL;
+    }
+    child->instr_ptr = exec->words + 1;
+    child->return_slot = (uint16_t)IR_A(code->co_words[0]);
+    child->owner = FRAME_OWNED_BY_GENERATOR;
+    gen->gi_frame_state = FRAME_CREATED;
+    /* The final frame now independently owns this code. */
+    Py_DECREF(code);
+    return (_PyStatusValue){1, PyValue_FromObjectSteal((PyObject *)gen)};
+#endif
+}
+
 PyObject *
 _Py_MakeCoro(PyFunctionObject *func)
 {
-    int coro_flags = ((PyCodeObject *)func->func_code)->co_flags &
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    int coro_flags = code->co_flags &
         (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
     assert(coro_flags);
     if (coro_flags == CO_GENERATOR) {
-        return make_gen(&PyGen_Type, func);
+        return make_gen(&PyGen_Type, func, code);
     }
     if (coro_flags == CO_ASYNC_GENERATOR) {
         PyAsyncGenObject *ag;
-        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func);
+        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func, code);
         if (ag == NULL) {
             return NULL;
         }
@@ -1189,7 +1274,7 @@ _Py_MakeCoro(PyFunctionObject *func)
     }
 
     assert (coro_flags == CO_COROUTINE);
-    PyObject *coro = make_gen(&PyCoro_Type, func);
+    PyObject *coro = make_gen(&PyCoro_Type, func, code);
     if (!coro) {
         return NULL;
     }

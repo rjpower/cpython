@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_value.h"         // _PyStatusValue
 #include "pycore_frame.h"         // FRAME_STATE_FINISHED()
 #include "pycore_interpframe_structs.h" // _PyGenObject
 
@@ -32,6 +33,13 @@ _PyGen_FinalizerIsNoop(PyObject *op)
 
 PyAPI_FUNC(PyObject *)_PyGen_yf(PyGenObject *);
 extern int _PyGen_ClearFrame(PyGenObject *self);
+
+/* Exact native positional construction from the explicitly selected code.
+ * MISS (0) and ERROR (-1) leave the function and argument homes unchanged;
+ * SUCCESS (1) moves and NULLs them, returning one canonical object owner. */
+PyAPI_FUNC(_PyStatusValue) _PyGen_TryMakeFromFunction(
+    PyThreadState *tstate, PyValue *function, PyCodeObject *code,
+    PyValue *args, int supplied);
 
 /* Set StopIteration(value), or a bare StopIteration for PyValue_NULL.
    Return 0, or -1 with another exception set. StopIteration's value field

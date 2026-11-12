@@ -4,6 +4,7 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgsTstate()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_dict.h"          // _PyDict_NewPresized()
+#include "pycore_genobject.h"     // _PyGen_TryMakeFromFunction()
 #include "pycore_function.h"      // _PyFunction_Vectorcall() definition
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_interpframe.h"   // _PyEvalFramePushAndInit()
@@ -372,9 +373,31 @@ _PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
     if (!(((PyCodeObject *)f->func_code)->co_flags & CO_OPTIMIZED)) {
         locals = Py_NewRef(f->func_globals);
     }
+    PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(func));
+    PyCodeObject *code = (PyCodeObject *)f->func_code;
+    if (locals == NULL && kwnames == NULL && nargs <= INT_MAX &&
+        (code->co_flags & (CO_GENERATOR | CO_COROUTINE)) &&
+        !_Py_ReachedRecursionLimitWithMargin(tstate, 1))
+    {
+        _PyStatusValue made = _PyGen_TryMakeFromFunction(
+            tstate, &function, code, owners, (int)nargs);
+        if (made.status != 0) {
+            if (made.status < 0) {
+                PyObject *error = PyErr_GetRaisedException();
+                for (Py_ssize_t i = 0; i < total; i++) {
+                    PyValue_CLOSE(owners[i]);
+                }
+                PyValue_CLOSE(function);
+                PyErr_SetRaisedException(error);
+            }
+            if (owners != small) {
+                PyMem_Free(owners);
+            }
+            return made.value;
+        }
+    }
     _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        owners, nargs, kwnames, NULL);
+        tstate, function, locals, owners, nargs, kwnames, NULL);
     if (owners != small) {
         PyMem_Free(owners);
     }

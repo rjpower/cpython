@@ -1,5 +1,13 @@
 # Project status
 
+Activation 53 is implementing two reviewed experiments from golden51: eligible
+final-home generative construction and a shared canonical completion terminal.
+Source/native audits and one broad Astra review are complete; lane proposals
+and independent peer review precede implementation. No candidate has a native
+build, qualification result or measured win yet. The [active plan](issues/activation53/plan.md),
+[design](design/activation-transfers.md) and [review resolution](issues/activation53/review-resolution.md)
+record the contracts. The selected runtime below is unchanged.
+
 Round 52 is closed: **both generator-delegation candidates are rejected**.
 Golden51 remains selected and unchanged. One broad Astra review, incorporated
 feedback, implementation, focused qualification, profiling and independent cold
@@ -10,9 +18,9 @@ coroutines and DeltaBlue in six pairs; its entry revision loses 1.0%/11.3%/11.9%
 The revision's all29 geometric mean is 1.020473 versus golden51 and 1.172901
 versus upstream. Neither is promoted. Full suites were not run after the
 performance gate failed. Experimental code and evidence are retained; task-only
-builds/worktrees are retired. The [next plan](issues/generator-delegation52/next-plan.md)
-requires weighted transition evidence before another shared resume/transfer
-proposal. There is no active runtime implementation or native job.
+builds/worktrees are retired. The [round 52 next plan](issues/generator-delegation52/next-plan.md)
+called for weighted transition evidence before another shared resume/transfer
+proposal.
 
 Round 51 selects shared exact-call reservation/initialization and canonical
 integer ADD/SUB publication at runtime `0e5e61f4c6b`. All five Astra options
@@ -22,7 +30,7 @@ on measured breadth or composition. Profiling, full diagnostics and independent
 review are complete. The [golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261111-runtime)
 is published on `pyjit/round51-golden` with the documented limits below.
 
-Start with the [goal](GOAL.md), [next plan](issues/generator-delegation52/next-plan.md),
+Start with the [goal](GOAL.md), [active plan](issues/activation53/plan.md),
 [report](issues/interpreter-round51/report.md),
 [benchmark tables](issues/interpreter-round51/benchmark-tables.md) and
 [architecture](design/runtime-architecture.md). [HANDOFF](HANDOFF.md) owns exact
@@ -100,9 +108,10 @@ debugger-jump checks and LLTrace remain enabled. Quarantine is a coverage gap,
 not a fix. Remaining established debugger/trace failures must stay visible.
 Golden39, upstream and prior50 remain immutable controls.
 
-Next, weight creation, resume, yield and completion on selected golden51 before
-choosing a shared transition contract. The yield-only round52 experiment failed
-its performance gates; its mechanism worked without delivering throughput.
-A constant-operand redesign needs a weighted constant-home cost census first. Feedback already uses
-direct scaled offsets; removing a nonexistent pointer table is not an option.
+Activation 53 source and native audits are complete, with phase evidence and a
+[thesis](issues/activation53/thesis.md) submitted for one broad Astra review.
+No source candidate or measured build win exists yet. The yield-only round52
+experiment failed its performance gates; its mechanism worked without delivering
+throughput. A constant-operand redesign needs a weighted constant-home cost
+census first. Feedback already uses direct scaled offsets; removing a nonexistent pointer table is not an option.
 See the [source assessment](issues/interpreter-round51/next-plan-assessment.md).

@@ -12,8 +12,8 @@ observer reconstruction contract before removal.
 
 Improve unchanged-workload performance toward upstream parity while retaining
 logging parity and examining broad regressions. The
-[next plan](issues/generator-delegation52/next-plan.md) proposes how to weight
-future transition work; [status](STATUS.md) records results and limits.
+[active plan](issues/activation53/plan.md) investigates activation construction
+and completion; [status](STATUS.md) records results and limits.
 
 ## Standing decisions
 

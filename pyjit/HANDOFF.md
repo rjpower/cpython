@@ -2,9 +2,21 @@
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
 are not the measured runtime. Start with [goal](GOAL.md),
-[next plan](issues/generator-delegation52/next-plan.md), [status](STATUS.md),
+[active plan](issues/activation53/plan.md), [status](STATUS.md),
 [experiment report](issues/generator-delegation52/report.md) and
 [designs](design/runtime-architecture.md).
+
+## Activation 53: reviewed experiments
+
+The [plan](issues/activation53/plan.md), [thesis](issues/activation53/thesis.md)
+and [phase evidence](issues/activation53/phase-evidence.md) describe the active
+investigation. Source/native audits and one broad Astra review are complete; the
+[resolution](issues/activation53/review-resolution.md) chooses two bounded lanes.
+Worktrees `BASE/worktrees/activation53-{final-homes,completion}` and matching
+release build directories are configured from golden51. Sol lanes cross-review
+concrete proposals before source implementation. Root owns regeneration and
+native build/test/timing. No measured win or qualified candidate exists yet.
+Golden51 and the control paths below remain unchanged.
 
 ## Round 52: closed, both candidates rejected
 
@@ -39,7 +51,7 @@ coroutines and 1.356641 DeltaBlue. Reporting and independent review are complete
 The [report](issues/generator-delegation52/report.md),
 [tables](issues/generator-delegation52/benchmark-tables.md) and
 [next decision plan](issues/generator-delegation52/next-plan.md) own closure.
-No native job remains. Never overlap future quiet campaigns with builds/tests.
+No round 52 native job remains. Never overlap future quiet campaigns with builds/tests.
 
 The two task-created source trees and six role build directories above are
 retired. Both branches are pushed. E/`retired-experiments` retains 349 files:
@@ -117,7 +129,7 @@ nine plus one LLTrace failure. No additional module fails. The other four GDB
 groups pass. Exact current case IDs are retained in verbose logs and independent
 review; prior50 quiet logs establish only groups/counts. Independent final
 review approves this incremental checkpoint with its explicit performance losses
-and diagnostic limits. No native job or runtime edit remains pending.
+and diagnostic limits.
 Timing/profiling finished before full tests; never overlap quiet campaigns with
 builds, tests or bulk cleanup.
 
@@ -127,10 +139,10 @@ it. Other four GDB groups passed the filtered control check and remain enabled.
 Debugger-jump and LLTrace retain their established failures; report actual
 remaining failures rather than calling filtered full diagnostics green.
 
-Next round first weights selected-image generator creation/resume/yield/
-completion costs before proposing a shared transition contract. Constant operands
-need a weighted hidden-home cost census before proposal. Feedback already uses a directly addressed scaled byte offset,
-not an entry-pointer table. The source assessment records rejected premises.
+Activation 53 has weighted selected-image creation, resume, yield and completion
+evidence for the active thesis. Constant operands need a weighted hidden-home
+cost census before proposal. Feedback already uses a directly addressed scaled
+byte offset, not an entry-pointer table. The source assessment records rejected premises.
 
 Host scripts use `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
 Root owns builds, tests, timing, integration, commits and publication. Workers

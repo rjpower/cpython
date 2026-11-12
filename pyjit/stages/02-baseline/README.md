@@ -8,9 +8,10 @@ timing is not a performance gate.
 
 The [round 52 report](../../issues/generator-delegation52/report.md) records
 the closed delegation experiment; round 51 remains selected. The
-[next plan](../../issues/generator-delegation52/next-plan.md) proposes future
-performance weighting, with no implementation queued. [Status](../../STATUS.md)
-records qualification, performance and limits. Native method and tracing JIT
+[active plan](../../issues/activation53/plan.md) investigates activation
+construction and completion; its source/native audits are complete and one broad
+Astra review is in progress. No source candidate or measured build win exists
+yet. [Status](../../STATUS.md) records qualification, performance and limits. Native method and tracing JIT
 tiers belong to later stages; owning bridges support incremental extension ports.
 
 The durable contracts are [register IR](../../design/register-ir.md),

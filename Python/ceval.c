@@ -3643,7 +3643,8 @@ _PyEval_TryMakeGenerator(PyThreadState *tstate, PyValue *function,
         !DK_IS_UNICODE(((PyDictObject *)func->func_globals)->ma_keys)) {
         return (_PyStatusValue){0, PyValue_NULL};
     }
-    int lltrace = PyDict_Contains(func->func_globals, &_Py_ID(__lltrace__));
+    int lltrace = PyDict_ContainsValue(
+        func->func_globals, _PyValue_FromObjectKnown(&_Py_ID(__lltrace__)));
     if (lltrace != 0) {
         return (_PyStatusValue){lltrace < 0 ? -1 : 0, PyValue_NULL};
     }

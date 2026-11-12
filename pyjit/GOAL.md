@@ -12,8 +12,10 @@ observer reconstruction contract before removal.
 
 Improve unchanged-workload performance toward upstream parity while retaining
 logging parity and examining broad regressions. The
-[active plan](issues/activation53/plan.md) investigates activation construction
-and completion; [status](STATUS.md) records results and limits.
+[round plan](issues/activation53/plan.md) records three rejected activation
+experiments. Golden51 remains selected. The [next decision](issues/activation53/next-steps.md)
+prioritizes reducing eager activation state using existing entry authority;
+[status](STATUS.md) records results and limits.
 
 ## Standing decisions
 

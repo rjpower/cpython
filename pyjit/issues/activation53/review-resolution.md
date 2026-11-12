@@ -1,9 +1,10 @@
 # Activation53 review resolution
 
-One broad [Astra review](astra-review.md) is complete. This resolves design
-choices; implementation and measured admission remain pending. The corrected
-[design](../../design/activation-transfers.md) supersedes the alternatives in the
-original [thesis](thesis.md).
+One broad [Astra review](astra-review.md) corrected the original [thesis](thesis.md).
+The table records preimplementation decisions. All resulting implementations
+were tested and rejected; the [report](report.md) owns that final decision.
+The [design](../../design/activation-transfers.md) describes unchanged selected
+golden51 behavior.
 
 | Review finding | Decision |
 | --- | --- |

@@ -2,7 +2,9 @@
 
 E=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/activation53`.
 Native selected runtime is golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`;
-upstream is `3a440b65695615e9fd9912342b79cdd54fced0d2`. No candidate exists yet.
+upstream is `3a440b65695615e9fd9912342b79cdd54fced0d2`. This is baseline
+evidence gathered before the three implementations; outcomes are in the
+[report](report.md).
 
 ## Diagnostic phase census
 

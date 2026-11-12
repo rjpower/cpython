@@ -1,6 +1,7 @@
 # B: one canonical completion terminal
 
-Proposed, awaiting peer review. Runtime lane:
+Reviewed proposal, later implemented, qualified and rejected on performance;
+see the [final result](completion-result.md). Retired runtime lane:
 `BASE/worktrees/activation53-completion`, based on immutable golden51
 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`. BASE and native roles follow HANDOFF.
 This implements Astra's bounded B, not a continuation descriptor or resume cache.
@@ -105,3 +106,15 @@ changed canonical-transfer proof retains its existing Publish fallback.
 
 No performance result is claimed. Separate B timing must precede composition;
 the extra pending-redirect guard may outweigh a removed call boundary.
+
+## Peer resolution
+
+A independently accepted the corrected proposal before implementation. Root
+accepted its source/ABI scope. The proposed epoch guard was removed: completion
+already consults current code monitoring metadata, and admission-to-commit has
+no callback. Both return variants retain the canonical provenance proof (or its
+existing Publish fallback) before transferring result bits. The terminal adopts
+that owner once and restores a real instruction word before observer/error
+edges, including a fresh site word after a cold failure. Its source is explicitly
+no-inline so the optimizer cannot copy the full terminal into every return arm.
+No runtime observation state, handler number or resume store was added.

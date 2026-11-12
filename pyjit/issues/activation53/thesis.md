@@ -1,6 +1,7 @@
 # Activation thesis: final owners and explicit transfers
 
-Proposed for one broad Astra review; not implemented. Baseline is selected
+Original proposal for one broad Astra review. The corrected implementations
+were tested and rejected; see the [final report](report.md). Baseline is selected
 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`, with unchanged GCC15.2,
 CPU15/hash0/JIT-off comparisons. [Plan](plan.md), [call audit](call-audit.md),
 [resume audit](resume-audit.md) and [phase evidence](phase-evidence.md) define

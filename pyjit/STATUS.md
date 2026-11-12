@@ -1,117 +1,83 @@
 # Project status
 
-Activation 53 is implementing two reviewed experiments from golden51: eligible
-final-home generative construction and a shared canonical completion terminal.
-Source/native audits and one broad Astra review are complete; lane proposals
-and independent peer review precede implementation. No candidate has a native
-build, qualification result or measured win yet. The [active plan](issues/activation53/plan.md),
-[design](design/activation-transfers.md) and [review resolution](issues/activation53/review-resolution.md)
-record the contracts. The selected runtime below is unchanged.
+Golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected.
+All three activation53 candidates are rejected after six-pair confirmation:
+direct final-home construction, shared completion and native-only construction.
+Native-only improves generators 5.9%, but repeatedly loses 2.4% on DeltaBlue
+and 2.7% on Richards. No experimental code is absorbed.
 
-Round 52 is closed: **both generator-delegation candidates are rejected**.
-Golden51 remains selected and unchanged. One broad Astra review, incorporated
-feedback, implementation, focused qualification, profiling and independent cold
-review are complete. The [experiment report](issues/generator-delegation52/report.md)
-and [full tables](issues/generator-delegation52/benchmark-tables.md) record the
-results. The first candidate loses 4.4%/4.7%/2.7% versus golden51 on generators,
-coroutines and DeltaBlue in six pairs; its entry revision loses 1.0%/11.3%/11.9%.
-The revision's all29 geometric mean is 1.020473 versus golden51 and 1.172901
-versus upstream. Neither is promoted. Full suites were not run after the
-performance gate failed. Experimental code and evidence are retained; task-only
-builds/worktrees are retired. The [round 52 next plan](issues/generator-delegation52/next-plan.md)
-called for weighted transition evidence before another shared resume/transfer
-proposal.
+Start with the [goal](GOAL.md), [round plan](issues/activation53/plan.md),
+[current report](issues/activation53/report.md), [tables](issues/activation53/benchmark-tables.md)
+and [next decision](issues/activation53/next-steps.md).
+[HANDOFF](HANDOFF.md) owns exact paths and recovery. Canonical documentation is
+in this checkout; its C files are not the measured runtime.
 
-Round 51 selects shared exact-call reservation/initialization and canonical
-integer ADD/SUB publication at runtime `0e5e61f4c6b`. All five Astra options
-were implemented and independently reviewed in separate subtrees. Cached layout
-displacement, canonical iteration and normal-generator cleanup were rejected
-on measured breadth or composition. Profiling, full diagnostics and independent
-review are complete. The [golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261111-runtime)
-is published on `pyjit/round51-golden` with the documented limits below.
+## Selected performance
 
-Start with the [goal](GOAL.md), [active plan](issues/activation53/plan.md),
-[report](issues/interpreter-round51/report.md),
-[benchmark tables](issues/interpreter-round51/benchmark-tables.md) and
-[architecture](design/runtime-architecture.md). [HANDOFF](HANDOFF.md) owns exact
-source/build paths and execution state. Canonical documentation is in this
-checkout; its C files are not the measured runtime.
+Unchanged workloads, GCC15.2, CPU15, hash0, JIT disabled. Ratios are elapsed
+golden51/upstream; lower is faster. The fresh all29 two-pair geometric mean is
+**1.156831**, with 6/29 cases faster. Separate six-pair hot confirmation:
 
-## Performance
-
-Unchanged kernels, GCC 15.2, CPU 15, hash 0, JIT disabled. Ratios are elapsed
-candidate/control, lower is faster. Individual campaigns are direct comparisons;
-do not multiply their ratios.
-
-| Case | / prior checkpoint50, six pairs | / upstream, six pairs |
+| Case | Geometric mean | Pair range |
 | --- | ---: | ---: |
-| DeltaBlue | 1.036881 | 1.159832 |
-| Richards | 0.966903 | — |
-| Comprehensions | 1.000125 | — |
-| Generators | 1.012945 | 1.445513 |
-| Coroutines | 0.893073 | 1.267666 |
-| Spectral norm | 0.897685 | — |
-| Logging silent | 0.891657 | 0.775668 |
+| Generators | 1.450583 | 1.441005–1.462817 |
+| Coroutines | 1.257081 | 1.240689–1.271521 |
+| DeltaBlue | 1.174507 | 1.170100–1.186879 |
+| Richards | 1.245939 | 1.208283–1.271766 |
+| Comprehensions | 1.376346 | 1.355705–1.402835 |
+| Logging silent | 0.730916 | 0.662089–0.771119 |
 
-All 29 kernels, two balanced pairs, have geometric means of **0.985700 versus
-prior50**, **0.982829 versus golden39** and **1.156535 versus upstream**.
-This is incremental progress, not broad parity. Logging is faster than upstream
-in every confirmation pair; its direct prior50 pairs have a wide
-0.827254–1.038904 range, including one loss.
+Logging has a wide spread. The all29 generator screen also has a wide pair
+range, 1.437–1.784; retain it separately from the longer confirmation. These
+campaigns measure unchanged selected source and are not evidence of a new
+implementation gain. Do not multiply independent comparison ratios.
 
-Keep the regressions visible. DeltaBlue is 3.7% slower than prior50 in the
-longer confirmation and 4.5% slower in the broad screen; generators are 1.3%
-slower. The screen finds deepcopy_memo 2.7% slower than prior50; six pairs confirm
-a 2.0% cost, with five slower pairs. Spectral norm remains 24.5% slower than
-golden39 despite its improvement this round. The tables retain every kernel and control.
+The [checkpoint report](issues/interpreter-round51/report.md) retains direct
+prior50 and golden39 comparisons, selected PMU data and incremental regressions.
+The [round52 report](issues/generator-delegation52/report.md) records two rejected
+delegation variants. Round53's full construction candidate reduces coroutine
+instructions to 0.985784 of golden51 but takes 1.027712 times elapsed time.
+Neither that result nor flat samples establishes a hardware cause.
 
-Post-warmup PMU diagnostics show native-instruction ratios of 1.352487 for
-DeltaBlue, 1.414550 for generators and 1.388163 for coroutines versus upstream.
-Their user-cycle ratios are 1.173937, 1.443516 and 1.249676. Logging executes
-0.953890 times the instructions; its cycle pairs vary substantially. These are
-whole-workload counts, not removable fractions or proof of a hardware cause.
+## Selected design and gaps
 
-## Selected design
+Universal eight-byte PyValues span the runtime and rebuilt extensions.
+The register interpreter is implemented; native method/tracing JIT tiers remain
+unfinished. Exact calls reserve and initialize once, overlap thread arguments
+and publish ordinary returns inline. Function and executing code remain separate
+owners. Warm thread storage avoids repeated NULL initialization.
 
-Exact calls choose final owning homes before one storage reservation and one
-header initialization. Initialized thread callers retain argument overlap;
-cold helpers fill an uncertain storage suffix or move heap-caller arguments.
-Code and function remain separate owners; continuation, observation, binding
-and retirement retain the shared ABI.
+The remaining activation costs include a 112-byte header versus upstream's 80,
+value classification, recipient/continuation state, construction-time physical
+home movement and callback-safe retirement. Generator resume already dispatches
+inside the evaluator; hidden constants are initialized at construction, not
+each resume. The workload's frequent SEND/YIELD transitions and recursive
+coroutine creation/completion need different treatment. These are concrete
+mechanisms, not a complete causal accounting of the elapsed gap.
 
-Integer ADD/SUB publication preserves canonical output across the proven inline
-and boxed-overflow join. A bounded whole-producer proof checks guards, scaled
-overflow, allocation failure and unchanged input retirement. It does not
-whitelist arbitrary boxing or generalize to other arithmetic.
+Current contracts: [IR](design/register-ir.md),
+[interpreter](design/interpreter.md), [calls/frames](design/call-and-frame-lifetimes.md),
+[activation transfers](design/activation-transfers.md) and [values](design/pyvalue.md).
+Source positions do not authorize ordinary dispatch or call admission.
 
-Universal PyValues are integrated throughout runtime and rebuilt extensions.
-Native method/tracing JIT tiers remain unfinished. Source coordinates do not
-control ordinary dispatch or call admission; compiler line restrictions still
-need an observer reconstruction contract. Current contracts:
-[IR](design/register-ir.md), [interpreter](design/interpreter.md),
-[frames/calls](design/call-and-frame-lifetimes.md), [values](design/pyvalue.md).
+## Qualification and next decision
 
-## Qualification and next work
+Selected release/debug builds each check 117 modules. Prior focused checks pass
+821 tests with nine skips plus five generator tests per role; the value API gate
+passes 306 units. Full diagnostics run 54689 filtered tests in each role:
+release retains nine debugger-jump errors; debug retains those nine plus one
+LLTrace failure. These are documented failed diagnostics, not green full suites.
+Only the GDB pretty-printer class is quarantined; other GDB groups remain active.
 
-Release/debug builds each check 117 modules. Focused qualification passes 821
-tests with nine skips plus five generator tests in each build. The strict value
-API gate passes 306 units with zero findings or parse errors. Independent merged
-source/native, timing/PMU and full-diagnostic review approve this increment.
-Full diagnostics run 54,689 filtered tests in each build. Release retains nine
-debugger-jump errors; debug retains those nine plus one LLTrace failure. No
-additional failing module group appears. The prior quiet logs establish the
-same groups/counts, not individual-case equivalence. These are failed diagnostics
-with documented limits, not green full suites.
+Round53 followed thesis, one broad Astra review, independent implementation/
+post-review, focused release/debug checks, native route probes and balanced
+timing. Full suites were omitted once its candidates failed performance.
+All three branches are pushed. Verified archives retain patches, six native
+ELFs/extensions/configurations and hashes; only the nine task source/build
+directories were retired. Selected builds and controls remain intact.
 
-The runner quarantines only the GDB pretty-printer class; other GDB groups,
-debugger-jump checks and LLTrace remain enabled. Quarantine is a coverage gap,
-not a fix. Remaining established debugger/trace failures must stay visible.
-Golden39, upstream and prior50 remain immutable controls.
-
-Activation 53 source and native audits are complete, with phase evidence and a
-[thesis](issues/activation53/thesis.md) submitted for one broad Astra review.
-No source candidate or measured build win exists yet. The yield-only round52
-experiment failed its performance gates; its mechanism worked without delivering
-throughput. A constant-operand redesign needs a weighted constant-home cost
-census first. Feedback already uses direct scaled offsets; removing a nonexistent pointer table is not an option.
-See the [source assessment](issues/interpreter-round51/next-plan-assessment.md).
+The [next decision](issues/activation53/next-steps.md) prioritizes reducing eager
+activation state using existing authority, with alternatives for carrying resume
+proofs and bounded compiled regions. Require named removed work, peer review and
+cross-benchmark gates before implementation. Astra reviews broad designs rather
+than the inner loop.

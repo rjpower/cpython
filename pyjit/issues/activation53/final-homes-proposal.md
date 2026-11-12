@@ -1,5 +1,7 @@
 # A: bounded final-home construction
 
+Reviewed proposal, later implemented and rejected; see the [final result](final-homes-result.md).
+
 Proposed against detached golden51 in `BASE/worktrees/activation53-final-homes`.
 The corrected Astra contract replaces the earlier broad construction proposal:
 physical word zero must itself be RETURN_GENERATOR. No prefix execution,
@@ -16,8 +18,9 @@ helper reuses plan destinations/default offsets/empty-variadic rules, not the
 generic binder. It performs no caller recipient publication.
 
 The producer's one common branch tests the existing generative code flags.
-The cold helper checks the actual immutable and executing first word, physical
-successor and initial recipient. Existing constructor validation already requires
+The shared `_PyCode_HasDirectGeneratorEntry` fact checks exact generator/coroutine
+flags, the actual immutable first word, physical successor and initial recipient.
+The cold helper additionally checks the current executing first word. Existing constructor validation already requires
 RETURN_GENERATOR's initial recipient to be IR_NO_DST; code.replace traverses
 that same validation. No new code flag, executable allocation field or frame
 field is required. Prefixes and transparent wrappers are declined, not skipped.
@@ -63,9 +66,15 @@ non-pure peek uop before the existing pure initialization uop. A bounded emitter
 validator binds the guard prefix, consuming geometry and terminal shape, and
 declares allocation/error/callback effects explicitly.
 
-The validated positional-plan helper tries the same constructor before its
+The positional plan producer retains its existing ordinary-function admission
+and admits generator/coroutine plans only through that same immutable entry fact;
+async generators and creation prefixes stay excluded. This changes a producer
+restriction that the initial inspection missed. The validated positional-plan helper tries the same constructor before its
 thread-frame reservation; success publishes with the existing call completion
-machinery and returns `_PyCallResult {0, NULL}`. Keyword plans decline this new
+machinery and returns `_PyCallResult {0, NULL}`. The emitter recognizes that
+finished outcome before the existing MISS fallback and reloads the winning
+return_pc; this is an added finished-result test on known-plan calls and belongs
+in native cost accounting. Keyword plans decline this new
 path. Error retains the plan's original owning window for its normal error
 recipe. Both exact IR and positional plans keep capacity/recursion admission.
 
@@ -87,8 +96,9 @@ This is bounded native construction coverage, not a generic binder redesign.
 
 ## Files and verification
 
-Handwritten files: `Python/bytecodes.c`, `Python/ceval.c`, `Objects/genobject.c`,
+Handwritten files: `Python/bytecodes.c`, `Python/ceval.c`, `Python/specialize.c`, `Objects/genobject.c`,
 `Objects/call.c`, `Include/internal/pycore_ceval.h`,
+`Include/internal/pycore_ir.h`,
 `Tools/cases_generator/{analyzer,ir_generator}.py` and focused existing/new
 generator admission tests. Add bounded contract/effect and malformed-producer
 coverage in `Lib/test/test_generated_cases.py` or its existing IR sibling.
@@ -100,6 +110,15 @@ and cold executable creation are reported as misses. Root may obtain counters
 through source/native diagnostics rather than adding a common-path release
 counter.
 
+Monitoring admission conservatively rejects every nonzero global instrumentation
+version, including after tools are removed. Root runs each constructor test method
+in a fresh process when its direct path matters, separately from a whole-module
+fallback regression run. Exact and known-plan finalizer redirects are separate
+methods; the native map test warms the executable before invoking map. A changed
+co_flags/no-RETURN_GENERATOR negative exercises the immutable entry authority.
+Successful native/IR/known-plan constructor probes remain necessary: semantic
+passes alone do not prove those producers hit the new path.
+
 Independent B-worker peer review accepted the bounded interface and shell/native
 ownership contract. Its required intact-window error correction is incorporated
 above. The function home and supplied contiguous range explicitly include self
@@ -107,6 +126,16 @@ when present; a no-self NULL spacer remains NULL. Success saves the real caller
 continuation before the shared recipient operation closes discard/displaced
 owners, then reloads the callback-selected PC. Runtime implementation is now
 authorized by the coordinator after that peer review.
+
+The actual instruction cursor retains CALL during ordinary result cleanup, as
+selected ordinary return and generic call completion do. return_pc records
+future control separately. Eagerly setting instr_ptr to that future word made
+a trace hook installed by a displaced finalizer miss the first landing LINE;
+initial candidate validation exposed this regression. The correction omits that
+eager write entirely, preserving callback-selected cursors without restoration
+after effects. Existing LINE dispatch now retains the real predecessor and
+processes ordinary source-edge events. This correction has independent source
+approval; root owns rebuilt runtime confirmation.
 
 Required candidate checks cover arguments/defaults/kwargs, discarded and local
 CALL results, closure/genexpr prefix fallback, code.replace/mortal constants,

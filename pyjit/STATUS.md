@@ -1,5 +1,13 @@
 # Project status
 
+Round 52 is implementing explicit generator delegation and suspension after
+one broad Astra review and cross-component peer review. The
+[design](design/generator-delegation.md) and
+[review resolution](issues/generator-delegation52/review-resolution.md) define
+the bounded first increment. The [active plan](issues/generator-delegation52/plan.md)
+requires measured benefit and final qualification before golden promotion.
+The selected runtime below is unchanged.
+
 Round 51 selects shared exact-call reservation/initialization and canonical
 integer ADD/SUB publication at runtime `0e5e61f4c6b`. All five Astra options
 were implemented and independently reviewed in separate subtrees. Cached layout
@@ -8,7 +16,7 @@ on measured breadth or composition. Profiling, full diagnostics and independent
 review are complete. The [golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261111-runtime)
 is published on `pyjit/round51-golden` with the documented limits below.
 
-Start with the [goal](GOAL.md), [plan](issues/interpreter-round51/plan.md),
+Start with the [goal](GOAL.md), [plan](issues/generator-delegation52/plan.md),
 [report](issues/interpreter-round51/report.md),
 [benchmark tables](issues/interpreter-round51/benchmark-tables.md) and
 [architecture](design/runtime-architecture.md). [HANDOFF](HANDOFF.md) owns exact

@@ -6,8 +6,8 @@ with the JIT disabled against matched immutable controls. Assess throughput,
 Python behavior and tooling separately; exact CPython display or destruction
 timing is not a performance gate.
 
-The [current packet](../../issues/interpreter-round51/plan.md) evaluates bounded
-interpreter improvements and their composition. [Status](../../STATUS.md) records
+The [current packet](../../issues/generator-delegation52/plan.md) develops explicit
+generator delegation and suspension, with measured promotion gates. [Status](../../STATUS.md) records
 the selected runtime, qualification, performance and limits. Native method and
 tracing JIT tiers belong to later stages; owning bridges support incremental
 extension ports.

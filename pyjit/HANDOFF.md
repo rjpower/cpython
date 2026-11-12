@@ -2,11 +2,24 @@
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
 are not the measured runtime. Start with [goal](GOAL.md),
-[plan](issues/interpreter-round51/plan.md), [status](STATUS.md),
+[plan](issues/generator-delegation52/plan.md), [status](STATUS.md),
 [report](issues/interpreter-round51/report.md) and
 [designs](design/runtime-architecture.md).
 
-## Runtime and evidence
+## Active round 52
+
+Astra reviewed the DELEGATE/SUSPEND proposal once; the design incorporates
+all eight findings. Cross-component peer review is complete. Three Sol lanes
+are implementing compiler, runtime and constructor/observer consumers with
+disjoint whole-file ownership; see the review-resolution table.
+Packet: `pyjit/issues/generator-delegation52`. Evidence:
+`BASE/pyjit-link-wave1/generator-delegation52`. Candidate source is
+`BASE/worktrees/delegation52`, branch `pyjit/generator-delegation52`, from
+immutable golden51. Release/debug directories `BASE/delegation52-{release,debug}`
+are configured with matching pyconfig/module flags but not yet built. Source implementation is in progress; no candidate native build, executed
+qualification or performance claim is established yet. Root owns integration and build/test/timing windows.
+
+## Selected runtime and evidence
 
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 D=`pyjit/issues/interpreter-round51`.

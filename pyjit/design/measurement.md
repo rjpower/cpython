@@ -20,8 +20,9 @@ workloads after seeing the score.
 
 ## Interpretation
 
-- Ratio means baseline elapsed divided by candidate elapsed. Above one favors
-  the candidate. State the baseline for every table.
+- The current runner reports candidate elapsed divided by control elapsed;
+  lower is faster. State the control and ratio convention for every table.
+  Older published tables retain their stated conventions.
 - Report raw vectors, median, minimum, maximum and
   `100 * (max / min - 1)` spread. Five serial samples in a process are correlated,
   not independent randomized process pairs or a confidence interval.
@@ -46,5 +47,6 @@ workloads after seeing the score.
 The [benchmark guide](../bench/README.md) describes the existing CLI.
 [Earlier GC results](../issues/gc-cleanup-scanning/performance.md) are historical
 measurements, not restored-runtime performance. The
-[current interpreter checkpoint](../issues/pyvalue-rc-restoration/integration/status.md)
-requires fresh matched JIT-off measurements after coherent integration.
+[current status](../STATUS.md) records the selected checkpoint and its results;
+the [current plan](../issues/generator-delegation52/plan.md) sets the next
+measurement work.

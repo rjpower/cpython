@@ -1,7 +1,7 @@
 # Documentation ownership
 
 Keep a clear path from the [goal](GOAL.md) to the current
-[plan](issues/interpreter-round51/plan.md), [status](STATUS.md), and durable
+[plan](issues/generator-delegation52/plan.md), [status](STATUS.md), and durable
 [designs](design/runtime-architecture.md). Readers should not need an experiment
 chronology to understand a project decision.
 

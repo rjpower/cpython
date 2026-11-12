@@ -1830,6 +1830,9 @@ static _PyCallResult call_transaction_run_vector(
 static inline _PyCallResult call_bind_known_python(
     PyThreadState *, _PyInterpreterFrame *, int, int, int,
     _PyCallTransactionKind, const _PyFbCall *);
+static inline Py_ALWAYS_INLINE _PyIRStepResult complete_step_impl(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
+    _PyInstr *, PyValue, enum _PyIRStepKind, bool, bool);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
@@ -2130,6 +2133,56 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
+
+/* Only the generator arm of IR_RETURN_TO_CALLER enters here. Child cleanup
+ * has finished and ir_word carries its canonical result owner, rather than
+ * an instruction. Adopt that owner once, then restore the parent's real word
+ * before any observer or error transfer can inspect interpreter state. */
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_TAIL_CALL_complete_generator_return(TAIL_CALL_PARAMS)
+{
+    _PyValueTemps *const value_temps = NULL;
+    PyValue value = {ir_word};
+    assert(_PyValue_IsHome(value));
+    int opcode;
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        ir_word = *frame->instr_ptr;
+        _PyFrame_SetReturnValue(frame, value);
+        next_instr = frame->return_pc;
+    }
+    else {
+        _PyInstr *site = frame->instr_ptr;
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        int offset = (int)_PyFrame_InstrOffset(frame, site);
+        assert(offset >= 0 && offset < Py_SIZE(code));
+        ir_word = code->co_words[offset];
+        if (code->_co_monitoring != NULL || frame->pending_redirect) {
+            _PyIRStepResult completed =
+                _PyEval_CompleteGeneratorReturn(tstate, frame, value);
+            next_instr = completed.next;
+            if (completed.status < 0) {
+                ir_word = code->co_words[
+                    _PyFrame_InstrOffset(frame, frame->instr_ptr)];
+                JUMP_TO_LABEL(error);
+            }
+        }
+        else {
+            int kind = _PyIR_HandlerBase[IR_HANDLER(ir_word)];
+            assert(kind == SEND || kind == FOR_ITER);
+            _PyInstr *exit = frame->return_pc + IR_DS(ir_word);
+            /* No callback occurs between the current monitoring test and
+             * commit. Both observation tests in the shared body are false. */
+            _PyIRStepResult completed = complete_step_impl(
+                tstate, frame, site, IR_B(ir_word), IR_A(ir_word), exit,
+                value, kind == SEND ? _PY_IR_SEND : _PY_IR_FOR_ITER, true, false);
+            assert(completed.status >= 0);
+            next_instr = completed.next;
+        }
+    }
+    LLTRACE_RESUME_FRAME();
+    DISPATCH();
+}
+
 #include "generated_ir_cases.c.h"
 
 /* The only non-tail call into the handlers.  GCC 15.2 miscompiles a call
@@ -2992,7 +3045,7 @@ static inline Py_ALWAYS_INLINE _PyIRStepResult
 complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *site, int base, int destination,
                    _PyInstr *exit, PyValue value, enum _PyIRStepKind kind,
-                   bool canonical_input)
+                   bool canonical_input, bool observe)
 {
     if (canonical_input) {
         assert(_PyValue_IsHome(value));
@@ -3004,7 +3057,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue receiver = window[0];
     PyCodeObject *code = _PyFrame_GetCode(frame);
     frame->instr_ptr = site;
-    if (code->_co_monitoring != NULL &&
+    if (observe && code->_co_monitoring != NULL &&
         kind != _PY_IR_SEND_THROW && PyValue_IsObject(receiver)) {
         PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
         if (PyGen_CheckExact(object) || PyCoro_CheckExact(object)) {
@@ -3054,7 +3107,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     frame->return_pc = exit;
     _PyIRStepResult observed = {exit, _PY_IR_STEP_EXIT};
-    if (code->_co_monitoring != NULL) {
+    if (observe && code->_co_monitoring != NULL) {
         observed = _PyIR_ObserveStep(
             tstate, frame, site, exit, PyValue_Borrow(PyValue_None), kind, 1);
     }
@@ -3088,7 +3141,7 @@ _PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     /* Native completions still need publication; generator returns arrive
      * from the emitter's checked canonical input or its Publish fallback. */
     return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, kind, false);
+                              value, kind, false, true);
 }
 
 _PyIRStepResult
@@ -3111,10 +3164,10 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
     _PyInstr *exit = frame->return_pc + IR_DS(word);
     if (opcode == SEND) {
         return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                                  exit, value, _PY_IR_SEND, true);
+                                  exit, value, _PY_IR_SEND, true, true);
     }
     return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                              exit, value, _PY_IR_FOR_ITER, true);
+                              exit, value, _PY_IR_FOR_ITER, true, true);
 }
 
 void

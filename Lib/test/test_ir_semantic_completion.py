@@ -15,6 +15,62 @@ def opnames(function):
 
 
 class SemanticCompletionTests(unittest.TestCase):
+    def test_child_cleanup_enables_completion_monitoring(self):
+        monitoring, tool = sys.monitoring, 4
+        monitoring.use_tool_id(tool, 'completion after child cleanup')
+        self.addCleanup(monitoring.free_tool_id, tool)
+        self.addCleanup(monitoring.register_callback, tool,
+                        monitoring.events.STOP_ITERATION, None)
+        marker = object()
+        enabled = False
+
+        class EnableMonitoring:
+            def __del__(self):
+                if enabled:
+                    monitoring.set_local_events(
+                        tool, outer.__code__, monitoring.events.STOP_ITERATION)
+
+        def inner():
+            token = EnableMonitoring()
+            yield 'ready'
+            return marker
+
+        def outer():
+            return (yield from inner())
+
+        self.addCleanup(monitoring.set_local_events, tool, outer.__code__, 0)
+        stopped = []
+
+        def on_stop(code, offset, exception):
+            self.assertIs(code, outer.__code__)
+            self.assertIs(exception.value, marker)
+            stopped.append(offset)
+            if fail:
+                raise ValueError('completion hook')
+
+        monitoring.register_callback(tool, monitoring.events.STOP_ITERATION,
+                                     on_stop)
+        for _ in range(ROUNDS):
+            generator = outer()
+            self.assertEqual(next(generator), 'ready')
+            with self.assertRaises(StopIteration):
+                next(generator)
+        enabled = True
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                monitoring.set_local_events(tool, outer.__code__, 0)
+                stopped.clear()
+                generator = outer()
+                self.assertEqual(next(generator), 'ready')
+                if fail:
+                    with self.assertRaisesRegex(ValueError, 'completion hook'):
+                        next(generator)
+                else:
+                    with self.assertRaises(StopIteration) as returned:
+                        next(generator)
+                    self.assertIs(returned.exception.value, marker)
+                self.assertEqual(len(stopped), 1)
+
     def test_monitored_generator_for_completion(self):
         item, returned = object(), object()
 

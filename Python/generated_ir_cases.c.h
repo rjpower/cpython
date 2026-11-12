@@ -12035,9 +12035,9 @@
                 slots = _PyFrame_Slots(frame);
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
-                    _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    /* This internal tail edge transfers one canonical owner, not an instruction. */
+                    ir_word = temp.bits;
+                    Py_MUSTTAIL return _TAIL_CALL_complete_generator_return(TAIL_CALL_ARGS);
                 }
                 else {
                     next_instr = frame->return_pc;
@@ -16668,9 +16668,9 @@
                 slots = _PyFrame_Slots(frame);
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
-                    _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    /* This internal tail edge transfers one canonical owner, not an instruction. */
+                    ir_word = temp.bits;
+                    Py_MUSTTAIL return _TAIL_CALL_complete_generator_return(TAIL_CALL_ARGS);
                 }
                 else {
                     next_instr = frame->return_pc;

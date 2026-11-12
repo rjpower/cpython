@@ -3900,9 +3900,9 @@ class IREmitter(Emitter):
         else:
             self.emit(f"assert(_PyValue_IsHome({value}));\n")
         self.emit(f"if ({generator_return}) {{\n")
-        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
-        self.emit("next_instr = ir_step_result.next;\n")
-        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("/* This internal tail edge transfers one canonical owner, not an instruction. */\n")
+        self.emit(f"ir_word = {value}.bits;\n")
+        self.emit("Py_MUSTTAIL return _TAIL_CALL_complete_generator_return(TAIL_CALL_ARGS);\n")
         self.emit("}\n")
         self.emit("else {\n")
         self.emit("next_instr = frame->return_pc;\n")

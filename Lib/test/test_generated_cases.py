@@ -880,6 +880,8 @@ class TestIRCases(unittest.TestCase):
                     handler = self.handler(output.getvalue(), name)
                     self.assertNotIn("assert(_PyValue_IsHome(temp));", handler)
                     self.assertIn("temp = _PyValue_Publish(&temp);", handler)
+                    self.assertLess(handler.index("temp = _PyValue_Publish(&temp);"),
+                                    handler.index("ir_word = temp.bits;"))
 
     def test_canonical_list_child_and_yield_sources(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1118,10 +1120,16 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
                 retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
-                completed = handler.index("_PyEval_CompleteGeneratorReturn(")
+                completed = handler.index("Py_MUSTTAIL return _TAIL_CALL_complete_generator_return(")
                 published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
                 self.assertLess(retired, completed)
                 self.assertLess(retired, published)
+                self.assertIn("ir_word = temp.bits;", handler)
+                self.assertNotIn("_PyEval_CompleteGeneratorReturn(", handler)
+                self.assertEqual(handler.count(
+                    "_TAIL_CALL_complete_generator_return("), 1)
+                self.assertLess(handler.index("assert(_PyValue_IsHome(temp));"),
+                                handler.index("ir_word = temp.bits;"))
                 self.assertNotIn("IR_STORE_RETURN", handler)
         handler = self.handler(output.getvalue(), "CLEANUP_THROW")
         self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)

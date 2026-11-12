@@ -2,22 +2,59 @@
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
 are not the measured runtime. Start with [goal](GOAL.md),
-[plan](issues/generator-delegation52/plan.md), [status](STATUS.md),
-[report](issues/interpreter-round51/report.md) and
+[next plan](issues/generator-delegation52/next-plan.md), [status](STATUS.md),
+[experiment report](issues/generator-delegation52/report.md) and
 [designs](design/runtime-architecture.md).
 
-## Active round 52
+## Round 52: closed, both candidates rejected
 
-Astra reviewed the DELEGATE/SUSPEND proposal once; the design incorporates
-all eight findings. Cross-component peer review is complete. Three Sol lanes
-are implementing compiler, runtime and constructor/observer consumers with
-disjoint whole-file ownership; see the review-resolution table.
-Packet: `pyjit/issues/generator-delegation52`. Evidence:
-`BASE/pyjit-link-wave1/generator-delegation52`. Candidate source is
-`BASE/worktrees/delegation52`, branch `pyjit/generator-delegation52`, from
-immutable golden51. Release/debug directories `BASE/delegation52-{release,debug}`
-are configured with matching pyconfig/module flags but not yet built. Source implementation is in progress; no candidate native build, executed
-qualification or performance claim is established yet. Root owns integration and build/test/timing windows.
+Packet `pyjit/issues/generator-delegation52`; evidence
+`BASE/pyjit-link-wave1/generator-delegation52`. One broad Astra review,
+cross-component implementation/review and a fresh cold review are complete.
+The terminal emitter is trusted compiler code: producer/predicate gates and
+selected generated/native checks exist, while Astra finding 7's stronger emitted
+body mutation obligation remains partial. The design now states that boundary.
+
+First candidate `58f9ea6cfee47536893ec59780a0f719b4c856ef`, branch
+`pyjit/generator-delegation52`, source `BASE/worktrees/delegation52`, builds
+`BASE/delegation52-{release,debug,stats}`. All three import 117 modules. Focused
+runtime/protocol/observer checks pass after integration repairs; 306 value API
+units have zero failing findings/parse errors. Native GDB demonstrates two
+successive forwarding hits with one C-held owner and empty intermediate homes.
+Six golden51 pairs lose 4.4%/4.7%/2.7% on generators/coroutines/DeltaBlue;
+all29/upstream is 1.167121. Fresh PMU stat has 24 valid 100%-running intervals;
+four sampled profiles have zero losses and stable identities.
+
+One bounded followup `e85171923c08b0d68ee169119e761d7583bbcb26`, branch
+`pyjit/generator-delegation52-entry`, source `BASE/worktrees/delegation52-entry`,
+release build `BASE/delegation52-entry-release` (now retired). It imports 117
+modules and passes 462 focused tests. Debug/stats are configured but deliberately unbuilt
+after its failed release performance screen. Static native inspection confirms
+generation metadata moved behind wrappers. Six golden51 pairs nevertheless
+lose 1.0%/11.3%/11.9% on the three targets; all29/golden51 is 1.020473, only
+8/29 cases win. Both candidates are rejected; no further implementation is
+queued. Followup all29/upstream is 1.172901; fresh PMU has 24 valid intervals,
+all 100% running. Instructions/upstream are 1.593718 generators, 1.411233
+coroutines and 1.356641 DeltaBlue. Reporting and independent review are complete.
+The [report](issues/generator-delegation52/report.md),
+[tables](issues/generator-delegation52/benchmark-tables.md) and
+[next decision plan](issues/generator-delegation52/next-plan.md) own closure.
+No native job remains. Never overlap future quiet campaigns with builds/tests.
+
+The two task-created source trees and six role build directories above are
+retired. Both branches are pushed. E/`retired-experiments` retains 349 files:
+source patches, four built-role ELFs/extensions, configurations and SHA256
+manifest; `retirement.json` lists the eight removed paths. Debug/stats followup
+configuration copies do not imply built binaries. Raw evidence and all controls
+remain intact. Recreate a source/build if needed with the retained branch head
+and packet `build.py`; its matching configurations are retained. Do not confuse
+an archived experimental binary with the selected runtime.
+
+Golden51 remains immutable and selected. No new full suite was run after
+the performance gate failed. Canonical closure documentation is on
+`weaver/python-jit`; Loom mirrors the final report, tables, design and next plan.
+GitHub CLI's authenticated credential helper publishes over HTTPS without
+changing origin.
 
 ## Selected runtime and evidence
 
@@ -90,9 +127,9 @@ it. Other four GDB groups passed the filtered control check and remain enabled.
 Debugger-jump and LLTrace retain their established failures; report actual
 remaining failures rather than calling filtered full diagnostics green.
 
-Next round first attributes selected-image generator creation/resume/yield/
-completion costs. Constant operands need a weighted hidden-home cost census
-before proposal. Feedback already uses a directly addressed scaled byte offset,
+Next round first weights selected-image generator creation/resume/yield/
+completion costs before proposing a shared transition contract. Constant operands
+need a weighted hidden-home cost census before proposal. Feedback already uses a directly addressed scaled byte offset,
 not an entry-pointer table. The source assessment records rejected premises.
 
 Host scripts use `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.

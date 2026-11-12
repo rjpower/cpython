@@ -5,8 +5,17 @@ interpreter. The selected baseline is golden51, `0e5e61f4c6b`; it stays immutabl
 while the candidate is reviewed, implemented and measured. The
 [design](../../design/generator-delegation.md) incorporates the single broad
 [Astra review](astra-review.md); [resolution](review-resolution.md) and
-component peer review are complete. Source implementation is in progress; no
-new native qualification or performance result is established.
+component peer review are complete. The first candidate, `58f9ea6cfee`, is
+implemented and passes focused native integration. It fails the performance
+gate: six direct golden51 pairs lose 4.4% on generators, 4.7% on coroutines and
+2.7% on DeltaBlue. Its all29 two-pair upstream mean is 1.167121. Golden remains
+unchanged. The one [bounded followup](entry-followup.md), `e85171923c0`,
+moves demonstrated cold metadata work out of ordinary release entry, but also
+fails: six golden51 pairs lose 1.0%/11.3%/11.9% on the three targets; all29 is
+1.020473 versus golden51 and 1.172901 versus upstream. Both candidates are
+rejected, reporting is complete and no further implementation is queued.
+Full suites were not run after performance failed. See the [report](report.md)
+and [next decision plan](next-plan.md).
 [Status](../../STATUS.md) owns admission and the
 [baseline report](../interpreter-round51/report.md) owns existing measurements.
 

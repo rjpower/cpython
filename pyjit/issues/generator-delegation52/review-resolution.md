@@ -1,9 +1,9 @@
 # Architectural review resolution
 
-2026-11-12. Proposed contract, revised after the single
-[Astra review](astra-review.md). This records design resolution, not implemented
-or executed evidence. Root must authorize runtime edits after accepting these
-interfaces. No further Astra loop is requested.
+2026-11-12. The round 52 candidate responds to the eight findings from the
+single [Astra review](astra-review.md). This table records their architectural
+resolution and obligations; finding 7 remains partially met. The completed
+[report](report.md) rejects both candidates on performance.
 
 | Finding | Resolution in [design](../../design/generator-delegation.md) | Implementation obligation |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ interfaces. No further Astra loop is requested.
 | 4. Delayed resume target, blocking | Real words: retain actual RESUME_DELEGATE and ordinary next cursor until every fallible resume operation succeeds. Select CD only with unchanged PC/generation. | Redirect intent, including same-PC, wins. Extend skipped and dispatched paths with epoch/TLBC/Emscripten and native/exact/throw/close consumers together. Distinguish resume callback error from injected SUSPEND error. |
 | 5. Far physical/semantic targets | Real words: s=DELEGATE, s+1=SUSPEND, s+2=RESUME_DELEGATE, s+3=IR_JUMP, D=2. Dedicated exact-shape normalizer; no instr_length grouping or arbitrary chasing. | Physical completion dispatches s+3 and keeps its INSTRUCTION event; branch/source report normalized CD done. Adapter outside synthetic SUSPEND region with committed completion EH/source phase. |
 | 6. Generic providers | Owners: generic/virtual/asend execute through generic DELEGATE provider and materialized SUSPEND route; exact-generator specialization only initially. Existing completion, recipient, PEP523 and throw/close contracts remain. | Lost SEND_VIRTUAL/SEND_ASYNC_GEN specialization at converted sites is an explicit performance cost. No provider replay or thread-return-kind persistent delegation state. |
-| 7. Actual emitted fusion proof | Shared interfaces: freeze bounded logical-yield/fused-suspension proof, not a general third-edge framework. Explicit final owner/link/PC state, logical allocation row never physical POST. | Bind canonical transfer and fusion to terminal primitive/emitted AST and tokens; mutation negatives cover NULLing, target/recipient, callbacks, observer and redirect guards. Preserve frontend stack/END_SEND/CLEANUP_THROW effects through allocation. |
+| 7. Actual emitted fusion proof | The intended bounded final state includes owner/link/PC state; the logical allocation row is never physical POST. | The DSL producer and C predicate are mechanically bound with mutation negatives. The terminal emitter is trusted compiler code, supported by selective output checks and source/native review, not a general AST/token mutation gate. Astra’s stronger emitter-binding obligation remains partial; see [cold review](cold-review.md). Preserve frontend stack/END_SEND/CLEANUP_THROW effects through allocation. |
 | 8. Mechanism and overhead evidence | Gates: deep exact chain establishes iterative transfer; shallow/plain/FOR_ITER, generator-expression/comprehension and native cases expose failed-check costs. Coroutine fibonacci often returns without yielding, so no assumed gain. | Inspect emitted native loop and removed traffic; run unchanged paired target/broad gates. Preserve losing evidence and do not promote on architectural claims alone. |
 
 ## Frozen interfaces
@@ -30,7 +30,8 @@ interfaces. No further Astra loop is requested.
   exact version/image/observer authority. It cannot synchronize or move owners.
 - Generated terminal `IR_SUSPEND(value, site, recipient, resume, kind)` consumes
   one already-detached canonical C owner and explicitly assigns the resume PC.
-  Runtime owns its narrow actual-body canonical/fusion proof.
+  The DSL producer and C predicate have mechanical checks; the backend emitter
+  remains trusted and requires peer and native qualification for edits.
 - Add literal `_PY_IR_DELEGATE` to `enum _PyIRStepKind` and existing entry and
   completion consumers. No per-frame record, chain cache or outcome allocation.
 - Compiler-owned handwritten header helper:
@@ -40,23 +41,14 @@ interfaces. No further Astra loop is requested.
   and ingress. Completion/source/branch consumers share this helper.
 - Logical `_PyIR_Outcome`/completion-window rules mirror SEND and SUSPEND only
   for cold allocation/owner analysis. Bounded fusion owns its distinct physical
-  final-state proof and cannot expose the logical intermediate row to observers.
+  final-state contract and cannot expose the logical intermediate row
+  to observers. Post-emission contract verification remains future work.
 
-## File ownership in candidate R52
+## Candidate source
 
-R52 is `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/delegation52`,
-branch `pyjit/generator-delegation52`, starting at `0e5e61f4c6b`.
-
-| Lane | Exclusive handwritten files |
-| --- | --- |
-| Compiler/design | `Python/codegen.c`, `Python/flowgraph.c`, `Python/regcfg.c`, `Python/regcfg_passes.c`, `Python/assemble.c`; `Include/internal/pycore_ir.h`, `pycore_ir_outcomes.h`, `pycore_regcfg.h` as needed; `Lib/test/test_ir.py`, `test_ir_contract.py`. Canonical design/resolution/progress docs in C. |
-| Runtime | Entire `Tools/cases_generator/ir_generator.py`, including format computation, field roles, opcode mapping and forward/event/output mappings; analyzer/terminal registries as needed; `Python/bytecodes.c`, `Python/ceval.c`, `Python/ceval.h`, `Python/ceval_macros.h`, `Objects/genobject.c`; entire `pycore_ceval.h` including enum/helpers, frame/gen headers; `Lib/test/test_generated_cases.py`. |
-| Consumers | `Objects/codeobject.c`, `Objects/frameobject.c`, `Python/instrumentation.c`, `Python/ir.c`, `Python/specialize.c`, `pycore_code.h`, stats iterator classification, `Lib/dis.py`, all other affected Lib tests including new `test_ir_delegation.py`, remote/GDB readers as agreed. |
-| Root | All generated products, opcode IDs/numbering and regeneration; build/measurement scripts, build/test windows, integration, commits and publication. `pycore_ir_metadata.h` is generated and must not be hand-edited. |
-
-Header needs outside these boundaries go through root before editing. In
-particular, runtime requests changes to compiler-owned IR/outcome interfaces
-rather than editing them, and compiler requests all generator format work from
-runtime, including `_PY_IR_DELEGATE` in runtime-owned `pycore_ceval.h`.
-Root serializes regeneration against handwritten edits. Workers do not
-commit or run native builds/tests without the coordinator's window.
+Golden51 remains selected. Initial candidate `58f9ea6cfee` lost six paired
+comparisons by 4.37% for generators, 4.66% for coroutines and 2.67% for
+DeltaBlue. Followup `e851719` passes native wrapper-first placement inspection,
+but six-pair confirmation loses by 0.95%, 11.30% and 11.85% respectively.
+Both candidates are rejected. See the [cold review](cold-review.md),
+[report](report.md) and [next plan](next-plan.md).

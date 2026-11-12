@@ -1,12 +1,18 @@
 # Project status
 
-Round 52 is implementing explicit generator delegation and suspension after
-one broad Astra review and cross-component peer review. The
-[design](design/generator-delegation.md) and
-[review resolution](issues/generator-delegation52/review-resolution.md) define
-the bounded first increment. The [active plan](issues/generator-delegation52/plan.md)
-requires measured benefit and final qualification before golden promotion.
-The selected runtime below is unchanged.
+Round 52 is closed: **both generator-delegation candidates are rejected**.
+Golden51 remains selected and unchanged. One broad Astra review, incorporated
+feedback, implementation, focused qualification, profiling and independent cold
+review are complete. The [experiment report](issues/generator-delegation52/report.md)
+and [full tables](issues/generator-delegation52/benchmark-tables.md) record the
+results. The first candidate loses 4.4%/4.7%/2.7% versus golden51 on generators,
+coroutines and DeltaBlue in six pairs; its entry revision loses 1.0%/11.3%/11.9%.
+The revision's all29 geometric mean is 1.020473 versus golden51 and 1.172901
+versus upstream. Neither is promoted. Full suites were not run after the
+performance gate failed. Experimental code and evidence are retained; task-only
+builds/worktrees are retired. The [next plan](issues/generator-delegation52/next-plan.md)
+requires weighted transition evidence before another shared resume/transfer
+proposal. There is no active runtime implementation or native job.
 
 Round 51 selects shared exact-call reservation/initialization and canonical
 integer ADD/SUB publication at runtime `0e5e61f4c6b`. All five Astra options
@@ -16,7 +22,7 @@ on measured breadth or composition. Profiling, full diagnostics and independent
 review are complete. The [golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261111-runtime)
 is published on `pyjit/round51-golden` with the documented limits below.
 
-Start with the [goal](GOAL.md), [plan](issues/generator-delegation52/plan.md),
+Start with the [goal](GOAL.md), [next plan](issues/generator-delegation52/next-plan.md),
 [report](issues/interpreter-round51/report.md),
 [benchmark tables](issues/interpreter-round51/benchmark-tables.md) and
 [architecture](design/runtime-architecture.md). [HANDOFF](HANDOFF.md) owns exact
@@ -94,8 +100,9 @@ debugger-jump checks and LLTrace remain enabled. Quarantine is a coverage gap,
 not a fix. Remaining established debugger/trace failures must stay visible.
 Golden39, upstream and prior50 remain immutable controls.
 
-Next, use selected-image generator profiles to distinguish creation, resume,
-yield and completion work before choosing a transition change. A constant-operand
-redesign needs a weighted constant-home cost census first. Feedback already uses
+Next, weight creation, resume, yield and completion on selected golden51 before
+choosing a shared transition contract. The yield-only round52 experiment failed
+its performance gates; its mechanism worked without delivering throughput.
+A constant-operand redesign needs a weighted constant-home cost census first. Feedback already uses
 direct scaled offsets; removing a nonexistent pointer table is not an option.
 See the [source assessment](issues/interpreter-round51/next-plan-assessment.md).

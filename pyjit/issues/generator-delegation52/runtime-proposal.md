@@ -1,20 +1,11 @@
-# Runtime slice proposal
+# Runtime slice
 
-Proposed, awaiting coordinator GO. This implements the revised three-word
-contract and all eight [Astra findings](astra-review.md); it does not promote a
-candidate. Selected source is round51 `0e5e61f4c6b`; edits will use the separate
-`build/worktrees/delegation52` runtime checkout. No code changed for this proposal.
+The experimental round 52 candidate implements the revised three-word contract.
+The [Astra review](astra-review.md) has a partial proof obligation described
+below. Both candidates are rejected on performance; selected golden51
+`0e5e61f4c6b` remains unchanged. See the [report](report.md) for final results.
 
-## File and interface ownership
-
-Runtime owns `Python/bytecodes.c`, the whole
-`Tools/cases_generator/ir_generator.py`, `analyzer.py`, any necessary small
-terminal-macro registry entry, `Python/ceval.c`, `ceval.h`, `ceval_macros.h`,
-`Objects/genobject.c`, relevant declarations in `pycore_ceval.h`,
-`pycore_interpframe.h`, and `Lib/test/test_generated_cases.py`. Compiler owns
-CFG/lowering/assembly, `pycore_ir.h` exact far-target normalizer and semantic
-outcomes; consumer owns constructor, observation, specialization and other tests.
-Root regenerates products and owns builds/native execution/timing.
+## Instruction and shared interfaces
 
 Frozen instruction names: DELEGATE, DELEGATE_GEN; SUSPEND,
 INSTRUMENTED_SUSPEND; RESUME_DELEGATE, INSTRUMENTED_RESUME_DELEGATE.
@@ -111,8 +102,8 @@ Order cheap rejections first:
 4. Disable fusion entirely under Py_GIL_DISABLED. Recheck once for every parent
    after existing hooks. A failed predicate leaves owner/frame state unchanged.
 
-The exact checks and generated body are part of the bounded proof, not merely
-an opcode-name permission. Plain/shallow yields should reach cheap rejection
+The exact eligibility checks and generated body implement a bounded transfer
+contract; the backend emitter remains a trusted compiler boundary. Plain/shallow yields should reach cheap rejection
 before immutable decoding or unrelated frame inspection. The first candidate
 may conservatively exclude all debug LLTrace-capable fusion if proving disabled
 hook detection is more complex than its value.
@@ -126,32 +117,33 @@ retries the real resume site; failure leaves site+1 for error attribution.
 Only success with unchanged real PC and generation selects CD. A changed PC or
 generation dispatches the committed actual PC, including same-address intent.
 
-Implement its fallible sequencing in a small shared runtime helper returning
+Its fallible sequencing is implemented in a small shared runtime helper returning
 `_PyIRStepResult`, with a thin terminal emitter for plain/instrumented variants.
 The helper performs no owner movement. It preserves existing tracing rules and
-periodic policy; it does not poll every delegation level. Extend IR_SKIP_RESUME
-for the uninstrumented new operation only after the same epoch/eval-breaker,
+periodic policy; it does not poll every delegation level. IR_SKIP_RESUME covers
+the uninstrumented new operation only after the same epoch/eval-breaker,
 TLBC and Emscripten guards. Native evaluator entry and exact-generator entry both
 use that shared macro; DTrace entry remains in the existing position. Instrumented
 RESUME_DELEGATE always dispatches. Throw entry bypasses resume unchanged.
 
-## Proof and validation plan
+## Proof and validation
 
-Port canonical yield proof to the actual detached-owner terminal and bounded
-emitter. Register IR_SUSPEND as terminal/frame/sync/escape in the analyzer;
-record its suspension effect explicitly so moving state writes into generated
-code cannot erase metadata. Reject proof mutations for missing owner nulling,
-changed recipient/resume PC, callbacks inside a held-only parent, weakened
-observation/redirect/epoch checks and nonterminal transfers. Keep instrumented
-publication conservative.
+Mechanical checks bind the DSL canonical transfer producer and C eligibility
+predicate, with mutation negatives for those checks. IR_SUSPEND is registered
+as terminal/frame/sync/escape with an explicit suspension effect. The backend
+terminal emitter is trusted compiler implementation: selective generated-output
+checks and source/native review, tests and GDB evidence support it, but no
+general emitter AST/token mutation gate checks every terminal state write.
+Astra finding 7's stronger binding obligation is therefore partial. Peer and
+native qualification are required for backend edits; bounded post-emission
+contract verification is future work. See the [cold review](cold-review.md).
 
-Runtime host checks will use configured shared uv cache and `uv run`; only
-coordinator-approved generator/proof tests run before native build windows.
-Consumer/compiler peer review must accept these interfaces before edits.
-Coordinator then qualifies ordinary coherent semantics, enables bounded fusion
-using the same terminal, regenerates, builds release/debug, reviews native loop
-shape, and measures unchanged target/guard workloads. An ordinary-op checkpoint
-is sequencing evidence, not the final architecture claim.
+Golden51 remains selected. Initial candidate `58f9ea6cfee` lost six paired
+comparisons by 4.37% for generators, 4.66% for coroutines and 2.67% for
+DeltaBlue. Followup `e851719` passes native wrapper-first placement inspection,
+but six-pair confirmation loses by 0.95%, 11.30% and 11.85% respectively.
+Both candidates are rejected. The [report](report.md) records final qualification
+and performance limits.
 
 ## Peer resolution
 
@@ -170,3 +162,33 @@ ordinary publication materializes B+2 before selecting SUSPEND and invoking
 cold landing synchronization. No hook runs with SUSPEND recovery selected and
 its expected input absent. The current generator's DTrace hook retains the
 existing saved-resume-PC ordering. Active DTrace/LLTrace excludes parent fusion.
+
+## Entry observation repair after native debug qualification
+
+Native INSTRUCTION qualification exposed a stale-epoch entry boundary: an outer
+INSTRUCTION wrapper around saved RESUME_DELEGATE could run before the inner
+resume handler refreshed instrumentation. The coherent fix uses one
+`IR_FINISH_RESUME_ENTRY` boundary for native start_frame and exact generator
+entry. Incoming owners and activation links are already committed. It snapshots
+real PC/redirect generation with an actual ownership guard, retains DTrace then
+LLTrace order, prepares the selected continuation after the last hook, and only
+then performs eligible resume skipping. Fresh ordinary _PUSH_FRAME entry stays
+unchanged.
+
+Private `prepare_resume_entry` retains a redirect decision, selects the winning
+real PC, and synchronizes only when the actual executing operation is an outer
+LINE/INSTRUCTION wrapper over immutable RESUME_DELEGATE. Plain and inner
+instrumented resume handlers already synchronize before events and need no
+duplicate semantic decode/epoch load here. Synchronization performs no owner
+movement, CD selection or PY_RESUME callback. Success/error recheck PC and
+generation; errors use the winning real site+1, and REDIRECT prevents cached
+skip authority, including same-PC intent. Compiler and consumer peers accepted
+this contract. Subsequent native inspection confirmed wrapper-first placement
+in the entry followup; final qualification remains coordinator-owned.
+
+The no-handler-local-address fixture also gained one narrow exception for the
+always-inline conservative instrumented publication: exactly one token sequence
+`temp = _PyValue_Publish(&temp); PyValue ir_yielded = temp;`. Occurrence-limited
+subtraction preserves rejection of an additional same-line `opaque(&temp)`;
+different helpers, arguments, handlers or duplicate publication remain errors.
+No runtime publication proof was weakened. Both focused host fixture tests pass.

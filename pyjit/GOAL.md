@@ -11,8 +11,9 @@ exception recovery use semantic state. Compiler line restrictions need an
 observer reconstruction contract before removal.
 
 Improve unchanged-workload performance toward upstream parity while retaining
-logging parity and examining broad regressions. The [plan](issues/generator-delegation52/plan.md)
-defines the current delegation/suspension work; [status](STATUS.md) records results and limits.
+logging parity and examining broad regressions. The
+[next plan](issues/generator-delegation52/next-plan.md) proposes how to weight
+future transition work; [status](STATUS.md) records results and limits.
 
 ## Standing decisions
 

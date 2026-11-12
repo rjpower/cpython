@@ -17,13 +17,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('name')
     parser.add_argument('--commit', default='0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254')
-    parser.add_argument('--role', choices=['release', 'debug'], default='release')
+    parser.add_argument('--role', choices=['release', 'debug', 'stats'], default='release')
     parser.add_argument('--configure-only', action='store_true')
     args = parser.parse_args()
     assert re.fullmatch(r'delegation52(?:-[a-z0-9]+)*', args.name)
     source = BASE / 'worktrees' / args.name
     build = BASE / f'{args.name}-{args.role}'
-    reference = BASE / f'round51-golden-{args.role}'
+    reference = BASE / ('execution-boundaries-stats' if args.role == 'stats'
+                        else f'round51-golden-{args.role}')
     env = {key: value for key, value in os.environ.items()
            if not key.startswith('PYTHON') and key != 'LD_PRELOAD'}
     env['UV_CACHE_DIR'] = '/home/power/.cache/uv'

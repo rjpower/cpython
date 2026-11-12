@@ -1,9 +1,15 @@
 # Generator delegation and suspension
 
-Proposed round-52 architecture; not implemented or measured. Source baseline is
-round51-golden `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`, under
-`../python-boil-the-ocean/build/worktrees/round51-golden` (R). Canonical
-documentation remains in this checkout. This proposal follows the
+Round-52 architecture, implemented and rejected on performance; golden51
+`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected. The initial
+candidate `58f9ea6cfee` lost in six paired comparisons with golden51:
+generators +4.37%, coroutines +4.66% and DeltaBlue +2.67%. Followup
+`e851719` passes native inspection of wrapper-first entry placement, but its
+six-pair confirmation loses generators +0.95%, coroutines +11.30% and
+DeltaBlue +11.85%. Both candidates are rejected; see the
+[final report](../issues/generator-delegation52/report.md). See the
+[cold review](../issues/generator-delegation52/cold-review.md) and
+[plan](../issues/generator-delegation52/plan.md). This design follows the
 [frame ABI](call-and-frame-lifetimes.md), [register IR](register-ir.md) and
 [observer contract](handler-and-observer-contract.md).
 
@@ -90,6 +96,19 @@ epoch/TLBC/Emscripten guards and hook ordering. The saved suspended
 PC remains this real resume word, preserving a real previous SUSPEND word for
 injected-error attribution. No new per-frame resume pointer or per-suspension
 target store is introduced.
+
+Native and exact-generator entry share `IR_FINISH_RESUME_ENTRY` after incoming
+ownership, frame links, recursion and exception state are committed. It keeps
+the real saved PC visible through DTrace and LLTrace, then honors PC/generation
+redirects before considering a skip. An outer INSTRUCTION wrapper can precede
+RESUME_DELEGATE's own version check, so a cold entry helper refreshes stale
+instrumentation before that wrapper calls Python. It uses the immutable real
+operation, preserves the winning resume site's next-word error cursor and
+rechecks redirects after synchronization. Plain and inner instrumented resumes
+already synchronize before their events and need no extra immutable decode.
+Only a successful, nonredirected entry runs the existing guarded resume skip.
+Fresh call-frame entry keeps its existing path. Source coordinates grant none
+of this authority.
 
 Plain yields use SUSPEND with the current YIELD_VALUE geometry and a following
 ordinary RESUME. Initially this is a shared semantic implementation with a
@@ -272,19 +291,23 @@ fusion proof; and the observer/error-PC mapping above. Producer and consumer
 workers must not independently invent frame flags, alternate recipients or
 site-record formats.
 
-The fusion proof binds the emitted producer and transfer bodies: immutable
-triple, NULL B+2, identical final suspension owners, actual resume PC, no
-intermediate callback, and exact guarded observer/redirect checks. Mutation of
-any of these facts rejects the direct route. Cold CFG analysis may retain the
-logical yielded edge that defines B+2 followed by its consuming SUSPEND; this
-does not assert physical B+2 publication on the fused route. Actual stopped
-states and callback-error recipes must describe the route actually taken.
-Freeze bounded fusion, without a general third-edge framework: final receiver
-and cursor retained, B+2 NULL, incoming recipient B+2, saved PC s+2,
-suspended-delegate state, detached current/exception/previous links, and one held
-owner. Never expose the logical allocation row as physical POST state. Bind the
-terminal primitive and actual emitted AST/token body, including NULLing,
-PC/recipient and observer/redirect guards; mutations must reject the proof.
+The intended physical final state retains the receiver and cursor, leaves B+2
+NULL, sets incoming recipient B+2 and saved PC s+2, suspends the delegate,
+detaches current/exception/previous links and holds one owner. Cold CFG
+analysis may model a logical B+2 yielded edge followed by consuming SUSPEND;
+that row is not physical POST state on the fused route. Actual stopped states
+and callback-error recipes must describe the route taken.
+
+The implemented mechanical checks bind the DSL canonical transfer producer and
+the C eligibility predicate, with mutation negatives for those checks. The
+terminal emitter is trusted compiler implementation: selective generated-output
+checks, source and native review, tests and GDB evidence support it, but no
+general emitter AST/token mutation gate validates all terminal state writes.
+In particular, the stronger emitter-binding obligation in Astra finding 7 is
+only partially met. Backend edits require peer and native qualification. A
+bounded post-emission contract verification is future work, not an implemented
+proof; it should check physical owner and continuation state and escaping
+operations without introducing a general third-edge framework.
 
 ## Implementation boundaries and gates
 

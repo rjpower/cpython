@@ -1,6 +1,6 @@
 # Development process
 
-Start with the [goal](GOAL.md), [current plan](issues/generator-delegation52/plan.md),
+Start with the [goal](GOAL.md), [next plan](issues/generator-delegation52/next-plan.md),
 [status](STATUS.md) and [stage map](ROADMAP.md). Use [HANDOFF](HANDOFF.md) when
 taking over execution. The coordinator owns integration, merged validation,
 measurement and current project state.

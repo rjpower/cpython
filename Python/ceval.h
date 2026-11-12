@@ -229,11 +229,17 @@ lltrace_instruction(_PyInterpreterFrame *frame,
     int offset = _PyFrame_InstrOffset(frame, next_instr);
     int shown = _PyIR_BaseOpcode(_PyIR_RealHandler(frame, next_instr));
     int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame), offset);
-    if (OPCODE_HAS_ARG(shown)) {
-        printf("%d: %s %d\n", offset, _PyOpcode_OpName[shown], oparg);
+    const char *shown_name = shown < IR_FIRST_ONLY_HANDLER
+        ? _PyOpcode_OpName[shown]
+        : _PyIR_OnlyNames[shown - IR_FIRST_ONLY_HANDLER];
+    int has_arg = shown < IR_FIRST_ONLY_HANDLER
+        ? OPCODE_HAS_ARG(shown)
+        : _PyIR_FormatOf(shown)->imm != _PyIR_LOC_NONE;
+    if (has_arg) {
+        printf("%d: %s %d\n", offset, shown_name, oparg);
     }
     else {
-        printf("%d: %s\n", offset, _PyOpcode_OpName[shown]);
+        printf("%d: %s\n", offset, shown_name);
     }
     printf("    ir %s %u %u %u %u\n", name, a, b, c, d);
     fflush(stdout);

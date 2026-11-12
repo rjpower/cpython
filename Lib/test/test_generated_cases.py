@@ -1003,6 +1003,117 @@ class TestIRCases(unittest.TestCase):
                 self.assertFalse(ir_generator.canonical_frame_transfer_input(
                     instruction))
 
+    def test_suspend_terminal_transfer_proof(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def analyze(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                return analyzer.analyze_files([self.temp_input_filename])
+
+        analysis = analyze(source)
+        self.assertTrue(ir_generator.canonical_frame_transfer_input(
+            analysis.ir_only["SUSPEND"]))
+        self.assertFalse(ir_generator.canonical_frame_transfer_input(
+            analysis.ir_only["INSTRUMENTED_SUSPEND"]))
+        start = source.index("ir_only window op(_SUSPEND,")
+        before, body = source[:start], source[start:]
+        changes = (
+            ("DEAD(retval);", ""),
+            ("SAVE_STACK();", ""),
+            ("PyValue temp = retval;", "PyValue temp = PyValue_DUP(retval);"),
+            ("int incoming = IR_DST_SLOT;", "int incoming = IR_DST_SLOT + 1;"),
+            ("_PyInstr *resume_pc = this_instr + 1;",
+             "_PyInstr *resume_pc = this_instr + 2;"),
+            ("IR_SUSPEND(temp, this_instr, incoming, resume_pc, oparg);",
+             "opaque(temp); IR_SUSPEND(temp, this_instr, incoming, resume_pc, oparg);"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, body)
+                changed = analyze(before + body.replace(old, new, 1))
+                self.assertFalse(ir_generator.canonical_frame_transfer_input(
+                    changed.ir_only["SUSPEND"]))
+                output = io.StringIO()
+                try:
+                    ir_generator.generate_ir(
+                        [self.temp_input_filename], changed, output, False)
+                except SyntaxError:
+                    continue
+                handler = self.handler(output.getvalue(), "SUSPEND")
+                self.assertNotIn("can_propagate_delegate_yield(", handler)
+                self.assertIn("_PyFrame_SetReturnValue(frame, ir_yielded)", handler)
+
+    def test_delegate_yield_guard_binds_actual_helper(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "ceval.c").read_text()
+        self.assertTrue(ir_generator.delegate_yield_guard_proven(source))
+        changes = (
+            ("frame->owner != FRAME_OWNED_BY_GENERATOR || frame->pending_redirect",
+             "frame->owner != FRAME_OWNED_BY_GENERATOR"),
+            ("continuation != frame->return_pc ||", ""),
+            ("IR_A(suspend) != frame->return_slot ||", ""),
+            ("!PyValue_IsNull(frame->base[frame->return_slot])", "false"),
+            ("code->_co_instrumentation_version) != epoch", "code->_co_instrumentation_version) == epoch"),
+            ("code->_co_monitoring != NULL ||", ""),
+            ("frame->frame_obj != NULL ||", ""),
+            ("tstate->c_profilefunc != NULL ||", ""),
+            ("if (frame->lltrace)", "if (false)"),
+            ("return continuation;", "opaque(); return continuation;"),
+            ("#ifdef Py_GIL_DISABLED\n    return NULL;",
+             "#ifdef Py_GIL_DISABLED\n    return continuation;"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                self.assertFalse(ir_generator.delegate_yield_guard_proven(
+                    source.replace(old, new, 1)))
+
+    def test_delegate_terminal_generation_and_metadata(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        handler = self.handler(output.getvalue(), "SUSPEND")
+        self.assertLess(handler.index("window[0] = PyValue_NULL;"),
+                        handler.index("for (;;)"))
+        self.assertLess(handler.index("LLTRACE_RESUME_FRAME();"),
+                        handler.index("can_propagate_delegate_yield("))
+        self.assertEqual(handler.count("_PyFrame_SetReturnValue(frame, ir_yielded)"), 1)
+        # The evaluator's interpreter-owned entry shim does not initialize a
+        # frame object field. Only generator recipients inspect that field.
+        self.assertIn("ir_generation = frame->owner == FRAME_OWNED_BY_GENERATOR && frame->frame_obj != NULL", handler)
+        self.assertIn("if (!ir_redirected && frame->owner == FRAME_OWNED_BY_GENERATOR &&", handler)
+        self.assertTrue(all(line.startswith("        TARGET(")
+                            for line in output.getvalue().splitlines()
+                            if line.lstrip().startswith("TARGET(")))
+        self.assertLess(handler.index("_PyFrame_SetReturnValue(frame, ir_yielded)"),
+                        handler.index("_PyIR_PrepareSuspendLanding("))
+        self.assertNotIn("_PyOpcode_Deopt[opcode] == (DELEGATE)", output.getvalue())
+        with mock.patch.object(ir_generator, "delegate_yield_guard_proven", return_value=False):
+            output = io.StringIO()
+            ir_generator.generate_ir(
+                [self.temp_input_filename], analysis, output, False)
+        self.assertNotIn("can_propagate_delegate_yield(",
+                         self.handler(output.getvalue(), "SUSPEND"))
+        formats = ir_generator.compute_formats(analysis)
+        resume = formats["RESUME_DELEGATE"]
+        self.assertTrue(resume.jumps)
+        self.assertTrue(resume.jump_always)
+        self.assertEqual(resume.imm, ir_generator.LOC_A)
+        self.assertEqual(resume.roles, [ir_generator.ROLE_IMM,
+                         ir_generator.ROLE_NONE, ir_generator.ROLE_IMM,
+                         ir_generator.ROLE_IMM])
+        self.assertEqual(ir_generator.monitoring_events(
+            "INSTRUMENTED_RESUME_DELEGATE",
+            analysis.ir_only["INSTRUMENTED_RESUME_DELEGATE"]),
+            ["PY_MONITORING_EVENT_PY_RESUME"])
+
     def test_completion_result_local_does_not_capture_held_value(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

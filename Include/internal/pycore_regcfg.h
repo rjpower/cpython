@@ -91,6 +91,8 @@ typedef struct _PyRegOp {
                             // the pair.  0: none.
     int completion;         // index + 1 of the frontend END_SEND whose
                             // allocated recipient this semantic producer owns
+    int delegate;           // index + 1 of the DELEGATE owning this triple
+    int resume;             // DELEGATE's RESUME_DELEGATE op index + 1
     _Py_SourceLocation loc;
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */

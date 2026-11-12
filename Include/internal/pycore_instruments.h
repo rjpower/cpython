@@ -107,12 +107,13 @@ typedef struct _Py_GlobalMonitors {
 } _Py_GlobalMonitors;
 
 /* Ancillary data structure used for instrumentation.
+   Each entry starts with an aligned 16-bit handler and a packed line delta.
    Line instrumentation creates this with sufficient
    space for one entry per code unit. The total size
    of the data will be `bytes_per_entry * Py_SIZE(code)` */
 typedef struct {
     uint8_t bytes_per_entry;
-    uint8_t data[1];
+    uint16_t data[1];
 } _PyCoLineInstrumentationData;
 
 
@@ -146,7 +147,7 @@ typedef struct _PyCoMonitoringData {
     uint8_t *source_forced;
     /* Information to support instruction events */
     /* The underlying instructions, which can themselves be instrumented */
-    uint8_t *per_instruction_opcodes;
+    uint16_t *per_instruction_opcodes;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
 } _PyCoMonitoringData;
@@ -154,14 +155,14 @@ typedef struct _PyCoMonitoringData {
 extern int
 _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
 
-static inline uint8_t
+static inline uint16_t
 _PyCode_GetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index)
 {
-    return line_data->data[index*line_data->bytes_per_entry];
+    return *(uint16_t *)((char *)line_data->data + index * line_data->bytes_per_entry);
 }
 
 // Exported for external JIT support
-PyAPI_FUNC(uint8_t) _PyCode_Deinstrument(uint8_t opcode);
+PyAPI_FUNC(uint16_t) _PyCode_Deinstrument(uint16_t opcode);
 
 #ifdef __cplusplus
 }

@@ -30,6 +30,29 @@ def exception_entry(*values):
     return bytes(data)
 
 
+def replace_exception_recipe(code, pc, target, slot_lasti):
+    """Isolate an owner-proof recipe while retaining delegation throw regions."""
+    entries = []
+    table = dis.Bytecode(code).exception_entries
+    for instruction in dis.get_instructions(code):
+        if instruction.opname != 'SUSPEND' or instruction.arg != 1:
+            continue
+        entry = next(entry for entry in table
+                     if entry.start <= instruction.offset < entry.end)
+        entries.append((instruction.offset, 1, entry.target,
+                        entry.slot << 1 | entry.lasti))
+    entries.append((pc, 1, target, slot_lasti))
+    return b''.join(exception_entry(*entry) for entry in sorted(entries))
+
+
+def set_delegate_destination(code, encoded, site, destination):
+    """Keep normal and throw completion destinations equal in owner negatives."""
+    cleanup = next(entry.target for entry in dis.Bytecode(code).exception_entries
+                   if entry.start <= site + 1 < entry.end)
+    for pc in (site, cleanup):
+        encoded[pc] = (encoded[pc] & ~(4095 << 16)) | (destination << 16)
+
+
 class SemanticCompletionTests(unittest.TestCase):
     def test_cleanup_throw_survives_optimization_as_named_semantic_jump(self):
         first, second = object(), object()
@@ -132,7 +155,7 @@ class SemanticCompletionTests(unittest.TestCase):
         self.assertEqual(released, ['released', 'released'])
         self.assertNotIn('POP_TOP', code_names(gen))
         recipients = [i.dst for i in dis.get_instructions(gen)
-                      if i.opname in ('RETURN_GENERATOR', 'YIELD_VALUE')]
+                      if i.opname in ('RETURN_GENERATOR', 'SUSPEND')]
         self.assertEqual(recipients, [None, None])
 
     def test_completion_events_disable_independently(self):
@@ -243,11 +266,11 @@ class SemanticCompletionTests(unittest.TestCase):
         code = delegate.__code__
         words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'SEND')
+                    if i.opname == 'DELEGATE')
         base = (words[site] >> 28) & 4095
-        words[site] = (words[site] & ~(4095 << 16)) | (base << 16)
+        set_delegate_destination(code, words, site, base)
         words[-1] = dis.opmap['POP_TOP'] | (base << 16)
-        table = exception_entry(site, 1, len(words) - 1, (base + 1) << 1)
+        table = replace_exception_recipe(code, site, len(words) - 1, (base + 1) << 1)
         # Publishing a new completed result into B does not reconstruct the
         # old receiver that this forged handler attempts to consume.
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
@@ -315,16 +338,16 @@ class SemanticCompletionTests(unittest.TestCase):
         code = delegate.__code__
         original = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'SEND')
+                    if i.opname == 'DELEGATE')
         base = (original[site] >> 28) & 4095
         self.assertGreater(base, len(_testinternalcapi.get_co_localskinds(code)))
-        table = exception_entry(site, 1, len(original) - 1, (base + 2) << 1)
+        table = replace_exception_recipe(code, site, len(original) - 1, (base + 2) << 1)
         handlers = ('CALL', 'CALL_KW', 'CALL_PY_EXACT_ARGS', 'INSTRUMENTED_CALL',
                     'CALL_FUNCTION_EX', 'CALL_EX_PY', 'INSTRUMENTED_CALL_FUNCTION_EX')
         for handler, destination in ((h, d) for h in handlers for d in (4095, base)):
             with self.subTest(handler=handler, destination=destination):
                 words = original.copy()
-                words[site] = (words[site] & ~(4095 << 16)) | (destination << 16)
+                set_delegate_destination(code, words, site, destination)
                 words[-1] = dis._all_opmap[handler] | (4095 << 16) | ((base - 1) << 28)
                 # B is preserved by PRE's handler and is neither an optional
                 # NULL self nor reconstructed by POST's completed result.
@@ -341,7 +364,7 @@ class SemanticCompletionTests(unittest.TestCase):
         site = next(i.offset for i in dis.get_instructions(delegate)
                     if i.opname == 'CLEANUP_THROW')
         base = (original[site] >> 28) & 4095
-        table = exception_entry(site, 1, len(original) - 1, base << 1)
+        table = replace_exception_recipe(code, site, len(original) - 1, base << 1)
         for handler in ('CALL_FUNCTION_EX', 'CALL_EX_PY', 'INSTRUMENTED_CALL_FUNCTION_EX'):
             for window in (base, base + 1):
                 with self.subTest(handler=handler, window=window):
@@ -648,7 +671,7 @@ class SemanticCompletionTests(unittest.TestCase):
         words.extend((dis.opmap['PUSH_EXC_INFO'] | (base << 16) | (exception << 28),
                       dis.opmap['POP_TOP'] | (base << 16),
                       dis.opmap['RERAISE'] | ((exception + 1) << 16)))
-        table = exception_entry(site, 1, handler, exception << 1)
+        table = replace_exception_recipe(code, site, handler, exception << 1)
         # PUSH_EXC_INFO publishes at its implicit B window; its ignored A
         # field cannot recreate the old receiver that POP_TOP attempts to read.
         with self.assertRaisesRegex(ValueError, f'pc={handler + 1} '):
@@ -825,8 +848,13 @@ class SemanticCompletionTests(unittest.TestCase):
                     sys.settrace(None)
                 self.assertLessEqual(helpers, set(observed))
                 self.assertTrue(all(offset < len(instructions) for offset in observed))
-                body, completed = sorted(helpers)
-                self.assertEqual(observed.count(body), 2)
+                if any(i.opname == 'FOR_ITER' for i in instructions):
+                    self.assertEqual(len(helpers), 2)
+                    body, completed = sorted(helpers)
+                    self.assertEqual(observed.count(body), 2)
+                else:
+                    self.assertEqual(len(helpers), 1)
+                    completed, = helpers
                 self.assertEqual(observed.count(completed), 1)
 
     def test_mixed_line_instruction_ingress_and_suspension(self):
@@ -875,7 +903,7 @@ class SemanticCompletionTests(unittest.TestCase):
                             if delegated:
                                 iterator = func()
                                 self.assertEqual(next(iterator), 1)
-                                # Change observation while the SEND child and
+                                # Change observation while the DELEGATE child and
                                 # parent are suspended, then finish normally.
                                 if observe_instructions:
                                     enable(instruction_tool, 0)

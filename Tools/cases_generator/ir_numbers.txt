@@ -369,3 +369,11 @@ LOAD_ATTR_SHAPE_LOCAL_TEMP 319
 
 # Materialize a compiler-proven virtual local binding on its first read.
 # removed: MATERIALIZE_KWARGS 325
+
+# Explicit generator delegation and suspension (format 64419).
+DELEGATE 326
+DELEGATE_GEN 327
+SUSPEND 328
+INSTRUMENTED_SUSPEND 329
+RESUME_DELEGATE 330
+INSTRUMENTED_RESUME_DELEGATE 331

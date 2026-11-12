@@ -49,6 +49,8 @@ BINARY_OP = opmap['BINARY_OP']
 JUMP_BACKWARD = opmap['JUMP_BACKWARD']
 FOR_ITER = opmap['FOR_ITER']
 SEND = opmap['SEND']
+DELEGATE = _ir_opmap['DELEGATE']
+RESUME_DELEGATE = _ir_opmap['RESUME_DELEGATE']
 LOAD_ATTR = opmap['LOAD_ATTR']
 LOAD_SUPER_ATTR = opmap['LOAD_SUPER_ATTR']
 CALL_INTRINSIC_1 = opmap['CALL_INTRINSIC_1']
@@ -402,10 +404,10 @@ def _feedback_arg(fbinit, fb):
 def _decode_word(handler, fields, fbinit=None):
     """The oparg, dst, srcs and feedback index of a word, which has the
     format of handler.  The oparg is that of the stack instruction except
-    that a jump names its target, and FOR_ITER and SEND their exit as a
+    that a jump names its target, and FOR_ITER, SEND and DELEGATE their exit as a
     distance from the next word; it is None if it is in a feedback table
-    that fbinit does not hold. A SEND destination receives completion, and a
-    YIELD_VALUE destination receives the next resume input; neither is an
+    that fbinit does not hold. SEND/DELEGATE destinations receive completion;
+    YIELD_VALUE/SUSPEND destinations receive the next resume input. Neither is an
     unconditional definition during the current operation."""
     row = _ir_contract[handler]
     roles, imm, base = row.roles, row.imm, row.base
@@ -524,6 +526,9 @@ class Instruction(_Instruction):
 
         Otherwise return None.
         """
+        if _deoptop(self.opcode) in (RESUME_DELEGATE,
+                                      _ir_opmap["INSTRUMENTED_RESUME_DELEGATE"]):
+            return self.argval
         return _get_jump_target(self.opcode, self.arg, self.offset)
 
     @property
@@ -952,6 +957,16 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
         else:
             argval, argrepr = arg, repr(arg)
 
+        if _deoptop(handler) in (RESUME_DELEGATE,
+                                 _ir_opmap["INSTRUMENTED_RESUME_DELEGATE"]):
+            word = int.from_bytes(original_code[offset * _WORD_SIZE:
+                                                (offset + 1) * _WORD_SIZE],
+                                  sys.byteorder)
+            argval = word >> 40
+            label_target = (arg_resolver.get_label_for_offset(argval)
+                            if arg_resolver else None)
+            target = f"L{label_target}" if label_target is not None else str(argval)
+            argrepr = f"{arg}, to {target}"
         cache_info = _feedback_info(fb, fbinit, feedback)
         label = arg_resolver.get_label_for_offset(offset) if arg_resolver else None
         yield Instruction(_all_opname[op], op, arg, argval, argrepr,
@@ -1083,8 +1098,15 @@ disco = disassemble                     # XXX For backwards compatibility
 
 def _findlabels(code, fbinit=None):
     labels = []
-    for offset, handler, arg, *_ in _unpack_opargs(code, fbinit):
-        label = _get_jump_target(handler, arg, offset)
+    for offset, handler, fields in _unpack_words(code):
+        if _deoptop(handler) in (RESUME_DELEGATE,
+                                 _ir_opmap["INSTRUMENTED_RESUME_DELEGATE"]):
+            label = _field(fields, _LOC_CD)
+        elif _ir_contract[handler] is not None:
+            arg, *_ = _decode_word(handler, fields, fbinit)
+            label = _get_jump_target(handler, arg, offset)
+        else:
+            label = None
         if label is not None and label not in labels:
             labels.append(label)
     return labels

@@ -90,6 +90,14 @@ _opcode_stack_effect_impl(PyObject *module, int opcode, PyValueBorrow oparg,
     return effect;
 }
 
+static int
+is_semantic_ir_opcode(int opcode)
+{
+    return opcode == DELEGATE || opcode == DELEGATE_GEN ||
+           opcode == SUSPEND || opcode == INSTRUMENTED_SUSPEND ||
+           opcode == RESUME_DELEGATE || opcode == INSTRUMENTED_RESUME_DELEGATE;
+}
+
 /*[clinic input]
 
 _opcode.is_valid -> bool
@@ -103,7 +111,7 @@ static int
 _opcode_is_valid_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=b0d918ea1d073f65 input=fe23e0aa194ddae0]*/
 {
-    return IS_VALID_OPCODE(opcode);
+    return is_semantic_ir_opcode(opcode) || IS_VALID_OPCODE(opcode);
 }
 
 /*[clinic input]
@@ -119,7 +127,8 @@ static int
 _opcode_has_arg_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=7a062d3b2dcc0815 input=93d878ba6361db5f]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_ARG(opcode);
+    return is_semantic_ir_opcode(opcode) ||
+           (IS_VALID_OPCODE(opcode) && OPCODE_HAS_ARG(opcode));
 }
 
 /*[clinic input]
@@ -167,6 +176,10 @@ static int
 _opcode_has_jump_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=e9c583c669f1c46a input=35f711274357a0c3]*/
 {
+    if (is_semantic_ir_opcode(opcode)) {
+        return (_PyIR_FormatOf(opcode)->flags & _PyIR_JUMPS) != 0 ||
+               (_PyIR_FormatOf(opcode)->flags & _PyIR_FORWARD) != 0;
+    }
     return IS_VALID_OPCODE(opcode) && OPCODE_HAS_JUMP(opcode);
 }
 

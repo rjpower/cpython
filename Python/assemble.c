@@ -442,7 +442,8 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
                     goto error;
                 }
             }
-            if (!IS_NO_FALLTHROUGH_OPCODE(control->opcode) &&
+            if (control->opcode != RESUME_DELEGATE &&
+                !IS_NO_FALLTHROUGH_OPCODE(control->opcode) &&
                 assemble_source_edge(writer, cfg, op->word,
                                      _PyIR_SOURCE_FALLTHROUGH, b, control_index + 1) < 0)
             {
@@ -896,10 +897,19 @@ static int
 handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+    if (op->opcode == RESUME_DELEGATE) {
+        /* Flags and continuation are separate operands of this operation. */
+        return op->oparg;
+    }
     if (fmt->flags & _PyIR_JUMPS) {
         return jump_target(cfg, op);
     }
     if (fmt->flags & _PyIR_FORWARD) {
+        if (op->opcode == DELEGATE &&
+            cfg->ops[op->resume - 1].nwords == 2)
+        {
+            return 2;
+        }
         if (op->nwords > 1) {
             return 1;
         }
@@ -1277,6 +1287,85 @@ lower_completions(_PyRegCfg *cfg)
     return SUCCESS;
 }
 
+/* Allocation sees the original SEND/yield/resume/backedge stack effects.
+ * Once physical homes are fixed, certify the suspendable-call continuation
+ * independently of source positions and eliminate only its routing backedge. */
+static int
+lower_delegations(_PyRegCfg *cfg)
+{
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *send = &cfg->ops[i];
+        if (send->opcode != SEND || !send->completion) {
+            continue;
+        }
+        int y = next_frontend_op(cfg, i + 1, 0);
+        if (y < 0 || cfg->ops[y].opcode != YIELD_VALUE ||
+            cfg->ops[y].oparg != 1)
+        {
+            /* Async-for SEND has a body rather than an outward suspension. */
+            continue;
+        }
+        int r = next_frontend_op(cfg, y + 1, 0);
+        int j = r < 0 ? -1 : next_frontend_op(cfg, r + 1, 0);
+        if (r < 0 || j < 0 || cfg->ops[r].opcode != RESUME ||
+            cfg->ops[j].opcode != JUMP_BACKWARD_NO_INTERRUPT ||
+            cfg->ops[j].target < 0 ||
+            next_frontend_op(cfg, cfg->blocks[cfg->ops[j].target].start, 0) != i)
+        {
+            return completion_error(cfg, send, "invalid delegation continuation");
+        }
+        _PyRegOp *yield = &cfg->ops[y];
+        _PyRegOp *resume = &cfg->ops[r];
+        int location = resume->oparg & RESUME_OPARG_LOCATION_MASK;
+        if ((location != RESUME_AFTER_YIELD_FROM && location != RESUME_AFTER_AWAIT) ||
+            (resume->oparg & ~(RESUME_OPARG_LOCATION_MASK | RESUME_OPARG_DEPTH1_MASK)) ||
+            yield->except < 0 || resume->except != send->except)
+        {
+            return completion_error(cfg, send, "invalid delegation resume context");
+        }
+        int cleanup = next_frontend_op(cfg, cfg->blocks[yield->except].start, 0);
+        if (cleanup < 0 || cfg->ops[cleanup].opcode != CLEANUP_THROW ||
+            cfg->ops[cleanup].completion != send->completion)
+        {
+            return completion_error(cfg, send, "invalid delegation throw context");
+        }
+        _PyRegSlots sent, suspended;
+        _PyRegCfg_OpSlots(cfg, send, &sent);
+        _PyRegCfg_OpSlots(cfg, yield, &suspended);
+        if (suspended.base != sent.base + 2 || suspended.dst != suspended.base) {
+            return completion_error(cfg, send, "delegation suspension window differs");
+        }
+        for (int k = 0; k < cfg->nops; k++) {
+            _PyRegOp *incoming = &cfg->ops[k];
+            int edges[2] = {incoming->target, incoming->except};
+            for (int e = 0; e < 2; e++) {
+                if (edges[e] < 0) {
+                    continue;
+                }
+                int first = next_frontend_op(cfg, cfg->blocks[edges[e]].start, 0);
+                if (first == y || first == r || first == j) {
+                    return completion_error(cfg, send, "external delegation continuation ingress");
+                }
+            }
+        }
+        send->opcode = DELEGATE;
+        send->delegate = i + 1;
+        send->resume = r + 1;
+        yield->opcode = SUSPEND;
+        yield->delegate = i + 1;
+        resume->opcode = RESUME_DELEGATE;
+        resume->delegate = i + 1;
+        resume->target = cfg->ops[j].target;
+        cfg->ops[j].flags |= _PyReg_COMPLETED;
+    }
+    for (int i = 0; i < cfg->nops; i++) {
+        if (cfg->ops[i].opcode == YIELD_VALUE && cfg->ops[i].oparg == 0) {
+            cfg->ops[i].opcode = SUSPEND;
+        }
+    }
+    return SUCCESS;
+}
+
 /* Choose the handlers.  A compare marked by _PyRegPass_FuseJump starts
  * fused with its jump, which then has no word of its own; place_entries()
  * unfuses the pairs whose compare gets no entry, and layout() those whose
@@ -1285,6 +1374,7 @@ static int
 choose_handlers(_PyRegCfg *cfg, PyObject *consts)
 {
     RETURN_IF_ERROR(lower_completions(cfg));
+    RETURN_IF_ERROR(lower_delegations(cfg));
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
         op->fb = -1;
@@ -1294,7 +1384,9 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             continue;
         }
         assert(!IS_PSEUDO_INSTR(op->opcode));
-        assert(IS_VALID_OPCODE(op->opcode));
+        assert(IS_VALID_OPCODE(op->opcode) ||
+               (op->opcode >= 256 && op->opcode < IR_NUM_HANDLERS &&
+                (_PyIR_FormatOf(op->opcode)->flags & _PyIR_VALID)));
         if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
             op->handler = NOP;
             op->nwords = 0;
@@ -1464,6 +1556,17 @@ layout(struct assembler *a, _PyRegCfg *cfg)
             if (word <= _PyIR_MaxForward) {
                 continue;
             }
+            if (op->opcode == DELEGATE) {
+                _PyRegOp *resume = &cfg->ops[op->resume - 1];
+                int distance = jump_target(cfg, op) - (op->word + 1);
+                if (distance > _PyIR_MaxForward && resume->nwords == 1) {
+                    /* Keep the complete triple adjacent; its exit adapter
+                     * belongs after RESUME_DELEGATE, never after DELEGATE. */
+                    resume->nwords = 2;
+                    changed = 1;
+                }
+                continue;
+            }
             if ((op->opcode != FOR_ITER && op->opcode != SEND) || op->nwords > 1) {
                 continue;
             }
@@ -1488,7 +1591,9 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
-    if ((op->opcode == SEND || op->opcode == CLEANUP_THROW) && op->completion) {
+    if ((op->opcode == SEND || op->opcode == DELEGATE ||
+         op->opcode == CLEANUP_THROW) && op->completion)
+    {
         _PyRegSlots completed;
         _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
         slots.dst = completed.dst;
@@ -1554,6 +1659,14 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[r] = 0;
         }
     }
+    if (op->opcode == RESUME_DELEGATE) {
+        assert(op->delegate > 0);
+        int target = cfg->ops[op->delegate - 1].word;
+        fields[0] = (uint32_t)op->oparg;
+        fields[1] = 0;
+        fields[2] = (uint32_t)target & IR_FIELD_MAX;
+        fields[3] = (uint32_t)target >> 12;
+    }
     *word = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
     return SUCCESS;
 }
@@ -1607,13 +1720,19 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
             if (op->nwords > 1) {
-                int exit = jump_target(cfg, op);
-                if (op->opcode == FOR_ITER) {
+                if (op->opcode == RESUME_DELEGATE) {
+                    _PyRegOp *delegate = &cfg->ops[op->delegate - 1];
+                    assert(op->nwords == 2 && w == delegate->word + 2);
+                    words[w + 1] = jump_word(jump_target(cfg, delegate));
+                }
+                else if (op->opcode == FOR_ITER) {
+                    int exit = jump_target(cfg, op);
                     words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
                     words[w + 2] = jump_word(exit);
                 }
                 else {
                     assert(op->opcode == SEND);
+                    int exit = jump_target(cfg, op);
                     words[w + 1] = jump_word(w + RELAXED_SEND_WORDS);
                     words[w + 2] = jump_word(exit);
                 }

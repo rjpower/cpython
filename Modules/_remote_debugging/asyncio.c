@@ -339,7 +339,7 @@ get_awaited_coro_address(
         return -1;
     }
 
-    /* The receiver of the SEND whose yield suspended the frame is two
+    /* The receiver of the DELEGATE whose yield suspended the frame is two
      * slots below the slot of the yielded value, return_slot.  A generator
      * keeps its slots in its frame, in owned_slots. */
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);

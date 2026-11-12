@@ -474,7 +474,7 @@ class AssemblerTest(unittest.TestCase):
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_yield_to_each_kind_of_resumer(self):
         # A yield returns past the instruction that resumed the generator:
-        # FOR_ITER_GEN, SEND_GEN or the trampoline of a C-level next().  One
+        # FOR_ITER_GEN, DELEGATE_GEN or the trampoline of a C-level next(). One
         # generator alternates between all three.
         def counter():
             n = 0
@@ -497,7 +497,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(g, delegate(g), rounds),
                          list(range(1, 3 * rounds + 1)))
         self.assertIn("FOR_ITER_GEN", handlers(f))
-        self.assertIn("SEND_GEN", handlers(delegate))
+        self.assertIn("DELEGATE_GEN", handlers(delegate))
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_compare_and_branch(self):
@@ -1278,7 +1278,7 @@ class NameLimitTest(unittest.TestCase):
 
 
 class RelaxationTest(unittest.TestCase):
-    """FOR_ITER and SEND reach IR_MAX_FORWARD words; a loop whose exit is
+    """FOR_ITER and DELEGATE reach IR_MAX_FORWARD words; a loop whose exit is
     further away exits through IR_JUMP words after its own."""
 
     def relaxed(self, func, opname):
@@ -1406,13 +1406,60 @@ class RelaxationTest(unittest.TestCase):
         """
         namespace = relaxed_compile(source)
         for name in ("outer", "co"):
-            _, jumps = self.relaxed(namespace[name], "SEND")
-            self.assertEqual(jumps, ["IR_JUMP"] * 2)
+            ir = get_ir(namespace[name].__code__)
+            site = next(i for i, row in enumerate(ir) if row[0] == "DELEGATE")
+            self.assertEqual([row[0] for row in ir[site + 1:site + 4]],
+                             ["SUSPEND", "RESUME_DELEGATE", "IR_JUMP"])
+            self.assertEqual(ir[site][4], 2)
+            self.assertEqual(ir[site + 1][1:3], (ir[site][2] + 2,) * 2)
+            resume = ir[site + 2]
+            self.assertEqual(resume[3] | resume[4] << 12, site)
         expected = [1, 5, "done", "stop", "a", "b"]
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(namespace["run"](), expected)
         if SPECIALIZES:
-            self.assertIn("SEND_GEN", handlers(namespace["outer"]))
+            self.assertIn("DELEGATE_GEN", handlers(namespace["outer"]))
+
+    def test_delegation_error_contexts_and_continuation(self):
+        def outer(receiver):
+            result = yield from receiver
+            return result
+
+        ir = get_ir(outer.__code__)
+        site = next(i for i, row in enumerate(ir) if row[0] == "DELEGATE")
+        self.assertEqual([row[0] for row in ir[site:site + 3]],
+                         ["DELEGATE", "SUSPEND", "RESUME_DELEGATE"])
+        self.assertNotIn("JUMP_BACKWARD_NO_INTERRUPT", [row[0] for row in ir])
+        entries = list(dis.Bytecode(outer).exception_entries)
+        suspension = next(entry for entry in entries
+                          if entry.start <= site + 1 < entry.end)
+        self.assertEqual(ir[suspension.target][0], "CLEANUP_THROW")
+        self.assertFalse(any(entry.start <= site < entry.end and
+                             entry.target == suspension.target
+                             for entry in entries))
+
+        class Receiver:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                return "ready"
+
+            def send(self, value):
+                raise LookupError("provider")
+
+            def throw(self, error):
+                raise StopIteration("completed")
+
+        g = outer(Receiver())
+        self.assertEqual(next(g), "ready")
+        with self.assertRaisesRegex(LookupError, "provider"):
+            g.send(42)
+        g = outer(Receiver())
+        self.assertEqual(next(g), "ready")
+        with self.assertRaises(StopIteration) as completed:
+            g.throw(ValueError())
+        self.assertEqual(completed.exception.value, "completed")
 
     def test_events_of_a_relaxed_loop(self):
         # Relaxation preserves the semantic branch pairs. Its actual jump

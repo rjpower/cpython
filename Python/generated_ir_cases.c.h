@@ -9093,6 +9093,226 @@
             DISPATCH();
         }
 
+        TARGET(DELEGATE) {
+            int opcode = DELEGATE;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DELEGATE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyObject *value_boxes[14];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 14};
+            _PyValueTemps *value_temps = &value_owners;
+            _PyFb_DELEGATE *fb = (_PyFb_DELEGATE *)IR_FB(IR_C(ir_word));
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue receiver;
+            PyValue null_or_index;
+            PyValue v;
+            PyValue retval;
+            PyObject *ir_obj_receiver = NULL;
+            // _CHECK_GENERATOR_OWNER
+            {
+                if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                    _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            // _SPECIALIZE_DELEGATE
+            {
+                receiver = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_Delegate(receiver, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(DELEGATE);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _DELEGATE
+            {
+                v = window[2];
+                null_or_index = window[1];
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
+                    if (ir_obj_receiver == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(DELEGATE);
+                }
+                else {
+                    ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
+                }
+                PyObject *receiver_o = ir_obj_receiver;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                if (!IS_PEP523_HOOKED(tstate) &&
+                    (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                    !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
+                    gen_try_set_executing((PyGenObject *)receiver_o))
+                {
+                    PyGenObject *gen = (PyGenObject *)receiver_o;{
+                        _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
+                        PyValue ir_resume_input = PyValue_None;
+                        if (_PY_IR_DELEGATE != _PY_IR_FOR_ITER) {
+                            ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
+                            IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                        }
+                        frame->return_slot = (uint16_t)(_PY_IR_DELEGATE != _PY_IR_FOR_ITER ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                        frame->return_pc = next_instr;
+                        ir_resumed_frame->previous = frame;
+                        gen->gi_exc_state.previous_item = tstate->exc_info;
+                        tstate->exc_info = &gen->gi_exc_state;
+                        frame = tstate->current_frame = ir_resumed_frame;
+                        slots = _PyFrame_Slots(frame);
+                        if (_Py_EnterRecursivePy(tstate)) {
+                            PyValue_XCLOSE(ir_resume_input);
+                            JUMP_TO_LABEL(exit_unwind_notrace);
+                        }
+                        _PyFrame_SetReturnValue(frame, ir_resume_input);
+                        LOAD_IP(0);
+                        IR_SKIP_RESUME();
+                        DTRACE_FUNCTION_ENTRY();
+                        LLTRACE_RESUME_FRAME();
+                        DISPATCH();
+                    }
+                }
+                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    null_or_index = window[1];
+                    PyValue item = next.value;
+                    int found = next.status;
+                    if (found <= 0) {
+                        if (found < 0) {
+                            IR_PUBLISH_TEMP(window[1], null_or_index);
+                            JUMP_TO_LABEL(error);
+                        }
+                        PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
+                            _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_DELEGATE);
+                            next_instr = ir_step_result.next;
+                            if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                            DISPATCH();
+                        }
+                    }
+                    retval = item;
+                }
+                else {
+                    _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                    if (sent.status == PYGEN_ERROR) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (sent.status == PYGEN_RETURN) {
+                        PyValue completed = sent.value;{
+                            _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_DELEGATE);
+                            next_instr = ir_step_result.next;
+                            if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                            DISPATCH();
+                        }
+                    }
+                    window[2] = PyValue_NULL;
+                    PyValue_CLOSE(v);
+                    retval = sent.value;
+                }
+            }
+            IR_PUBLISH_TEMP(window[1], null_or_index);
+            IR_PUBLISH_TEMP(window[2], retval);
+            if (_PyIR_PrepareSuspendLanding(tstate, frame, next_instr) < 0) {
+                next_instr = frame->instr_ptr + 1;
+            JUMP_TO_LABEL(error);
+}
+            DISPATCH();
+        }
+
+        TARGET(DELEGATE_GEN) {
+            int opcode = DELEGATE_GEN;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DELEGATE_GEN);
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue receiver;
+            PyValue v;
+            // _CHECK_GENERATOR_OWNER
+            {
+                if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                    _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(DELEGATE);
+                    assert(_PyIR_BaseOpcode(opcode) == DELEGATE);
+                    JUMP_TO_PREDICTED(DELEGATE);
+                }
+            }
+            // _DELEGATE_GEN_FRAME
+            {
+                v = window[2];
+                receiver = window[0];
+                if (!PyValue_IsObject(receiver)) {
+                    UPDATE_MISS_STATS(DELEGATE);
+                    assert(_PyIR_BaseOpcode(opcode) == DELEGATE);
+                    JUMP_TO_PREDICTED(DELEGATE);
+                }
+                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+                if (Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) {
+                    UPDATE_MISS_STATS(DELEGATE);
+                    assert(_PyIR_BaseOpcode(opcode) == DELEGATE);
+                    JUMP_TO_PREDICTED(DELEGATE);
+                }
+                if (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) {
+                    UPDATE_MISS_STATS(DELEGATE);
+                    assert(_PyIR_BaseOpcode(opcode) == DELEGATE);
+                    JUMP_TO_PREDICTED(DELEGATE);
+                }
+                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                    UPDATE_MISS_STATS(DELEGATE);
+                    assert(_PyIR_BaseOpcode(opcode) == DELEGATE);
+                    JUMP_TO_PREDICTED(DELEGATE);
+                }
+                STAT_INC(DELEGATE, hit);{
+                    _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
+                    PyValue ir_resume_input = PyValue_None;
+                    if (_PY_IR_DELEGATE != _PY_IR_FOR_ITER) {
+                        ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
+                        IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                    }
+                    frame->return_slot = (uint16_t)(_PY_IR_DELEGATE != _PY_IR_FOR_ITER ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    frame->return_pc = next_instr;
+                    ir_resumed_frame->previous = frame;
+                    gen->gi_exc_state.previous_item = tstate->exc_info;
+                    tstate->exc_info = &gen->gi_exc_state;
+                    frame = tstate->current_frame = ir_resumed_frame;
+                    slots = _PyFrame_Slots(frame);
+                    if (_Py_EnterRecursivePy(tstate)) {
+                        PyValue_XCLOSE(ir_resume_input);
+                        JUMP_TO_LABEL(exit_unwind_notrace);
+                    }
+                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    LOAD_IP(0);
+                    IR_SKIP_RESUME();
+                    DTRACE_FUNCTION_ENTRY();
+                    LLTRACE_RESUME_FRAME();
+                    DISPATCH();
+                }
+            }
+        }
+
         TARGET(DELETE_DEREF) {
             int opcode = DELETE_DEREF;
             (void)(opcode);
@@ -9650,11 +9870,11 @@
                 STAT_INC(FOR_ITER, hit);{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
-                    if (_PY_IR_FOR_ITER == _PY_IR_SEND) {
+                    if (_PY_IR_FOR_ITER != _PY_IR_FOR_ITER) {
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                         IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                     }
-                    frame->return_slot = (uint16_t)(_PY_IR_FOR_ITER == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    frame->return_slot = (uint16_t)(_PY_IR_FOR_ITER != _PY_IR_FOR_ITER ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
                     ir_resumed_frame->previous = frame;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -11081,7 +11301,7 @@
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
             }
-            assert(next_opcode > 0 && next_opcode < 256);
+            assert(next_opcode > 0 && next_opcode < IR_NUM_HANDLERS);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
             DISPATCH_GOTO();
         }
@@ -11426,7 +11646,7 @@
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(_PyFrame_InstrOffset(frame, this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -11991,6 +12211,26 @@
             DISPATCH();
         }
 
+        TARGET(INSTRUMENTED_RESUME_DELEGATE) {
+            int opcode = INSTRUMENTED_RESUME_DELEGATE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_RESUME_DELEGATE);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            {
+                _PyIRStepResult ir_resume = _PyEval_ResumeDelegate(tstate, frame, this_instr, oparg, 1);
+                next_instr = ir_resume.next;
+                if (ir_resume.status < 0) { JUMP_TO_LABEL(error); }
+                DISPATCH();
+            }
+        }
+
         TARGET(INSTRUMENTED_RETURN_VALUE) {
             int opcode = INSTRUMENTED_RETURN_VALUE;
             (void)(opcode);
@@ -12045,6 +12285,110 @@
                 }
                 LLTRACE_RESUME_FRAME();
                 DISPATCH();
+            }
+        }
+
+        TARGET(INSTRUMENTED_SUSPEND) {
+            int opcode = INSTRUMENTED_SUSPEND;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_SUSPEND);
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue val;
+            PyValue value;
+            PyValue taken;
+            PyValue retval;
+            // _CHECK_GENERATOR_OWNER
+            {
+                if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                    _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            // _YIELD_VALUE_EVENT
+            {
+                val = window[0];
+                int err = _Py_call_instrumentation_arg(
+                    tstate, PY_MONITORING_EVENT_PY_YIELD,
+                    frame, this_instr, val);
+                if (err) {
+                    // Explicit stack reload
+                    slots = _PyFrame_Slots(frame);
+                    JUMP_TO_LABEL(error);
+                }
+                if (frame->instr_ptr != this_instr) {
+                    // Explicit stack reload
+                    slots = _PyFrame_Slots(frame);
+                    next_instr = frame->instr_ptr;
+                    DISPATCH();
+                }
+            }
+            // _MAKE_HEAP_SAFE
+            {
+                value = val;
+                taken = value;
+            }
+            // _SUSPEND
+            {
+                retval = taken;
+                PyValue temp = retval;
+                window[0] = PyValue_NULL;
+                int incoming =IR_A(ir_word);
+                _PyInstr *resume_pc = this_instr + 1;{
+                    temp = _PyValue_Publish(&temp);
+                    PyValue ir_yielded = temp;
+                    _PyInstr *ir_suspend_site = this_instr;
+                    int ir_incoming = incoming;
+                    _PyInstr *ir_resume_pc = resume_pc;
+                    int ir_suspend_kind = oparg;
+                    for (;;) {
+                        assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+                        frame->instr_ptr = ir_resume_pc;
+                        PyGenObject *ir_generator = _PyGen_GetGeneratorFromFrame(frame);
+                        DTRACE_FUNCTION_RETURN();
+                        tstate->exc_info = ir_generator->gi_exc_state.previous_item;
+                        ir_generator->gi_exc_state.previous_item = NULL;
+                        _Py_LeaveRecursiveCallPy(tstate);
+                        _PyInterpreterFrame *ir_suspended = frame;
+                        ir_suspended->return_slot = (uint16_t)ir_incoming;
+                        _PyThreadState_UpdateLastProfiledFrame(tstate, ir_suspended, ir_suspended->previous);
+                        frame = tstate->current_frame = ir_suspended->previous;
+                        ir_suspended->previous = NULL;
+                        ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                        FT_ATOMIC_STORE_INT8_RELEASE(ir_generator->gi_frame_state, FRAME_SUSPENDED + ir_suspend_kind);
+                        slots = _PyFrame_Slots(frame);
+                        next_instr = frame->return_pc;
+                        LLTRACE_RESUME_FRAME();
+                        ir_suspend_site = NULL;
+                        if (ir_suspend_site != NULL) {
+                            ir_incoming = (int)IR_A(*ir_suspend_site);
+                            ir_resume_pc = ir_suspend_site + 1;
+                            ir_suspend_kind = 1;
+                            continue;
+                        }
+                        int ir_redirected = frame->pending_redirect;
+                        uint64_t ir_generation = frame->owner == FRAME_OWNED_BY_GENERATOR && frame->frame_obj != NULL ? frame->frame_obj->f_lineno_generation : 0;
+                        if (_PyFrame_SetReturnValue(frame, ir_yielded)) { next_instr = frame->return_pc; }
+                        if (!ir_redirected && frame->owner == FRAME_OWNED_BY_GENERATOR &&
+                            (frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation) == ir_generation &&
+                        _PyIR_BaseOpcode(_PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)_PyFrame_InstrOffset(frame, next_instr))) == SUSPEND) {
+                            if (_PyIR_PrepareSuspendLanding(tstate, frame, next_instr) < 0) {
+                                next_instr = frame->instr_ptr + 1;
+                                JUMP_TO_LABEL(error);
+                            }
+                        }
+                        DISPATCH();
+                    }
+                }
             }
         }
 
@@ -12117,7 +12461,7 @@
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(
                         _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                    assert(opcode == SEND || opcode == FOR_ITER);
+                    assert(opcode == SEND || opcode == FOR_ITER || opcode == DELEGATE);
                 }
                 #endif
                 slots = _PyFrame_Slots(frame);
@@ -16593,6 +16937,26 @@
             DISPATCH();
         }
 
+        TARGET(RESUME_DELEGATE) {
+            int opcode = RESUME_DELEGATE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME_DELEGATE);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            {
+                _PyIRStepResult ir_resume = _PyEval_ResumeDelegate(tstate, frame, this_instr, oparg, 0);
+                next_instr = ir_resume.next;
+                if (ir_resume.status < 0) { JUMP_TO_LABEL(error); }
+                DISPATCH();
+            }
+        }
+
         TARGET(RETURN_GENERATOR) {
             int opcode = RETURN_GENERATOR;
             (void)(opcode);
@@ -16741,11 +17105,11 @@
                     PyGenObject *gen = (PyGenObject *)receiver_o;{
                         _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                         PyValue ir_resume_input = PyValue_None;
-                        if (_PY_IR_SEND == _PY_IR_SEND) {
+                        if (_PY_IR_SEND != _PY_IR_FOR_ITER) {
                             ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                             IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                         }
-                        frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                        frame->return_slot = (uint16_t)(_PY_IR_SEND != _PY_IR_FOR_ITER ? IR_B(ir_word) + 2 : IR_A(ir_word));
                         frame->return_pc = next_instr;
                         ir_resumed_frame->previous = frame;
                         gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -16922,11 +17286,11 @@
                 STAT_INC(SEND, hit);{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
-                    if (_PY_IR_SEND == _PY_IR_SEND) {
+                    if (_PY_IR_SEND != _PY_IR_FOR_ITER) {
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                         IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                     }
-                    frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    frame->return_slot = (uint16_t)(_PY_IR_SEND != _PY_IR_FOR_ITER ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
                     ir_resumed_frame->previous = frame;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -18178,6 +18542,91 @@
             DISPATCH();
         }
 
+        TARGET(SUSPEND) {
+            int opcode = SUSPEND;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SUSPEND);
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue value;
+            PyValue taken;
+            PyValue retval;
+            // _CHECK_GENERATOR_OWNER
+            {
+                if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                    _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            // _MAKE_HEAP_SAFE
+            {
+                value = window[0];
+                taken = value;
+            }
+            // _SUSPEND
+            {
+                retval = taken;
+                PyValue temp = retval;
+                window[0] = PyValue_NULL;
+                int incoming =IR_A(ir_word);
+                _PyInstr *resume_pc = this_instr + 1;{
+                    assert(_PyValue_IsHome(temp));
+                    PyValue ir_yielded = temp;
+                    _PyInstr *ir_suspend_site = this_instr;
+                    int ir_incoming = incoming;
+                    _PyInstr *ir_resume_pc = resume_pc;
+                    int ir_suspend_kind = oparg;
+                    for (;;) {
+                        assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+                        frame->instr_ptr = ir_resume_pc;
+                        PyGenObject *ir_generator = _PyGen_GetGeneratorFromFrame(frame);
+                        DTRACE_FUNCTION_RETURN();
+                        tstate->exc_info = ir_generator->gi_exc_state.previous_item;
+                        ir_generator->gi_exc_state.previous_item = NULL;
+                        _Py_LeaveRecursiveCallPy(tstate);
+                        _PyInterpreterFrame *ir_suspended = frame;
+                        ir_suspended->return_slot = (uint16_t)ir_incoming;
+                        _PyThreadState_UpdateLastProfiledFrame(tstate, ir_suspended, ir_suspended->previous);
+                        frame = tstate->current_frame = ir_suspended->previous;
+                        ir_suspended->previous = NULL;
+                        ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                        FT_ATOMIC_STORE_INT8_RELEASE(ir_generator->gi_frame_state, FRAME_SUSPENDED + ir_suspend_kind);
+                        slots = _PyFrame_Slots(frame);
+                        next_instr = frame->return_pc;
+                        LLTRACE_RESUME_FRAME();
+                        ir_suspend_site = can_propagate_delegate_yield(tstate, frame, next_instr);
+                        if (ir_suspend_site != NULL) {
+                            ir_incoming = (int)IR_A(*ir_suspend_site);
+                            ir_resume_pc = ir_suspend_site + 1;
+                            ir_suspend_kind = 1;
+                            continue;
+                        }
+                        int ir_redirected = frame->pending_redirect;
+                        uint64_t ir_generation = frame->owner == FRAME_OWNED_BY_GENERATOR && frame->frame_obj != NULL ? frame->frame_obj->f_lineno_generation : 0;
+                        if (_PyFrame_SetReturnValue(frame, ir_yielded)) { next_instr = frame->return_pc; }
+                        if (!ir_redirected && frame->owner == FRAME_OWNED_BY_GENERATOR &&
+                            (frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation) == ir_generation &&
+                        _PyIR_BaseOpcode(_PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)_PyFrame_InstrOffset(frame, next_instr))) == SUSPEND) {
+                            if (_PyIR_PrepareSuspendLanding(tstate, frame, next_instr) < 0) {
+                                next_instr = frame->instr_ptr + 1;
+                                JUMP_TO_LABEL(error);
+                            }
+                        }
+                        DISPATCH();
+                    }
+                }
+            }
+        }
+
         TARGET(SWAP) {
             int opcode = SWAP;
             (void)(opcode);
@@ -19059,7 +19508,7 @@
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(
                         _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                    assert(opcode == SEND || opcode == FOR_ITER);
+                    assert(opcode == SEND || opcode == FOR_ITER || opcode == DELEGATE);
                 }
                 #endif
                 slots = _PyFrame_Slots(frame);

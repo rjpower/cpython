@@ -71,6 +71,16 @@ _PyIR_EventOpcode(int handler)
 int
 _PyIR_BaseOpcode(int handler)
 {
+    switch (handler) {
+        case DELEGATE_GEN:
+            return DELEGATE;
+        case INSTRUMENTED_SUSPEND:
+        case INSTRUMENTED_RESUME_DELEGATE:
+        case DELEGATE:
+        case SUSPEND:
+        case RESUME_DELEGATE:
+            return handler;
+    }
     if (handler == IR_JUMP) {
         return JUMP_FORWARD;
     }
@@ -340,6 +350,9 @@ int
 _PyCode_InstrTarget(PyCodeObject *co, int i)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(_PyCode_InstrHandler(co, i));
+    if (_PyIR_HandlerBase[_PyCode_InstrHandler(co, i)] == RESUME_DELEGATE) {
+        return (int)IR_CD(_PyCode_WORDS(co)[i]);
+    }
     if (fmt->flags & _PyIR_JUMPS) {
         return _PyCode_InstrOparg(co, i);
     }

@@ -31,6 +31,9 @@ hasarg = [op for op in opmap.values() if _opcode.has_arg(op)]
 hasconst = [op for op in opmap.values() if _opcode.has_const(op)]
 hasname = [op for op in opmap.values() if _opcode.has_name(op)]
 hasjump = [op for op in opmap.values() if _opcode.has_jump(op)]
+# Semantic primary operations also occupy the 16-bit register-handler domain.
+hasarg.extend(op for op in _ir_opmap.values() if _opcode.has_arg(op))
+hasjump.extend(op for op in _ir_opmap.values() if _opcode.has_jump(op))
 hasjrel = hasjump  # for backward compatibility
 hasjabs = []
 hasfree = [op for op in opmap.values() if _opcode.has_free(op)]

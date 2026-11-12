@@ -2128,6 +2128,103 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pending;
 }
 
+/* A failed query leaves the held yield owner and every frame home intact.
+ * Immutable constructor validation proves the adjacent delegation triple. */
+static inline _PyInstr *
+can_propagate_delegate_yield(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                             _PyInstr *continuation)
+{
+#ifdef Py_GIL_DISABLED
+    return NULL;
+#else
+    if (frame->owner != FRAME_OWNED_BY_GENERATOR || frame->pending_redirect) {
+        return NULL;
+    }
+    _PyIRWord suspend = FT_ATOMIC_LOAD_UINT64_RELAXED(*continuation);
+    if (IR_HANDLER(suspend) != SUSPEND || IR_C(suspend) != 1 ||
+        continuation != frame->instr_ptr + 1 ||
+        continuation != frame->return_pc ||
+        IR_A(suspend) != frame->return_slot ||
+        IR_B(suspend) != frame->return_slot ||
+        !PyValue_IsNull(frame->base[frame->return_slot]))
+    {
+        return NULL;
+    }
+    int active = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr));
+    if (active != DELEGATE && active != DELEGATE_GEN) {
+        return NULL;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
+                      ~_PY_EVAL_EVENTS_MASK;
+    if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version) != epoch ||
+        code->_co_exec == NULL || frame->ir_words != code->_co_exec->words ||
+        code->_co_monitoring != NULL || frame->frame_obj != NULL ||
+        tstate->tracing || tstate->c_tracefunc != NULL ||
+        tstate->c_profilefunc != NULL || IS_PEP523_HOOKED(tstate))
+    {
+        return NULL;
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace) {
+        return NULL;
+    }
+#endif
+#if defined(WITH_DTRACE) && !defined(Py_BUILD_CORE_MODULE)
+    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
+        return NULL;
+    }
+#endif
+    return continuation;
+#endif
+}
+
+_PyIRStepResult
+_PyEval_ResumeDelegate(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *site, int flags, int monitored)
+{
+    uint64_t generation = frame->frame_obj == NULL ? 0 :
+                          frame->frame_obj->f_lineno_generation;
+    _PyIRStepResult result = {site + 1, _PY_IR_STEP_ERROR_PRE};
+#ifdef Py_GIL_DISABLED
+    int check_instrumentation = 1;
+#else
+    int check_instrumentation = tstate->tracing == 0;
+#endif
+    if (check_instrumentation) {
+        uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
+                          ~_PY_EVAL_EVENTS_MASK;
+        if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version) != epoch) {
+            if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp) < 0) {
+                return result;
+            }
+            return (_PyIRStepResult){site, _PY_IR_STEP_EXIT};
+        }
+    }
+    if ((flags & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM &&
+        check_periodics(tstate) != 0)
+    {
+        return result;
+    }
+    if (monitored && _Py_call_instrumentation(tstate,
+            PY_MONITORING_EVENT_PY_RESUME, frame, site) != 0)
+    {
+        if (frame->instr_ptr != site ||
+            (frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation) != generation)
+        {
+            result.next = frame->instr_ptr + 1;
+        }
+        return result;
+    }
+    if (frame->instr_ptr != site ||
+        (frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation) != generation)
+    {
+        return (_PyIRStepResult){frame->instr_ptr, _PY_IR_STEP_REDIRECT};
+    }
+    /* Keep site + 1 as the error cursor until all fallible resume work succeeds. */
+    return (_PyIRStepResult){_PyFrame_InstrAt(frame, (int)IR_CD(*site)), _PY_IR_STEP_EXIT};
+}
+
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
@@ -3107,11 +3204,11 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
      * when the executing site has a transparent instrumentation wrapper. */
     _PyIRWord word = code->co_words[offset];
     int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
-    assert(opcode == SEND || opcode == FOR_ITER);
+    assert(opcode == SEND || opcode == FOR_ITER || opcode == DELEGATE);
     _PyInstr *exit = frame->return_pc + IR_DS(word);
-    if (opcode == SEND) {
+    if (opcode == SEND || opcode == DELEGATE) {
         return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                                  exit, value, _PY_IR_SEND, true);
+                                  exit, value, opcode == DELEGATE ? _PY_IR_DELEGATE : _PY_IR_SEND, true);
     }
     return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
                               exit, value, _PY_IR_FOR_ITER, true);

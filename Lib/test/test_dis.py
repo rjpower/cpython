@@ -576,10 +576,9 @@ dis_asyncwith = """\
                 CALL                     0  r5 <- r5
                 GET_AWAITABLE            1  r5 <- r5
                 LOAD_COMMON_CONSTANT     7 (None)  r7 <-
-        L2:     SEND                     3 (to L5)  r5 <- r5
-        L3:     YIELD_VALUE              1  r7 <- r7
-        L4:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 11 (to L2)
+        L2:     DELEGATE                 2 (to L5)  r5 <- r5
+        L3:     SUSPEND                  1  r7 <- r7
+        L4:     RESUME_DELEGATE          3 (3, to L2)
         L5:     POP_TOP               <- r5
 
 %4d            LOAD_SMALL_INT           1  r1 <-
@@ -590,28 +589,26 @@ dis_asyncwith = """\
                 CALL                     3  r3 <- r3
                 GET_AWAITABLE            2  r3 <- r3
                 LOAD_COMMON_CONSTANT     7 (None)  r5 <-
-        L7:     SEND                     3 (to L10)  r3 <- r3
-        L8:     YIELD_VALUE              1  r5 <- r5
-        L9:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 23 (to L7)
+        L7:     DELEGATE                 2 (to L10)  r3 <- r3
+        L8:     SUSPEND                  1  r5 <- r5
+        L9:     RESUME_DELEGATE          3 (3, to L7)
        L10:     POP_TOP               <- r3
 
 %4d            LOAD_SMALL_INT           2  r2 <-
                 LOAD_COMMON_CONSTANT     7 (None)  r3 <-
                 RETURN_VALUE          <- r3
 
-%4d   L11:     CLEANUP_THROW           15 (to L5)  r5 <- r5
-       L12:     CLEANUP_THROW           27 (to L10)  r3 <- r3
+%4d   L11:     CLEANUP_THROW           14 (to L5)  r5 <- r5
+       L12:     CLEANUP_THROW           25 (to L10)  r3 <- r3
        L13:     PUSH_EXC_INFO         r6 <- r6
                 WITH_EXCEPT_START     r8 <- r3
                 GET_AWAITABLE            2  r8 <- r8
                 LOAD_COMMON_CONSTANT     7 (None)  r10 <-
-       L14:     SEND                     4 (to L18)  r8 <- r8
-       L15:     YIELD_VALUE              1  r10 <- r10
-       L16:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 37 (to L14)
-       L17:     CLEANUP_THROW           42 (to L18)  r8 <- r8
-       L18:     POP_JUMP_IF_TRUE        44 (to L19)  <- r8
+       L14:     DELEGATE                 3 (to L18)  r8 <- r8
+       L15:     SUSPEND                  1  r10 <- r10
+       L16:     RESUME_DELEGATE          3 (3, to L14)
+       L17:     CLEANUP_THROW           39 (to L18)  r8 <- r8
+       L18:     POP_JUMP_IF_TRUE        41 (to L19)  <- r8
                 RERAISE                  2  <- r5
        L19:     POP_TOP               <- r7
        L20:     POP_EXCEPT            <- r6
@@ -812,7 +809,7 @@ Disassembly of <code object <genexpr> at 0x..., file "%s", line %d>:
        L2:     FOR_ITER                 5 (to L3)  r1 <- r3
                LOAD_DEREF               2 (x)  r5 <-
                BINARY_OP                0 (+)  r5 <- r5, r1
-               YIELD_VALUE              0  <- r5
+               SUSPEND                  0  <- r5
                RESUME                   9
                JUMP_BACKWARD            6 (to L2)
        L3:     LOAD_COMMON_CONSTANT     7 (None)  r3 <-

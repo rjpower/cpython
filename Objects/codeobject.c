@@ -698,15 +698,26 @@ validate_source_map(struct _PyCodeConstructor *con)
             return -1;
         }
         const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-        if (_PyIR_HandlerBase[IR_HANDLER(words[event.to])] == RESUME) {
+        int landing = _PyIR_HandlerBase[IR_HANDLER(words[event.to])];
+        if (landing == RESUME || landing == RESUME_DELEGATE) {
             PyErr_SetString(PyExc_ValueError,
                             "code: source map cannot precede an entry RESUME");
             return -1;
         }
+        if ((landing == SUSPEND && IR_C(words[event.to]) == 1 &&
+             (event.from != event.to - 1 || event.edge != _PyIR_SOURCE_FALLTHROUGH)) ||
+            (event.handler >= 0 &&
+             (_PyIR_HandlerBase[IR_HANDLER(words[event.handler])] == RESUME_DELEGATE ||
+              (_PyIR_HandlerBase[IR_HANDLER(words[event.handler])] == SUSPEND &&
+               IR_C(words[event.handler]) == 1))))
+        {
+            PyErr_SetString(PyExc_ValueError, "code: invalid delegation source ingress");
+            return -1;
+        }
         if (event.handler >= 0) {
             _PyIRWord from = words[event.from];
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(from));
-            bool completed = ((opcode == FOR_ITER || opcode == SEND) &&
+            int opcode = _PyIR_HandlerBase[IR_HANDLER(from)];
+            bool completed = ((opcode == FOR_ITER || opcode == SEND || opcode == DELEGATE) &&
                               event.edge == _PyIR_SOURCE_TAKEN) ||
                              (opcode == CLEANUP_THROW &&
                               event.edge == _PyIR_SOURCE_TAKEN);
@@ -1014,7 +1025,7 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         unsigned int mask = work.facts[i] & limit;
         unsigned int nonnull = (work.facts[i] >> count) & limit;
         _PyIRWord word = words[i];
-        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+        int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
         int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
                                               : _PyIR_FieldOparg(word);
@@ -1096,7 +1107,7 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                 if (opcode == FOR_ITER && !taken) {
                     edge &= ~completion_home_mask(IR_B(word) + 1, work.homes, count);
                 }
-                if (opcode == SEND && !taken) {
+                if ((opcode == SEND || opcode == DELEGATE) && !taken) {
                     edge &= ~completion_home_mask(IR_B(word) + 2, work.homes, count);
                 }
             }
@@ -1184,6 +1195,198 @@ observer_handler_safe(struct _PyCodeConstructor *con, _PyIRWord word, int edge,
                               observed.count, unavailable, may_nonnull);
 }
 
+static int
+delegation_middle(const _PyIRWord *words, int pc)
+{
+    int opcode = _PyIR_HandlerBase[IR_HANDLER(words[pc])];
+    return opcode == RESUME_DELEGATE ||
+           (opcode == SUSPEND && IR_C(words[pc]) == 1);
+}
+
+static int
+suspension_handler(struct _PyCodeConstructor *con, int pc)
+{
+    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+    while (cursor < end) {
+        int start, size, target, slot_lasti;
+        if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0)
+        {
+            return -2;
+        }
+        if (pc >= start && pc - start < size) {
+            return target;
+        }
+    }
+    return -1;
+}
+
+/* Public construction must establish the immutable producer contract. This
+ * filters local geometry; actual generator ownership is checked at execution. */
+static int
+validate_suspension_words(struct _PyCodeConstructor *con)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int limit = nl + con->stacksize;
+    bool suspends = false;
+    int pc = 0;
+    const char *phase = "geometry";
+    for (int i = 0; i < n; i++) {
+        pc = i;
+        _PyIRWord word = words[i];
+        int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
+        if (opcode != DELEGATE && opcode != SUSPEND &&
+            opcode != RESUME_DELEGATE)
+        {
+            continue;
+        }
+        suspends = true;
+        if (opcode == DELEGATE) {
+            if (i + 2 >= n || IR_B(word) < (uint32_t)nl ||
+                IR_B(word) + 3 > (uint32_t)limit ||
+                (IR_A(word) != IR_NO_DST && IR_A(word) >= (uint32_t)limit))
+            {
+                goto invalid;
+            }
+            _PyIRWord suspend = words[i + 1], resume = words[i + 2];
+            int location = IR_A(resume) & RESUME_OPARG_LOCATION_MASK;
+            if (_PyIR_HandlerBase[IR_HANDLER(suspend)] != SUSPEND ||
+                IR_A(suspend) != IR_B(word) + 2 ||
+                IR_B(suspend) != IR_A(suspend) ||
+                IR_C(suspend) != 1 || IR_D(suspend) != 0 ||
+                _PyIR_HandlerBase[IR_HANDLER(resume)] != RESUME_DELEGATE ||
+                (IR_A(resume) & ~(RESUME_OPARG_LOCATION_MASK | RESUME_OPARG_DEPTH1_MASK)) ||
+                (location != RESUME_AFTER_YIELD_FROM && location != RESUME_AFTER_AWAIT) ||
+                IR_B(resume) != 0 || IR_CD(resume) != (uint32_t)i)
+            {
+                goto invalid;
+            }
+            int physical = i + 1 + IR_DS(word);
+            if (physical <= i + 2 || physical >= n) {
+                goto invalid;
+            }
+            phase = "completion target";
+            int done = _PyIR_DelegateDoneTarget(words, n, i, physical);
+            if (done < 0 || done >= n || (done >= i && done <= i + 2) ||
+                (physical == i + 3 && IR_HANDLER(words[physical]) == IR_JUMP &&
+                 (IR_A(words[physical]) != 0 || IR_B(words[physical]) != 0 ||
+                  IR_CD(words[physical]) >= (uint32_t)n)))
+            {
+                goto invalid;
+            }
+            phase = "throw recipe";
+            int handler = suspension_handler(con, i + 1);
+            if (handler < 0 || handler >= n ||
+                _PyIR_HandlerBase[IR_HANDLER(words[handler])] != CLEANUP_THROW ||
+                IR_B(words[handler]) != IR_B(word) ||
+                IR_A(words[handler]) != IR_A(word) ||
+                IR_CD(words[handler]) != (uint32_t)done ||
+                suspension_handler(con, i) == handler ||
+                (physical != done && suspension_handler(con, physical) == handler))
+            {
+                goto invalid;
+            }
+        }
+        else if (opcode == SUSPEND) {
+            phase = "plain or delegated suspension";
+            if (IR_B(word) < (uint32_t)nl || IR_B(word) >= (uint32_t)limit ||
+                (IR_A(word) != IR_NO_DST && IR_A(word) >= (uint32_t)limit) ||
+                IR_C(word) > 1 || IR_D(word) != 0 || i + 1 >= n)
+            {
+                goto invalid;
+            }
+            if (IR_C(word) == 1) {
+                if (i == 0 || _PyIR_HandlerBase[IR_HANDLER(words[i - 1])] != DELEGATE) {
+                    goto invalid;
+                }
+            }
+            else if (_PyIR_HandlerBase[IR_HANDLER(words[i + 1])] != RESUME) {
+                goto invalid;
+            }
+        }
+        else if (i < 2 || _PyIR_HandlerBase[IR_HANDLER(words[i - 2])] != DELEGATE) {
+            goto invalid;
+        }
+    }
+    if (!suspends) {
+        return 0;
+    }
+    if (!(con->flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))) {
+        goto invalid;
+    }
+    phase = "generator entry";
+    int entry = 0;
+    for (; entry < n; entry++) {
+        pc = entry;
+        int opcode = _PyIR_HandlerBase[IR_HANDLER(words[entry])];
+        if (opcode == RETURN_GENERATOR) {
+            break;
+        }
+        /* Generator expressions acquire their first iterator before creating
+         * the generator; closure setup can precede that prefix. */
+        if (opcode != COPY_FREE_VARS && opcode != MAKE_CELL && opcode != RESUME &&
+            opcode != LOAD_FAST && opcode != LOAD_FAST_BORROW &&
+            opcode != GET_ITER && opcode != GET_AITER)
+        {
+            goto invalid;
+        }
+    }
+    if (entry == n) {
+        goto invalid;
+    }
+    phase = "normal ingress";
+    for (int i = 0; i < n; i++) {
+        pc = i;
+        _PyIRWord word = words[i];
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+        if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+            !(fmt->flags & _PyIR_NAMES_TARGET))
+        {
+            int target = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+                ? i + 1 + IR_DS(word) : (int)IR_CD(word);
+            if (target >= 0 && target < n && delegation_middle(words, target)) {
+                goto invalid;
+            }
+        }
+        if (delegation_middle(words, i)) {
+            int previous = i ? _PyIR_HandlerBase[IR_HANDLER(words[i - 1])] : -1;
+            int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
+            if ((opcode == SUSPEND && previous != DELEGATE) ||
+                (opcode == RESUME_DELEGATE && previous != SUSPEND))
+            {
+                goto invalid;
+            }
+        }
+    }
+    phase = "exception ingress";
+    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+    while (cursor < end) {
+        int start, size, target, slot_lasti;
+        if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0 ||
+            target < 0 || target >= n || delegation_middle(words, target))
+        {
+            goto invalid;
+        }
+    }
+    return 0;
+invalid:
+    PyErr_Format(PyExc_ValueError,
+        "code: invalid delegation or suspension contract (%U:%d; %s pc=%d "
+        "handler=%d A=%u B=%u C=%u D=%u)", con->qualname, con->firstlineno,
+        phase, pc, IR_HANDLER(words[pc]), IR_A(words[pc]), IR_B(words[pc]),
+        IR_C(words[pc]), IR_D(words[pc]));
+    return -1;
+}
+
 /* These words now own completion, rather than returning to frontend cleanup.
  * Validate their complete windows and the anchors their EH recipes preserve. */
 static int
@@ -1196,7 +1399,7 @@ validate_completion_words(struct _PyCodeConstructor *con)
     bool has_owner_proof = false;
     for (int i = 0; i < n; i++) {
         _PyIRWord word = words[i];
-        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+        int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
         int count = _PyIR_CompletionWindow(opcode);
         for (int edge = 0; edge < 2; edge++) {
             if (_PyIR_ObserverOutcome(word, edge)) {
@@ -1217,11 +1420,13 @@ validate_completion_words(struct _PyCodeConstructor *con)
             (opcode == RETURN_GENERATOR && dst != IR_NO_DST) ||
             (opcode == FOR_ITER && dst >= nl && dst != IR_NO_DST &&
              dst != base + 2) ||
-            (opcode == YIELD_VALUE && IR_C(word) == 1 && dst != base))
+            ((opcode == YIELD_VALUE || opcode == SUSPEND) &&
+             IR_C(word) == 1 && dst != base))
         {
             goto invalid;
         }
-        if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
+        if (opcode == FOR_ITER || opcode == SEND ||
+            opcode == DELEGATE || opcode == CLEANUP_THROW) {
             int target = opcode == CLEANUP_THROW ? (int)IR_CD(word)
                                                 : i + 1 + IR_DS(word);
             if (target < 0 || target >= n) {
@@ -1268,7 +1473,7 @@ validate_completion_words(struct _PyCodeConstructor *con)
             goto invalid;
         }
         for (int i = start; i < start + size; i++) {
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[i]));
+            int opcode = _PyIR_HandlerBase[IR_HANDLER(words[i])];
             for (int edge = 0; edge < 2; edge++) {
                 if (!_PyIR_ObserverOutcome(words[i], edge)) {
                     continue;
@@ -1286,7 +1491,8 @@ validate_completion_words(struct _PyCodeConstructor *con)
                     goto invalid;
                 }
             }
-            if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
+            if (opcode == FOR_ITER || opcode == SEND ||
+            opcode == DELEGATE || opcode == CLEANUP_THROW) {
                 int base = IR_B(words[i]), dst = IR_A(words[i]);
                 int count = _PyIR_CompletionWindow(opcode);
                 if (dst != IR_NO_DST && dst >= nl && dst < floor &&
@@ -1388,7 +1594,8 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
             return -1;
         }
     }
-    if (validate_completion_words(con) < 0 || validate_source_map(con) < 0 ||
+    if (validate_suspension_words(con) < 0 ||
+        validate_completion_words(con) < 0 || validate_source_map(con) < 0 ||
         validate_virtual_kwargs(con) < 0)
     {
         return -1;

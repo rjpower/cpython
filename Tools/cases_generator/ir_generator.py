@@ -222,7 +222,7 @@ FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
 
 # The families whose oparg is a forward distance in words, in D, rather than
 # an absolute target: the loops, whose bodies jump relative to the next word.
-FORWARD_JUMPS = ("FOR_ITER", "SEND")
+FORWARD_JUMPS = ("FOR_ITER", "SEND", "DELEGATE")
 
 # The IR-only families that fuse a compare with the conditional jump after
 # it: the distance is in D, as for the loops, and the entry's arg holds the
@@ -1280,10 +1280,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     # These semantic operations have distinct body/yield and completion
     # outcomes. Their completion markers replace JUMPBY, but the executable
     # ABI remains an explicit window and a real forward exit.
-    completes_step = group in {"FOR_ITER", "SEND"}
+    completes_step = group in {"FOR_ITER", "SEND", "DELEGATE"}
     array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
-    jumps = completes_step or any(m.properties.jumps for m in members)
+    jumps = completes_step or group == "RESUME_DELEGATE" or any(m.properties.jumps for m in members)
     fused = group in FUSED_JUMPS
     forward = jumps and (group in FORWARD_JUMPS or fused)
     has_fb = any(uses_feedback(m) for m in members)
@@ -1298,7 +1298,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         imm_kind = "wide"
     else:
         imm_kind = "narrow"
-    no_fold = any(m.properties.no_fold for m in members) or any(
+    no_fold = group == "DELEGATE" or any(m.properties.no_fold for m in members) or any(
         e.aliased for m in members for e in io[m.name][1])
 
     placed = None
@@ -1322,6 +1322,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             raise analysis_error(
                 f"the fields of {group} do not fit in a word", head.where)
     roles, imm, fb = placed
+    if group == "RESUME_DELEGATE":
+        # Resume flags and the semantic continuation are independent operands.
+        roles = [ROLE_IMM, ROLE_NONE, ROLE_IMM, ROLE_IMM]
+        imm = LOC_A
     unpacks = group in UNPACKS
     if unpacks:
         # The first free field names the run of locals
@@ -1395,9 +1399,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=(store_dst and store_mode(head, io[head.name][1]) in
             (STORE_RESULT, STORE_RETURN)) or group in
-            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "RETURN_GENERATOR"},
+            {"SEND", "DELEGATE", "CLEANUP_THROW", "YIELD_VALUE", "SUSPEND", "RETURN_GENERATOR"},
         unpacks=unpacks,
-        jump_always=jumps and jumps_always(head),
+        jump_always=group == "RESUME_DELEGATE" or jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
     )
@@ -1420,6 +1424,7 @@ FEEDBACK_LAYOUTS = {
     "FOR_ITER": "_PyFbUnary",
     "GET_ITER": "_PyFbUnary",
     "SEND": "_PyFbUnary",
+    "DELEGATE": "_PyFbUnary",
     "BINARY_OP": "_PyFbBinary",
     "COMPARE_OP": "_PyFbBinary",
     "CONTAINS_OP": "_PyFbBinary",
@@ -1874,7 +1879,7 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     elsewhere leaves to the head."""
     # The terminal adapter publishes the native result itself, or the Python
     # child's eventual return. Its unused DSL C output still has a real dst.
-    if inst.properties.always_exits and "IR_COMPLETE_STEP" in uop_tokens(inst):
+    if inst.properties.always_exits and set(uop_tokens(inst)) & {"IR_COMPLETE_STEP", "IR_SUSPEND"}:
         # Completion owns its explicit recipient; frontend output aliases
         # describe stack conversion, not stores performed after the marker.
         return None
@@ -2580,6 +2585,8 @@ class IREmitter(Emitter):
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
+        self._replacers["IR_SUSPEND"] = self.suspend
+        self._replacers["IR_RESUME_DELEGATE"] = self.resume_delegate
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -3844,7 +3851,12 @@ class IREmitter(Emitter):
             self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
             return
         if inst.family is not None:
-            super().emit_jump_to_predicted(inst)
+            if inst.family.name == "DELEGATE":
+                self.emit("UPDATE_MISS_STATS(DELEGATE);\n")
+                self.emit("assert(_PyIR_BaseOpcode(opcode) == DELEGATE);\n")
+                self.emit("JUMP_TO_PREDICTED(DELEGATE);\n")
+            else:
+                super().emit_jump_to_predicted(inst)
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
@@ -3927,11 +3939,11 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit(f"_PyInterpreterFrame *ir_resumed_frame = &{gen}->gi_iframe;\n")
         self.emit("PyValue ir_resume_input = PyValue_None;\n")
-        self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
+        self.emit(f"if ({kind} != _PY_IR_FOR_ITER) {{\n")
         self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
         self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
         self.emit("}\n")
-        self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
+        self.emit(f"frame->return_slot = (uint16_t)({kind} != _PY_IR_FOR_ITER ? {base} + 2 : {dst});\n")
         self.emit("frame->return_pc = next_instr;\n")
         self.emit("ir_resumed_frame->previous = frame;\n")
         self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
@@ -3948,6 +3960,77 @@ class IREmitter(Emitter):
         self.emit("DTRACE_FUNCTION_ENTRY();\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")
         self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
+    def resume_delegate(self, tkn, tkn_iter, uop, storage, inst):
+        args, _ = self.instruction_macro_args(tkn, tkn_iter)
+        assert next(tkn_iter).kind == "SEMI"
+        if len(args) != 2 or [t.text for t in args[0]] != ["oparg"] or [t.text for t in args[1]] not in (["0"], ["1"]):
+            raise analysis_error("resume marker requires flags and literal monitoring mode", tkn)
+        flags, monitored = (" ".join(t.text for t in arg) for arg in args)
+        self.emit("{\n")
+        self.emit(f"_PyIRStepResult ir_resume = _PyEval_ResumeDelegate(tstate, frame, this_instr, {flags}, {monitored});\n")
+        self.emit("next_instr = ir_resume.next;\n")
+        self.emit("if (ir_resume.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
+    def suspend(self, tkn, tkn_iter, uop, storage, inst):
+        value, site, recipient, resume, kind = self.macro_args(tkn, tkn_iter, 5)
+        assert inst is not None
+        self.emit("{\n")
+        if canonical_frame_transfer_input(inst):
+            self.emit(f"assert(_PyValue_IsHome({value}));\n")
+        else:
+            self.emit(f"{value} = _PyValue_Publish(&{value});\n")
+        self.emit(f"PyValue ir_yielded = {value};\n")
+        self.emit(f"_PyInstr *ir_suspend_site = {site};\n")
+        self.emit(f"int ir_incoming = {recipient};\n")
+        self.emit(f"_PyInstr *ir_resume_pc = {resume};\n")
+        self.emit(f"int ir_suspend_kind = {kind};\n")
+        self.emit("for (;;) {\n")
+        self.emit("assert(frame->owner == FRAME_OWNED_BY_GENERATOR);\n")
+        self.emit("frame->instr_ptr = ir_resume_pc;\n")
+        self.emit("PyGenObject *ir_generator = _PyGen_GetGeneratorFromFrame(frame);\n")
+        self.emit("DTRACE_FUNCTION_RETURN();\n")
+        self.emit("tstate->exc_info = ir_generator->gi_exc_state.previous_item;\n")
+        self.emit("ir_generator->gi_exc_state.previous_item = NULL;\n")
+        self.emit("_Py_LeaveRecursiveCallPy(tstate);\n")
+        self.emit("_PyInterpreterFrame *ir_suspended = frame;\n")
+        self.emit("ir_suspended->return_slot = (uint16_t)ir_incoming;\n")
+        self.emit("_PyThreadState_UpdateLastProfiledFrame(tstate, ir_suspended, ir_suspended->previous);\n")
+        self.emit("frame = tstate->current_frame = ir_suspended->previous;\n")
+        self.emit("ir_suspended->previous = NULL;\n")
+        self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
+        self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_generator->gi_frame_state, FRAME_SUSPENDED + ir_suspend_kind);\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("next_instr = frame->return_pc;\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        if canonical_frame_transfer_input(inst) and delegate_yield_guard_proven():
+            self.emit("ir_suspend_site = can_propagate_delegate_yield(tstate, frame, next_instr);\n")
+        else:
+            self.emit("ir_suspend_site = NULL;\n")
+        self.emit("if (ir_suspend_site != NULL) {\n")
+        self.emit("ir_incoming = (int)IR_A(*ir_suspend_site);\n")
+        self.emit("ir_resume_pc = ir_suspend_site + 1;\n")
+        self.emit("ir_suspend_kind = 1;\n")
+        self.emit("continue;\n")
+        self.emit("}\n")
+        self.emit("int ir_redirected = frame->pending_redirect;\n")
+        self.emit("uint64_t ir_generation = frame->owner == FRAME_OWNED_BY_GENERATOR && frame->frame_obj != NULL ? frame->frame_obj->f_lineno_generation : 0;\n")
+        self.emit("if (_PyFrame_SetReturnValue(frame, ir_yielded)) { next_instr = frame->return_pc; }\n")
+        self.emit("if (!ir_redirected && frame->owner == FRAME_OWNED_BY_GENERATOR &&\n")
+        self.emit("(frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation) == ir_generation &&\n")
+        self.emit("_PyIR_BaseOpcode(_PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)_PyFrame_InstrOffset(frame, next_instr))) == SUSPEND) {\n")
+        self.emit("if (_PyIR_PrepareSuspendLanding(tstate, frame, next_instr) < 0) {\n")
+        self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("}\n")
+        self.emit("}\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
         self.emit("}\n")
         return False
 
@@ -4703,6 +4786,81 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
     return CanonicalResult(producer, result)
 
 
+# Bind shortcut admission to its actual compiled helper, including both
+# preprocessor arms. An altered helper retains ordinary semantic execution.
+DELEGATE_YIELD_GUARD = r"""{
+#ifdef Py_GIL_DISABLED
+    return NULL;
+#else
+    if (frame->owner != FRAME_OWNED_BY_GENERATOR || frame->pending_redirect) {
+        return NULL;
+    }
+    _PyIRWord suspend = FT_ATOMIC_LOAD_UINT64_RELAXED(*continuation);
+    if (IR_HANDLER(suspend) != SUSPEND || IR_C(suspend) != 1 ||
+        continuation != frame->instr_ptr + 1 ||
+        continuation != frame->return_pc ||
+        IR_A(suspend) != frame->return_slot ||
+        IR_B(suspend) != frame->return_slot ||
+        !PyValue_IsNull(frame->base[frame->return_slot]))
+    {
+        return NULL;
+    }
+    int active = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr));
+    if (active != DELEGATE && active != DELEGATE_GEN) {
+        return NULL;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
+                      ~_PY_EVAL_EVENTS_MASK;
+    if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version) != epoch ||
+        code->_co_exec == NULL || frame->ir_words != code->_co_exec->words ||
+        code->_co_monitoring != NULL || frame->frame_obj != NULL ||
+        tstate->tracing || tstate->c_tracefunc != NULL ||
+        tstate->c_profilefunc != NULL || IS_PEP523_HOOKED(tstate))
+    {
+        return NULL;
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace) {
+        return NULL;
+    }
+#endif
+#if defined(WITH_DTRACE) && !defined(Py_BUILD_CORE_MODULE)
+    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
+        return NULL;
+    }
+#endif
+    return continuation;
+#endif
+}"""
+
+
+def delegate_yield_guard_proven(source: str | None = None) -> bool:
+    if source is None:
+        source = (ROOT / "Python" / "ceval.c").read_text()
+    start = source.find("can_propagate_delegate_yield(")
+    if start < 0:
+        return False
+    start = source.find("{", start)
+    if start < 0:
+        return False
+    actual = []
+    depth = 0
+    for token in tokenize(source[start:]):
+        if token.kind == "COMMENT":
+            continue
+        actual.append(token.text)
+        if token.kind == "LBRACE":
+            depth += 1
+        elif token.kind == "RBRACE":
+            depth -= 1
+            if depth == 0:
+                break
+    expected = [t.text for t in tokenize(DELEGATE_YIELD_GUARD)
+                if t.kind != "COMMENT"]
+    return actual == expected
+
+
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
     """A return or yield transfers a canonical home owner unchanged.
 
@@ -4712,6 +4870,33 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
     if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
         return False
     parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if len(parts) == 3:
+        guard, prefix, transfer = parts
+        expected_guard = """{
+            if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                ERROR_NO_POP();
+            }
+        }"""
+        expected_transfer = """{
+            PyValue temp = retval;
+            DEAD(retval);
+            SAVE_STACK();
+            int incoming = IR_DST_SLOT;
+            _PyInstr *resume_pc = this_instr + 1;
+            IR_SUSPEND(temp, this_instr, incoming, resume_pc, oparg);
+        }"""
+        if (not guard.stack.inputs and not guard.stack.outputs
+                and tuple(item.name for item in prefix.stack.inputs) == ("value",)
+                and tuple(item.name for item in prefix.stack.outputs) == ("taken",)
+                and tuple(item.name for item in transfer.stack.inputs) == ("retval",)
+                and tuple(item.name for item in transfer.stack.outputs) == ("value",)
+                and not any(part.caches for part in parts)
+                and canonical_body_tokens(guard) == [t.text for t in tokenize(expected_guard)]
+                and canonical_body_tokens(prefix) == [t.text for t in tokenize("{ taken = TAKE(value); }")]
+                and canonical_body_tokens(transfer) == [t.text for t in tokenize(expected_transfer)]):
+            return True
     if any(cache.name != "unused" for part in parts for cache in part.caches):
         return False
     if len(parts) == 2:
@@ -4746,7 +4931,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(
                         _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                    assert(opcode == SEND || opcode == FOR_ITER);
+                    assert(opcode == SEND || opcode == FOR_ITER || opcode == DELEGATE);
                 }
                 #endif
                 RELOAD_STACK();
@@ -4978,6 +5163,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 fmt, UNPACKS[fmt.group], canonical=inst.name in (
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
+        if fmt.group == "DELEGATE":
+            out.emit("if (_PyIR_PrepareSuspendLanding(tstate, frame, next_instr) < 0) {\n")
+            out.emit("next_instr = frame->instr_ptr + 1;\n")
+            out.emit("JUMP_TO_LABEL(error);\n}\n")
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -5178,6 +5367,11 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         events.update(EVENT_PREFIX + e for e in MONITORING_HELPERS.get(tkn.text, ()))
     if name.startswith("INSTRUMENTED_") and uses_call_transaction(inst):
         events.update(EVENT_PREFIX + e for e in TRANSACTION_EVENTS)
+    tokens = [t.text for t in uop_token_list(inst)]
+    for index, token in enumerate(tokens):
+        if token == "IR_RESUME_DELEGATE" and tokens[index:index + 6] == [
+                "IR_RESUME_DELEGATE", "(", "oparg", ",", "1", ")"]:
+            events.add(EVENT_PREFIX + "PY_RESUME")
     # Completion has one semantic site, including when the producer is a
     # specialized native iterator or a Python generator returning to it.
     if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}
@@ -5186,7 +5380,7 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         if group == "FOR_ITER":
             events.update(EVENT_PREFIX + e for e in
                           ("BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"))
-        elif group == "SEND":
+        elif group in {"SEND", "DELEGATE"}:
             events.update(EVENT_PREFIX + e for e in
                           ("BRANCH_LEFT", "STOP_ITERATION"))
     return sorted(events)
@@ -5784,7 +5978,8 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
     "The _PyIR_* effect bits of handler name, which runs inst"
     p = inst.properties
     tokens = {t.text for t in uop_token_list(inst)}
-    suspends = p.switches_frame and writes_suspended_frame_state(inst)
+    suspends = p.switches_frame and (writes_suspended_frame_state(inst)
+                                       or "IR_SUSPEND" in tokens)
     pushes_frame = p.switches_frame and not p.returns and not suspends
     specializes = fmt.fb != LOC_NONE and any(
         isinstance(part, Uop) and "specializing" in part.annotations
@@ -5802,7 +5997,7 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
             ("_PyIR_DEOPTS", p.deopts or p.side_exit),
             ("_PyIR_SUSPENDS", suspends),
             ("_PyIR_PUSHES_FRAME", pushes_frame),
-            ("_PyIR_POLLS", p.eval_breaker or polls_at_end(name, inst)),
+            ("_PyIR_POLLS", p.eval_breaker or "IR_RESUME_DELEGATE" in tokens or polls_at_end(name, inst)),
             ("_PyIR_ALLOCATES", allocates),
             ("_PyIR_PURE", p.pure),
             ("_PyIR_SPECIALIZES", specializes),

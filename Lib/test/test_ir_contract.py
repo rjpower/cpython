@@ -45,6 +45,7 @@ FEEDBACK = {
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),
+    "DELEGATE": ("UNARY", 24),
     "BINARY_OP": ("BINARY", 32),
     "COMPARE_OP": ("BINARY", 32),
     "CONTAINS_OP": ("BINARY", 32),
@@ -214,7 +215,8 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(transfer(name, 4, 5), unknown)
 
     def test_generator_completion_operand_layout(self):
-        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
+        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER'],
+                    opcode._ir_opmap['DELEGATE']}
         # Exported base uses BaseOpcode, which retains instrumented IDs.
         # Include their positively declared canonical-family twin links.
         twins = {row.twin for row in ROWS.values()
@@ -232,8 +234,22 @@ class ContractTests(unittest.TestCase):
                                              _opcode.IR_ROLE_IMM))
                 self.assertEqual(row.imm, _opcode.IR_LOC_D)
                 self.assertTrue(row.flags & _opcode.IR_FORWARD)
-        self.assertTrue({'SEND', 'SEND_GEN', 'FOR_ITER', 'FOR_ITER_GEN',
+        self.assertTrue({'SEND', 'SEND_GEN', 'DELEGATE', 'DELEGATE_GEN',
+                         'FOR_ITER', 'FOR_ITER_GEN',
                          'INSTRUMENTED_FOR_ITER'} <= selected)
+
+    def test_delegated_resume_flags_and_target_are_separate(self):
+        for name in ("RESUME_DELEGATE", "INSTRUMENTED_RESUME_DELEGATE"):
+            row = BY_NAME[name]
+            with self.subTest(handler=name):
+                self.assertEqual(row.imm, _opcode.IR_LOC_A)
+                self.assertEqual(row.roles, (_opcode.IR_ROLE_IMM,
+                                             _opcode.IR_ROLE_NONE,
+                                             _opcode.IR_ROLE_IMM,
+                                             _opcode.IR_ROLE_IMM))
+                self.assertTrue(row.flags & _opcode.IR_JUMPS)
+                self.assertTrue(row.flags & _opcode.IR_JUMP_ALWAYS)
+                self.assertFalse(row.effects & _opcode.IR_SUSPENDS)
 
     def test_result_publication_phase(self):
         phase = _opcode.IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE
@@ -261,7 +277,7 @@ class ContractTests(unittest.TestCase):
             with self.subTest(handler=opcode.opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)
                 self.assertIn(opcode.opname[h], named)
-                self.assertIn(row.base, opcode.opmap.values())
+                self.assertIn(row.base, named.values())
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
             self.assertIn(name, BY_NAME)
@@ -311,7 +327,8 @@ class ContractTests(unittest.TestCase):
             "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
             "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
             "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
-            "SEND_GEN": 2, "LOAD_ATTR_METHOD_WITH_VALUES": 0,
+            "SEND_GEN": 2, "DELEGATE": 1, "DELEGATE_GEN": 2,
+            "LOAD_ATTR_METHOD_WITH_VALUES": 0,
         }
         for name, count in expected.items():
             for oparg in (2, 3, 7):
@@ -416,11 +433,14 @@ class ContractTests(unittest.TestCase):
         # Every family that has an entry has one in the generic form
         for family in FEEDBACK:
             self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
-        # The generic handlers that specialise from their entry
+        # Generic family heads, including the new IR-only delegation family.
+        # Private arithmetic/fused handlers inherit their family's specializer
+        # without introducing another feedback family.
         self.assertEqual(
-            {opcode.opname[op] for op in range(opcode.MIN_INSTRUMENTED_OPCODE)
-             if CONTRACT[op] is not None
-             and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
+            {opcode.opname[op] for op, row in ROWS.items()
+             if (op < opcode.MIN_INSTRUMENTED_OPCODE or
+                 op == opcode._ir_opmap["DELEGATE"])
+             and row.effects & _opcode.IR_SPECIALIZES},
             set(FEEDBACK) - NOT_SPECIALIZING)
 
     def test_feedback_tables(self):
@@ -451,7 +471,8 @@ class ContractTests(unittest.TestCase):
                 if name.startswith("INSTRUMENTED_"):
                     self.assertEqual(twin, h)
                 if twin is None:
-                    if row.base == opcode.opmap["SEND"]:
+                    if row.base in {opcode.opmap["SEND"],
+                                    opcode._ir_opmap["DELEGATE"]}:
                         self.assertEqual(row.events, events.STOP_ITERATION | events.BRANCH_LEFT)
                     elif row.base in {opcode.opmap[name] for name in
                                       ('CLEANUP_THROW', 'RAISE_VARARGS', 'RERAISE')}:
@@ -470,6 +491,7 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
             "INSTRUMENTED_RETURN_VALUE": {"PY_RETURN"},
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
+            "INSTRUMENTED_SUSPEND": {"PY_YIELD"},
             "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
             "INSTRUMENTED_JUMP_BACKWARD": {"JUMP"},
             "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
@@ -477,7 +499,9 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
             "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
+            "DELEGATE": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
+            "INSTRUMENTED_RESUME_DELEGATE": {"PY_RESUME"},
         }
         for name, names in expected.items():
             with self.subTest(name=name):
@@ -566,8 +590,10 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
+                                    "SUSPEND", "INSTRUMENTED_SUSPEND",
                                     "RETURN_GENERATOR"})
-        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
+        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "DELEGATE",
+                     "DELEGATE_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
@@ -756,6 +782,17 @@ class AnalyzerTests(unittest.TestCase):
 _DEFINITION = re.compile(r"\b(?:op|inst)\((\w+),\s*\(([^)]*)\)\)\s*\{")
 _MACRO = re.compile(r"\bmacro\((\w+)\)\s*=\s*([^;]*);")
 
+# These new primary operations retain the frontend stack geometry through
+# allocation, then acquire separate physical identities during assembly.
+_FRONTEND_STACK_SHAPES = {
+    "DELEGATE": "SEND",
+    "DELEGATE_GEN": "SEND_GEN",
+    "SUSPEND": "YIELD_VALUE",
+    "INSTRUMENTED_SUSPEND": "INSTRUMENTED_YIELD_VALUE",
+    "RESUME_DELEGATE": "RESUME",
+    "INSTRUMENTED_RESUME_DELEGATE": "INSTRUMENTED_RESUME",
+}
+
 
 def _stack_items(text):
     "The (name, size) of each item of one side of a stack effect"
@@ -892,7 +929,8 @@ class SourceScanTests(unittest.TestCase):
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
         self.assertLessEqual({"SWAP", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
-                              "FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
+                              "FOR_ITER", "FOR_ITER_RANGE", "SEND",
+                              *_FRONTEND_STACK_SHAPES}, names)
         self.assertGreater(len(result), 200)
         return result
 
@@ -911,15 +949,16 @@ class SourceScanTests(unittest.TestCase):
         # _PyOpcode_num_popped() and _pushed(), which
         # opcode_metadata_generator.py writes, for every handler: the
         # specialisations and twins too.  Those disagree only for a call
-        # that publishes its result itself.  An IR-only handler has the
-        # counts of the instruction that it is named after.
+        # that publishes its result itself. Private IR handlers retain their
+        # shadow's counts; new primary operations retain the explicitly named
+        # frontend shapes used before late assembly lowering.
         path = self.source("Include", "internal", "pycore_opcode_metadata.h")
         popped = _stack_counts(path, "_PyOpcode_num_popped")
         pushed = _stack_counts(path, "_PyOpcode_num_pushed")
         scans = self.scans()
         invokes = set()
         for h, row in ROWS.items():
-            name = opcode.opname[h]
+            name = _FRONTEND_STACK_SHAPES.get(opcode.opname[h], opcode.opname[h])
             if name not in popped:
                 shadow = opcode.opname[row.shadow]
                 name = shadow if shadow in popped else opcode.opname[row.base]

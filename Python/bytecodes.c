@@ -218,6 +218,14 @@ dummy_func(
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
             _MONITOR_RESUME;
 
+        ir_only tier1 inst(RESUME_DELEGATE, (--)) {
+            IR_RESUME_DELEGATE(oparg, 0);
+        }
+
+        ir_only tier1 inst(INSTRUMENTED_RESUME_DELEGATE, (--)) {
+            IR_RESUME_DELEGATE(oparg, 1);
+        }
+
         pseudo(LOAD_CLOSURE, (-- unused)) = {
             LOAD_FAST,
         };
@@ -1565,6 +1573,90 @@ dummy_func(
             iter = PyValue_FromObjectSteal(iter_o);
         }
 
+        op(_CHECK_GENERATOR_OWNER, (--)) {
+            if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
+                _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "suspension requires a generator-owned frame");
+                ERROR_NO_POP();
+            }
+        }
+
+        family(DELEGATE, INLINE_CACHE_ENTRIES_DELEGATE) = {
+            DELEGATE_GEN,
+        };
+
+        ir_only specializing op(_SPECIALIZE_DELEGATE, (receiver, unused, unused -- receiver, unused, unused)) {
+            #if ENABLE_SPECIALIZATION
+            _PyFbHeader *feedback = FB_COUNTER();
+            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                next_instr = this_instr;
+                _Py_Specialize_Delegate(receiver, next_instr);
+                DISPATCH_SAME_OPARG();
+            }
+            OPCODE_DEFERRED_INC(DELEGATE);
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            #endif  /* ENABLE_SPECIALIZATION */
+        }
+
+        tier1 window op(_DELEGATE, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+            if (!IS_PEP523_HOOKED(tstate) &&
+                (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
+                gen_try_set_executing((PyGenObject *)receiver_o))
+            {
+                PyGenObject *gen = (PyGenObject *)receiver_o;
+                IR_ENTER_GENERATOR(gen, _PY_IR_DELEGATE);
+            }
+            if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                null_or_index = window[1];
+                PyValue item = next.value;
+                int found = next.status;
+                if (found <= 0) {
+                    if (found < 0) {
+                        ERROR_NO_POP();
+                    }
+                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                    IR_COMPLETE_STEP(_PY_IR_DELEGATE, completed, oparg);
+                }
+                retval = item;
+                DEAD(v);
+            }
+            else {
+                _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                if (sent.status == PYGEN_ERROR) {
+                    ERROR_NO_POP();
+                }
+                if (sent.status == PYGEN_RETURN) {
+                    PyValue completed = sent.value;
+                    IR_COMPLETE_STEP(_PY_IR_DELEGATE, completed, oparg);
+                }
+                PyValue_CLOSE(v);
+                retval = sent.value;
+            }
+        }
+
+        macro(DELEGATE) = unused/1 + _CHECK_GENERATOR_OWNER + _SPECIALIZE_DELEGATE + _DELEGATE;
+
+        ir_only inline_ok op(_DELEGATE_GEN_FRAME, (receiver, null, v -- receiver, null, gen_frame)) {
+            EXIT_IF(!PyValue_IsObject(receiver));
+            PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v));
+            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
+            STAT_INC(DELEGATE, hit);
+            IR_ENTER_GENERATOR(gen, _PY_IR_DELEGATE);
+        }
+
+        macro(DELEGATE_GEN) =
+            unused/1 +
+            _CHECK_GENERATOR_OWNER +
+            _CHECK_PEP_523 +
+            _DELEGATE_GEN_FRAME +
+            _PUSH_FRAME;
+
         family(SEND, INLINE_CACHE_ENTRIES_SEND) = {
             SEND_GEN,
             SEND_VIRTUAL,
@@ -1705,6 +1797,26 @@ dummy_func(
             _GUARD_3OS_ASYNC_GEN_ASEND +
             _SEND_ASYNC_GEN;
 
+        ir_only window op(_SUSPEND, (retval -- value)) {
+            PyValue temp = retval;
+            DEAD(retval);
+            SAVE_STACK();
+            int incoming = IR_DST_SLOT;
+            _PyInstr *resume_pc = this_instr + 1;
+            IR_SUSPEND(temp, this_instr, incoming, resume_pc, oparg);
+        }
+
+        macro(SUSPEND) =
+            _CHECK_GENERATOR_OWNER +
+            _MAKE_HEAP_SAFE +
+            _SUSPEND;
+
+        macro(INSTRUMENTED_SUSPEND) =
+            _CHECK_GENERATOR_OWNER +
+            _YIELD_VALUE_EVENT +
+            _MAKE_HEAP_SAFE +
+            _SUSPEND;
+
         window op(_YIELD_VALUE, (retval -- value)) {
             // NOTE: It's important that YIELD_VALUE never raises an exception!
             // The compiler treats any exception raised here as a failed close()
@@ -1736,7 +1848,7 @@ dummy_func(
                 assert(i >= 0 && i <= INT_MAX);
                 int opcode = _PyIR_BaseOpcode(
                     _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                assert(opcode == SEND || opcode == FOR_ITER);
+                assert(opcode == SEND || opcode == FOR_ITER || opcode == DELEGATE);
             }
             #endif
             RELOAD_STACK();
@@ -5385,7 +5497,7 @@ dummy_func(
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(INSTR_OFFSET_OF(this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -5418,7 +5530,7 @@ dummy_func(
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, next_opcode));
             }
-            assert(next_opcode > 0 && next_opcode < 256);
+            assert(next_opcode > 0 && next_opcode < IR_NUM_HANDLERS);
             opcode = ORIGINAL_HANDLER(next_opcode);
             DISPATCH_GOTO();
         }

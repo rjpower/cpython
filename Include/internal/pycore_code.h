@@ -232,6 +232,7 @@ PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
                                           int oparg);
 PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_Delegate(PyValue receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_ToBool(PyValue value, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValueBorrow value, _PyInstr *instr);
 #define _Py_Specialize_PopJumpIf(V0, V1) \

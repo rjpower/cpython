@@ -792,14 +792,20 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
 #endif
 #define IR_SKIP_RESUME() \
     do { \
-        if (IR_HANDLER(*next_instr) == RESUME && \
+        int ir_resume_handler = IR_HANDLER(*next_instr); \
+        if ((ir_resume_handler == RESUME || ir_resume_handler == RESUME_DELEGATE) && \
             _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
                     _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
             IR_SKIP_RESUME_TLBC() && IR_SKIP_RESUME_EMSCRIPTEN()) \
         { \
             frame->instr_ptr = next_instr; \
-            next_instr++; \
+            if (ir_resume_handler == RESUME_DELEGATE) { \
+                next_instr = _PyFrame_InstrAt(frame, (int)IR_CD(*next_instr)); \
+            } \
+            else { \
+                next_instr++; \
+            } \
         } \
     } while (0)
 

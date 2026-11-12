@@ -308,7 +308,9 @@ set_opcode(_PyInstr *instr, int opcode)
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
     int handler = IR_HANDLER(old);
-    if (handler >= MIN_INSTRUMENTED_OPCODE && handler < IR_FIRST_ONLY_HANDLER) {
+    if ((handler >= MIN_INSTRUMENTED_OPCODE && handler < IR_FIRST_ONLY_HANDLER) ||
+        handler == INSTRUMENTED_SUSPEND || handler == INSTRUMENTED_RESUME_DELEGATE)
+    {
         /* Lost race with instrumentation */
         return 0;
     }
@@ -618,7 +620,7 @@ instr_is_fused(_PyInstr *instr)
 }
 
 static inline void
-specialize(_PyInstr *instr, uint8_t specialized_opcode)
+specialize(_PyInstr *instr, int specialized_opcode)
 {
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
@@ -632,12 +634,12 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
         }
     }
     if (!set_opcode(instr, handler)) {
-        STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
+        STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
+        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
                             SPEC_FAIL_OTHER);
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
+    STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -652,13 +654,13 @@ static inline void
 unspecialize(_PyInstr *instr)
 {
     assert(!PyErr_Occurred());
-    STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
+    STAT_INC(_PyIR_BaseOpcode(instr_opcode(instr)), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
                                          _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(instr_opcode(instr)), SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
@@ -3275,6 +3277,23 @@ failure:
 }
 
 Py_NO_INLINE void
+_Py_Specialize_Delegate(PyValue receiver_st, _PyInstr *instr)
+{
+    PyObject *receiver = PyValue_AsKnownObjectBorrow(receiver_st);
+    assert(ENABLE_SPECIALIZATION);
+    PyTypeObject *tp = Py_TYPE(receiver);
+    fb_begin_unary(instr, tp);
+    if ((tp == &PyGen_Type || tp == &PyCoro_Type) &&
+        _PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        specialize(instr, DELEGATE_GEN);
+        return;
+    }
+    SPECIALIZATION_FAIL(DELEGATE, _PySpecialization_ClassifyIterator(receiver));
+    unspecialize(instr);
+}
+
+Py_NO_INLINE void
 _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
 {
     PyObject *receiver = PyValue_AsKnownObjectBorrow(receiver_st);
@@ -3474,7 +3493,7 @@ Py_NO_INLINE void
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE,
     };
-    int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
+    int opcode = _PyIR_BaseOpcode(instr_opcode(instr));
     assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
     specialize_truth(value_o, instr,
                      opcode == POP_JUMP_IF_FALSE ? if_false : if_true);

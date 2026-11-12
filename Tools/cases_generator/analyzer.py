@@ -527,6 +527,8 @@ IR_MARKER_EFFECTS = {
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
+    "IR_SUSPEND": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
+    "IR_RESUME_DELEGATE": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",

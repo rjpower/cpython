@@ -442,7 +442,7 @@ class OpcodeStats:
                 opcode = "SUPER"
             elif opcode.endswith("ATTR"):
                 opcode = "ATTR"
-            elif opcode in ("FOR_ITER", "GET_ITER", "SEND"):
+            elif opcode in ("FOR_ITER", "GET_ITER", "SEND", "DELEGATE"):
                 opcode = "ITER"
             elif opcode.endswith("SUBSCR"):
                 opcode = "SUBSCR"

@@ -240,6 +240,7 @@ _PyIR_NullableInputs(_PyIRWord word)
             return (1u << 1) | (1u << 3);  /* NULL self, optional kwargs. */
         case FOR_ITER:
         case SEND:
+        case DELEGATE:
         case POP_ITER:
         case END_SEND:
             return 1u << 1;  /* Optional virtual-iterator cursor. */
@@ -265,11 +266,13 @@ _PyIR_Outcome(_PyIRWord word, int taken)
             return taken ? (_PyIRSlotOutcome){1, base, 2, IR_NO_DST}
                          : (_PyIRSlotOutcome){1, base + 1, 1, dst};
         case SEND:
+        case DELEGATE:
             return taken ? (_PyIRSlotOutcome){1, base, 3, dst}
                          : (_PyIRSlotOutcome){1, base + 2, 1, IR_NO_DST};
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
         case YIELD_VALUE:
+        case SUSPEND:
             /* The outgoing value is taken; the next activation supplies A. */
             return (_PyIRSlotOutcome){1, base, 1, dst};
         case RETURN_GENERATOR:
@@ -695,9 +698,11 @@ _PyIR_CompletionWindow(int opcode)
 {
     switch (opcode) {
         case FOR_ITER: return 2;
-        case SEND: return 3;
+        case SEND:
+        case DELEGATE: return 3;
         case CLEANUP_THROW: return 4;
-        case YIELD_VALUE: return 1;
+        case YIELD_VALUE:
+        case SUSPEND: return 1;
         default: return 0;
     }
 }

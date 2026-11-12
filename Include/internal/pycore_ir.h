@@ -535,6 +535,40 @@ _PyIR_FormatOf(int handler)
     return &_PyIR_Formats[handler];
 }
 
+/* Completion can dispatch a real far adapter while reporting the semantic
+ * done edge. This exact shape never groups the independently observed suspend
+ * and resume words, and never follows an arbitrary chain of jumps. */
+static inline int
+_PyIR_DelegateDoneTarget(const _PyIRWord *words, int count, int site,
+                         int physical)
+{
+    if (count < 4 || site < 0 || site > count - 4 || physical != site + 3) {
+        return physical;
+    }
+    _PyIRWord delegate = words[site];
+    _PyIRWord suspend = words[site + 1];
+    _PyIRWord resume = words[site + 2];
+    _PyIRWord adapter = words[site + 3];
+    if (IR_HANDLER(delegate) >= IR_NUM_HANDLERS ||
+        IR_HANDLER(suspend) >= IR_NUM_HANDLERS ||
+        IR_HANDLER(resume) >= IR_NUM_HANDLERS ||
+        _PyIR_HandlerBase[IR_HANDLER(delegate)] != DELEGATE ||
+        IR_DS(delegate) != 2 ||
+        _PyIR_HandlerBase[IR_HANDLER(suspend)] != SUSPEND ||
+        IR_A(suspend) != IR_B(delegate) + 2 ||
+        IR_B(suspend) != IR_A(suspend) ||
+        IR_C(suspend) != 1 || IR_D(suspend) != 0 ||
+        _PyIR_HandlerBase[IR_HANDLER(resume)] != RESUME_DELEGATE ||
+        IR_B(resume) != 0 || IR_CD(resume) != (uint32_t)site ||
+        IR_HANDLER(adapter) != IR_JUMP ||
+        IR_A(adapter) != 0 || IR_B(adapter) != 0 ||
+        IR_CD(adapter) >= (uint32_t)count)
+    {
+        return physical;
+    }
+    return (int)IR_CD(adapter);
+}
+
 /* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */
 static inline _PyFbHeader *
 _PyIR_FbEntry(char *entries, uint32_t i)

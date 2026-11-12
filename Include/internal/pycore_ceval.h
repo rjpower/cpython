@@ -335,7 +335,7 @@ PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterF
 PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
-enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
+enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW, _PY_IR_DELEGATE };
 enum _PyIRStepStatus {
     _PY_IR_STEP_ERROR_PRE = -2,
     _PY_IR_STEP_ERROR_POST = -1,
@@ -357,6 +357,11 @@ PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteStep(
     _PyInstr *, PyValue, enum _PyIRStepKind);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteGeneratorReturn(
     PyThreadState *, _PyInterpreterFrame *, PyValue);
+/* The result owner is already in its actual recipient before synchronization. */
+PyAPI_FUNC(int) _PyIR_PrepareSuspendLanding(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *);
+PyAPI_FUNC(_PyIRStepResult) _PyEval_ResumeDelegate(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,

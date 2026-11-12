@@ -30,7 +30,62 @@ profile located 9.28% of samples in exact CALL, 7.62% in RETURN_GENERATOR and
 6.45% in generator completion. These are sample locations, not removable time
 budgets. Creation/completion and repeated suspension have different weights.
 
-## Decision and evidence
+## Why upstream executes faster
+
+Selected51's retained post-warmup PMU campaign, distinct from the fresh elapsed
+campaign, shows substantially more retired machine instructions for unchanged
+workloads. Ratios below are selected/upstream. Relative cycles per instruction
+are the cycle ratio divided by the instruction ratio, using the same paired
+counter campaign.
+
+| Workload | Instructions | User cycles | Relative cycles/instruction |
+| --- | ---: | ---: | ---: |
+| DeltaBlue | 1.352487 | 1.173937 | 0.867983 |
+| Generators | 1.414550 | 1.443516 | 1.020477 |
+| Coroutines | 1.388163 | 1.249676 | 0.900237 |
+
+Evidence: `BASE/pyjit-link-wave1/interpreter-round51/final51-perf-stat-clean/normalized-summary.json`.
+The primary aggregate distinction is more executed instructions; average
+cycles/instruction are better on DeltaBlue/coroutines and nearly equal on
+generators. This does not partition instructions or stalls by mechanism.
+
+The source comparison identifies concrete differences, rather than assigning
+shared Python obligations to this runtime alone:
+
+- **More general input/result transfer.** Upstream SEND_GEN pushes the input at
+  the child's known stack frontier and advances the parent's stack pointer.
+  Selected SEND_GEN NULLs its source home, records an explicit recipient/PC and
+  calls the inlined `_PyFrame_SetReturnValue`: pending redirect, discarded
+  recipient, prior recipient owner and its retirement must be considered.
+  Selected YIELD records the next incoming recipient; upstream's stack position
+  supplies that location. Both update real frame/exception/recursion state.
+  The selected generator profile places 27.41% of samples in SEND_GEN and
+  13.92% in YIELD_VALUE, making repeated transfer a stronger target than final
+  construction for this workload. These are locations, not removable budgets.
+- **More construction and storage bookkeeping.** The selected header is
+  112 bytes versus upstream's 80. Generator construction moves every physical
+  register home and NULLs every source home. Upstream copies only through the
+  live stack frontier and leaves popped source storage untouched. The selected
+  frontier invariant currently requires those NULLs. Both runtimes allocate
+  generator/coroutine objects; allocation itself is not a relative explanation.
+- **Runtime recovery of register ownership facts.** Ordinary register consumers
+  can name locals or temporaries. Generated paths use the local boundary to
+  select borrowing versus consuming/NULLing, and result paths support arbitrary
+  recipients. Upstream stack effects supply some of those lifetime/location
+  facts implicitly. General PyValue consumers also distinguish inline values
+  from objects before object access. Specialized native paths can remove some
+  checks; source appearances alone do not count executed tests.
+
+Exact ordinary calls already save upstream's argument copies and repeated local
+NULL filling. They do not recursively enter the C evaluator. Both runtimes own
+executing code, check providers, maintain recursion and handle observers. Those
+shared costs cannot explain the relative gap merely by appearing in our profile.
+Nor does this comparison prove that the frame header, PyValues or one helper
+accounts for a particular percentage. The missing evidence is a weighted native
+instruction attribution across corresponding complete paths; upstream's
+collapsed evaluator prevents a direct per-symbol percentage comparison.
+
+## Experiment decisions
 
 [Completion](completion-result.md) removes the inspected hot C completion
 boundary but loses 3.1% on coroutines and 1.1% on Richards in all six pairs.

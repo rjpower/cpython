@@ -11053,7 +11053,8 @@
             PyObject *ir_obj_exc_st = NULL;
             // _MONITOR_END_ASYNC_FOR
             {
-                assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
+                assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND ||
+                   _PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == DELEGATE);
                 INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             // _END_ASYNC_FOR

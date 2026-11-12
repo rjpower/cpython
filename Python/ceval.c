@@ -2128,6 +2128,58 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pending;
 }
 
+static inline uint64_t
+resume_entry_generation(_PyInterpreterFrame *frame)
+{
+    return frame->owner != FRAME_OWNED_BY_INTERPRETER && frame->frame_obj != NULL
+        ? frame->frame_obj->f_lineno_generation : 0;
+}
+
+/* The incoming owner and activation links are committed before entry hooks.
+ * Refresh a wrapped delegation resume before its first observable callback. */
+static inline _PyIRStepResult
+prepare_resume_entry(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *site, uint64_t generation)
+{
+    bool redirected = frame->instr_ptr != site ||
+                      resume_entry_generation(frame) != generation;
+    site = frame->instr_ptr;
+    _PyIRStepResult ready = {site, redirected ? _PY_IR_STEP_REDIRECT : _PY_IR_STEP_EXIT};
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return ready;
+    }
+    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*site));
+    if (handler != INSTRUMENTED_LINE && handler != INSTRUMENTED_INSTRUCTION)
+    {
+        return ready;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int offset = (int)_PyFrame_InstrOffset(frame, site);
+    if (_PyIR_HandlerBase[IR_HANDLER(code->co_words[offset])] != RESUME_DELEGATE) {
+        return ready;
+    }
+#ifndef Py_GIL_DISABLED
+    if (tstate->tracing) {
+        return ready;
+    }
+#endif
+    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
+                      ~_PY_EVAL_EVENTS_MASK;
+    if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version) == epoch) {
+        return ready;
+    }
+    int err = _Py_Instrument(code, tstate->interp);
+    if (frame->instr_ptr != site || resume_entry_generation(frame) != generation) {
+        return (_PyIRStepResult){err < 0 ? frame->instr_ptr + 1 : frame->instr_ptr,
+            err < 0 ? _PY_IR_STEP_ERROR_PRE : _PY_IR_STEP_REDIRECT};
+    }
+    if (err < 0) {
+        frame->instr_ptr = site;
+        return (_PyIRStepResult){site + 1, _PY_IR_STEP_ERROR_PRE};
+    }
+    return ready;
+}
+
 /* A failed query leaves the held yield owner and every frame home intact.
  * Immutable constructor validation proves the adjacent delegation triple. */
 static inline _PyInstr *

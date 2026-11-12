@@ -5778,15 +5778,9 @@ dummy_func(
             if (too_deep) {
                 goto exit_unwind_notrace;
             }
-            DTRACE_FUNCTION_ENTRY();
             next_instr = frame->instr_ptr;
-            IR_SKIP_RESUME();
+            IR_FINISH_RESUME_ENTRY();
         #ifdef Py_DEBUG
-            int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
-            if (lltrace < 0) {
-                JUMP_TO_LABEL(exit_unwind);
-            }
-            frame->lltrace = lltrace;
             /* _PyEval_EvalFrameDefault() must not be called with an exception set,
             because it can clear it (directly or indirectly) and so the
             caller loses its exception */

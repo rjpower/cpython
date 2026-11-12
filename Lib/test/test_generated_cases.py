@@ -3280,6 +3280,38 @@ def generated_address_sites(text):
     return sites
 
 
+def remove_allowed_address_sites(found, allowed):
+    """An audited occurrence never permits a second address on the same line."""
+    remaining = list(allowed)
+    errors = []
+    for site in found:
+        if site in remaining:
+            remaining.remove(site)
+        else:
+            errors.append(site)
+    return errors
+
+
+def generated_terminal_publication_sites(text):
+    """One always-inline publication followed by the terminal owner's move."""
+    parts = re.split(r"\n\s*(?:TARGET|LABEL)\((\w+)\)", text)
+    pattern = ["temp", "=", "_PyValue_Publish", "(", "&", "temp", ")", ";",
+               "PyValue", "ir_yielded", "=", "temp", ";"]
+    allowed = {}
+    for name, body in zip(parts[1::2], parts[2::2]):
+        if name != "INSTRUMENTED_SUSPEND":
+            continue
+        tokens = [t for t in lexer.tokenize(body)
+                  if t.kind not in ("COMMENT", "NEWLINE", "CMACRO",
+                                    "CMACRO_OTHER")]
+        found = [f"{name}: line {tokens[i + 4].line}: &temp"
+                 for i in range(len(tokens) - len(pattern) + 1)
+                 if [t.text for t in tokens[i:i + len(pattern)]] == pattern]
+        if len(found) == 1:
+            allowed[name] = found
+    return allowed
+
+
 class TestCallTransactionMarkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -3373,11 +3405,23 @@ class TestCallTransactionMarkers(unittest.TestCase):
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
         self.assertGreater(len(sites), 200)
+        # Instrumented suspension keeps its conservative publication boundary.
+        # This always-inline helper never receives an escaping pointer: its
+        # result moves immediately into the sole terminal owner. No other
+        # address of that local, or a different callee, gets this exception.
+        header = (Path(__file__).resolve().parents[2] /
+                  "Include" / "internal" / "pycore_value.h").read_text()
+        self.assertIn("static inline Py_ALWAYS_INLINE PyValue\n"
+                      "_PyValue_Publish(PyValue *source)", header)
+        publications = generated_terminal_publication_sites(rest)
+        self.assertEqual(set(publications), {"INSTRUMENTED_SUSPEND"})
         box_area = set()
         for name, found in sites.items():
-            others = [site for site in found if not site.endswith(BOX_AREA_SITES)]
+            others = remove_allowed_address_sites(
+                [site for site in found if not site.endswith(BOX_AREA_SITES)],
+                publications.get(name, ()))
             self.assertEqual(others, [], name)
-            if len(others) < len(found):
+            if any(site.endswith(BOX_AREA_SITES) for site in found):
                 box_area.add(name)
         formats = ir_generator.compute_formats(self.analysis)
         self.assertEqual(box_area,
@@ -3401,6 +3445,38 @@ class TestCallTransactionMarkers(unittest.TestCase):
                         self.assertIn("int oparg = IR_DS(ir_word);", body)
                         checked += 1
         self.assertGreater(checked, 5)
+
+    def test_terminal_publication_address_exception_is_narrow(self):
+        original = """
+            TARGET(INSTRUMENTED_SUSPEND) {
+                PyValue temp = retval;
+                temp = _PyValue_Publish(&temp);
+                PyValue ir_yielded = temp;
+                DISPATCH();
+            }
+        """
+        for changed in (
+                original,
+                original.replace("_PyValue_Publish", "opaque"),
+                original.replace("Publish(&temp)", "Publish(&ir_yielded)"),
+                original.replace("DISPATCH();", "opaque(&temp); DISPATCH();"),
+                original.replace("temp = _PyValue_Publish(&temp);\n"
+                                 "                PyValue ir_yielded = temp;",
+                                 "temp = _PyValue_Publish(&temp); "
+                                 "PyValue ir_yielded = temp; opaque(&temp);"),
+                original.replace("PyValue ir_yielded = temp;",
+                                 "PyValue ir_yielded = temp; temp = _PyValue_Publish(&temp);"),
+                original.replace("INSTRUMENTED_SUSPEND", "ARBITRARY_HANDLER")):
+            with self.subTest(changed=changed):
+                sites = generated_address_sites(changed)
+                allowed = generated_terminal_publication_sites(changed)
+                remaining = [site for name, found in sites.items()
+                             for site in remove_allowed_address_sites(
+                                 found, allowed.get(name, ()))]
+                if changed == original:
+                    self.assertFalse(remaining)
+                else:
+                    self.assertTrue(remaining)
 
     def test_generated_address_sites(self):
         # The check of the generated output sees an address in a

@@ -327,7 +327,7 @@ left_site(PyCodeObject *code, int i, int base)
     }
     if (base == END_ASYNC_FOR) {
         int send = _PyCode_InstrTarget(code, i);
-        assert(base_opcode(code, send) == SEND);
+        assert(base_opcode(code, send) == SEND || base_opcode(code, send) == DELEGATE);
         return send;
     }
     return -1;
@@ -4022,7 +4022,8 @@ branchesiter_next(PyObject *op)
                 // Both async-for branch events refer to its semantic SEND.
                 int src_offset = _PyCode_InstrTarget(code, offset);
                 bi->bi_offset = next_offset;
-                assert(base_opcode(code, src_offset) == SEND);
+                assert(base_opcode(code, src_offset) == SEND ||
+                       base_opcode(code, src_offset) == DELEGATE);
                 return int_triple(src_offset, jump_dest(code, src_offset), next_offset);
             }
         }

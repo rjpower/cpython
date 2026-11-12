@@ -469,6 +469,83 @@ class DelegationTests(unittest.TestCase):
                     self.assertEqual(next(iterator), 'caught')
                 iterator.close()
 
+    def test_stale_global_instruction_events_before_native_and_exact_resume(self):
+        class ResumeError(Exception):
+            pass
+
+        errors = []
+
+        def leaf():
+            yield 1
+            return 7
+
+        def parent():
+            try:
+                return (yield from leaf())
+            except ResumeError as error:
+                traceback = error.__traceback__
+                while traceback.tb_frame.f_code is not parent.__code__:
+                    traceback = traceback.tb_next
+                errors.append(traceback.tb_lasti)
+                return 'caught'
+
+        def driver(child):
+            return (yield from child)
+
+        for _ in range(WARM):
+            list(driver(parent()))
+        resumes = {function.__code__: site_of(function) + 2
+                   for function in (parent, driver)}
+        monitoring, tool = sys.monitoring, 4
+        events = monitoring.events
+        seen = []
+        fail = False
+
+        def on_instruction(code, offset):
+            if code in resumes:
+                seen.append((events.INSTRUCTION, code, offset))
+
+        def on_resume(code, offset):
+            if code in resumes:
+                seen.append((events.PY_RESUME, code, offset))
+                if fail and code is parent.__code__:
+                    raise ResumeError('resume observer')
+
+        monitoring.use_tool_id(tool, 'stale delegated resume entry')
+        try:
+            monitoring.register_callback(tool, events.INSTRUCTION, on_instruction)
+            monitoring.register_callback(tool, events.PY_RESUME, on_resume)
+            for exact in (False, True):
+                for fail in (False, True):
+                    with self.subTest(exact=exact, callback_error=fail):
+                        monitoring.set_events(tool, events.INSTRUCTION)
+                        child = parent()
+                        iterator = driver(child) if exact else child
+                        self.assertEqual(next(iterator), 1)
+                        seen.clear()
+                        errors.clear()
+                        # The real resume word is already wrapped. Suspended
+                        # frames miss this version change, so refresh the old
+                        # wrapper before it can observe the new resume event.
+                        monitoring.set_events(tool, events.INSTRUCTION | events.PY_RESUME)
+                        try:
+                            with self.assertRaises(StopIteration) as stopped:
+                                next(iterator)
+                        finally:
+                            monitoring.set_events(tool, 0)
+                            iterator.close()
+                        self.assertEqual(stopped.exception.value, 'caught' if fail else 7)
+                        tracked = (parent.__code__, driver.__code__) if exact else (parent.__code__,)
+                        for code in tracked:
+                            self.assertIn((events.INSTRUCTION, code, resumes[code]), seen)
+                            self.assertIn((events.PY_RESUME, code, resumes[code]), seen)
+                        self.assertEqual(errors, [resumes[parent.__code__]] if fail else [])
+        finally:
+            monitoring.set_events(tool, 0)
+            monitoring.register_callback(tool, events.INSTRUCTION, None)
+            monitoring.register_callback(tool, events.PY_RESUME, None)
+            monitoring.free_tool_id(tool)
+
     def test_near_far_events_and_real_adapter(self):
         source = ('def inner():\n    yield 1\n    return 7\n'
                   'def outer():\n    return (yield from inner())\n')
@@ -567,6 +644,7 @@ class DelegationTests(unittest.TestCase):
     @unittest.skipUnless(support.Py_DEBUG, 'lltrace requires Py_DEBUG')
     def test_lltrace_new_handler_domain(self):
         script = textwrap.dedent('''
+            import sys
             def leaf():
                 yield 3
                 return 7
@@ -576,6 +654,13 @@ class DelegationTests(unittest.TestCase):
                 return (yield from middle())
             for _ in range(100):
                 list(outer())
+            monitoring = sys.monitoring
+            monitoring.use_tool_id(4, 'lltrace delegated resume')
+            monitoring.register_callback(4, monitoring.events.PY_RESUME,
+                                         lambda *args: None)
+            for function in (middle, outer):
+                monitoring.set_local_events(4, function.__code__,
+                                            monitoring.events.PY_RESUME)
             __lltrace__ = 1
             iterator = outer()
             assert next(iterator) == 3
@@ -586,11 +671,15 @@ class DelegationTests(unittest.TestCase):
             else:
                 raise AssertionError('missing completion')
             del __lltrace__
+            for function in (middle, outer):
+                monitoring.set_local_events(4, function.__code__, 0)
+            monitoring.register_callback(4, monitoring.events.PY_RESUME, None)
+            monitoring.free_tool_id(4)
             print('delegation complete')
         ''')
         _, stdout, stderr = assert_python_ok('-c', script)
         self.assertEqual(stderr, b'')
-        for name in (b'DELEGATE', b'SUSPEND', b'RESUME_DELEGATE',
+        for name in (b'DELEGATE', b'SUSPEND', b'INSTRUMENTED_RESUME_DELEGATE',
                      b'delegation complete'):
             self.assertIn(name, stdout)
         if test_ir.SPECIALIZES and _opcode.ENABLE_SPECIALIZATION:

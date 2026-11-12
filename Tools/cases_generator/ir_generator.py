@@ -3956,9 +3956,7 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
         self.emit("LOAD_IP(0);\n")
-        self.emit("IR_SKIP_RESUME();\n")
-        self.emit("DTRACE_FUNCTION_ENTRY();\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("IR_FINISH_RESUME_ENTRY();\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         return False

@@ -876,7 +876,7 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     return opcode;
 }
 
-/* END_ASYNC_FOR names its semantic SEND site for branch observation. */
+/* END_ASYNC_FOR names its await's semantic send site for branch observation. */
 static int
 jump_target(_PyRegCfg *cfg, _PyRegOp *op)
 {
@@ -884,7 +884,7 @@ jump_target(_PyRegCfg *cfg, _PyRegOp *op)
     _PyRegBlock *b = &cfg->blocks[op->target];
     if (op->opcode == END_ASYNC_FOR) {
         _PyRegOp *send = &cfg->ops[b->start];
-        assert(send->opcode == SEND);
+        assert(send->opcode == SEND || send->opcode == DELEGATE);
         return send->word;
     }
     return b->word;

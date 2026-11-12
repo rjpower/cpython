@@ -809,6 +809,25 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
         } \
     } while (0)
 
+/* Entry hooks see the saved semantic PC. A hook's redirect, including
+ * same-PC intent, wins over both a cached skip and the encoded continuation. */
+#define IR_FINISH_RESUME_ENTRY() \
+    do { \
+        _PyInstr *ir_entry_site = frame->instr_ptr; \
+        uint64_t ir_entry_generation = resume_entry_generation(frame); \
+        DTRACE_FUNCTION_ENTRY(); \
+        LLTRACE_RESUME_FRAME(); \
+        _PyIRStepResult ir_entry = prepare_resume_entry( \
+            tstate, frame, ir_entry_site, ir_entry_generation); \
+        next_instr = ir_entry.next; \
+        if (ir_entry.status < 0) { \
+            JUMP_TO_LABEL(error); \
+        } \
+        if (ir_entry.status != _PY_IR_STEP_REDIRECT) { \
+            IR_SKIP_RESUME(); \
+        } \
+    } while (0)
+
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \

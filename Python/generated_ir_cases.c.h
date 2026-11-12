@@ -9178,9 +9178,7 @@
                         }
                         _PyFrame_SetReturnValue(frame, ir_resume_input);
                         LOAD_IP(0);
-                        IR_SKIP_RESUME();
-                        DTRACE_FUNCTION_ENTRY();
-                        LLTRACE_RESUME_FRAME();
+                        IR_FINISH_RESUME_ENTRY();
                         DISPATCH();
                     }
                 }
@@ -9305,9 +9303,7 @@
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
-                    IR_SKIP_RESUME();
-                    DTRACE_FUNCTION_ENTRY();
-                    LLTRACE_RESUME_FRAME();
+                    IR_FINISH_RESUME_ENTRY();
                     DISPATCH();
                 }
             }
@@ -9887,9 +9883,7 @@
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
-                    IR_SKIP_RESUME();
-                    DTRACE_FUNCTION_ENTRY();
-                    LLTRACE_RESUME_FRAME();
+                    IR_FINISH_RESUME_ENTRY();
                     DISPATCH();
                 }
             }
@@ -17122,9 +17116,7 @@
                         }
                         _PyFrame_SetReturnValue(frame, ir_resume_input);
                         LOAD_IP(0);
-                        IR_SKIP_RESUME();
-                        DTRACE_FUNCTION_ENTRY();
-                        LLTRACE_RESUME_FRAME();
+                        IR_FINISH_RESUME_ENTRY();
                         DISPATCH();
                     }
                 }
@@ -17303,9 +17295,7 @@
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
-                    IR_SKIP_RESUME();
-                    DTRACE_FUNCTION_ENTRY();
-                    LLTRACE_RESUME_FRAME();
+                    IR_FINISH_RESUME_ENTRY();
                     DISPATCH();
                 }
             }
@@ -19623,15 +19613,10 @@
                 if (too_deep) {
                     JUMP_TO_LABEL(exit_unwind_notrace);
                 }
-                DTRACE_FUNCTION_ENTRY();
                 next_instr = frame->instr_ptr;
-                IR_SKIP_RESUME();
+                IR_FINISH_RESUME_ENTRY();
                 #ifdef Py_DEBUG
-                int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
-                if (lltrace < 0) {
-                    JUMP_TO_LABEL(exit_unwind);
-                }
-                frame->lltrace = lltrace;
+
                 assert(!_PyErr_Occurred(tstate));
                 #endif
                 slots = _PyFrame_Slots(frame);

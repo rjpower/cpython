@@ -1224,20 +1224,38 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
         Py_DECREF(f);
         return NULL;
     }
+    PyObject *origin = NULL;
+    if (type == &PyCoro_Type) {
+        int depth = _PyThreadState_GET()->coroutine_origin_tracking_depth;
+        if (depth != 0) {
+            origin = _PyCoro_ComputeOrigin(depth, _PyEval_GetFrame());
+            if (origin == NULL) {
+                PyObject_GC_Del(gen);
+                Py_DECREF(f);
+                return NULL;
+            }
+        }
+    }
     /* Copy the frame */
     assert(f->f_frame->frame_obj == NULL);
     assert(f->f_frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
+    Py_BEGIN_CRITICAL_SECTION(f);
+    /* Like RETURN_GENERATOR, discard the first None input instead of using
+     * the ordinary frame initializer's default slot zero. */
+    f->f_frame->return_slot = IR_NO_DST;
     _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame);
     gen->gi_frame_state = FRAME_CREATED;
-    assert(frame->frame_obj == f);
-    f->f_frame = frame;
+    frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     assert(PyObject_GC_IsTracked((PyObject *)f));
-    Py_DECREF(f);
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
+    gen->gi_origin_or_finalizer = origin;
+    gen->gi_closed = 0;
+    gen->gi_hooks_inited = 0;
+    gen->gi_running_async = 0;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else
@@ -1246,7 +1264,10 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
         gen->gi_qualname = Py_NewRef(qualname);
     else
         gen->gi_qualname = Py_NewRef(_PyGen_GetCode(gen)->co_qualname);
+    f->f_frame = frame;
     _PyObject_GC_TRACK(gen);
+    Py_END_CRITICAL_SECTION();
+    Py_DECREF(f);
     return (PyObject *)gen;
 }
 
@@ -1630,26 +1651,7 @@ _PyCoro_ComputeOrigin(int origin_depth, _PyInterpreterFrame *current_frame)
 PyObject *
 PyCoro_New(PyFrameObject *f, PyObject *name, PyObject *qualname)
 {
-    PyObject *coro = gen_new_with_qualname(&PyCoro_Type, f, name, qualname);
-    if (!coro) {
-        return NULL;
-    }
-
-    PyThreadState *tstate = _PyThreadState_GET();
-    int origin_depth = tstate->coroutine_origin_tracking_depth;
-
-    if (origin_depth == 0) {
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = NULL;
-    } else {
-        PyObject *cr_origin = _PyCoro_ComputeOrigin(origin_depth, _PyEval_GetFrame());
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = cr_origin;
-        if (!cr_origin) {
-            Py_DECREF(coro);
-            return NULL;
-        }
-    }
-
-    return coro;
+    return gen_new_with_qualname(&PyCoro_Type, f, name, qualname);
 }
 
 
@@ -1997,18 +1999,7 @@ PyTypeObject PyAsyncGen_Type = {
 PyObject *
 PyAsyncGen_New(PyFrameObject *f, PyObject *name, PyObject *qualname)
 {
-    PyAsyncGenObject *ag;
-    ag = (PyAsyncGenObject *)gen_new_with_qualname(&PyAsyncGen_Type, f,
-                                                   name, qualname);
-    if (ag == NULL) {
-        return NULL;
-    }
-
-    ag->ag_origin_or_finalizer = NULL;
-    ag->ag_closed = 0;
-    ag->ag_hooks_inited = 0;
-    ag->ag_running_async = 0;
-    return (PyObject*)ag;
+    return gen_new_with_qualname(&PyAsyncGen_Type, f, name, qualname);
 }
 
 // Whether value is the wrapper of an async yield (_PyAsyncGenValueWrapperNew).

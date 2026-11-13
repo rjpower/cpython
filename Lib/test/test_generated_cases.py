@@ -3311,6 +3311,43 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises(SyntaxError):
                 ir_generator.validate_nullable_inputs(analysis.instructions["OP"].parts[0])
 
+    def test_nullable_name_store_uses_only_its_value_argument(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        part = analysis.instructions["STORE_NAME"].parts[0]
+        self.assertTrue(part.stack.inputs[0].nullable)
+        ir_generator.validate_nullable_inputs(part)
+        intrinsic = analysis.uops["_CALL_INTRINSIC_2"]
+        self.assertTrue(intrinsic.stack.inputs[0].nullable)
+        self.assertFalse(intrinsic.stack.inputs[1].nullable)
+        ir_generator.validate_nullable_inputs(intrinsic)
+        # A nullable delete value does not permit GETATTR or object boxing
+        # to see NULL after the intrinsic-specific branch.
+        guarded = next(stmt for stmt in intrinsic.body.body
+                       if isinstance(stmt, parser.IfStmt))
+        old = guarded.else_body.condition
+        guarded.else_body.condition = parser.Parser(
+            "{ if (other) {} }", "<missing intrinsic guard>").block().body[0].condition
+        try:
+            with self.assertRaises(SyntaxError):
+                ir_generator.validate_nullable_inputs(intrinsic)
+        finally:
+            guarded.else_body.condition = old
+        for arguments, accepted in (
+                ("tstate, value, name, ns", True),
+                ("value, other, name, ns", False),
+                ("tstate, other, value, ns", False),
+                ("tstate, other, name, value", False)):
+            with self.subTest(arguments=arguments):
+                inst = self.analyze("\ninst(OP, (value:nullable --)) {\n"
+                    f"int rc = _PyEval_StoreName({arguments});\n"
+                    "PyValue_XCLOSE(value);\n}\n").instructions["OP"]
+                if accepted:
+                    ir_generator.validate_nullable_inputs(inst.parts[0])
+                else:
+                    with self.assertRaises(SyntaxError):
+                        ir_generator.validate_nullable_inputs(inst.parts[0])
+
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
             inst(OP, (required, value:nullable, items[oparg]:nullable --)) {

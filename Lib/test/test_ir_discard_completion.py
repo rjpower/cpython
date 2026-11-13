@@ -13,7 +13,7 @@ from test import support, test_tools
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-VARIANTS = ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL")
+VARIANTS = ("CALL_NO_SELF_PY_EXACT_ARGS", "CALL_NO_SELF_PY_GENERAL")
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD + 10
 
 
@@ -107,7 +107,7 @@ class DiscardCompletionTests(unittest.TestCase):
                 make = general_call if general else exact
                 for _ in range(ROUNDS):
                     caller(make)
-                self.assertTrue(set(handlers(caller)) & set(VARIANTS))
+                self.assertIn(VARIANTS[int(general)], handlers(caller))
                 call = next(i.offset for i in dis.get_instructions(caller)
                             if i.opname == "CALL")
                 successor = next(i.offset for i in dis.get_instructions(caller)
@@ -295,7 +295,7 @@ class DiscardCompletionTests(unittest.TestCase):
             with self.subTest(function=function):
                 calls = [word for word in
                          _testinternalcapi.get_ir(function.__code__)
-                         if word[0] == "CALL"]
+                         if word[0] == "CALL_NO_SELF"]
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(calls[0][1], 4095)
 
@@ -312,7 +312,7 @@ class DiscardCompletionGeneratorTests(unittest.TestCase):
         output = io.StringIO()
         gen.generate_ir([], analysis, output, False)
         generated = output.getvalue()
-        for name in VARIANTS:
+        for name in (*VARIANTS, "CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL"):
             self.assertIn(f"TARGET({name}) {{", generated)
         self.assertNotIn("IR_POSTCALL_DISCARD", generated)
         self.assertNotIn("CALL_POSTCALL_DISCARD", generated)

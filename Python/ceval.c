@@ -3063,7 +3063,8 @@ fail_post_args:
  * code/exception close, whose referents can themselves invoke Python. */
 static Py_NO_INLINE PyValue
 clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        int stage, PyValue result, uint8_t reason)
+                        int stage, PyValue result, uint8_t reason,
+                        int initial_extent)
 {
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
@@ -3075,7 +3076,7 @@ clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(frame->base <= _PyDataStack_Slots(top));
 #endif
     _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
     roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
     roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
@@ -3112,7 +3113,8 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (stage != _Py_FRAME_CLEAR_DONE ||
         _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
     {
-        return clear_thread_frame_slow(tstate, frame, stage, result, reason);
+        return clear_thread_frame_slow(tstate, frame, stage, result, reason,
+                                      _PyFrame_GetCode(frame)->co_nlocalsplus);
     }
     Py_CLEAR(frame->f_executable);
     _PyThreadState_PopFrame(tstate, frame);
@@ -3284,6 +3286,32 @@ _PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
 {
     assert(!PyValue_IsNull(result));
     return frame_clear_and_pop(tstate, frame, result, _PyIR_RETIRE_NORMAL_RETURN);
+}
+
+Py_NO_INLINE PyValue
+_PyEval_FrameClearAndPopGeneralWithResult(PyThreadState *tstate,
+                                         _PyInterpreterFrame *frame,
+                                         PyValue result)
+{
+    assert(!PyValue_IsNull(result));
+    if (frame->owner != FRAME_OWNED_BY_THREAD) {
+        return frame_clear_and_pop(tstate, frame, result,
+                                   _PyIR_RETIRE_NORMAL_RETURN);
+    }
+    assert((PyObject **)frame == tstate->datastack_limit);
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
+    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
+    int extent = _PyFrame_NumSlots(frame);
+    int stage = _PyFrame_TryClearExceptCodeGeneral(frame);
+    if (stage != _Py_FRAME_CLEAR_DONE ||
+        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
+    {
+        return clear_thread_frame_slow(tstate, frame, stage, result,
+                                      _PyIR_RETIRE_NORMAL_RETURN, extent);
+    }
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopFrame(tstate, frame);
+    return result;
 }
 
 void

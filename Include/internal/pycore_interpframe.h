@@ -512,7 +512,9 @@ enum {
 
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
-void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
+                            int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);
 void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
                                   struct _PyTransitionRoots *roots);

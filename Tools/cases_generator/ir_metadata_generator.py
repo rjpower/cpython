@@ -199,15 +199,19 @@ def generate_ir_metadata(
         checkpoints = contracts[name].error_checkpoints
         key = normal, checkpoints
         if key not in programs:
-            suffix = []
+            actions = max((checkpoint.actions for checkpoint in checkpoints),
+                          key=len, default=())
+            suffix = list(actions)
             for checkpoint in checkpoints:
+                if actions[:len(checkpoint.actions)] != checkpoint.actions:
+                    raise ValueError("error checkpoints have different storage graphs")
                 suffix.append(OwnershipEvent("_PyIR_OWNER_ERROR_CHECKPOINT",
-                    flags=checkpoint.flags, src=checkpoint.id, extent=len(checkpoint.reads)))
-                suffix.extend(OwnershipEvent("_PyIR_OWNER_ERROR_READ", flags=int(nullable), src=field)
-                              for field, nullable in checkpoint.reads)
+                    flags=checkpoint.flags, dst=checkpoint.node,
+                    src=checkpoint.id))
             program = normal
             if suffix:
-                program += (OwnershipEvent("_PyIR_OWNER_ERROR_PROGRAM", extent=len(suffix)), *suffix)
+                program += (OwnershipEvent("_PyIR_OWNER_ERROR_PROGRAM",
+                            src=len(actions), extent=len(suffix)), *suffix)
             if len(program) > 65535 or len(ownership) + len(program) > 0xffffffff:
                 raise ValueError("ownership event table is too large")
             programs[key] = len(ownership), len(normal)

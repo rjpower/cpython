@@ -310,7 +310,13 @@ enum {
     _PyIR_OWNER_YIELD_DELEGATED,
     _PyIR_OWNER_ERROR_PROGRAM,
     _PyIR_OWNER_ERROR_CHECKPOINT,
-    _PyIR_OWNER_ERROR_READ,
+    _PyIR_OWNER_STORAGE_SAVE,
+    _PyIR_OWNER_STORAGE_VACATE,
+    _PyIR_OWNER_STORAGE_PUBLISH,
+    _PyIR_OWNER_STORAGE_CALLBACK,
+    _PyIR_OWNER_STORAGE_JOIN,
+    _PyIR_OWNER_STORAGE_LITERAL,
+    _PyIR_OWNER_STORAGE_COPY,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
@@ -320,12 +326,17 @@ enum {
 #define _PyIR_NORMAL_NULL_FALLTHROUGH 4u
 #define _PyIR_NORMAL_NULL_TAKEN 8u
 #define _PyIR_ERROR_CANONICAL_OR_NULL 1u
-#define _PyIR_ERROR_READ_NULLABLE 1u
+#define _PyIR_STORAGE_READ_NULLABLE 1u
+#define _PyIR_STORAGE_TAKES_HOME 1u
+#define _PyIR_STORAGE_PUBLISH_TEMPORARY 1u
+#define _PyIR_STORAGE_PUBLISH_SAME_VALUE 2u
+#define _PyIR_STORAGE_LITERAL_NONNULL 1u
+#define _PyIR_STORAGE_COPY_OWNED_SOURCE 1u
 
 /* owner_events counts only the normal prefix. ERROR_PROGRAM, when flagged,
  * follows that prefix and counts its suffix records in extent. Each
- * ERROR_CHECKPOINT names a reached literal ID and counts its following
- * ERROR_READ records. Those reads name encoded fields, not logical IO slots. */
+ * Its src counts the shared topological Storage action prefix. Each following
+ * ERROR_CHECKPOINT names a reached literal ID and its final action node. */
 typedef struct {
     uint8_t kind, flags;
     uint16_t dst, src, extent;

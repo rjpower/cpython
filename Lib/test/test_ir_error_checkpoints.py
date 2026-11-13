@@ -106,6 +106,69 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
 
+    def test_actual_retired_scalar_input_is_absent_from_selected_snapshot(self):
+        monitor = sys.monitoring
+        tool = monitor.DEBUGGER_ID
+        observations = []
+        current = None
+        payload_id = value_id = 0
+
+        class Value:
+            def __bool__(self):
+                raise LookupError("retired scalar input")
+
+        def raised(code, offset, exception):
+            if code is current:
+                frame = sys._getframe(1)
+                selected = _testinternalcapi.get_frame_selected_object_ids(frame)
+                observations.append((
+                    _testinternalcapi.get_frame_home_view(frame)[0],
+                    payload_id in selected, value_id in selected,
+                    _testinternalcapi.gc_verify()))
+
+        monitor.use_tool_id(tool, "scalar-error-actions")
+        try:
+            monitor.register_callback(tool, monitor.events.RAISE, raised)
+            # A may be an independent recipient, the consumed input itself,
+            # or a dynamic named binding. Replay coalesces these aliases
+            # before interpreting the actual VACATE of B.
+            for recipient in (5, 4, 2):
+                image = make_code([
+                    ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
+                    ("LOAD_FAST", 4, 1), ("DELETE_FAST", 1),
+                    ("UNARY_NOT", recipient, 4),
+                    ("RETURN_VALUE", recipient),
+                ], slots=5, locals=("payload", "value", "mutable")).replace(co_argcount=2)
+                for current in routes(image):
+                    self.assertEqual(self.authority(current, 4), 2)
+                    function = types.FunctionType(current, globals())
+                    payload, value = object(), Value()
+                    payload_id, value_id = id(payload), id(value)
+                    monitor.set_local_events(tool, current, monitor.events.RAISE)
+                    try:
+                        try:
+                            function(payload, value)
+                        except LookupError as error:
+                            self.assertEqual(str(error), "retired scalar input")
+                        else:
+                            self.fail("the scalar predicate must fail")
+                    finally:
+                        monitor.set_local_events(tool, current, 0)
+                    self.assertEqual(observations[-1], (2, True, False, []))
+        finally:
+            monitor.register_callback(tool, monitor.events.RAISE, None)
+            monitor.free_tool_id(tool)
+
+    def test_nullable_binding_does_not_supply_required_nonnull_read(self):
+        # Named bindings are canonical but may be unbound. The scalar
+        # action replay does not invent the missing boundness check.
+        for words in (
+                [("RESUME", 0), ("UNARY_NOT", 2, 0), ("RETURN_VALUE", 2)],
+                [("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 1, 0),
+                 ("UNARY_NOT", 2, 1), ("RETURN_VALUE", 2)]):
+            for code in routes(make_code(words, slots=2, locals=("unbound",))):
+                self.assertEqual(self.authority(code, len(words) - 2), 0)
+
     def test_unknown_and_joined_may_shape_cannot_supply_readability(self):
         # The opaque operation is valid, but its whole incoming shape is not
         # a positive checkpoint certificate.
@@ -208,6 +271,7 @@ class ErrorCheckpointTests(unittest.TestCase):
 
         def writing_flush(stack, *args, **kwargs):
             result = original(stack, *args, **kwargs)
+            # A write without its matching action receipt is uncovered.
             stack.home_writes += 1
             return result
 

@@ -1347,9 +1347,10 @@ run_staged_provider(PyObject *module, PyObject *args)
                                &payload, 1, NULL);
     }
     else {
-        PyValue argument = PyValue_FromObjectBorrow(payload);
+        PyValue argument = PyValue_DUP(PyValue_FromObjectBorrow(payload));
         PyValue value = _PyEval_VectorValue(tstate, (PyFunctionObject *)function,
                                             &argument, 1, NULL);
+        PyValue_CLOSE(argument);
         result = PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
         PyValue_XCLOSE(value);
     }

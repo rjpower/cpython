@@ -80,6 +80,24 @@ class AbruptOperandTests(unittest.TestCase):
                 bad[2] = (name, 1, 1)
                 self.reject(base, co_code=encoded(bad))
 
+    def test_window_scalar_fields_are_trailing_inputs_not_through_indices(self):
+        for name in ("LIST_APPEND", "SET_ADD"):
+            for depth in (1, 2, 8):
+                with self.subTest(handler=name, depth=depth):
+                    # IN0 names the consumed trailing scalar. The through
+                    # prefix is addressed from BASE, not from scalar index0.
+                    words = [("LOAD_CONST", 1), ("LOAD_CONST", depth + 1),
+                             (name, 1, depth + 1, depth), ("POP_TOP", 1),
+                             ("LOAD_CONST", 0), ("CALL_NO_SELF", 0, 0, 0, 0),
+                             ("RETURN_VALUE", 0)]
+                    code = make_code(words, slots=depth + 4)
+                    for admitted in routes(code):
+                        _testinternalcapi.get_ir(admitted, True)
+                    # The real collection at BASE remains owned until the
+                    # explicit retirement. It cannot itself become a hole.
+                    words[3] = ("IR_JUMP", 0, 0, 4)
+                    self.reject(code, co_code=encoded(words))
+
     def test_actual_anext_exception_keeps_a_held_keyword_call_hole(self):
         class Pause:
             def __await__(self):

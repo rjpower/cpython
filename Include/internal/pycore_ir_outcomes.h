@@ -457,7 +457,7 @@ _PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int through = _PyIR_Extent(fmt->through, arg);
     for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] >= _PyIR_ROLE_IN0 &&
+        if (!(fmt->flags & _PyIR_WINDOW) && fmt->roles[f] >= _PyIR_ROLE_IN0 &&
             fmt->roles[f] - _PyIR_ROLE_IN0 < through &&
             (int)fields[f] == home)
         {

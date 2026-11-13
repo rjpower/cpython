@@ -9,14 +9,29 @@ and [next decision](issues/activation53/next-steps.md).
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 Current evidence E=`BASE/pyjit-link-wave1/activation53`.
 
-## Round54: research active
+## Round54: isolated implementation and measurement
 
 Packet `pyjit/issues/frame-state54`; new evidence
-`BASE/pyjit-link-wave1/frame-state54`. Astra researches five options covering
-register validity, header layout and transfer specialization. Independent Sol
-inventories cover fields and ownership validity. Implementation follows reviewed
-contracts in isolated golden51-derived source trees. Root owns native execution
-and integration; no round54 build or timing is running yet.
+`BASE/pyjit-link-wave1/frame-state54`. One broad Astra review and independent
+Sol inventories accepted five isolated experiments, not five predicted wins.
+The [resolution](issues/frame-state54/review-resolution.md) records corrections
+and the [plan](issues/frame-state54/plan.md) owns admission.
+
+| Branch suffix under pyjit/frame54- | Change | State |
+| --- | --- | --- |
+| recipient | Existing recipient word records empty versus replace | Matching release/debug builds and focused checks pass; confirmation pending |
+| feedback | Derive feedback from execution prefix | Matching release/debug builds and 578 focused tests per role pass; confirmation running |
+| globals | Derive namespaces from independently pinned function | Sentinel tracing fixed; 799 focused tests per role pass; initial screen mixed |
+| locals | Optional mapping on frame object | Correcting complete GC publication before builds |
+| clears | Proved same-home integer overwrite | Narrow debug publication fix awaiting regenerated build |
+
+Sources are `BASE/worktrees/frame54-SUFFIX`, builds
+`BASE/frame54-SUFFIX-{release,debug}`. Root owns generation, builds, runtime
+checks and quiet timings. Do not overlap them. The initial recipient generator
+effect annotation and namespace debug-sentinel bugs were fixed; failed logs
+remain evidence. Current initial timings are not golden admission. A component
+win does not establish composition. Selected51 stays immutable until merged
+validation, direct benchmarks and cold review pass.
 
 ## Selected runtime and controls
 

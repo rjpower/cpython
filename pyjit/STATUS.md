@@ -1,9 +1,12 @@
 # Project status
 
 Golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected.
-Round54's [active plan](issues/frame-state54/plan.md) is in architectural review:
-one Astra research review and independent frame-field/register-validity audits
-precede five Sol implementation experiments. No round54 performance claim yet.
+Round54's [active plan](issues/frame-state54/plan.md) is implementing five
+contracts after one broad Astra review and independent frame-field/register
+audits. Recipient proofs, feedback derivation and namespace derivation build
+and pass focused release/debug checks. Optional locals storage and same-home
+commit are correcting GC publication and a debug publication invariant. Quiet
+component measurements are underway; no round54 candidate is admitted.
 
 All three activation53 candidates are rejected after six-pair confirmation:
 direct final-home construction, shared completion and native-only construction.

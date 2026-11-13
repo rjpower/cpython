@@ -2,8 +2,10 @@
 
 Status: Astra research and independent inventories complete. Five contracts
 accepted for isolated experiments in the [resolution](review-resolution.md).
-Options 2/3 have independent peer approval and are implementing; options 1/4/5
-are preparing concrete proposals. Selected
+All five handwritten implementations have peer review. Options 1/2/3 build
+in release/debug; focused checks are running or passed. Option 4 is correcting
+GC publication and option 5 its debug overwrite invariant before final builds.
+No round54 candidate has performance admission. Selected
 golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` is the immutable baseline.
 
 The user requests one broad Astra review with five concrete improvements,

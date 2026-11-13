@@ -33,10 +33,21 @@ validation. Astra is not in the implementation loop.
 - Locals storage may not allocate inside pure frame initialization. Mapping
   preparation stays fallible before commit; teardown holds the mapping across
   unique frame-object destruction and slot retirement.
+- Source review corrects Astra's early-tracking prescription: a private
+  mapping-bearing thread record must not become GC-enumerable before semantic
+  frame completion. Existing root paths retain its mapping while it stays
+  untracked; track on actual complete observer publication or complete heap
+  transition. This correction is subject to actual source and runtime gates.
 - Static native inspection found the same-home ADD input NULL store survives;
   integer input close machinery is already optimized away. Count only work
   actually removed. Make alias equality visible in emitted C; a release-elided
   assertion is not compiler authority. Weighted reached sites remain a gate.
+- Pure recipient recording must be certified nonescaping in the analyzer.
+  The first generated attempt published a wrapped frame pointer as a value;
+  bootstrap rejected it. The corrected classification retains pure setup.
+- Debug tracing must reject entry sentinels before deriving their namespaces.
+  Its helper now accepts a frame and checks its class before function access,
+  preserving release handlers without a new guard.
 
 ## Integration decision
 

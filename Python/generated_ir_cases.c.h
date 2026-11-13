@@ -15202,7 +15202,7 @@
                 frame->phase_state = 0;
                 ir_obj_aiter = _PyValueTemps_Box(value_temps, aiter);
                 if (ir_obj_aiter == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    PROCESS_ERROR_AT(RAISE, 1, this_instr);
                 }
                 BOX_STAT_INC(GET_ANEXT);
             }
@@ -15214,7 +15214,7 @@
             PyObject *awaitable_o = _PyEval_GetANext(ir_obj_aiter);
             if (awaitable_o == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                PROCESS_ERROR_AT(RAISE, 2, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(IR_A(ir_word), awaitable);

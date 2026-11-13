@@ -3081,6 +3081,11 @@ class IREmitter(Emitter):
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         edge, _ = contracts[tkn]
+        # This checked terminal path has performed its final owner commit.
+        # Only its successful intended normal edge gets the normal recipe;
+        # callback errors/redirects retain their separate recovery protocols.
+        if normal_vacate_capability(inst, fmt):
+            self.normal_observer_edges.add(edge)
         self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
         self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
         self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
@@ -4471,6 +4476,16 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
+    """Conditions shared by actual final commits, never a source-name grant."""
+    return (not inst.properties.switches_frame and not fmt.names_target
+            and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
+            and not through_items(inst, *external_io(inst))
+            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+                                  "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
+                        for t in uop_token_list(inst)))
+
+
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
     """The physical final publication shared by ordinary and observed paths."""
     stack.final = True
@@ -5040,6 +5055,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.normal_observer_edges = set()
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
@@ -5216,13 +5232,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # at their common point, so consumed inputs are empty on either edge.
         # Other normal exits, through/outcome protocols and raw frame access
         # need their own transport recipe.
-        emitter.normal_inputs_cleared = (
-            not inst.properties.switches_frame and not fmt.names_target
-            and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
-            and not through_items(inst, *external_io(inst))
-            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
-                                  "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
-                        for t in uop_token_list(inst)))
+        emitter.normal_inputs_cleared = normal_vacate_capability(inst, fmt)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
@@ -5231,6 +5241,11 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
+    if (not reachable and emitter.normal_observer_edges == {0, 1}
+            and normal_vacate_capability(inst, fmt)):
+        # Each exclusive checked branch wrapper flushes before its callback
+        # and dispatches itself, so there is no outer common flush to visit.
+        emitter.normal_inputs_cleared = True
     if call_window and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
         emitter.call_completion()

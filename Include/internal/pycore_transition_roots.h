@@ -1,0 +1,75 @@
+#ifndef Py_INTERNAL_TRANSITION_ROOTS_H
+#define Py_INTERNAL_TRANSITION_ROOTS_H
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef Py_BUILD_CORE
+#  error "this header requires Py_BUILD_CORE define"
+#endif
+
+#include "pycore_tstate.h"       // _PyThreadStateImpl
+#include "pycore_value.h"        // PyValue
+
+enum {
+    _Py_TRANSITION_CODE = 1,
+    _Py_TRANSITION_FUNCTION = 2,
+    _Py_TRANSITION_LOCALS = 4,
+    _Py_TRANSITION_FRAME_OBJECT = 8,
+    _Py_TRANSITION_EXCEPTION = 16,
+};
+
+/* External owners during an outlined, potentially reentrant retirement.
+ * NULL homes remain authoritative: [0, remaining) is an initialized prefix.
+ * A producer advances remaining or removes a header bit before closing that
+ * owner. Code stays pinned through the last home/map read. Once code closes,
+ * a walker uses only these explicit fields, never frame geometry.
+ *
+ * Storage for the record, frame and homes must outlive nested callbacks.
+ * Pop precedes release of the frame's arena reservation. Heap-frame takeover
+ * transfers the prefix and header authority before any subsequent callback.
+ */
+typedef struct _PyTransitionRoots {
+    struct _PyTransitionRoots *previous;
+    _PyInterpreterFrame *frame;
+    int remaining;
+    unsigned char header_mask;
+    unsigned char result_present;
+    PyValue result;
+} _PyTransitionRoots;
+
+static inline void
+_PyThreadState_PushTransitionRoots(PyThreadState *tstate,
+                                  _PyTransitionRoots *roots)
+{
+    assert(roots->frame != NULL);
+    assert(roots->remaining >= 0);
+    assert((roots->header_mask & ~31) == 0);
+    assert(!(roots->header_mask & _Py_TRANSITION_EXCEPTION) ||
+           roots->frame->owner == FRAME_OWNED_BY_GENERATOR);
+    assert(roots->remaining == 0 ||
+           (roots->header_mask & _Py_TRANSITION_CODE));
+    roots->previous = ((_PyThreadStateImpl *)tstate)->transition_roots;
+    ((_PyThreadStateImpl *)tstate)->transition_roots = roots;
+}
+
+static inline void
+_PyThreadState_PopTransitionRoots(PyThreadState *tstate,
+                                 _PyTransitionRoots *roots)
+{
+    assert(((_PyThreadStateImpl *)tstate)->transition_roots == roots);
+    assert(roots->remaining == 0);
+    assert(roots->header_mask == 0);
+    assert(!roots->result_present);
+    ((_PyThreadStateImpl *)tstate)->transition_roots = roots->previous;
+}
+
+/* Mark external roots only. Never use this visitor for cyclic-GC edge
+ * subtraction: moving a heap edge here removes that container edge first. */
+PyAPI_FUNC(int) _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate,
+                                              visitproc visit, void *arg);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* !Py_INTERNAL_TRANSITION_ROOTS_H */

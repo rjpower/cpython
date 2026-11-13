@@ -1,5 +1,7 @@
 import sys
 import unittest
+import weakref
+from test import support
 from test.support import import_helper
 
 
@@ -7,6 +9,37 @@ _testcapi = import_helper.import_module('_testcapi')
 
 
 class FrameTest(unittest.TestCase):
+    def test_frame_new_locals_mapping(self):
+        namespace = {'value': 23}
+        code = compile('pass', '<frame-new-mapping>', 'exec')
+        frame = _testcapi.frame_new(code, globals(), namespace)
+        self.assertIs(frame.f_locals, namespace)
+        self.assertIs(_testcapi.frame_getlocals(frame), namespace)
+        frame.clear()
+        self.assertEqual(frame.f_locals, {})
+        self.assertEqual(namespace, {'value': 23})
+
+    def test_frame_new_generator_mapping(self):
+        class Namespace(dict):
+            pass
+
+        def body():
+            yield 17
+
+        namespace = Namespace()
+        namespace_ref = weakref.ref(namespace)
+        generator = _testcapi.frame_new_generator(body.__code__, globals(), namespace)
+        frame = generator.gi_frame
+        del namespace
+        support.gc_collect()
+        self.assertIsNotNone(namespace_ref())
+        self.assertEqual(next(generator), 17)
+        generator.close()
+        self.assertIsNotNone(namespace_ref())
+        frame.clear()
+        support.gc_collect()
+        self.assertIsNone(namespace_ref())
+
     def getframe(self):
         return sys._getframe()
 

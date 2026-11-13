@@ -16614,11 +16614,11 @@
             }
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
             frame->instr_ptr++;
-            _PyFrame_Copy(frame, gen_frame);
-            gen_frame->return_slot = (uint16_t)IR_A(ir_word);
+            frame->return_slot = (uint16_t)IR_A(ir_word);
+            _PyFrame_Copy(frame, gen_frame, FRAME_OWNED_BY_GENERATOR);
             assert(frame->frame_obj == NULL);
-            gen->gi_frame_state = FRAME_CREATED;
-            gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
+            assert(gen_frame->frame_obj == NULL ||
+                   gen_frame->frame_obj->f_frame == gen_frame);
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);

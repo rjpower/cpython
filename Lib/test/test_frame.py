@@ -18,6 +18,235 @@ from test.support.script_helper import assert_python_ok
 from test import mapping_tests
 
 
+class TestFrameLocalsMapping(unittest.TestCase):
+    def test_private_mapping_gc_visibility(self):
+        import gc
+        import types
+
+        if sys.gettrace() is not None or sys.getprofile() is not None:
+            self.skipTest('tracing publishes frame objects')
+
+        namespace = {}
+        observed = []
+
+        def check():
+            support.gc_collect()
+            self.assertEqual(namespace['value'], 17)
+            for objects in (gc.get_objects(), gc.get_referrers(namespace)):
+                self.assertFalse(any(isinstance(obj, types.FrameType)
+                                     and obj.f_code is private_code
+                                     for obj in objects))
+            observed.append(True)
+
+        code = compile('value = 17\ncheck()', '<private-exec>', 'exec')
+        private_code = code
+        exec(code, {'check': check}, namespace)
+
+        class Meta(type):
+            @classmethod
+            def __prepare__(metaclass, name, bases):
+                return namespace
+
+        namespace = {}
+        code = compile('class Example(metaclass=Meta):\n'
+                       '    value = 17\n    check()', '<private-class>', 'exec')
+        private_code = next(const for const in code.co_consts
+                            if isinstance(const, types.CodeType))
+        exec(code, {'Meta': Meta, 'check': check, '__name__': __name__})
+        self.assertEqual(observed, [True, True])
+
+    def test_unobserved_generator_mapping_cycle(self):
+        class Namespace(dict):
+            pass
+
+        def body():
+            yield 17
+
+        def make_cycle():
+            namespace = Namespace()
+            generator = eval(body.__code__, {}, namespace)
+            namespace['generator'] = generator
+            return weakref.ref(namespace), weakref.ref(generator)
+
+        namespace_ref, generator_ref = make_cycle()
+        support.gc_collect()
+        self.assertIsNone(namespace_ref())
+        self.assertIsNone(generator_ref())
+
+    def test_exec_custom_mapping_identity(self):
+        from collections import UserDict
+
+        namespace = UserDict()
+        environment = {'capture': lambda: sys._getframe(1)}
+        exec('value = 10\ncopy = value\ndel value\nframe = capture()',
+             environment, namespace)
+        frame = namespace.pop('frame')
+        self.assertIs(frame.f_locals, namespace)
+        self.assertEqual(namespace['copy'], 10)
+        self.assertNotIn('value', namespace)
+        frame.clear()
+
+    def test_class_prepare_mapping(self):
+        namespaces = []
+        frames = []
+
+        class Namespace(dict):
+            pass
+
+        class Meta(type):
+            @classmethod
+            def __prepare__(metaclass, name, bases):
+                namespace = Namespace()
+                namespaces.append(namespace)
+                return namespace
+
+        def capture():
+            frames.append(sys._getframe(1))
+
+        class Example(metaclass=Meta):
+            value = 17
+            capture()
+
+        self.assertEqual(Example.value, 17)
+        self.assertIs(frames[0].f_locals, namespaces[0])
+        frames[0].clear()
+
+    def test_mapping_error_traceback_escape(self):
+        from collections import UserDict
+
+        class Namespace(UserDict):
+            def __setitem__(self, name, value):
+                if name == 'broken':
+                    raise RuntimeError('mapping assignment')
+                super().__setitem__(name, value)
+
+        namespace = Namespace()
+        code = compile('kept = 23\nbroken = 1', '<mapping-error>', 'exec')
+        try:
+            exec(code, {}, namespace)
+        except RuntimeError as exc:
+            traceback = exc.__traceback__
+            while traceback.tb_frame.f_code is not code:
+                traceback = traceback.tb_next
+            frame = traceback.tb_frame
+        else:
+            self.fail('mapping assignment did not raise')
+        self.assertIs(frame.f_locals, namespace)
+        self.assertEqual(frame.f_locals['kept'], 23)
+        frame.clear()
+
+    def test_mapping_cycle_collection(self):
+        class Namespace(dict):
+            pass
+
+        def make_cycle():
+            namespace = Namespace()
+            exec('frame = capture()',
+                 {'capture': lambda: sys._getframe(1)}, namespace)
+            return weakref.ref(namespace), weakref.ref(namespace['frame'])
+
+        namespace_ref, frame_ref = make_cycle()
+        support.gc_collect()
+        self.assertIsNone(namespace_ref())
+        self.assertIsNone(frame_ref())
+
+    @support.requires_refcounting
+    def test_mapping_finalizer_observes_cleared_homes(self):
+        observations = []
+        references = []
+
+        class Victim:
+            pass
+
+        class Namespace(dict):
+            def __del__(self):
+                observations.append(references[0]() is None)
+
+        def body():
+            victim = Victim()
+            remember(weakref.ref(victim))
+
+        environment = {'Victim': Victim, 'remember': references.append,
+                       'weakref': weakref}
+        exec(body.__code__, environment, Namespace(), closure=body.__closure__)
+        self.assertEqual(observations, [True])
+
+    def test_generator_frame_mapping(self):
+        class Namespace(dict):
+            pass
+
+        def body():
+            value = 17
+            yield value
+
+        namespace = Namespace()
+        namespace_ref = weakref.ref(namespace)
+        generator = eval(body.__code__, {}, namespace)
+        del namespace
+        support.gc_collect()
+        self.assertIsNotNone(namespace_ref())
+        self.assertEqual(next(generator), 17)
+        frame = generator.gi_frame
+        self.assertEqual(frame.f_locals['value'], 17)
+        generator.close()
+        self.assertIsNotNone(namespace_ref())
+        frame.clear()
+        support.gc_collect()
+        self.assertIsNone(namespace_ref())
+
+    def test_trace_mapping_identity(self):
+        namespace = {}
+        code = compile('first = 1\nsecond = first + 1', '<mapping-trace>', 'exec')
+        observations = []
+
+        def trace(frame, event, arg):
+            if frame.f_code is code:
+                observations.append(frame.f_locals is namespace)
+            return trace
+
+        previous = sys.gettrace()
+        sys.settrace(trace)
+        try:
+            exec(code, {}, namespace)
+        finally:
+            sys.settrace(previous)
+        self.assertTrue(observations)
+        self.assertTrue(all(observations))
+        self.assertEqual(namespace['second'], 2)
+
+    @unittest.skipIf(_testcapi is None, 'requires _testcapi')
+    @support.requires_refcounting
+    def test_prepare_allocation_failure(self):
+        assert_python_ok('-c', textwrap.dedent('''
+            import gc
+            import sys
+            import _testcapi
+
+            code = compile('entered[0] = True', '<mapping-nomemory>', 'exec')
+            entered = [False]
+            environment = {'entered': entered}
+            namespace = {}
+            exec(code, environment, namespace)
+            baseline = sys.getrefcount(namespace)
+            failures = successes = 0
+            for start in range(32):
+                entered[0] = False
+                try:
+                    _testcapi.call_with_nomemory(
+                        start, start + 1, exec, code, environment, namespace)
+                except MemoryError:
+                    failures += 1
+                    assert entered == [False], start
+                else:
+                    successes += 1
+                    assert entered == [True], start
+                gc.collect()
+                assert sys.getrefcount(namespace) == baseline, start
+            assert failures and successes, (failures, successes)
+            exec(code, environment, namespace)
+        '''))
+
+
 class ClearTest(unittest.TestCase):
     """
     Tests for frame.clear().

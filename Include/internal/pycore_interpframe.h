@@ -6,8 +6,11 @@
 #endif
 
 #include "pycore_code.h"          // _PyCode_WORDS()
+#include "pycore_frame.h"         // PyFrameObject
+#include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
 #include "pycore_ir.h"            // _PyCodeExec
+#include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
@@ -25,6 +28,30 @@ static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
     assert(PyCode_Check(executable));
     return (PyCodeObject *)executable;
+}
+
+/* An owned frame's containing object is not an owning frame_obj self edge. */
+static inline PyFrameObject *
+_PyFrame_GetLocalsOwner(_PyInterpreterFrame *frame)
+{
+    if (frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
+        PyFrameObject *f = (PyFrameObject *)((char *)frame
+                            - offsetof(PyFrameObject, _f_frame_data));
+        assert(f->f_frame == frame);
+        assert(frame->frame_obj == NULL);
+        return f;
+    }
+    if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        return NULL;
+    }
+    return FT_ATOMIC_LOAD_PTR_ACQUIRE(frame->frame_obj);
+}
+
+static inline PyObject *
+_PyFrame_GetLocalsMapping(_PyInterpreterFrame *frame)
+{
+    PyFrameObject *f = _PyFrame_GetLocalsOwner(frame);
+    return f == NULL ? NULL : f->f_locals_mapping;
 }
 
 /* The executing copy of the code of f, which f->instr_ptr points into. */
@@ -237,7 +264,9 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 #endif
 }
 
-static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+static inline void
+_PyFrame_CopyData(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
+                  char owner)
 {
     // Read the layout before transferring the executable owner.
     int nslots = _PyFrame_NumSlots(src);
@@ -249,8 +278,8 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->f_funcobj = src->f_funcobj;
     dest->f_globals = src->f_globals;
     dest->f_builtins = src->f_builtins;
-    dest->f_locals = src->f_locals;
     dest->frame_obj = src->frame_obj;
+    src->frame_obj = NULL;
     dest->instr_ptr = src->instr_ptr;
     dest->ir_words = src->ir_words;
     dest->ir_feedback = src->ir_feedback;
@@ -270,6 +299,36 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     for (int i = 0; i < nslots; i++) {
         dest->base[i] = src->base[i];
         src->base[i] = PyValue_NULL;
+    }
+    dest->owner = owner;
+    if (dest->frame_obj != NULL) {
+        dest->frame_obj->f_frame = dest;
+        assert(owner == FRAME_OWNED_BY_GENERATOR);
+        if (!_PyObject_GC_IS_TRACKED(dest->frame_obj)) {
+            _PyObject_GC_TRACK(dest->frame_obj);
+        }
+    }
+    if (owner == FRAME_OWNED_BY_GENERATOR) {
+        PyGenObject *gen = _PyGen_GetGeneratorFromFrame(dest);
+        /* A tracked, cleared destination must not become resumable until its
+         * complete header and homes have been installed. */
+        FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CREATED);
+    }
+}
+
+static inline void
+_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest, char owner)
+{
+    PyFrameObject *f = src->frame_obj;
+    if (f != NULL) {
+        /* Observers must see either complete storage location, including its
+         * owner, rather than an association published halfway through a move. */
+        Py_BEGIN_CRITICAL_SECTION(f);
+        _PyFrame_CopyData(src, dest, owner);
+        Py_END_CRITICAL_SECTION();
+    }
+    else {
+        _PyFrame_CopyData(src, dest, owner);
     }
 }
 
@@ -295,11 +354,12 @@ _PyFrame_CodeHome(PyCodeObject *code)
     return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)code));
 }
 
-/* Consumes func and locals. The caller supplies initialized value storage. */
+/* Consumes func and frame_obj. The caller supplies initialized value storage
+ * and prepares any mapping-bearing object before this nonfallible commit. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
-    PyObject *locals, PyCodeObject *code, PyValue *base,
+    PyFrameObject *frame_obj, PyCodeObject *code, PyValue *base,
     _PyInterpreterFrame *previous)
 {
     frame->previous = previous;
@@ -309,8 +369,7 @@ _PyFrame_Initialize(
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
-    frame->f_locals = locals;
-    frame->frame_obj = NULL;
+    frame->frame_obj = frame_obj;
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->return_pc = frame->instr_ptr;
@@ -328,6 +387,9 @@ _PyFrame_Initialize(
     // code.replace(co_consts=...), gets one.
     if (code->co_nconstslots) {
         _PyFrame_FillConstSlots(frame, code);
+    }
+    if (frame_obj != NULL) {
+        frame_obj->f_frame = frame;
     }
 }
 
@@ -407,8 +469,18 @@ _PyFrame_GetFrameObject(_PyInterpreterFrame *frame)
 {
 
     assert(!_PyFrame_IsIncomplete(frame));
-    PyFrameObject *res = (PyFrameObject*)FT_ATOMIC_LOAD_PTR_ACQUIRE(frame->frame_obj);
+    PyFrameObject *res = _PyFrame_GetLocalsOwner(frame);
     if (res != NULL) {
+        int err;
+        Py_BEGIN_CRITICAL_SECTION(res);
+        err = _PyFrame_MaterializeKwargs(res->f_frame);
+        if (err == 0 && !_PyObject_GC_IS_TRACKED(res)) {
+            _PyObject_GC_TRACK(res);
+        }
+        Py_END_CRITICAL_SECTION();
+        if (err < 0) {
+            return NULL;
+        }
         return res;
     }
     return _PyFrame_MakeAndSetFrameObject(frame);
@@ -653,7 +725,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     frame->f_builtins = NULL;
     frame->f_globals = NULL;
 #endif
-    frame->f_locals = NULL;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->owner = FRAME_OWNED_BY_THREAD;

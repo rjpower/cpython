@@ -1139,20 +1139,24 @@ frame_locals_get_impl(PyFrameObject *self)
 /*[clinic end generated code: output=b4ace8bb4cae71f4 input=7bd444d0dc8ddf44]*/
 {
     assert(!_PyFrame_IsIncomplete(self->f_frame));
+    if (_PyFrame_MaterializeKwargs(self->f_frame) < 0) {
+        return NULL;
+    }
 
     PyCodeObject *co = _PyFrame_GetCode(self->f_frame);
 
     if (!(co->co_flags & CO_OPTIMIZED) && !_PyFrame_HasHiddenLocals(self->f_frame)) {
-        if (self->f_frame->f_locals == NULL) {
-            // We found cases when f_locals is NULL for non-optimized code.
-            // We fill the f_locals with an empty dict to avoid crash until
-            // we find the root cause.
-            self->f_frame->f_locals = PyDict_New();
-            if (self->f_frame->f_locals == NULL) {
+        if (self->f_locals_mapping == NULL) {
+            // A nonoptimized frame constructed without locals exposes an empty dict.
+            self->f_locals_mapping = PyDict_New();
+            if (self->f_locals_mapping == NULL) {
                 return NULL;
             }
+            if (!_PyObject_GC_IS_TRACKED(self)) {
+                _PyObject_GC_TRACK(self);
+            }
         }
-        return Py_NewRef(self->f_frame->f_locals);
+        return Py_NewRef(self->f_locals_mapping);
     }
 
     return _PyFrameLocalsProxy_New(self);
@@ -3907,7 +3911,6 @@ frame_dealloc(PyObject *op)
         int nslots = _PyFrame_NumSlots(frame);
         PyValue_CLEAR(frame->f_executable);
         PyValue_CLEAR(frame->f_funcobj);
-        Py_CLEAR(frame->f_locals);
         PyValue *locals = _PyFrame_GetLocalsArray(frame);
         PyValue *sp = locals + nslots;
         while (sp > locals) {
@@ -3915,6 +3918,7 @@ frame_dealloc(PyObject *op)
             PyValue_CLEAR(*sp);
         }
     }
+    Py_CLEAR(f->f_locals_mapping);
     Py_CLEAR(f->f_back);
     Py_CLEAR(f->f_trace);
     Py_CLEAR(f->f_extra_locals);
@@ -3932,6 +3936,7 @@ frame_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(f->f_extra_locals);
     Py_VISIT(f->f_locals_cache);
     Py_VISIT(f->f_overwritten_fast_locals);
+    Py_VISIT(f->f_locals_mapping);
     if (f->f_frame->owner != FRAME_OWNED_BY_FRAME_OBJECT) {
         return 0;
     }
@@ -3956,7 +3961,7 @@ frame_tp_clear(PyObject *op)
         sp--;
         PyValue_CLEAR(*sp);
     }
-    Py_CLEAR(f->f_frame->f_locals);
+    Py_CLEAR(f->f_locals_mapping);
     return 0;
 }
 
@@ -4067,7 +4072,7 @@ PyTypeObject PyFrame_Type = {
 
 static void
 init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-           PyFunctionObject *func, PyObject *locals)
+           PyFunctionObject *func)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     /* This is the direct heap initializer. Escape/generator destinations
@@ -4076,7 +4081,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
         frame->owned_slots[i] = PyValue_NULL;
     }
     _PyFrame_Initialize(tstate, frame, PyValue_DUP(PyValue_FromObjectBorrow(func)),
-                        Py_XNewRef(locals), code, frame->owned_slots, NULL);
+                        NULL, code, frame->owned_slots, NULL);
 }
 
 PyFrameObject*
@@ -4089,6 +4094,7 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
         return NULL;
     }
     f->f_back = NULL;
+    f->f_frame = NULL;
     f->f_trace = NULL;
     f->f_trace_lines = 1;
     f->f_trace_opcodes = 0;
@@ -4100,6 +4106,7 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_line_epoch = 0;
     f->f_lineno_generation = 0;
     f->f_extra_locals = NULL;
+    f->f_locals_mapping = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;
     f->f_weakreflist = NULL;
@@ -4139,7 +4146,8 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
         Py_DECREF(func);
         return NULL;
     }
-    init_frame(tstate, (_PyInterpreterFrame *)f->_f_frame_data, func, locals);
+    init_frame(tstate, (_PyInterpreterFrame *)f->_f_frame_data, func);
+    f->f_locals_mapping = Py_XNewRef(locals);
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
@@ -4273,21 +4281,14 @@ _PyFrame_HasHiddenLocals(_PyInterpreterFrame *frame)
 PyObject *
 _PyFrame_GetLocals(_PyInterpreterFrame *frame)
 {
-    // We should try to avoid creating the FrameObject if possible.
-    // So we check if the frame is a module or class level scope
     PyCodeObject *co = _PyFrame_GetCode(frame);
 
     if (!(co->co_flags & CO_OPTIMIZED) && !_PyFrame_HasHiddenLocals(frame)) {
-        if (frame->f_locals == NULL) {
-            // We found cases when f_locals is NULL for non-optimized code.
-            // We fill the f_locals with an empty dict to avoid crash until
-            // we find the root cause.
-            frame->f_locals = PyDict_New();
-            if (frame->f_locals == NULL) {
-                return NULL;
-            }
+        PyFrameObject *f = _PyFrame_GetFrameObject(frame);
+        if (f == NULL) {
+            return NULL;
         }
-        return Py_NewRef(frame->f_locals);
+        return frame_locals_get_impl(f);
     }
 
     PyFrameObject* f = _PyFrame_GetFrameObject(frame);

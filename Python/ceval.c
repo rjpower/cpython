@@ -2268,7 +2268,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 #if defined(Py_DEBUG)
     /* Set these to invalid but identifiable values for debugging. */
     entry->frame.f_funcobj = PyValue_Wrap((void *)0xaaa0);
-    entry->frame.f_locals = (PyObject*)0xaaa1;
     entry->frame.frame_obj = (PyFrameObject*)0xaaa2;
     entry->frame.f_globals = (PyObject*)0xaaa3;
     entry->frame.f_builtins = (PyObject*)0xaaa4;
@@ -3144,12 +3143,26 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     if (_PyCode_GetExec(code) == NULL) {
         goto fail;
     }
+    PyFrameObject *frame_obj = NULL;
+    if (locals != NULL) {
+        frame_obj = _PyFrame_New_NoTrack(code);
+        if (frame_obj == NULL) {
+            goto fail;
+        }
+    }
     _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
     if (frame == NULL) {
+        Py_XDECREF(frame_obj);
         PyErr_NoMemory();
         goto fail;
     }
-    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
+    if (frame_obj != NULL) {
+        frame_obj->f_locals_mapping = locals;
+        locals = NULL;
+    }
+    _PyFrame_Initialize(tstate, frame, func, frame_obj, code, frame->base, previous);
+    /* Keep the private record out of GC enumeration until the frame is
+     * published for observation or moved into complete heap storage. */
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
@@ -4954,7 +4967,7 @@ static int
 is_lazy_import_module_level(void)
 {
     _PyInterpreterFrame *frame = _PyEval_GetFrame();
-    return frame != NULL && frame->f_globals == frame->f_locals;
+    return frame != NULL && frame->f_globals == _PyFrame_GetLocalsMapping(frame);
 }
 
 PyObject *
@@ -5590,7 +5603,7 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
 PyValue
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
-    PyObject *namespace = frame->f_locals;
+    PyObject *namespace = _PyFrame_GetLocalsMapping(frame);
     if (namespace == NULL) {
         _PyErr_SetString(tstate, PyExc_SystemError, "no locals found");
         return PyValue_NULL;

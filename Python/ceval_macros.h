@@ -292,7 +292,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 #define GLOBALS() frame->f_globals
 #define BUILTINS() frame->f_builtins
-#define LOCALS() frame->f_locals
+#define LOCALS() _PyFrame_GetLocalsMapping(frame)
 #define CONSTS() _PyFrame_GetCode(frame)->co_consts
 #define NAMES() _PyFrame_GetCode(frame)->co_names
 

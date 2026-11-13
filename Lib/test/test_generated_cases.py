@@ -3294,6 +3294,35 @@ class TestIRCases(unittest.TestCase):
         for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
+    def test_native_entry_requires_actual_body_and_owning_scalar_io(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        inst = analysis.instructions["INTERPRETER_EXIT"]
+        self.assertTrue(ir_generator.native_entry_input_contract(inst))
+        part = inst.parts[0]
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+        try:
+            with self.assertRaises(SyntaxError):
+                ir_generator.native_entry_input_contract(inst)
+        finally:
+            part.body.body.pop()
+        item = part.stack.inputs[0]
+        for attribute, changed in (("name", "other"), ("peek", True), ("size", "1")):
+            old = getattr(item, attribute)
+            setattr(item, attribute, changed)
+            try:
+                with self.assertRaises(SyntaxError):
+                    ir_generator.native_entry_input_contract(inst)
+            finally:
+                setattr(item, attribute, old)
+        old = inst.name
+        inst.name = "OTHER_NATIVE_SHAPE"
+        try:
+            self.assertFalse(ir_generator.native_entry_input_contract(inst))
+        finally:
+            inst.name = old
+
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
         body = """{
             PyObject *object = IR_BUILD_TUPLE(values);

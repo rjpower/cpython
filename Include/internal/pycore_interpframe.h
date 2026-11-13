@@ -662,6 +662,7 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
+    frame->phase_state = 0;
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif

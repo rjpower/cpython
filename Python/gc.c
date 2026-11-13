@@ -482,6 +482,13 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
+    if (frame->phase_state & _PyIR_PHASE_PUBLISHED) {
+        uint8_t status = _PyIR_ShadowFramePhase(frame);
+        frame->phase_state = (uint16_t)(
+            (frame->phase_state & ~_PyIR_PHASE_STATUS_MASK) |
+            (status << _PyIR_PHASE_STATUS_SHIFT));
+        assert(status != _PyIR_SHADOW_MISMATCH);
+    }
     PyValue *ref = _PyFrame_GetLocalsArray(frame);
     PyValue *end = ref + _PyFrame_NumSlots(frame);
     /* all slots; _Py_VISIT_VALUE skips NULL, indices and inline values */

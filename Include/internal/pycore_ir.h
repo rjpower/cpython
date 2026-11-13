@@ -401,6 +401,21 @@ enum {
     _PyIR_SHADOW_MISMATCH,
 };
 
+/* Phase IDs belong to a canonical family; coverage is separate from PRE=0. */
+enum {
+    _PyIR_PHASE_PRE,
+    _PyIR_PHASE_POST,
+    _PyIR_PHASE_ERROR,
+    _PyIR_PHASE_RETIRING,
+    _PyIR_PHASE_SUSPENDED,
+    _PyIR_PHASE_BINARY_PROVIDER,
+    _PyIR_PHASE_BINARY_RETIRE,
+    _PyIR_PHASE_BINARY_ERROR_RESTORE,
+};
+#define _PyIR_PHASE_PUBLISHED (1u << 8)
+#define _PyIR_PHASE_STATUS_SHIFT 9
+#define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
+
 typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction
@@ -446,6 +461,10 @@ int _PyCode_BuildRetirementPlan(PyCodeObject *co,
 struct _PyInterpreterFrame;
 PyAPI_FUNC(uint8_t) _PyIR_ShadowRetirement(struct _PyInterpreterFrame *frame,
                                         uint8_t reason);
+
+/* Read-only NULL-control comparison, called only in a reached frame walk.
+ * The published bit alone does not grant an arbitrary reader home access. */
+PyAPI_FUNC(uint8_t) _PyIR_ShadowFramePhase(struct _PyInterpreterFrame *frame);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

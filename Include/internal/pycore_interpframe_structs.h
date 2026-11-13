@@ -71,9 +71,19 @@ struct _PyInterpreterFrame {
 #ifdef Py_DEBUG
     uint8_t lltrace:5;
 #endif
+    /* Last reached publication, with phase ID/validity and shadow status.
+     * Only a collector/suspended-state protocol establishes its validity. */
+    uint16_t phase_state;
     /* The slots of a frame that owns them, which base then points to */
     PyValue owned_slots[1];
 };
+
+#if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
+static_assert(offsetof(_PyInterpreterFrame, phase_state) == 110,
+              "phase publication must fit the existing frame padding");
+static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 112,
+              "phase publication must preserve the fixed frame header");
+#endif
 
 
 /* _PyGenObject_HEAD defines the initial segment of generator

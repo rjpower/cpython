@@ -385,7 +385,8 @@ RELEASES = {
     "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
     "IR_TRY_DICT_FIRST_PROBE",
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
-    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop", "_PyErr_Clear",
+    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
+    "_PyEval_FrameClearAndPopWithResult", "_PyErr_Clear",
 }
 NOT_RELEASES = {
     # A release whose destructor, that of an exact type, runs no Python
@@ -4780,7 +4781,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         _PyInterpreterFrame *dying = frame;
         int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
         frame = tstate->current_frame = dying->previous;
-        _PyEval_FrameClearAndPop(tstate, dying);
+        temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""

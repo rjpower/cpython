@@ -618,7 +618,8 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
             if (dst != IR_NO_DST && dst >= limit) {
                 return unknown;
             }
-            if (dst == IR_NO_DST && !(fmt->flags & _PyIR_DISCARDS)) {
+            if (dst == IR_NO_DST &&
+                !(fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS))) {
                 return unknown;
             }
         }
@@ -792,8 +793,24 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
             return unknown;
         }
     }
+    int window_reads = reads;
+    if ((fmt->flags & _PyIR_WINDOW) && fmt->owner_events == 1) {
+        int event = _PyIR_OwnerPrograms[fmt->owner_program].kind;
+        if (event == _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
+            event == _PyIR_OWNER_UNPACK_LOCAL_DRAIN)
+        {
+            /* The actual final stack commit reads trailing scalar inputs
+             * through their IN fields, not their former window positions.
+             * Folding one into a local leaves that scratch tail untouched.
+             * Outputs still use their complete physical window extent. */
+            if (fmt->ninputs > reads - through) {
+                return unknown;
+            }
+            window_reads -= fmt->ninputs;
+        }
+    }
     if (base >= 0 && home >= base + through &&
-        home - base < Py_MAX(reads, writes))
+        home - base < Py_MAX(window_reads, writes))
     {
         return unknown;
     }

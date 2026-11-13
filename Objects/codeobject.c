@@ -1782,6 +1782,20 @@ admitted_word_arg(_PyIRWord word, const uint32_t *table, int nfb)
     return (int)_PyIR_FBINIT_ARG(table[ordinal]);
 }
 
+static int
+normal_window_result_offset(const _PyIRFormat *fmt)
+{
+    if (fmt->owner_events == 1) {
+        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+        if (event->kind == _PyIR_OWNER_NORMAL_CLEAR_INPUTS &&
+            (event->flags & _PyIR_NORMAL_WINDOW_RESULT))
+        {
+            return event->src;
+        }
+    }
+    return -1;
+}
+
 /* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -1883,6 +1897,14 @@ check_words(struct _PyCodeConstructor *con)
             goto error;
         }
         int outputs = writes - through;
+        int result_offset = normal_window_result_offset(fmt);
+        if (result_offset >= 0 && dst >= nl && dst != IR_NO_DST &&
+            dst != base + result_offset)
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid window result destination", i);
+            goto error;
+        }
         if ((fmt->transfer_kind == _PyIR_TRANSFER_COPY && arg < 1) ||
             (fmt->transfer_kind == _PyIR_TRANSFER_SWAP && arg < 2))
         {
@@ -2563,12 +2585,12 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
             case _PyIR_OWNER_NORMAL_COMPLETION:
-                /* Completion transport belongs to a selected outgoing edge,
-                 * not to this common pre-branch state. Its body destination
-                 * is not produced on completion: retain only an existing
-                 * absence proof for that home, never invent one. */
+                /* Completion transport belongs to its selected edge. FOR's
+                 * body destination is not produced on completion: retain
+                 * only its incoming absence. SEND produces an actual A. */
                 home = (int)IR_A(word);
-                work->completion_destination_empty = home >= nl &&
+                work->completion_destination_empty =
+                    !(event->flags & _PyIR_COMPLETION_HAS_RESULT) && home >= nl &&
                     home < nl + image->scratch &&
                     (semantic_home_facts(work, state, home, nl) & (1u << SEM_NO_HOME));
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
@@ -2585,6 +2607,28 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                     if (_PyIR_ConsumesNormalInput(word, arg, home) &&
                         !_PyIR_DefinesHome(word, arg, home))
                     {
+                        uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
+                        state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                    }
+                }
+                int moved_offset = normal_window_result_offset(fmt);
+                if (moved_offset >= 0) {
+                    int dst = -1, base = -1;
+                    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                    for (int f = 0; f < 4; f++) {
+                        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                            dst = (int)fields[f];
+                        }
+                        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                            base = (int)fields[f];
+                        }
+                    }
+                    assert(dst >= 0 && base >= nl);
+                    if (dst < nl ||
+                        (dst == IR_NO_DST && (fmt->flags & _PyIR_DISCARDS)))
+                    {
+                        int home = base + moved_offset;
+                        assert(home >= nl && home < nl + image->scratch);
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
                         state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
                     }
@@ -2653,19 +2697,26 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
         if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != edge) {
             continue;
         }
-        /* The family-closed emitted completion route consumes receiver and
-         * cursor. Logical absence survives child retirement even when its
-         * nonowning overlay bytes do not provide physical NULL. */
-        assert(event->src == 2 && edge == 1);
+        /* The actual completion consumes its full window before any result
+         * publication. Logical absence does not imply physical NULL. */
+        int has_result = event->flags & _PyIR_COMPLETION_HAS_RESULT;
+        assert((has_result ? event->src == 3 || event->src == 4
+                           : event->src == 2) && edge == 1);
         int base = (int)IR_B(word);
-        assert(base >= image->nl && base <= image->nl + image->scratch - 2);
+        assert(base >= image->nl &&
+               base <= image->nl + image->scratch - event->src);
         for (int home = base; home < base + event->src; home++) {
             unsigned int old = semantic_home_facts(work, state, home, image->nl);
             semantic_set_facts(work, state, home, image->nl,
                 (old & (1u << SEM_NULL)) | (1u << SEM_NO_HOME));
         }
         int dst = (int)IR_A(word);
-        if (dst >= image->nl && dst != IR_NO_DST &&
+        if (has_result && dst >= image->nl && dst != IR_NO_DST) {
+            uint64_t mask = UINT64_C(1) << ((dst - image->nl) % 64);
+            state[SEM_NO_HOME * work->nwords + (dst - image->nl) / 64] &= ~mask;
+            state[SEM_NULL * work->nwords + (dst - image->nl) / 64] &= ~mask;
+        }
+        else if (!has_result && dst >= image->nl && dst != IR_NO_DST &&
             (dst < base || dst >= base + event->src) &&
             work->completion_destination_empty)
         {

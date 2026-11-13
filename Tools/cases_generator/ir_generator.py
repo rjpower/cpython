@@ -1427,6 +1427,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         # may read in place unless it keeps or passes them on
         assert len(members) == 1, group
         m_inputs, m_outputs = io[head.name]
+        if n_inputs > len(m_inputs) or any(item.is_array()
+                                          for item in m_inputs[-n_inputs:]):
+            raise analysis_error("window input fields require trailing scalar inputs",
+                                 head.where)
         first = len(m_inputs) - n_inputs
         uses = classify_inputs(head, len(m_inputs))
         passthrough = {e.external for e in m_outputs if e.external >= 0}
@@ -3077,7 +3081,7 @@ class IREmitter(Emitter):
         storage.push_outputs()
         fmt = self.format_of(inst)
         mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
-        emit_final_outputs(inst, fmt, mode, stack, self.out)
+        self.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, self.out))
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         edge, _ = contracts[tkn]
@@ -4121,8 +4125,10 @@ class IREmitter(Emitter):
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
         fmt = self.format_of(inst)
-        if kind == "_PY_IR_FOR_ITER" and distance == "oparg":
-            self.normal_completion(inst, fmt)
+        if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND", "_PY_IR_SEND_THROW"} and distance == "oparg":
+            self.normal_completion(inst, fmt, kind)
+        else:
+            self.normal_completion_uncovered = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4135,18 +4141,22 @@ class IREmitter(Emitter):
         self.emit("}\n")
         return False
 
-    def normal_completion(self, inst, fmt):
+    def normal_completion(self, inst, fmt, kind):
         inputs, _ = external_io(inst)
-        if (not fmt.window or len(inputs) != 2 or
+        produces_result = kind != "_PY_IR_FOR_ITER"
+        count = 4 if kind == "_PY_IR_SEND_THROW" else 3 if produces_result else 2
+        if (not fmt.window or len(inputs) != count or
                 any(item.is_array() for item in inputs) or
                 fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A" or
-                fmt.dst_offset != 2):
+                fmt.dst_offset != (0 if kind == "_PY_IR_SEND_THROW" else 2)):
             raise analysis_error("unsupported normal completion window", inst.where)
-        # This actual helper route drains receiver/cursor only on its taken
-        # completion edge. A resumed generator reaches the same helper on
-        # return; a yielded body result does not take this edge.
+        # The actual completion helper drains the complete input window,
+        # then SEND publishes A. A resumed child reaches the same helper on
+        # return; a body/yielded result does not take this edge. Flag 1 is
+        # the encoded _PyIR_COMPLETION_HAS_RESULT capability.
         self.normal_completions.add(OwnershipEvent(
-            "_PyIR_OWNER_NORMAL_COMPLETION", src=2, dst=1))
+            "_PyIR_OWNER_NORMAL_COMPLETION", flags=int(produces_result),
+            src=count, dst=1))
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
@@ -4179,8 +4189,10 @@ class IREmitter(Emitter):
         gen, kind = self.macro_args(tkn, tkn_iter, 2)
         assert inst is not None
         fmt = self.format_of(inst)
-        if kind == "_PY_IR_FOR_ITER":
-            self.normal_completion(inst, fmt)
+        if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}:
+            self.normal_completion(inst, fmt, kind)
+        else:
+            self.normal_completion_uncovered = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4573,7 +4585,7 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
                     for part in inst.parts if isinstance(part, Uop)))
 
 
-def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
+def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | None:
     """The physical final publication shared by ordinary and observed paths."""
     stack.final = True
     stack.flush(out)
@@ -4587,6 +4599,8 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
             expression = f"{macro}({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
         out.emit(f"{expression};\n")
+        return fmt.dst_offset
+    return None
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
@@ -5142,9 +5156,11 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.normal_result_offsets = set()
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
+    emitter.normal_completion_uncovered = False
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
@@ -5313,7 +5329,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
-        emit_final_outputs(inst, fmt, mode, stack, out)
+        emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
         if call_window:
             emitter.call_normal_drained = True
         # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
@@ -5363,10 +5379,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_UNPACK_LOCAL_DRAIN"))
         elif emitter.normal_inputs_cleared:
+            offsets = emitter.normal_result_offsets
+            result_offset = next(iter(offsets)) if len(offsets) == 1 else None
             emitter.ownership_events.append(OwnershipEvent(
-                "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
-    emitter.ownership_events.extend(sorted(emitter.normal_completions,
-                                          key=lambda event: (event.dst, event.src)))
+                "_PyIR_OWNER_NORMAL_CLEAR_INPUTS",
+                flags=int(result_offset is not None), src=result_offset or 0))
+    if not emitter.normal_completion_uncovered:
+        emitter.ownership_events.extend(sorted(emitter.normal_completions,
+                                              key=lambda event: (event.dst, event.src)))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
@@ -5665,6 +5685,15 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            moved_results = [programs[name] for name in members
+                             if len(programs.get(name, ())) == 1
+                             and programs[name][0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"
+                             and programs[name][0].flags]
+            if moved_results and not all(programs.get(name) == moved_results[0]
+                                         for name in members):
+                for name in members:
+                    if programs.get(name) in moved_results:
+                        programs[name] = (OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),)
             unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
             if not all(programs.get(name) == unpack_drain for name in members):
                 for name in members:

@@ -38,6 +38,9 @@ static inline void
 _PyFrame_BindChunkBitmap(_PyInterpreterFrame *frame, _PyStackChunk *chunk,
                          PyValue *base)
 {
+    /* Initializing writers need this coordinate base as well as its plane;
+     * an overlapping reservation may reuse a header from another window. */
+    frame->base = base;
     frame->presence_bits = _PyHomeBitmap_Word(
         chunk->presence_bits, (const PyValue *)chunk->data, base);
 }

@@ -98,8 +98,8 @@ gen_traverse(PyObject *self, visitproc visit, void *arg)
     }
     else {
         // We still need to visit the code object when the frame is cleared to
-        // ensure that it's kept alive if the reference is deferred.
-        _Py_VISIT_VALUE(gen->gi_iframe.f_executable);
+        // ensure that the independent code owner remains reachable.
+        Py_VISIT(gen->gi_iframe.f_executable);
     }
     /* cr_origin holds only tuples, strings and ints, which cannot form a
        cycle, but the tracing mark must reach them. */
@@ -239,7 +239,7 @@ gen_dealloc(PyObject *self)
         gen_clear_frame(gen);
     }
     assert(gen->gi_exc_state.exc_value == NULL);
-    PyValue_CLEAR(gen->gi_iframe.f_executable);
+    Py_CLEAR(gen->gi_iframe.f_executable);
     Py_CLEAR(gen->gi_name);
     Py_CLEAR(gen->gi_qualname);
 
@@ -1155,7 +1155,7 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
-    gen->gi_iframe.f_executable = PyValue_None;
+    gen->gi_iframe.f_executable = NULL;
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
     assert(name != NULL);
     gen->gi_name = Py_NewRef(name);

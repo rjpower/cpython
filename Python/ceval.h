@@ -242,15 +242,11 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)
 {
-    PyObject *fobj = PyValue_AsKnownObjectBorrow(frame->f_funcobj);
-    if (!PyValue_CodeCheck(frame->f_executable) ||
-        fobj == NULL ||
-        !PyFunction_Check(fobj)
-    ) {
+    if (frame->f_executable == NULL || frame->f_funcobj == NULL) {
         printf("\nResuming frame.\n");
         return;
     }
-    PyFunctionObject *f = (PyFunctionObject *)fobj;
+    PyFunctionObject *f = _PyFrame_GetFunction(frame);
     PyObject *exc = PyErr_GetRaisedException();
     PyObject *name = Py_XNewRef(FT_ATOMIC_LOAD_PTR_ACQUIRE(f->func_qualname));
     if (name == NULL) {

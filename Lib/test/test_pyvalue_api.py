@@ -91,11 +91,11 @@ class KnownEntryTests(unittest.TestCase):
                               err)
 
 
-class FrameCodeHomeTests(unittest.TestCase):
-    def test_code_home_tag_and_count(self):
-        code = self.test_code_home_tag_and_count.__code__.replace()
+class FrameCodePinTests(unittest.TestCase):
+    def test_code_pin_count(self):
+        code = self.test_code_pin_count.__code__.replace()
         self.assertFalse(sys._is_immortal(code))
-        _testinternalcapi.check_frame_code_home(code)
+        _testinternalcapi.check_frame_code_pin(code)
 
     def test_active_code_survives_replacement(self):
         def original(function, replacement, reference):
@@ -130,6 +130,53 @@ class FrameCodeHomeTests(unittest.TestCase):
         generator.close()
         del generator
         self.assertIsNone(reference())
+
+    def test_escaped_frame_keeps_independent_pins(self):
+        def body(callback):
+            callback()
+            return sys._getframe()
+
+        code = body.__code__.replace()
+        function = types.FunctionType(code, {'sys': sys})
+        code_ref = weakref.ref(code)
+        function_ref = weakref.ref(function)
+        functions = [function]
+        del code, function
+
+        def check_active():
+            support.gc_collect()
+            self.assertIsNotNone(function_ref())
+            self.assertIsNotNone(code_ref())
+
+        frame = functions.pop()(check_active)
+        support.gc_collect()
+        self.assertIsNotNone(function_ref())
+        self.assertIs(frame.f_code, code_ref())
+        frame.clear()
+        support.gc_collect()
+        self.assertIsNone(function_ref())
+        self.assertIs(frame.f_code, code_ref())
+        del frame
+        support.gc_collect()
+        self.assertIsNone(code_ref())
+
+    def test_completed_generator_keeps_code_without_function(self):
+        def body():
+            yield 1
+
+        code = body.__code__.replace()
+        function = types.FunctionType(code, {})
+        code_ref = weakref.ref(code)
+        function_ref = weakref.ref(function)
+        generator = function()
+        del code, function
+        self.assertEqual(list(generator), [1])
+        support.gc_collect()
+        self.assertIsNone(function_ref())
+        self.assertIs(generator.gi_code, code_ref())
+        del generator
+        support.gc_collect()
+        self.assertIsNone(code_ref())
 
     def test_context_and_init_trampoline(self):
         class Item:

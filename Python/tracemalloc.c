@@ -317,7 +317,7 @@ hashtable_compare_traceback(const void *key1, const void *key2)
 static void
 tracemalloc_get_frame(_PyInterpreterFrame *pyframe, frame_t *frame)
 {
-    assert(PyValue_CodeCheck(pyframe->f_executable));
+    assert(pyframe->f_executable != NULL);
     frame->filename = UNKNOWN_FILENAME;
 
     int lineno = -1;

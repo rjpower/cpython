@@ -412,10 +412,10 @@ caller(void)
     if (f == NULL) {
         Py_RETURN_NONE;
     }
-    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
+    if (f == NULL || f->f_funcobj == NULL) {
         Py_RETURN_NONE;
     }
-    PyObject *r = PyFunction_GetModule(PyValue_AsKnownObjectBorrow(f->f_funcobj));
+    PyObject *r = PyFunction_GetModule((PyObject *)f->f_funcobj);
     if (!r) {
         PyErr_Clear();
         Py_RETURN_NONE;

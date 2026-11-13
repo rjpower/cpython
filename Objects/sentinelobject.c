@@ -38,7 +38,7 @@ static PyObject *
 caller(void)
 {
     _PyInterpreterFrame *f = _PyThreadState_GET()->current_frame;
-    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
+    if (f == NULL || f->f_funcobj == NULL) {
         assert(!PyErr_Occurred());
         Py_RETURN_NONE;
     }

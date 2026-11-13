@@ -27,8 +27,8 @@ _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     Py_VISIT(frame->frame_obj);
     Py_VISIT(frame->f_locals);
-    _Py_VISIT_VALUE(frame->f_funcobj);
-    _Py_VISIT_VALUE(frame->f_executable);
+    Py_VISIT(frame->f_funcobj);
+    Py_VISIT(frame->f_executable);
     return _PyGC_VisitFrameStack(frame, visit, arg);
 }
 
@@ -100,7 +100,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     _PyFrame_Copy(frame, new_frame);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
-    frame->f_executable = PyValue_DUP(new_frame->f_executable);
+    frame->f_executable = (PyCodeObject *)Py_NewRef(new_frame->f_executable);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     if (_PyFrame_IsIncomplete(new_frame)) {
@@ -230,7 +230,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     else {
         _PyFrame_ClearLocals(frame);
     }
-    PyValue_CLEAR(frame->f_funcobj);
+    Py_CLEAR(frame->f_funcobj);
 }
 
 /* Unstable API functions */
@@ -238,7 +238,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return PyValue_AsPyObjectNew(frame->f_executable);
+    return Py_NewRef(_PyFrame_GetCode(frame));
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

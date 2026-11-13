@@ -21,10 +21,9 @@ extern "C" {
     _PyFrame_InstrOffset((IF), (IF)->instr_ptr)
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
-    assert(!PyValue_IsNull(f->f_executable));
-    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
-    assert(PyCode_Check(executable));
-    return (PyCodeObject *)executable;
+    assert(f->f_executable != NULL);
+    assert(PyCode_Check(f->f_executable));
+    return f->f_executable;
 }
 
 /* The executing copy of the code of f, which f->instr_ptr points into. */
@@ -87,15 +86,14 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
         return NULL;
     }
 
-    if (PyValue_IsNull(f->f_executable)) {
+    if (f->f_executable == NULL) {
         return NULL;
     }
-    void *ptr;
-    memcpy(&ptr, &f->f_executable, sizeof(f->f_executable));
+    PyCodeObject *ptr = f->f_executable;
     if (_PyMem_IsPtrFreed(ptr)) {
         return NULL;
     }
-    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
+    PyObject *executable = (PyObject *)f->f_executable;
     if (_PyObject_IsFreed(executable)) {
         return NULL;
     }
@@ -128,9 +126,9 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
-    PyObject *func = PyValue_AsKnownObjectBorrow(f->f_funcobj);
-    assert(PyFunction_Check(func));
-    return (PyFunctionObject *)func;
+    assert(f->f_funcobj != NULL);
+    assert(PyFunction_Check(f->f_funcobj));
+    return f->f_funcobj;
 }
 
 static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
@@ -288,13 +286,6 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
     }
 }
 
-static inline PyValue
-_PyFrame_CodeHome(PyCodeObject *code)
-{
-    assert(code != NULL && PyCode_Check(code));
-    return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)code));
-}
-
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
@@ -304,9 +295,9 @@ _PyFrame_Initialize(
 {
     frame->previous = previous;
     frame->base = base;
-    frame->f_funcobj = func;
-    frame->f_executable = _PyFrame_CodeHome(code);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectSteal(func);
+    frame->f_funcobj = func_obj;
+    frame->f_executable = (PyCodeObject *)Py_NewRef(code);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
@@ -647,8 +638,8 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
-    frame->f_funcobj = PyValue_None;
-    frame->f_executable = _PyFrame_CodeHome(code);
+    frame->f_funcobj = NULL;
+    frame->f_executable = (PyCodeObject *)Py_NewRef(code);
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;

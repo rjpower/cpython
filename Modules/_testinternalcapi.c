@@ -1117,7 +1117,7 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_FunctionCheck(f->f_funcobj)) {
+    if (f->f_funcobj != NULL) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1179,7 +1179,7 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_FunctionCheck(f->f_funcobj)) {
+    if (f->f_funcobj != NULL) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -3356,23 +3356,26 @@ pyvalue_entry_null(PyObject *self, PyObject *unused)
 }
 
 static PyObject *
-check_frame_code_home(PyObject *self, PyObject *arg)
+check_frame_code_pin(PyObject *self, PyObject *arg)
 {
     if (!PyCode_Check(arg) || _Py_IsImmortal(arg)) {
         PyErr_SetString(PyExc_ValueError, "expected a mortal code object");
         return NULL;
     }
     Py_ssize_t before = Py_REFCNT(arg);
-    PyValue home = _PyFrame_CodeHome((PyCodeObject *)arg);
-    int ok = home.bits == (uintptr_t)arg && Py_REFCNT(arg) == before + 1;
-    PyValue_CLOSE(home);
+    _PyInterpreterFrame frame = {
+        .f_executable = (PyCodeObject *)Py_NewRef(arg),
+    };
+    int ok = _PyFrame_GetCode(&frame) == (PyCodeObject *)arg
+             && Py_REFCNT(arg) == before + 1;
+    Py_CLEAR(frame.f_executable);
     ok = ok && Py_REFCNT(arg) == before;
 
     PyCodeObject *immortal = (PyCodeObject *)&_Py_InitCleanup;
-    home = _PyFrame_CodeHome(immortal);
-    ok = ok && _Py_IsImmortal((PyObject *)immortal) &&
-         home.bits == ((uintptr_t)immortal | Py_TAG_REFCNT);
-    PyValue_CLOSE(home);
+    frame.f_executable = (PyCodeObject *)Py_NewRef(immortal);
+    ok = ok && _Py_IsImmortal((PyObject *)immortal)
+         && _PyFrame_GetCode(&frame) == immortal;
+    Py_CLEAR(frame.f_executable);
     if (!ok) {
         PyErr_SetString(PyExc_AssertionError, "incorrect frame code ownership");
         return NULL;
@@ -4434,7 +4437,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_from_object_borrow_inline", pyvalue_from_object_borrow_inline, METH_O, NULL},
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
-    {"check_frame_code_home", check_frame_code_home, METH_O, NULL},
+    {"check_frame_code_pin", check_frame_code_pin, METH_O, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
     {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},

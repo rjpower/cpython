@@ -27,7 +27,8 @@ enum _frameowner {
 };
 
 struct _PyInterpreterFrame {
-    PyValue f_executable; /* Deferred or strong reference (code object or None) */
+    /* Strong executing-code reference, or NULL for an interpreter sentinel. */
+    PyCodeObject *f_executable;
     struct _PyInterpreterFrame *previous;
     /* Slot 0: co_nlocalsplus locals, cells and free variables, then
      * co_stacksize temporaries.  Every slot holds a value or NULL; a
@@ -39,7 +40,8 @@ struct _PyInterpreterFrame {
     /* For a frame on the frame stack, the top of the value stack before it
      * was pushed, which popping it restores */
     PyValue *saved_top;
-    PyValue f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
+    /* Strong reference, NULL for interpreter entry and trampoline frames. */
+    PyFunctionObject *f_funcobj;
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */

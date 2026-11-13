@@ -3905,8 +3905,8 @@ frame_dealloc(PyObject *op)
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
         int nslots = _PyFrame_NumSlots(frame);
-        PyValue_CLEAR(frame->f_executable);
-        PyValue_CLEAR(frame->f_funcobj);
+        Py_CLEAR(frame->f_executable);
+        Py_CLEAR(frame->f_funcobj);
         Py_CLEAR(frame->f_locals);
         PyValue *locals = _PyFrame_GetLocalsArray(frame);
         PyValue *sp = locals + nslots;
@@ -4160,7 +4160,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
           && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
-          && PyValue_FunctionCheck(frame->f_funcobj)))
+          && frame->f_funcobj != NULL))
     {
         /* Free vars are initialized */
         return;

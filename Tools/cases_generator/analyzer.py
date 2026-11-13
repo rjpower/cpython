@@ -652,6 +652,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFb_HasEntry",
     "_PyFrame_GetBytecode",
     "_PyFrame_GetCode",
+    "_PyFrame_GetFunction",
     "_PyFrame_IsIncomplete",
     "_PyFrame_PushUnchecked",
     "_PyFrame_PushOverlapping",

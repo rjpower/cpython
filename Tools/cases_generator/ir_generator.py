@@ -4741,7 +4741,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 #ifdef Py_DEBUG
-                if (!PyValue_IsNone(frame->f_executable)) {
+                if (frame->f_executable != NULL) {
                     Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(

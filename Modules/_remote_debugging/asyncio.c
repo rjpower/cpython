@@ -345,7 +345,7 @@ get_awaited_coro_address(
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
     if (return_slot >= 2 && return_slot != IR_NO_DST) {
-        uintptr_t code_addr = GET_MEMBER_NO_TAG(uintptr_t, iframe,
+        uintptr_t code_addr = GET_MEMBER(uintptr_t, iframe,
             unwinder->debug_offsets.interpreter_frame.executable);
         char code[SIZEOF_CODE_OBJ];
         if (code_addr == 0 || code_addr >= Py_PTR_LIMIT ||

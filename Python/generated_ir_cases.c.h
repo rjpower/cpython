@@ -9082,8 +9082,7 @@
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyCodeObject *co = _PyFrame_GetCode(frame);
-            assert(PyValue_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(frame->f_funcobj);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyObject *closure = func->func_closure;
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
@@ -12112,7 +12111,7 @@
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 #ifdef Py_DEBUG
-                if (!PyValue_IsNone(frame->f_executable)) {
+                if (frame->f_executable != NULL) {
                     Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(
@@ -16606,8 +16605,7 @@
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue res;
-            assert(PyValue_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(frame->f_funcobj);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
             if (gen == NULL) {
                 JUMP_TO_LABEL(error);
@@ -19054,7 +19052,7 @@
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 #ifdef Py_DEBUG
-                if (!PyValue_IsNone(frame->f_executable)) {
+                if (frame->f_executable != NULL) {
                     Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(

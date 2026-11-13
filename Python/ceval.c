@@ -2267,13 +2267,13 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->stack[0] = PyValue_NULL;
 #if defined(Py_DEBUG)
     /* Set these to invalid but identifiable values for debugging. */
-    entry->frame.f_funcobj = PyValue_Wrap((void *)0xaaa0);
     entry->frame.f_locals = (PyObject*)0xaaa1;
     entry->frame.frame_obj = (PyFrameObject*)0xaaa2;
     entry->frame.f_globals = (PyObject*)0xaaa3;
     entry->frame.f_builtins = (PyObject*)0xaaa4;
 #endif
-    entry->frame.f_executable = PyValue_None;
+    entry->frame.f_executable = NULL;
+    entry->frame.f_funcobj = NULL;
     entry->frame.base = entry->frame.owned_slots;
     /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
@@ -2964,7 +2964,7 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     assert((PyObject **)frame == tstate->datastack_limit);
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
     _PyFrame_ClearExceptCode(frame);
-    PyValue_CLEAR(frame->f_executable);
+    Py_CLEAR(frame->f_executable);
     _PyThreadState_PopFrame(tstate, frame);
 }
 

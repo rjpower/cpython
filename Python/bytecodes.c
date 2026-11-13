@@ -2994,8 +2994,10 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(PyValue_AsKnownObjectBorrow(value)));
         }
 
-        op(_GUARD_STORE_ATTR_VALUE, (value:nullable, owner -- value, owner)) {
-            DEOPT_IF(PyValue_IsNull(value));
+        // Keep the retained store value distinct from _LOCK_OBJECT's value,
+        // which names the receiver at the next physical stack position.
+        op(_GUARD_STORE_ATTR_VALUE, (store_value:nullable, owner -- store_value, owner)) {
+            DEOPT_IF(PyValue_IsNull(store_value));
         }
 
         macro(STORE_ATTR_INSTANCE_VALUE) =

@@ -305,39 +305,58 @@ is_well_formed(PyValue ref, bool in_stack)
            && Py_TYPE(PyValue_AsKnownObjectBorrow(ref)) != NULL;
 }
 
-void
-_PyValue_CheckFrame(_PyInterpreterFrame *frame)
+static void
+check_frame_home_range(_PyInterpreterFrame *frame, int n)
 {
+    /* This writer oracle requires initialized NULL-control homes. A waiting
+     * thread frame's scratch can belong to an overlapping child. */
+    assert(n >= 0 && n <= _PyFrame_NumSlots(frame));
+    assert(frame->owner != FRAME_OWNED_BY_THREAD ||
+           n <= _PyFrame_GetCode(frame)->co_nlocalsplus ||
+           _PyThreadState_GET()->current_frame == frame);
     PyValue *stack_base = _PyFrame_Stackbase(frame);
-    PyValue *end = frame->base + _PyFrame_NumSlots(frame);
+    PyValue *end = frame->base + n;
     for (PyValue *sp = frame->base; sp < end; sp++) {
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
                 "malformed value 0x%" PRIx64 " in slot %d",
                 (uint64_t)_PyValue_Word(*sp), (int)(sp - frame->base));
         }
+        if (PyValue_RefcountOnObject(*sp) != _PyFrame_HomeOwnsCount(frame, sp)) {
+            _Py_FatalErrorFormat(__func__,
+                "counted-home bitmap mismatch in slot %d",
+                (int)(sp - frame->base));
+        }
     }
+}
+
+void
+_PyValue_CheckFrame(_PyInterpreterFrame *frame)
+{
+    check_frame_home_range(frame, _PyFrame_NumSlots(frame));
 }
 #endif
 
-/* Release the first n slots of frame, from the top, so that a finalizer
- * that looks at the frame finds the slots that it has not reached yet intact
- * and the rest NULL */
+/* A descending one-pass clear. Callbacks can repopulate passed local homes;
+ * the cursor does not revisit them. Reload the owner bits after every close. */
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
     frame->phase_state = 0;
 #ifdef Py_DEBUG
-    _PyValue_CheckFrame(frame);
+    check_frame_home_range(frame, n);
 #endif
-    PyValue *locals = frame->base;
-    PyValue *sp = locals + n;
-    while (sp > locals) {
-        sp--;
-        // a move: cleared below
-        PyValue ref = *sp;
-        *sp = PyValue_NULL;
-        PyValue_XCLOSE(ref);
+    int end = n;
+    while (end > 0) {
+        int owner = _PyFrame_PreviousCountedHome(frame, 0, end);
+        while (end > owner + 1) {
+            frame->base[--end] = PyValue_NULL;
+        }
+        if (owner >= 0) {
+            end = owner;
+            PyValue ref = _PyFrame_TakeHome(frame, frame->base + owner);
+            PyValue_CLOSE(ref);
+        }
     }
     Py_CLEAR(frame->f_locals);
 }
@@ -367,14 +386,22 @@ _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
         remaining = _PyFrame_GetCode(frame)->co_nlocalsplus;
     }
 #ifdef Py_DEBUG
-    _PyValue_CheckFrame(frame);
+    check_frame_home_range(frame, remaining);
 #endif
     while (remaining > 0) {
-        PyValue ref = frame->base[remaining - 1];
+        int owner = _PyFrame_PreviousCountedHome(frame, 0, remaining);
+        while (remaining > owner + 1) {
+            frame->base[--remaining] = PyValue_NULL;
+        }
+        if (owner < 0) {
+            break;
+        }
+        PyValue ref = frame->base[owner];
         if (!_PyValue_TryXCloseNoReentry(ref)) {
             return remaining;
         }
-        frame->base[--remaining] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, frame->base + owner, PyValue_NULL);
+        remaining = owner;
     }
     if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
         return _Py_FRAME_CLEAR_LOCALS;
@@ -397,6 +424,11 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
         remaining = frame->owner == FRAME_OWNED_BY_THREAD
             ? _PyFrame_GetCode(frame)->co_nlocalsplus : _PyFrame_NumSlots(frame);
     }
+#ifdef Py_DEBUG
+    /* Association release and private heap deallocation can bypass the
+     * callback-free sweep. Only the remaining prefix is still ours. */
+    check_frame_home_range(frame, remaining);
+#endif
     *roots = (_PyTransitionRoots){
         .frame = frame,
         .remaining = remaining,
@@ -433,10 +465,15 @@ _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
         Py_DECREF(f);
     }
     while (roots->remaining > 0) {
-        int slot = --roots->remaining;
-        PyValue ref = frame->base[slot];
-        frame->base[slot] = PyValue_NULL;
-        PyValue_XCLOSE(ref);
+        int owner = _PyFrame_PreviousCountedHome(frame, 0, roots->remaining);
+        while (roots->remaining > owner + 1) {
+            frame->base[--roots->remaining] = PyValue_NULL;
+        }
+        if (owner >= 0) {
+            roots->remaining = owner;
+            PyValue ref = _PyFrame_TakeHome(frame, frame->base + owner);
+            PyValue_CLOSE(ref);
+        }
     }
     roots->home_authority = _PyIR_HOME_NONE;
     roots->homes = NULL;

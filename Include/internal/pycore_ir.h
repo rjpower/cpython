@@ -358,10 +358,10 @@ _PyFb_HasEntry(int opcode)
  * with a feedback vector set up from the code object's feedback table.
  * Specialisation and instrumentation rewrite the handler field of the copy
  * only, so the code object's words are the generic handlers that both
- * restore.  Frames keep the words and entries of the copy in ir_words and
- * ir_feedback, which handlers index with their jump targets and feedback
- * indices.  The free-threaded build shares one copy between threads and does
- * not specialise it. */
+ * restore.  Frames keep the word base of the copy in ir_words; handlers
+ * derive the feedback base from its preceding execution header and index
+ * these bases with their jump targets and feedback indices. The free-threaded
+ * build shares one copy between threads and does not specialise it. */
 typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction

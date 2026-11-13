@@ -36,6 +36,14 @@ _PyFrame_Exec(_PyInterpreterFrame *f)
     return exec;
 }
 
+/* Real and static executing images place this header immediately before
+ * their words. The embedded thread base sentinel has no executing image. */
+static inline char *
+_PyFrame_Feedback(const _PyInterpreterFrame *frame)
+{
+    return (((const _PyCodeExec *)frame->ir_words) - 1)->entries;
+}
+
 /* The word index of the instruction at instr, which is f_lasti for
  * frame->instr_ptr.  The word before the first, which the unwinding of a
  * frame that has not finished an instruction reads, is at -1. */
@@ -52,13 +60,11 @@ _PyFrame_InstrAt(_PyInterpreterFrame *f, int offset)
     return f->ir_words + offset;
 }
 
-/* Set the bases that the handlers of the frame index, for exec, which
- * frame->instr_ptr points into. */
+/* Set the word base of the executing image that instr_ptr points into. */
 static inline void
 _PyFrame_SetExec(_PyInterpreterFrame *frame, const _PyCodeExec *exec)
 {
     frame->ir_words = exec->words;
-    frame->ir_feedback = exec->entries;
 }
 
 /* Start a frame of code, whose executing copy exists: _PyCode_GetExec()
@@ -253,7 +259,6 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->frame_obj = src->frame_obj;
     dest->instr_ptr = src->instr_ptr;
     dest->ir_words = src->ir_words;
-    dest->ir_feedback = src->ir_feedback;
 #ifdef Py_GIL_DISABLED
     dest->tlbc_index = src->tlbc_index;
 #endif

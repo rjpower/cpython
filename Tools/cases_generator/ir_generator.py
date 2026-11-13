@@ -2934,7 +2934,7 @@ class IREmitter(Emitter):
         self.emit("window = slots + call_base;\n")
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
-                      "(frame->ir_feedback + ((size_t)call_feedback << 3));\n")
+                      "(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));\n")
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
         """A step of the call before its invocation, which records in the

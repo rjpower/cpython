@@ -4608,7 +4608,7 @@
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
                         window = slots + call_base;
-                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                        fb = (_PyFb_CALL *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                         if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
@@ -4630,7 +4630,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                fb = (_PyFb_CALL *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -5060,7 +5060,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                fb = (_PyFb_CALL *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -5739,7 +5739,7 @@
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
                     window = slots + call_base;
-                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    fb = (_PyFb_CALL_FUNCTION_EX *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -5759,7 +5759,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                fb = (_PyFb_CALL_FUNCTION_EX *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                 func = window[0];
                 callargs = window[2];
                 kwargs = window[3];
@@ -6079,7 +6079,7 @@
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
                     window = slots + call_base;
-                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    fb = (_PyFb_CALL_KW *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -6100,7 +6100,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                fb = (_PyFb_CALL_KW *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -6220,7 +6220,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                fb = (_PyFb_CALL_KW *)(_PyFrame_Feedback(frame) + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }

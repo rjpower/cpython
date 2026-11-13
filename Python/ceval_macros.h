@@ -320,7 +320,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * either, so nothing after a trigger writes past a header there. */
 #ifdef Py_DEBUG
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-    (assert((char *)(FB) != frame->ir_feedback \
+    (assert((char *)(FB) != _PyFrame_Feedback(frame) \
             || !backoff_counter_triggers((FB)->counter)), 1)
 #else
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
@@ -746,14 +746,13 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
         } \
     } while (0)
 
-/* The frame's view of its executing copy: frame->ir_words and
- * frame->ir_feedback follow the copy that instr_ptr points into. */
+/* The frame's word and derived feedback bases follow its executing copy. */
 #define IR_CHECK_BLOCK() \
     assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
-           frame->ir_feedback == _PyFrame_Exec(frame)->entries)
+           _PyFrame_Feedback(frame) == _PyFrame_Exec(frame)->entries)
 
 /* The feedback entry at index F. */
-#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
+#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(_PyFrame_Feedback(frame), (F)))
 
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with
  * entry FB at unit F, keeps in the arg field of the entry.  These sites

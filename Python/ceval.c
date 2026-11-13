@@ -1354,7 +1354,7 @@ value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue_XCLOSE(failed_result);
         return -1;
     }
-    assert(frame->ir_feedback == exec->entries);
+    assert(_PyFrame_Feedback(frame) == exec->entries);
     frame->instr_ptr = current;
     return 0;
 }
@@ -1600,7 +1600,7 @@ call_transaction_publish_pc(void *opaque)
     assert(exec != NULL && call->current >= exec->words &&
            call->current < exec->words + exec->nwords);
     assert(call->frame->ir_words == exec->words);
-    assert(call->frame->ir_feedback == exec->entries);
+    assert(_PyFrame_Feedback(call->frame) == exec->entries);
 #endif
     call->frame->instr_ptr = call->current;
 }
@@ -2042,7 +2042,7 @@ native_call_publish_pc(void *opaque)
     assert(exec != NULL && state->current_word >= 0 &&
            state->current_word < exec->nwords);
     assert(frame->ir_words == exec->words);
-    assert(frame->ir_feedback == exec->entries);
+    assert(_PyFrame_Feedback(frame) == exec->entries);
     frame->instr_ptr = exec->words + state->current_word;
 }
 
@@ -2086,7 +2086,7 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
         return -1;
     }
     assert(frame->ir_words == exec->words);
-    assert(frame->ir_feedback == exec->entries);
+    assert(_PyFrame_Feedback(frame) == exec->entries);
     assert(next == exec->words + state->next_word);
     (void)next;
     frame->instr_ptr = exec->words + state->current_word;
@@ -2278,7 +2278,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
-    entry->frame.ir_feedback = NULL;
     entry->frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry->frame.visited = 0;
     /* What the frame returns or yields lands in entry->stack[0] */
@@ -3439,7 +3438,6 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
         goto done;
     }
     child->ir_words = exec->words;
-    child->ir_feedback = exec->entries;
     child->instr_ptr = exec->words;
     PyValue *retired = storage + call->count;
     call_transaction_detach(call, retired);

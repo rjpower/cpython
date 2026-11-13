@@ -316,6 +316,91 @@ class DeallocTest(unittest.TestCase):
                 self.assertEqual(internal.get_transition_root_ids(), [])
 
 
+class CopyHomeViewTest(unittest.TestCase):
+    def test_zero_binding_escape_keeps_empty_control(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body():
+            return sys._getframe()
+
+        frame = body()
+        self.assertEqual(internal.get_frame_home_view(frame), (3, 0, 0, 0))
+        frame.clear()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+
+    def test_selected_copy_skips_inactive_words(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            return value, object(), object()
+
+        for payload in (object(), 17, 2.5):
+            with self.subTest(payload=type(payload)):
+                internal.check_frame_selected_copy(body.__code__, payload)
+
+    def test_escaped_frame_keeps_explicit_control(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            scalar = 17
+            return sys._getframe()
+
+        def replacement(value):
+            return value
+
+        payload = object()
+        code = body.__code__
+        frame = body(payload)
+        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
+        self.assertEqual((authority, limit, nranges), (3, 0, 0))
+        self.assertGreaterEqual(bindings, code.co_nlocals)
+        body.__code__ = replacement.__code__
+        self.assertIs(frame.f_code, code)
+        self.assertIs(frame.f_locals['value'], payload)
+        self.assertEqual(frame.f_locals['scalar'], 17)
+        frame.clear()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+
+    def test_created_generator_and_suspended_escape_values(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            scalar = 17
+            yield value, scalar
+
+        def replacement(value):
+            yield None
+
+        payload = object()
+        code = body.__code__
+        gen = body(payload)
+        frame = gen.gi_frame
+        self.assertIs(frame.f_locals['value'], payload)
+        body.__code__ = replacement.__code__
+        self.assertEqual(next(gen), (payload, 17))
+        gen.close()
+        self.assertIs(frame.f_code, code)
+        self.assertIs(frame.f_locals['value'], payload)
+        self.assertEqual(frame.f_locals['scalar'], 17)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        frame.clear()
+
+    @unittest.skipIf(_testcapi is None, '_testcapi required')
+    def test_public_frame_generator_keeps_capture_until_resume(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body():
+            yield 17
+
+        gen = _testcapi.frame_new_generator(body.__code__, globals(), {})
+        frame = gen.gi_frame
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        self.assertEqual(next(gen), 17)
+        gen.close()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        frame.clear()
+
+
 class FrameAttrsTest(unittest.TestCase):
 
     def make_frames(self):

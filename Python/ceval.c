@@ -2237,9 +2237,11 @@ handoff_staged_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
         if (roots->kind == _Py_TRANSITION_KIND_STAGED && !roots->caller_staged &&
             roots->frame != NULL && roots->frame == frame)
         {
-            assert(!roots->result_present && roots->prefix == NULL);
+            assert(!roots->result_present);
             roots->remaining = 0;
             roots->header_mask = 0;
+            roots->home_authority = _PyIR_HOME_NONE;
+            roots->homes = NULL;
             roots->frame = NULL;
             return true;
         }
@@ -3281,6 +3283,7 @@ stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     *staged = (_PyTransitionRoots){
         .frame = frame,
         .remaining = _PyFrame_NumSlots(frame),
+        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         /* A custom evaluator may install nullable headers before handoff. */
         .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
@@ -3294,6 +3297,8 @@ unstage_binding_frame(PyThreadState *tstate, _PyTransitionRoots *staged)
 {
     staged->remaining = 0;
     staged->header_mask = 0;
+    staged->home_authority = _PyIR_HOME_NONE;
+    staged->homes = NULL;
     staged->frame = NULL;
     _PyThreadState_PopTransitionRoots(tstate, staged);
 }
@@ -3460,6 +3465,8 @@ clear_init_shim(PyThreadState *tstate, _PyTransitionRoots *staged)
     _PyFrame_ClearTemporaries(shim, 0);
     staged->remaining = 0;
     staged->header_mask = 0;
+    staged->home_authority = _PyIR_HOME_NONE;
+    staged->homes = NULL;
     _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
     /* Deallocators preserve the raised-exception state they entered with.
      * Thus restoring the saved error below cannot close a new exception. */
@@ -3488,6 +3495,7 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
     _PyTransitionRoots shim_roots = {
         .frame = shim,
         .remaining = _PyFrame_NumSlots(shim),
+        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
         .header_mask = _Py_TRANSITION_CODE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         .caller_staged = 1,
@@ -3533,6 +3541,8 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
     unstage_binding_frame(tstate, &child_roots);
     shim_roots.remaining = 0;
     shim_roots.header_mask = 0;
+    shim_roots.home_authority = _PyIR_HOME_NONE;
+    shim_roots.homes = NULL;
     shim_roots.caller_staged = 0;
     shim_roots.frame = NULL;
     _PyThreadState_PopTransitionRoots(tstate, &shim_roots);

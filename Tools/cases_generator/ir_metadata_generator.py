@@ -171,6 +171,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".transfer_kind = {contract.transfer_kind}, "
         f".owner_program = {owner_program[0]}, .owner_events = {owner_program[1]}, "
         f".call_input_holes = {contract.call_input_holes}, "
+        f".error_routes = {bits(list(contract.error_routes))}, "
         f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "

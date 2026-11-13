@@ -333,6 +333,10 @@ PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, Py
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
 PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
+/* The returned owner remains C-owned until ordinary result publication. */
+PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopWithResult(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
+/* Error/close paths carry no detached result. */
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
 enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };

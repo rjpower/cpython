@@ -415,19 +415,37 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame);
 PyAPI_FUNC(void) _PyValue_CheckFrame(_PyInterpreterFrame *frame);
 #endif
 
-/* Clears all references in the frame.
- * If take is non-zero, then the _PyInterpreterFrame frame
- * may be transferred to the frame object it references
- * instead of being cleared. Either way
- * the caller no longer owns the references
- * in the frame.
- * take should  be set to 1 for heap allocated
- * frames like the ones in generators and coroutines.
- *
- * Exported for external JIT support
- */
- PyAPI_FUNC(void)
-_PyFrame_ClearExceptCode(_PyInterpreterFrame * frame);
+/* A refcount test only proves a close callback-free while holding the GIL. */
+static inline bool
+_PyFrame_ObjectMayReenter(PyObject *object)
+{
+    if (object == NULL) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    return !_Py_IsImmortal(object);
+#else
+    return Py_REFCNT(object) == 1;
+#endif
+}
+
+enum {
+    _Py_FRAME_CLEAR_DONE = -1,
+    _Py_FRAME_CLEAR_ASSOCIATION = -2,
+    _Py_FRAME_CLEAR_LOCALS = -3,
+    _Py_FRAME_CLEAR_FUNCTION = -4,
+};
+
+struct _PyTransitionRoots;
+int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+                            struct _PyTransitionRoots *roots);
+void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
+                                  struct _PyTransitionRoots *roots);
+
+/* Retire frame and exception owners while preserving a detached result.
+ * Code remains owned by the generator. Close/deallocation passes NULL. */
+PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg);

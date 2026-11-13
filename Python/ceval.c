@@ -8,6 +8,7 @@
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
 #include "pycore_setobject.h"     // PySet_AddValue()
+#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
@@ -2955,21 +2956,67 @@ fail_post_args:
     return -1;
 }
 
-static void
-clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+/* This continuation is reached only when a remaining release may reenter.
+ * Its record protects the result and retiring reservation through the final
+ * code/exception close, whose referents can themselves invoke Python. */
+static Py_NO_INLINE PyValue
+clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        int stage, PyValue result)
 {
-    assert(frame->owner == FRAME_OWNED_BY_THREAD);
-    // Make sure that this is, indeed, the top frame. We can't check this in
-    // _PyThreadState_PopFrame, since f_code is already cleared at that point:
-    assert((PyObject **)frame == tstate->datastack_limit);
-    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    _PyFrame_ClearExceptCode(frame);
+#ifndef NDEBUG
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    PyObject **top = tstate->datastack_top;
+    PyObject **limit = tstate->datastack_limit;
+    PyValue *saved_top = frame->saved_top;
+    assert((PyObject **)frame == limit);
+    assert(frame->base >= _PyDataStack_Slots(&chunk->data[0]));
+    assert(frame->base <= _PyDataStack_Slots(top));
+#endif
+    _PyTransitionRoots roots;
+    _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    if (stage != _Py_FRAME_CLEAR_DONE) {
+        _PyFrame_FinishClearExceptCode(frame, stage, &roots);
+    }
+    assert(roots.remaining == 0);
+    roots.header_mask &= ~_Py_TRANSITION_CODE;
     Py_CLEAR(frame->f_executable);
+#ifndef NDEBUG
+    /* Nested calls may grow the arena, but must restore this reservation. */
+    assert(tstate->datastack_chunk == chunk);
+    assert(tstate->datastack_top == top);
+    assert(tstate->datastack_limit == limit);
+    assert(frame->saved_top == saved_top);
+#endif
+    result = roots.result;
+    roots.result = PyValue_NULL;
+    roots.result_present = 0;
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
     _PyThreadState_PopFrame(tstate, frame);
+    return result;
 }
 
-static void
-clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+static PyValue
+clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   PyValue result)
+{
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
+    int stage = _PyFrame_TryClearExceptCode(frame);
+    if (stage != _Py_FRAME_CLEAR_DONE ||
+        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
+    {
+        return clear_thread_frame_slow(tstate, frame, stage, result);
+    }
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopFrame(tstate, frame);
+    return result;
+}
+
+static PyValue
+clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValue result)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -2978,14 +3025,11 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
-    Py_BEGIN_CRITICAL_SECTION(gen);
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    _PyFrame_ClearExceptCode(frame);
-    Py_END_CRITICAL_SECTION();
-    _PyErr_ClearExcState(&gen->gi_exc_state);
-    // gh-143939: There must not be any escaping calls between setting
-    // the generator return kind and returning from _PyEval_EvalFrame.
+    result = _PyFrame_ClearGenerator(gen, result);
+    // No escaping call may follow this store before evaluator return.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
+    return result;
 }
 
 static inline Py_ALWAYS_INLINE _PyIRStepResult
@@ -3117,18 +3161,22 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
                               exit, value, _PY_IR_FOR_ITER, true);
 }
 
-void
-_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame * frame)
+PyValue
+_PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
+                                  _PyInterpreterFrame *frame, PyValue result)
 {
     // By this point, tstate->current_frame is already set to the parent frame.
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        clear_thread_frame(tstate, frame);
+        return clear_thread_frame(tstate, frame, result);
     }
-    else {
-        clear_gen_frame(tstate, frame);
-    }
+    return clear_gen_frame(tstate, frame, result);
+}
+
+void
+_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    (void)_PyEval_FrameClearAndPopWithResult(tstate, frame, PyValue_NULL);
 }
 
 /* code is independently pinned through preparation and binding. Consumes
@@ -3153,7 +3201,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-        clear_thread_frame(tstate, frame);
+        (void)clear_thread_frame(tstate, frame, PyValue_NULL);
         return NULL;
     }
     return frame;

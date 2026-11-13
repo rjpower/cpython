@@ -540,7 +540,12 @@ gen_try_set_executing(PyGenObject *gen)
     (IR_IS_LOCAL(F) ? PyValue_NULL \
                     : _PyFrame_TakeKnownHome(frame, &IR_SLOT(F), PyValue_Borrow(V)))
 
-/* Selected only by the checked interpreter-exit native-home contract. */
+/* Selected only by the checked interpreter-exit native-home contract.
+ * The activation's initialized C-stack home has no presence plane. */
+#define IR_VIEW_NATIVE_INPUT(F) \
+    (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
+     PyValue_Borrow(IR_SLOT(F)))
+
 #define IR_CONSUME_NATIVE_INPUT(F, V) \
     (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
      IR_SLOT(F) = PyValue_NULL, _PyIR_AdoptTemp(V))

@@ -2644,6 +2644,8 @@ class IRStack(Stack):
             p = memory_offset.as_int()
             if (p is not None and self.owner.get(p) == "in"
                     and p in lay.borrowable):
+                if lay.native_entry:
+                    return f"IR_VIEW_NATIVE_INPUT({self.input_field(p)})"
                 if lay.in_fields[p] in lay.local_fields:
                     return f"PyValue_Borrow(IR_SLOT({self.input_field(p)}))"
                 return f"IR_VIEW({self.input_field(p)})"
@@ -6312,8 +6314,9 @@ def native_entry_input_contract(inst: Instruction) -> bool:
         return result;
     }"""
     if (len(parts) != 1 or len(inst.parts) != 1 or
-            [(item.name, item.peek, item.size) for item in parts[0].stack.inputs] !=
-                [("retval", False, "")] or parts[0].stack.outputs or
+            [(item.name, item.peek, item.size, item.nullable)
+             for item in parts[0].stack.inputs] !=
+                [("retval", False, "", False)] or parts[0].stack.outputs or
             statement_shape(parts[0].body) != statement_shape(
                 Parser(expected, "<native entry ownership>").block())):
         raise analysis_error("native interpreter exit needs its checked contract", inst.where)

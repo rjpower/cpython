@@ -650,10 +650,17 @@ class CodeTest(unittest.TestCase):
                 d()
         code_a = f.__code__
         code_b = code_a.replace(co_linetable=b"")
-        _, recovery = semantic_parts(code_a.co_exceptiontable)
-        no_exceptions = semantic_table(records=recovery)
-        code_c = code_a.replace(co_exceptiontable=no_exceptions)
-        code_d = code_b.replace(co_exceptiontable=no_exceptions)
+        exceptions, recovery = semantic_parts(code_a.co_exceptiontable)
+        self.assertTrue(exceptions)
+        # A leading zero varint group keeps every admitted exception edge
+        # while changing only the semantic bytes used by equality.
+        equivalent = bytes((0xc0, exceptions[0] & 0x7f)) + exceptions[1:]
+        alternate = semantic_table(equivalent, recovery)
+        code_c = code_a.replace(co_exceptiontable=alternate)
+        code_d = code_b.replace(co_exceptiontable=alternate)
+        self.assertEqual(dis.Bytecode(code_c).exception_entries,
+                         dis.Bytecode(code_a).exception_entries)
+        self.assertEqual(code_c.co_linetable, code_a.co_linetable)
         self.assertNotEqual(code_a, code_b)
         self.assertNotEqual(code_a, code_c)
         self.assertNotEqual(code_a, code_d)

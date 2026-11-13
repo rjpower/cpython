@@ -98,7 +98,7 @@ HELPERS = {
 
 SCALAR_CONSTANTS = {"_PY_EVAL_EVENTS_MASK", "RESUME_OPARG_LOCATION_MASK",
                     "RESUME_AFTER_YIELD_FROM", "PY_MONITORING_EVENT_PY_START",
-                    "PY_MONITORING_EVENT_PY_RESUME"}
+                    "PY_MONITORING_EVENT_PY_RESUME", "NUM_COMMON_CONSTANTS"}
 
 
 @dataclass
@@ -176,6 +176,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
     reserved = {"frame", "slots", "window", "tstate", "next_instr", "this_instr",
                 "oparg", "PyValue_NULL", "FRAME_CO_CONSTS", "NULL", "true", "false",
                 "_PyFrame_GetCode", "ERROR_IF", "ERROR_NO_POP", "JUMPTO", "JUMPBY",
+                "JUMP_TARGET",
                 "DISPATCH", "DISPATCH_SAME_OPARG", "assert", "RELOAD_STACK",
                 "IR_COMPLETE_STEP", *HELPERS, *SCALAR_CONSTANTS, *reserved_names}
 
@@ -193,6 +194,13 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
                      "_co_instrumentation_version"]:
             return Kind.ATOMIC_FIELD
         if texts == ["frame", "->", "instr_ptr"]:
+            return Kind.INSTR
+        # These projections use immutable admitted operand geometry. Neither
+        # returns a home address nor executes a callback. Bounds remain the
+        # universal word validator's obligation, not a source-effect grant.
+        if texts == ["tstate", "->", "interp", "->", "common_consts", "[", "oparg", "]"]:
+            return Kind.VALUE
+        if texts == ["JUMP_TARGET", "(", "oparg", ")"]:
             return Kind.INSTR
         if (len(texts) == 9 and texts[:5] == ["(", "(", "PyStopIterationObject", "*", ")"]
                 and variables.get(texts[5]) == Kind.OBJECT

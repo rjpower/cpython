@@ -337,6 +337,71 @@ class ErrorEffectTests(unittest.TestCase):
                         self.assertFalse(contracts[name].error_routes, name)
                         self.assertFalse(contracts[name].abrupt_operands, name)
 
+    def test_read_only_projections_keep_actual_late_error_routes(self):
+        constant = ("assert(oparg < NUM_COMMON_CONSTANTS); "
+                    "value = PyValue_DUP(tstate->interp->common_consts[oparg]);")
+        _, summary = self.analyze(constant)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary.homes, ir_error_effects.HomeEffect.NO_ARENA_WRITE)
+        self.assertFalse(summary.error_sources)
+        _, summary = self.analyze(
+            "assert(JUMP_TARGET(oparg) < next_instr); JUMPTO(oparg);", "--")
+        self.assertIsNotNone(summary)
+        self.assertFalse(summary.may_fail)
+        for before, after in (
+            ("common_consts", "opaque_consts"),
+            ("[oparg]", "[frame]"),
+            ("[oparg]", "[oparg++]"),
+            ("tstate->interp->common_consts[oparg]", "&tstate->interp->common_consts[oparg]"),
+        ):
+            with self.subTest(projection=after):
+                self.assertIsNone(self.analyze(constant.replace(before, after))[1])
+        for body in (
+            "tstate->interp->common_consts[oparg] = PyValue_NULL;",
+            "int NUM_COMMON_CONSTANTS = 1; " + constant,
+            "oparg = 0; " + constant,
+            "value = PyValue_DUP(tstate->interp->common_consts[oparg].bits);",
+        ):
+            with self.subTest(mutation=body):
+                self.assertIsNone(self.analyze(body)[1])
+        for target in ("opaque_target(oparg)", "JUMP_TARGET(frame)",
+                       "JUMP_TARGET(oparg++)", "&JUMP_TARGET(oparg)"):
+            with self.subTest(target=target):
+                self.assertIsNone(self.analyze(
+                    f"assert({target} < next_instr); JUMPTO(oparg);", "--")[1])
+
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        if not source.is_file():
+            self.skipTest("requires bytecodes.c")
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        # A scratch recipient has no ordinary failure; a binding recipient
+        # can still fail during the actual displaced-local refresh. Keep the
+        # conditional route in metadata rather than treating PURE as inert.
+        self.assertEqual(contracts["LOAD_COMMON_CONSTANT"].error_routes,
+                         ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_LOCAL_DST"))
+        self.assertEqual(contracts["JUMP_BACKWARD_NO_INTERRUPT"].error_routes,
+                         ("_PyIR_ERROR_COMPLETE",))
+        self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
+        original = ir_generator.IREmitter.release_displaced
+
+        def missing_binding_receipt(emitter):
+            original(emitter)
+            emitter.error_local_dst = False
+
+        with mock.patch.object(ir_generator.IREmitter, "release_displaced", missing_binding_receipt):
+            incomplete = ir_generator.handler_contracts(analysis, formats)
+        self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
+        original_boxes = ir_generator.boxes_into_record
+
+        def has_bridge(text):
+            return "common_consts" in text or original_boxes(text)
+
+        with mock.patch.object(ir_generator, "boxes_into_record", has_bridge):
+            boxed = ir_generator.handler_contracts(analysis, formats)
+        self.assertIn("_PyIR_ERROR_BRIDGE", boxed["LOAD_COMMON_CONSTANT"].error_routes)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4948,15 +4948,15 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     PyObject *code_object;
     int site, phase, dirty_home = -1, missing_home = -1;
-    int unaligned = 0, wrong_image = 0, authority_only = 0;
+    int unaligned = 0, wrong_image = 0, authority_only = 0, error_checkpoint = -1;
     static char *keywords[] = {
         "code", "site", "phase", "dirty_home", "missing_home",
-        "unaligned", "wrong_image", "authority_only", NULL,
+        "unaligned", "wrong_image", "authority_only", "error_checkpoint", NULL,
     };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iippp:check_ir_frame_phase",
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iipppi:check_ir_frame_phase",
                                     keywords, &code_object, &site, &phase,
                                     &dirty_home, &missing_home, &unaligned,
-                                    &wrong_image, &authority_only))
+                                    &wrong_image, &authority_only, &error_checkpoint))
     {
         return NULL;
     }
@@ -4968,6 +4968,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     int nl = code->co_nlocalsplus;
     if (site < 0 || site > Py_SIZE(code) || phase < 0 || phase > UINT16_MAX ||
+        error_checkpoint < -1 || error_checkpoint > UINT8_MAX ||
         nl < 0 || nslots < nl || nslots > IR_MAX_SLOTS ||
         (dirty_home != -1 && (dirty_home < nl || dirty_home >= nslots)) ||
         (missing_home != -1 && (missing_home < nl || missing_home >= nslots)))
@@ -4996,7 +4997,10 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .phase_state = (uint16_t)phase,
     };
     _PyIRHomeView view;
-    _PyIRHomeAuthority covered = _PyIR_GetFrameHomeView(&frame, &view);
+    _PyIRHomeAuthority covered = error_checkpoint < 0
+        ? _PyIR_GetFrameHomeView(&frame, &view)
+        : _PyIR_GetErrorHomeView(&frame, (_PyInstr *)pc,
+                                 (uint8_t)error_checkpoint, &view);
     int dirty_selected = 0, missing_required = 0;
     if (covered) {
         for (uint32_t r = 0; r < view.nranges; r++) {
@@ -5029,8 +5033,11 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         frame.ir_words = &other_image;
     }
     frame.instr_ptr = (_PyInstr *)(pc + unaligned);
-    int status = authority_only ? (int)_PyIR_GetFrameHomeView(&frame, &view)
-                               : _PyIR_ShadowFramePhase(&frame);
+    int status = error_checkpoint >= 0
+        ? (int)_PyIR_GetErrorHomeView(&frame, frame.instr_ptr,
+                                     (uint8_t)error_checkpoint, &view)
+        : authority_only ? (int)_PyIR_GetFrameHomeView(&frame, &view)
+                         : _PyIR_ShadowFramePhase(&frame);
     PyMem_Free(homes);
     return PyLong_FromLong(status);
 }

@@ -123,7 +123,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertTrue(summary.may_fail)
         self.assertTrue(summary.callback)
         self.assertEqual(summary.homes,
-                         ir_error_effects.HomeEffect.PRESERVES_SCRATCH_ABSENCE)
+                         ir_error_effects.HomeEffect.PRESERVES_CANONICAL_OR_NULL)
         expected = {id(token) for part in instruction.parts
                     for token in part.body.tokens()
                     if token.text in {"ERROR_IF", "ERROR_NO_POP"}}

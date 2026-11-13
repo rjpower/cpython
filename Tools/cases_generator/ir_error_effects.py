@@ -38,6 +38,7 @@ class HomeEffect(Enum):
     UNKNOWN = auto()
     NO_ARENA_WRITE = auto()
     PRESERVES_SCRATCH_ABSENCE = auto()
+    PRESERVES_CANONICAL_OR_NULL = auto()
 
 
 @dataclass(frozen=True)
@@ -49,16 +50,23 @@ class HelperEffect:
     callback: bool = False
 
 
-def native_helper(inputs, result, may_fail=False, callback=False):
-    homes = (HomeEffect.PRESERVES_SCRATCH_ABSENCE if callback
+def native_helper(inputs, result, may_fail=False, callback=False, *, canonical_clear=False):
+    homes = (HomeEffect.PRESERVES_CANONICAL_OR_NULL if callback and canonical_clear
+             else HomeEffect.PRESERVES_SCRATCH_ABSENCE if callback
              else HomeEffect.NO_ARENA_WRITE)
     return HelperEffect(inputs, result, homes, may_fail, callback)
 
 
 # These interfaces receive native values, never an arena-home address. A
 # callback may change named bindings or vacate scratch through a debugger
-# redirect. It cannot publish a new scratch owner. Generated operand writes
-# remain a separate emitter obligation. A returned failure is not a goto.
+# redirect. It cannot publish a new scratch owner. The stronger canonical_clear
+# contract additionally preserves previously initialized scratch: f_locals
+# writes only bindings, frame_lineno_set_impl clears scratch with canonical NULL
+# and restores saved values only to bindings, and an executing frame cannot be
+# cleared or resumed. Nested activations reserve their own frame storage. This
+# permits canonical-or-NULL widening, never initialization from absence or an
+# old-PC shape after an accepted redirect. Generated operand writes remain a
+# separate emitter obligation. A returned failure is not a goto.
 HELPERS = {
     "PyValue_DUP": native_helper((Kind.VALUE,), Kind.VALUE),
     "PyValue_XDUP": native_helper((Kind.VALUE,), Kind.VALUE),
@@ -70,17 +78,17 @@ HELPERS = {
     "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE),
     "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT),
     "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE),
-    "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True),
-    "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True),
+    "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
+    "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
     "DEAD": native_helper((Kind.VALUE,), Kind.VOID),
     # Their emitted writes are confined by IRStack, independently of this
     # source summary. They grant no permission to pass a home to a C helper.
-    "DECREF_INPUTS": native_helper((), Kind.VOID, callback=True),
+    "DECREF_INPUTS": native_helper((), Kind.VOID, callback=True, canonical_clear=True),
     "INPUTS_DEAD": native_helper((), Kind.VOID),
     "GETLOCAL": native_helper((Kind.SCALAR,), Kind.VALUE),
     "PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
-    "_PyEval_GetANext": native_helper((Kind.OBJECT,), Kind.OBJECT, True, True),
+    "_PyEval_GetANext": native_helper((Kind.OBJECT,), Kind.OBJECT, True, True, canonical_clear=True),
     "check_periodics": native_helper((Kind.TSTATE,), Kind.SCALAR, True, True),
     "_Py_Instrument": native_helper((Kind.CODE, Kind.INTERP), Kind.SCALAR, True),
     "_Py_atomic_load_uintptr_relaxed": native_helper((Kind.ATOMIC_ADDRESS,), Kind.SCALAR),
@@ -468,6 +476,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
     homes = (HomeEffect.UNKNOWN if any(h.homes == HomeEffect.UNKNOWN for h in used)
              else HomeEffect.PRESERVES_SCRATCH_ABSENCE
              if any(h.homes == HomeEffect.PRESERVES_SCRATCH_ABSENCE for h in used)
+             else HomeEffect.PRESERVES_CANONICAL_OR_NULL
+             if any(h.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL for h in used)
              else HomeEffect.NO_ARENA_WRITE)
     return SourceErrorEffects(frozenset(errors), frozenset(unwinds), frozenset(terminals),
                               frozenset(helpers), homes, any(h.may_fail for h in used),

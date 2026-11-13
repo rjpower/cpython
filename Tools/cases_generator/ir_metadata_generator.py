@@ -34,6 +34,7 @@ from ir_generator import (
     Extent,
     HandlerContract,
     IRFormat,
+    OwnershipEvent,
     binary_op_handlers,
     binary_ops,
     compute_formats,
@@ -155,7 +156,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.discards, "_PyIR_DISCARDS"),
             (fmt.unpacks, "_PyIR_UNPACKS"),
             (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX"),
-            (contract.abrupt_operands, "_PyIR_ABRUPT_OPERANDS")):
+            (contract.abrupt_operands, "_PyIR_ABRUPT_OPERANDS"),
+            (bool(contract.error_checkpoints), "_PyIR_ERROR_PROGRAM")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
@@ -190,14 +192,25 @@ def generate_ir_metadata(
 ) -> None:
     formats = compute_formats(analysis)
     contracts = handler_contracts(analysis, formats)
-    programs = {(): (0, 0)}
+    programs = {((), ()): (0, 0)}
     ownership = []
     for name in sorted(contracts):
-        program = contracts[name].ownership_events
-        if program not in programs:
+        normal = contracts[name].ownership_events
+        checkpoints = contracts[name].error_checkpoints
+        key = normal, checkpoints
+        if key not in programs:
+            suffix = []
+            for checkpoint in checkpoints:
+                suffix.append(OwnershipEvent("_PyIR_OWNER_ERROR_CHECKPOINT",
+                    flags=checkpoint.flags, src=checkpoint.id, extent=len(checkpoint.reads)))
+                suffix.extend(OwnershipEvent("_PyIR_OWNER_ERROR_READ", flags=int(nullable), src=field)
+                              for field, nullable in checkpoint.reads)
+            program = normal
+            if suffix:
+                program += (OwnershipEvent("_PyIR_OWNER_ERROR_PROGRAM", extent=len(suffix)), *suffix)
             if len(program) > 65535 or len(ownership) + len(program) > 0xffffffff:
                 raise ValueError("ownership event table is too large")
-            programs[program] = len(ownership), len(program)
+            programs[key] = len(ownership), len(normal)
             ownership.extend(program)
     insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
@@ -309,7 +322,7 @@ def generate_ir_metadata(
                       if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
                                       rows[name], events,
-                                      programs[rows[name].ownership_events])
+                                      programs[rows[name].ownership_events, rows[name].error_checkpoints])
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

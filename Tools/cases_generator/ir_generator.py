@@ -2327,6 +2327,13 @@ class OwnershipEvent:
     extent: int = 0
 
 
+@dataclass(frozen=True)
+class ErrorCheckpoint:
+    id: int
+    flags: int
+    reads: tuple[tuple[int, bool], ...]
+
+
 def may_be_positive(diff: PointerOffset) -> bool:
     "Whether diff can be above zero; symbolic sizes are never negative"
     d = diff.as_int()
@@ -2494,6 +2501,12 @@ class IRStack(Stack):
         self.null_paths: dict[int, set[str]] = {0: set()}
         self.null_stores: dict[int, bool] = {}
         self.null_uncovered = False
+        # Count actual storage operations conservatively. An error snapshot
+        # with zero writes preserves the complete incoming home shape; a
+        # logical IO declaration alone cannot establish that property.
+        self.home_writes = 0
+        self.read_fields: dict[int, bool] = {}
+        self.unknown_read = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2510,6 +2523,9 @@ class IRStack(Stack):
         other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
         other.null_stores = dict(self.null_stores)
         other.null_uncovered = self.null_uncovered
+        other.home_writes = self.home_writes
+        other.read_fields = dict(self.read_fields)
+        other.unknown_read = self.unknown_read
         return other
 
     def select_null_edge(self, edge: int) -> None:
@@ -2622,6 +2638,13 @@ class IRStack(Stack):
         for names in self.null_paths.values():
             names.discard(var.name)
         lay = self.layout
+        if var.used and var.name != "unused":
+            p = memory_offset.as_int()
+            if not var.is_array() and p in lay.in_fields:
+                field = FIELDS.index(lay.in_fields[p])
+                self.read_fields[field] = self.read_fields.get(field, True) and var.nullable
+            else:
+                self.unknown_read = True
         if not var.is_array():
             role = self.call_input_role(memory_offset)
             if role is not None:
@@ -2673,6 +2696,7 @@ class IRStack(Stack):
         """The frame gives up the input at position p.  A borrowable one's
         owner, ir_own_<F>, adopts the bits of a variable that holds its
         view."""
+        self.home_writes += 1
         f = self.input_field(p)
         if p not in self.layout.borrowable:
             role = self.call_input_role(PointerOffset(p, (), ()))
@@ -2699,6 +2723,7 @@ class IRStack(Stack):
               canonical_result: str | None = None) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
         frame then holds it there"""
+        self.home_writes += 1
         out.start_line()
         p = memory_offset.as_int()
         if self.reloaded:
@@ -2840,6 +2865,8 @@ class IRStack(Stack):
         lay = self.layout
         count = high - low
         n = count.as_int()
+        if n != 0:
+            self.home_writes += 1
         if lay.window:
             if self.window_taken:
                 return
@@ -2912,6 +2939,12 @@ class IRStack(Stack):
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
         super().merge(other, out)
+        self.home_writes = other.home_writes = max(self.home_writes, other.home_writes)
+        reads = {field: self.read_fields.get(field, True) and other.read_fields.get(field, True)
+                 for field in self.read_fields.keys() | other.read_fields.keys()}
+        self.read_fields = dict(reads)
+        other.read_fields = reads
+        self.unknown_read = other.unknown_read = self.unknown_read or other.unknown_read
         paths = {}
         for edge in self.null_paths.keys() | other.null_paths.keys():
             if edge in self.null_paths and edge in other.null_paths:
@@ -2998,6 +3031,9 @@ class IREmitter(Emitter):
         self.error_local_dst = False
         self.send_source_parts = None
         self.error_redispatch_origin = None
+        self.error_checkpoint_sites = {}
+        self.error_checkpoint_count = 0
+        self.allowed_error_checkpoints: frozenset[int] | None = frozenset()
         self.observer_source = None
         self.observer_errors = set()
         self.observer_terminals = set()
@@ -4376,7 +4412,38 @@ class IREmitter(Emitter):
         stack.error_exit = True
         stack.flush(self.out)
         self.operand_error_flush(stack)
-        return "PROCESS_ERROR_AT(RAISE, 0, this_instr);"
+        checkpoint = self.record_error_checkpoint(stack)
+        return f"PROCESS_ERROR_AT(RAISE, {checkpoint}, this_instr);"
+
+    def record_error_checkpoint(self, stack: IRStack, bridge=None) -> int:
+        """Capture the actual flushed stack, independently of normal IO.
+
+        The first transport group preserves its complete incoming shape.
+        Any emitted home operation loses that case; later groups describe
+        those operations explicitly in the same ownership graph.
+        """
+        source = self.error_source
+        fmt = self.handler_format
+        if (source is None or source.homes not in {
+                HomeEffect.NO_ARENA_WRITE, HomeEffect.PRESERVES_CANONICAL_OR_NULL} or
+                source.changes_origin or fmt is None or fmt.window or
+                stack.reloaded or stack.home_writes or stack.unknown_read or
+                any(stack.read_fields.values())):
+            return 0
+        route = bridge if bridge is not None else self.abrupt_operand_origin
+        if route is None:
+            return 0
+        self.error_checkpoint_count += 1
+        if self.error_checkpoint_count > 255:
+            raise StackError("more than 255 emitted error checkpoints")
+        checkpoint = self.error_checkpoint_count
+        self.error_checkpoint_sites[checkpoint] = ErrorCheckpoint(
+            checkpoint, int(source.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL),
+            tuple(sorted(stack.read_fields.items())))
+        if (self.allowed_error_checkpoints is not None and
+                checkpoint not in self.allowed_error_checkpoints):
+            return 0
+        return checkpoint
 
     def operand_error_flush(self, stack, bridge=None):
         # These are actual error stores from the same IRStack used to emit C.
@@ -4858,9 +4925,11 @@ class IREmitter(Emitter):
             bridge = (id(uop), var.name)
             self.abrupt_operand_bridge_expected.add(bridge)
             # Every input is still in its slot: exception_unwind has them
-            storage.stack.copy().flush(self.out)
-            self.operand_error_flush(storage.stack, bridge)
-            self.emit("PROCESS_ERROR_AT(RAISE, 0, this_instr);\n")
+            error_stack = storage.stack.copy()
+            error_stack.flush(self.out)
+            self.operand_error_flush(error_stack, bridge)
+            checkpoint = self.record_error_checkpoint(error_stack, bridge)
+            self.emit(f"PROCESS_ERROR_AT(RAISE, {checkpoint}, this_instr);\n")
             self.emit("}\n")
             if inst is not None:
                 self.emit(f"BOX_STAT_INC({inst.name});\n")
@@ -6211,6 +6280,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.error_finalized = False
     emitter.error_local_dst = False
     emitter.error_redispatch_origin = None
+    emitter.error_checkpoint_sites = {}
+    emitter.error_checkpoint_count = 0
     emitter.observer_source = observer_entry_source(inst, fmt)
     emitter.observer_errors = set()
     emitter.observer_terminals = set()
@@ -6471,15 +6542,21 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
-                      boxing: set[str], outfile: TextIO, lines: bool) -> None:
+                      boxing: set[str], outfile: TextIO, lines: bool,
+                      checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None) -> None:
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
         emitter.handler_format = formats[name]
+        emitter.allowed_error_checkpoints = frozenset(
+            checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
         generate_handler(name, inst, formats[name], emitter, out,
                          name in boxing)
+        for checkpoint in (checkpoints or {}).get(name, ()):
+            if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
+                raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
 
@@ -6737,7 +6814,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     abrupt: dict[str, bool] | None = None,
                     operand_abrupt: dict[str, bool] | None = None,
                     error_routes: dict[str, tuple[str, ...]] | None = None,
-                    observer_entries: dict[str, bool] | None = None
+                    observer_entries: dict[str, bool] | None = None,
+                    checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -6758,6 +6836,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         out = CWriter(buffer, 0, False)
         emitter = IREmitter(out, analysis, formats)
         emitter.handler_format = formats[name]
+        emitter.allowed_error_checkpoints = None
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
         boxes = boxes_into_record(buffer.getvalue())
@@ -6779,6 +6858,9 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
             programs[name] = tuple(emitter.ownership_events)
         if error_routes is not None:
             error_routes[name] = emitted_error_routes(emitter, formats[name], boxes)
+        if checkpoints is not None:
+            checkpoints[name] = (tuple(emitter.error_checkpoint_sites.values())
+                if emitted_error_routes(emitter, formats[name], boxes) else ())
         if boxes:
             if any(isinstance(p, Uop) and any(
                     t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
@@ -6843,6 +6925,15 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 if len(program) == 1 and program[0].kind in (
                         "_PyIR_OWNER_NORMAL_CLEAR_INPUTS", "_PyIR_OWNER_CALL_DRAIN"):
                     del programs[name]
+    if checkpoints is not None:
+        groups: dict[str, list[str]] = {}
+        for name in handler_instructions(analysis):
+            groups.setdefault(formats[name].group, []).append(name)
+        for members in groups.values():
+            common = checkpoints.get(members[0], ())
+            if not all(checkpoints.get(name, ()) == common for name in members):
+                for name in members:
+                    checkpoints[name] = ()
     return result
 
 
@@ -6919,6 +7010,7 @@ class HandlerContract:
     abrupt_operands: bool
     error_routes: tuple[str, ...]
     observer_entry: bool
+    error_checkpoints: tuple[ErrorCheckpoint, ...]
 
 
 def statement_shape(node):
@@ -7792,8 +7884,9 @@ def handler_contracts(analysis: Analysis,
     operand_abrupt = {}
     error_routes = {}
     observer_entries = {}
+    checkpoints = {}
     boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt,
-                             error_routes, observer_entries)
+                             error_routes, observer_entries, checkpoints)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
@@ -7837,6 +7930,7 @@ def handler_contracts(analysis: Analysis,
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),
             observer_entry=observer_entries.get(name, False),
+            error_checkpoints=checkpoints.get(name, ()),
         )
     return result
 
@@ -8041,12 +8135,13 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool) -> None:
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
-    boxing = boxing_handlers(analysis, formats)
+    checkpoints = {}
+    boxing = boxing_handlers(analysis, formats, checkpoints=checkpoints)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, formats, boxing, outfile, lines)
+    generate_ir_cases(analysis, formats, boxing, outfile, lines, checkpoints)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
         {LABEL_START_MARKER}

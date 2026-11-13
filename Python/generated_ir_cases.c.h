@@ -4949,7 +4949,6 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                IR_PUBLISH_TEMP(window[0], new_frame);
                 _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
@@ -7296,7 +7295,6 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                IR_PUBLISH_TEMP(window[0], new_frame);
                 _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
@@ -12949,7 +12947,6 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), new_frame);
                 _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
@@ -12957,7 +12954,6 @@
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
-                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -13598,7 +13594,6 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), new_frame);
                 _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
@@ -13606,7 +13601,6 @@
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
-                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;

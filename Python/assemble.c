@@ -353,7 +353,8 @@ assemble_location_info(struct assembler *a, _PyRegCfg *cfg, int firstlineno)
 /* Source-only operations occupy no word. Find the actual continuation first,
  * then record only this edge's eliminated source lines and exception state. */
 static int
-assemble_source_edge(PyBytesWriter *writer, _PyRegCfg *cfg, int from,
+assemble_source_edge(PyBytesWriter *writer, PyBytesWriter *positions,
+                     _PyRegCfg *cfg, int from,
                      int edge, int block, int first)
 {
     int b = block, i = first;
@@ -376,15 +377,13 @@ assemble_source_edge(PyBytesWriter *writer, _PyRegCfg *cfg, int from,
     int to = cfg->ops[i].word;
     for (int j = first; j < i; j++) {
         _PyRegOp *op = &cfg->ops[j];
-        if (!(op->flags & _PyReg_SOURCE_ORIGIN) || op->loc.lineno <= 0 ||
+        if (!(op->flags & _PyReg_SOURCE_ORIGIN) ||
             !(op->opcode == NOP || (op->flags & _PyReg_ELIDED_NOP)))
         {
             continue;
         }
-        _PyIRSourceEvent event = {
+        _PyIRRecoveryEvent event = {
             .from = from, .to = to, .edge = edge,
-            .line = op->loc.lineno, .end_line = op->loc.end_lineno,
-            .column = op->loc.col_offset, .end_column = op->loc.end_col_offset,
             .handler = -1, .exc_slot = 0, .lasti = 0,
         };
         if (op->except >= 0) {
@@ -393,9 +392,17 @@ assemble_source_edge(PyBytesWriter *writer, _PyRegCfg *cfg, int from,
             event.exc_slot = cfg->nlocalsplus + handler->startdepth - 1;
             event.lasti = handler->preserve_lasti;
         }
-        unsigned char encoded[_PyIR_SOURCE_RECORD];
-        _PyIRSource_EncodeEvent(encoded, &event);
+        unsigned char encoded[_PyIR_RECOVERY_RECORD];
+        _PyIRSemantic_EncodeEvent(encoded, &event);
         RETURN_IF_ERROR(PyBytesWriter_WriteBytes(writer, encoded, sizeof(encoded)));
+        _PyIRPosition position = {-1, -1, -1, -1};
+        if (op->loc.lineno > 0) {
+            position = (_PyIRPosition){op->loc.lineno, op->loc.end_lineno,
+                                      op->loc.col_offset, op->loc.end_col_offset};
+        }
+        unsigned char location[_PyIR_POSITION_RECORD];
+        _PyIRPositions_EncodeEvent(location, &position);
+        RETURN_IF_ERROR(PyBytesWriter_WriteBytes(positions, location, sizeof(location)));
     }
     return SUCCESS;
 }
@@ -407,11 +414,16 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
     if (writer == NULL) {
         return ERROR;
     }
+    PyBytesWriter *positions = PyBytesWriter_Create(0);
+    if (positions == NULL) {
+        PyBytesWriter_Discard(writer);
+        return ERROR;
+    }
     /* There is no executed predecessor before the real entry prologue.
      * Do not accept a leading source-only span without entry semantics. */
     for (int i = 0; i < cfg->nops && !cfg->ops[i].nwords; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if ((op->flags & _PyReg_SOURCE_ORIGIN) && op->loc.lineno > 0 &&
+        if ((op->flags & _PyReg_SOURCE_ORIGIN) &&
             (op->opcode == NOP || (op->flags & _PyReg_ELIDED_NOP)))
         {
             PyErr_SetString(PyExc_SystemError,
@@ -435,39 +447,62 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(control->opcode, control->oparg);
             if (control->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
                 int target = control->target;
-                if (assemble_source_edge(writer, cfg, op->word,
-                                         _PyIR_SOURCE_TAKEN, target,
+                if (assemble_source_edge(writer, positions, cfg, op->word,
+                                         _PyIR_EDGE_TAKEN, target,
                                          cfg->blocks[target].start) < 0)
                 {
                     goto error;
                 }
             }
             if (!IS_NO_FALLTHROUGH_OPCODE(control->opcode) &&
-                assemble_source_edge(writer, cfg, op->word,
-                                     _PyIR_SOURCE_FALLTHROUGH, b, control_index + 1) < 0)
+                assemble_source_edge(writer, positions, cfg, op->word,
+                                     _PyIR_EDGE_FALLTHROUGH, b, control_index + 1) < 0)
             {
                 goto error;
             }
         }
     }
     PyObject *records = PyBytesWriter_Finish(writer);
+    PyObject *location_records = PyBytesWriter_Finish(positions);
     if (records == NULL) {
+        Py_XDECREF(location_records);
+        return ERROR;
+    }
+    if (location_records == NULL) {
+        Py_DECREF(records);
         return ERROR;
     }
     Py_ssize_t size = PyBytes_GET_SIZE(records);
-    PyObject *map = _PyIRSource_Pack(
-        (const unsigned char *)PyBytes_AS_STRING(a->a_linetable),
-        (uint32_t)PyBytes_GET_SIZE(a->a_linetable),
-        (const unsigned char *)PyBytes_AS_STRING(records),
-        (uint32_t)(size / _PyIR_SOURCE_RECORD));
-    Py_DECREF(records);
-    if (map == NULL) {
+    if ((uint64_t)size / _PyIR_RECOVERY_RECORD > UINT32_MAX ||
+        (uint64_t)PyBytes_GET_SIZE(a->a_except_table) > UINT32_MAX ||
+        (uint64_t)PyBytes_GET_SIZE(a->a_linetable) > UINT32_MAX)
+    {
+        Py_DECREF(records);
+        Py_DECREF(location_records);
+        PyErr_NoMemory();
         return ERROR;
     }
+    uint32_t count = (uint32_t)(size / _PyIR_RECOVERY_RECORD);
+    PyObject *semantic = _PyIRSemantic_Pack(
+        (const unsigned char *)PyBytes_AS_STRING(a->a_except_table),
+        (uint32_t)PyBytes_GET_SIZE(a->a_except_table),
+        (const unsigned char *)PyBytes_AS_STRING(records), count);
+    PyObject *map = semantic == NULL ? NULL : _PyIRPositions_Pack(
+        (const unsigned char *)PyBytes_AS_STRING(a->a_linetable),
+        (uint32_t)PyBytes_GET_SIZE(a->a_linetable),
+        (const unsigned char *)PyBytes_AS_STRING(location_records), count);
+    Py_DECREF(records);
+    Py_DECREF(location_records);
+    if (map == NULL) {
+        Py_XDECREF(semantic);
+        return ERROR;
+    }
+    Py_SETREF(a->a_except_table, semantic);
     Py_SETREF(a->a_linetable, map);
     return SUCCESS;
 error:
     PyBytesWriter_Discard(writer);
+    PyBytesWriter_Discard(positions);
     return ERROR;
 }
 
@@ -487,7 +522,6 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
     if (a->a_except_table == NULL) {
         return ERROR;
     }
-    RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_except_table));
 
     a->a_linetable = PyBytesWriter_FinishWithSize(a->a_linetable_writer,
                                                   a->a_location_off);
@@ -496,6 +530,7 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
         return ERROR;
     }
     RETURN_IF_ERROR(assemble_source_map(a, cfg));
+    RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_except_table));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_linetable));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_bytecode));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_fbinit));

@@ -446,7 +446,7 @@ class TestIRCases(unittest.TestCase):
             PyValue held = TAKE(value);
             res = held;
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
-                                        PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
+                                        PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
         }
         """
         output = self.ir_output(source)
@@ -470,13 +470,13 @@ class TestIRCases(unittest.TestCase):
              "unproved terminal C owner transport"),
             ("res = held;", "int ir_observer_next = 0; res = held;",
              "reserved local"),
-            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
-             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); PyValue_CLOSE(res);",
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN); PyValue_CLOSE(res);",
              "follows terminal observer"),
-            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
-             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); "
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN); "
              "IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), "
-             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);", "follows terminal observer"),
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);", "follows terminal observer"),
         )
         for old, new, message in changes:
             with self.subTest(message=message):
@@ -496,13 +496,13 @@ class TestIRCases(unittest.TestCase):
             if (flag) {
                 res = held;
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
-                                            PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
+                                            PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
             else {
                 IR_DEFER_CLOSE(held);
                 res = PyValue_NULL;
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
-                                            PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_SOURCE_FALLTHROUGH);
+                                            PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
             }
         }
         """
@@ -537,14 +537,14 @@ class TestIRCases(unittest.TestCase):
         jump = """
         inst(OP, (--)) {
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
-                PY_MONITORING_EVENT_JUMP, _PyIR_SOURCE_TAKEN);
+                PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
         }
         """
         self.ir_output(jump)
         for old, new, message in (
-            (", _PyIR_SOURCE_TAKEN", "", "takes source, destination, event, owner edge"),
-            ("_PyIR_SOURCE_TAKEN", "edge", "literal owner edge"),
-            ("_PyIR_SOURCE_TAKEN", "_PyIR_SOURCE_FALLTHROUGH", "disagrees with destination"),
+            (", _PyIR_EDGE_TAKEN", "", "takes source, destination, event, owner edge"),
+            ("_PyIR_EDGE_TAKEN", "edge", "literal owner edge"),
+            ("_PyIR_EDGE_TAKEN", "_PyIR_EDGE_FALLTHROUGH", "disagrees with destination"),
             ("JUMP_TARGET(oparg)", "next_instr", "disagrees with destination"),
             ("PY_MONITORING_EVENT_JUMP", "event", "literal event"),
         ):
@@ -558,7 +558,7 @@ class TestIRCases(unittest.TestCase):
             DEAD(index_or_null);
             IR_DEFER_CLOSE(held);
             IR_OBSERVE_COMMITTED_BRANCH(prev_instr, next_instr,
-                PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_FALLTHROUGH);
+                PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_FALLTHROUGH);
         }
         """
         output = self.ir_output(iterator)

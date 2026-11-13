@@ -22,15 +22,15 @@ class LocationParserTests(unittest.TestCase):
 
     def test_actual_proxy_character_input(self):
         payload = b'\x80\x00'
-        wrapped = b'IRSM' + struct.pack('<III', 1, len(payload), 0) + payload
+        wrapped = b'IRSM' + struct.pack('<III', 2, len(payload), 0) + payload
         expected = [(0, 1, 10)]
         self.assertEqual(list(self.parse(10, payload.decode('latin-1'))), expected)
         self.assertEqual(list(self.parse(10, wrapped.decode('latin-1'))), expected)
 
     def test_truncated_and_inconsistent_envelopes(self):
-        for raw in (b'IRSM', b'IRSM' + struct.pack('<III', 2, 0, 0),
-                    b'IRSM' + struct.pack('<III', 1, 1, 0),
-                    b'IRSM' + struct.pack('<III', 1, 0, 1)):
+        for raw in (b'IRSM', b'IRSM' + struct.pack('<III', 1, 0, 0),
+                    b'IRSM' + struct.pack('<III', 2, 1, 0),
+                    b'IRSM' + struct.pack('<III', 2, 0, 1)):
             with self.subTest(raw=raw):
                 with self.assertRaisesRegex(ValueError, 'source map'):
                     list(self.parse(10, raw.decode('latin-1')))

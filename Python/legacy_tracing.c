@@ -8,7 +8,7 @@
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_ir.h"            // _PyCode_InstrHandler()
-#include "pycore_ir_source.h"     // _PyIRSource_Stored()
+#include "pycore_ir_source.h"     // _PyIRObservation_Stored()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_pyerrors.h"      // PyStopIterationObject
 #include "pycore_tstate.h"        // _PyThreadStateImpl
@@ -478,12 +478,13 @@ sys_trace_jump_func(
         /* Will be handled by target INSTRUMENTED_LINE */
         return disable;
     }
-    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    _PyIRObservationMap source = _PyIRObservation_Stored(code);
     for (uint32_t i = 0; i < source.nrecords; i++) {
-        _PyIRSourceEvent edge;
-        _PyIRSource_Event(&source, i, &edge);
+        _PyIRObservationEvent edge;
+        _PyIRObservation_Event(&source, i, &edge);
         if (edge.from == from && edge.to == to &&
-            edge.edge == _PyIR_SOURCE_TAKEN && edge.line != from_line)
+            edge.edge == _PyIR_EDGE_TAKEN && edge.line >= 0 &&
+            edge.line != from_line)
         {
             /* The compact backedge crosses a source-only loop header.
              * Its source events and landing LINE supply the iteration;

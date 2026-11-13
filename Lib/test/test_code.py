@@ -204,6 +204,8 @@ import unittest
 import warnings
 import textwrap
 import weakref
+from test.support.ir_semantics import (observation_tables, semantic_parts,
+                                       semantic_table)
 import dis
 import struct
 
@@ -648,8 +650,10 @@ class CodeTest(unittest.TestCase):
                 d()
         code_a = f.__code__
         code_b = code_a.replace(co_linetable=b"")
-        code_c = code_a.replace(co_exceptiontable=b"")
-        code_d = code_b.replace(co_exceptiontable=b"")
+        _, recovery = semantic_parts(code_a.co_exceptiontable)
+        no_exceptions = semantic_table(records=recovery)
+        code_c = code_a.replace(co_exceptiontable=no_exceptions)
+        code_d = code_b.replace(co_exceptiontable=no_exceptions)
         self.assertNotEqual(code_a, code_b)
         self.assertNotEqual(code_a, code_c)
         self.assertNotEqual(code_a, code_d)
@@ -1693,16 +1697,16 @@ class ConstSlotsTest(unittest.TestCase):
                     # arm's CALL requires the same home specifically NULL.
                     pc, source = copy.offset, optional_self
                 words[pc] = (words[pc] & ~(4095 << 16)) | (source << 16)
-                matching_map = memoryview(code.co_linetable).tobytes()
-                self.assertEqual(matching_map, code.co_linetable)
-                self.assertIsNot(matching_map, code.co_linetable)
+                matching_recovery = memoryview(code.co_exceptiontable).tobytes()
+                self.assertEqual(matching_recovery, code.co_exceptiontable)
+                self.assertIsNot(matching_recovery, code.co_exceptiontable)
                 # The changed arm reads a home already consumed by STORE_FAST
                 # (or a NULL COPY input). Admission now rejects this witness
                 # before an observer can consider its joined requirements.
                 with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
                     code.replace(co_code=b"".join(
                         word.to_bytes(8, sys.byteorder) for word in words),
-                        co_linetable=matching_map)
+                        co_exceptiontable=matching_recovery)
                 # Keep a runtime counterpart with valid transfers: the NULL
                 # call input is reconstructed by reexecuting the original arm.
                 f = types.FunctionType(code, original.__globals__)
@@ -2263,7 +2267,7 @@ class ConstSlotsTest(unittest.TestCase):
                                       (4095 << 16))
         with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_linetable=memoryview(code.co_linetable).tobytes())
+                         co_exceptiontable=memoryview(code.co_exceptiontable).tobytes())
         attempted = []
         def tracer(frame, event, arg):
             if frame.f_code is f.__code__ and event == "line":
@@ -2484,7 +2488,7 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertEqual({(words[i.offset] >> 28) & 4095 for i in saves}, {local})
         f.__code__ = original.replace(
             co_code=struct.pack(f'<{len(words)}Q', *words),
-            co_linetable=memoryview(original.co_linetable).tobytes())
+            co_exceptiontable=memoryview(original.co_exceptiontable).tobytes())
         self.assertEqual(f([(1, 2)]), ("outer", 2, [3]))
 
         first = f.__code__.co_firstlineno
@@ -2639,7 +2643,9 @@ class ConstSlotsTest(unittest.TestCase):
         words[instruction.offset] = (dis.opmap["LOAD_FAST_AND_CLEAR"] |
                                       (4095 << 16) |
                                       (f.__code__.co_varnames.index("value") << 28))
-        f.__code__ = f.__code__.replace(co_code=struct.pack(f'<{len(words)}Q', *words))
+        f.__code__ = f.__code__.replace(
+            co_code=struct.pack(f'<{len(words)}Q', *words),
+            co_exceptiontable=f.__code__.co_exceptiontable)
         class Finished(Exception):
             pass
         refused = False
@@ -2699,7 +2705,8 @@ class ConstSlotsTest(unittest.TestCase):
         words[second_restore.offset] = (
             (words[second_restore.offset] & ~(4095 << 28)) |
             (first_word & (4095 << 28)))
-        bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words))
+        bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                               co_exceptiontable=original.co_exceptiontable)
         first = original.co_firstlineno
         for invalid in (False, True):
             with self.subTest(invalid=invalid):
@@ -2755,11 +2762,11 @@ class ConstSlotsTest(unittest.TestCase):
         # token must not be accepted as a restoration of the younger binding.
         words[inner.offset] = ((words[inner.offset] & ~(4095 << 16)) |
                                 (outer_home << 16))
-        matching_map = memoryview(original.co_linetable).tobytes()
-        self.assertEqual(matching_map, original.co_linetable)
-        self.assertIsNot(matching_map, original.co_linetable)
+        matching_recovery = memoryview(original.co_exceptiontable).tobytes()
+        self.assertEqual(matching_recovery, original.co_exceptiontable)
+        self.assertIsNot(matching_recovery, original.co_exceptiontable)
         bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                               co_linetable=matching_map)
+                               co_exceptiontable=matching_recovery)
         self.assertEqual(f(True), (1, 10, [[1, 2]]))
         first = original.co_firstlineno
         for invalid in (False, True):
@@ -3458,7 +3465,7 @@ def parse_location_table(code):
         version = int.from_bytes(locations[4:8], "little")
         size = int.from_bytes(locations[8:12], "little")
         records = int.from_bytes(locations[12:16], "little")
-        if version != 1 or 16 + size + records * 40 != len(locations):
+        if version != 2 or 16 + size + records * 16 != len(locations):
             raise ValueError("malformed source map")
         locations = locations[16:16 + size]
     it = iter(locations)
@@ -3619,12 +3626,10 @@ class CodeLocationTest(unittest.TestCase):
         version, size, _ = struct.unpack_from('<III', raw, 4)
         source_lines = [real_line + 30, real_line + 10, real_line,
                         real_line + 20, real_line + 10]
-        records = b''.join(struct.pack('<10i', target - 1, target, 0,
-                                       line, line, 0, 1, -1, 0, 0)
-                           for line in source_lines)
-        code = code.replace(co_linetable=(
-            b'IRSM' + struct.pack('<III', version, size, len(source_lines)) +
-            raw[16:16 + size] + records))
+        records = [(target - 1, target, 0, line, line, 0, 1, -1, 0, 0)
+                   for line in source_lines]
+        exceptions, _ = semantic_parts(code.co_exceptiontable)
+        code = code.replace(**observation_tables(raw[16:16 + size], records, exceptions))
         original = code.co_linetable
         ranges = list(code.co_lines())
         self.assertEqual([(start, line) for start, end, line in ranges if start == end],

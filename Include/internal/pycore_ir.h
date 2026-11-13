@@ -183,8 +183,8 @@ enum {
                                     // elements stay in the window
 #define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
                                     // exceptional absence only, not readability
-#define _PyIR_ABRUPT_OPERANDS 0x4000 // actual ordinary error stores confined
-                                     // to encoded operands; absence only
+#define _PyIR_ABRUPT_OPERANDS 0x4000 // only encoded transport can destroy prior
+                                     // scratch absence; no readability grant
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -208,6 +208,13 @@ enum {
                                     // counter drives specialisation
 #define _PyIR_BOXES         0x400   // may box a value into the value record
                                     // (_PyValueTemps), which it then needs
+
+/* Complete exceptional-route census from the actual emitter. Zero is
+ * unknown, not infallible. These bits establish no readable-home facts. */
+#define _PyIR_ERROR_COMPLETE  1u
+#define _PyIR_ERROR_DIRECT    2u
+#define _PyIR_ERROR_BRIDGE    4u
+#define _PyIR_ERROR_LOCAL_DST 8u
 
 #define _PyIR_NO_DST        INT8_MIN
 
@@ -349,6 +356,7 @@ typedef struct _PyIRFormat {
     uint32_t owner_program;
     uint16_t owner_events;
     uint8_t call_input_holes; // canonical virtual-NULL window inputs
+    uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves

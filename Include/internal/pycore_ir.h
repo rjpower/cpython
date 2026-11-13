@@ -262,6 +262,22 @@ enum {
     _PyIR_OUTPUT_OUTCOME,
 };
 
+/* Positively checked normal-edge ownership contracts. UNKNOWN deliberately
+ * grants no logical initialization or ownership fact during NULL shadowing. */
+enum {
+    _PyIR_TRANSFER_UNKNOWN,
+    _PyIR_TRANSFER_FRESH,
+    _PyIR_TRANSFER_LOCAL_DUP,
+    _PyIR_TRANSFER_LOCAL_MOVE,
+    _PyIR_TRANSFER_LOCAL_STORE,
+    _PyIR_TRANSFER_LOCAL_CLEAR,
+    _PyIR_TRANSFER_RETIRE,
+    _PyIR_TRANSFER_COPY,
+    _PyIR_TRANSFER_SWAP,
+    _PyIR_TRANSFER_PRESERVE,
+    _PyIR_TRANSFER_EXIT,
+};
+
 /* A checked observer edge whose terminal provider has committed its physical
  * outputs before the callback. Generated from the provider, not inferred from
  * its event name. An absent fact cannot authorize POST inspection. */
@@ -293,6 +309,7 @@ typedef struct _PyIRFormat {
                             // result at base+dst moved to the explicit dst;
                             // OUTCOME: use the semantic per-edge contract.
                             // UNPACKS additionally transfers to its local run.
+    uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves

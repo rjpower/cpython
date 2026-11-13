@@ -1117,7 +1117,8 @@ class TestIRCases(unittest.TestCase):
         for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
-                retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
+                retired = handler.index(
+                    "temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")
                 published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
                 self.assertLess(retired, completed)
@@ -2943,6 +2944,7 @@ class TestIRCases(unittest.TestCase):
                 ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+                ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -2963,6 +2965,7 @@ class TestIRCases(unittest.TestCase):
             ".fb_kind = 0, .fb_size = 0, "
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+            ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -2972,6 +2975,65 @@ class TestIRCases(unittest.TestCase):
             '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
+
+    def test_normal_transfer_source_proofs(self):
+        cases = (
+            ("LOAD_CONST", "-- value",
+             "value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));",
+             "FRESH", "PyValue_XDUP", "PyValue_Borrow"),
+            ("LOAD_FAST_AND_CLEAR", "-- value",
+             "value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL;",
+             "LOCAL_MOVE", "GETLOCAL(oparg) = PyValue_NULL;", ""),
+            ("POP_TOP", "value --", "PyValue_XCLOSE(value);",
+             "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
+            ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
+             "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
+            ("SWAP", "bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
+             "PyValue temp = bottom; bottom = top; top = temp;",
+             "SWAP", "top = temp;", ""),
+        )
+        for name, effect, body, kind, old, new in cases:
+            with self.subTest(handler=name):
+                def kind_for(body):
+                    analysis = self.analyze(f"\ninst({name}, ({effect})) {{ {body} }}\n")
+                    inst = analysis.instructions[name]
+                    fmt = ir_generator.compute_formats(analysis)[name]
+                    return ir_generator.normal_transfer_kind(inst, fmt)
+                self.assertEqual(kind_for(body), "_PyIR_TRANSFER_" + kind)
+                self.assertIn(old, body)
+                self.assertEqual(kind_for(body.replace(old, new)),
+                                 "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_normal_transfer_requires_matching_io(self):
+        # The same body with a different window cannot acquire COPY geometry.
+        source = "\ninst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }\n"
+        analysis = self.analyze(source)
+        inst = analysis.instructions["COPY"]
+        fmt = ir_generator.compute_formats(analysis)["COPY"]
+        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                         "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_normal_transfer_real_family_coverage(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        insts = ir_generator.handler_instructions(analysis)
+        expected = {
+            "LOAD_CONST": "FRESH", "LOAD_CONST_INLINE_INT": "FRESH",
+            "LOAD_CONST_INLINE_FLOAT": "FRESH", "LOAD_COMMON_CONSTANT": "FRESH",
+            "LOAD_SMALL_INT": "FRESH", "LOAD_SMALL_INT_INLINE": "FRESH",
+            "LOAD_FAST": "LOCAL_DUP", "LOAD_FAST_BORROW": "LOCAL_DUP",
+            "LOAD_FAST_CHECK": "LOCAL_DUP", "LOAD_FAST_AND_CLEAR": "LOCAL_MOVE",
+            "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
+            "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
+            "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
+            "IR_JUMP": "PRESERVE", "RETURN_VALUE": "EXIT",
+            "CALL": "UNKNOWN", "LOAD_ATTR": "UNKNOWN", "SEND": "UNKNOWN",
+        }
+        for name, kind in expected.items():
+            with self.subTest(handler=name):
+                self.assertEqual(ir_generator.normal_transfer_kind(insts[name], formats[name]),
+                                 "_PyIR_TRANSFER_" + kind)
 
     def slot_role(self, effect: str, body: str) -> str | None:
         analysis = self.analyze(f"\ninst(OP, ({effect})) {{\n{body}\n}}\n")

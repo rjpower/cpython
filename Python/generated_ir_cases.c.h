@@ -18638,7 +18638,6 @@
             PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            Py_DECREF(seq_o);
             if (res == 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -18705,7 +18704,6 @@
                 PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-                Py_DECREF(seq_o);
                 if (res == 0) {
                     JUMP_TO_LABEL(error);
                 }

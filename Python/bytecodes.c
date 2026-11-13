@@ -331,8 +331,7 @@ dummy_func(
         }
 
         op(_POP_TOP_OPARG, (args[oparg] -- )) {
-            _PyValue_CloseStack(args, oparg);
-            DEAD(args);
+            IR_CLOSE_INPUTS(args);
         }
 
         pure inst(PUSH_NULL, (-- res)) {

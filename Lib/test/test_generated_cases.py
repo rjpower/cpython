@@ -3218,6 +3218,45 @@ class TestIRCases(unittest.TestCase):
             self.assertEqual(marker in escapes,
                              analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
 
+    def test_input_drain_requires_its_sole_owning_array(self):
+        def check(source):
+            analysis = self.analyze("\n" + source + "\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+
+        self.assertTrue(check("inst(OP, (items[oparg] --)) { IR_CLOSE_INPUTS(items); }"))
+        for source in (
+            "inst(OP, (items[oparg*2] --)) { IR_CLOSE_INPUTS(items); }",
+            "inst(OP, (items[oparg] -- result)) { IR_CLOSE_INPUTS(items); result = PyValue_None; }",
+            "inst(OP, (items[oparg] -- items[oparg])) { IR_CLOSE_INPUTS(items); }",
+            "inst(OP, (items[oparg] --)) { if (oparg) { IR_CLOSE_INPUTS(items); } }",
+            "inst(OP, (items[oparg] --)) { SPAM(); IR_CLOSE_INPUTS(items); }",
+            "inst(OP, (items[oparg] --)) { IR_CLOSE_INPUTS(items); DEAD(items); }",
+            "inst(OP, (items[oparg] --)) { PyValue *alias = items; IR_CLOSE_INPUTS(alias); }",
+        ):
+            with self.subTest(source=source):
+                with self.assertRaises(SyntaxError):
+                    check(source)
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        part = analysis.uops["_POP_TOP_OPARG"]
+        self.assertTrue(ir_generator.home_operation_contract(part))
+        self.assertNotIn("IR_CLOSE_INPUTS", analyzer.IR_MARKER_EFFECTS)
+        self.assertIn("IR_CLOSE_INPUTS", {escape.call.text
+                                        for escape in part.properties.escaping_calls.values()})
+        self.assertTrue(ir_generator.releases_object(
+            analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
+
+    def test_input_drain_lowers_through_actual_storage(self):
+        output = self.ir_output("""
+            inst(OP, (items[oparg] --)) {
+                IR_CLOSE_INPUTS(items);
+            }
+        """)
+        self.assertIn("_PyFrame_CloseHomeRange(frame, items, oparg)", output)
+        self.assertIn("frame->phase_state = 0;", output)
+        self.assertNotIn("IR_CLOSE_INPUTS", output)
+        self.assertNotIn("_PyValue_CloseStack", output)
+
     def test_home_arrays_reject_unproved_bounds_and_pointer_escapes(self):
         def check(source):
             analysis = self.analyze("\n" + source + "\n")

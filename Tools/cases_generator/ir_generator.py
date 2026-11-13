@@ -435,6 +435,7 @@ RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
                           r"Dealloc|_READER|FINISH_VALUE")
 RELEASES = {
     "IR_DEFER_CLOSE",
+    "IR_CLOSE_INPUTS",
     "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
     "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
     "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
@@ -3016,6 +3017,7 @@ class IREmitter(Emitter):
         self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
+        self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
         self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
@@ -3144,6 +3146,14 @@ class IREmitter(Emitter):
         _, end = self.instruction_macro_args(tkn, tkn_iter)
         self.out.emit_at(f"_PyFrame_TakeHome(frame, &{local.name}[{index}])", tkn)
         self.out.last_token = end
+        return True
+
+    def close_input_homes(self, tkn, tkn_iter, uop, storage, inst):
+        local, _ = self.checked_home_array(tkn, uop, storage)
+        _, end = self.instruction_macro_args(tkn, tkn_iter)
+        self.out.emit_at(f"_PyFrame_CloseHomeRange(frame, {local.name}, oparg)", tkn)
+        self.out.last_token = end
+        local.kill()
         return True
 
     def created_copy(self, tkn, tkn_iter, uop, storage, inst):
@@ -5179,6 +5189,18 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                         index is None or not in_bounds(item, index, guards) or array in taken):
                     raise analysis_error("input take needs its unique index-matched owning array", token)
                 taken.add(array)
+                covered.add(id(args[0][0]))
+            elif token.text == "IR_CLOSE_INPUTS":
+                array = name(args[0]) if len(args) == 1 else None
+                item = inputs.get(array)
+                statement = [t for t in tokens if t.kind != "COMMENT"]
+                if (item is None or item.peek or item.size != "oparg" or
+                        len(inputs) != 1 or outputs or guards or
+                        len(part.body.body) != 1 or
+                        [t.text for t in statement] !=
+                            ["IR_CLOSE_INPUTS", "(", array, ")", ";"]):
+                    raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
+                index = 0
                 covered.add(id(args[0][0]))
             elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None

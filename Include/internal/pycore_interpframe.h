@@ -223,6 +223,20 @@ _PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
     return owner;
 }
 
+/* Only a checked owning frame-array operand supplies this interval. Detach
+ * before each close so reentrant collection sees the remaining owners. */
+static inline void
+_PyFrame_CloseHomeRange(_PyInterpreterFrame *frame, PyValue *homes, int count)
+{
+    assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+    assert(count >= 0 && homes >= frame->base);
+    assert(homes + count <= frame->base + _PyFrame_NumSlots(frame));
+    while (count > 0) {
+        PyValue owner = _PyFrame_TakeHome(frame, homes + --count);
+        PyValue_CLOSE(owner);
+    }
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST

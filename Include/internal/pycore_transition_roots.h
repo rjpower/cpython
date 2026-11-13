@@ -57,11 +57,15 @@ typedef struct _PyTransitionRoots {
     unsigned char kind:2;
     /* Only the owning constructor scope may consume this shim node. */
     unsigned char caller_staged:1;
+    unsigned char home_authority:2;
     /* Producer outcome, retained after code detach; observers never recheck. */
     unsigned char retire_reason;
     unsigned char shadow_status;
     PyValue result;
-    _PyTransitionPrefix *prefix;
+    union {
+        _PyTransitionPrefix *prefix;  /* EXTERNAL only */
+        const _PyIRHomeView *homes;   /* RETIRING/STAGED only */
+    };
 } _PyTransitionRoots;
 
 #if SIZEOF_VOID_P == 8
@@ -91,7 +95,25 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
            roots->frame->owner == FRAME_OWNED_BY_GENERATOR);
     assert(roots->remaining == 0 ||
            (roots->header_mask & _Py_TRANSITION_CODE));
-    if (roots->prefix != NULL) {
+    if (roots->kind != _Py_TRANSITION_KIND_EXTERNAL) {
+        assert(roots->home_authority != _PyIR_HOME_SHADOW_CANDIDATE);
+        if (roots->home_authority == _PyIR_HOME_NONE) {
+            assert(roots->remaining == 0 && roots->homes == NULL);
+        }
+        else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+            assert(roots->homes == NULL);
+        }
+        else {
+            assert(roots->home_authority == _PyIR_HOME_MUST_READABLE);
+            assert(roots->homes != NULL);
+            assert(roots->header_mask & _Py_TRANSITION_CODE);
+        }
+    }
+    else {
+        assert(roots->home_authority == _PyIR_HOME_NONE);
+        assert(roots->remaining == 0);
+    }
+    if (roots->kind == _Py_TRANSITION_KIND_EXTERNAL && roots->prefix != NULL) {
         assert(roots->prefix->base != NULL);
         assert(roots->prefix->begin >= 0);
         assert(roots->prefix->begin <= roots->prefix->end);
@@ -112,8 +134,14 @@ _PyThreadState_PopTransitionRoots(PyThreadState *tstate,
     assert(roots->remaining == 0);
     assert(roots->header_mask == 0);
     assert(!roots->result_present);
-    assert(roots->prefix == NULL ||
-           roots->prefix->begin == roots->prefix->end);
+    assert(roots->home_authority == _PyIR_HOME_NONE);
+    if (roots->kind == _Py_TRANSITION_KIND_EXTERNAL) {
+        assert(roots->prefix == NULL ||
+               roots->prefix->begin == roots->prefix->end);
+    }
+    else {
+        assert(roots->homes == NULL);
+    }
     ((_PyThreadStateImpl *)tstate)->transition_roots = roots->previous;
 }
 

@@ -2248,6 +2248,97 @@ def one():
     return 1
 
 
+@unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+class GeneratorRecipientTest(unittest.TestCase):
+    def test_local_recipient_is_published_before_displacement_callback(self):
+        events = []
+        replacement = object()
+        active = False
+
+        class Displaced:
+            def __del__(self):
+                if active:
+                    frame = sys._getframe(1)
+                    events.append((frame.f_code, frame.f_locals["item"]))
+                    frame.f_locals["item"] = replacement
+                    gc.collect()
+
+        def values():
+            yield 11
+            yield 22
+
+        def collect(iterator):
+            seen = []
+            item = Displaced()
+            for item in iterator:
+                seen.append(item)
+            return seen
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(collect(values()), [11, 22])
+        self.assertIn("FOR_ITER_GEN", handlers(collect))
+        word = next(row for row in get_ir(collect.__code__) if row[0] == "FOR_ITER")
+        self.assertLess(word[1], nlocalsplus(collect))
+        active = True
+        self.assertEqual(collect(values()), [replacement, 22])
+        self.assertEqual(events, [(collect.__code__, 11)])
+        active = False
+        # The same cache site still falls back for a different iterator type.
+        self.assertEqual(collect(iter([31, 32])), [31, 32])
+        self.assertEqual(collect(values()), [11, 22])
+        observed = []
+
+        def trace(frame, event, value):
+            if frame.f_code is values.__code__ and event == "return" and value is not None:
+                parent = frame.f_back
+                observed.append(parent.f_locals["item"])
+                parent.f_locals["item"] = replacement
+                gc.collect()
+            return trace
+
+        sys.settrace(trace)
+        try:
+            self.assertEqual(collect(values()), [11, 22])
+        finally:
+            sys.settrace(None)
+        self.assertEqual(len(observed), 2)
+
+    def test_scratch_and_discarded_generator_recipients(self):
+        def pairs():
+            yield (1, 2)
+            yield (3, 4)
+
+        def unpack(iterator):
+            result = []
+            for left, right in iterator:
+                result.append(left + right)
+            return result
+
+        def discard(iterator):
+            for item in iterator:
+                pass
+
+        # No body instruction reads item. Construct the supported discarded
+        # recipient without changing the iterator window or exhausted target.
+        code = discard.__code__
+        words = [int.from_bytes(code.co_code[i:i + 8], "little")
+                 for i in range(0, len(code.co_code), 8)]
+        index = next(i for i, row in enumerate(get_ir(code)) if row[0] == "FOR_ITER")
+        words[index] = (words[index] & ~(IR_FIELD_MAX << 16)) | (IR_FIELD_MAX << 16)
+        discard.__code__ = code.replace(
+            co_code=b"".join(word.to_bytes(8, "little") for word in words),
+            co_linetable=b"", co_exceptiontable=code.co_exceptiontable)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+            self.assertEqual(unpack(pairs()), [3, 7])
+            self.assertIsNone(discard(pairs()))
+        self.assertIn("FOR_ITER_GEN", handlers(unpack))
+        self.assertIn("FOR_ITER_GEN", handlers(discard))
+        word = next(row for row in get_ir(unpack.__code__) if row[0] == "FOR_ITER")
+        self.assertGreaterEqual(word[1], nlocalsplus(unpack))
+        self.assertEqual(unpack(iter([(5, 6)])), [11])
+        self.assertIsNone(discard(iter([(5, 6)])))
+
+
 class RegCfgTest(unittest.TestCase):
     """The passes over the register CFG (Python/regcfg_passes.c) and its
     compaction (Python/regcfg.c)"""

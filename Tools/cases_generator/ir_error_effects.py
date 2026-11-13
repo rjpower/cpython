@@ -77,6 +77,7 @@ def native_helper(inputs, result, may_fail=False, callback=False, *,
 # old-PC shape after an accepted redirect. Generated operand writes remain a
 # separate emitter obligation. A returned failure is not a goto.
 HELPERS = {
+    "IS_PEP523_HOOKED": native_helper((Kind.TSTATE,), Kind.SCALAR),
     "PyValue_DUP": native_helper((Kind.VALUE,), Kind.VALUE),
     "PyValue_XDUP": native_helper((Kind.VALUE,), Kind.VALUE),
     "TAKE": native_helper((Kind.VALUE,), Kind.VALUE),
@@ -280,13 +281,16 @@ def _call(tokens: list[Token]) -> list[list[Token]] | None:
 
 
 def analyze_error_effects(inst: Instruction, reserved_names=(), *,
-                          observer_wrapper=False) -> SourceErrorEffects | None:
+                          observer_wrapper=False,
+                          guard_prefix=False) -> SourceErrorEffects | None:
     """Summarize complete typed source, including an empty error-source set.
 
     Token identities are meaningful only for this analysis object. No summary
     alone proves that the emitter visited every route or finalized its homes.
     Observer mode checks home confinement across intentional PC adoption; it
     cannot supply an ordinary failing-origin or readable-shape certificate.
+    Guard-prefix mode checks only predicates preceding a terminal intrinsic;
+    its conditional exits do not certify ordinary error/normal transport.
     """
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     # Source identities cannot distinguish two emissions of the same uop.
@@ -548,6 +552,15 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                 return False
             _apply_native(value, origin)
             changes_origin = origin.changed = True
+            return True
+        if guard_prefix and texts[:1] in (["DEOPT_IF"], ["EXIT_IF"]):
+            arguments = _call(tokens)
+            if arguments is None or len(arguments) != 1:
+                return False
+            value = expression(arguments[0], variables, origin)
+            if value.kind not in SCALAR_KINDS:
+                return False
+            _apply_native(value, origin)
             return True
         if texts[:1] in (["ERROR_IF"], ["ERROR_NO_POP"], ["JUMPTO"], ["JUMPBY"],
                          ["DISPATCH"], ["DISPATCH_SAME_OPARG"], ["assert"],

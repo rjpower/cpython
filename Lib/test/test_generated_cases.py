@@ -1122,6 +1122,80 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
             emitted("FOR_ITER", False)
 
+    def test_generator_entry_recipient_uses_actual_terminal(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        for name, kind in (("FOR_ITER_GEN", "_PY_IR_FOR_ITER"),
+                           ("SEND_GEN", "_PY_IR_SEND")):
+            instruction = analysis.instructions[name]
+            recipe = ir_generator.generator_entry_recipe(instruction)
+            self.assertIsNotNone(recipe)
+            self.assertEqual(recipe.kind, kind)
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    out = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(out, analysis, formats)
+                    ir_generator.generate_handler(name, instruction, formats[name],
+                                                  emitter, out, record)
+                    handler = output.getvalue()
+                    self.assertNotIn("if (IR_IS_LOCAL(IR_A(ir_word))", handler)
+                    self.assertIn("frame->return_slot =", handler)
+                    self.assertIn(f"{kind} == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word)",
+                                  handler)
+                    self.assertLess(handler.index("frame->return_slot ="),
+                                    handler.index("frame = tstate->current_frame = ir_resumed_frame;"))
+                    self.assertIn("_PyFrame_SetReturnValue(frame, ir_resume_input)", handler)
+                    self.assertNotIn("_PyValue_Publish", handler)
+        instruction = analysis.instructions["FOR_ITER_GEN"]
+        recipe = ir_generator.generator_entry_recipe(instruction)
+        self.assertEqual(ir_generator.store_mode(
+            instruction, ir_generator.external_io(instruction)[1]), ir_generator.STORE_RETURN)
+        self.assertIsNone(ir_generator.generator_entry_recipe(analysis.instructions["SEND"]))
+        terminal = "IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);"
+        changes = (
+            (terminal, "IR_ENTER_GENERATOR(gen, _PY_IR_SEND);"),
+            (terminal, terminal + " STAT_INC(FOR_ITER, hit);"),
+            (terminal, "if (flag) { " + terminal + " }"),
+            (terminal, terminal + terminal),
+            (terminal, "opaque(); " + terminal),
+            (terminal, "frame->phase_state = 0; " + terminal),
+        )
+        # Use the real parsed body text so token spacing cannot hide a suffix.
+        original = source[source.index("op(_FOR_ITER_GEN_FRAME"):
+                          source.index("macro(FOR_ITER_GEN)")]
+        original = original[original.index("{"):original.rindex("}") + 1]
+        for old, new in changes:
+            with self.subTest(change=new):
+                changed = source.replace(original, original.replace(old, new), 1)
+                Path(self.temp_input_filename).write_text(changed)
+                mutated = analyzer.analyze_files([self.temp_input_filename])
+                self.assertIsNone(ir_generator.generator_entry_recipe(
+                    mutated.instructions["FOR_ITER_GEN"]))
+        renamed = re.sub(r"\bgen\b", "child", original)
+        Path(self.temp_input_filename).write_text(source.replace(original, renamed, 1))
+        mutated = analyzer.analyze_files([self.temp_input_filename])
+        self.assertEqual(ir_generator.generator_entry_recipe(
+            mutated.instructions["FOR_ITER_GEN"]).generator, "child")
+        with mock.patch.object(recipe.part.stack.outputs[0], "name", "changed"):
+            self.assertIsNone(ir_generator.generator_entry_recipe(instruction))
+        guard = next(part for part in instruction.parts
+                     if isinstance(part, analyzer.Uop) and part is not recipe.part)
+        for prefix in ("frame->phase_state = 0;", "opaque();",
+                       "next_instr = this_instr;", "PyValue *alias = slots;"):
+            with self.subTest(prefix=prefix):
+                parsed = ir_generator.Parser(
+                    "{" + prefix + " DEOPT_IF(IS_PEP523_HOOKED(tstate));}",
+                    "<entry prefix>").block()
+                with mock.patch.object(guard, "body", parsed):
+                    self.assertIsNone(ir_generator.generator_entry_recipe(instruction))
+        # Guard-only inspection must not grant an ordinary error-route summary.
+        guard_instruction = ir_generator.replace(instruction, parts=[guard])
+        self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
+
     def test_suspension_effect_requires_a_state_write(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

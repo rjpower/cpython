@@ -2151,6 +2151,77 @@ STORE_NEVER = "never"      # pushes more than the result, so dst never names
                            # a local
 
 
+@dataclass(frozen=True)
+class GeneratorEntryRecipe:
+    part: Uop
+    generator: str
+    kind: str
+
+
+def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
+    """The terminal intrinsic owns this child's yielded-result recipient.
+
+    This describes recipient transport only. The normal/error source contracts
+    still decide whether the surrounding operation preserves home authority.
+    Conditional entry in a generic SEND is not an unconditional return recipe.
+    """
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return None
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    entries = [part for part in parts if any(
+        token.text == "IR_ENTER_GENERATOR" for token in part.body.tokens())]
+    if len(entries) != 1:
+        return None
+    entry = entries[0]
+    statements = entry.body.body
+    if not statements or not isinstance(statements[-1], SimpleStmt):
+        return None
+    tokens = list(statements[-1].tokens())
+    if (len(tokens) != 7 or tokens[0].text != "IR_ENTER_GENERATOR"
+            or tokens[1].kind != "LPAREN" or tokens[2].kind != "IDENTIFIER"
+            or tokens[3].kind != "COMMA" or tokens[5].kind != "RPAREN"
+            or tokens[6].kind != "SEMI"
+            or tokens[4].text not in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}
+            or sum(token.text == "IR_ENTER_GENERATOR"
+                   for token in entry.body.tokens()) != 1):
+        return None
+    if (set(entry.properties.escaping_calls) != {statements[-1]}
+            or any(token.text in {"frame", "slots", "window"}
+                   or token.text.startswith(("_PyFrame_", "_PyHomeBitmap_", "IR_"))
+                   for statement in statements[:-1] for token in statement.tokens())):
+        return None
+    kind = tokens[4].text
+    count = 2 if kind == "_PY_IR_FOR_ITER" else 3
+    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 3
+            or any(item.is_array() for item in
+                   entry.stack.inputs + entry.stack.outputs)
+            or any(passed_through(entry, j) != j for j in range(2))
+            or passed_through(entry, 2) is not None):
+        return None
+    at = parts.index(entry)
+    for part in parts[:at]:
+        if not part.is_guard():
+            return None
+        effect = analyze_error_effects(replace(inst, parts=[part]), guard_prefix=True)
+        if (effect is None or effect.homes != HomeEffect.NO_ARENA_WRITE
+                or effect.callback or effect.changes_origin or effect.may_fail
+                or effect.error_sources or effect.unwind_sources):
+            return None
+    # The legacy frame output supplies only the stack model. Its sole consumer
+    # is unreachable after the intrinsic's actual terminal frame handoff.
+    tail = parts[at + 1:]
+    if (len(tail) != 1 or len(tail[0].stack.inputs) != 1
+            or tail[0].stack.inputs[0].is_array() or tail[0].stack.outputs
+            or not tail[0].properties.switches_frame):
+        return None
+    inputs, outputs = external_io(inst)
+    if (len(inputs) != count or len(outputs) != 2
+            or any(item.is_array() for item in inputs)
+            or any(output.external != j for j, output in enumerate(outputs))):
+        return None
+    return GeneratorEntryRecipe(entry, tokens[2].text, kind)
+
+
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
@@ -2164,6 +2235,11 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     names dst as its return slot needs nothing more; one that may also
     produce the result itself moves it.  A member whose frames return
     elsewhere leaves to the head."""
+    entry = generator_entry_recipe(inst)
+    if entry is not None and entry.kind == "_PY_IR_FOR_ITER":
+        # The child's yields go to A through the ordinary return-slot protocol,
+        # including local replacement and discard. SEND instead yields to B+2.
+        return STORE_RETURN
     # The terminal adapter publishes the native result itself, or the Python
     # child's eventual return. Its unused DSL C output still has a real dst.
     if inst.properties.always_exits and "IR_COMPLETE_STEP" in uop_tokens(inst):
@@ -5223,6 +5299,12 @@ class IREmitter(Emitter):
         """
         gen, kind = self.macro_args(tkn, tkn_iter, 2)
         assert inst is not None
+        entry = generator_entry_recipe(inst)
+        if (kind not in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}
+                or entry is not None and
+                    (entry.part is not uop or entry.generator != gen or entry.kind != kind)
+                or kind == "_PY_IR_FOR_ITER" and entry is None):
+            raise analysis_error("unsupported generator-entry recipient", tkn)
         fmt = self.format_of(inst)
         if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}:
             self.normal_completion(inst, fmt, kind)

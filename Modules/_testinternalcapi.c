@@ -5016,7 +5016,82 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
+static PyObject *
+get_frame_home_view(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyIRHomeView view = {0};
+    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(
+        ((PyFrameObject *)arg)->f_frame, &view);
+    return Py_BuildValue("(iiii)", authority, view.nbindings,
+                         view.scratch_limit, view.nranges);
+}
+
+/* A cold protocol probe: inactive words are never exposed as Python values,
+ * executed, or closed. Only the selected home owns payload. */
+static PyObject *
+check_frame_selected_copy(PyObject *self, PyObject *args)
+{
+    PyObject *code_object, *payload;
+    if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
+                          &code_object, &payload))
+    {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+    int n = _PyFrame_NumSlotsForCodeObject(code);
+    int nl = code->co_nlocalsplus;
+    if (n - nl < 2) {
+        PyErr_SetString(PyExc_ValueError, "probe needs two scratch homes");
+        return NULL;
+    }
+    size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
+        (size_t)n * sizeof(PyValue);
+    _PyInterpreterFrame *src = PyMem_Calloc(1, size);
+    _PyInterpreterFrame *dst = PyMem_Calloc(1, size);
+    if (src == NULL || dst == NULL) {
+        PyMem_Free(src);
+        PyMem_Free(dst);
+        return PyErr_NoMemory();
+    }
+    src->f_executable = (PyCodeObject *)Py_NewRef(code);
+    src->base = src->owned_slots;
+    const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
+    for (int i = nl; i < n; i++) {
+        src->base[i].bits = poison;
+    }
+    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
+    src->base[nl + 1] = _PyValue_Publish(&value);
+    const _PyIRPhaseRange selected = {.begin = 1, .end = 2};
+    const _PyIRHomeView view = {
+        .nbindings = (uint16_t)nl, .scratch_limit = 2,
+        .nranges = 1, .ranges = &selected,
+    };
+    _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
+    int correct = dst->base[nl + 1].bits == value.bits &&
+        PyValue_IsNull(src->base[nl + 1]);
+    for (int i = nl; i < n; i++) {
+        if (i != nl + 1) {
+            correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
+        }
+    }
+    PyValue_XCLOSE(dst->base[nl + 1]);
+    Py_DECREF(dst->f_executable);
+    PyMem_Free(src);
+    PyMem_Free(dst);
+    if (!correct) {
+        PyErr_SetString(PyExc_AssertionError, "copy touched an inactive home");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"get_frame_home_view", get_frame_home_view, METH_O},
+    {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},

@@ -5245,8 +5245,7 @@ dummy_func(
             ERROR_IF(gen == NULL);
             SAVE_STACK();
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            frame->instr_ptr++;
-            _PyFrame_Copy(frame, gen_frame);
+            _PyFrame_CopyCreatedGenerator(frame, gen_frame);
             // The value of the first send takes the slot of res
             gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
             assert(frame->frame_obj == NULL);

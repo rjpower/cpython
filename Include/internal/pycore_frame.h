@@ -13,6 +13,7 @@ extern "C" {
 #endif
 
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
+#include "pycore_ir.h"            // _PyIRHomeView
 
 
 struct _frame {
@@ -30,6 +31,7 @@ struct _frame {
     uint64_t f_line_epoch;      /* monitoring configuration at publication */
     char f_trace_lines;         /* Emit per-line trace events? */
     char f_trace_opcodes;       /* Emit per-opcode trace events? */
+    uint8_t f_capture_authority; /* _PyIRHomeAuthority for owned captured homes */
     PyObject *f_extra_locals;   /* Dict for locals set by users using f_locals, could be NULL */
     /* This is purely for backwards compatibility for PyEval_GetLocals.
        PyEval_GetLocals requires a borrowed reference so the actual reference
@@ -42,6 +44,7 @@ struct _frame {
      */
     PyObject *f_overwritten_fast_locals;
     PyObject *f_weakreflist;    /* List of weak references */
+    _PyIRHomeView f_capture;
     /* The frame data, if this frame object owns the frame */
     PyObject *_f_frame_data[1];
 };

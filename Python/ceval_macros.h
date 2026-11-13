@@ -112,13 +112,32 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
     do { \
         Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
     } while (0)
+/* Error processing must receive the current handler's native bridge owners.
+ * Global labels have no value record, so finish the reached scope here. */
+#define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
+    do { \
+        _PyIRErrorResult ir_error_result = _PyEval_ProcessError( \
+            tstate, frame, (origin), \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint), \
+            value_temps); \
+        if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) { \
+            frame = tstate->current_frame; \
+            slots = _PyFrame_Slots(frame); \
+            next_instr = ir_error_result.next; \
+            int opcode; \
+            NEXTOPARG(); \
+            PRE_DISPATCH_GOTO(); \
+            DISPATCH_GOTO(); \
+        } \
+        return PyValue_NULL; \
+    } while (0)
 #define JUMP_TO_LABEL(name) \
     do { \
         if (value_temps != NULL && value_temps->count != 0) { \
             int value_had_error = PyErr_Occurred() != NULL; \
             if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
                 next_instr = frame->instr_ptr + 1; \
-                Py_MUSTTAIL return (_TAIL_CALL_error)(TAIL_CALL_ARGS); \
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
             } \
         } \
         Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
@@ -179,7 +198,7 @@ do { \
     { \
         if (value_temps != NULL && value_temps->count != 0 && \
             finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
-            next_instr = frame->instr_ptr + 1; JUMP_TO_LABEL(error); \
+            next_instr = frame->instr_ptr + 1; PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
         } \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
@@ -202,7 +221,7 @@ do { \
             finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
             _PyEval_FrameClearAndPop(tstate, (NEW_FRAME),          \
                                     _PyIR_RETIRE_STAGED_FAILURE); \
-            JUMP_TO_LABEL(error);                               \
+            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);           \
         }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
@@ -402,7 +421,7 @@ do { \
         next_instr = _Py_call_instrumentation_jump(this_instr, tstate, event, frame, src, _dest); \
         if (next_instr == NULL) { \
             next_instr = frame->instr_ptr + 1; \
-            JUMP_TO_LABEL(error); \
+            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
         } \
     } \
 } while (0);

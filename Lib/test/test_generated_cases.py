@@ -295,6 +295,63 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
+    def test_error_ingress_keeps_native_bridge_owners(self):
+        output = self.ir_output("""
+        inst(OP, (value -- result)) {
+            PyObject *object = PyValue_AsKnownObjectBorrow(value);
+            PyObject *found = spam_call(object);
+            DECREF_INPUTS();
+            ERROR_IF(found == NULL);
+            result = PyValue_FromObjectSteal(found);
+        }
+        """)
+        body = self.handler(output, "OP")
+        self.assertIn("_PyValueTemps *value_temps = &value_owners;", body)
+        boxing = body.index("_PyValueTemps_Box(value_temps, value)")
+        failure = body.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);", boxing)
+        self.assertLess(boxing, failure)
+        self.assertNotIn("JUMP_TO_LABEL(error)", body)
+        self.assertNotIn("finish_value_bridges", body)
+
+    def test_error_labels_use_explicit_literal_ingresses(self):
+        source = "\n" + "\n".join(
+            f"label({name}) {{ IR_PROCESS_ERROR({ingress}, 0); }}"
+            for name, ingress in ir_generator.ERROR_INGRESSES.items()) + "\n"
+        analysis = self.analyze(source)
+        output = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
+        text = output.getvalue()
+        for name, ingress in ir_generator.ERROR_INGRESSES.items():
+            with self.subTest(ingress=ingress):
+                origin = ("frame->instr_ptr" if ingress in {"EXIT", "EXIT_NOTRACE"}
+                          else "next_instr - 1")
+                self.assertIn(f"PROCESS_ERROR_AT({ingress}, 0, {origin});", text)
+        with self.assertRaisesRegex(SyntaxError, "unsupported error label ingress"):
+            self.ir_output("\nlabel(error) { IR_PROCESS_ERROR(RAISE, 1); }\n")
+
+    def test_observer_proof_does_not_select_runtime_error_origin(self):
+        source = (Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instruction = analysis.instructions["INSTRUMENTED_LINE"]
+
+        def emitted():
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            emitter = ir_generator.IREmitter(out, analysis, formats)
+            ir_generator.generate_handler(instruction.name, instruction,
+                                          formats[instruction.name], emitter, out, False)
+            return output.getvalue()
+
+        self.assertIsNotNone(ir_generator.observer_entry_source(
+            instruction, formats[instruction.name]))
+        expected = emitted()
+        with mock.patch.object(ir_generator, "observer_entry_source", return_value=None):
+            uncovered = emitted()
+        self.assertEqual(expected, uncovered)
+        self.assertIn("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1)", expected)
+
     def test_dict_first_probe_contract(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -1197,7 +1254,7 @@ class TestIRCases(unittest.TestCase):
         local = handler.index("IR_STORE_DST(IR_A(ir_word), attr);", failure)
         self.assertEqual(handler.count(direct), 1)
         self.assertLess(handler.index(direct), retire)
-        self.assertIn("JUMP_TO_LABEL(error)", handler[failure:local])
+        self.assertIn("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1)", handler[failure:local])
         self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST)", handler[failure:local])
         self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
 
@@ -1510,7 +1567,7 @@ class TestIRCases(unittest.TestCase):
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
                 if (ir_obj_left == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(OP);
             }
@@ -1520,7 +1577,7 @@ class TestIRCases(unittest.TestCase):
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
                 ir_obj_right = _PyValueTemps_Box(value_temps, right);
                 if (ir_obj_right == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(OP);
             }
@@ -1535,14 +1592,14 @@ class TestIRCases(unittest.TestCase):
             ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), left);
             PyValue_XCLOSE(ir_own_B);
             if (o == NULL) {
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }
             DISPATCH();
         }
@@ -2070,7 +2127,7 @@ class TestIRCases(unittest.TestCase):
         self.assertLess(output.index("PyValue held = IR_TAKE(value, ir_own_B);"),
                         output.index("PyValue_CLOSE(held);"))
         self.assertLess(output.index("PyValue_CLOSE(held);"),
-                        output.index("JUMP_TO_LABEL(error);"))
+                        output.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);"))
 
     def test_owner_and_take_forms_refused(self):
         cases = {
@@ -2465,7 +2522,7 @@ class TestIRCases(unittest.TestCase):
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }
             DISPATCH();
         }
@@ -2719,7 +2776,7 @@ class TestIRCases(unittest.TestCase):
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
                     if (ir_obj_owner == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(OP);
                 }
@@ -2735,7 +2792,7 @@ class TestIRCases(unittest.TestCase):
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }
             DISPATCH();
         }
@@ -2785,7 +2842,7 @@ class TestIRCases(unittest.TestCase):
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }
             DISPATCH();
         }
@@ -2841,7 +2898,7 @@ class TestIRCases(unittest.TestCase):
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }
             DISPATCH();
         }

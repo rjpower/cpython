@@ -25,6 +25,7 @@ _READERS = {"PyValue_IsNull", "PyValue_IsNone", "PyValue_IsObject",
             "PyValue_IsTaggedIndex", "_PyValue_CheckHome", "PyValue_XCLOSE", "DEAD",
             "IR_CLOSE_INPUTS"}
 _NULLABLE_ARGUMENTS = {"_PyFrame_WriteHome": {2}, "_PyValue_SetAttr": {2},
+                       "_PyEval_StoreName": {1},
                        "value_operation_close3": {0, 1, 2},
                        "_Py_Specialize_ForIter": {1}}
 # These macros write their scalar argument without spelling an assignment

@@ -1377,22 +1377,13 @@ dummy_func(
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        inline_ok op(_CALL_INTRINSIC_2, (value2_st, value1_st -- res, vs1, vs2)) {
+        inline_ok op(_CALL_INTRINSIC_2, (value2_st:nullable, value1_st -- res, vs1, vs2)) {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken first: the calls below can run code that rebinds a local
             PyValue first = TAKE(value1_st);
             PyValue second = TAKE(value2_st);
             INPUTS_DEAD();
-            if (oparg == INTRINSIC_GETATTR) {
-                // The owner is a value; the name is a str
-                assert(PyValue_IsObject(first));
-                res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
-                if (PyValue_IsNull(res)) {
-                    value_operation_close3(first, second, PyValue_NULL);
-                    IR_ABORT_VALUE_READER();
-                }
-            }
-            else if (oparg == INTRINSIC_SETATTR) {
+            if (oparg == INTRINSIC_SETATTR) {
                 // second is the value, NULL for a deletion; first is the
                 // tuple (owner, name)
                 PyObject *target = PyValue_AsKnownObjectBorrow(first);
@@ -1409,6 +1400,20 @@ dummy_func(
                     IR_ABORT_VALUE_READER();
                 }
                 res = PyValue_None;
+            }
+            else if (PyValue_IsNull(second)) {
+                PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                value_operation_close3(first, second, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
+            }
+            else if (oparg == INTRINSIC_GETATTR) {
+                // The owner is a value; the name is a str
+                assert(PyValue_IsObject(first));
+                res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
+                if (PyValue_IsNull(res)) {
+                    value_operation_close3(first, second, PyValue_NULL);
+                    IR_ABORT_VALUE_READER();
+                }
             }
             else {
                 PyObject *value1 = _PyValueTemps_Object(value_temps, first);
@@ -1884,7 +1889,7 @@ dummy_func(
             bc = found.value;
         }
 
-        inst(STORE_NAME, (v -- )) {
+        inst(STORE_NAME, (v:nullable -- )) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);

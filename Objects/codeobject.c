@@ -2517,8 +2517,28 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
  * obligation can appear once at a block join.
  * Unsupported families/exception entries have explicit unknown state and
  * cannot authorize the later ownership representation switch. */
+/* Zero-row plans are shared: exec teardown/size accounting frees and charges
+ * only plans with actual site/phase rows. Cover every nonempty flag subset. */
 static const _PyIRCodePlan all_normal_returns = {
     .flags = _PyIR_PLAN_ALL_RETURNS};
+static const _PyIRCodePlan all_created_empty = {
+    .flags = _PyIR_PLAN_ALL_CREATED_EMPTY};
+static const _PyIRCodePlan all_returns_created_empty = {
+    .flags = _PyIR_PLAN_ALL_RETURNS | _PyIR_PLAN_ALL_CREATED_EMPTY};
+
+static const _PyIRCodePlan *
+flag_only_plan(uint32_t flags)
+{
+    switch (flags) {
+        case _PyIR_PLAN_ALL_RETURNS:
+            return &all_normal_returns;
+        case _PyIR_PLAN_ALL_CREATED_EMPTY:
+            return &all_created_empty;
+        default:
+            assert(flags == (_PyIR_PLAN_ALL_RETURNS | _PyIR_PLAN_ALL_CREATED_EMPTY));
+            return &all_returns_created_empty;
+    }
+}
 
 static int
 semantic_exact_return(const semantic_image *image, const semantic_worklist *work,
@@ -2692,11 +2712,12 @@ normal_transfer_proof(const semantic_image *image,
     int result = 0;
     semantic_phases phases = {0};
     work.phases = plan != NULL ? &phases : NULL;
-    uint32_t nreturns = 0, ncertified = 0;
+    uint32_t nreturns = 0, ncertified = 0, ncreated = 0, ncreated_empty = 0;
     if (plan != NULL) {
         for (int i = 0; i < n; i++) {
             nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
                 _PyIR_TRANSFER_EXIT;
+            ncreated += semantic_has_created_copy(_PyIR_FormatOf(IR_HANDLER(words[i])));
         }
     }
     for (int b = 0; b < nblocks && result == 0; b++) {
@@ -2712,16 +2733,19 @@ normal_transfer_proof(const semantic_image *image,
             }
             if (plan != NULL) {
                 ncertified += semantic_exact_return(image, &work, state, i, complete);
+                ncreated_empty += work.created_empty;
             }
         }
     }
-    if (result == 0 && plan != NULL && (ncertified || phases.nsites)) {
-        if (ncertified && ncertified == nreturns && phases.nsites == 0) {
-            *plan = &all_normal_returns;
+    uint32_t flags =
+        (ncertified && ncertified == nreturns ? _PyIR_PLAN_ALL_RETURNS : 0) |
+        (ncreated && ncreated == ncreated_empty ? _PyIR_PLAN_ALL_CREATED_EMPTY : 0);
+    if (result == 0 && plan != NULL && (ncertified || phases.nsites || flags)) {
+        uint32_t nsites = flags & _PyIR_PLAN_ALL_RETURNS ? 0 : ncertified;
+        if (nsites == 0 && phases.nsites == 0) {
+            *plan = flag_only_plan(flags);
         }
         else {
-            int all_returns = ncertified && ncertified == nreturns;
-            uint32_t nsites = all_returns ? 0 : ncertified;
             size_t bytes = sizeof(_PyIRCodePlan);
             uint32_t counts[] = {nsites, phases.nsites, phases.nranges};
             size_t sizes[] = {sizeof(uint32_t), sizeof(_PyIRPhaseSite), sizeof(_PyIRPhaseRange)};
@@ -2742,7 +2766,7 @@ normal_transfer_proof(const semantic_image *image,
                 *sparse = (_PyIRCodePlan){
                     .nsites = nsites, .nphases = phases.nsites,
                     .nranges = phases.nranges,
-                    .flags = all_returns ? _PyIR_PLAN_ALL_RETURNS : 0};
+                    .flags = flags};
                 uint32_t next = 0;
                 for (int b = 0; b < nblocks && nsites; b++) {
                     if (!work.blocks[b].reached) {

@@ -5034,7 +5034,7 @@ get_frame_home_view(PyObject *self, PyObject *arg)
 /* A cold protocol probe: inactive words are never exposed as Python values,
  * executed, or closed. Only the selected home owns payload. */
 static PyObject *
-check_frame_selected_copy(PyObject *self, PyObject *args)
+check_frame_copy(PyObject *args, int created)
 {
     PyObject *code_object, *payload;
     if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
@@ -5045,9 +5045,29 @@ check_frame_selected_copy(PyObject *self, PyObject *args)
     PyCodeObject *code = (PyCodeObject *)code_object;
     int n = _PyFrame_NumSlotsForCodeObject(code);
     int nl = code->co_nlocalsplus;
-    if (n - nl < 2) {
-        PyErr_SetString(PyExc_ValueError, "probe needs two scratch homes");
+    if ((!created && n - nl < 2) || (created && nl == 0)) {
+        PyErr_SetString(PyExc_ValueError, "insufficient probe homes");
         return NULL;
+    }
+    _PyCodeExec *exec = NULL;
+    int site = 0;
+    if (created) {
+        exec = _PyCode_GetExec(code);
+        if (exec == NULL) {
+            return NULL;
+        }
+        if (exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+        {
+            PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
+            return NULL;
+        }
+        while (site < exec->nwords &&
+               _PyIR_BaseOpcode(IR_HANDLER(exec->words[site])) != RETURN_GENERATOR)
+        {
+            site++;
+        }
+        assert(site < exec->nwords);
     }
     size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
         (size_t)n * sizeof(PyValue);
@@ -5065,21 +5085,29 @@ check_frame_selected_copy(PyObject *self, PyObject *args)
         src->base[i].bits = poison;
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-    src->base[nl + 1] = _PyValue_Publish(&value);
+    int selected_home = created ? 0 : nl + 1;
+    src->base[selected_home] = _PyValue_Publish(&value);
     const _PyIRPhaseRange selected = {.begin = 1, .end = 2};
     const _PyIRHomeView view = {
         .nbindings = (uint16_t)nl, .scratch_limit = 2,
         .nranges = 1, .ranges = &selected,
     };
-    _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
-    int correct = dst->base[nl + 1].bits == value.bits &&
-        PyValue_IsNull(src->base[nl + 1]);
+    if (created) {
+        src->ir_words = exec->words;
+        src->instr_ptr = exec->words + site;
+        _PyFrame_CopyCreatedGenerator(src, dst);
+    }
+    else {
+        _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
+    }
+    int correct = dst->base[selected_home].bits == value.bits &&
+        PyValue_IsNull(src->base[selected_home]);
     for (int i = nl; i < n; i++) {
-        if (i != nl + 1) {
+        if (i != selected_home) {
             correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
         }
     }
-    PyValue_XCLOSE(dst->base[nl + 1]);
+    PyValue_XCLOSE(dst->base[selected_home]);
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
     PyMem_Free(dst);
@@ -5090,7 +5118,36 @@ check_frame_selected_copy(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+check_frame_selected_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 0);
+}
+
+static PyObject *
+check_created_frame_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 1);
+}
+
+static PyObject *
+has_empty_created_copy_plan(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected code");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec((PyCodeObject *)arg);
+    if (exec == NULL) {
+        return NULL;
+    }
+    return PyBool_FromLong(exec->semantic_plan != NULL &&
+        (exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY));
+}
+
 static PyMethodDef module_functions[] = {
+    {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
+    {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},

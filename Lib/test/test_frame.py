@@ -317,6 +317,51 @@ class DeallocTest(unittest.TestCase):
 
 
 class CopyHomeViewTest(unittest.TestCase):
+    def test_empty_created_copy_uses_certified_kind_and_skips_scratch(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def gen(value):
+            yield value
+
+        async def coro(value):
+            return value
+
+        async def asyncgen(value):
+            yield value
+
+        for function in (gen, coro, asyncgen):
+            with self.subTest(function=function.__name__):
+                self.assertTrue(internal.has_empty_created_copy_plan(function.__code__))
+                for payload in (object(), 17, 2.5):
+                    internal.check_created_frame_copy(function.__code__, payload)
+
+    def test_empty_created_copy_preserves_cells_and_free_variables(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        captured = object()
+
+        def body(value):
+            def read():
+                return value, captured
+            yield read
+
+        self.assertTrue(internal.has_empty_created_copy_plan(body.__code__))
+        payload = object()
+        gen = body(payload)
+        try:
+            read = next(gen)
+            self.assertEqual(read(), (payload, captured))
+        finally:
+            gen.close()
+
+    def test_genexpr_iterator_is_not_empty_created_scratch(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        payload = object()
+        gen = (value for value in (payload,))
+        self.assertFalse(internal.has_empty_created_copy_plan(gen.gi_code))
+        self.assertIs(next(gen), payload)
+        with self.assertRaises(StopIteration):
+            next(gen)
+
     def test_zero_binding_escape_keeps_empty_control(self):
         internal = import_helper.import_module('_testinternalcapi')
 

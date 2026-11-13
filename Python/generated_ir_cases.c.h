@@ -8743,16 +8743,6 @@
             {
                 value1_st = IR_VIEW(IR_C(ir_word));
                 value2_st = IR_VIEW(IR_B(ir_word));
-                if (PyValue_IsNull(value2_st)) {
-                    if (IR_IS_LOCAL(IR_B(ir_word))) {
-                        _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
-                    }
-                    else {
-                        PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
-                    }
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
                 if (PyValue_IsNull(value1_st)) {
                     if (IR_IS_LOCAL(IR_C(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_C(ir_word));
@@ -8768,22 +8758,7 @@
                 PyValue first = IR_TAKE(value1_st, ir_own_C);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value2_st);
                 PyValue second = IR_TAKE(value2_st, ir_own_B);
-                if (oparg == INTRINSIC_GETATTR) {
-                    assert(PyValue_IsObject(first));
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
-                    if (PyValue_IsNull(res)) {
-                        frame->phase_state = 0;
-                        frame->phase_state = 0;
-                        IR_STORE_TEMP_DST(IR_A(ir_word), res);
-                        value_operation_close3(first, second, PyValue_NULL);
-                        frame->phase_state = 0;
-                        (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                }
-                else if (oparg == INTRINSIC_SETATTR) {
+                if (oparg == INTRINSIC_SETATTR) {
                     PyObject *target = PyValue_AsKnownObjectBorrow(first);
                     assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                     frame->phase_state = 0;
@@ -8812,6 +8787,32 @@
                         PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     res = PyValue_None;
+                }
+                else if (PyValue_IsNull(second)) {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    value_operation_close3(first, second, PyValue_NULL);
+                    frame->phase_state = 0;
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+                else if (oparg == INTRINSIC_GETATTR) {
+                    assert(PyValue_IsObject(first));
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
+                    if (PyValue_IsNull(res)) {
+                        frame->phase_state = 0;
+                        frame->phase_state = 0;
+                        IR_STORE_TEMP_DST(IR_A(ir_word), res);
+                        value_operation_close3(first, second, PyValue_NULL);
+                        frame->phase_state = 0;
+                        (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
                 }
                 else {
                     PyObject *value1 = _PyValueTemps_Object(value_temps, first);
@@ -27454,16 +27455,6 @@
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 v = IR_VIEW(IR_B(ir_word));
-                if (PyValue_IsNull(v)) {
-                    if (IR_IS_LOCAL(IR_B(ir_word))) {
-                        _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
-                    }
-                    else {
-                        PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
-                    }
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
                 if (PyValue_IsNull(owner)) {
                     if (IR_IS_LOCAL(IR_A(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_A(ir_word));
@@ -27532,12 +27523,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            PyValueBorrow store_value;
             PyValueBorrow value;
             PyValueBorrow owner;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
+            // _GUARD_STORE_ATTR_VALUE
+            {
+                store_value = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(store_value)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
             // _LOCK_OBJECT
             {
                 value = IR_VIEW(IR_A(ir_word));
@@ -27596,7 +27597,8 @@
             }
             // _STORE_ATTR_INSTANCE_VALUE
             {
-                value = IR_VIEW(IR_B(ir_word));
+                value = store_value;
+                (void)value;
                 if (PyValue_IsNull(value)) {
                     if (IR_IS_LOCAL(IR_B(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
@@ -27675,12 +27677,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            PyValueBorrow store_value;
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
+            // _GUARD_STORE_ATTR_VALUE
+            {
+                store_value = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(store_value)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_VIEW(IR_A(ir_word));
@@ -27719,7 +27731,8 @@
             }
             // _STORE_ATTR_SHAPE
             {
-                value = IR_VIEW(IR_B(ir_word));
+                value = store_value;
+                (void)value;
                 if (PyValue_IsNull(value)) {
                     if (IR_IS_LOCAL(IR_B(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
@@ -27773,12 +27786,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            PyValueBorrow store_value;
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
+            // _GUARD_STORE_ATTR_VALUE
+            {
+                store_value = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(store_value)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_VIEW(IR_A(ir_word));
@@ -27817,7 +27840,8 @@
             }
             // _STORE_ATTR_SHAPE_ADD
             {
-                value = IR_VIEW(IR_B(ir_word));
+                value = store_value;
+                (void)value;
                 if (PyValue_IsNull(value)) {
                     if (IR_IS_LOCAL(IR_B(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
@@ -27870,12 +27894,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            PyValueBorrow store_value;
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
+            // _GUARD_STORE_ATTR_VALUE
+            {
+                store_value = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(store_value)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_VIEW(IR_A(ir_word));
@@ -27905,7 +27939,8 @@
             }
             // _STORE_ATTR_SLOT
             {
-                value = IR_VIEW(IR_B(ir_word));
+                value = store_value;
+                (void)value;
                 if (PyValue_IsNull(value)) {
                     if (IR_IS_LOCAL(IR_B(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
@@ -27966,12 +28001,22 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
+            PyValueBorrow store_value;
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
+            // _GUARD_STORE_ATTR_VALUE
+            {
+                store_value = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(store_value)) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_VIEW(IR_A(ir_word));
@@ -28001,7 +28046,8 @@
             }
             // _STORE_ATTR_WITH_HINT
             {
-                value = IR_VIEW(IR_B(ir_word));
+                value = store_value;
+                (void)value;
                 if (PyValue_IsNull(value)) {
                     if (IR_IS_LOCAL(IR_B(ir_word))) {
                         _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
@@ -28254,16 +28300,6 @@
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
             v = IR_VIEW(IR_A(ir_word));
-            if (PyValue_IsNull(v)) {
-                if (IR_IS_LOCAL(IR_A(ir_word))) {
-                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_A(ir_word));
-                }
-                else {
-                    PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
-                }
-                frame->phase_state = 0;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             frame->phase_state = 0;

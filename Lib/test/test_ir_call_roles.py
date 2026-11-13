@@ -1,0 +1,268 @@
+"""Canonical CALL roles and positive public-image virtual-hole admission."""
+
+import gc
+import marshal
+import opcode
+import sys
+import types
+import unittest
+import weakref
+
+import _opcode
+import _testinternalcapi
+from test.test_ir_admission import construct
+from test.test_ir_transfer_admission import encoded, make_code
+
+
+HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
+CONTRACT = _opcode.get_ir_contract()
+
+
+def routes(code):
+    return (code, construct(code), code.replace(),
+            marshal.loads(marshal.dumps(code)))
+
+
+def call_rows(code, adaptive=False):
+    return [row for row in _testinternalcapi.get_ir(code, adaptive)
+            if CONTRACT[HANDLERS[row[0]]].base in
+            (opcode.opmap["CALL"], opcode.opmap["CALL_KW"],
+             opcode.opmap["CALL_FUNCTION_EX"])]
+
+
+class CallRoleTests(unittest.TestCase):
+    def assert_admitted(self, words, **geometry):
+        code = make_code(words, **geometry)
+        for admitted in routes(code):
+            self.assertEqual(admitted.co_code, code.co_code)
+            # ExecImage uses the same admitted image and builds its own proof.
+            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
+                             _testinternalcapi.get_ir(code))
+        return code
+
+    def assert_rejected(self, words, bad, message, **geometry):
+        code = make_code(words, **geometry)
+        replacement = encoded(bad)
+        self.assertEqual(len(replacement), len(code.co_code))
+        for route in (construct, lambda co, **kw: co.replace(**kw)):
+            with self.assertRaisesRegex(ValueError, message):
+                route(code, co_code=replacement)
+        payload = marshal.dumps(code)
+        self.assertEqual(payload.count(code.co_code), 1)
+        with self.assertRaisesRegex(ValueError, message):
+            marshal.loads(payload.replace(code.co_code, replacement, 1))
+
+    def test_compiler_forms_retain_geometry_and_distinct_roles(self):
+        def vector(fn, value):
+            return fn(value)
+        def keywords(fn, value):
+            return fn(value=value)
+        def ex(fn, values):
+            return fn(*values)
+        def ex_kw(fn, values, names):
+            return fn(*values, **names)
+        def method(owner, value):
+            return owner.method(value)
+        cases = ((vector, "CALL_NO_SELF", 2),
+                 (keywords, "CALL_KW_NO_SELF", 2),
+                 (ex, "CALL_EX_NO_SELF_NO_KW", 10),
+                 (ex_kw, "CALL_EX_NO_SELF_KW", 2),
+                 (method, "CALL", 0))
+        for function, name, holes in cases:
+            for admitted in routes(function.__code__):
+                with self.subTest(function=function.__name__):
+                    rows = call_rows(admitted)
+                    self.assertEqual(len(rows), 1)
+                    self.assertEqual(rows[0][0], name)
+                    row = CONTRACT[HANDLERS[name]]
+                    self.assertEqual(row.call_input_holes, holes)
+                    self.assertEqual(row.roles[0:2],
+                                     (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE))
+
+    def test_ex_optional_kwargs_requires_its_own_absence_proof(self):
+        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
+                 ("POP_TOP", 3), ("CALL_EX_NO_SELF_NO_KW", 0, 0, 0),
+                 ("RETURN_VALUE", 0)]
+        self.assert_admitted(words, slots=5)
+        bad = words.copy()
+        bad[2] = ("LOAD_CONST", 3)
+        self.assert_rejected(words, bad, "virtual call input", slots=5)
+        # A present kwargs role has a real value home and keeps that owner.
+        bad[3] = ("CALL_EX_NO_SELF_KW", 0, 0, 0)
+        self.assert_admitted(bad, slots=5)
+
+    def test_absence_is_required_after_unknown_and_at_joins(self):
+        words = [("LOAD_CONST", 0), ("POP_TOP", 1),
+                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+        self.assert_admitted(words)
+        bad = words.copy()
+        bad[1] = ("LOAD_CONST", 1)
+        self.assert_rejected(words, bad, "virtual call input")
+        # The producer's owner fact disappears at this unsupported output,
+        # but that loss of proof must not certify the hole empty.
+        good = [("LOAD_CONST", 0), ("POP_TOP", 1),
+                ("POP_TOP", 1), words[2], words[3]]
+        bad = [good[0], ("LOAD_CONST", 1), ("UNARY_NOT", 1, 1),
+               good[3], good[4]]
+        self.assert_rejected(good, bad, "virtual call input")
+        joined = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
+                  ("POP_JUMP_IF_NONE", 2, 0, 5), ("POP_TOP", 1),
+                  ("IR_JUMP", 0, 0, 6), ("POP_TOP", 1),
+                  words[2], words[3]]
+        self.assert_admitted(joined)
+        for arm in (3, 5):
+            bad = joined.copy()
+            bad[arm] = ("LOAD_CONST", 1)
+            self.assert_rejected(joined, bad, "virtual call input")
+
+    def test_real_normal_retirement_makes_reused_holes_available(self):
+        self.assert_admitted([
+            ("LOAD_CONST", 1), ("BUILD_TUPLE", 0, 1, 1),
+            ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)])
+        # The first child/native call consumes argument home2. It becomes
+        # the next call's virtual self hole, independent of physical residue.
+        self.assert_admitted([
+            ("LOAD_CONST", 0), ("LOAD_CONST", 2),
+            ("CALL_NO_SELF", 0, 0, 1, 0), ("POP_TOP", 0),
+            ("LOAD_CONST", 1), ("CALL_NO_SELF", 1, 1, 0, 0),
+            ("RETURN_VALUE", 1)])
+
+    def test_full_extent_and_resumed_recipient_are_not_implicit_holes(self):
+        for home in (1, 63, 64, 4094):
+            self.assert_admitted([
+                ("LOAD_CONST", home - 1),
+                ("CALL_NO_SELF", home - 1, home - 1, 0, 0),
+                ("RETURN_VALUE", home - 1)], slots=home + 1)
+        words = [("LOAD_CONST", 0), ("YIELD_VALUE", 3, 0, 0),
+                 ("POP_TOP", 3), ("LOAD_CONST", 0),
+                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+        bad = words.copy()
+        bad[1] = ("YIELD_VALUE", 1, 0, 0)
+        self.assert_rejected(words, bad, "virtual call input")
+
+    def test_live_parent_suffix_and_recipient_are_not_child_workspace(self):
+        words = [("LOAD_CONST", 0), ("POP_TOP", 3),
+                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+        bad = words.copy()
+        bad[1] = ("LOAD_CONST", 3)
+        self.assert_rejected(words, bad, "child clobber home")
+        bad[2] = ("CALL_NO_SELF", 3, 0, 0, 0)
+        bad[3] = ("RETURN_VALUE", 3)
+        self.assert_rejected(words, bad, "call recipient")
+
+    def test_real_loops_exception_handlers_and_generators_are_admitted(self):
+        def sequence(fn, values):
+            result = []
+            for value in values:
+                try:
+                    result.append(fn(tuple((value + 0,))))
+                except LookupError:
+                    result.append(fn(()))
+            return result
+        def generator(fn, values):
+            for value in values:
+                yield fn(value)
+        for admitted in routes(sequence.__code__):
+            self.assertTrue(any("NO_SELF" in row[0] for row in call_rows(admitted)))
+            function = types.FunctionType(admitted, globals())
+            self.assertEqual(function(lambda value: value, (1, 2)), [(1,), (2,)])
+        for admitted in routes(generator.__code__):
+            function = types.FunctionType(admitted, globals())
+            self.assertEqual(list(function(lambda value: value + 1, (1, 2))), [2, 3])
+
+    def test_specialization_deopt_trace_and_profile_preserve_roles(self):
+        def invoke(fn, value):
+            return fn(value)
+        def first(value):
+            return value
+        class Other:
+            def __call__(self, value):
+                return value
+        payload = object()
+        for i in range(200):
+            self.assertIs(invoke(first, payload), payload)
+        self.assertTrue(all(CONTRACT[HANDLERS[row[0]]].call_input_holes == 2
+                            for row in call_rows(invoke.__code__, True)))
+        for target in (Other(), first):
+            self.assertIs(invoke(target, payload), payload)
+        def hook(*args):
+            return hook
+        for setter in (sys.settrace, sys.setprofile):
+            old = sys.gettrace() if setter is sys.settrace else sys.getprofile()
+            try:
+                setter(hook)
+                self.assertIs(invoke(first, payload), payload)
+            finally:
+                setter(old)
+        self.assertEqual(call_rows(invoke.__code__)[0][0], "CALL_NO_SELF")
+
+    def test_native_prepend_uses_owned_copy_without_arena_offset(self):
+        receiver = object()
+        payloads = tuple(object() for _ in range(33))
+        observed = []
+        def target(self, *values, **names):
+            self_frame = sys._getframe(1)
+            if "values" in self_frame.f_locals:
+                self_frame.f_locals["values"] = None
+            gc.collect()
+            observed.append((self, values, names))
+            return observed[-1]
+        provider = _testinternalcapi.VCallPrepend(target, receiver)
+        def wrapper(count):
+            # Explicit CALL_KW keeps the actual argument window in the arena.
+            # CALL_EX with **names legitimately builds its own native array
+            # and grants OFFSET, which is a different capability.
+            arguments = ", ".join(f"values[{i}]" for i in range(count))
+            if arguments:
+                arguments += ", "
+            namespace = {}
+            exec("def invoke(fn, values):\n"
+                 f"    result = fn({arguments}named=values[-1])\n"
+                 "    return result, values\n", namespace)
+            return namespace["invoke"]
+        for count in (0, 1, 33):
+            invoke = wrapper(count)
+            self.assertEqual(call_rows(invoke.__code__)[0][0], "CALL_KW_NO_SELF")
+            result, replaced = invoke(provider, payloads)
+            self.assertIsNone(replaced)
+            self.assertIs(result[0], receiver)
+            self.assertEqual(result[1], payloads[:count])
+            self.assertIs(result[2]["named"], payloads[-1])
+        def failure(self, *values, **names):
+            gc.collect()
+            raise LookupError("prepend target failure")
+        with self.assertRaisesRegex(LookupError, "prepend target failure"):
+            wrapper(33)(_testinternalcapi.VCallPrepend(failure, receiver), payloads)
+
+    def test_method_promotion_survives_last_wrapper_callback(self):
+        class Owner:
+            def method(self, value):
+                return value
+        def replacement(self, value):
+            return self, value
+        owner = Owner()
+        active = False
+        references = []
+        callbacks = []
+        def changed(reference):
+            if active:
+                callbacks.append(reference)
+                Owner.method.__code__ = replacement.__code__
+        def factory():
+            method = owner.method
+            references.append(weakref.ref(method, changed))
+            return method
+        def invoke(value):
+            return factory()(value)
+        payload = object()
+        for _ in range(200):
+            self.assertIs(invoke(payload), payload)
+        active = True
+        result = invoke(payload)
+        self.assertEqual(len(callbacks), 1)
+        self.assertIs(result[0], owner)
+        self.assertIs(result[1], payload)
+
+
+if __name__ == "__main__":
+    unittest.main()

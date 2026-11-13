@@ -2945,7 +2945,7 @@ class TestIRCases(unittest.TestCase):
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-                ".owner_program = 0, .owner_events = 0, "
+                ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -2967,7 +2967,7 @@ class TestIRCases(unittest.TestCase):
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-            ".owner_program = 0, .owner_events = 0, "
+            ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -3138,6 +3138,32 @@ class TestIRCases(unittest.TestCase):
                                      "_PyIR_TRANSFER_UNKNOWN")
                 finally:
                     local.parts[0].body.body.pop()
+
+    def test_actual_call_role_families_have_normal_drain_recipes(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        variants = ir_generator.call_role_variants(analysis)
+        self.assertEqual(len(variants), 35)
+        self.assertEqual({head for _, head, _ in variants.values()},
+                         set(ir_generator.CALL_ROLE_FAMILIES))
+        for name, (original, _, holes) in variants.items():
+            with self.subTest(handler=name):
+                self.assertEqual(formats[name], formats[original])
+                self.assertEqual(contracts[name].call_input_holes, holes)
+                self.assertEqual(contracts[name].ownership_events, (
+                    ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
+        self.assertEqual(contracts["BUILD_TUPLE"].ownership_events, (
+            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
+        body = analysis.instructions["BUILD_TUPLE"].parts[0].body
+        changed = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
+        try:
+            changed_contract = ir_generator.handler_contracts(analysis, formats)["BUILD_TUPLE"]
+            self.assertEqual(changed_contract.ownership_events, ())
+        finally:
+            body.body.pop(0)
 
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

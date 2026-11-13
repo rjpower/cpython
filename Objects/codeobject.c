@@ -2016,8 +2016,13 @@ typedef struct {
 /* NULL, nonNULL and logical initialization are must-facts. Owner obligations
  * are may-facts: an owner on either incoming path still needs retirement.
  * Such a bit neither proves readability nor promises a mortal count; values
- * can be inline/immortal and another path can have an uninitialized home. */
-enum { SEM_NULL, SEM_INITIALIZED, SEM_MAY_OWNER, SEM_NONNULL, SEM_FACTS };
+ * can be inline/immortal and another path can have an uninitialized home.
+ * NO_HOME separately proves no logical value remains, including an inline or
+ * index control value. Canonical NULL is empty; nonowning child header residue
+ * need not be NULL. Unknown never grants this must-fact. */
+enum {
+    SEM_NULL, SEM_INITIALIZED, SEM_MAY_OWNER, SEM_NONNULL, SEM_NO_HOME, SEM_FACTS
+};
 
 static void
 semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
@@ -2240,20 +2245,28 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
     if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
         *complete = 0;
         int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS : _PyIR_FieldOparg(word);
-        int scratch = image->scratch;
-        for (int bit = 0; bit < scratch; bit++) {
+        for (int bit = 0; bit < image->scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
-            if (!(state[bit / 64] & mask)) {
-                continue;
-            }
             _PyIRPhysicalTransfer physical = _PyIR_NormalPhysicalTransfer(
-                word, arg, 0, nl + bit, nl, nl + scratch);
+                word, arg, 0, nl + bit, nl, nl + image->scratch);
             if (physical.kind != _PyIR_PHYSICAL_PRESERVE) {
-                state[bit / 64] &= ~mask;
+                state[SEM_NULL * work->nwords + bit / 64] &= ~mask;
+            }
+            int absence = _PyIR_NormalCallAbsence(
+                word, arg, nl + bit, nl, nl + image->scratch);
+            uint64_t *empty = &state[SEM_NO_HOME * work->nwords + bit / 64];
+            if (absence == _PyIR_ABSENCE_SET_EMPTY) {
+                *empty |= mask;
+            }
+            else if (absence == _PyIR_ABSENCE_SET_VALUE ||
+                     (absence != _PyIR_ABSENCE_PRESERVE &&
+                      physical.kind != _PyIR_PHYSICAL_PRESERVE))
+            {
+                *empty &= ~mask;
             }
         }
         memset(state + work->nwords, 0,
-               (size_t)(SEM_FACTS - 1) * work->nwords * sizeof(uint64_t));
+               (size_t)(SEM_NO_HOME - 1) * work->nwords * sizeof(uint64_t));
         return 0;
     }
     int arg = _PyIR_FieldOparg(word);
@@ -2316,14 +2329,15 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
                 next[h] = old;
                 break;
             case _PyIR_SEMANTIC_RELEASE:
-                next[h] = 1u << SEM_NULL;
+                next[h] = (1u << SEM_NULL) | (1u << SEM_NO_HOME);
                 break;
             case _PyIR_SEMANTIC_FRESH:
                 next[h] = (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER) |
                           (1u << SEM_NONNULL);
                 break;
             case _PyIR_SEMANTIC_NULL:
-                next[h] = (1u << SEM_NULL) | (1u << SEM_INITIALIZED);
+                next[h] = (1u << SEM_NULL) | (1u << SEM_INITIALIZED) |
+                          (1u << SEM_NO_HOME);
                 break;
             case _PyIR_SEMANTIC_DUPLICATE:
             case _PyIR_SEMANTIC_MOVE:
@@ -2402,6 +2416,45 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
     work->created_empty = 0;
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (inspect && fmt->call_input_holes) {
+        int base = (int)IR_B(word);
+        int arg = _PyIR_FieldOparg(word);
+        for (int k = 0; k < _PyIR_Extent(fmt->reads, arg); k++) {
+            if (_PyIR_CallInputRole(fmt, k) == _PyIR_CALL_INPUT_VIRTUAL_NULL &&
+                !(semantic_home_facts(work, state, base + k, image->nl) &
+                  (1u << SEM_NO_HOME)))
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %d has an unproved virtual call input %d",
+                             pc, base + k);
+                return -1;
+            }
+        }
+        int count = _PyIR_Extent(fmt->reads, arg);
+        int dst = (int)IR_A(word);
+        if (dst >= image->nl && dst != IR_NO_DST &&
+            (dst < base || dst >= base + count) &&
+            !(semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d overwrites an unproved call recipient %d", pc, dst);
+            return -1;
+        }
+        if (fmt->effects & _PyIR_PUSHES_FRAME) {
+            int first = base + count;
+            for (int home = first; home < image->nl + image->scratch; home++) {
+                if (home != (int)IR_A(word) &&
+                    !(semantic_home_facts(work, state, home, image->nl) &
+                      (1u << SEM_NO_HOME)))
+                {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has an unproved child clobber home %d",
+                                 pc, home);
+                    return -1;
+                }
+            }
+        }
+    }
     if (fmt->owner_events == 0) {
         assert(fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN);
         return semantic_leaf_step(image, work, state, pc, inspect, complete);
@@ -2437,7 +2490,8 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 home = semantic_input_home(word, fmt, event->src);
                 owners[event->dst] = semantic_home_facts(work, state, home, nl);
                 if (home >= nl) {
-                    semantic_set_facts(work, state, home, nl, 1u << SEM_NULL);
+                    semantic_set_facts(work, state, home, nl,
+                                       (1u << SEM_NULL) | (1u << SEM_NO_HOME));
                 }
                 break;
             case _PyIR_OWNER_RESTORE:
@@ -2497,12 +2551,39 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 return 0;
             case _PyIR_OWNER_ERROR_EXIT:
                 return 0;
+            case _PyIR_OWNER_CALL_DRAIN:
+                return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
+                int arg = _PyIR_FieldOparg(word);
+                /* The actual same-frame successful flush/vacate, with all
+                 * family members covered, proves only consumed inputs empty.
+                 * It does not make an output readable or grant phase coverage. */
+                if (semantic_leaf_step(image, work, state, pc, inspect, complete) < 0) {
+                    return -1;
+                }
+                for (int home = nl; home < nl + image->scratch; home++) {
+                    if (_PyIR_ReadsHome(word, arg, home) &&
+                        !_PyIR_DefinesHome(word, arg, home))
+                    {
+                        uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
+                        state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                    }
+                }
+                return 0;
+            }
             case _PyIR_OWNER_CREATED_COPY:
                 work->created_empty = inspect && exact &&
                     semantic_empty_scratch(image, work, state);
                 /* A future activation installs a new send home. It is not
                  * the ordinary successor of the created copy snapshot. */
                 *complete = 0;
+                /* The next activation supplies the explicit send recipient.
+                 * The empty certificate describes the earlier copy only. */
+                home = (int)IR_A(word);
+                if (home >= nl && home != IR_NO_DST) {
+                    semantic_set_facts(work, state, home, nl,
+                        (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER));
+                }
                 return 0;
             default:
                 Py_UNREACHABLE();
@@ -2538,6 +2619,25 @@ semantic_exact_return(const semantic_image *image, const semantic_worklist *work
         }
     }
     return 1;
+}
+
+/* exception_unwind clears [slot-lasti,N), then installs exception at slot
+ * and optional lasti below it. Retained parent prefix remains unknown. */
+static void
+semantic_handler_entry(const semantic_image *image,
+                       const semantic_worklist *work, uint64_t *state,
+                       int slot, int lasti)
+{
+    memset(state, 0, (size_t)SEM_FACTS * work->nwords * sizeof(uint64_t));
+    for (int home = slot + 1; home < image->nl + image->scratch; home++) {
+        semantic_set_facts(work, state, home, image->nl,
+                           (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+    }
+    for (int home = slot - lasti; home <= slot; home++) {
+        semantic_set_facts(work, state, home, image->nl,
+                           (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER) |
+                           (1u << SEM_NONNULL));
+    }
 }
 
 static int
@@ -2643,7 +2743,9 @@ normal_transfer_proof(const semantic_image *image,
     uint64_t *state = work.facts + (size_t)nblocks * state_words;
     work.branch = plan != NULL ? state + state_words : NULL;
     for (int bit = 0; bit < scratch; bit++) {
-        state[bit / 64] |= UINT64_C(1) << (bit % 64);
+        uint64_t mask = UINT64_C(1) << (bit % 64);
+        state[SEM_NULL * work.nwords + bit / 64] |= mask;
+        state[SEM_NO_HOME * work.nwords + bit / 64] |= mask;
     }
     semantic_enqueue(&work, 0, state, 1);
     memset(state, 0, state_words * sizeof(uint64_t));
@@ -2653,12 +2755,14 @@ normal_transfer_proof(const semantic_image *image,
         int err = _PyIR_ExceptionNext(&cursor, exception_end, &entry);
         assert(err == 0);
         (void)err;
+        semantic_handler_entry(image, &work, state, entry.slot, entry.lasti);
         semantic_enqueue(&work, block_at[entry.target], state, 0);
     }
     for (uint32_t i = 0; i < source.nrecords; i++) {
         _PyIRSourceEvent event;
         _PyIRSource_Event(&source, i, &event);
         if (event.handler >= 0) {
+            semantic_handler_entry(image, &work, state, event.exc_slot, event.lasti);
             semantic_enqueue(&work, block_at[event.handler], state, 0);
         }
     }
@@ -2701,6 +2805,14 @@ normal_transfer_proof(const semantic_image *image,
     }
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
+            for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+                if (_PyIR_FormatOf(IR_HANDLER(words[i]))->call_input_holes) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has no virtual call entry proof", i);
+                    result = -1;
+                    break;
+                }
+            }
             continue;
         }
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));

@@ -97,6 +97,19 @@ extern "C" {
      (_PyIRWord)((C) & IR_FIELD_MAX) << 40 | \
      (_PyIRWord)((D) & IR_FIELD_MAX) << 52)
 
+/* Geometry certified before installing the inline integer overwrite variant.
+ * Both inputs are real homes; its destination is the same scratch home as B. */
+static inline int
+_PyIR_InlineIntOverwriteGeometry(_PyIRWord word, size_t nlocalsplus,
+                               size_t nslots)
+{
+    uint32_t b = IR_B(word);
+    uint32_t c = IR_C(word);
+    return IR_A(word) == b && c != b
+        && b < IR_MAX_SLOTS && c < IR_MAX_SLOTS
+        && b >= nlocalsplus && b < nslots && c < nslots;
+}
+
 /* The fb field is an offset in 8-byte units into the feedback vector, and
  * each kind of entry takes its own size (pycore_feedback.h): the entry is at
  * entries + (fb << 3), with no table.  Entry 0 is the 16-byte header, so

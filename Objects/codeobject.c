@@ -1387,6 +1387,20 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
                             "code: empty or release-only executable instruction");
             return -1;
         }
+        if (handler == BINARY_OP_ADD_INT_OVERWRITE_TEMP) {
+            size_t nlocalsplus = (size_t)PyTuple_GET_SIZE(con->localsplusnames);
+            // Both counts are nonnegative; size_t holds their sum even when
+            // a constructor's requested frame exceeds the IR slot domain.
+            size_t nslots = nlocalsplus + (size_t)con->stacksize;
+            if (!_PyIR_InlineIntOverwriteGeometry(words[i], nlocalsplus, nslots)) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has invalid inline overwrite geometry "
+                             "(A=%u, B=%u, C=%u, locals=%zu, slots=%zu)",
+                             i, IR_A(words[i]), IR_B(words[i]), IR_C(words[i]),
+                             nlocalsplus, nslots);
+                return -1;
+            }
+        }
     }
     if (validate_completion_words(con) < 0 || validate_source_map(con) < 0 ||
         validate_virtual_kwargs(con) < 0)

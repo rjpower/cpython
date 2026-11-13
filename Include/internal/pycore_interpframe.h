@@ -10,6 +10,7 @@
 #include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_home_bitmap.h" // counted physical home edges
 #include "pycore_stats.h"         // CALL_STAT_INC()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 
@@ -160,23 +161,6 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
-/* A checked physical home capability, shared with the bitmap placement. */
-static inline void
-_PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
-{
-    assert(frame != NULL && home >= frame->base);
-    assert(home < frame->base + _PyFrame_NumSlots(frame));
-    *home = value;
-}
-
-static inline PyValue
-_PyFrame_TakeHome(_PyInterpreterFrame *frame, PyValue *home)
-{
-    PyValue value = *home;
-    _PyFrame_WriteHome(frame, home, PyValue_NULL);
-    return value;
-}
-
 /* The owner of V, the view of a temporary whose slot the same expression
  * clears: the count moves from the slot to the C local.  The one
  * count-free conversion from a borrow to an owner, shared by known-home
@@ -194,7 +178,12 @@ static inline void
 _PyFrame_PublishVacantHome(_PyInterpreterFrame *frame, PyValue *home,
                           PyValue value)
 {
-    _PyFrame_WriteHome(frame, home, value);
+    assert(!_PyFrame_HomeIsPresent(frame, home));
+    *home = value;
+    if (!PyValue_IsNull(value)) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        FT_ATOMIC_OR_UINT64(*word, _PyHomeBitmap_Mask(home));
+    }
 }
 
 static inline void
@@ -202,8 +191,20 @@ _PyFrame_ReplaceKnownHome(_PyInterpreterFrame *frame, PyValue *home,
                         PyValueBorrow old, PyValue value)
 {
     assert(PyValue_Is(*home, old));
-    (void)old;
-    _PyFrame_WriteHome(frame, home, value);
+    int old_present = !PyValue_IsNull(old);
+    int new_present = !PyValue_IsNull(value);
+    assert(old_present == _PyFrame_HomeIsPresent(frame, home));
+    *home = value;
+    if (old_present != new_present) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        uint64_t mask = _PyHomeBitmap_Mask(home);
+        if (new_present) {
+            FT_ATOMIC_OR_UINT64(*word, mask);
+        }
+        else {
+            FT_ATOMIC_AND_UINT64(*word, ~mask);
+        }
+    }
 }
 
 static inline PyValue
@@ -212,7 +213,13 @@ _PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
 {
     assert(PyValue_Is(*home, value));
     PyValue owner = _PyIR_AdoptTemp(value);
-    _PyFrame_WriteHome(frame, home, PyValue_NULL);
+    int present = !PyValue_IsNull(value);
+    assert(present == _PyFrame_HomeIsPresent(frame, home));
+    *home = PyValue_NULL;
+    if (present) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        FT_ATOMIC_AND_UINT64(*word, ~_PyHomeBitmap_Mask(home));
+    }
     return owner;
 }
 
@@ -251,7 +258,12 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
     {
         old = f->base[f->return_slot];
     }
-    f->base[f->return_slot] = v;
+    if (f->owner == FRAME_OWNED_BY_INTERPRETER) {
+        f->base[f->return_slot] = v;
+    }
+    else {
+        _PyFrame_WriteHome(f, f->base + f->return_slot, v);
+    }
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
 }
@@ -290,10 +302,12 @@ static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     f->phase_state = 0;
-    for (int i = _PyFrame_NumSlots(f); i-- > first;) {
-        PyValue ref = f->base[i];  // a move: cleared below
-        if (!PyValue_IsNull(ref)) {
-            f->base[i] = PyValue_NULL;
+    int end = _PyFrame_NumSlots(f);
+    while (end > first) {
+        int owner = _PyFrame_PreviousPresentHome(f, first, end);
+        end = owner < first ? first : owner;
+        if (owner >= first) {
+            PyValue ref = _PyFrame_TakeHome(f, f->base + owner);
             PyValue_CLOSE(ref);
         }
     }
@@ -304,14 +318,36 @@ static inline bool
 _PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
                        int *begin, int *end)
 {
+    if (view->kind > _PyIR_HOME_VIEW_PRESENCE ||
+        (view->kind == _PyIR_HOME_VIEW_RANGES && view->first_bit != 0) ||
+        (view->kind == _PyIR_HOME_VIEW_PRESENCE && view->nranges != 0))
+    {
+        assert(!"invalid home view encoding");
+        return false;
+    }
     if (*cursor == 0) {
-        *cursor = 1;
+        *cursor = view->kind == _PyIR_HOME_VIEW_PRESENCE
+            ? (uint32_t)view->nbindings + 1 : 1;
         if (view->nbindings != 0) {
             *begin = 0;
             *end = view->nbindings;
             return true;
         }
     }
+    if (view->kind == _PyIR_HOME_VIEW_PRESENCE) {
+        assert(view->nranges == 0);
+        int limit = view->nbindings + view->scratch_limit;
+        *begin = _PyHomeBitmap_NextBit(
+            view->presence, view->first_bit, (int)*cursor - 1, limit, 1);
+        if (*begin == limit) {
+            return false;
+        }
+        *end = _PyHomeBitmap_NextBit(
+            view->presence, view->first_bit, *begin, limit, 0);
+        *cursor = (uint32_t)*end + 1;
+        return true;
+    }
+    assert(view->first_bit == 0);
     while (*cursor - 1 < view->nranges) {
         const _PyIRPhaseRange *range = &view->ranges[(*cursor)++ - 1];
         if (range->begin >= view->scratch_limit) {
@@ -326,12 +362,10 @@ _PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
-/* The caller pins code for the entire view/copy commit. */
+/* The caller pins code and frame storage for the entire view/copy commit. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyFrame_GetHomeView(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
-_PyIRHomeAuthority _PyFrame_GetCopyViewUnderNullControl(
-    _PyInterpreterFrame *frame, _PyIRHomeView *view);
-void _PyFrame_GetNullControlHomeView(
+void _PyFrame_GetPresenceHomeView(
     _PyInterpreterFrame *frame, int remaining, _PyIRHomeView *view);
 PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
     _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
@@ -383,8 +417,7 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
               const _PyIRHomeView *view, _PyIRHomeAuthority authority)
 {
     int nslots = _PyFrame_NumSlots(src);
-    assert(authority == _PyIR_HOME_MUST_READABLE ||
-           authority == _PyIR_HOME_NULL_CONTROL_READABLE);
+    assert(authority == _PyIR_HOME_MUST_READABLE);
     assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
     assert(view->nbindings + view->scratch_limit <= nslots);
     uint16_t delegated = 0;
@@ -415,8 +448,8 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
         }
         while (filled < end) {
             // A move: the slots src leaves behind may be the caller's.
-            dest->base[filled] = src->base[filled];
-            src->base[filled++] = PyValue_NULL;
+            _PyFrame_MoveHome(src, src->base + filled, dest, dest->base + filled);
+            filled++;
         }
     }
     /* NULL shadow still initializes inactive destinations without loading the
@@ -437,8 +470,8 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
     const uint32_t *table = _PyCode_CONSTSLOTS(code);
     for (int i = 0; i < code->co_nconstslots; i++) {
-        frame->base[table[2 * i]] =
-            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
+        _PyFrame_WriteHome(frame, frame->base + table[2 * i],
+            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1])));
     }
 }
 
@@ -619,8 +652,8 @@ _PyFrame_GetLocals(_PyInterpreterFrame *frame);
 /* The data stack is untyped memory in pointer-sized units, which the public
  * PyThreadState and _PyStackChunk declare as PyObject *: frames take slots
  * (words) from its bottom and headers from its top.  These convert between
- * its addresses and slot addresses; they are the only casts between a
- * PyValue * and another pointer type outside the value headers
+ * its addresses and slot addresses. The bitmap allocation helpers also
+ * convert adjacent physical home and metadata addresses
  * (Tools/build/check_value_api.py, raw-bits). */
 static inline PyValue *
 _PyDataStack_Slots(PyObject **address)
@@ -678,6 +711,7 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)header;
     frame->base = _PyDataStack_Slots(tstate->datastack_top);
+    _PyFrame_BindChunkBitmap(frame, tstate->datastack_chunk, frame->base);
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = end;
@@ -705,6 +739,8 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
 #ifndef NDEBUG
     /* The code owner may already be cleared. Check the physical departing
      * suffix, including an overlapping caller's previously NULL tail. */
+    int departing = (int)(_PyDataStack_Slots(tstate->datastack_top) - frame->base);
+    assert(_PyFrame_NextPresentHome(frame, 0, departing) == departing);
     for (PyValue *p = frame->base;
          p < _PyDataStack_Slots(tstate->datastack_top); p++)
     {
@@ -778,6 +814,7 @@ _PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
     _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk,
         (PyObject **)frame, _PyDataStack_Address(physical_end));
     frame->saved_top = saved_top;
+    _PyFrame_BindChunkBitmap(frame, tstate->datastack_chunk, base);
     tstate->datastack_limit = (PyObject **)frame;
     if (end > saved_top) {
         tstate->datastack_top = _PyDataStack_Address(end);

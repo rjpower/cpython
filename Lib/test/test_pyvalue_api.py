@@ -641,6 +641,45 @@ class BinderStagingTests(unittest.TestCase):
 class ProviderHandoffTests(unittest.TestCase):
     STAGED = 2
 
+    def test_unlinked_header_pins_survive_collection_and_hook_failure(self):
+        class HookFailure(Exception):
+            pass
+
+        for object_provider in (False, True):
+            for fail in (False, True):
+                with self.subTest(object_provider=object_provider, fail=fail):
+                    payload = {}
+                    observed = []
+
+                    def target(remaining):
+                        return remaining
+
+                    selected = target.__code__
+
+                    def observe(phase):
+                        if phase != 'before':
+                            return
+                        support.gc_collect()
+                        ids = set(_testinternalcapi.get_transition_root_ids())
+                        observed.append((id(target) in ids, id(selected) in ids,
+                                         id(payload['mapping']) in ids))
+                        stages = _testinternalcapi.get_transition_shadow_status()
+                        self.assertTrue(any(kind == self.STAGED and has_frame
+                                            for kind, reason, status, has_frame in stages))
+                        if fail:
+                            raise HookFailure('before evaluator publication')
+
+                    if fail:
+                        with self.assertRaisesRegex(HookFailure, 'before evaluator'):
+                            _testinternalcapi.run_staged_provider(
+                                target, payload, observe, 'headers', object_provider)
+                    else:
+                        self.assertIs(_testinternalcapi.run_staged_provider(
+                            target, payload, observe, 'headers', object_provider), payload)
+                    self.assertEqual(observed, [(True, True, True)])
+                    self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+                    support.gc_collect()
+
     def test_created_generator_uses_executing_code_after_hook_mutation(self):
         for object_provider in (False, True):
             for replacement_generator in (False, True):

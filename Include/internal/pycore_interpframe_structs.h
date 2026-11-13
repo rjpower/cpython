@@ -74,6 +74,7 @@ struct _PyInterpreterFrame {
     /* Last reached publication, with phase ID/validity and shadow status.
      * Only a collector/suspended-state protocol establishes its validity. */
     uint16_t phase_state;
+    uint64_t *presence_bits; /* Physical non-NULL frame-home word covering base. */
     /* The slots of a frame that owns them, which base then points to */
     PyValue owned_slots[1];
 };
@@ -81,8 +82,8 @@ struct _PyInterpreterFrame {
 #if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
 static_assert(offsetof(_PyInterpreterFrame, phase_state) == 110,
               "phase publication must fit the existing frame padding");
-static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 112,
-              "phase publication must preserve the fixed frame header");
+static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 120,
+              "the bitmap rival prices one additional frame pointer");
 #endif
 
 

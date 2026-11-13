@@ -650,10 +650,17 @@ class CodeTest(unittest.TestCase):
                 d()
         code_a = f.__code__
         code_b = code_a.replace(co_linetable=b"")
-        _, recovery = semantic_parts(code_a.co_exceptiontable)
-        no_exceptions = semantic_table(records=recovery)
-        code_c = code_a.replace(co_exceptiontable=no_exceptions)
-        code_d = code_b.replace(co_exceptiontable=no_exceptions)
+        exceptions, recovery = semantic_parts(code_a.co_exceptiontable)
+        self.assertTrue(exceptions)
+        # A leading zero varint group keeps every admitted exception edge
+        # while changing only the semantic bytes used by equality.
+        equivalent = bytes((0xc0, exceptions[0] & 0x7f)) + exceptions[1:]
+        alternate = semantic_table(equivalent, recovery)
+        code_c = code_a.replace(co_exceptiontable=alternate)
+        code_d = code_b.replace(co_exceptiontable=alternate)
+        self.assertEqual(dis.Bytecode(code_c).exception_entries,
+                         dis.Bytecode(code_a).exception_entries)
+        self.assertEqual(code_c.co_linetable, code_a.co_linetable)
         self.assertNotEqual(code_a, code_b)
         self.assertNotEqual(code_a, code_c)
         self.assertNotEqual(code_a, code_d)
@@ -1675,7 +1682,7 @@ class ConstSlotsTest(unittest.TestCase):
                 code = original.__code__
                 first = code.co_firstlineno
                 rows = _testinternalcapi.get_ir(code)
-                calls = [row for row in rows if row[0] == "CALL"]
+                calls = [row for row in rows if row[0] == "CALL_NO_SELF"]
                 self.assertEqual(len(calls), 1)
                 optional_self = calls[0][2] + 1
                 self.assertGreaterEqual(optional_self, code.co_nlocals)
@@ -2762,6 +2769,15 @@ class ConstSlotsTest(unittest.TestCase):
         # token must not be accepted as a restoration of the younger binding.
         words[inner.offset] = ((words[inner.offset] & ~(4095 << 16)) |
                                 (outer_home << 16))
+        # This changed restoration can retain scratch owners until return.
+        # Reprove the general form instead of inheriting an EMPTY certificate.
+        return_forms = {
+            dis._all_opmap["RETURN_VALUE_EMPTY"]: dis._all_opmap["RETURN_VALUE"],
+            dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
+                dis._all_opmap["INSTRUMENTED_RETURN_VALUE"],
+        }
+        words = [(word & ~65535) | return_forms.get(word & 65535, word & 65535)
+                 for word in words]
         matching_recovery = memoryview(original.co_exceptiontable).tobytes()
         self.assertEqual(matching_recovery, original.co_exceptiontable)
         self.assertIsNot(matching_recovery, original.co_exceptiontable)

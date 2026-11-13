@@ -3113,6 +3113,17 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
+    def test_normal_vacate_rejects_unproved_renamed_frame_capabilities(self):
+        for helper in ("_PyFrame_TakeHome", "_PyFrame_MoveHome",
+                       "_PyFrame_SetHomeBit", "_PyFrame_InitHeapBitmap",
+                       "_PyFrame_BindChunkBitmap", "_PyHomeBitmap_InitStorage"):
+            with self.subTest(helper=helper):
+                analysis = self.analyze(
+                    f"\ninst(OP, (--)) {{ {helper}(other, other->base); }}\n")
+                inst = analysis.instructions["OP"]
+                fmt = ir_generator.compute_formats(analysis)["OP"]
+                self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+
     def test_abrupt_prefix_requires_complete_suspension_source(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3195,6 +3206,25 @@ class TestIRCases(unittest.TestCase):
             self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
         finally:
             part.body.body = original
+
+    def test_normal_frame_capability_routes_do_not_fall_through(self):
+        observer = ("_Py_call_instrumentation_2args(tstate, "
+                    "PY_MONITORING_EVENT_CALL, frame, this_instr, left, right);")
+        for effect in (
+                "_PyFrame_TakeHome(other, other->base);",
+                "_PyFrame_Unknown(other);",
+                "_PyHomeBitmap_Unknown(other);",
+                "_Py_BuildMap_ValueSteal(other, other->base, 1);",
+                "#define MUTATE _PyFrame_TakeHome\nMUTATE(other, other->base);",
+                "#if _PyHomeBitmap_Unknown\nopaque(other);\n#endif\n"):
+            for prefix in ("", observer):
+                with self.subTest(effect=effect, observer=bool(prefix)):
+                    analysis = self.analyze("\ninst(OP, (left, right --)) {\n"
+                                            + prefix + "\n" + effect
+                                            + "\nDECREF_INPUTS(); }\n")
+                    inst = analysis.instructions["OP"]
+                    fmt = ir_generator.compute_formats(analysis)["OP"]
+                    self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
 
     def test_home_helpers_keep_ordinary_escape_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

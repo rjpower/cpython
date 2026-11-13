@@ -1372,6 +1372,10 @@ allocate_chunk(int size_in_bytes, _PyStackChunk* previous)
     res->size = size_in_bytes;
     res->top = 0;
     res->initialized = &res->data[0];
+    unsigned int first_bit = ((uintptr_t)res->data >> 3) & 63;
+    size_t words = _PyStackChunk_BitmapWords(size_in_bytes, first_bit);
+    res->presence_bits = (uint64_t *)((char *)res + size_in_bytes) - words;
+    memset(res->presence_bits, 0, words * sizeof(uint64_t));
     return res;
 }
 
@@ -3107,7 +3111,7 @@ _PyInterpreterState_HasFeature(PyInterpreterState *interp, unsigned long feature
 static PyObject **
 chunk_frames_end(_PyStackChunk *chunk)
 {
-    return (PyObject **)((char *)chunk + chunk->size) - 1;
+    return (PyObject **)chunk->presence_bits - 1;
 }
 
 /* The initialized hit stays inline; only newly exposed storage needs this
@@ -3130,10 +3134,12 @@ push_chunk(PyThreadState *tstate, int nslots)
 {
     /* Include the chunk header, the spare owned_slots word after the
      * frame header, and the strict value/header separation cell. */
-    size_t needed = offsetof(_PyStackChunk, data) + sizeof(PyObject *) *
-        ((size_t)nslots + FRAME_SPECIALS_SIZE + 2 + MINIMUM_OVERHEAD);
+    size_t needed_cells = (size_t)nslots + FRAME_SPECIALS_SIZE + 2 + MINIMUM_OVERHEAD;
     int allocate_size = _PY_DATA_STACK_CHUNK_SIZE;
-    while ((size_t)allocate_size < needed) {
+    /* Before allocation, allow the worst physical first-bit alignment. */
+    while (((size_t)allocate_size - offsetof(_PyStackChunk, data)) / sizeof(PyValue) -
+           _PyStackChunk_BitmapWords(allocate_size, 63) < needed_cells)
+    {
         if (allocate_size > INT_MAX / 2) {
             PyErr_NoMemory();
             return NULL;
@@ -3141,8 +3147,9 @@ push_chunk(PyThreadState *tstate, int nslots)
         allocate_size *= 2;
     }
     _PyStackChunk *new;
-    if (tstate->datastack_cached_chunk != NULL
-        && (size_t)allocate_size <= tstate->datastack_cached_chunk->size)
+    if (tstate->datastack_cached_chunk != NULL &&
+        (size_t)((PyObject **)tstate->datastack_cached_chunk->presence_bits -
+                 tstate->datastack_cached_chunk->data) >= needed_cells)
     {
         new = tstate->datastack_cached_chunk;
         tstate->datastack_cached_chunk = NULL;
@@ -3170,6 +3177,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     PyObject **value_end = &new->data[nslots];
     _PyStackChunk_EnsureFrameStorage(new, (PyObject **)frame, value_end);
     frame->base = _PyDataStack_Slots(&new->data[0]);
+    _PyFrame_BindChunkBitmap(frame, new, frame->base);
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = _PyDataStack_Address(frame->base + nslots);

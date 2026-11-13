@@ -536,7 +536,7 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -550,7 +550,7 @@ gen_try_set_executing(PyGenObject *gen)
 
 #define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
     do { \
-        (SLOT) = (V); \
+        _PyFrame_WriteHome(frame, &(SLOT), (V)); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -558,7 +558,7 @@ gen_try_set_executing(PyGenObject *gen)
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \
     do { \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -595,7 +595,7 @@ gen_try_set_executing(PyGenObject *gen)
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (VALUE); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), (VALUE)); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -614,7 +614,7 @@ gen_try_set_executing(PyGenObject *gen)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL(F)) { \
             (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckHome(IR_SLOT(F)); \
         } \
         else if ((F) == IR_NO_DST) { \
@@ -622,7 +622,7 @@ gen_try_set_executing(PyGenObject *gen)
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -632,13 +632,11 @@ gen_try_set_executing(PyGenObject *gen)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL(F)) { \
             (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
         } \
         else if ((F) == IR_NO_DST) { \
-            (RETIRED) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            (RETIRED) = _PyFrame_TakeHome(frame, &(SLOT)); \
         } \
     } while (0)
 
@@ -652,7 +650,7 @@ gen_try_set_executing(PyGenObject *gen)
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (V); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), (V)); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -664,7 +662,7 @@ gen_try_set_executing(PyGenObject *gen)
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -677,9 +675,8 @@ gen_try_set_executing(PyGenObject *gen)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
-            (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
     } while (0)
@@ -691,14 +688,12 @@ gen_try_set_executing(PyGenObject *gen)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
-            (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
         else if ((F) == IR_NO_DST) { \
-            PyValue ir_result = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            PyValue ir_result = _PyFrame_TakeHome(frame, &(SLOT)); \
             PyValue_XCLOSE(ir_result); \
         } \
     } while (0)
@@ -712,7 +707,8 @@ gen_try_set_executing(PyGenObject *gen)
  * finish_unpack_to_locals() does the rest out of line, so that the release
  * sees the locals as the STORE_FAST sequence leaves them. */
 static inline int
-_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
+_PyIR_UnpackToLocals(_PyInterpreterFrame *frame, PyValue *locals,
+                     PyValue *window, int n, int canonical)
 {
     for (int i = 0; i < n; i++) {
         PyValue old = locals[i];
@@ -721,23 +717,24 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
         }
         PyValue *element = &window[n - 1 - i];
         assert(!canonical || _PyValue_IsHome(*element));
-        locals[i] = canonical ? *element : _PyValue_Publish(element);
+        _PyFrame_WriteHome(frame, locals + i,
+                           canonical ? *element : _PyValue_Publish(element));
         _PyValue_CheckHome(locals[i]);
-        window[n - 1 - i] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, window + n - 1 - i, PyValue_NULL);
         PyValue_XCLOSE(old);
     }
     return -1;
 }
-#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N), 0)
+#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals(frame, (L), (W), (N), 0)
 #define IR_UNPACK_CANONICAL_TO_LOCALS(L, W, N) \
-    _PyIR_UnpackToLocals((L), (W), (N), 1)
+    _PyIR_UnpackToLocals(frame, (L), (W), (N), 1)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \
         PyValue *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyValue_NULL; \
+            _PyFrame_WriteHome(frame, ir_p + ir_i, PyValue_NULL); \
         } \
     } while (0)
 

@@ -855,12 +855,12 @@ value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
         }
     }
     if (first_slot >= nlocals) {
-        slots[first_slot] = first;
+        _PyFrame_WriteHome(frame, slots + first_slot, first);
         _PyValue_CheckTemp(slots[first_slot]);
         rest.first = PyValue_NULL;
     }
     if (second_slot >= nlocals) {
-        slots[second_slot] = second;
+        _PyFrame_WriteHome(frame, slots + second_slot, second);
         _PyValue_CheckTemp(slots[second_slot]);
         rest.second = PyValue_NULL;
     }
@@ -1448,7 +1448,7 @@ call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
 /* Window-relative geometry includes reserved virtual cells. Only actual
  * input owners are vacated; virtual cells supply no readable value. */
 static inline void
-call_clear_owned_slots(PyValue *window, int first, int count,
+call_clear_owned_slots(_PyInterpreterFrame *frame, PyValue *window, int first, int count,
                        _PyCallTransactionKind kind, int state)
 {
     for (int i = first; i < first + count; i++) {
@@ -1457,7 +1457,7 @@ call_clear_owned_slots(PyValue *window, int first, int count,
              !(state & CALL_KWARGS_PRESENT))) {
             continue;
         }
-        window[i] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, window + i, PyValue_NULL);
     }
 }
 
@@ -1494,8 +1494,8 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
     PyValue obsolete = homes[0];
     /* Publish both final input homes before the obsolete wrapper can run
      * a destructor. No pointer into the old window crosses that release. */
-    homes[0] = function;
-    homes[1] = self;
+    _PyFrame_WriteHome(frame, homes, function);
+    _PyFrame_WriteHome(frame, homes + 1, self);
     state |= CALL_SELF_PRESENT | CALL_PREPARED | CALL_EFFECTS;
     _PyValue_CheckHome(homes[0]);
     _PyValue_CheckHome(homes[1]);
@@ -1539,7 +1539,7 @@ call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame
     obsolete = homes[2];
     /* A tuple is a heap object, so this pure owner transfer cannot retire a
      * scalar box. Only the final tuple home is visible during local cleanup. */
-    homes[2] = PyValue_FromObjectSteal(tuple);
+    _PyFrame_WriteHome(frame, homes + 2, PyValue_FromObjectSteal(tuple));
     tuple = NULL;
     status = 0;
 done:
@@ -1665,7 +1665,7 @@ call_transaction_detach(_PyCallTransaction *call, PyValue *retired)
             continue;
         }
         retired[i] = homes[i];
-        homes[i] = PyValue_NULL;
+        _PyFrame_WriteHome(call->frame, homes + i, PyValue_NULL);
     }
 }
 
@@ -1797,7 +1797,7 @@ call_transaction_native(_PyCallTransaction *call)
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         _PyValue_RecheckHome(*home);
         displaced = *home;
-        *home = result;
+        _PyFrame_WriteHome(call->frame, home, result);
     }
     result = PyValue_NULL;
     call_transaction_publish_pc(call);
@@ -1841,7 +1841,7 @@ done:
         if (failed < 0) {
             PyValue *window = _PyFrame_Slots(call->frame) + call->base;
             assert(PyValue_IsNull(window[0]));
-            window[0] = local_result;
+            _PyFrame_WriteHome(call->frame, window, local_result);
             return -1;
         }
         if (call->destination == IR_NO_DST) {
@@ -1851,7 +1851,7 @@ done:
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         // a move: replaced below
         PyValue displaced_local = *home;
-        *home = local_result;
+        _PyFrame_WriteHome(call->frame, home, local_result);
         _PyValue_CheckHome(*home);
         PyValue_XCLOSE(displaced_local);
         failed = call_record_refresh(call);
@@ -1863,18 +1863,16 @@ done:
  * Move their arguments after initialization, preserving any constant homes
  * beyond the actual arguments. No owner is retired and no callback can run. */
 static Py_NO_INLINE void
-call_transfer_exact_args(PyValue *base, PyValue *window, int nargs,
+call_transfer_exact_args(_PyInterpreterFrame *dest, _PyInterpreterFrame *source,
+                         PyValue *window, int nargs,
                          _PyCallSelfRole self_role)
 {
     int has_self = self_role == CALL_SELF_SUPPLIED;
     if (has_self) {
-        base[0] = window[1];
+        _PyFrame_MoveHome(source, window + 1, dest, dest->base);
     }
     for (int i = 0; i < nargs; i++) {
-        base[has_self + i] = window[2 + i];
-    }
-    for (int i = has_self ? 1 : 2; i < 2 + nargs; i++) {
-        window[i] = PyValue_NULL;
+        _PyFrame_MoveHome(source, window + 2 + i, dest, dest->base + has_self + i);
     }
 }
 
@@ -1924,7 +1922,7 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     result = _PyValue_Publish(&result);
     if (!local) {
-        _PyFrame_Slots(frame)[result_slot] = result;
+        _PyFrame_WriteHome(frame, _PyFrame_Slots(frame) + result_slot, result);
         _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
     }
     frame->phase_state = phase;
@@ -1990,8 +1988,8 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     result = _PyValue_Publish(&result);
     self = _PyValue_Publish(&self);
-    _PyFrame_Slots(frame)[slot] = result;
-    _PyFrame_Slots(frame)[slot + 1] = self;
+    _PyFrame_WriteHome(frame, _PyFrame_Slots(frame) + slot, result);
+    _PyFrame_WriteHome(frame, _PyFrame_Slots(frame) + slot + 1, self);
     _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
     _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot + 1]);
     value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
@@ -2049,15 +2047,16 @@ finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue *element = &window[n - 1 - i];
         if (err < 0) {
             PyValue rest = *element;
-            *element = PyValue_NULL;
+            _PyFrame_WriteHome(frame, element, PyValue_NULL);
             PyValue_XCLOSE(rest);
             continue;
         }
         PyValue old = locals[i];
         assert(!canonical || _PyValue_IsHome(*element));
-        locals[i] = canonical ? *element : _PyValue_Publish(element);
+        _PyFrame_WriteHome(frame, locals + i,
+                           canonical ? *element : _PyValue_Publish(element));
         _PyValue_CheckHome(locals[i]);
-        *element = PyValue_NULL;
+        _PyFrame_WriteHome(frame, element, PyValue_NULL);
         err = finish_value_bridges_ex(tstate, frame, next, temps, &old, 1,
                                       PyValue_NULL);
     }
@@ -2113,9 +2112,9 @@ native_call_publish_result(void *opaque)
     _PyNativeCallPublication *state = opaque;
     native_call_publish_pc(state);
     PyValue *window = _PyFrame_Slots(state->frame) + state->base;
-    call_clear_owned_slots(window, 0, state->inputs,
+    call_clear_owned_slots(state->frame, window, 0, state->inputs,
                            CALL_TRANSACTION_VECTOR, state->roles);
-    window[0] = *state->result;
+    _PyFrame_WriteHome(state->frame, window, *state->result);
 }
 
 static int
@@ -2376,6 +2375,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.f_executable = NULL;
     entry->frame.f_funcobj = NULL;
     entry->frame.base = entry->frame.owned_slots;
+    entry->frame.presence_bits = NULL; /* Native entry homes have no arena bits. */
     /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
@@ -2787,10 +2787,11 @@ fail:
 }
 
 static int
-initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *co,
-    PyValue *localsplus, PyValue const *args,
+initialize_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
+    PyFunctionObject *func, PyCodeObject *co, PyValue const *args,
     Py_ssize_t argcount, PyObject *kwnames)
 {
+    PyValue *localsplus = frame->base;
     const Py_ssize_t total_args = co->co_argcount + co->co_kwonlyargcount;
     /* Create a dictionary for keyword parameters (**kwags) */
     PyObject *kwdict;
@@ -2806,7 +2807,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             i++;
         }
         assert(PyValue_IsNull(localsplus[i]));
-        localsplus[i] = PyValue_FromObjectSteal(kwdict);
+        _PyFrame_WriteHome(frame, localsplus + i, PyValue_FromObjectSteal(kwdict));
     }
     else {
         kwdict = NULL;
@@ -2830,7 +2831,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
     }
     for (j = 0; j < n; j++) {
         assert(PyValue_IsNull(localsplus[j]));
-        localsplus[j] = args[j];
+        _PyFrame_WriteHome(frame, localsplus + j, args[j]);
         _PyValue_CheckHome(localsplus[j]);
     }
 
@@ -2852,7 +2853,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             goto fail_post_positional;
         }
         assert(PyValue_IsNull(localsplus[total_args]));
-        localsplus[total_args] = PyValue_FromObjectSteal(u);
+        _PyFrame_WriteHome(frame, localsplus + total_args, PyValue_FromObjectSteal(u));
     }
     else if (argcount > n) {
         /* Too many positional args. Error is reported later */
@@ -2967,7 +2968,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                               keyword);
                 goto kw_fail;
             }
-            localsplus[j] = value_value;
+            _PyFrame_WriteHome(frame, localsplus + j, value_value);
             _PyValue_CheckHome(localsplus[j]);
         }
     }
@@ -3004,7 +3005,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             PyValue *defs = _PyTuple_ITEMS(func->func_defaults);
             for (; i < defcount; i++) {
                 if (PyValue_IsNull(localsplus[m+i])) {
-                    localsplus[m+i] = PyValue_XDUP(defs[i]);
+                    _PyFrame_WriteHome(frame, localsplus + m + i, PyValue_XDUP(defs[i]));
                     _PyValue_CheckHome(localsplus[m+i]);
                 }
             }
@@ -3027,7 +3028,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                     goto fail_post_args;
                 }
                 if (found > 0) {
-                    localsplus[i] = def;
+                    _PyFrame_WriteHome(frame, localsplus + i, def);
                     continue;
                 }
             }
@@ -3188,12 +3189,13 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue cursor = window[1];
     PyValue sent = kind != _PY_IR_FOR_ITER ? window[2] : PyValue_NULL;
     PyValue exception = kind == _PY_IR_SEND_THROW ? window[3] : PyValue_NULL;
-    window[0] = window[1] = PyValue_NULL;
+    _PyFrame_WriteHome(frame, window, PyValue_NULL);
+    _PyFrame_WriteHome(frame, window + 1, PyValue_NULL);
     if (kind != _PY_IR_FOR_ITER) {
-        window[2] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, window + 2, PyValue_NULL);
     }
     if (kind == _PY_IR_SEND_THROW) {
-        window[3] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, window + 3, PyValue_NULL);
     }
     PyValue displaced = PyValue_NULL;
     if (kind != _PY_IR_FOR_ITER && destination != IR_NO_DST) {
@@ -3201,7 +3203,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
         displaced = frame->base[destination];
         assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
                PyValue_IsNull(displaced));
-        frame->base[destination] = value;
+        _PyFrame_WriteHome(frame, frame->base + destination, value);
         _PyValue_CheckHome(value);
         value = PyValue_NULL;
     }
@@ -3364,7 +3366,7 @@ stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     *staged = (_PyTransitionRoots){
         .frame = frame,
         .remaining = _PyFrame_NumSlots(frame),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+        .home_authority = _PyIR_HOME_FRAME_PRESENCE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         /* A custom evaluator may install nullable headers before handoff. */
         .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
@@ -3405,7 +3407,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
     stage_binding_frame(tstate, frame, staged);
-    if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
+    if (initialize_locals(tstate, frame, func_obj, code, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
         /* Transfer to retirement without a callback or poll. */
@@ -3572,11 +3574,11 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
         return NULL;
     }
     _PyFrame_InitializeTrampoline(shim, shim_code, 1, caller);
-    shim->base[0] = PyValue_DUP(window[1]);
+    _PyFrame_WriteHome(shim, shim->base, PyValue_DUP(window[1]));
     _PyTransitionRoots shim_roots = {
         .frame = shim,
         .remaining = _PyFrame_NumSlots(shim),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+        .home_authority = _PyIR_HOME_FRAME_PRESENCE,
         .header_mask = _Py_TRANSITION_CODE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         .caller_staged = 1,
@@ -3598,10 +3600,10 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
     PyValue function = window[0];
     PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-    window[0] = PyValue_NULL;
+    _PyFrame_WriteHome(caller, window, PyValue_NULL);
     for (int i = 0; i < argcount; i++) {
         arguments[i] = window[i + 1];
-        window[i + 1] = PyValue_NULL;
+        _PyFrame_WriteHome(caller, window + i + 1, PyValue_NULL);
     }
     _PyTransitionRoots child_roots;
     _PyInterpreterFrame *child = eval_frame_push_and_init_code(
@@ -3652,11 +3654,11 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     }
     _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
         tstate, (PyCodeObject *)&_Py_InitCleanup, 1, caller);
-    shim->base[0] = PyValue_DUP(window[1]);
+    _PyFrame_WriteHome(shim, shim->base, PyValue_DUP(window[1]));
     PyValue function = window[0];
-    window[0] = PyValue_NULL;
+    _PyFrame_WriteHome(caller, window, PyValue_NULL);
     _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, shim);
-    call_transfer_exact_args(child->base, window, nargs, CALL_SELF_SUPPLIED);
+    call_transfer_exact_args(child, caller, window, nargs, CALL_SELF_SUPPLIED);
     caller->return_slot = (uint16_t)destination;
     caller->return_pc = next;
     tstate->py_recursion_remaining--;
@@ -3721,20 +3723,20 @@ call_transaction_overlap_python(_PyCallTransaction *call,
 
     /* No callback, release or failure is allowed until child is current. */
     PyValue function = homes[0];
-    homes[0] = PyValue_NULL;
+    _PyFrame_WriteHome(call->frame, homes, PyValue_NULL);
     _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
         call->tstate, function, homes + offset, nargs, call->frame);
     for (int i = nargs; i < code->co_argcount; i++) {
-        child->base[i] = PyValue_XDUP(
-            _PyTuple_ITEMS(defaults)[i - (code->co_argcount - ndefaults)]);
+        _PyFrame_WriteHome(child, child->base + i, PyValue_XDUP(
+            _PyTuple_ITEMS(defaults)[i - (code->co_argcount - ndefaults)]));
     }
     int extra = code->co_argcount;
     if (flags & CO_VARARGS) {
         PyValue empty = _PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
-        child->base[extra++] = empty;
+        _PyFrame_WriteHome(child, child->base + extra++, empty);
     }
     if (flags & CO_VARKEYWORDS) {
-        child->base[extra] = PyValue_FromObjectSteal(kwdict);
+        _PyFrame_WriteHome(child, child->base + extra, PyValue_FromObjectSteal(kwdict));
     }
     call->frame->return_slot = (uint16_t)call->destination;
     call->frame->return_pc = call->frame->instr_ptr + 1;
@@ -4077,23 +4079,23 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue keywords[_Py_CALL_BIND_KEYWORD_CAPACITY];
         for (int i = 0; i < kwcount; i++) {
             keywords[i] = homes[offset + positional + i];
-            homes[offset + positional + i] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, homes + offset + positional + i, PyValue_NULL);
         }
         PyValue names_owner = homes[argument_count + 2];
-        homes[argument_count + 2] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, homes + argument_count + 2, PyValue_NULL);
         PyValue function = homes[0];
-        homes[0] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, homes, PyValue_NULL);
         /* No failure, callback or release until the child is complete. */
         _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
             tstate, function, homes + offset, positional, frame);
         for (int i = 0; i < kwcount; i++) {
-            child->base[binding->binding.keyword_dest[i]] = keywords[i];
+            _PyFrame_WriteHome(child, child->base + binding->binding.keyword_dest[i], keywords[i]);
         }
         for (int i = positional; i < code->co_argcount; i++) {
             if (PyValue_IsNull(child->base[i])) {
                 assert(i >= first_default);
-                child->base[i] = PyValue_XDUP(
-                    _PyTuple_ITEMS(defaults)[i - first_default]);
+                _PyFrame_WriteHome(child, child->base + i, PyValue_XDUP(
+                    _PyTuple_ITEMS(defaults)[i - first_default]));
             }
         }
         frame->return_slot = (uint16_t)destination;
@@ -4141,26 +4143,28 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 }
             }
             PyValue function = homes[0];
-            homes[0] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, homes, PyValue_NULL);
             _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
                 tstate, function, homes + offset, supplied, frame);
             if (supplied < code->co_argcount) {
                 PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
                 for (int i = supplied; i < code->co_argcount; i++) {
-                    child->base[i] = PyValue_XDUP(
-                        defaults[binding->binding.positional.default_start + i - supplied]);
+                    _PyFrame_WriteHome(child, child->base + i, PyValue_XDUP(
+                        defaults[binding->binding.positional.default_start + i - supplied]));
                 }
             }
             if (binding->binding_flags & _Py_CALL_BIND_VARARGS) {
-                child->base[code->co_argcount] =
-                    (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+                _PyFrame_WriteHome(child, child->base + code->co_argcount,
+                    (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty)));
             }
             if (binding->binding.positional.kwargs_slot != IR_NO_DST) {
                 if (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) {
                     child->pending_kwargs = binding->binding.positional.kwargs_slot;
                 }
                 else {
-                    child->base[binding->binding.positional.kwargs_slot] = PyValue_FromObjectSteal(kwargs);
+                    _PyFrame_WriteHome(child,
+                        child->base + binding->binding.positional.kwargs_slot,
+                        PyValue_FromObjectSteal(kwargs));
                 }
             }
             frame->return_slot = (uint16_t)destination;
@@ -4620,14 +4624,18 @@ Error:
         // a move: cleared below
         PyValue ref = *sp;
         prefix.begin++;
-        *sp = PyValue_NULL;
+        _PyFrame_WriteHome(frame, sp, PyValue_NULL);
         PyValue_CLOSE(ref);
     }
 Done:
     Py_XDECREF(it);
     Py_DECREF(v);
-    /* Cleanup may reenter while outputs still belong to this prefix. Hand
-     * them back to the initialized/NULL frame without an intervening call. */
+    /* Installed values are external prefix owners until cleanup completes.
+     * Publish their frame authority before disarming, without a callback. */
+    for (int home = prefix.begin; home < prefix.end; home++) {
+        _PyFrame_SetHomeBit(frame, prefix.base + home,
+                           !PyValue_IsNull(prefix.base[home]));
+    }
     prefix.begin = prefix.end;
     _PyThreadState_PopTransitionRoots(tstate, &roots);
     return result;
@@ -6147,7 +6155,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
             result.status = i < 0 ? -1 : 0;
             return result;
         }
-        *index_ptr = PyValue_TagIndex(i);
+        _PyFrame_WriteHome(frame, index_ptr, PyValue_TagIndex(i));
         result.status = 1;
         return result;
     }

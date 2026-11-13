@@ -4917,7 +4917,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     if (exec == NULL) {
         return NULL;
     }
-    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    PyValue *homes = PyMem_New(PyValue, nslots + _PyHomeBitmap_HeapWords(nslots));
     if (homes == NULL) {
         return PyErr_NoMemory();
     }
@@ -4935,6 +4935,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         .ir_words = exec->words,
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
+        .presence_bits = _PyHomeBitmap_InitStorage(homes, nslots),
     };
     uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason);
     PyMem_Free(homes);
@@ -4979,7 +4980,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     if (exec == NULL) {
         return NULL;
     }
-    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    PyValue *homes = PyMem_New(PyValue, nslots + _PyHomeBitmap_HeapWords(nslots));
     if (homes == NULL) {
         return PyErr_NoMemory();
     }
@@ -4993,6 +4994,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .ir_words = exec->words,
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
+        .presence_bits = _PyHomeBitmap_InitStorage(homes, nslots),
         .phase_state = (uint16_t)phase,
     };
     _PyIRHomeView view;
@@ -5035,6 +5037,56 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
+/* Snapshot identities before any Python allocation can reenter or move an
+ * associated generator frame. No value or frame pointer is used afterward. */
+static PyObject *
+get_frame_present_object_ids(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
+    _PyIRHomeView view;
+    if (_PyFrame_GetHomeView(frame, &view) != _PyIR_HOME_MUST_READABLE) {
+        PyErr_SetString(PyExc_ValueError, "frame has no protected home view");
+        return NULL;
+    }
+    /* PyMem allocation cannot call Python; failure ends before another home
+     * read. The buffer owns identities, not references to the frame's values. */
+    uintptr_t *snapshot = PyMem_New(uintptr_t, _PyFrame_NumSlots(frame));
+    if (snapshot == NULL) {
+        return PyErr_NoMemory();
+    }
+    Py_ssize_t count = 0;
+    uint32_t cursor = 0;
+    int begin, end;
+    while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &end)) {
+        for (int i = begin; i < end; i++) {
+            PyValue value = frame->base[i];
+            if (PyValue_IsObject(value)) {
+                snapshot[count++] = (uintptr_t)PyValue_AsKnownObjectBorrow(value);
+            }
+        }
+    }
+    PyObject *ids = PyList_New(count);
+    if (ids == NULL) {
+        PyMem_Free(snapshot);
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        PyObject *id = PyLong_FromVoidPtr((void *)snapshot[i]);
+        if (id == NULL) {
+            PyMem_Free(snapshot);
+            Py_DECREF(ids);
+            return NULL;
+        }
+        PyList_SET_ITEM(ids, i, id);
+    }
+    PyMem_Free(snapshot);
+    return ids;
+}
+
 static PyObject *
 get_frame_home_view(PyObject *self, PyObject *arg)
 {
@@ -5066,7 +5118,8 @@ check_created_home_view_invalidation(PyObject *self, PyObject *arg)
     }
     /* No callback or home mutation occurs during this invalidation probe. */
     frame->phase_state = 0;
-    int denied = _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_NONE;
+    int denied = _PyFrame_GetHomeView(frame, &view) != _PyIR_HOME_MUST_READABLE ||
+        view.kind != _PyIR_HOME_VIEW_RANGES;
     frame->phase_state = _PyIR_PHASE_CREATED;
     if (!denied) {
         PyErr_SetString(PyExc_AssertionError, "created authority was reacquired");
@@ -5144,7 +5197,7 @@ check_frame_copy(PyObject *args, int mode)
         }
     }
     size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
-        (size_t)n * sizeof(PyValue);
+        ((size_t)n + _PyHomeBitmap_HeapWords(n)) * sizeof(PyValue);
     _PyInterpreterFrame *src = PyMem_Calloc(1, size);
     /* The selectors derive their owner container from the embedded frame.
      * Private untracked storage never executes or invokes an object destructor. */
@@ -5160,6 +5213,8 @@ check_frame_copy(PyObject *args, int mode)
     }
     src->f_executable = (PyCodeObject *)Py_NewRef(code);
     src->base = src->owned_slots;
+    _PyFrame_InitHeapBitmap(src, n);
+    _PyFrame_InitHeapBitmap(dst, n);
     const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
     for (int i = nl; i < n; i++) {
         src->base[i].bits = poison;
@@ -5168,7 +5223,7 @@ check_frame_copy(PyObject *args, int mode)
     int selected_home = delegated ? IR_D(protocol) : created ? 0 : nl + 1;
     assert(selected_home >= 0 && selected_home < n);
     assert(!delegated || selected_home >= nl);
-    src->base[selected_home] = _PyValue_Publish(&value);
+    _PyFrame_WriteHome(src, src->base + selected_home, _PyValue_Publish(&value));
     int scratch_home = delegated ? selected_home - nl : 1;
     const _PyIRPhaseRange selected = {
         .begin = (uint16_t)scratch_home,
@@ -5177,7 +5232,9 @@ check_frame_copy(PyObject *args, int mode)
     const _PyIRHomeView view = {
         .nbindings = (uint16_t)nl,
         .scratch_limit = (uint16_t)(clipped ? 0 : selected.end),
-        .nranges = !clipped, .ranges = &selected,
+        .kind = _PyIR_HOME_VIEW_PRESENCE,
+        .first_bit = ((uintptr_t)src->base >> 3) & 63,
+        .presence = src->presence_bits,
     };
     if (delegated) {
         src->owner = FRAME_OWNED_BY_GENERATOR;
@@ -5207,6 +5264,8 @@ check_frame_copy(PyObject *args, int mode)
         dst->owner = FRAME_OWNED_BY_FRAME_OBJECT;
         capture->f_frame = dst;
         capture->f_capture = view;
+        capture->f_capture.presence = dst->presence_bits;
+        capture->f_capture.first_bit = ((uintptr_t)dst->base >> 3) & 63;
         capture->f_capture_authority = _PyIR_HOME_MUST_READABLE;
         dst->phase_state |= _PyIR_PHASE_CAPTURED;
         _PyIRHomeView selected_view;
@@ -5231,9 +5290,9 @@ check_frame_copy(PyObject *args, int mode)
         correct &= status == 0 && visited == PyValue_IsObject(value);
     }
 #endif
-    PyValue_XCLOSE(dst->base[selected_home]);
+    PyValue_XCLOSE(_PyFrame_TakeHome(dst, dst->base + selected_home));
     if (clipped) {
-        PyValue_XCLOSE(src->base[selected_home]);
+        PyValue_XCLOSE(_PyFrame_TakeHome(src, src->base + selected_home));
     }
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
@@ -5284,11 +5343,143 @@ has_empty_created_copy_plan(PyObject *self, PyObject *arg)
         (exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY));
 }
 
+/* Exercise every physical first-bit alignment, including both endpoint masks
+ * and two frame views of the same storage. No fake frame is published. */
+static PyObject *
+check_home_bitmap(PyObject *self, PyObject *payload)
+{
+    const int selected[] = {0, 1, 63, 64, 65, 129};
+    const int endpoints[] = {0, 1, 2, 62, 63, 64, 65, 66, 128, 129, 130};
+    PyValue storage[193];
+    int correct = 1;
+    for (unsigned int first = 0; first < 64; first++) {
+        unsigned int origin = ((uintptr_t)storage >> 3) & 63;
+        PyValue *base = storage + ((first + 64 - origin) & 63);
+        uint64_t words[4] = {0};
+        _PyInterpreterFrame frame = {.base = base, .presence_bits = words};
+        for (int i = 0; i < 130; i++) {
+            base[i] = PyValue_NULL;
+        }
+        PyValue values[] = {
+            PyValue_FromObjectSteal(Py_NewRef(payload)), PyValue_FromInlineInt(19),
+            PyValue_TagIndex(3), PyValue_None, PyValue_True, PyValue_FromInlineInt(-7),
+        };
+        for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
+            _PyFrame_PublishVacantHome(&frame, base + selected[i], values[i]);
+        }
+        _PyIRHomeView view = {
+            .nbindings = 1, .scratch_limit = 129,
+            .kind = _PyIR_HOME_VIEW_PRESENCE,
+            .first_bit = first, .presence = words,
+        };
+        uint32_t cursor = 0;
+        int begin, end, visited = 0;
+        while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &end)) {
+            for (int i = begin; i < end; i++) {
+                correct &= _PyFrame_HomeIsPresent(&frame, base + i);
+                visited++;
+            }
+        }
+        correct &= visited == Py_ARRAY_LENGTH(selected);
+        for (size_t b = 0; b < Py_ARRAY_LENGTH(endpoints); b++) {
+            for (size_t e = b; e < Py_ARRAY_LENGTH(endpoints); e++) {
+                int begin = endpoints[b], end = endpoints[e];
+                int next = end, previous = begin - 1;
+                for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
+                    int home = selected[i];
+                    if (begin <= home && home < end) {
+                        if (next == end) {
+                            next = home;
+                        }
+                        previous = home;
+                    }
+                }
+                correct &= _PyFrame_NextPresentHome(&frame, begin, end) == next;
+                correct &= _PyFrame_PreviousPresentHome(&frame, begin, end) == previous;
+            }
+        }
+        _PyInterpreterFrame alias = {
+            .base = base + 1,
+            .presence_bits = _PyHomeBitmap_Word(words, base, base + 1),
+        };
+        _PyFrame_MoveHome(&frame, base + 1, &alias, base + 1);
+        correct &= _PyFrame_HomeIsPresent(&frame, base + 1);
+        _PyFrame_MoveHome(&frame, base + 63, &alias, base + 2);
+        correct &= !_PyFrame_HomeIsPresent(&frame, base + 63);
+        correct &= _PyFrame_HomeIsPresent(&alias, base + 2);
+        PyValue old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromObjectSteal(Py_NewRef(payload)));
+        PyValue_CLOSE(old);
+        correct &= _PyFrame_HomeIsPresent(&alias, base + 2);
+        old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromInlineInt(7));
+        PyValue_CLOSE(old);
+        correct &= _PyFrame_HomeIsPresent(&alias, base + 2);
+        old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromObjectSteal(Py_NewRef(payload)));
+        correct &= _PyFrame_HomeIsPresent(&alias, base + 2);
+        old = _PyFrame_TakeKnownHome(&alias, base + 2, PyValue_Borrow(base[2]));
+        PyValue_CLOSE(old);
+        correct &= !_PyFrame_HomeIsPresent(&alias, base + 2);
+        _PyFrame_PublishVacantHome(&alias, base + 2, PyValue_FromInlineInt(7));
+        old = _PyFrame_TakeKnownHome(&alias, base + 2, PyValue_Borrow(base[2]));
+        correct &= PyValue_Is(old, PyValue_FromInlineInt(7));
+        correct &= !_PyFrame_HomeIsPresent(&alias, base + 2);
+        int home;
+        while ((home = _PyFrame_NextPresentHome(&frame, 0, 130)) < 130) {
+            PyValue value = _PyFrame_TakeKnownHome(
+                &frame, base + home, PyValue_Borrow(base[home]));
+            PyValue_CLOSE(value);
+        }
+        correct &= _PyFrame_PreviousPresentHome(&frame, 0, 130) == -1;
+    }
+    if (!correct) {
+        PyErr_SetString(PyExc_AssertionError, "physical home bitmap mismatch");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* Development-only writer oracle while all reserved homes are initialized.
+ * Replace its full range before the rival admits stale zero-bit homes. */
+static PyObject *
+check_frame_bitmap_null_control(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
+    if (frame->owner == FRAME_OWNED_BY_THREAD &&
+        frame != _PyThreadState_GET()->current_frame)
+    {
+        PyErr_SetString(PyExc_ValueError,
+                        "waiting thread frame has no full-home authority");
+        return NULL;
+    }
+    for (int i = 0; i < _PyFrame_NumSlots(frame); i++) {
+        if (!PyValue_IsNull(frame->base[i]) !=
+            _PyFrame_HomeIsPresent(frame, frame->base + i))
+        {
+            PyErr_Format(PyExc_AssertionError,
+                         "present-home bitmap mismatch in slot %d", i);
+            return NULL;
+        }
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"check_frame_bitmap_null_control", check_frame_bitmap_null_control, METH_O},
+    {"check_home_bitmap", check_home_bitmap, METH_O},
     {"check_created_home_view_invalidation", check_created_home_view_invalidation, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},
+    {"get_frame_present_object_ids", get_frame_present_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},

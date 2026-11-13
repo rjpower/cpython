@@ -1832,15 +1832,17 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
         assert(status != _PyIR_SHADOW_MISMATCH);
     }
     _PyIRHomeView view;
-    int selected = _PyInterpreterState_GET()->stoptheworld.world_stopped &&
-        frame->phase_state == _PyIR_PHASE_CREATED &&
-        _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    int selected = _PyInterpreterState_GET()->stoptheworld.world_stopped;
+    if (selected) {
+        /* Preserve the existing per-value deferred/count policy below. */
+        _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+    }
     uint32_t cursor = 0;
     int begin = 0, limit = _PyFrame_NumSlots(frame);
     if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
         return 0;
     }
-    /* Unstopped traversals and other states retain NULL-control reads. */
+    /* Unstopped traversals retain the existing initialized-NULL policy. */
     do {
         PyValue *ref = _PyFrame_GetLocalsArray(frame) + begin;
         PyValue *end = _PyFrame_GetLocalsArray(frame) + limit;

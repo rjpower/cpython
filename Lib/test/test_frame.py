@@ -19,6 +19,222 @@ from test.support.script_helper import assert_python_ok
 from test import mapping_tests
 
 
+class HomeBitmapTest(unittest.TestCase):
+    def test_word_endpoints_and_overlapping_frame_views(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        payload = []
+        before = sys.getrefcount(payload)
+        internal.check_home_bitmap(payload)
+        self.assertEqual(sys.getrefcount(payload), before)
+
+    def test_waiting_parent_excludes_child_owned_argument_homes(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        class Payload:
+            pass
+
+        def child(value):
+            parent_frame = sys._getframe(1)
+            own_ids = internal.get_frame_present_object_ids(sys._getframe())
+            parent_ids = internal.get_frame_present_object_ids(parent_frame)
+            observations.append((id(value) in own_ids, id(value) in parent_ids))
+            return value
+
+        def parent():
+            return child(Payload())
+
+        # Cover the checked generic entry and the reached exact overlap route.
+        for _ in range(150):
+            self.assertIsInstance(parent(), Payload)
+        self.assertEqual(observations, [(True, False)] * 150)
+
+    def test_pending_unpack_prefix_is_external_until_commit(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+        payload_ids = []
+
+        class Payload:
+            pass
+
+        class Source:
+            def __init__(self):
+                self.index = 0
+                self.frame = None
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if payload_ids:
+                    support.gc_collect()
+                    external = internal.get_transition_root_ids()
+                    homes = internal.get_frame_present_object_ids(self.frame)
+                    observations.append((all(value in external for value in payload_ids),
+                                         all(value not in homes for value in payload_ids)))
+                if self.index == 2:
+                    raise StopIteration
+                self.index += 1
+                value = Payload()
+                payload_ids.append(id(value))
+                return value
+
+        def unpack(source):
+            left, right = source
+            yield left, right
+
+        source = Source()
+        gen = unpack(source)
+        source.frame = gen.gi_frame
+        result = next(gen)
+        self.assertEqual(observations, [(True, True), (True, True)])
+        self.assertEqual([id(value) for value in result], payload_ids)
+        homes = internal.get_frame_present_object_ids(gen.gi_frame)
+        self.assertTrue(all(value in homes for value in payload_ids))
+        gen.close()
+
+    def test_presence_traversal_keeps_immortal_and_no_count_referents(self):
+        import gc
+        internal = import_helper.import_module('_testinternalcapi')
+        marker = object()
+
+        def suspended(value):
+            scalar = 17
+            immortal = None
+            yield value, scalar, immortal
+
+        gen = suspended(marker)
+        next(gen)
+        frame = gen.gi_frame
+        ids = internal.get_frame_present_object_ids(frame)
+        self.assertIn(id(marker), ids)
+        self.assertIn(id(None), ids)
+        referents = gc.get_referents(gen)
+        self.assertTrue(any(item is marker for item in referents))
+        self.assertTrue(any(item is None for item in referents))
+        gen.close()
+
+    @threading_helper.requires_working_threading()
+    def test_foreign_thread_home_query_is_explicitly_unavailable(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        ready = threading.Event()
+        finish = threading.Event()
+        frames = []
+
+        def worker():
+            named = object()
+            frames.append(sys._getframe())
+            ready.set()
+            finish.wait()
+            return named
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        try:
+            self.assertTrue(ready.wait(support.SHORT_TIMEOUT))
+            frame = frames[0]
+            self.assertIs(frame.f_code, worker.__code__)
+            self.assertIn('named', frame.f_locals)
+            self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+            with self.assertRaisesRegex(ValueError, 'protected home view'):
+                internal.get_frame_present_object_ids(frame)
+        finally:
+            finish.set()
+            thread.join(support.SHORT_TIMEOUT)
+        self.assertFalse(thread.is_alive())
+
+    def test_array_writers_during_callbacks(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        class Target:
+            def __setattr__(self, name, value):
+                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                observations.append(name)
+                object.__setattr__(self, name, value)
+
+        def unpack(source, target):
+            target.a, target.b, target.c = source
+            yield target
+
+        target = Target()
+        payloads = [[], {}, set()]
+        for source in (tuple(payloads), payloads):
+            for _ in range(100):
+                self.assertIs(next(unpack(source, target)), target)
+        self.assertEqual(observations, ['a', 'b', 'c'] * 200)
+        self.assertIs(target.c, payloads[2])
+
+        class Key:
+            def __hash__(self):
+                caller = sys._getframe(1)
+                if caller.f_code in (build.__code__, build_map.__code__):
+                    internal.check_frame_bitmap_null_control(caller)
+                observations.append('hash')
+                return id(self)
+
+        def build(a, b, c):
+            yield {a, b, c}
+
+        def build_map(a, b, c):
+            yield {a: [], b: {}, c: set()}
+
+        keys = Key(), Key(), Key()
+        self.assertEqual(next(build(*keys)), set(keys))
+        self.assertEqual(observations[-6:], ['hash'] * 6)
+
+        self.assertEqual(set(next(build_map(*keys))), set(keys))
+        self.assertEqual(observations[-6:], ['hash'] * 6)
+
+    def test_string_builder_and_inplace_local_writers(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def build(a, b, c):
+            value = f'{a}{b}{c}'
+            internal.check_frame_bitmap_null_control(sys._getframe())
+            return value
+
+        def append(value, part):
+            value += part
+            internal.check_frame_bitmap_null_control(sys._getframe())
+            return value
+
+        for i in range(100):
+            pieces = tuple(str(i + j) * 30 for j in range(3))
+            self.assertEqual(build(*pieces), ''.join(pieces))
+            self.assertEqual(append(pieces[0], pieces[1]),
+                             pieces[0] + pieces[1])
+
+    def test_special_lookup_writers_during_descriptor_calls(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        class Method:
+            def __init__(self, name):
+                self.name = name
+
+            def __get__(self, receiver, owner):
+                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                observations.append(self.name)
+                if self.name == 'enter':
+                    return lambda: receiver
+                return lambda *args: False
+
+        class Manager:
+            __enter__ = Method('enter')
+            __exit__ = Method('exit')
+
+        def use(manager):
+            with manager as value:
+                yield value
+
+        manager = Manager()
+        generator = use(manager)
+        self.assertIs(next(generator), manager)
+        generator.close()
+        self.assertEqual(sorted(observations), ['enter', 'exit'])
+
+
 class ClearTest(unittest.TestCase):
     """
     Tests for frame.clear().
@@ -486,7 +702,10 @@ class CopyHomeViewTest(unittest.TestCase):
         support.gc_collect()
         self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
         self.assertIs(next(gen), payload)
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+        # The created certificate was invalidated; dynamic presence remains a
+        # separate provider for the actually suspended frame's current homes.
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
+        self.assertIn(id(payload), internal.get_frame_present_object_ids(frame))
         gen.close()
         frame.clear()
 
@@ -535,16 +754,17 @@ class CopyHomeViewTest(unittest.TestCase):
         with self.assertRaises(StopIteration):
             next(gen)
 
-    def test_zero_binding_escape_keeps_empty_control(self):
+    def test_zero_binding_escape_keeps_empty_presence(self):
         internal = import_helper.import_module('_testinternalcapi')
 
         def body():
             return sys._getframe()
 
         frame = body()
-        self.assertEqual(internal.get_frame_home_view(frame), (3, 0, 0, 0))
+        self.assertEqual(internal.get_frame_home_view(frame), (2, 0, 0, 0))
         frame.clear()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
+        self.assertEqual(internal.get_frame_present_object_ids(frame), [])
 
     def test_selected_copy_skips_inactive_words(self):
         internal = import_helper.import_module('_testinternalcapi')
@@ -556,7 +776,7 @@ class CopyHomeViewTest(unittest.TestCase):
             with self.subTest(payload=type(payload)):
                 internal.check_frame_selected_copy(body.__code__, payload)
 
-    def test_escaped_frame_keeps_explicit_control(self):
+    def test_escaped_frame_keeps_explicit_presence(self):
         internal = import_helper.import_module('_testinternalcapi')
 
         def body(value):
@@ -570,14 +790,15 @@ class CopyHomeViewTest(unittest.TestCase):
         code = body.__code__
         frame = body(payload)
         authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
-        self.assertEqual((authority, limit, nranges), (3, 0, 0))
+        self.assertEqual((authority, limit, nranges), (2, 0, 0))
         self.assertGreaterEqual(bindings, code.co_nlocals)
         body.__code__ = replacement.__code__
         self.assertIs(frame.f_code, code)
         self.assertIs(frame.f_locals['value'], payload)
         self.assertEqual(frame.f_locals['scalar'], 17)
         frame.clear()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
+        self.assertEqual(internal.get_frame_present_object_ids(frame), [])
 
     def test_created_generator_and_suspended_escape_values(self):
         internal = import_helper.import_module('_testinternalcapi')
@@ -600,7 +821,7 @@ class CopyHomeViewTest(unittest.TestCase):
         self.assertIs(frame.f_code, code)
         self.assertIs(frame.f_locals['value'], payload)
         self.assertEqual(frame.f_locals['scalar'], 17)
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
         frame.clear()
 
     @unittest.skipIf(_testcapi is None, '_testcapi required')
@@ -612,10 +833,10 @@ class CopyHomeViewTest(unittest.TestCase):
 
         gen = _testcapi.frame_new_generator(body.__code__, globals(), {})
         frame = gen.gi_frame
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
         self.assertEqual(next(gen), 17)
         gen.close()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
         frame.clear()
 
 

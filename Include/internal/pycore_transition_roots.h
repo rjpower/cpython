@@ -37,7 +37,7 @@ typedef struct {
 } _PyTransitionPrefix;
 
 /* External owners during an outlined, potentially reentrant retirement.
- * NULL homes remain authoritative: [0, remaining) is an initialized prefix.
+ * Frame presence selects readable values within [0, remaining).
  * A producer advances remaining or removes a header bit before closing that
  * owner. Code stays pinned through the last home/map read. Once code closes,
  * a walker uses only these explicit fields, never frame geometry.
@@ -100,7 +100,7 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
         if (roots->home_authority == _PyIR_HOME_NONE) {
             assert(roots->remaining == 0 && roots->homes == NULL);
         }
-        else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+        else if (roots->home_authority == _PyIR_HOME_FRAME_PRESENCE) {
             assert(roots->homes == NULL);
         }
         else {

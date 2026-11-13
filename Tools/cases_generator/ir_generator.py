@@ -2054,6 +2054,17 @@ def slot_uses(inst: Instruction) -> list[tuple[str, Token, str | None]]:
                     a < 2 or tokens[a - 2].kind not in OPERANDS):
                 func = enclosing_call(tokens, a - 1)
                 name = func.text if func is not None else None
+                if name == "_PyFrame_WriteHome":
+                    if [t.text for t in tokens[max(0, a - 5):a]] != [
+                            "_PyFrame_WriteHome", "(", "frame", ",", "&"]:
+                        raise analysis_error(
+                            f"{inst.name}: local store needs the active frame capability",
+                            tokens[i])
+                    # NULL ends that local owner; another value replaces it.
+                    tail = [t.text for t in tokens[b:b + 4]]
+                    uses.append(("clear" if tail == [",", "PyValue_NULL", ")", ";"]
+                                 else "store", tokens[i], None))
+                    continue
                 if name in SLOT_ADDRESS_READS:
                     uses.append(("read", tokens[i], None))
                     continue
@@ -2751,7 +2762,7 @@ class IRStack(Stack):
                         or var.name in lay.canonical_outputs):
                     out.emit(f"assert(PyValue_IsNull({slot}) || "
                              f"PyValue_Is({slot}, {var.name}));\n")
-                    out.emit(f"{slot} = {var.name};\n")
+                    out.emit(f"_PyFrame_WriteHome(frame, &{slot}, {var.name});\n")
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:
                     out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
@@ -2838,7 +2849,7 @@ class IRStack(Stack):
             if lay.call_kind is not None:
                 assert not lay.in_fields
                 first = (low - lay.base).to_c()
-                out.emit(f"call_clear_owned_slots(window, {first}, {count.to_c()}, "
+                out.emit(f"call_clear_owned_slots(frame, window, {first}, {count.to_c()}, "
                          f"{lay.call_kind}, call_state);\n")
                 return
             if n is None:
@@ -2853,7 +2864,7 @@ class IRStack(Stack):
                         del self.owner[p]
                         self.consume(out, p)
                     continue
-                out.emit(f"{self.window_slot(position)} = PyValue_NULL;\n")
+                out.emit(f"_PyFrame_WriteHome(frame, &{self.window_slot(position)}, PyValue_NULL);\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -2862,7 +2873,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
+                    out.emit(f"_PyFrame_WriteHome(frame, &{self.out_slot(PointerOffset(p, (), ()))}, PyValue_NULL);\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -4712,7 +4723,7 @@ class IREmitter(Emitter):
         self.emit("PyValue ir_resume_input = PyValue_None;\n")
         self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
         self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
-        self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
+        self.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({base} + 2), PyValue_NULL);\n")
         self.emit("}\n")
         self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
         self.emit("frame->return_pc = next_instr;\n")
@@ -5036,6 +5047,11 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+# Raw home helpers are accepted only through checked Storage adapters.
+FRAME_HOME_HELPERS = {"_Py_BuildString_ValueSteal", "_Py_BuildMap_ValueSteal",
+                      "_PyObject_LookupSpecialMethod"}
+
+
 # These events permit observer callbacks and dynamic named-local writes, but
 # not a scratch redirect. Normal completion still reaches the emitted final
 # vacate; an instrumentation error follows the existing error route instead.
@@ -5336,6 +5352,21 @@ def normal_observer_frame_footprint(part: Uop) -> bool:
                for at, token in enumerate(tokens))
 
 
+def normal_frame_footprint(part: Uop) -> bool:
+    tokens = list(part.body.tokens())
+    if any(t.text in FRAME_HOME_HELPERS or
+           t.text.startswith(("_PyFrame_", "_PyHomeBitmap_")) for t in tokens):
+        return False
+    if any(t.text in IR_HELPER_EFFECTS for t in tokens):
+        try:
+            home_operation_contract(part)
+        except SyntaxError:
+            return False
+    if any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS for t in tokens):
+        return normal_observer_frame_footprint(part)
+    return True
+
+
 def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     """A scalar input moved to an independently reserved returning child."""
     parts = [part for part in inst.parts if isinstance(part, Uop)]
@@ -5407,7 +5438,8 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
             or constructor[-len(suffix):] != suffix):
         return None
     tail = statements[at + 1:]
-    move = [t.text for t in tokenize("pushed_frame->base[0] = TAKE(owner);")]
+    move = [t.text for t in tokenize(
+        "_PyFrame_WriteHome(pushed_frame, pushed_frame->base, TAKE(owner));")]
     wrap = [t.text for t in tokenize("new_frame = PyValue_Wrap(pushed_frame);")]
     if len(tail) not in (2, 3) or tail[0] != move or tail[-1] != wrap:
         return None
@@ -5415,8 +5447,9 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         # An independent immutable name argument; never another parent home.
         extra = tail[1]
         begin = [t.text for t in tokenize(
-            "pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(")]
-        end = [")", ")", ";"]
+            "_PyFrame_WriteHome(pushed_frame, pushed_frame->base + 1, "
+            "PyValue_DUP(PyValue_FromObjectBorrow(")]
+        end = [")", ")", ")", ";"]
         if (len(extra) != len(begin) + 1 + len(end)
                 or extra[:len(begin)] != begin or extra[-len(end):] != end):
             return None
@@ -5518,7 +5551,8 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     if async_exit_transport(inst, fmt):
         return True
     parts = [part for part in inst.parts if isinstance(part, Uop)]
-    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS, *FRAME_HOME_HELPERS}
+    macro_names = {*reserved, "_PyFrame_", "_PyHomeBitmap_"}
     steals = [part for part in parts if any(
         t.text in STEAL_SUCCESS_HOME_HELPERS for t in part.body.tokens())]
     return (not steals or (len(steals) == 1 and inst.parts == steals
@@ -5528,18 +5562,12 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
             and not any(item.name in reserved for part in parts for item in
                         (*part.stack.inputs, *part.stack.outputs, *part.caches))
             and not any(t.kind.startswith("CMACRO") and
-                        (any(name in t.text for name in reserved) or
-                         "_PyFrame_" in t.text or "_PyHomeBitmap_" in t.text)
-                        for t in uop_token_list(inst))
-            and not any(t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
+                        any(name in t.text for name in macro_names)
                         for t in uop_token_list(inst))
             and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
                         for t in uop_token_list(inst))
-            and all(not any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS
-                            for t in part.body.tokens())
-                    or normal_observer_frame_footprint(part)
-                    for part in inst.parts if isinstance(part, Uop)))
+            and all(normal_frame_footprint(part) for part in parts))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | None:
@@ -7060,7 +7088,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
             if (cell == NULL) { ERROR_NO_POP(); }
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_FromObjectSteal(cell));
             PyValue_XCLOSE(tmp);
         }"""
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
@@ -7072,7 +7100,8 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+                _PyFrame_WriteHome(frame, frame->base + offset + i,
+                                   PyValue_XDUP(PyTuple_GET_VALUE(closure, i)));
             }
         }"""
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
@@ -7107,7 +7136,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             return "_PyIR_TRANSFER_LOCAL_DUP"
         return unknown
     if inst.name == "LOAD_FAST_AND_CLEAR":
-        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL; }"):
+        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL); }"):
             return "_PyIR_TRANSFER_LOCAL_MOVE"
         return unknown
     close = "{ PyValue_XCLOSE(value); }"
@@ -7116,7 +7145,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     if inst.name == "STORE_FAST":
         store = """{
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = value;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), value);
             _PyValue_CheckHome(value);
             DEAD(value);
             trash = tmp;
@@ -7125,7 +7154,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     if inst.name == "DELETE_FAST":
         body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
                 + unbound + " PyValue tmp = GETLOCAL(oparg); "
-                "GETLOCAL(oparg) = PyValue_NULL; PyValue_XCLOSE(tmp); }")
+                "_PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL); PyValue_XCLOSE(tmp); }")
         # DELETE_FAST names its checked view v rather than value_s.
         return "_PyIR_TRANSFER_LOCAL_CLEAR" if scalar_shape(0, 0) and bodies_match(
             body.replace("value_s", "v")) else unknown

@@ -929,13 +929,13 @@
                 PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKE(right, ir_own_C));
+                _PyFrame_WriteHome(frame, target_local, PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 temp = value_unicode_append(temp, right_o);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-                *target_local = PyValue_NULL;
                 if (temp == NULL) {
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
@@ -3397,9 +3397,9 @@
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), container);
-                pushed_frame->base[0] = IR_TAKE(container, ir_own_B);
+                _PyFrame_WriteHome(pushed_frame, pushed_frame->base, IR_TAKE(container, ir_own_B));
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), sub);
-                pushed_frame->base[1] = IR_TAKE(sub, ir_own_C);
+                _PyFrame_WriteHome(pushed_frame, pushed_frame->base + 1, IR_TAKE(sub, ir_own_C));
                 frame->return_slot = (uint16_t)IR_A(ir_word);
                 frame->return_pc = next_instr;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -4622,11 +4622,11 @@
             PyValue_XCLOSE(format_ref);
             frame->phase_state = 0;
             frame->phase_state = 0;
-            window[1] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
             PyValue_CLOSE(str);
             frame->phase_state = 0;
             frame->phase_state = 0;
-            window[0] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
             PyValue_CLOSE(value);
             if (interpolation_o == NULL) {
                 frame->phase_state = 0;
@@ -5267,7 +5267,7 @@
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
-                call_clear_owned_slots(window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 init_frame = PyValue_Wrap(temp);
             }
             // _PUSH_FRAME
@@ -5460,10 +5460,10 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
+                    call_transfer_exact_args(pushed_frame, frame, window_base, oparg,
                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
-                window_base[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, window_base, PyValue_NULL);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -5719,14 +5719,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -5841,14 +5841,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -5963,14 +5963,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -6094,7 +6094,7 @@
                 slots = _PyFrame_Slots(frame);
                 window = &slots[IR_B(ir_word)];
                 res = result;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
             }
             // _CHECK_PERIODIC_AT_END
@@ -7394,15 +7394,15 @@
                 (void)null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(cls);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(instance);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_CLOSE_POINTER(callable);
                 res = retval ? PyValue_True : PyValue_False;
                 assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
@@ -8302,7 +8302,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], a);
@@ -8314,7 +8314,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -8430,7 +8430,7 @@
                 PyValue item = arg;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
@@ -8444,7 +8444,7 @@
                     callable = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[0], callable);
                     _PyValue_CLOSE_POINTER(tmp);
-                    call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                    call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
@@ -8468,7 +8468,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -8592,14 +8592,14 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -8732,14 +8732,14 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -8897,7 +8897,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
@@ -8909,7 +8909,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -9075,7 +9075,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
@@ -9088,7 +9088,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _POP_TOP
@@ -9096,7 +9096,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -9447,7 +9447,7 @@
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
-                call_clear_owned_slots(window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 init_frame = PyValue_Wrap(temp);
             }
             // _PUSH_FRAME
@@ -9640,10 +9640,10 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
+                    call_transfer_exact_args(pushed_frame, frame, window_base, oparg,
                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
-                window_base[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, window_base, PyValue_NULL);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -9899,14 +9899,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -10021,14 +10021,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -10143,14 +10143,14 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -10274,7 +10274,7 @@
                 slots = _PyFrame_Slots(frame);
                 window = &slots[IR_B(ir_word)];
                 res = result;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
             }
             // _CHECK_PERIODIC_AT_END
@@ -10387,15 +10387,15 @@
                 (void)null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(cls);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(instance);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_CLOSE_POINTER(callable);
                 res = retval ? PyValue_True : PyValue_False;
                 assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
@@ -10501,7 +10501,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], a);
@@ -10513,7 +10513,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10629,7 +10629,7 @@
                 PyValue item = arg;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
@@ -10643,7 +10643,7 @@
                     callable = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[0], callable);
                     _PyValue_CLOSE_POINTER(tmp);
-                    call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                    call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
@@ -10667,7 +10667,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10791,14 +10791,14 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -10931,14 +10931,14 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
                 value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -11096,7 +11096,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
@@ -11108,7 +11108,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -11274,7 +11274,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
@@ -11287,7 +11287,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _POP_TOP
@@ -11295,7 +11295,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -11514,10 +11514,10 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
+                    call_transfer_exact_args(pushed_frame, frame, window_base, oparg,
                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
-                window_base[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, window_base, PyValue_NULL);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -11735,7 +11735,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -11844,7 +11844,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -11946,7 +11946,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -12084,10 +12084,10 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
+                    call_transfer_exact_args(pushed_frame, frame, window_base, oparg,
                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
-                window_base[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, window_base, PyValue_NULL);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -12305,7 +12305,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -12414,7 +12414,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -12516,7 +12516,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                call_clear_owned_slots(frame, window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -14112,7 +14112,8 @@
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+                _PyFrame_WriteHome(frame, frame->base + offset + i,
+                                   PyValue_XDUP(PyTuple_GET_VALUE(closure, i)));
             }
             DISPATCH();
         }
@@ -14171,7 +14172,7 @@
                 JUMP_TO_LABEL(error);
             }
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL);
             frame->phase_state = 0;
             frame->phase_state = 0;
             PyValue_XCLOSE(tmp);
@@ -14296,7 +14297,7 @@
                 value = u;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[4 + (oparg - 1)] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[4 + (oparg - 1)], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             DISPATCH();
@@ -14390,7 +14391,7 @@
                 value = upd;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1 + (oparg - 1)] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[1 + (oparg - 1)], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             DISPATCH();
@@ -14444,8 +14445,8 @@
                 awaitable_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], awaitable_st);
                 PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
             }
             else {
                 Py_INCREF(exc);
@@ -14764,7 +14765,7 @@
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_FOR_ITER == _PY_IR_SEND) {
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
-                        IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                        _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word) + 2), PyValue_NULL);
                     }
                     frame->return_slot = (uint16_t)(_PY_IR_FOR_ITER == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
@@ -15558,8 +15559,8 @@
                 level = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], level);
                 PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                 frame->phase_state = 0;
                 JUMP_TO_LABEL(error);
             }
@@ -15587,8 +15588,8 @@
             level = PyValue_NULL;
             IR_PUBLISH_TEMP(window[0], level);
             PyValue_CLOSE(tmp);
-            window[0] = PyValue_NULL;
-            window[1] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+            _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
             if (res_o == NULL) {
                 frame->phase_state = 0;
                 JUMP_TO_LABEL(error);
@@ -16380,8 +16381,8 @@
                     awaitable_st = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[0], awaitable_st);
                     PyValue_CLOSE(tmp);
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
+                    _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                    _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                 }
                 else {
                     Py_INCREF(exc);
@@ -17108,9 +17109,9 @@
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
                         PyValue_CLOSE(tmp);
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                        _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
+                        _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                         frame->phase_state = 0;
                         JUMP_TO_LABEL(error);
                     }
@@ -17154,9 +17155,9 @@
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
                 PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 if (PyValue_IsNull(super)) {
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
@@ -17889,7 +17890,7 @@
                 assert(oparg == 0 || oparg == 1);
                 PyValue temp = retval;
                 frame->phase_state = 0;
-                window[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
                 DTRACE_FUNCTION_RETURN();
                 tstate->exc_info = gen->gi_exc_state.previous_item;
                 gen->gi_exc_state.previous_item = NULL;
@@ -18352,7 +18353,7 @@
                 value = i;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1 + (oparg-1)] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[1 + (oparg-1)], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             DISPATCH();
@@ -18798,8 +18799,9 @@
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                     tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), frame);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
-                pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
+                _PyFrame_WriteHome(pushed_frame, pushed_frame->base, IR_TAKE(owner, ir_own_B));
+                _PyFrame_WriteHome(pushed_frame, pushed_frame->base + 1,
+                               PyValue_DUP(PyValue_FromObjectBorrow(name)));
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -19467,7 +19469,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), frame);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
+                _PyFrame_WriteHome(pushed_frame, pushed_frame->base, IR_TAKE(owner, ir_own_B));
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -19652,7 +19654,7 @@
                 PyValue receiver = ir_own_B;
                 frame->phase_state = 0;
                 assert(PyValue_IsNull(IR_SLOT(IR_A(ir_word))) || PyValue_Is(IR_SLOT(IR_A(ir_word)), attr));
-                IR_SLOT(IR_A(ir_word)) = attr;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), attr);
                 _PyValue_CheckTemp(IR_SLOT(IR_A(ir_word)));
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
@@ -20137,7 +20139,7 @@
             (void)oparg;
             PyValue value;
             value = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL);
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
@@ -20829,9 +20831,9 @@
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
                         PyValue_CLOSE(tmp);
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                        _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
+                        _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                         frame->phase_state = 0;
                         JUMP_TO_LABEL(error);
                     }
@@ -20875,9 +20877,9 @@
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
                 PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 if (PyValue_IsNull(super)) {
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
@@ -20971,9 +20973,9 @@
             global_super_st = PyValue_NULL;
             IR_PUBLISH_TEMP(window[0], global_super_st);
             PyValue_CLOSE(tmp);
-            window[0] = PyValue_NULL;
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+            _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
+            _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
             if (found.status < 0) {
                 frame->phase_state = 0;
                 JUMP_TO_LABEL(error);
@@ -21061,11 +21063,11 @@
                 } else {
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    window[2] = PyValue_NULL;
+                    _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                     PyValue_CLOSE(self_st);
                     self_or_null = PyValue_NULL;
                 }
-                window[2] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 PyValue tmp = global_super_st;
                 global_super_st = self_or_null;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
@@ -21074,8 +21076,8 @@
                 class_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], class_st);
                 _PyValue_CLOSE_POINTER(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                 attr = found.value;
             }
             IR_PUBLISH_TEMP(window[0], attr);
@@ -21110,7 +21112,7 @@
                 JUMP_TO_LABEL(error);
             }
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_FromObjectSteal(cell));
             frame->phase_state = 0;
             frame->phase_state = 0;
             PyValue_XCLOSE(tmp);
@@ -21320,7 +21322,7 @@
                 value = tp;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             // _POP_TOP
@@ -21328,7 +21330,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -22633,7 +22635,7 @@
             assert(exc && PyExceptionInstance_Check(exc));
             frame->phase_state = 0;
             frame->phase_state = 0;
-            window[oparg] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[oparg], PyValue_NULL);
             _PyErr_SetRaisedException(tstate, exc);
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -22925,7 +22927,7 @@
                         PyValue ir_resume_input = PyValue_None;
                         if (_PY_IR_SEND == _PY_IR_SEND) {
                             ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
-                            IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word) + 2), PyValue_NULL);
                         }
                         frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                         frame->return_pc = next_instr;
@@ -22990,7 +22992,7 @@
                     }
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    window[2] = PyValue_NULL;
+                    _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                     PyValue_CLOSE(v);
                     retval = sent.value;
                 }
@@ -23061,7 +23063,7 @@
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 PyValue_CLOSE(v);
                 asend = iter;
                 null_out = null_in;
@@ -23127,7 +23129,7 @@
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_SEND == _PY_IR_SEND) {
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
-                        IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                        _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word) + 2), PyValue_NULL);
                     }
                     frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
@@ -23450,7 +23452,7 @@
                 value = i;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1 + (oparg-1)] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[1 + (oparg-1)], PyValue_NULL);
                 PyValue_XCLOSE(value);
             }
             DISPATCH();
@@ -24076,7 +24078,7 @@
             {
                 value = IR_SLOT(IR_A(ir_word));
                 PyValue tmp = GETLOCAL(oparg);
-                GETLOCAL(oparg) = value;
+                _PyFrame_WriteHome(frame, &GETLOCAL(oparg), value);
                 _PyValue_CheckHome(value);
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
                 trash = tmp;
@@ -24973,7 +24975,7 @@
             PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
             frame->phase_state = 0;
             frame->phase_state = 0;
-            window[0] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             if (res == 0) {
                 frame->phase_state = 0;
@@ -25045,7 +25047,7 @@
                 PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 if (res == 0) {
                     frame->phase_state = 0;
@@ -25434,7 +25436,7 @@
                 assert(oparg == 0 || oparg == 1);
                 PyValue temp = retval;
                 frame->phase_state = 0;
-                window[0] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
                 DTRACE_FUNCTION_RETURN();
                 tstate->exc_info = gen->gi_exc_state.previous_item;
                 gen->gi_exc_state.previous_item = NULL;
@@ -25533,12 +25535,12 @@
                     frame->phase_state = 0;
                     frame->phase_state = 0;
                     int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                    slots[first] = PyValue_TagIndex(frame_lasti);
+                    _PyFrame_WriteHome(frame, slots + first, PyValue_TagIndex(frame_lasti));
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 PyObject *exc = _PyErr_GetRaisedException(tstate);
-                slots[exc_slot] = PyValue_FromObjectSteal(exc);
+                _PyFrame_WriteHome(frame, slots + exc_slot, PyValue_FromObjectSteal(exc));
                 next_instr = _PyFrame_InstrAt(frame, handler);
                 frame->phase_state = 0;
                 frame->phase_state = 0;

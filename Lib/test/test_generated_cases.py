@@ -3013,6 +3013,26 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
                          "_PyIR_TRANSFER_UNKNOWN")
 
+    def test_resume_normal_transfer_checks_helper_footprint(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        inst = analysis.instructions["RESUME"]
+        fmt = ir_generator.compute_formats(analysis)["RESUME"]
+        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                         "_PyIR_TRANSFER_PRESERVE")
+        body = [part for part in inst.parts if isinstance(part, analyzer.Uop)][-1].body
+        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
+                          "*(slots + offset) = PyValue_NULL;",
+                          "frame->base[0] = PyValue_NULL;"):
+            with self.subTest(statement=statement):
+                changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
+                body.body.append(changed.instructions["OP"].parts[0].body.body[0])
+                try:
+                    self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                                     "_PyIR_TRANSFER_UNKNOWN")
+                finally:
+                    body.body.pop()
+
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3027,7 +3047,7 @@ class TestIRCases(unittest.TestCase):
             "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
             "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
             "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
-            "IR_JUMP": "PRESERVE", "RETURN_VALUE": "EXIT",
+            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE", "RETURN_VALUE": "EXIT",
             "CALL": "UNKNOWN", "LOAD_ATTR": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():

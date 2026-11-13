@@ -6,12 +6,95 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
+#include "pycore_pystate.h"       // HEAD_LOCK(), thread enumeration
 #include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
+
+static int
+find_error_home_view(PyThreadState *owner, _PyInterpreterFrame *frame,
+                     _PyIRHomeView *view, _PyIRHomeAuthority *authority)
+{
+    int matches = 0;
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)owner)->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        if (roots->kind != _Py_TRANSITION_KIND_ERROR || roots->frame != frame) {
+            continue;
+        }
+        assert(roots->header_mask == 0 && !roots->result_present);
+        if (roots->homes == NULL ||
+            (roots->home_authority != _PyIR_HOME_MUST_READABLE &&
+             roots->home_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
+        {
+            return -1;
+        }
+        *view = *roots->homes;
+        view->scratch_limit = (uint16_t)Py_MIN(view->scratch_limit,
+            Py_MAX(roots->remaining - view->nbindings, 0));
+        *authority = roots->home_authority;
+        matches++;
+    }
+    return matches;
+}
+
+_PyIRHomeAuthority
+_PyFrame_GetErrorHomeView(PyThreadState *owner_hint, _PyInterpreterFrame *frame,
+                         _PyIRHomeView *view)
+{
+    if (frame->phase_state != _PyIR_PHASE_ERROR_SCOPE) {
+        return _PyIR_HOME_NONE;
+    }
+    PyThreadState *current = _PyThreadState_GET();
+    if (owner_hint != NULL && owner_hint->interp != current->interp) {
+        return _PyIR_HOME_NONE;
+    }
+    _PyIRHomeAuthority authority = _PyIR_HOME_NONE;
+    int matches = 0;
+    if (owner_hint == NULL || owner_hint == current) {
+        matches = find_error_home_view(current, frame, view, &authority);
+        if (matches != 0 || owner_hint == current) {
+            return matches == 1 ? authority : _PyIR_HOME_NONE;
+        }
+    }
+#ifdef Py_GIL_DISABLED
+    /* A suspended-frame read claim does not protect a foreign C stack. */
+    if (!current->interp->stoptheworld.world_stopped) {
+        return _PyIR_HOME_NONE;
+    }
+#endif
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)current;
+    int lock_head = impl->head_locked_frame_walk == 0;
+    if (lock_head) {
+        HEAD_LOCK(&_PyRuntime);
+    }
+    if (owner_hint != NULL) {
+        matches = find_error_home_view(owner_hint, frame, view, &authority);
+    }
+    else {
+        _Py_FOR_EACH_TSTATE_UNLOCKED(current->interp, owner) {
+            if (owner != current) {
+                int found = find_error_home_view(owner, frame, view, &authority);
+                if (found < 0) {
+                    matches = -1;
+                    break;
+                }
+                matches += found;
+            }
+        }
+    }
+    if (lock_head) {
+        HEAD_UNLOCK(&_PyRuntime);
+    }
+    return matches == 1 ? authority : _PyIR_HOME_NONE;
+}
 
 _PyIRHomeAuthority
 _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
 {
+    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+        return _PyFrame_GetErrorHomeView(NULL, frame, view);
+    }
     if (frame->phase_state & _PyIR_PHASE_CAPTURED) {
         if (frame->phase_state != _PyIR_PHASE_CAPTURED &&
             frame->phase_state != (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
@@ -473,7 +556,8 @@ _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
 }
 
 static Py_NO_INLINE PyValue
-clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason)
+clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason,
+                      int initial_extent)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     _PyInterpreterFrame *frame = &gen->gi_iframe;
@@ -483,7 +567,7 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason
     PyObject **limit = tstate->datastack_limit;
 #endif
     _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, stage, _PyFrame_NumSlots(frame), result, &roots);
+    _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
     roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
     roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
@@ -509,20 +593,37 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason
     return result;
 }
 
-PyValue
-_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result, uint8_t reason)
+static inline Py_ALWAYS_INLINE PyValue
+clear_generator_at_extent(PyGenObject *gen, PyValue result, uint8_t reason,
+                           int initial_extent)
 {
     int stage;
     Py_BEGIN_CRITICAL_SECTION(gen);
-    stage = _PyFrame_TryClearExceptCode(&gen->gi_iframe);
+    stage = try_clear_except_code(&gen->gi_iframe, initial_extent);
     Py_END_CRITICAL_SECTION();
     if (stage != _Py_FRAME_CLEAR_DONE ||
         _PyFrame_ObjectMayReenter(gen->gi_exc_state.exc_value))
     {
-        return clear_generator_slow(gen, stage, result, reason);
+        return clear_generator_slow(gen, stage, result, reason, initial_extent);
     }
     _PyErr_ClearExcState(&gen->gi_exc_state);
     return result;
+}
+
+PyValue
+_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result, uint8_t reason)
+{
+    return clear_generator_at_extent(gen, result, reason,
+                                     _PyFrame_NumSlots(&gen->gi_iframe));
+}
+
+PyValue
+_PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason)
+{
+    /* The error processor has drained selected scratch. Do not reconstruct
+     * an N-sized view from the generator's allocation or its public PC. */
+    return clear_generator_at_extent(gen, PyValue_NULL, reason,
+        _PyFrame_GetCode(&gen->gi_iframe)->co_nlocalsplus);
 }
 
 /* Unstable API functions */

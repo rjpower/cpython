@@ -261,9 +261,9 @@ class ReachedPhaseTests(unittest.TestCase):
                 self.assertEqual(states, [PUBLISHED | PROVIDER | (EXACT << STATUS_SHIFT)])
             else:
                 # RESTORE moves each owner home; it does not retire it. The
-                # actual last-owner callbacks occur in ClearTemporaries, which
-                # invalidates the active phase before clearing any scratch.
-                self.assertEqual(states, [0])
+                # actual last-owner callbacks occur under the reached ERROR
+                # control scope, without reusing the normal RESTORE proof.
+                self.assertEqual(states, [1 << 14])
 
 
 if __name__ == "__main__":

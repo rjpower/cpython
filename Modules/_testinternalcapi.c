@@ -5049,6 +5049,54 @@ get_frame_home_view(PyObject *self, PyObject *arg)
                          view.scratch_limit, view.nranges);
 }
 
+/* Snapshot selected object addresses before building Python objects. An
+ * allocation can run GC and move an associated interpreter frame. */
+static PyObject *
+get_frame_selected_object_ids(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
+    _PyIRHomeView view;
+    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(frame, &view);
+    if (authority != _PyIR_HOME_MUST_READABLE &&
+        authority != _PyIR_HOME_NULL_CONTROL_READABLE)
+    {
+        PyErr_SetString(PyExc_ValueError, "frame has no readable selected view");
+        return NULL;
+    }
+    uintptr_t *addresses = PyMem_Malloc(
+        (size_t)Py_MAX(_PyFrame_NumSlots(frame), 1) * sizeof(*addresses));
+    if (addresses == NULL) {
+        return PyErr_NoMemory();
+    }
+    int count = 0, begin, end;
+    uint32_t cursor = 0;
+    while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &end)) {
+        for (int home = begin; home < end; home++) {
+            PyValue value = frame->base[home];
+            if (PyValue_IsObject(value)) {
+                addresses[count++] = (uintptr_t)PyValue_AsKnownObjectBorrow(value);
+            }
+        }
+    }
+    PyObject *ids = PyList_New(count);
+    if (ids != NULL) {
+        for (int i = 0; i < count; i++) {
+            PyObject *address = PyLong_FromUnsignedLongLong(addresses[i]);
+            if (address == NULL) {
+                Py_CLEAR(ids);
+                break;
+            }
+            PyList_SET_ITEM(ids, i, address);
+        }
+    }
+    PyMem_Free(addresses);
+    return ids;
+}
+
 static PyObject *
 check_created_home_view_invalidation(PyObject *self, PyObject *arg)
 {
@@ -5289,6 +5337,7 @@ static PyMethodDef module_functions[] = {
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},
+    {"get_frame_selected_object_ids", get_frame_selected_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},

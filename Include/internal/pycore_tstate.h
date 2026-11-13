@@ -94,6 +94,10 @@ typedef struct _PyThreadStateImpl {
         GENERATOR_YIELD = 1,
     } generator_return_kind;
 
+    /* Only the executing verifier publishes this while holding HEAD_LOCK
+     * through recursive tp_traverse calls. A frame-owner hint is not a lock. */
+    unsigned int head_locked_frame_walk;
+
     /* Head of circular linked-list of all tasks which are instances of `asyncio.Task`
        or subclasses of it used in `asyncio.all_tasks`.
     */
@@ -160,6 +164,13 @@ typedef struct _PyThreadStateImpl {
     char __padding[_Py_QSBR_CACHE_LINE_SIZE];
 #endif
 } _PyThreadStateImpl;
+
+#if SIZEOF_VOID_P == 8
+/* The cold traversal guard occupies the padding after the return-kind enum. */
+static_assert(offsetof(_PyThreadStateImpl, asyncio_tasks_head) ==
+              offsetof(_PyThreadStateImpl, generator_return_kind) + 8,
+              "cold traversal guard occupies existing padding");
+#endif
 
 #ifdef __cplusplus
 }

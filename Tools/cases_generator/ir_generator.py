@@ -2704,6 +2704,7 @@ class IREmitter(Emitter):
         self._replacers["IR_BINARY_READER"] = self.binary_reader
         self._replacers["IR_CREATED_COPY"] = self.created_copy
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
+        self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
@@ -2816,6 +2817,13 @@ class IREmitter(Emitter):
                       else "_Py_BuildMap_ValueSteal")
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
+        self.out.last_token = end
+        return True
+
+    def take_input_home(self, tkn, tkn_iter, uop, storage, inst):
+        local, index = self.checked_home_array(tkn, uop, storage)
+        _, end = self.instruction_macro_args(tkn, tkn_iter)
+        self.out.emit_at(f"_PyFrame_TakeHome(frame, &{local.name}[{index}])", tkn)
         self.out.last_token = end
         return True
 
@@ -4585,7 +4593,7 @@ NORMAL_FRAME_OBSERVERS = {
 }
 
 
-def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
+def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
     """Check declared array capabilities without granting a raw pointer."""
     markers = [t for t in part.body.tokens() if t.text in IR_HELPER_EFFECTS]
     if not markers:
@@ -4593,6 +4601,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
     inputs = {item.name: item for item in part.stack.inputs}
     outputs = {item.name: item for item in part.stack.outputs}
     contexts: list[tuple[list[Token], tuple[tuple[int, tuple[str, ...]], ...]]] = []
+    loops: dict[int, tuple[str, tuple[str, ...], tuple]] = {}
 
     def collect(stmt, guards=()):
         if isinstance(stmt, SimpleStmt):
@@ -4606,6 +4615,34 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
             collect(stmt.body, guards + ((id(stmt), condition),))
             if stmt.else_body is not None:
                 collect(stmt.else_body, guards + ((id(stmt), ("else",)),))
+        elif isinstance(stmt, ForStmt):
+            header = [t.text for t in stmt.header if t.kind != "COMMENT"]
+            semicolons = [at for at, text in enumerate(header) if text == ";"]
+            if (any(scope in loops for scope, _ in guards) or len(semicolons) != 2 or
+                    header[:2] not in (["(", "int"], ["(", "Py_ssize_t"]) or
+                    header[-1:] != [")"]):
+                raise analysis_error("home loop needs a forward integer induction", stmt.for_)
+            first, second = semicolons
+            initial, condition, step = header[1:first], header[first + 1:second], header[second + 1:-1]
+            if (len(initial) != 4 or initial[2:] != ["=", "0"] or
+                    len(condition) != 3 or condition[:2] != [initial[1], "<"] or
+                    step not in ([initial[1], "++"], ["++", initial[1]]) or
+                    not (condition[2] == "oparg" or condition[2].isdigit())):
+                raise analysis_error("home loop needs zero-to-extent unit induction", stmt.for_)
+            index, extent = initial[1], tuple(condition[2:])
+            if index in {*HANDLER_LOCALS, *IR_HELPER_EFFECTS, *inputs, *outputs}:
+                raise analysis_error("home loop index shadows its extent or array", stmt.for_)
+            body = list(stmt.body.tokens())
+            if any(t.text in {"break", "continue", "goto", "return", "DISPATCH",
+                              "DISPATCH_INLINED", "JUMPTO", "JUMPBY", "ERROR_IF",
+                              "ERROR_NO_POP", "EXIT_IF", "DEOPT_IF", "Py_UNREACHABLE"}
+                   or t.kind.startswith("CMACRO") or
+                   (t.kind == "IDENTIFIER" and t.text.isupper() and
+                    t.text not in IR_HELPER_EFFECTS) for t in body):
+                raise analysis_error("home loop cannot bypass its per-home operation", stmt.for_)
+            loops[id(stmt)] = (index, extent, guards)
+            contexts.append((stmt.header, guards))
+            collect(stmt.body, guards + ((id(stmt), ("for", index, *extent)),))
         else:
             raise analysis_error("home adapter requires checked statement control", markers[0])
 
@@ -4617,6 +4654,9 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
         return arg[0].text if len(arg) == 1 and arg[0].kind == "IDENTIFIER" else None
 
     def in_bounds(item, index, guards):
+        if isinstance(index, str):
+            return any(scope in loops and condition == ("for", index, item.size)
+                       for scope, condition in guards)
         if item.size.isdigit():
             return index < int(item.size)
         return (item.size == "oparg & 1" and index == 0 and
@@ -4625,9 +4665,11 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
 
     used: dict[str, StackItem] = {}
     covered: set[int] = set()
-    operations: dict[int, tuple[str, int]] = {}
+    operations: dict[int, tuple[str, int | str]] = {}
     order = {id(token): at for at, token in enumerate(part.body.tokens())}
-    writes: list[tuple[str, int, tuple[tuple[int, tuple[str, ...]], ...], int]] = []
+    writes: list[tuple[str, int | str, tuple[tuple[int, tuple[str, ...]], ...], int]] = []
+    loop_operations: dict[int, int] = {}
+    taken: set[str] = set()
     for tokens, guards in contexts:
         iterator = TokenIterator(tokens)
         for token in iterator:
@@ -4642,11 +4684,24 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
                 array = name(args[0]) if len(args) == 3 else None
                 item = outputs.get(array)
                 index = (int(args[1][0].text) if len(args) == 3 and
-                         len(args[1]) == 1 and args[1][0].text.isdigit() else -1)
-                if item is None or not item.is_array() or index < 0 or not in_bounds(item, index, guards):
+                         len(args[1]) == 1 and args[1][0].text.isdigit() else
+                         name(args[1]) if len(args) == 3 else None)
+                if item is None or not item.is_array() or index is None or not in_bounds(item, index, guards):
                     raise analysis_error("output home needs a declared array and proved index", token)
+                if any(previous == array and (old == index or isinstance(old, str) or
+                       isinstance(index, str)) for previous, old, _, _ in writes):
+                    raise analysis_error("output home cannot be published twice", token)
                 covered.add(id(args[0][0]))
                 writes.append((array, index, guards, order[id(end)]))
+            elif token.text == "IR_TAKE_INPUT":
+                array = name(args[0]) if len(args) == 2 else None
+                item = inputs.get(array)
+                index = name(args[1]) if len(args) == 2 else None
+                if (item is None or item.peek or not item.is_array() or
+                        index is None or not in_bounds(item, index, guards) or array in taken):
+                    raise analysis_error("input take needs its unique index-matched owning array", token)
+                taken.add(array)
+                covered.add(id(args[0][0]))
             elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP"}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
@@ -4667,8 +4722,17 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
                 index = 0
                 covered.add(id(args[1][0]))
             assert array is not None and item is not None
+            for scope, condition in guards:
+                if scope in loops:
+                    counter, extent, outer = loops[scope]
+                    if (index != counter or item.size != " ".join(extent) or
+                            guards != outer + ((scope, condition),)):
+                        raise analysis_error("every home iteration must execute its index-matched operation", token)
+                    loop_operations[scope] = loop_operations.get(scope, 0) + 1
             used[array] = item
             operations[id(token)] = (array, index)
+    if any(loop_operations.get(scope) != 1 for scope in loops):
+        raise analysis_error("home loop must contain one operation on every normal iteration", markers[0])
 
     # A declared array's generated pointer cannot be copied, rebound, passed
     # elsewhere or used as a raw write target after acquiring a capability.
@@ -4695,8 +4759,11 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
                     arg[2].text.isdigit() and arg[3].text == "]"):
                 reads.add(id(arg[0]))
     for tokens, guards in contexts:
+        protected = {"oparg", *(loops[scope][0] for scope, _ in guards if scope in loops)}
+        if protected.intersection(declared_locals(tokens)):
+            raise analysis_error("home loop extent or index cannot be shadowed", tokens[0])
         for at, token in enumerate(tokens):
-            if token.text == "oparg":
+            if token.text in protected:
                 before, after = at - 1, at + 1
                 while before >= 0 and tokens[before].kind == "LPAREN":
                     before -= 1

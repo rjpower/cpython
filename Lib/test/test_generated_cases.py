@@ -3247,6 +3247,43 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(SyntaxError):
                 check(source)
 
+    def test_home_loops_require_unique_all_path_induction(self):
+        def check(body, inputs="", outputs="out[oparg]"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {{ {body} }}\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+        loop = "for (int i = 0; i < oparg; i++) { IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"
+        self.assertTrue(check(loop))
+        self.assertTrue(check(loop.replace("i++", "++i")))
+        self.assertTrue(check("""for (Py_ssize_t i = 0; i < oparg; i++) {
+            PyValue value = IR_TAKE_INPUT(values, i);
+            PyValue_CLOSE(value);
+        } DEAD(values);""", inputs="values[oparg]", outputs=""))
+        for changed in (
+                loop.replace("i = 0", "i = 1"),
+                loop.replace("i < oparg", "i <= oparg"),
+                loop.replace("i < oparg", "i < oparg + 1"),
+                loop.replace("i++", "i += 2"),
+                loop.replace(" i", " frame"),
+                loop.replace("out, i", "out, 0"),
+                loop.replace("IR_WRITE_OUTPUT", "continue; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "SKIP(); IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "if (flag) IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "int i = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "(i) = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "opaque(&(i)); IR_WRITE_OUTPUT"),
+                loop.replace(" }", " break; }"),
+                loop.replace(" }", " IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"),
+                loop + loop):
+            with self.subTest(changed=changed), self.assertRaises(SyntaxError):
+                check(changed)
+        with self.assertRaisesRegex(SyntaxError, "published twice"):
+            check("IR_WRITE_OUTPUT(out, 0, PyValue_NULL); IR_WRITE_OUTPUT(out, 0, PyValue_NULL);",
+                  outputs="out[2]")
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
+            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+
     def test_home_operations_lower_through_actual_storage(self):
         output = self.ir_output("""
             window inst(OP, (-- out[2])) {
@@ -3267,6 +3304,28 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("_Py_BuildMap_ValueSteal(frame, values, oparg)", output)
         self.assertNotIn("IR_BUILD_MAP", output)
         self.assertIn("frame->phase_state = 0;", output)
+
+    def test_home_loop_operations_lower_through_actual_storage(self):
+        output = self.ir_output("""
+            window inst(OP, (-- out[oparg])) {
+                for (int i = 0; i < oparg; i++) {
+                    IR_WRITE_OUTPUT(out, i, PyValue_NULL);
+                }
+            }
+        """)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[i], PyValue_NULL)", output)
+        output = self.ir_output("""
+            inst(OP, (values[oparg] -- result)) {
+                for (int i = 0; i < oparg; i++) {
+                    PyValue value = IR_TAKE_INPUT(values, i);
+                    PyValue_CLOSE(value);
+                }
+                DEAD(values);
+                result = PyValue_None;
+            }
+        """)
+        self.assertIn("_PyFrame_TakeHome(frame, &values[i])", output)
+        self.assertNotIn("IR_TAKE_INPUT", output)
 
     def test_disjoint_child_requires_actual_constructor_and_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

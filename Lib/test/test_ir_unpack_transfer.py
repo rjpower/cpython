@@ -14,6 +14,35 @@ from test.test_ir_admission import construct
 
 
 class UnpackTransferTests(unittest.TestCase):
+    def test_nonfolded_unpack_preserves_only_untouched_tail_absence(self):
+        for count in (0, 2, 8):
+            with self.subTest(count=count):
+                base = 1
+                tail = base + max(count, 2)
+                words = [("LOAD_CONST", base), ("POP_TOP", tail),
+                         ("UNPACK_SEQUENCE", base, count, 0, 4095)]
+                words.extend(("POP_TOP", base + i)
+                             for i in range(max(count, 1)))
+                words.extend((("LOAD_CONST", base),
+                              ("CALL_NO_SELF", base, base, 0, 0),
+                              ("RETURN_VALUE", base)))
+                code = make_code(words, slots=count + 4, locals=("local",))
+                for admitted in routes(code):
+                    self.assertEqual(_testinternalcapi.get_ir(admitted, True),
+                                     _testinternalcapi.get_ir(code))
+                # Being outside the output footprint preserves an existing
+                # absence fact; it cannot manufacture one for a live value.
+                bad = words.copy()
+                bad[1] = ("LOAD_CONST", tail)
+                replacement = encoded(bad)
+                for route in (construct, lambda co, **kw: co.replace(**kw)):
+                    with self.assertRaisesRegex(ValueError, "child clobber home"):
+                        route(code, co_code=replacement)
+                payload = marshal.dumps(code)
+                self.assertEqual(payload.count(code.co_code), 1)
+                with self.assertRaisesRegex(ValueError, "child clobber home"):
+                    marshal.loads(payload.replace(code.co_code, replacement, 1))
+
     def test_folded_outputs_are_empty_but_scratch_outputs_remain_live(self):
         for count in (0, 2, 8):
             with self.subTest(count=count):

@@ -3388,6 +3388,21 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
+    /* A constructor binder has taken the evaluated scratch inputs. Its
+     * caller's named bindings remain mutable, but no redirect recipe may
+     * reconstruct those consumed inputs before publication or failure unwind. */
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)PyThreadState_GET())->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        if (roots->caller_staged && roots->frame != NULL &&
+            roots->frame->previous == self->f_frame)
+        {
+            PyErr_SetString(PyExc_ValueError,
+                            "jump requires a staged constructor owner recipe");
+            return -1;
+        }
+    }
     /* Event eligibility permits a request; the phase and owner proofs below
      * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;
@@ -3502,6 +3517,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
             return -1;
         }
+        frame_at_line->phase_state = 0;
         frame_at_line->return_pc = frame_at_line->instr_ptr;
         self->f_line_next = -1;
         self->f_lineno = 0;
@@ -3778,6 +3794,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
     }
     /* No callback is possible between the final proof and the commit. */
+    frame->phase_state = 0;
     int nretired = 0;
     for (int i = 0; i < plan.nrestores; i++) {
         RegisterLocalRestore action = plan.restores[i];
@@ -3922,6 +3939,34 @@ static PyGetSetDef frame_getsetlist[] = {
     {0}
 };
 
+static Py_NO_INLINE void
+frame_dealloc_owned(PyFrameObject *f, _PyInterpreterFrame *frame,
+                    PyObject **observers, size_t nobservers)
+{
+    assert(frame->frame_obj == NULL);
+    PyThreadState *tstate = _PyThreadState_GET();
+    int nslots = _PyFrame_NumSlots(frame);
+    _PyTransitionRoots roots;
+    _PyFrame_InitClearRoots(frame, nslots, PyValue_NULL, &roots);
+    roots.retire_reason = _PyIR_RETIRE_HEAP_CLEAR;
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+
+    FT_CLEAR_WEAKREFS((PyObject *)f, f->f_weakreflist);
+    roots.header_mask &= ~_Py_TRANSITION_FUNCTION;
+    Py_CLEAR(frame->f_funcobj);
+    roots.header_mask &= ~_Py_TRANSITION_LOCALS;
+    Py_CLEAR(frame->f_locals);
+    _PyFrame_FinishClearExceptCode(frame, nslots, &roots);
+    for (size_t i = 0; i < nobservers; i++) {
+        Py_CLEAR(observers[i]);
+    }
+    /* Code also owns constants with finalizers. Keep its pin through every
+     * home/metadata close, then remove authority before its final close. */
+    roots.header_mask &= ~_Py_TRANSITION_CODE;
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+}
+
 static void
 frame_dealloc(PyObject *op)
 {
@@ -3932,7 +3977,18 @@ frame_dealloc(PyObject *op)
         _PyObject_GC_UNTRACK(f);
     }
 
-    FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
+    /* This refcount-zero object has no Python observer that can mutate its
+     * bindings. Move metadata owners to actual native workspace before any
+     * callback; the untracked object's fields are not conservative roots. */
+    PyObject *observers[] = {
+        (PyObject *)f->f_back, f->f_trace, f->f_extra_locals,
+        f->f_locals_cache, f->f_overwritten_fast_locals,
+    };
+    f->f_back = NULL;
+    f->f_trace = NULL;
+    f->f_extra_locals = NULL;
+    f->f_locals_cache = NULL;
+    f->f_overwritten_fast_locals = NULL;
 
     /* GH-106092: If f->f_frame was on the stack and we reached the maximum
      * nesting depth for deallocations, the trashcan may have delayed this
@@ -3942,22 +3998,14 @@ frame_dealloc(PyObject *op)
 
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
-        int nslots = _PyFrame_NumSlots(frame);
-        Py_CLEAR(frame->f_executable);
-        Py_CLEAR(frame->f_funcobj);
-        Py_CLEAR(frame->f_locals);
-        PyValue *locals = _PyFrame_GetLocalsArray(frame);
-        PyValue *sp = locals + nslots;
-        while (sp > locals) {
-            sp--;
-            PyValue_CLEAR(*sp);
+        frame_dealloc_owned(f, frame, observers, Py_ARRAY_LENGTH(observers));
+    }
+    else {
+        FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
+        for (size_t i = 0; i < Py_ARRAY_LENGTH(observers); i++) {
+            Py_CLEAR(observers[i]);
         }
     }
-    Py_CLEAR(f->f_back);
-    Py_CLEAR(f->f_trace);
-    Py_CLEAR(f->f_extra_locals);
-    Py_CLEAR(f->f_locals_cache);
-    Py_CLEAR(f->f_overwritten_fast_locals);
     PyObject_GC_Del(f);
 }
 

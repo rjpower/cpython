@@ -656,21 +656,15 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
-/* Pushes a trampoline frame without checking for space.
- * Must be guarded by _PyThreadState_HasStackSpace() */
-static inline _PyInterpreterFrame *
-_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int return_slot, _PyInterpreterFrame * previous)
+static inline void
+_PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
+                             int return_slot, _PyInterpreterFrame *previous)
 {
-    CALL_STAT_INC(frames_pushed);
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
     frame->f_funcobj = NULL;
     frame->f_executable = (PyCodeObject *)Py_NewRef(code);
-#ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;
-#endif
     frame->f_locals = NULL;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);
@@ -679,11 +673,24 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif
-    assert(return_slot < nslots);
+    assert(return_slot < _PyFrame_NumSlotsForCodeObject(code));
     frame->return_slot = (uint16_t)return_slot;
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->phase_state = 0;
+}
+
+/* Pushes a trampoline frame without checking for space.
+ * Must be guarded by _PyThreadState_HasStackSpace() */
+static inline _PyInterpreterFrame *
+_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code,
+                               int return_slot, _PyInterpreterFrame *previous)
+{
+    CALL_STAT_INC(frames_pushed);
+    _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(
+        tstate, _PyFrame_NumSlotsForCodeObject(code));
+    _PyFrame_InitializeTrampoline(frame, code, return_slot, previous);
     return frame;
 }
 

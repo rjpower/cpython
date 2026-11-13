@@ -46,7 +46,11 @@ do { \
 #endif  // Py_STATS
 
 
-#define SIMPLE_FUNCTION 0
+typedef enum {
+    SIMPLE_SIGNATURE,
+    GENERAL_SIGNATURE,
+    UNOPTIMIZED_SIGNATURE,
+} FunctionSignature;
 
 /* Common */
 
@@ -668,7 +672,7 @@ unspecialize(_PyInstr *instr)
     }
 }
 
-static int function_kind(PyCodeObject *code);
+static FunctionSignature function_signature(PyCodeObject *code);
 static bool function_check_args(PyObject *o, int expected_argcount, int opcode);
 static uint32_t function_get_version(PyObject *o, int opcode);
 
@@ -1867,22 +1871,29 @@ _Py_Specialize_LoadGlobal(
     Py_END_CRITICAL_SECTION2();
 }
 
-static int
-function_kind(PyCodeObject *code) {
+static FunctionSignature
+function_signature(PyCodeObject *code)
+{
     int flags = code->co_flags;
     if ((flags & (CO_VARKEYWORDS | CO_VARARGS)) || code->co_kwonlyargcount) {
-        return SPEC_FAIL_CODE_COMPLEX_PARAMETERS;
+        return GENERAL_SIGNATURE;
     }
     if ((flags & CO_OPTIMIZED) == 0) {
-        return SPEC_FAIL_CODE_NOT_OPTIMIZED;
+        return UNOPTIMIZED_SIGNATURE;
     }
-    // The specialisations of simple functions push the callee's frame
-    // inline, where allocating its executing copy could not fail
+    return SIMPLE_SIGNATURE;
+}
+
+/* An optional specialization may fail without failing the current operation.
+ * Cache nomination still requires a positive execution-image readiness proof. */
+static bool
+prepare_function_for_inline(PyCodeObject *code)
+{
     if (_PyCode_GetExec(code) == NULL) {
         PyErr_Clear();
-        return SPEC_FAIL_OTHER;
+        return false;
     }
-    return SIMPLE_FUNCTION;
+    return true;
 }
 
 /* Returning false indicates a failure. */
@@ -1892,13 +1903,19 @@ function_check_args(PyObject *o, int expected_argcount, int opcode)
     assert(Py_IS_TYPE(o, &PyFunction_Type));
     PyFunctionObject *func = (PyFunctionObject *)o;
     PyCodeObject *fcode = (PyCodeObject *)func->func_code;
-    int kind = function_kind(fcode);
-    if (kind != SIMPLE_FUNCTION) {
-        SPECIALIZATION_FAIL(opcode, kind);
+    FunctionSignature signature = function_signature(fcode);
+    if (signature != SIMPLE_SIGNATURE) {
+        SPECIALIZATION_FAIL(opcode, signature == GENERAL_SIGNATURE
+                            ? SPEC_FAIL_CODE_COMPLEX_PARAMETERS
+                            : SPEC_FAIL_CODE_NOT_OPTIMIZED);
         return false;
     }
     if (fcode->co_argcount != expected_argcount) {
         SPECIALIZATION_FAIL(opcode, SPEC_FAIL_WRONG_NUMBER_ARGUMENTS);
+        return false;
+    }
+    if (!prepare_function_for_inline(fcode)) {
+        SPECIALIZATION_FAIL(opcode, SPEC_FAIL_OTHER);
         return false;
     }
     return true;
@@ -1976,8 +1993,7 @@ store_subscr_fail_kind(PyObject *container, PyValueBorrow sub)
     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
         PyFunctionObject *func = (PyFunctionObject *)descriptor;
         PyCodeObject *code = (PyCodeObject *)func->func_code;
-        int kind = function_kind(code);
-        if (kind == SIMPLE_FUNCTION) {
+        if (function_signature(code) == SIMPLE_SIGNATURE) {
             fail_kind = SPEC_FAIL_SUBSCR_PY_SIMPLE;
         }
         else {
@@ -2064,9 +2080,14 @@ get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_vers
         return NULL;
     }
     PyObject *init = PyValue_AsKnownObjectSteal(init_value);
-    int kind = function_kind((PyCodeObject *)PyFunction_GET_CODE(init));
-    if (kind != SIMPLE_FUNCTION) {
+    PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(init);
+    if (function_signature(code) != SIMPLE_SIGNATURE) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_INIT_NOT_SIMPLE);
+        Py_DECREF(init);
+        return NULL;
+    }
+    if (!prepare_function_for_inline(code)) {
+        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         Py_DECREF(init);
         return NULL;
     }
@@ -2195,7 +2216,7 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
 {
     _PyFbCall *fb = instr_entry(instr);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    int kind = function_kind(code);
+    FunctionSignature signature = function_signature(code);
     /* Don't specialize if PEP 523 is active */
     if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_PEP_523);
@@ -2206,12 +2227,16 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     int argcount = -1;
-    if (kind == SPEC_FAIL_CODE_NOT_OPTIMIZED) {
+    if (signature == UNOPTIMIZED_SIGNATURE) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CODE_NOT_OPTIMIZED);
         return -1;
     }
-    if (kind == SIMPLE_FUNCTION) {
+    if (signature == SIMPLE_SIGNATURE) {
         argcount = code->co_argcount;
+    }
+    if (!prepare_function_for_inline(code)) {
+        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
+        return -1;
     }
     int version = _PyFunction_GetVersionForCurrentState(func);
     if (!_PyFunction_IsVersionValid(version)) {
@@ -2346,7 +2371,7 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
 {
     _PyFbCall *fb = instr_entry(instr);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    int kind = function_kind(code);
+    FunctionSignature signature = function_signature(code);
     /* Don't specialize if PEP 523 is active */
     if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_PEP_523);
@@ -2356,8 +2381,12 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_VECTORCALL);
         return -1;
     }
-    if (kind == SPEC_FAIL_CODE_NOT_OPTIMIZED) {
+    if (signature == UNOPTIMIZED_SIGNATURE) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CODE_NOT_OPTIMIZED);
+        return -1;
+    }
+    if (!prepare_function_for_inline(code)) {
+        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         return -1;
     }
     int version = _PyFunction_GetVersionForCurrentState(func);
@@ -2799,7 +2828,8 @@ specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
     {
         PyObject *getitem = PyValue_AsKnownObjectBorrow(descriptor);
         PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
-        if (function_kind(code) == SIMPLE_FUNCTION && code->co_argcount == 2 &&
+        if (function_signature(code) == SIMPLE_SIGNATURE && code->co_argcount == 2 &&
+            prepare_function_for_inline(code) &&
             _PyType_CacheGetItemForSpecialization(
                 (PyHeapTypeObject *)container_type, getitem, tp_version))
         {

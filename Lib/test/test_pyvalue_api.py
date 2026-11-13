@@ -2,6 +2,8 @@
 section 1.3 and the value format conversions of section 4."""
 
 import contextvars
+import dis
+import gc
 import math
 import sys
 import types
@@ -861,6 +863,145 @@ class ProviderHandoffTests(unittest.TestCase):
                                      for kind, reason, status, has_frame in
                                      _testinternalcapi.get_transition_shadow_status()))
                 self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+
+@support.requires_specialization
+class InitShimTests(unittest.TestCase):
+    def assert_constructor(self, function):
+        self.assertIn('CALL_ALLOC_AND_ENTER_INIT',
+                      {inst.opname for inst in dis.get_instructions(
+                          function, adaptive=True)})
+
+    def test_exact_init_uses_active_authority(self):
+        armed = False
+        observations = []
+
+        class C:
+            def __init__(self, value):
+                self.value = value
+                if armed:
+                    observations.append(id(self) in
+                        _testinternalcapi.get_transition_root_ids())
+                    support.gc_collect()
+
+        def instantiate(value):
+            return C(value)
+
+        payload = Item()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            instantiate(payload)
+        self.assert_constructor(instantiate)
+        armed = True
+        result = instantiate(payload)
+        self.assertIs(result.value, payload)
+        self.assertEqual(observations, [False])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_failed_heap_call_stages_self_and_blocks_redirect(self):
+        armed = False
+        observations = []
+        redirects = []
+        old_binding = Item()
+        new_binding = Item()
+        caller = None
+
+        def probe():
+            return None
+
+        def tracer(frame, event, arg):
+            if frame.f_code is probe.__code__ and event == 'line':
+                try:
+                    caller.f_lineno = caller.f_lineno
+                except ValueError as error:
+                    redirects.append(str(error))
+                else:
+                    redirects.append('accepted')
+            return tracer
+
+        def observe(phase):
+            ids = set(_testinternalcapi.get_transition_root_ids())
+            if phase == 'argument':
+                instances = [obj for obj in gc.get_objects() if type(obj) is C]
+                observations.append((phase, len(instances),
+                                     all(id(obj) in ids for obj in instances)))
+                instances.clear()
+            else:
+                observations.append((phase,))
+            caller.f_locals['named'] = new_binding
+            previous = sys.gettrace()
+            previous_local = caller.f_trace
+            try:
+                caller.f_trace = tracer
+                sys.settrace(tracer)
+                probe()
+            finally:
+                sys.settrace(previous)
+                caller.f_trace = previous_local
+            support.gc_collect()
+
+        class C:
+            def __init__(self):
+                pass
+
+            def __del__(self):
+                if armed:
+                    observe('shim')
+
+        class Extra:
+            def __del__(self):
+                if armed:
+                    observe('argument')
+
+        def instantiate():
+            named = old_binding
+            yield
+            try:
+                C(Extra(), None, None, None, None, None, None, None, None)
+            except TypeError:
+                return named
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            generator = instantiate()
+            next(generator)
+            with self.assertRaises(StopIteration):
+                next(generator)
+        self.assert_constructor(instantiate)
+        generator = instantiate()
+        next(generator)
+        caller = generator.gi_frame
+        armed = True
+        with self.assertRaises(StopIteration) as stopped:
+            next(generator)
+        self.assertIs(stopped.exception.value, new_binding)
+        self.assertEqual(observations, [('argument', 1, True), ('shim',)])
+        self.assertEqual(len(redirects), 2)
+        self.assertTrue(all('staged constructor owner recipe' in error
+                            for error in redirects), redirects)
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_changed_init_code_uses_checked_child_geometry(self):
+        class C:
+            def __init__(self, value):
+                self.value = value
+
+        def instantiate(value):
+            return C(value)
+
+        payload = Item()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            instantiate(payload)
+        self.assert_constructor(instantiate)
+        old_size = C.__init__.__code__.co_nlocals
+        namespace = {}
+        source = ('def replacement(self, *values):\n' +
+                  ''.join(f'    pad{i} = values\n' for i in range(256)) +
+                  '    self.value = values[0]\n')
+        exec(source, namespace)
+        C.__init__.__code__ = namespace['replacement'].__code__
+        self.assertGreater(C.__init__.__code__.co_nlocals, old_size)
+        result = instantiate(payload)
+        self.assertIs(result.value, payload)
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
 class UnpackPrefixTests(unittest.TestCase):

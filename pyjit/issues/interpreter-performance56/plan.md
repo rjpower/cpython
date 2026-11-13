@@ -1,7 +1,7 @@
 # Interpreter performance: combined plan
 
 Status: combined architecture reviewed by Astra high in 6036b9a5ce7; source
-peer review and foundation qualification active. This is the active successor
+implementation, peer review and merged qualification active. This is the active successor
 to model55. Read the [design](../../design/proposals/interpreter-performance56.md)
 and [critical audit](review.md), then the experiments below. The [goal](../../GOAL.md),
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
@@ -13,8 +13,8 @@ Improve the interpreter across DeltaBlue, generators, coroutines, Richards,
 comprehensions and silent logging, then qualify the whole benchmark set.
 Preserve Python behavior, explicit ownership, useful observation and the gains
 already delivered by canonical PyValues. Select qualified improvements against
-immutable golden54 and upstream controls. Do not attribute a roughly43%
-generator gap, or the smaller DeltaBlue gap, to frame clearing without evidence.
+immutable golden54 and upstream controls. Do not attribute the generator or
+DeltaBlue gap to frame clearing without evidence.
 
 ## One architecture, four workstreams
 
@@ -44,14 +44,14 @@ inputs and records source, generated, native and dynamic evidence separately.
 
 | Lane | Next concrete work | Owner and exit |
 | --- | --- | --- |
-| Foundation | I VALUE/error-copy plus isolated empty-family repair; qualify full generation and native focused behavior | Root;33 narrow/full cases/metadata/contracts pass at 1413a9; products/build/native pending |
-| Early call | Exact-object-tuple CALL_EX probe before owning snapshots, preserving final refresh/nonexact path | Frames Sol; propose/peer, expected mortal-pair delta and actual hot-set frequency |
+| Foundation | Qualify the VALUE replay correction and direct completion composition | Root; If6ef builds 117/79 both roles; chained proof passes, synthetic line-target fixture pending; completion84 passes per role |
+| Early call | [Exact-tuple preparation](call-ex-tuple.md) and cold call-observer geometry integrated | Root; 12 transaction methods pass per role, native arm bypasses acquisitions; hot six has zero sites, so no broad gain claim |
 | Shared facts/transport | Extend existing helper/action facts for one frequent canonical producer; replace its old special proof | IR Sol; immediate consumer, negative proof tests and emitted/native removal |
-| Borrowing | Multi-use callback-free folding, then acyclic CFG joins with explicit owning snapshots | IR/frames peers; net surviving-word and DUP/CLOSE reduction after materialization |
-| Completion | One remaining binding/recipient or completion duplication under the common ownership contract | Frames Sol; keep overlap, code pins, CALL_WAIT partition and inline return |
-| Specialization | One hot arithmetic or attribute/call family consuming shared guard/effect/result facts | GC Sol; cache hit/miss/invalidation proof and fewer hot checks/bridges |
+| Borrowing | Close initial callback-free COPY-web experiment at zero candidates; reassess broader materialization/CFG opportunities against measured work | Frames/IR; 21 corpus sources, 426 CFGs; no speculative pass is implemented |
+| Completion | Qualify [direct native terminal entries](completion.md); fix shared generator-entry recipient admission | Frames Sol; source audit finds FOR local/discard destinations lose direct handoff; typed recipe and semantic witnesses in review |
+| Specialization | Execute complete homogeneous [polymorphic SHAPE rows](polymorphic-slot.md) under one checked read contract | GC Sol; measured site coverage in DeltaBlue/Richards; source implementation, then actual peer and native hit/miss/throughput gates |
 | Cold storage | Independently qualify IRSC2; diagnose bitmap monitor/profile and synthetic debug failure | Root with source peers; full M4 remains a separate lifecycle gate |
-| Selection | Compose qualified winners; direct hot6 and all29 versus frozen parent, golden54 and upstream | Root; coherent full diagnostics and cold post-review |
+| Selection | Compose qualified winners; direct hot six and all 29 versus frozen parent, golden54 and upstream | Root; coherent full diagnostics and cold post-review |
 
 The first call and transport proposals proceed in parallel. Shared facts are a
 bounded foundation for broader borrowing/specialization, not a framework project.
@@ -69,10 +69,11 @@ component is not a qualified runtime or a speedup.
 
 ## Carry-forward evidence
 
-Golden54 remains `61015a9452d9069646fb5fede9ff963896833b89`. The latest measured
-model55 static checkpoint is 8232dd8adde, with mixed two-pair results against54
-and substantial remaining gaps versus upstream. The
-[checkpoint report](report.md) owns the exact ratios, ranges and scope.
+Golden54 remains `61015a9452d9069646fb5fede9ff963896833b89`. Latest integration
+f6ef4a81a87 improves generators to .949424 of golden elapsed time in two pairs,
+but coroutines and comprehensions regress. The earlier broad/PMU checkpoint
+6a00c6a08d4 has all 29/upstream mean 1.161978. No new variant is selected.
+The [checkpoint report](report.md) owns exact-head ratios, ranges and scope.
 
 The model55 bitmap execution-reader candidate builds both roles, but monitoring
 and profiling qualification remain open. Its pending IRSC2 retained-transfer
@@ -102,4 +103,5 @@ reviewed source remain historical inputs. Four duplicate progress/staging pages
 are retired with their exact committed contents retained in git and the stage56
 evidence directory. Ten superseded Loom review/inventory/progress mirrors have
 been exported with revision metadata and empty thread inventories before
-retirement. Their canonical design/review evidence remains in the repository.
+retirement. All ten are now retired; 12 current mirrors retain the goal → plan →
+architecture/status chain. Canonical design/review evidence remains in git.

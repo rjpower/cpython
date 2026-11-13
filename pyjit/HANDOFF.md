@@ -8,22 +8,42 @@ Follow [process](PROCESS.md). Do not restart completed runtime integration.
 
 ## Active integration
 
-Astra high completed the combined design/audit in 6036b9a5ce7, integrated here
-as bd32753b5a0. Read [proposal](design/proposals/interpreter-performance56.md)
-and [review](issues/interpreter-performance56/review.md). No native evidence was
-produced by that source review. Sol frames, IR and GC workers now peer the
-call/borrowing, value/action and specialization contracts against actual sources
-before bounded implementation. Do not call Astra in the inner loop.
+Astra high completed the architecture/audit in 6036b9a5ce7, integrated here as
+bd32753b5a0 and refined in 8cc069dc884. Read the [proposal](design/proposals/interpreter-performance56.md)
+and [review](issues/interpreter-performance56/review.md). Sol frames, IR and GC
+workers own generator-recipient/call, shared-value, and polymorphic-shape lanes.
+Root owns products, native execution, evidence, publication and selection.
+Do not call Astra in the inner loop.
 
-Root admitted isolated empty-family fix 3cfc808 as I1413a9fe218. Its new host
-gate E55/scalar-results-host-empty-family passes 33 methods and full cases,
-metadata and contracts emission. The reused driver's final message incorrectly
-says thirty-two; unittest's actual count is 33. Full generation passes under
-scalar-results-qualified; product review precedes commit and native build.
+Measured early checkpoint 6a00c6a08d4 has complete all 29/upstream, hot six/golden,
+18 stat and 6 record invocations at stable identities. See E56/call-ex-* and the
+[current report](issues/interpreter-performance56/report.md). Transaction 12
+methods pass each role. Initial COPY-web census has zero candidates across 21
+corpus files/426 CFGs; frozen parser/metadata/input hashes reproduce the result.
+No compiler pass is justified for that slice.
 
-The launch brief/manifest remains under E56. The active plan keeps full static
-M4 and bitmap qualification separate from ordinary value/call improvements.
-Root owns full generation, native evidence, publication and selection.
+I now f6ef4a81a87 includes second replay469b→aa952, recipient0888→99f,
+products31a3 and fixture maintenance d531→f6ef. Full host37 and actual-recipient
+source checks pass; full regeneration and both 117/79 builds pass. The native
+proof assertions now pass; the chained witness fails later because its synthetic image has f_lineno=None,
+so assignment raises "lineno must be an integer" before the intended active-call
+check. Actual denial is retained under E56/redirect-denial-diagnostic; IR owns a
+valid target fixture. Nine completion/observer modules pass all 84 methods per
+native role. Core selector omitted ReachedPhaseTests, covered by that second
+completion run. E56/recipient-hot6-golden completes two balanced pairs with
+stable identities/no errors: generator .949424, coroutine1.065409,
+DeltaBlue1.022672, Richards .968734, comprehension1.027499, logging1.017075
+(wide range). No current upstream/full qualification or promotion is claimed.
+
+The earlier root source diagnosis was confirmed in actual code: legacy transfer
+erased untouched scratch facts after a complete normal graph. The reviewed
+repair makes that graph authoritative, with conservative fallback for unknown
+source. E56/scalar-normal-legacy-gdb* records unsuccessful debugger attempts;
+the second timed out during startup and supplies no native confirmation.
+
+Source-only next packets use existing isolated worktrees. Full static M4,
+IRSC2 and bitmap qualification remain separate. Root's common native wrapper
+writes tags under E55; current native builds are shared and must stay serialized.
 
 ## Controls
 
@@ -46,13 +66,13 @@ and `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstr
 
 | Source under BASE/worktrees | Branch / head | Native state and next gate |
 | --- | --- | --- |
-| call55-integrated | pyjit/call55-integrated / 1413a9fe218 | Shared builds still 8232dd8adde. VALUE/error-copy and isolated empty-family repair pass 33 narrow methods and full cases/metadata/contracts; full generation passes; product review pending. |
-| call55-bitmap | pyjit/call55-bitmap /0e918ddc25b | Both 117/79 builds. Release34 focused cases pass; debug HomeRead aborts in a synthetic image. Monitoring/profile failures remain. No bitmap timing. |
-| call55-ir | pyjit/call55-ir /3cfc808d8eb | Clean; includes frozen IRSC2 compiler/readers/runtime9c297 plus separate empty-family fix. No native/full generation. |
-| call55-pins | pyjit/call55-frames-retained /80b3de991c6 | Clean source-reviewed presence-provider retained runtime; no native. Earlier separate fixes are already integrated into B. |
-| call55-gc | pyjit/call55-gc-monitor-read-roles /0b447e8235b | Clean source-only monitoring diagnosis. Compiler bf2f44a2973 and reader6ca122f3135 preserved on pyjit/call55-gc-retained-eh. |
+| call55-integrated | pyjit/call55-integrated /f6ef4a81a87 | Both 117/79 builds; proof passes, synthetic line-target fixture pending. Completion84 passes per role; hot6/golden mixed, generator .949424. |
+| call55-bitmap | pyjit/call55-bitmap /0e918ddc25b | Both 117/79 builds. Release 34 focused pass; debug HomeRead and monitor/profile failures remain. No timing. |
+| call55-ir | pyjit/perf56-value-replay /469b5682289 | Second replay integrated; shared tuple/list fact migration in progress. Frozen IRSC2 packet remains on pyjit/call55-ir at3cfc808. |
+| call55-pins | pyjit/perf56-generator-recipient /d531d993d30 | Recipient and fixture packets integrated; exact awaitable transfer proposed. Retained-EH80b preserved on pyjit/call55-frames-retained. |
+| call55-gc | pyjit/perf56-polymorphic-shape /323cb4da34a | Reviewed PIC frozen; no products/native. Prior monitor/EH branches preserved. |
 
-Latest measured I8232: E55/scalar-storage-hot-screen-{golden,upstream}; stable
+Historical measured I8232: E55/scalar-storage-hot-screen-{golden,upstream}; stable
 identities/no errors. E55/scalar-storage-{release,debug}-build.log has117/79;
 runtime checks23 and admission233 per role; freezer5+27 passes. Retained ELF
 E55/scalar-storage-native SHA256

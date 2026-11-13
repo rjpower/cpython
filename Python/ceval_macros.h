@@ -160,7 +160,7 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 #ifdef Py_DEBUG
 #define LLTRACE_RESUME_FRAME() \
 do { \
-    int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS()); \
+    int lltrace = maybe_lltrace_resume_frame(frame); \
     frame->lltrace = lltrace; \
 } while (0)
 #else

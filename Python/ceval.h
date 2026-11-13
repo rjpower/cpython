@@ -278,12 +278,14 @@ lltrace_resume_frame(_PyInterpreterFrame *frame)
 }
 
 static int
-maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
+maybe_lltrace_resume_frame(_PyInterpreterFrame *frame)
 {
-    if (globals == NULL) {
+    if (frame->owner >= FRAME_OWNED_BY_INTERPRETER ||
+        !PyValue_FunctionCheck(frame->f_funcobj)) {
         return 0;
     }
-    if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+    PyObject *globals = _PyFrame_GetGlobals(frame);
+    if (globals == NULL) {
         return 0;
     }
     int r = PyDict_ContainsValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__lltrace__)));

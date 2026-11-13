@@ -3056,6 +3056,40 @@ semantic_exception_at(const _PyIRExceptionEntry *entries, int count, int pc)
     return low < count && entries[low].start <= pc ? entries + low : NULL;
 }
 
+/* Only a complete emitted route census can remove an ordinary EH edge.
+ * Observer/source recovery is joined separately, even for an inert word. */
+static int
+semantic_has_exceptional_predecessor(const semantic_image *image, int pc)
+{
+    _PyIRWord word = image->words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    unsigned int routes = fmt->error_routes;
+    unsigned int known = _PyIR_ERROR_COMPLETE | _PyIR_ERROR_DIRECT |
+                         _PyIR_ERROR_BRIDGE | _PyIR_ERROR_LOCAL_DST;
+    if (!(routes & _PyIR_ERROR_COMPLETE) || (routes & ~known) ||
+        (routes & (_PyIR_ERROR_DIRECT | _PyIR_ERROR_BRIDGE)))
+    {
+        return 1;
+    }
+    if (routes & _PyIR_ERROR_LOCAL_DST) {
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        int found = 0;
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                found++;
+                if (fields[f] < (uint32_t)image->nl) {
+                    return 1;
+                }
+            }
+        }
+        /* A malformed conditional capability cannot certify an inert site. */
+        if (found != 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int
 normal_transfer_proof(const semantic_image *image,
                       const _PyIRCodePlan **plan, PyObject **normalized)
@@ -3233,7 +3267,9 @@ normal_transfer_proof(const semantic_image *image,
             for (int i = 0; i < nexceptions; i++) {
                 const _PyIRExceptionEntry *entry = &handlers[i];
                 for (int pc = entry->start; pc < entry->end; pc++) {
-                    if (!work.blocks[block_at[pc]].reached) {
+                    if (!work.blocks[block_at[pc]].reached &&
+                        semantic_has_exceptional_predecessor(image, pc))
+                    {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                                  entry->slot, entry->lasti);
                         semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
@@ -3278,7 +3314,9 @@ normal_transfer_proof(const semantic_image *image,
             for (int i = work.blocks[b].start; i < end; i++) {
                 const _PyIRExceptionEntry *entry =
                     semantic_exception_at(handlers, nexceptions, i);
-                if (entry != NULL) {
+                if (entry != NULL &&
+                    semantic_has_exceptional_predecessor(image, i))
+                {
                     semantic_exception_entry(image, &work, abrupt, state,
                                              semantic_abrupt_floor(image, i),
                                              entry->slot, entry->lasti);

@@ -62,11 +62,28 @@ class ExceptionAbsenceTests(unittest.TestCase):
         aliases[3] = ("YIELD_VALUE", 1, 4, 0)
         self.rejected(code, co_code=encoded(aliases))
 
-    def test_uncovered_exception_predecessor_poison_is_not_skipped(self):
+    def test_complete_inert_exception_predecessor_is_not_an_ingress(self):
         code, _ = self.image()
-        # POP_TOP has normal retirement evidence, but no abrupt-prefix
-        # contract. It is another protected predecessor, not a new proof.
-        self.rejected(code, co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
+        contract = _opcode.get_ir_contract()[opcode.opmap["POP_TOP"]]
+        self.assertEqual(contract.error_routes, _opcode.IR_ERROR_COMPLETE)
+        # The protected POP has no emitted exceptional route. Its lack of an
+        # abrupt-prefix receipt must not erase the YIELD predecessor's facts.
+        extended = code.replace(
+            co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
+        for admitted in routes(extended):
+            _testinternalcapi.get_ir(admitted, True)
+
+    def test_uncovered_exception_predecessor_poison_is_not_skipped(self):
+        code, words = self.image()
+        # Keep the normal path balanced while adding a genuinely uncovered
+        # protected producer. Its absence of a route census remains unknown.
+        words[4] = ("UNARY_NOT", 4, 4)
+        words[5] = ("POP_TOP", 4)
+        unknown = code.replace(co_code=encoded(words), co_linetable=b"")
+        self.assertFalse(_opcode.get_ir_contract()[
+            opcode.opmap["UNARY_NOT"]].error_routes & _opcode.IR_ERROR_COMPLETE)
+        self.rejected(unknown,
+                      co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
 
     def test_unknown_source_recovery_is_an_independent_predecessor(self):
         code, _ = self.image()

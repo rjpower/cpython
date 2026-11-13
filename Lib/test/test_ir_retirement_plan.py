@@ -10,11 +10,19 @@ from test.test_ir_transfer_admission import encoded, make_code
 
 NORMAL_RETURN, ERROR_UNWIND, HEAP_CLEAR, STAGED_FAILURE = range(1, 5)
 UNCOVERED, EXACT, MISMATCH = range(3)
+RETIRING = 1
 
 
 def return_sites(code):
     return [i for i, row in enumerate(_testinternalcapi.get_ir(code))
             if row[0] == "RETURN_VALUE"]
+
+
+def retiring_states():
+    # Provider tests assert the complete chain, including disarmed STAGED
+    # nodes. These fixtures select actual retirement records explicitly.
+    return [state for state in _testinternalcapi.get_transition_shadow_status()
+            if state[0] == RETIRING]
 
 
 class RetirementPlanTests(unittest.TestCase):
@@ -123,23 +131,24 @@ class RetirementPlanTests(unittest.TestCase):
                 self.nested = nested
 
             def __del__(self):
-                observations.append(_testinternalcapi.get_transition_shadow_status())
+                observations.append(retiring_states())
                 if self.nested:
                     f(None, Trigger(False))
 
         result = object()
         self.assertIs(f(result, Trigger(True)), result)
         self.assertEqual(observations,
-                         [[(NORMAL_RETURN, EXACT)],
-                          [(NORMAL_RETURN, EXACT), (NORMAL_RETURN, EXACT)]])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), [])
+                         [[(RETIRING, NORMAL_RETURN, EXACT, True)],
+                          [(RETIRING, NORMAL_RETURN, EXACT, True),
+                           (RETIRING, NORMAL_RETURN, EXACT, True)]])
+        self.assertEqual(retiring_states(), [])
 
     def test_actual_unknown_retirement_and_nullable_binding(self):
         observations = []
 
         class Trigger:
             def __del__(self):
-                observations.append(_testinternalcapi.get_transition_shadow_status())
+                observations.append(retiring_states())
 
         def unknown(value, trigger):
             iter(value)
@@ -147,7 +156,8 @@ class RetirementPlanTests(unittest.TestCase):
 
         value = []
         self.assertIs(unknown(value, Trigger()), value)
-        self.assertEqual(observations, [[(NORMAL_RETURN, UNCOVERED)]])
+        self.assertEqual(observations,
+                         [[(RETIRING, NORMAL_RETURN, UNCOVERED, True)]])
         observations.clear()
 
         def nullable(trigger):
@@ -157,8 +167,8 @@ class RetirementPlanTests(unittest.TestCase):
 
         self.assertIn("unbound", nullable.__code__.co_varnames)
         self.assertIsNone(nullable(Trigger()))
-        self.assertEqual(observations, [[(NORMAL_RETURN, EXACT)]])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), [])
+        self.assertEqual(observations, [[(RETIRING, NORMAL_RETURN, EXACT, True)]])
+        self.assertEqual(retiring_states(), [])
 
 
 if __name__ == "__main__":

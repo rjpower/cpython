@@ -618,7 +618,8 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
             if (dst != IR_NO_DST && dst >= limit) {
                 return unknown;
             }
-            if (dst == IR_NO_DST && !(fmt->flags & _PyIR_DISCARDS)) {
+            if (dst == IR_NO_DST &&
+                !(fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS))) {
                 return unknown;
             }
         }

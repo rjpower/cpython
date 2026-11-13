@@ -1,9 +1,12 @@
 """Real call homes across preparation, native cleanup and Python binding."""
 
+import gc
 import sys
+import types
 import unittest
 
 from test.support import import_helper
+from test.test_ir_call_roles import call_rows, routes
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 _testclinic = import_helper.import_module("_testclinic")
@@ -20,6 +23,137 @@ def call_state(code):
 
 
 class NativeCallTransactionTests(unittest.TestCase):
+    def test_exact_tuple_preparation_all_routes(self):
+        def plain(target, arguments):
+            return target(*arguments)
+
+        def keywords(target, arguments):
+            return target(*arguments, label="kept")
+
+        def target(*arguments, **keywords):
+            return arguments, keywords
+
+        payload = object()
+        cases = ((plain, {}), (keywords, {"label": "kept"}))
+        for template, expected_keywords in cases:
+            for code in routes(template.__code__):
+                self.assertTrue(call_rows(code)[0][0].startswith("CALL_EX"))
+                invoke = types.FunctionType(code, {})
+                for arguments in ((), (payload, 1, -0.0)):
+                    with self.subTest(keywords=expected_keywords,
+                                      arguments=arguments):
+                        values, names = invoke(target, arguments)
+                        self.assertEqual(values, arguments)
+                        self.assertEqual(names, expected_keywords)
+                        if arguments:
+                            self.assertIs(values[0], payload)
+
+    def test_nonexact_tuple_preparation_keeps_evaluated_inputs(self):
+        def template(target, arguments):
+            return target(*arguments)
+
+        def target(*arguments):
+            return "original", arguments
+
+        def replacement(*arguments):
+            return "replacement", arguments
+
+        payload = object()
+        for code in routes(template.__code__):
+            events = []
+
+            def convert():
+                frame = sys._getframe(1).f_back
+                self.assertIs(frame.f_code, code)
+                frame.f_locals["target"] = replacement
+                frame.f_locals["arguments"] = ()
+                gc.collect()
+                events.append("iter")
+                return iter((payload,))
+
+            class TupleArguments(tuple):
+                def __iter__(self):
+                    return convert()
+
+            class Arguments:
+                def __iter__(self):
+                    return convert()
+
+            invoke = types.FunctionType(code, {})
+            for arguments in (TupleArguments(), Arguments()):
+                with self.subTest(kind=type(arguments)):
+                    self.assertEqual(invoke(target, arguments),
+                                     ("original", (payload,)))
+            self.assertEqual(events, ["iter", "iter"])
+
+    def test_nonexact_tuple_preparation_errors(self):
+        def template(target, arguments):
+            return target(*arguments)
+
+        marker = LookupError("tuple subclass iteration")
+        events = []
+
+        class Arguments(tuple):
+            def __iter__(self):
+                events.append("iter")
+                gc.collect()
+                raise marker
+
+        def target(*arguments):
+            self.fail("a failed preparation must not invoke its target")
+
+        for code in routes(template.__code__):
+            invoke = types.FunctionType(code, {})
+            for arguments in (None, 17, object()):
+                with self.subTest(arguments=arguments):
+                    with self.assertRaisesRegex(
+                            TypeError, r"argument after \* must be an iterable"):
+                        invoke(target, arguments)
+            with self.assertRaises(LookupError) as caught:
+                invoke(target, Arguments())
+            self.assertIs(caught.exception, marker)
+            marker.__traceback__ = None
+        self.assertEqual(events, ["iter"] * 4)
+
+    def test_exact_tuple_monitor_observes_evaluated_inputs_once(self):
+        def template(target, arguments):
+            return target(*arguments)
+
+        payload = object()
+        arguments = (payload,)
+        tool = sys.monitoring.DEBUGGER_ID
+        for code in routes(template.__code__):
+            events = []
+
+            def target(value):
+                events.append("body")
+                return value
+
+            def monitor(current, offset, function, first):
+                self.assertIs(current, code)
+                self.assertIs(function, target)
+                self.assertIs(first, payload)
+                frame = sys._getframe(1)
+                self.assertIs(frame.f_code, code)
+                frame.f_locals["target"] = None
+                frame.f_locals["arguments"] = ()
+                sys.monitoring.set_local_events(tool, code, 0)
+                gc.collect()
+                events.append("call")
+
+            sys.monitoring.use_tool_id(tool, "exact-tuple-preparation")
+            try:
+                sys.monitoring.register_callback(
+                    tool, sys.monitoring.events.CALL, monitor)
+                sys.monitoring.set_local_events(tool, code, sys.monitoring.events.CALL)
+                invoke = types.FunctionType(code, {})
+                self.assertIs(invoke(target, arguments), payload)
+                self.assertEqual(events, ["call", "body"])
+            finally:
+                sys.monitoring.set_local_events(tool, code, 0)
+                sys.monitoring.register_callback(tool, sys.monitoring.events.CALL, None)
+                sys.monitoring.free_tool_id(tool)
+
     def check_alias(self, expanded):
         events, states = [], []
         kwargs = {}

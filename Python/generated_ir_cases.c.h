@@ -4744,20 +4744,27 @@
                 assert(tp->tp_alloc == PyType_GenericAlloc);
                 PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
                 PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
+                if (init_func->vectorcall != _PyFunction_Vectorcall) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
                 PyCodeObject *code = (PyCodeObject *)init_func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
                 STAT_INC(CALL, hit);
                 PyObject *self_o = PyType_GenericAlloc(tp, 0);
                 if (self_o == NULL) {
+                    PyValue_CLOSE(init_owner);
                     JUMP_TO_LABEL(error);
                 }
                 self_or_null = PyValue_FromObjectSteal(self_o);
                 PyValue temp = callable;
-                callable = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
+                callable = init_owner;
                 IR_PUBLISH_TEMP(window[0], callable);
                 IR_PUBLISH_TEMP(window[1], self_or_null);
                 PyValue_CLOSE(temp);
@@ -4767,22 +4774,12 @@
                 args = &window[2];
                 self = self_or_null;
                 init = callable;
-                _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
-                    tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
-                assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
-                shim->base[0] = PyValue_DUP(self);
-                _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
-                    tstate, init, NULL, args-1, oparg+1, NULL, shim);
-                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
+                _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
+                    tstate, frame, args-2, oparg,IR_A(ir_word), next_instr);
                 if (temp == NULL) {
-                    _PyFrame_ClearTemporaries(shim, 0);
-                    _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
                     JUMP_TO_LABEL(error);
                 }
-                frame->return_slot = (uint16_t)IR_A(ir_word);
-                frame->return_pc = next_instr;
-                tstate->py_recursion_remaining--;
+                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 init_frame = PyValue_Wrap(temp);
             }
             // _PUSH_FRAME

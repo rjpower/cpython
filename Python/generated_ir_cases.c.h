@@ -14728,11 +14728,6 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {
-                UPDATE_MISS_STATS(FOR_ITER);
-                assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                JUMP_TO_PREDICTED(FOR_ITER);
-            }
             PyValue iter;
             // _CHECK_PEP_523
             {

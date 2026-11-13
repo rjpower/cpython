@@ -183,6 +183,8 @@ enum {
                                     // elements stay in the window
 #define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
                                     // exceptional absence only, not readability
+#define _PyIR_ABRUPT_OPERANDS 0x4000 // actual ordinary error stores confined
+                                     // to encoded operands; absence only
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree

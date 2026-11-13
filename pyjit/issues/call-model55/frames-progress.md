@@ -480,3 +480,43 @@ rvalue argument shapes and unary-address rejection, including parenthesized
 forms. Root's first host smoke passed the two parser checks but exposed an
 invalid synthetic scalar output layout; its positive fixture now declares
 window storage. Revised source is frozen for host retry and final peers.
+
+The fixed/helper writer packet is committed 99560a5115e after IR/GC actual
+source GO. Root's final host checks pass the three selected source methods and
+full cases/metadata generation. The delegated CAPI probe correction was
+separately committed d3f16918251; it selects actual immutable delegated words
+and D/A roles instead of collapsing through the old YIELD base opcode.
+
+The next six-file loop packet is committed 948577105fb after root/GC source
+GO: tuple/list output indices and SET take-before-hash share checked Storage
+operations. Three parser-only checks pass; coordinator emitted/native checks
+remain. The remaining writer census and costed counted-versus-occupancy reader
+assessment are writer-closure-ledger.md and bitmap-authority-assessment.md.
+They distinguish positive counted roots from non-counted copy/introspection
+and control readers; neither is a bitmap authority or full closure claim.
+
+The B shared-writer merge is source-resolved/staged with physical consume,
+store/vacate/native-entry/SEND hooks retained. Duplicate plain WriteHome and
+TakeHome definitions are removed; bitmap implementations remain authoritative.
+All nine copied opcode-body bridges are replaced by the shared checked
+operations. Six parser-only checks pass, GC gives actual source GO, and root
+commits the merge as 209e51e521d. IR did not add an independent final source
+review. Generated/native results remain coordinator evidence.
+
+The direct tuple/list handoff is committed 2c27c4bd2e9 (five files), after GC
+and root actual source GO. It uses existing helpers and final vacate, with no
+extra C argument, wrapper or sweep. Native helper escape classification is
+shared with lowering. Four parser checks and AST checks pass; the actual
+boxing-discovery/output-order and two runtime fixtures remain root work.
+Source review caught and fixed the provisional-record gate before freeze.
+The next requested refinement is the costed proposal known-home-capabilities.md;
+it changes no runtime source pending peer/interface freeze.
+
+Known-home packet `6a80182f670` is committed with root/GC/IR actual source GO.
+The B merge from I `3b4547380d0` is resolved and staged, including matching
+counted helper bodies and expanded existing alignment probe. Four conflicts
+were combined in place, preserving physical writer hooks and the new explicit
+general-return extent. GC gives actual source GO; five source/parser checks
+and diff checks pass. Root owns commit/regeneration/native qualification.
+The authority assessment now distinguishes already-implemented counted roots
+and drains from the proposed same-byte non-NULL plane for copy/traversal.

@@ -9,7 +9,6 @@ import subprocess
 
 
 BASE = Path('/home/power/code/cpython/.worktrees/python-boil-the-ocean/build')
-SOURCE = BASE / 'worktrees/call55-integrated'
 EVIDENCE = BASE / 'pyjit-link-wave1/call-model55'
 
 
@@ -22,12 +21,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('tag')
     parser.add_argument('symbols', nargs='+')
+    parser.add_argument('--variant', choices=['integrated', 'bitmap'],
+                        default='integrated')
     args = parser.parse_args()
-    if subprocess.check_output(['git', '-C', str(SOURCE), 'status', '--porcelain']):
+    source = BASE / f'worktrees/call55-{args.variant}'
+    if subprocess.check_output(['git', '-C', str(source), 'status', '--porcelain']):
         raise RuntimeError('native capture requires a clean source')
-    build = BASE / 'call55-integrated-release'
+    build = BASE / f'call55-{args.variant}-release'
     head = subprocess.check_output(
-        ['git', '-C', str(SOURCE), 'rev-parse', 'HEAD'], text=True).strip()
+        ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     native_head = subprocess.check_output(
         [str(build / 'python'), '-S', '-B', '-c',
          'import sys; print(sys._git[2])'], cwd=build, text=True).strip()

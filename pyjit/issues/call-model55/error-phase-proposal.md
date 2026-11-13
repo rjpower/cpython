@@ -1,8 +1,9 @@
 # Error and unwind selection
 
-Source audit: integrated `863b6d0cb08`. Proposal only; NULL control remains
-authoritative. GC's delegated consumer `16f465dc0e5` is separate and still
-needs matching IR admission and frames publication before integration.
+Initial source audit: integrated `863b6d0cb08`, refreshed against the current
+delegated composition and shared abrupt producer work. Proposal only; NULL
+control remains authoritative. The delegated cohort now has merged native
+evidence; it does not provide general ERROR selection.
 
 The next coherent consumer is the actual error processor, not a normal-edge
 map reused at an error PC. Capture an emitter-owned exceptional checkpoint
@@ -48,9 +49,9 @@ snapshot its identity before a callback can replace it.
 Use one reached NO_INLINE error processor to own the view and cursor. It must
 start before `finish_value_bridges`, rather than adding an addressed record to
 each ordinary handler. Its scope spans traceback/raise monitoring, suffix
-cleanup, handler installation and handled monitoring. A concrete ABI is a
-follow-on freeze: preserve the current tail-call parameters, return only the
-actual next continuation/disposition, and do not leave a pointer to local
+cleanup, handler installation and handled monitoring. The five-argument ABI
+below preserves the current tail-call parameters, returns only the actual next
+continuation/disposition, and does not leave a pointer to local
 descriptor storage after the helper returns. Propagation loops through parent
 frames rather than retaining one native helper frame per unwound Python frame.
 
@@ -124,7 +125,9 @@ required producer and reader is ported. Root owns native execution and switch.
 IR and frames lifecycle peers give direction GO: checkpoint before bridge
 cleanup, explicit origin, one selected cursor and separate lasti/exception
 roles. Frames' metadata-only active selection and explicit M2 transfer
-conditions are incorporated above. Detailed ABI remains pending source freeze.
+conditions are incorporated above. The entry ABI below has IR/frames direction
+GO and root approval; actual exceptional producer coverage remains a separate
+source freeze.
 
 ## Bounded scope ABI for the next freeze
 
@@ -138,9 +141,45 @@ view. Push validation must distinguish this metadata node from an owning
 retirement node: its code lifetime is backed by the active frame's real pin,
 not a fictitious CODE owner bit.
 
-Proposed reached entry: `_PyEval_ProcessError(tstate, frame, origin,
-checkpoint, value_temps)`, returning the existing two-word `_PyIRStepResult`.
-The checkpoint packs only an emitted finite phase/variant. `origin` is the
+Frozen reached entry:
+
+```c
+typedef enum {
+    _PyIR_ERROR_HANDLED = 0,
+    _PyIR_ERROR_EXIT = 1,
+} _PyIRErrorDisposition;
+
+typedef struct {
+    _PyInstr *next;
+    _PyIRErrorDisposition disposition;
+} _PyIRErrorResult;
+
+/* Same translation unit as the actual bridge and exception helpers. */
+static Py_NO_INLINE _PyIRErrorResult
+_PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *origin, uint32_t entry,
+                     _PyValueTemps *value_temps);
+```
+
+The result occupies 16 bytes on the selected 64-bit ABI. It contains no
+descriptor pointer or owner. `entry` has checkpoint ID in bits 0..7 and an
+ingress tag in bits 8..11; higher bits are reserved and rejected. The emitter
+must reject checkpoint IDs above 255 instead of truncating them. Checkpoint
+zero means explicitly UNCOVERED with an independently justified development
+NULL-control adapter; it is neither empty nor a static readable certificate.
+
+| Ingress tag | First action and recovery semantics |
+| --- | --- |
+| RAISE = 0 | Select before bridge cleanup; then traceback/raise monitoring and actual handler lookup. |
+| UNWIND = 1 | Select before bridges and enter handler lookup without duplicating traceback or raise monitoring. Explicit origin remains the raising word even if RERAISE changed public lasti. |
+| EXIT = 2 | Bypass handler lookup, preserving the existing evaluator-exit tracing distinction. |
+| EXIT_NOTRACE = 3 | Bypass handler lookup and the tracing action skipped by the existing notrace label. |
+| THROW = 4 | Select the actual throw ingress before `monitor_throw`; then use the RAISE path. A successful saved execution claim does not itself mutate homes. |
+| HANDLED_FAILURE = 5 | Select a fresh handler-entry snapshot before another clear after failed handled monitoring. |
+| CALLER = 6 | After child retirement, select the parent's actual WAIT/error continuation, including prepared call roles. Successful CALL_DRAIN cannot supply this shape. |
+| SOURCE = 7 | Use the actual pending semantic source recovery triple; source locations never select readable homes. Retain the current recovery decoder until its container migration. |
+
+`origin` is the
 explicit immutable word identity captured before bridges; `value_temps` is
 the existing native workspace, not a new arena owner bank. Enter before
 `JUMP_TO_LABEL` finishes bridges. The helper loops through propagation and
@@ -150,9 +189,9 @@ storage survives. A failed handled callback selects a new checkpoint before
 its next reentrant action. This preserves ordinary tail-call parameters and
 adds no addressed record to successful handlers.
 
-A dedicated cold ERROR-scope phase marker can dispatch common selection to
-the owning node. Its bit and exact entry signature remain unallocated until
-IR/frames review. Lookup first checks the current thread's chain; foreign
+A dedicated exact `_PyIR_PHASE_ERROR_SCOPE = (1u << 14)` marker dispatches
+common selection to kind 3. It cannot combine with captured, created or
+delegated suspension markers. Lookup first checks the current thread's chain; foreign
 thread lookup requires the GIL or actual interpreter stop-the-world and
 searches that interpreter's thread chains by exact frame identity. Merely
 having PUBLISHED set, or using the collector's current TLS, is insufficient.
@@ -174,6 +213,19 @@ code-owned/static ranges, not a pointer to the helper's stack descriptor.
 Callers still need their existing frame-read capability before inspecting
 the phase marker. Missing/duplicate/unprotected context returns NONE rather
 than reconstructing geometry from PC or code size.
+
+Thread-list locking is a separate capability. The verifier holds HEAD_LOCK
+through root enumeration and recursive `drain()`, where arbitrary `tp_traverse`
+calls can reach a foreign frame. Publish a cold nested HEAD-held depth on the
+executing thread around each actual HEAD-held traversal region, restore its
+prior depth on every exit, and clear it before HEAD_UNLOCK. The lookup uses
+unlocked enumeration only under that explicit guard; otherwise it takes
+HEAD_LOCK itself. An owner hint proves neither lock ownership nor quiescence.
+Do not infer ownership from a mutex's locked bit. No Python callback may run
+while this traversal guard is published. Review the exact thread struct
+placement and all held traversal regions before source freeze; charge any
+padding/size increase and cold entry/exit stores. This adds no hot frame field
+or tail-call argument.
 
 At terminal drainage the helper passes a bindings-only view and current
 cursor into actual M2 retirement before unlinking the metadata node. Current
@@ -201,7 +253,7 @@ generated/native inspection; source placement alone does not prove no cost.
 
 ### First producer and file boundaries
 
-Candidate literal names are `_Py_TRANSITION_KIND_ERROR = 3` and
+Frozen literal names are `_Py_TRANSITION_KIND_ERROR = 3` and
 `_PyIR_PHASE_ERROR_SCOPE = (1u << 14)`. The frame marker is exact, not combined
 with CAPTURED, CREATED or delegated suspension. These consume spare existing
 bits; they are not implemented or reusable permissions yet.
@@ -215,8 +267,8 @@ to `bytecodes.c` error/unwind labels. Frames peers mutable binding/copy and
 accepted-redirect ports. Root composes these as one used producer/consumer;
 do not land an unused kind or lookup independently.
 
-Before that source freeze, IR must supply the exact emitted origin/checkpoint
-entry and distinguish error, direct-unwind, recursion/throw and failed-handled
+Before the used producer/consumer source freeze, IR must supply actual emitted
+origin/checkpoint entries for error, direct-unwind, recursion/throw and failed-handled
 ingress. `error` and `exception_unwind` cannot both run the same traceback or
 raise-monitor action. Preserve current monitor ordering, the source recovery
 triple and the original RERAISE origin separately. `monitor_handled` failure
@@ -241,8 +293,9 @@ frame, and an actual cross-thread STW root walk where supported. A transition
 external-root-ID query cannot prove active selection: kind 3 owns no external
 edges. Add explicit code/view lifetime and metadata disarm assertions at M2
 handoff, plus the existing live named-binding mutation and capture controls.
-First producer scope and exact origin API still need IR/root freeze; the
-lookup/lifetime rules above have frames' bounded lifecycle GO.
+The first producer's exact checkpoint coverage still needs source freeze; the
+five-argument entry, result, eight ingress semantics and lookup/lifetime rules
+above have direction GO. No unused selector or checkpoint alias may land alone.
 
 ## First cold admission increment: retained absence
 
@@ -294,3 +347,104 @@ Exercise real await plus delegate throw/recovery and all public construction
 routes. No new runtime phase, readable-home authority, physical NULL fact,
 normal fill, fallback or M4 switch is part of this increment. This ABI and
 worklist change require peer/root freeze before source edits.
+
+## Next cold admission increment: real exceptional predecessors
+
+The current loop in `normal_transfer_proof` enqueues an EH predecessor before
+every protected word, including words with no path to error processing. This
+can erase retained absence at an inert jump or constant publication. The
+captured 54-word coroutine in
+`E55/call-abrupt-writer-rejections/coroutines-image.log` has 12 EH intervals
+and five source records, all with handler -1. Those records select no source
+recovery target. They do not justify treating every protected word as an
+ordinary error ingress.
+
+Neither `_PyIR_PURE` nor absence of `_PyIR_RAISES` is a positive no-error
+certificate. Actual generated dispatch has two additional routes:
+
+* `DISPATCH` and `JUMP_TO_LABEL` finish native value bridges only when an
+  actual boxing record has a nonzero count. Nonboxing handlers generate
+  `value_temps = NULL`. Bridge failure can enter `error` without a DSL ERROR.
+* Final local-result publication calls `release_displaced` and then
+  `finish_displaced_local`. Its old-value close can reenter and its refresh
+  can fail. A scratch constant result can therefore be inert while the same
+  handler with a local recipient is an exceptional producer.
+
+Keep exceptional route metadata separate from the sole normal ownership
+program. Proposed `_PyIRFormat.error_routes` is a uint8 immediately after
+`call_input_holes`. Source layout accounting puts it in existing padding
+before `shadow`: reads/writes/through shift one byte, while shadow, twin,
+events and total size stay unchanged. Root must verify actual C offsets.
+No frame or code-object field is added.
+
+| Route bit | Required producer evidence / word predicate |
+| --- | --- |
+| COMPLETE = 1 | Complete parsed source effect grammar and receipt coverage for every emitted exit, publication adapter and terminal. Absence of observed errors alone is insufficient. |
+| DIRECT = 2 | An actual error/direct-unwind, poll, monitor, checked helper failure, child-error propagation or other nonconditional error route exists. A source branch need not always take it. |
+| BRIDGE = 4 | Actual input boxing can leave a record for emitted terminal bridge finishing. Enabled only for that emitted handler's boxing capability. |
+| LOCAL_DST = 8 | An actual displaced-local publication/refresh adapter can fail. Enabled only when its independently validated encoded recipient names a binding, not from generic output geometry. |
+
+Zero means UNKNOWN, not no error. Additional child/WAIT capabilities can be
+introduced only with their used source receipt; the first increment need not
+certify them. A cold query, conceptually
+`semantic_has_exceptional_predecessor(image, pc)`, returns true for UNKNOWN
+or any enabled route. COMPLETE with no enabled route skips only the ordinary
+EH enqueue at that word. Source recovery records, observer ingress, recursion
+entry and external throw remain independently represented.
+
+The producer is the actual shared emitter graph. Reuse the structured typed
+expression/helper grammar, extending it to return an effect summary even for
+an empty ERROR-token set; current `operand_error_sources` returns None for
+that case and cannot certify inertness. Checked primitive projections, value
+moves, constants and encoded jumps may compose. Helper summaries distinguish
+no-arena-write from no-error/control-transfer. Raw frame/window aliases,
+unknown calls/macros, addresses, preprocessing or manual terminals lose
+COMPLETE. No instruction name, successful drain or infallible annotation
+substitutes for this check.
+
+Expected explicit ERROR/direct-unwind routes must equal receipts recorded
+after their actual copied-stack flush, as in ordinary abrupt-operand coverage.
+Implicit boxing failure has separate receipt keys. Final output publication,
+displaced refresh, polling, monitor wrappers, bridge finishing and terminal
+dispatch each have an explicit effect in the same graph. DEOPT/redispatch must
+close over the actual target family or lose COMPLETE. A terminal bypassing
+recorded finalization poisons coverage. Union enabled route bits and intersect
+COMPLETE over every family member/twin/redispatch target; a quiet sibling
+cannot hide an error route.
+
+For enabled producers, keep pre-normal exceptional enqueue and the independent
+abrupt floor. Import only prior NO_HOME below both EH cleanup and complete
+abrupt-write floors; classification alone supplies no preservation. RESUME's
+instrumentation/pending calls and CLEANUP_THROW's reraise/monitor branch are
+real producers. Successful completion is not their partial-error footprint.
+No INIT, physical NULL, readability, completeness or pending tuple crosses
+this ingress.
+
+The next helper contracts must close these actual routes without copied
+opcode bodies. Instrumentation takes a code pin and interpreter; periodic
+checking takes tstate, never an arena address. Its callback contract permits
+named-binding mutation but needs an explicit observational-frame boundary.
+The resume oparg can exclude its periodic branch at/after AFTER_YIELD_FROM;
+that does not exclude a twin's monitoring path. CLEANUP_THROW's actual
+`IR_COMPLETE_STEP` supplies typed step-kind input/result bounds, independently
+of its normal completion receipt. Its `monitor_reraise` argument must be
+observational for scratch. The source grammar validates those exact helper
+interfaces and all error/monitor routes; aliases or changed arguments revoke
+the footprint. No whole-body clone or opcode-specific abrupt flag is planned.
+
+The second unknown-ingress pass uses the same producer classifier for
+unreached words. It must not manufacture an unknown edge from a positively
+inert word and undo the first pass. An unreached or reached UNKNOWN producer
+still injects unknown; source recovery seeds remain independent. Existing
+bounded queue/EH indexing and one reusable vector suffice. This adds cold
+constant-size metadata and no per-PC allocation or native hot store.
+
+Freeze tests cover protected inert jumps and scratch constants versus local
+publication; boxing/bridge siblings; poll/monitor/helper errors; one missing
+route/terminal receipt; independent unknown source recovery; and a prior-live
+prefix negative. Renaming preserves primitive-derived behavior; injecting an
+opaque helper or changing a target revokes COMPLETE. Use actual captured
+coroutine ingress plus all public image routes. This is removal of false
+predecessors under cold admission, not runtime ERROR readability or a full
+M4 switch. IR and root give direction GO on the metadata/receipt model;
+actual source changes still need bounded helper/producer freeze.

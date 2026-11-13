@@ -119,7 +119,26 @@ experiment. The proposal's M0–M7 table owns the exact schemas and admission ga
 | M4 | One coherent switch to map-authoritative scratch and non-stack allocation | Complete root/reader review, focused plus full integration checks; remove scratch clearing and arena-value scanning together |
 | M5 | Equivalent physical-bitmap branch | Same lowering/ABI/locals policy; measure full bit traffic including locals, copying, GC and teardown |
 | M6 | Bounded optional lowering and locality improvements | One reviewed change at a time: result forms, constants, return moves, heap capture and cache layout |
-| M7 | Select and publish a combined checkpoint | Native-path review, both-role qualification, retention checks, hot6/all29 versus selected54 and upstream; preserve known/open diagnostic limits |
+| M7 | Select and publish a combined checkpoint | Native-path review, both-role qualification, retention checks, hot6/all 29 versus selected54 and upstream; preserve known/open diagnostic limits |
+
+### Bitmap experiment refinement
+
+The counted-only preparation builds and passes focused checks, but still pays
+NULL maintenance and cannot authorize inline/control/no-count copy readers.
+Its first hot screen loses every case. Root selects a same-byte single
+**non-NULL occupancy** plane as the next complete rival direction, with exact
+interface/source peer review before implementation. This replaces the bit's
+meaning; it adds no second plane. Preserve the counted checkpoint/evidence.
+
+A positive bit authorizes an initialized canonical non-NULL value; consumers
+classify its tag. Zero never authorizes a load. Keep named bindings initialized
+and clip physical bits to the actual parent/child/staged/retiring owner
+partition. Presence alone cannot assign ownership between overlapping frames
+or prove a protocol read. A typed HomeView variant and all copy/traverse/error/
+diagnostic readers must compose before removing scratch NULL stores. The
+[authority assessment](bitmap-authority-assessment.md) owns the concrete source
+scope and costs. Added inline/control bit traffic is part of the comparison,
+not a presumed improvement. Static M4 remains an independent full candidate.
 
 ### Delegation when implementation starts
 
@@ -147,7 +166,7 @@ fixed. Astra's broad review is complete and stays out of the inner loop.
 
 The hot set remains DeltaBlue, generators, coroutines, Richards,
 comprehensions and silent logging. Use unchanged workloads and immutable
-controls; preserve all29 breadth at checkpoint selection. Static maps lose
+controls; preserve all 29 breadth at checkpoint selection. Static maps lose
 if publication/decoding/code growth exceeds saved traffic; the bitmap loses
 if bit maintenance/cache traffic exceeds its sparse teardown benefit. Retain
 selected54 if neither complete implementation earns admission. Summarize what

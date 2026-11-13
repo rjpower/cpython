@@ -5,6 +5,32 @@ at `BASE/worktrees/frame54-cold-construction`; edits go to
 `BASE/worktrees/call55-gc`. Canonical runtime files are not the implementation.
 The official CPython AI policy and applicable agent/project guidance were read.
 
+## Current checkpoint, 2026-11-13
+
+GC is synced to integrated `30a18f4768c` at merge `8fb8b1149ad`. General-return
+runtime `a35d826f04e` and the remote discard fixture repair `700a367ccea` are
+separately frozen components; root is composing the runtime with IR's matching
+general/EMPTY forms and universal normalization. The prior CALL, delegated,
+copy/created, heap retirement and collector components are integrated. Exact
+native results remain in the root-owned report, not this historical lane log.
+
+Current source work is the separate exceptional-producer census: new typed
+`ir_error_effects.py`, actual emitter receipt matching and one padding byte in
+the cold format. Six parser/source methods pass in the host harness; no
+candidate execution or generated product is claimed. The EH consumer is not
+ported yet and nothing is committed as an unused standalone API. COMPLETE is
+earned from typed source and actual error/terminal/publication receipts;
+unknown remains unknown. RESUME monitor cannot inherit a generic no-write
+capability because accepted redirects can mutate scratch. The canonical
+`error-phase-proposal.md` records the frozen five-argument processor ABI and
+the remaining source/lookup gates, including actual HEAD-held traversal scope.
+
+NULL control and conservative native-owner policy remain authoritative. The
+bitmap rival's positive counted consumers do not authorize zero-bit or
+generic no-count reads. Source peers do not establish the final M4 switch.
+
+## Earlier checkpoints
+
 2026-11-12: M0 source census and M1 typed-reader peer review completed. Approved
 M1 consumer ports are implemented in seven files in the isolated worktree:
 `Objects/frameobject.c`, `Python/gc_trace.c`, `Python/gc_free_threading.c`,

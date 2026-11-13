@@ -1,8 +1,10 @@
 # General return and the empty-return certificate
 
-Root selected the canonical naming below. IR and frames give source-interface
-GO; implementation is isolated in their owned lanes. NULL control remains
-authoritative. No integrated admission relaxation or runtime pass is claimed.
+Integrated at `ff14b98be4b`: GC runtime `a35d826f04e`, IR forms/selection
+`ae26fb90aa0`, generated products and fixture ports. Both native builds
+complete117/79; six focused modules pass 67 cases per role. Broader IR/debugger
+qualification remains open in the [report](report.md). NULL control remains
+authoritative; this is not a stale-scratch authority switch.
 
 ## Actual gap
 
@@ -51,14 +53,16 @@ Universal constructor validation selects EMPTY during the existing stable
 post-transfer inspection, requiring every scratch home NO_HOME and no owner
 obligation. Explicit EMPTY requires the same independent proof. Collect
 rewrites into a lazy private word copy, never the borrowed image while proof
-runs; at most one image copy and O(1) extra proof state. Return the normalized
+runs; the return normalizer makes at most one additional image copy and uses
+O(1) extra proof state. Earlier `check_words` normalization can independently
+copy words, for example when normalizing inline constants. Return the normalized
 words through existing validation/construction. Exec-plan building validates
 existing immutable words without rewriting them. All public routes share this
 path; there is no compiler-trust bypass or second dataflow analysis.
 
 ## Actual retirement entry
 
-Proposed private entry: `_PyEval_FrameClearAndPopGeneralWithResult(tstate,
+Implemented private entry: `_PyEval_FrameClearAndPopGeneralWithResult(tstate,
 frame, result)`, reached only by the general handler. The detached result is
 passed and returned by value. It selects the current leaf frame's initialized
 extent N before cleanup, then uses the existing M2 reservation and fixed-last
@@ -89,6 +93,14 @@ remaining shape, just as the error-to-M2 handoff must. Current NULL-control
 full N is an explicit development capability, not a future fallback. General
 RETURN with a nonempty or uncovered shape does not acquire an empty-return
 certificate merely because cleanup succeeds.
+
+The current storage proof is concrete: frame headers grow down from the arena
+limit, below which active value storage ends. `_PyFrame_ReserveForCall` keeps
+those extents disjoint; `_PyStackChunk_EnsureFrameStorage` truncates the
+initialized frontier before header writes and NULL-fills newly exposed values
+that cross old header storage. Retirement leaves the departing overlapping
+value suffix NULL. This supports current initialized full-N control; abstract
+NO_HOME alone does not prove a home readable or physically NULL.
 
 ## Source boundaries and validation
 

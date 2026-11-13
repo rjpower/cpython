@@ -4,7 +4,7 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-Latest integrated runtime is `a2653e18206`: explicit CALL roles, shared
+Latest measured delegated runtime is `a2653e18206`: explicit CALL roles, shared
 attribute-child and exceptional-prefix proofs, async-exit completion, and an
 explicit delegated-yield receiver. Both release and debug build all 117
 modules (79 shared), with no failed imports. The five-module delegated-yield,
@@ -20,18 +20,206 @@ census at `e75b7088b12` passes all 189 standard-library entry modules and
 gaps: ordinary exceptional operand confinement and edge-specific NULL
 results. General RETURN also needs a separate remaining-owner retirement
 contract. Their reviewed implementations are being composed, rather than
-weakening admission or adding test-specific exceptions. The bitmap rival
-has not had a complete native build. Neither representation has switched
+weakening admission or adding test-specific exceptions. The bitmap rival now has complete native builds and bounded tests, recorded
+below. Neither representation has switched
 away from NULL scratch authority or earned golden admission.
 
-Latest broad performance remains `ed08ab64c7e`: direct all29 versus upstream
+The newer writer composition `50f1124fd7a` builds both 117/79 roles and passes
+37 writer/call/transfer cases per role. Its focused run still fails to import
+the new abrupt test module because the complete async case needs additional
+exceptional ingress proofs. Isolated raw/source checks expose one fixture
+that must retire GET_ANEXT's retained iterator; `54954474e73` repairs that
+fixture without production changes. Edge-specific NULL transport is integrated
+at `30a18f4768c` with host source/mutation checks, pending native qualification.
+Bitmap `bf7d6bf0d20` passes both full 117/79 module builds and five bootstrap
+plus 26/27 broader compile probes. Its five-module focus passes 150 tests per role, eight skips.
+The initial full build lacked the pkg-config sysroot; after correction both
+roles' module compile/link flags match the static candidate exactly. Neither
+source has switched away from NULL authority or earned golden admission.
+
+Latest broad performance remains `ed08ab64c7e`: direct all 29 versus upstream
 is 1.165467, with six faster. The selected54 hot screen loses DeltaBlue 5.5%
 and silent logging 15.2%; matched DeltaBlue PMU shows 36.8% more instructions
 than upstream. Newer port results below are separate campaigns. Do not apply
 those ratios to unqualified source or infer an isolated causal improvement.
 The full static/bitmap comparison and final selection remain open.
 
-## Current CALL/delegated checkpoint
+## General return and bitmap preparation
+
+Static `ff14b98be4b` composes general RETURN, positively certified EMPTY,
+per-edge NULL results and direct tuple/list steal-success receipts. Both
+117/79 module builds pass. Six focused modules pass 67 cases per role after
+fixture corrections. The expanded `test_ir` check has 12
+errors and three failures: old CALL-family expectations, inherited EMPTY
+certificates in rewritten images, and a debugger jump regression. Matched identical-AST control passes both
+selected54 builds and fails both candidate builds; evidence is
+`E/bool-source-jump-control`. It is not a known baseline limitation.
+This is partial qualification. General RETURN now retires residual scratch
+owners; EMPTY retains the small existing route. Admission still rejects an
+explicit EMPTY image without the all-path absence proof.
+
+Two balanced pairs for ff14, clean stable identities throughout both campaigns:
+
+| Workload | Candidate/selected54 | Pair range | Candidate/upstream | Pair range |
+| --- | ---: | ---: | ---: | ---: |
+| DeltaBlue | 1.039263 | 1.023542–1.055226 | 1.230703 | 1.203903–1.258099 |
+| Generators | 1.043308 | 1.037741–1.048905 | 1.504706 | 1.500261–1.509165 |
+| Coroutines | 1.052147 | 1.051541–1.052754 | 1.326683 | 1.326165–1.327201 |
+| Richards | 0.984842 | 0.983339–0.986348 | 1.230958 | 1.218720–1.243320 |
+| Comprehensions | 1.007455 | 1.004336–1.010584 | 1.356191 | 1.343044–1.369466 |
+| Logging silent | 1.004977 | 0.951576–1.061375 | 0.728430 | 0.723180–0.733718 |
+
+Neither campaign establishes a broad gain. General-return ownership semantics
+are corrected, but the composition still pays old NULL/arena work alongside
+preparation. Logging versus54 crosses parity between pairs. These are screens,
+not confirmation or isolated measurements of RETURN. Exact ELF/dumps at
+`E/general-return-native` retain CALL and EMPTY return reservations64/16 bytes;
+the general route calls the outlined residual-owner helper. Actual admission
+compiles 682/684 images, including all 189 standard-library entries. The two
+remaining async test images need exceptional predecessor contracts.
+Evidence: `E/general-return-hot-screen-{golden,upstream}` and
+`E/general-return-source-admission`.
+
+Bitmap `bf7d6bf0d20` builds both 117/79 roles and passes 150 focused cases
+per role, eight skips. Nine copied instruction-body guards are replaced with
+shared checked home operations. Its NULL-control two-pair screen versus
+selected54 is:
+
+| Workload | Candidate/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.335421 | 1.306381–1.365106 |
+| Generators | 1.222776 | 1.214566–1.231040 |
+| Coroutines | 1.333615 | 1.324347–1.342948 |
+| Richards | 1.210015 | 1.209541–1.210490 |
+| Comprehensions | 1.279180 | 1.271980–1.286420 |
+| Logging silent | 1.603326 | 1.574652–1.632522 |
+
+Campaign `E/bitmap-home-writer-hot-screen-golden` keeps clean stable
+identities and completes without workload failure. Every pair loses. This
+prices preparation plus the retained NULL work, not a complete bitmap rival.
+The retained ELF/dumps at `E/bitmap-home-writer-native` show redundant old-bit
+and tag checks where emitted transport already holds the canonical value.
+The next bounded capability packet preserves those known facts; it does not
+change the ownership representation. No speedup is assumed. Complete counted
+consumer and selected-reader closure remain in the
+[writer ledger](writer-closure-ledger.md) and
+[authority assessment](bitmap-authority-assessment.md).
+
+Evidence: `E/general-return-{handoff,fixture}-*`,
+`E/bitmap-home-writer-{devlibs,focus}*` and the campaigns above. The initial
+bitmap build's missing UUID header was a pkg-config sysroot mismatch; both
+roles now use the static candidate's exact module compile/link flags. No new
+representation or golden selection follows.
+
+## Known-value home commits
+
+Static `3b4547380d0` and counted B `0ee3a61aba3` share three explicit
+commits: publish a physically vacant home, replace an immediately captured
+current value, and take an already loaded owner. Native interpreter exit has
+its separately checked home capability. The bitmap bodies avoid reloading an
+old tag/bit to rediscover those facts. There is no new frame field, record or
+handler argument. Source review consolidates the AdoptTemp intrinsic instead
+of introducing another encoding exception.
+
+Both variants build117/79 in release/debug. Static four-module focus passes 36
+cases per role. B eight-module focus passes 176 per role, eight skips. Eight
+static source tests and full cases/metadata generation pass; B regeneration
+is unchanged. Exact ELFs/dumps are retained under
+`E/{known-home,bitmap-known-home}-native`. All qualification still uses NULL
+control; a zero count bit cannot authorize a value read.
+
+The static two-pair screen versus54 is DeltaBlue 1.040710, generators 1.019373,
+coroutines 1.024716, Richards 0.986029, comprehensions 1.013656 and
+logging 1.199787. Logging pair range1.136662–1.266417; no broad gain is
+established. Evidence `E/known-home-hot-screen-golden`. It is a separate
+campaign, not an isolated cost comparison with ff14. The B two-pair screen also completes with clean stable identities:
+
+| Workload | B/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.327228 | 1.298120–1.356988 |
+| Generators | 1.228186 | 1.225891–1.230485 |
+| Coroutines | 1.350701 | 1.348843–1.352561 |
+| Richards | 1.217027 | 1.214544–1.219515 |
+| Comprehensions | 1.250380 | 1.239933–1.260915 |
+| Logging silent | 1.587998 | 1.579355–1.596688 |
+
+Every pair loses. `E/bitmap-known-home-hot-screen-golden` prices the current
+counted preparation plus NULL work. It does not establish a complete rival,
+or isolate the helper change from the other composed source. Root selects the
+same-byte single non-NULL occupancy plane as the next full-rival experiment,
+with exact interface/source peer review before conversion. The
+[plan](plan.md) and [assessment](bitmap-authority-assessment.md) record why,
+the complete-reader scope and extra scalar bit traffic to charge.
+
+The CFG audit explains the supported debugger-jump regression: the new EMPTY
+encoded handler was mistaken for a fallthrough operation. Its false successor
+propagated exception-handler scratch requirements into an ordinary return.
+Five encoded-image CFG checks now project through the existing semantic
+shadow and canonical base (`c381fca17ba`); setter permissions are unchanged.
+This is source-reviewed and generated, with native qualification pending.
+Actual exceptional-route metadata and its cold EH consumer compose at
+`e90c6a4b7f9`; the producer uses one shared typed effect grammar, replacing the
+duplicated parser found during review. RESUME/CLEANUP_THROW remain explicitly
+unknown until their actual callback/redirect footprints are supplied.
+
+## Checked physical-home writer checkpoint
+
+`50f1124fd7a` adds source-checked fixed-index publications, consuming
+string/map and special-pair adapters, bounded tuple/list output loops and
+set-input TAKE. The compiler derives physical pointers and extents from its
+actual Storage. The source gate rejects array/address escape, extent/index
+mutation, conditional or duplicated per-element operations and repeated
+publication. Ordinary helper escape handling remains distinct from manual
+protocol markers. This prepares both representations; it does not remove the
+static candidate's NULL stores or arena scans.
+
+Both native builds complete 117/79, with no failed imports. The writer, CALL
+role and transfer modules pass 37 cases per role. Five extracted generator
+tests plus full cases/metadata generation pass. The new abrupt module does
+not import: its real async case exposes the still-uncovered RESUME/cleanup
+exceptional predecessors. An isolated diagnostic runs the other four methods:
+three pass, one invalid positive fixture retains an iterator before reusing
+its home for a child. The separate one-line repair preserves the intended
+absence proof and does not weaken the runtime. This is partial qualification,
+not a passing complete module or representation suite.
+
+Two balanced pairs versus selected54, stable clean source/native identities:
+
+| Workload | Candidate/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.033000 | 1.017705–1.048526 |
+| Generators | 1.013630 | 1.006017–1.021300 |
+| Coroutines | 0.997996 | 0.996518–0.999477 |
+| Richards | 0.987920 | 0.982802–0.993065 |
+| Comprehensions | 1.040724 | 1.032497–1.049017 |
+| Logging silent | 1.006214 | 0.998762–1.013723 |
+
+Campaign `E/call-home-writer-hot-screen-golden` shows no broad gain. It is
+separate from the preceding delegated screen; do not pool them or infer an
+isolated cost from the movement. No direct-upstream writer campaign exists.
+Exact ELF and six handler dumps: `E/call-home-writer-native`.
+
+The first exceptional-input correction incorrectly applied scalar through
+indices to relocated window scalars. Bootstrap freezing caught this before
+another full build. `78e48298569` limits that comparison to nonwindow forms,
+retaining BASE-relative window semantics. LIST_APPEND/SET_ADD controls cover
+depths 1, 2 and 8; the nonwindow retained-input negative remains. Five bootstrap
+and 26/27 broader probes then pass. The remaining coroutine rejection still
+requires actual exceptional-producer and partial-home receipts; a normal
+cleanup receipt cannot stand in for them.
+
+Source peers also caught a shared worklist issue in the next NULL-edge packet:
+the taken successor began from fallthrough-mutated facts. The integrated
+source restores the full common state and finite delegated tuple before
+each edge. Host tests cover actual final stores, family/twin revocation,
+mixed-arm joins and parenthesized pointer escapes. Runtime checks follow.
+
+Evidence: `E/writer-{storage-final-host,loop-host}`, `E/call-abrupt-writer-host*`,
+`E/call-abrupt-{writer,window-gate}-freezer-*`,
+`E/call-home-writer-{checkpoint,focus,debug}*`,
+`E/abrupt-isolated-*` and `E/edge-null-final-host*`.
+
+## CALL/delegated checkpoint
 
 Source `a2653e18206` composes the CALL-role and normal/exceptional transport
 ports with explicit delegated YIELD. A, B and D independently name resume
@@ -79,7 +267,7 @@ A separate direct-upstream two-pair screen also keeps stable identities:
 | Logging silent | 0.696498 | 0.694665–0.698336 |
 
 Campaign `E/delegated-call-hot-screen-upstream` preserves logging parity but
-does not close the other gaps. This is a hot-set screen, not all29 or final
+does not close the other gaps. This is a hot-set screen, not all 29 or final
 confirmation. The preceding selected54 and upstream comparisons are direct,
 independent campaigns; neither is computed by multiplying older ratios.
 
@@ -289,7 +477,7 @@ and `E/m3-native-*`. Full qualification and complete map authority remain open.
 
 ### Frozen M3 diagnosis versus upstream and selected54
 
-Completed `E/m3-unpack-all29-upstream`: two balanced pairs, stable clean
+Completed `E/m3-unpack-all 29-upstream`: two balanced pairs, stable clean
 identities, unchanged workloads. Overall elapsed geometric mean is 1.171628;
 6/29 cases are faster. This is a direct upstream comparison of the M3
 preparation candidate, not a selected checkpoint or full qualification.
@@ -443,7 +631,7 @@ clean identities:
 | Comprehensions | 0.992827 | 0.991367–0.994289 |
 | Logging silent | 1.083916 | 1.036127–1.133909 |
 
-The direct unchanged all29 campaign `E/m3-provider-all29-upstream` completes
+The direct unchanged all 29 campaign `E/m3-provider-all 29-upstream` completes
 with stable clean identities, geometric mean 1.162061 and 6/29 faster:
 
 | Workload | Candidate/upstream elapsed | Pair range |
@@ -604,10 +792,10 @@ query in either. Reset/publication stores add work. This is partial coverage,
 not the M4 representation switch.
 
 The stable two-pair screen `E/m2-phase-hot-screen-golden` is candidate/selected54
-elapsed. Separate direct `E/m2-phase-all29-upstream` has 116 valid timing rows,
+elapsed. Separate direct `E/m2-phase-all 29-upstream` has 116 valid timing rows,
 geometric mean 1.165467 and six of 29 faster. Keep comparison scopes separate:
 
-| Workload | /selected54 hot screen | Pair range | /upstream all29 | Pair range |
+| Workload | /selected54 hot screen | Pair range | /upstream all 29 | Pair range |
 | --- | ---: | ---: | ---: | ---: |
 | DeltaBlue | 1.054859 | 1.045043–1.064767 | 1.227415 | 1.189238–1.266819 |
 | Generators | 1.006683 | 1.003626–1.009750 | 1.465240 | 1.464976–1.465504 |
@@ -755,8 +943,8 @@ frame/phase checks and are not an added deduplicated total.
 
 Its native GC visitor reserves72 local plus48 saved-register bytes and a
 canary, including on uncovered traversal paths. The fast copy remains stackless.
-The two-pair selected54 screen yields DeltaBlue1.044330, generators1.033444,
-coroutines0.974828, Richards0.996005, comprehensions1.001460 and logging1.241757.
+The two-pair selected54 screen yields DeltaBlue 1.044330, generators 1.033444,
+coroutines 0.974828, Richards 0.996005, comprehensions 1.001460 and logging 1.241757.
 Logging spans1.167382–1.320871; this is a noisy losing composition, not a win.
 
 ### Vacant return recipients
@@ -765,14 +953,14 @@ Logging spans1.167382–1.320871; this is a noisy losing composition, not a win.
 return/send publication. Only a named local may contain a displaced owner;
 that path retains actual reload/publication/close behavior. No generic phase
 query or new transition is added. Both builds retain117/79 modules; completion,
-frame-call, generator, coroutine and frame modules pass288 tests per role
+frame-call, generator, coroutine and frame modules pass 288 tests per role
 (eight skips each). Exact native executable and return/send dumps are retained
 in`E/m3-vacant-recipient-native`.
 
-The two-pair selected54 screen is DeltaBlue1.046231[1.029183,1.063561],
-generators1.037883[1.036586,1.039182], coroutines1.036750[1.035068,1.038434],
-Richards1.009545[1.008556,1.010534], comprehensions1.005368[1.005026,1.005709],
-logging1.155015[1.153206,1.156826]. No promotion or isolated causal attribution
+The two-pair selected54 screen is DeltaBlue 1.046231[1.029183,1.063561],
+generators 1.037883[1.036586,1.039182], coroutines 1.036750[1.035068,1.038434],
+Richards 1.009545[1.008556,1.010534], comprehensions 1.005368[1.005026,1.005709],
+logging 1.155015[1.153206,1.156826]. No promotion or isolated causal attribution
 follows. The next coherent CALL-role source is merged/generated at aad17cd9c1c;
 its release C compilation reaches module freezing, which fails on unproved
 virtual inputs and a feedback-argument decoder crash. GDB identifies the latter

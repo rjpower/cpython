@@ -289,21 +289,135 @@ permanent fallback.
 
 ## Separating semantic recovery from optional positions
 
-A bounded representation to review next is a versioned semantic container in
-the existing `co_exceptiontable` bytes: the actual EH ranges plus recovery
-records `(from, to, edge, handler, exc_slot, lasti)`. This avoids adding a second
-code-object pointer or a second plan. The compiler emits those records from
-its semantic edges. The common constructor admits them, marshal/frozen paths
-carry them, and the existing code pin retains them. One shared cold decoder
-serves admission, the semantic plan, observer recovery and error processing.
+Root, GC and frames have reviewed this concrete schema and API. Source
+implementation and merged qualification remain pending; no serialization or
+runtime source change is included yet. Keep the existing
+`co_exceptiontable` reference and existing code plan. The code pin retains both
+semantic and position bytes; add no code/frame pointer or side allocation.
 
-`co_linetable` then contains optional locations only. Source-event positions
-can refer to semantic records by their stable order; line/column removal cannot
-remove or invent a recovery edge. Observer line selection may lose locations
-when positions are stripped, but exception/ownership behavior cannot change.
-Update all producers/readers and the format version together; do not read old
-recovery triples from IRSM as a fallback. The header/section bytes and cold
-decode work must be measured. This is a proposal, not an implemented format.
+The proposed byte grammar is:
+
+| Stored field | Representation | Meaning |
+| --- | --- | --- |
+| `co_exceptiontable == b""` | Shared canonical empty sentinel | No EH ranges or semantic recovery records; no allocation/header for the common empty case |
+| Nonempty `co_exceptiontable` | `IRSC`, little-endian u32 version 1, EH byte length, recovery count; then marked EH bytes and recovery rows | One semantic container, exact length `16 + eh_size + 24 * count` |
+| Recovery row | Six little-endian signed32 fields `(from, to, edge, handler, exc_slot, lasti)` | Existing physical edge and recovery tuple, independent of locations |
+| Stored `co_linetable` | `IRSM`, little-endian u32 version 2, physical-location byte length, position count; then locations and position rows | Optional positions only, exact length `16 + locations_size + 16 * count` |
+| Position row | Four little-endian signed32 fields `(line, end_line, column, end_column)` | Dense index matches the semantic recovery row; count is either0 or the semantic count |
+
+The empty semantic sentinel is a declared current-format case, not recognition
+of old nonempty raw EH tables. Reject old nonempty unversioned EH data and
+IRSM version 1 at common admission; there is no semantic fallback to line data.
+Raw constructor location bytes, including empty bytes, remain optional location
+input and normalize to version 2. Root should freeze the empty-sentinel choice
+before implementation; an always-header alternative needs deliberate shared
+empty storage rather than an allocation for every code object.
+
+Semantic row index is the stable edge ID. Preserve duplicate rows: two elided
+origins can have equal `(from,to,edge,handler,exc_slot,lasti)` but distinct ordered
+observer occurrences. Do not sort, deduplicate or renumber semantic rows while
+stripping columns/lines. Compiler edge traversal and within-edge lexical order
+define IDs before optional locations are emitted. Remove the current
+`op->loc.lineno > 0` permission gate from semantic emission; the backend origin
+flag, physical edge and exception association must survive missing positions.
+A dense position with no location is all `-1`; a completely stripped array has
+count 0. Physical compact-PC locations can normalize to NONE entries as today.
+
+Admit semantic geometry once: exact container length/overflow, marked sorted
+nonoverlapping EH ranges, bounded word sites/actual successors, edge 0/1,
+`handler == -1` with zero `exc_slot/lasti`, or a valid handler and canonical
+exception/optional-lasti scratch homes. Reuse current completion/observer
+retired-owner and virtual-kwargs proofs on those rows. Admit position geometry
+separately: exact bytes, dense count 0-or-semantic-count, valid optional location
+fields and physical-word coverage. Position changes cannot add an exceptional
+predecessor, supply an owner fact or remove a failed semantic validation.
+
+Use the existing `pycore_ir_exception.h` for `_PyIRSemanticMap` (EH slice plus
+recovery slice/count), `_PyIRRecoveryEvent`, and the single bounded C container
+decoder. `_PyIR_ExceptionNext` continues to decode only the admitted EH slice.
+Rename the line-only view to `_PyIRPositions`; remove the old combined source
+map API rather than leave a compatibility typedef/decoder. Observation may
+assemble a cold `_PyIRObservationEvent` by semantic row ID plus optional
+positions. That is a stack view, not another stored representation. Runtime
+`Stored` helpers require admitted immutable bytes; remote readers use bounded
+`Decode` and degrade malformed positions to no location without executing
+unowned target memory.
+
+The shared spelling is `_PyIRSemantic_{Decode,Stored,Event,EncodeEvent,Pack}`
+for the EH/recovery container, and
+`_PyIRPositions_{Decode,Stored,Event,EncodeEvent,Pack}` for positions. Semantic
+decode accepts only IRSC1 or the canonical empty sentinel. Position decode
+distinguishes raw optional constructor locations from normalized IRSM2 and a
+malformed envelope. `_PyIRObservation_Stored(code)` returns a cold
+`_PyIRObservationMap` joining these two admitted views;
+`_PyIRObservation_Event(map, id, event)` supplies the six semantic fields and
+either the matching four position fields or four `-1` values. The map and
+event are temporary C views, never code-owned allocations. Edge constants
+become `_PyIR_EDGE_FALLTHROUGH` and `_PyIR_EDGE_TAKEN`; observation wrapper
+flags retain their separate meaning.
+
+The actual producer/reader census is:
+
+| Source | Required change |
+| --- | --- |
+| `Python/flowgraph.c`, `regcfg_passes.c` | Preserve explicit origin/order and EH association independently of location availability through elision/fusion |
+| `Python/assemble.c` | Emit one semantic row and corresponding optional position together; pack EH plus semantic rows after both are complete; never derive semantics from packed locations |
+| `Objects/codeobject.c` admission | Replace source-based semantic reads in source/observer validation, completion safety, virtual kwargs and normal/EH worklist with the semantic map; keep location normalization separate |
+| `Objects/codeobject.c` public constructors/replace | Keep `_PyCode_New` the common boundary; changed geometry with inherited nonempty recovery requires matching explicit semantic data; `co_linetable=b""` alone preserves semantic bytes and reproof inputs |
+| `Python/ceval.h` runtime EH lookup | Retain current marked-table search on the decoded EH slice, excluding the new header/recovery payload |
+| `Python/instrumentation.c` | Port its independent EH scan; size observer arrays by stable recovery IDs; join positions only for line events, never for recovery selection/error recording |
+| `Objects/frameobject.c` | Feed register analysis, source cursor/landing recovery and `f_lineno` handler recipes from semantic rows; select lines through optional positions; accepted redirects still invalidate active phases |
+| `Python/legacy_tracing.c`, code line iterators | Use recovery edges plus position IDs for source-only line delivery/`co_lines`; absent positions provide no invented line |
+| `Python/marshal.c`, import/frozen loader | Existing two bytes fields keep their order; code loads still reach `_PyCode_New`; regenerate frozen payloads from newly admitted code |
+| `Tools/build/deepfreeze.py`, `Python/specialize.c` static InitCleanup code | Emit the new admitted bytes verbatim; audit direct static initializers and explicitly retain the canonical empty semantic sentinel |
+| `Lib/dis.py` | Replace its raw entire-field varint scan with a cold `_opcode` query of the shared admitted EH decoder; expose recovery rows separately for tests/tools when required |
+| `Modules/_remote_debugging/code_objects.c`, `Tools/gdb/libpython.py` | Parse position version 2 and 16-byte rows; physical location lookup does not need semantic bytes or a new target offset; reject old/malformed envelopes |
+| Test serialization helpers | Port deliberate raw IRSM/EH builders, tracing edge checks and constructor/marshal corruption controls together; do not hide schema mismatches with permissive dual-format reads |
+
+`code.replace` must distinguish optional position edits from semantic edits.
+Preserving current words and semantic bytes while stripping positions is valid.
+Replacing words/locals/frame geometry must revalidate matching semantic bytes;
+clearing only line data cannot bypass that guard. Track an omitted
+`co_exceptiontable` argument with the existing Clinic NULL-default pattern
+used for `co_code`, then fill from self after the replacement guard. This
+makes explicit reuse distinct from silently inheriting a recovery recipe;
+explicitly supplied bytes still undergo the full common proof. An explicitly supplied empty
+semantic container intentionally removes all recovery/EH, subject to ordinary
+image validation; it is not synthesized from a missing line array. General to
+EMPTY return normalization preserves sites/operand roles and does not rewrite
+semantic IDs.
+
+Reserve the next pyc magic (currently 64422 after the general-return change),
+freeze IRSC1/IRSM2 together, and rebuild frozen/deepfreeze artifacts in the same
+component. Direct marshal reads receive structural ValueError for obsolete or
+malformed envelopes rather than a hidden old-IRSM interpretation. Generic
+marshal field order/version need not change because both fields remain bytes.
+No stored old-format or runtime dual-decoder period is proposed.
+
+Before implementation, freeze shared header/API spellings and split readers
+with GC/frames. Then make one reviewable component: format/assembler/common
+admission, all readers, tool adapters and tests; root owns generation/native
+qualification. Useful counterexamples are: stripping all positions retains the
+same EH/recovery bytes and plan/admission outcome; removing columns retains a
+source callback's selected handler; malformed recovery is rejected with both
+full and empty positions; changing only a position cannot authorize a retired
+owner; constructor/replace/patched marshal/frozen entry all enforce the same
+semantic errors. Ordinary try/except/finalizers, async delegation, observer
+branch errors and source-only callback errors with retained lines need paired
+execution controls. Full position stripping may remove line callbacks that
+have no line to report; it must not change the ownership/EH of remaining real
+instruction/branch callbacks.
+
+With positions present, existing 40-byte combined records become 24 semantic
+bytes plus 16 position bytes, so record payload size is unchanged. A nonempty
+semantic field adds a 16-byte envelope. A previously empty exception field that
+now owns recovery rows also needs a nonempty bytes allocation; measure that
+allocator cost rather than count headers alone. Codes with no EH/recovery keep
+the shared empty bytes. No extra code/frame field, plan or ordinary-dispatch
+lookup is added. Reached error lookup adds constant-time envelope slicing
+before its current search; observer line handling joins the same index across
+two immutable slices. Construction stays linear in payload size plus existing
+semantic proof work; no per-edge plan copy or quadratic position join.
 
 The resulting runtime work to remove is concrete: inactive-scratch copying and
 scanning, per-home owner classification at retirement, and scratch clearing
@@ -330,6 +444,6 @@ normal admission census.
   one coherent integration. Price phase stores, plan construction/bytes,
   header/cache traffic, native spills and the complete lifecycle.
 
-Both-role qualification, native review and direct hot6/all29 comparisons are
+Both-role qualification, native review and direct hot6/all 29 comparisons are
 required before selection. Partial normal absence or successful bootstrap
 compilation does not complete M4 or establish a speedup.

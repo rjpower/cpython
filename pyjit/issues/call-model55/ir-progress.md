@@ -213,8 +213,40 @@ adds that guard and an all-route GET_LEN prior-empty/prior-live regression.
 GC independently source-reviewed both changes. Root owns the repeat native
 census; no full CALL qualification is claimed here.
 
-The delegated-yield source draft now uses explicit D plus a finite all-path
-SEND body-role tuple. Frames and GC consumer source reviews are complete;
-IR emitter/admission reviews, host residuals and combined native checks are
-still pending. The current whole-frame phase map remains partial and NULL
-control remains authoritative.
+Delegated yield now uses explicit D plus a finite all-path SEND body-role
+tuple. Source packet 30a3dd63963 and the independent frame/GC consumers passed
+source review and merged generation. Root's later delegated checkpoint passed
+198 focused tests per build role. This qualifies that bounded protocol, not a
+complete whole-frame ownership map.
+
+The ordinary abrupt-operand packet 118276357b3 records each source error only
+after its actual emitted error flush. It preserves prior logical absence below
+all encoded scratch operands, independently of normal drain/readable facts.
+The retained-input correction initially applied scalar INk indices to window
+layouts; 2e620f8b124 restricts it to nonwindow layouts, with paired scalar and
+window tests. Root's repeat freezer restored 5/5 bootstrap and 26/27 wider
+probes. The remaining coroutine ingress requires a complete exceptional-route
+census, including protected words with no ordinary raise and actual native
+resume/cleanup error producers. GET_ANEXT coverage alone does not close it.
+
+Packet 6484d1e5c9b adds per-edge NULL receipts from actual output assignments,
+structured Storage joins, and the reached final store. Taken and fallthrough
+successors now start from independent copies of the common post-transfer
+facts and finite protocol tuple. An absent-or-consumed recipient gate prevents
+NULL output from hiding an unrelated owner. Root's full-generation check found
+and fixed the emitter's missing label-mode default; handler-only host queries
+had missed it. Native qualification remains a root gate.
+
+General return packet ae26fb90aa0, paired with runtime packet a35d826f04e,
+keeps RETURN_VALUE as full frame-owned cleanup and introduces certified
+RETURN_VALUE_EMPTY plus its instrumented twin. The common constructor's stable
+proof lazily copies words and selects EMPTY only after proving all scratch
+homes logically absent with no remaining owner obligation. Explicit EMPTY
+claims, including unreachable ones, require the same proof. This is at most
+one additional RETURN normalization copy; earlier inline-constant repair can
+already have copied the image. Full-N cleanup relies on the current explicit
+NULL-control reservation/retirement invariant. It is not permission to read
+MAY-owner candidates after a stale-scratch switch. Source peers approved the
+packet; merged generation, runtime tests and native EMPTY-body review remain
+root gates. The whole-frame phase map remains partial and NULL control remains
+authoritative.

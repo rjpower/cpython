@@ -201,6 +201,60 @@ synthetic output-only scalar format; the positive test now declares actual
 window storage. Root's revised host check passes all three source tests and
 full cases/metadata generation. Final formatting uses the existing token
 spacing and CWriter machinery. C compilation and runtime remain pending.
-Tuple/list induction loops
-and SET drainage remain the immediate following packet. This increment does
-not complete bridge removal or switch bitmap authority.
+The fixed/helper increment is committed `99560a5115e`; root's final host
+recheck passes the three selected source methods and full cases/metadata
+generation. This does not complete bridge removal or switch bitmap authority.
+
+The immediate loop packet is committed `948577105fb` after root and GC actual
+source GO. Tuple/list output filling uses forward physical indices and the
+same reverse object-item order. SET uses TakeHome before hashing/closing.
+The generic AST check requires typed zero/exclusive/unit induction, exactly
+one index-matched operation on every normal iteration, immutable unexposed
+index/extent and no skip/duplicate/unknown-control path. Fixed-index repeated
+publications also reject. Counter names cannot shadow handler locals or
+checked helper names. This is a declared-array bounds/unique-operation
+capability, not a whole-body initialization or ownership certificate.
+
+Three parser-only source checks pass. The emitted-storage method and three
+runtime methods await coordinator validation. See writer-closure-ledger.md for
+the remaining aliases, helper transfers, scalar/local writers and reader
+gates; no closure claim follows from removing direct array lvalue stores.
+
+## Steal-on-success helper handoff
+
+The next bounded packet uses IR_BUILD_TUPLE/LIST to lower directly to the
+existing native const-array helpers. A shared callee map supplies both the C
+spelling and ordinary escape classification: tuple retains its existing
+NON_ESCAPING policy; list retains its ordinary escaping policy. Neither marker
+enters manual-protocol suppression. Tuple allocation schedules GC rather than
+calling Python; its element copy and tracking are callback-free.
+
+A parameterized AST ownership grammar requires a sole owning `values[oparg]`
+input, native object result initialization, the sole NULL failure arm taking
+ERROR_NO_POP, then INPUTS_DEAD and object-steal output adoption. It rejects
+extra/reordered statements, different failure control, changed array/count,
+aliases and additional uops. This sole-array grammar cannot request scalar
+boxing; classification's provisional `record=True` is not a runtime value-box
+requirement. Actual boxing discovery and final-vacate emission remain checked.
+
+Failure leaves input homes intact. On success, ordinary emitter reload adds
+no callback, and the actual final flush vacates the transferred input homes
+before result displacement cleanup. This reuses the generated vacancy/bitmap
+commit: there is no extra helper hop, frame argument, input sweep or temporary
+record. Missing the success suffix or reached final commit cannot inherit a
+normal drain receipt.
+
+The source packet includes perturbation controls and a coordinator-only
+boxing/emission-order check, a displaced-local finalizer observing the fully
+built container, and one subprocess allocation-failure/retry fixture. The
+fault arms after all 24 element owners exist, fails one allocation, and checks
+the innermost traceback opcode before claiming a builder failure. Runtime and
+generated-product validation remain coordinator work. Source review caught
+and fixed an incorrect gate on the provisional discovery record.
+
+The five-file packet is frozen as `2c27c4bd2e9`, after root and GC actual source
+GO (IR direction GO only). Four parser-only checks and AST checks pass;
+coordinator boxing/emission/native and allocation-failure validation remain.
+The B merge source resolution also removes all nine copied-body bridge entries
+while retaining strict physical bit writers and rejecting unapproved raw helper
+uses. Root owns that merge's generated products and qualification.

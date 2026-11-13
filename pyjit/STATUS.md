@@ -32,7 +32,7 @@ actual error cleanup, full 4095-home geometry and public admission routes.
 The bounded continuing cross-lane post-review is GO, not a fresh-context audit.
 
 Two-pair elapsed screens remain mixed: versus selected54, DeltaBlue is 5.5%
-slower and silent logging 15.2% slower, with a wide logging range. Direct all29
+slower and silent logging 15.2% slower, with a wide logging range. Direct all 29
 versus upstream has geometric mean **1.165467**, six faster; DeltaBlue is
 22.7% slower, generators 46.5% slower, coroutines 23.8% slower, and logging
 17.5% faster. Matched PMU finds DeltaBlue still executes **36.8% more
@@ -46,51 +46,62 @@ positive execution readiness before cache nomination; the unchanged OOM case
 and 837 focused cases pass both roles afterward. This does not turn the failed
 full diagnostics into a green suite.
 
-Selected-home authority/copy ports `197fd05cb27` pass 84 precise and 588
-lifecycle cases per role. Immutable-code generator allocation `8f6567840e7`
-fixes a reproduced release/debug crash and passes its four provider-mutation
-subcases plus 399 focused cases per role. Newer hot screens still lose
-generators/coroutines/logging versus selected54; they have no direct all29
-upstream campaign. Certified empty-created copy `9f28c0fa16d` passes 580
-lifecycle and five generated-contract tests per role; its hot screen still
-loses DeltaBlue 6.1%, generators 3.7% and silent logging 14.6% versus54.
-The explicit created marker/getter/collector composition `44383f6baa7` passes
-594 lifecycle cases per role. Vacant return recipients `91269fba2ce` pass 288
-focused cases per role, but still lose the hot screen. Explicit CALL roles
-are merged/generated; initial freezing exposes admission, generator-geometry
-and FBARG decoder defects. Geometry, replay, post-method-promotion fallback,
-fused-branch cleanup, consumed tails and iterator completion are repaired
-through `e75b7088b12`. Independent implicit-child and exceptional-prefix
-proofs now pass source perturbation checks. Both release and debug complete
-117 modules/79 shared with no import failure. The first 11-module release
-focus runs 88 tests: 8 modules pass and 3 expose fixture/return-contract gaps.
-A separate debug run passes those 8 modules (41 cases). Corrected CALL fixtures
-and the async-loop completion receipt then run 51 release cases: CALL roles and
-EH-prefix modules pass; one malformed source-negative fixture and the existing
-empty-only return contract remain failures. Their fixes/design are active.
-These are failed integration runs, not green qualification.
+The newer CALL composition includes explicit input roles, independent child
+transport, exceptional-prefix and async-exit receipts, and a delegated YIELD
+whose receiver D is independent of outgoing B and resume recipient A.
+Local/remote getters, throw, close and capture use that operand contract.
+`a2653e18206` passes 198 targeted tests per role, 11 skips. Its two-pair hot
+screen versus selected54 is DeltaBlue 1.013629, generators 1.026487, coroutines
+1.041078, Richards 0.998792, comprehensions 1.022872 and logging 0.921104.
+A separate direct-upstream screen is respectively 1.163485, 1.475615,
+1.312553, 1.260601, 1.382747 and 0.696498. These are screens, not all 29 or
+confirmation. Earlier copy/created/recipient ports and their limits remain
+in the [report](issues/call-model55/report.md).
 
-The five bootstrap plus 26/27 broader source images pass. Successive coroutine
-probes move past held-yield and async-exit gaps to a nested async comprehension;
-GET_ANEXT's exceptional operand confinement remains unproved. The next packet
-uses a general emitted error-footprint capability, not a per-test exception.
-Explicit delegated-yield source/lifecycle/remote packets are composed at
-`a2653e18206`. Both builds retain 117 modules/79 shared with no failed imports;
-the five-module send/suspension/frame/contract/remote focus passes 198 tests
-per role, 11 skips. The receiver is an explicit D operand, independent of the
-outgoing B value and resume A recipient. Frame capture and local/remote getters
-use that same contract. A separate earlier debug run passes 72 overlapping
-generator/send/delegated tests. The new hot-set screen completes with stable
-identities: versus selected54,
-DeltaBlue 1.013629, generators 1.026487, coroutines 1.041078, Richards 0.998792,
-comprehensions 1.022872 and silent logging 0.921104. A separate direct-upstream
-screen is respectively 1.163485, 1.475615, 1.312553, 1.260601, 1.382747 and
-0.696498. Both use two balanced pairs; they are not confirmation or all29.
-Logging is faster; the broader gaps remain. Static authority and the complete
-physical-bitmap comparison remain open. Bitmap `853bd363ce1` retains its older
-five bootstrap plus 25/26 compile-only pass, without full build/tests/timing.
-No golden selection follows from this work. Shared storage
-with NULL named locals is the reviewed M4 reference, not a measured layout winner.
+Checked home writers at `50f1124fd7a` pass both full 117/79 module builds and
+37 writer/CALL/transfer cases per role. Its separate two-pair selected54
+screen is respectively 1.033000, 1.013630, 0.997996, 0.987920, 1.040724 and
+1.006214; no broad gain is established. It still pays for NULL maintenance
+and arena scans. Five bootstrap and 26/27 broader compile probes pass; the
+remaining async source needs complete exceptional-producer and redirect/error
+contracts beyond GET_ANEXT's now-certified operand footprint.
+
+Current static source/native `ff14b98be4b` adds per-edge NULL results,
+general RETURN and independently certified EMPTY, plus direct tuple/list
+steal-success receipts. Both builds complete 117/79 with no failed imports.
+Six focused modules pass 67 cases per role after four fixture corrections; Expanded `test_ir` has stale CALL/EMPTY fixtures and a
+source-debugger jump regression: selected54 passes the identical fixture in
+both roles, while candidate fails. This remains partial qualification.
+Forged EMPTY negatives and actual remaining-owner assertions stay intact.
+Its two-pair hot screen versus54 is1.039263,1.043308,1.052147,0.984842,
+1.007455,1.004977; direct-upstream1.230703,1.504706,1.326683,1.230958,
+1.356191,0.728430. No broad gain. Source admission compiles 682/684 images,
+including all 189 stdlib entries. The remaining two images share async EH gaps.
+Known-home source 3b4547380d0 builds both 117/79 roles and passes 36 focused
+cases per role; its selected54 hot screen loses broadly (logging 1.199787). It carries existing
+value/physical vacancy facts through common commits instead of rediscovering
+them in B.
+
+Bitmap `bf7d6bf0d20` also builds both 117/79 roles and passes 150 focused
+tests per role, eight skips, including physical invariants and capture.
+Its nine copied instruction-body guards have been replaced by shared checked
+home operations. The NULL-control rival's two-pair selected54 screen is
+respectively 1.335421, 1.222776, 1.333615, 1.210015, 1.279180 and 1.603326.
+All pairs are slower. This prices current bookkeeping plus old NULL work;
+it does not evaluate a complete stale-scratch rival. The
+[writer ledger](issues/call-model55/writer-closure-ledger.md) and
+[authority assessment](issues/call-model55/bitmap-authority-assessment.md)
+own its remaining gates. Neither representation has switched authority or
+earned golden selection. Shared storage with initialized NULL named locals
+remains the reviewed M4 reference, not a measured layout winner.
+Current B `0ee3a61aba3` composes matching known-home commits, builds both 117/79
+and passes 176 focused cases per role, eight skips. Its separate selected54
+screen is1.327228,1.228186,1.350701,1.217027,1.250380,1.587998; every pair
+loses. Root selects single non-NULL occupancy as the next full-rival direction,
+with exact interfaces pending peer freeze; no authority switch is claimed.
+The semantic CFG correction and actual exceptional-route producer/consumer
+compose at static e90c6a4b7f9, with native qualification running.
+
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [qualification](issues/frame-state54/qualification.md) retain closure evidence.
@@ -107,13 +118,13 @@ uses an initialized frontier. Generator resume dispatches inside the evaluator;
 hidden constants initialize at construction, not every resume.
 
 Final round54 measurements use the actual selected61015 checkpoint, unchanged
-workloads, GCC15.2, CPU15, hash0 and JIT disabled. Against golden51, all29
+workloads, GCC15.2, CPU15, hash0 and JIT disabled. Against golden51, all 29
 (two balanced pairs) has geometric mean **1.006381**, 11/29 lower; separate
 six-pair hot confirmation has mean **0.996669**. Neither establishes a general
-speedup. Logging silent differs substantially by scope: all29 is 1.138347,
+speedup. Logging silent differs substantially by scope: all 29 is 1.138347,
 while hot6 is 0.978879 with range 0.876076–1.005017. Keep both observations.
 
-Against upstream, completed all29 mean is **1.156543**, 6/29 faster. Valid
+Against upstream, completed all 29 mean is **1.156543**, 6/29 faster. Valid
 six-pair confirmation is `final54-hot6-confirm2-upstream`:
 
 | Case | Selected54/upstream elapsed | Pair range |
@@ -146,7 +157,7 @@ has an 80-byte header but loses its screen; recovering omitted state and eager
 mapping records cost work. A bitmap migration must cover every physical-home
 reader/producer and reentrant phase, not just teardown.
 
-R's two-pair all29 mean improves most cases, but its six-pair coroutine loss is
+R's two-pair all 29 mean improves most cases, but its six-pair coroutine loss is
 6.9%; F loses 4.1% there. Validated S2 removes four repeated geometry checks
 and a reached intermediate NULL store, but hot coroutine timing is 2.4% worse.
 These are rejected experiments, not selected alternate contracts. Full tables

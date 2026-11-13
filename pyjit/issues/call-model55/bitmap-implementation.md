@@ -6,6 +6,14 @@ emitter events and initialized-value phases. Implementation is now active in
 the isolated rival described below. The earlier GIL counted-owner schedule
 does not authorize zero-bit reads or establish a complete comparison.
 
+The current [writer ledger](writer-closure-ledger.md) distinguishes checked
+array operations from remaining helper/lifecycle ports. The
+[authority assessment](bitmap-authority-assessment.md) explains the earlier
+counted-consumer gate and the remaining inline, copy and observer requirements.
+Preserve the counted checkpoint. Root has selected the single non-NULL
+occupancy alternative as the next rival direction, subject to exact interface
+peer review. It is not implemented or selected as the winning representation.
+
 ## Storage and hot addressing
 
 Use one dense physical-address bitmap per arena chunk, coallocated at its tail

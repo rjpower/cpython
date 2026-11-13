@@ -35,7 +35,7 @@ class ScalarStorageTests(unittest.TestCase):
     def contract(self, body):
         return self.program(f"inst(SAMPLE, (value --)) {{ {body} }}")
 
-    def program(self, program, *, scratch_result=False):
+    def program(self, program, *, scratch_result=False, name="SAMPLE"):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.c"
             source.write_text("// BEGIN BYTECODES //\n"
@@ -44,8 +44,8 @@ class ScalarStorageTests(unittest.TestCase):
             analysis = analyzer.analyze_files([str(source)], numbers=SourceNumbers())
         formats = ir_generator.compute_formats(analysis)
         if scratch_result:
-            formats["SAMPLE"] = replace(formats["SAMPLE"], store_dst=False)
-        return ir_generator.handler_contracts(analysis, formats)["SAMPLE"]
+            formats[name] = replace(formats[name], store_dst=False)
+        return ir_generator.handler_contracts(analysis, formats)[name]
 
     def test_scalar_release_uses_actual_save_vacate_and_callback(self):
         for body in (
@@ -153,7 +153,7 @@ class ScalarStorageTests(unittest.TestCase):
             emitter.allowed_error_checkpoints = None
             ir_generator.generate_handler(name, analysis.instructions[name],
                                           formats[name], emitter, out, True)
-            return tuple(emitter.error_checkpoint_sites.values())
+            return tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
 
         retained = emitted("GET_ANEXT")
         self.assertEqual([checkpoint.id for checkpoint in retained], [1, 2])

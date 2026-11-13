@@ -74,7 +74,7 @@ Invariants:
 import argparse
 import ir_numbers
 from ir_read_effects import (
-    error_nonnull_value, value_assignment, value_declaration,
+    error_nonnull_value, null_value_condition, value_assignment, value_declaration,
     value_nonnull_changes, value_transport_expression,
 )
 from ir_error_effects import (
@@ -2608,7 +2608,8 @@ class IRStack(Stack):
         self.home_action("_PyIR_OWNER_STORAGE_VACATE", index)
         self.home_values.pop(index, None)
 
-    def publish_field(self, field: str, var: Local, *, temporary=False) -> None:
+    def publish_field(self, field: str, var: Local, *, temporary=False,
+                      canonical=False) -> None:
         self.home_write_receipts += 1
         index = FIELDS.index(field)
         if var.ir_value is None or var.ir_value in self.expired_values:
@@ -2619,7 +2620,7 @@ class IRStack(Stack):
             # A borrowed C copy does not carry a count into a new home.
             self.home_node = None
             return
-        flags = int(temporary) | (int(same_value) << 1)
+        flags = int(temporary) | (int(same_value) << 1) | (int(canonical) << 2)
         self.home_action("_PyIR_OWNER_STORAGE_PUBLISH", index, var.ir_value, flags)
         self.home_values[index] = var.ir_value
         if not temporary:
@@ -2627,6 +2628,26 @@ class IRStack(Stack):
                 self.expired_values.add(var.ir_value)
             self.native_owners.discard(var.ir_value)
             self.possible_native_owners.discard(var.ir_value)
+
+    def refine_value(self, var: Local, nonnull: bool) -> None:
+        """Refine only the actual current native token on a selected arm."""
+        value = var.ir_value
+        if value is None or value not in self.native_owners:
+            return
+        refined = self.home_action("_PyIR_OWNER_STORAGE_GUARD", value=value,
+                                   flags=int(nonnull))
+        self.native_owners.discard(value)
+        self.possible_native_owners.discard(value)
+        self.expired_values.add(value)
+        # A plain C alias denotes this same value on this arm. It does not
+        # acquire an independent owner from the refinement.
+        for local in self.variables + list(self.native_values.values()):
+            if local.ir_value == value:
+                local.ir_value = refined
+        var.ir_value = refined
+        if nonnull and refined is not None:
+            self.native_owners.add(refined)
+            self.possible_native_owners.add(refined)
 
     def retire_value(self, value: int | None) -> None:
         if value is not None:
@@ -2910,7 +2931,8 @@ class IRStack(Stack):
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:
                     out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
-                self.publish_field(lay.dst, var)
+                self.publish_field(lay.dst, var,
+                    canonical=var.name == canonical_result or var.name in lay.canonical_outputs)
                 return False
             if self.final:
                 if self.published_temporary_result:
@@ -2928,7 +2950,7 @@ class IRStack(Stack):
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
-                self.publish_field(lay.dst, var)
+                self.publish_field(lay.dst, var, canonical=macro == "IR_STORE_CANONICAL_DST")
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end, releasing its value.
@@ -2936,7 +2958,8 @@ class IRStack(Stack):
                      or var.name in lay.canonical_outputs)
                      else "IR_STORE_TEMP_DST")
             out.emit(f"{macro}({FIELD_VARS[lay.dst]}, {var.name});\n")
-            self.publish_field(lay.dst, var, temporary=True)
+            self.publish_field(lay.dst, var, temporary=True,
+                canonical=macro == "IR_STORE_CANONICAL_TEMP_DST")
             return False
         if previous == "out":
             macro = ("IR_PUBLISH_CANONICAL_TEMP"
@@ -2946,7 +2969,7 @@ class IRStack(Stack):
                      if var.name in lay.canonical_outputs else "IR_STORE_TEMP")
         out.emit(f"{macro}({slot}, {var.name});\n")
         if p == lay.dst_offset and lay.dst is not None:
-            self.publish_field(lay.dst, var)
+            self.publish_field(lay.dst, var, canonical="CANONICAL" in macro)
         else:
             self.home_node = None
         if p is not None:
@@ -4400,6 +4423,24 @@ class IREmitter(Emitter):
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
         return super().emit_IfStmt(stmt, uop, storage, inst)
 
+    def refine_current_value(self, storage, name, nonnull):
+        locals = self.current_value_locals(storage)
+        target = next((var for var in locals if var.name == name), None)
+        if target is None:
+            return
+        previous = target.ir_value
+        storage.stack.refine_value(target, nonnull)
+        if target.ir_value != previous:
+            for var in locals:
+                if var.ir_value == previous:
+                    var.ir_value = target.ir_value
+
+    def branch_storage(self, storage, condition, truth):
+        name = null_value_condition(condition)
+        if name is not None:
+            self.refine_current_value(storage, name, not truth)
+        return storage
+
     def emit_WhileStmt(self, stmt, uop, storage, inst):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
@@ -4502,7 +4543,8 @@ class IREmitter(Emitter):
                         retired.add(value)
         return retired
 
-    def apply_value_transport(self, storage, assignment, transport, sources, changes):
+    def apply_value_transport(self, storage, assignment, transport, sources, changes,
+                              result=None):
         stack = storage.stack
         assert isinstance(stack, IRStack)
         targets = self.current_value_locals(storage)
@@ -4541,6 +4583,16 @@ class IREmitter(Emitter):
                     if value is not None:
                         stack.native_owners.add(value)
                         stack.possible_native_owners.add(value)
+        elif result is not None and result.result_owned is True:
+            flags = int(result.result_canonical) | (int(result.result_nonnull) << 1)
+            value = stack.home_action("_PyIR_OWNER_STORAGE_RESULT", flags=flags)
+            if value is not None:
+                stack.native_owners.add(value)
+                stack.possible_native_owners.add(value)
+        elif result is not None:
+            # An unclassified VALUE result may hide an owning native
+            # temporary. Neither its type nor a C name closes that ledger.
+            stack.home_node = None
         for var in targets:
             if var.name == name:
                 var.ir_value = value
@@ -4631,7 +4683,12 @@ class IREmitter(Emitter):
         for var in self.current_value_locals(storage):
             if var.name == guarded:
                 var.nonnull = var.in_local
-        self.apply_value_transport(storage, assignment, transport, sources, nonnull_changes)
+        result = (dict(self.error_source.value_results).get(id(stmt))
+                  if self.error_source is not None else None)
+        self.apply_value_transport(storage, assignment, transport, sources,
+                                   nonnull_changes, result)
+        if guarded is not None and reachable:
+            self.refine_current_value(storage, guarded, True)
         if self.observer_source is not None:
             self.observer_call_receipt(stmt)
             if _statement_text(stmt) == ["DISPATCH_GOTO", "(", ")", ";"]:
@@ -4718,8 +4775,13 @@ class IREmitter(Emitter):
         left above its stack pointer, and leave the rest to
         exception_unwind."""
         self.emit("frame->phase_state = 0;\n")
-        stack = storage.stack.copy()
+        error_storage = storage.copy()
+        stack = error_storage.stack
         assert isinstance(stack, IRStack)
+        if self.statement is not None:
+            guarded = error_nonnull_value(self.statement.contents)
+            if guarded is not None:
+                self.refine_current_value(error_storage, guarded, False)
         stack.error_exit = True
         stack.flush(self.out)
         self.operand_error_flush(stack)
@@ -6802,11 +6864,27 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                                          or emitter.disjoint_child_drained)
         if fmt.store_dst:
             emitter.release_displaced()
+            # The reached displaced-binding cleanup may call Python after
+            # output publication. It preserves canonical cells but widens
+            # their non-NULL facts, just like the typed source callbacks.
+            stack.home_action("_PyIR_OWNER_STORAGE_CALLBACK",
+                              FIELDS.index(fmt.field_of(ROLE_DST)), flags=1)
         if fmt.unpacks:
             emitter.unpack_to_locals(
                 inst, fmt, UNPACKS[fmt.group], canonical=inst.name in (
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
+        source = emitter.error_source
+        if (source is not None and source.native_exit_closed and
+                source.homes in {HomeEffect.NO_ARENA_WRITE,
+                                 HomeEffect.PRESERVES_CANONICAL_OR_NULL} and
+                not source.changes_origin and not fmt.window and
+                not stack.reloaded and stack.home_node is not None and
+                stack.home_writes == stack.home_write_receipts and
+                not stack.possible_native_owners and not stack.unknown_read and
+                not any(stack.read_fields.values())):
+            emitter.error_checkpoint_sites[0] = ErrorCheckpoint(
+                0, 0, stack.home_node, tuple(stack.home_graph.nodes[:stack.home_node]))
         out.emit("DISPATCH();\n")
         emitter.error_finalized = True
     normal_edges = ({1} if fmt.jump_always else {0, 1}
@@ -7136,7 +7214,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     operand_abrupt: dict[str, bool] | None = None,
                     error_routes: dict[str, tuple[str, ...]] | None = None,
                     observer_entries: dict[str, bool] | None = None,
-                    checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None
+                    checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None,
+                    normal_storage: dict[str, ErrorCheckpoint | None] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -7180,8 +7259,11 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         if error_routes is not None:
             error_routes[name] = emitted_error_routes(emitter, formats[name], boxes)
         if checkpoints is not None:
-            checkpoints[name] = (tuple(emitter.error_checkpoint_sites.values())
+            checkpoints[name] = (tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
                 if emitted_error_routes(emitter, formats[name], boxes) else ())
+        if normal_storage is not None:
+            normal_storage[name] = (emitter.error_checkpoint_sites.get(0)
+                if emitted_error_routes(emitter, formats[name], boxes) else None)
         if boxes:
             if any(isinstance(p, Uop) and any(
                     t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
@@ -7332,6 +7414,7 @@ class HandlerContract:
     error_routes: tuple[str, ...]
     observer_entry: bool
     error_checkpoints: tuple[ErrorCheckpoint, ...]
+    normal_storage: ErrorCheckpoint | None = None
 
 
 def statement_shape(node):
@@ -8207,8 +8290,9 @@ def handler_contracts(analysis: Analysis,
     error_routes = {}
     observer_entries = {}
     checkpoints = {}
+    normal_storage = {}
     boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt,
-                             error_routes, observer_entries, checkpoints)
+                             error_routes, observer_entries, checkpoints, normal_storage)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
@@ -8227,6 +8311,12 @@ def handler_contracts(analysis: Analysis,
             common = ()
         for name in members:
             error_routes[name] = common
+        # A pristine word may execute any sibling. The first normal action
+        # cohort requires identical reached transport on every such route.
+        first = normal_storage.get(members[0])
+        if not all(normal_storage.get(name) == first for name in members):
+            for name in members:
+                normal_storage[name] = None
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -8253,6 +8343,7 @@ def handler_contracts(analysis: Analysis,
             error_routes=error_routes.get(name, ()),
             observer_entry=observer_entries.get(name, False),
             error_checkpoints=checkpoints.get(name, ()),
+            normal_storage=normal_storage.get(name),
         )
     return result
 

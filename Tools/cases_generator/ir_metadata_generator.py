@@ -157,7 +157,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.unpacks, "_PyIR_UNPACKS"),
             (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX"),
             (contract.abrupt_operands, "_PyIR_ABRUPT_OPERANDS"),
-            (bool(contract.error_checkpoints), "_PyIR_ERROR_PROGRAM")):
+            (bool(contract.error_checkpoints or contract.normal_storage), "_PyIR_ERROR_PROGRAM")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
@@ -192,20 +192,23 @@ def generate_ir_metadata(
 ) -> None:
     formats = compute_formats(analysis)
     contracts = handler_contracts(analysis, formats)
-    programs = {((), ()): (0, 0)}
+    programs = {((), (), None): (0, 0)}
     ownership = []
     for name in sorted(contracts):
         normal = contracts[name].ownership_events
         checkpoints = contracts[name].error_checkpoints
-        key = normal, checkpoints
+        final = contracts[name].normal_storage
+        key = normal, checkpoints, final
         if key not in programs:
-            actions = max((checkpoint.actions for checkpoint in checkpoints),
+            snapshots = checkpoints + ((final,) if final is not None else ())
+            actions = max((checkpoint.actions for checkpoint in snapshots),
                           key=len, default=())
             suffix = list(actions)
-            for checkpoint in checkpoints:
+            for checkpoint in snapshots:
                 if actions[:len(checkpoint.actions)] != checkpoint.actions:
                     raise ValueError("error checkpoints have different storage graphs")
-                suffix.append(OwnershipEvent("_PyIR_OWNER_ERROR_CHECKPOINT",
+                suffix.append(OwnershipEvent("_PyIR_OWNER_ERROR_CHECKPOINT" if checkpoint.id else
+                    "_PyIR_OWNER_STORAGE_NORMAL",
                     flags=checkpoint.flags, dst=checkpoint.node,
                     src=checkpoint.id))
             program = normal
@@ -326,7 +329,8 @@ def generate_ir_metadata(
                       if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
                                       rows[name], events,
-                                      programs[rows[name].ownership_events, rows[name].error_checkpoints])
+                                      programs[rows[name].ownership_events, rows[name].error_checkpoints,
+                                               rows[name].normal_storage])
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

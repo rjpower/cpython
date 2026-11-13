@@ -3517,6 +3517,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
             return -1;
         }
+        frame_at_line->phase_state = 0;
         frame_at_line->return_pc = frame_at_line->instr_ptr;
         self->f_line_next = -1;
         self->f_lineno = 0;
@@ -3793,6 +3794,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
     }
     /* No callback is possible between the final proof and the commit. */
+    frame->phase_state = 0;
     int nretired = 0;
     for (int i = 0; i < plan.nrestores; i++) {
         RegisterLocalRestore action = plan.restores[i];

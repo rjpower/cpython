@@ -2471,7 +2471,7 @@ class IRStack(Stack):
                         or var.name in lay.canonical_outputs):
                     out.emit(f"assert(PyValue_IsNull({slot}) || "
                              f"PyValue_Is({slot}, {var.name}));\n")
-                    out.emit(f"{slot} = {var.name};\n")
+                    out.emit(f"_PyFrame_WriteHome(frame, &{slot}, {var.name});\n")
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:
                     out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
@@ -2573,7 +2573,7 @@ class IRStack(Stack):
                         del self.owner[p]
                         self.consume(out, p)
                     continue
-                out.emit(f"{self.window_slot(position)} = PyValue_NULL;\n")
+                out.emit(f"_PyFrame_WriteHome(frame, &{self.window_slot(position)}, PyValue_NULL);\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -2582,7 +2582,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
+                    out.emit(f"_PyFrame_WriteHome(frame, &{self.out_slot(PointerOffset(p, (), ()))}, PyValue_NULL);\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner

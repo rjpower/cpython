@@ -3111,6 +3111,55 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
+    def test_normal_vacate_observer_frame_footprint(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
+                     "LOAD_SUPER_ATTR_ATTR", "LOAD_SUPER_ATTR_METHOD"):
+            with self.subTest(handler=name):
+                self.assertTrue(ir_generator.normal_vacate_capability(
+                    analysis.instructions[name], formats[name]))
+
+        # The capability explains the helper/frame use, not an opcode name.
+        call = ("_Py_call_instrumentation_2args(tstate, "
+                "PY_MONITORING_EVENT_CALL, frame, this_instr, left, right);")
+        declaration = "\ninst(OP, (left, right --)) "
+        analysis = self.analyze(declaration + "{ " + call + " DECREF_INPUTS(); }\n")
+        inst = analysis.instructions["OP"]
+        fmt = ir_generator.compute_formats(analysis)["OP"]
+        self.assertTrue(ir_generator.normal_vacate_capability(inst, fmt))
+        changes = (
+            call.replace("tstate,", "other,"),
+            call.replace("EVENT_CALL", "EVENT_LINE"),
+            call.replace("frame, this_instr", "other_frame, this_instr"),
+            call.replace("frame, this_instr", "this_instr, frame"),
+            call.replace("this_instr", "next_instr"),
+            call.replace("left, right", "frame, right"),
+            call.replace("left, right", "left, right, frame"),
+            call.replace("_2args", "_unknown"),
+            "void *alias = frame; " + call,
+            "frame->base[0] = PyValue_NULL; " + call,
+            "opaque(frame); " + call,
+            "#if ENABLE_FOOTPRINT\n" + call + "\n#endif\n",
+        )
+        for changed in changes:
+            with self.subTest(changed=changed):
+                modified = self.analyze(declaration + "{\n" + changed
+                                        + "\nDECREF_INPUTS(); }\n")
+                self.assertFalse(ir_generator.normal_vacate_capability(
+                    modified.instructions["OP"], fmt))
+        # An AST-only arm change must also fail against the original source.
+        part = inst.parts[0]
+        wrapped = self.analyze(declaration + "{\n#if ENABLE_FOOTPRINT\n"
+                               + call + "\n#endif\nDECREF_INPUTS(); }\n")
+        original = part.body.body
+        part.body.body = wrapped.instructions["OP"].parts[0].body.body
+        try:
+            self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+        finally:
+            part.body.body = original
+
     def test_created_copy_recipe_checks_actual_transport(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

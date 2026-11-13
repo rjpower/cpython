@@ -18147,11 +18147,7 @@
                 JUMP_TO_LABEL(error);
             }
             frame->phase_state = 0;
-            _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            frame->phase_state = 0;
-            frame->phase_state = 0;
-            _PyFrame_CopyCreatedGenerator(frame, gen_frame);
-            gen_frame->return_slot = (uint16_t)IR_A(ir_word);
+            _PyInterpreterFrame *gen_frame = &gen->gi_iframe;_PyFrame_CopyCreatedGenerator(frame, gen_frame)gen_frame->return_slot = (uint16_t)IR_A(ir_word);
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;

@@ -39,7 +39,7 @@ class CreatedPlanTests(unittest.TestCase):
         self.assert_plan(make_code(words, locals=("value",)), True)
         changed = words.copy()
         # The first marker still qualifies, but the other retains a value.
-        changed[4:4] = [("LOAD_CONST", 1)]
+        changed[4:4] = [("LOAD_CONST", 2)]
         changed[3] = ("IR_JUMP", 0, 0, 6)
         self.assert_plan(make_code(changed, locals=("value",)), False)
         # An unreachable physical marker must not disappear from the census.

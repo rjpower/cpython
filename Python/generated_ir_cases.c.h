@@ -5719,7 +5719,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -5841,7 +5841,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -5963,7 +5963,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -8592,7 +8592,7 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -8732,7 +8732,7 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -9899,7 +9899,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -10021,7 +10021,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -10143,7 +10143,7 @@
                 args = &window[2];
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -10791,7 +10791,7 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {
@@ -10931,7 +10931,7 @@
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                _PyValue_CloseStack(args, oparg);
+                _PyFrame_CloseHomeRange(frame, args, oparg);
             }
             // _POP_TOP
             {

@@ -13,6 +13,7 @@ PUBLISHED = 1 << 8
 STATUS_SHIFT = 9
 UNCOVERED, EXACT, MISMATCH = range(3)
 PROVIDER, RETIRE, RESTORE = 5, 6, 7
+HOME_NONE, SHADOW_CANDIDATE, MUST_READABLE, NULL_CONTROL_READABLE = range(4)
 
 
 def binary_code(*, slots=4, move=True, unknown=False):
@@ -62,6 +63,8 @@ class PhasePlanTests(unittest.TestCase):
                     check = _testinternalcapi.check_ir_frame_phase
                     for phase in (PROVIDER, RETIRE, RESTORE):
                         self.assertEqual(check(admitted, site, PUBLISHED | phase), EXACT)
+                        self.assertEqual(check(admitted, site, PUBLISHED | phase,
+                                               authority_only=True), MUST_READABLE)
                     # The survivor is live in all three callback shapes.
                     self.assertEqual(check(admitted, site, PUBLISHED | PROVIDER,
                                            missing_home=2), MISMATCH)
@@ -87,12 +90,20 @@ class PhasePlanTests(unittest.TestCase):
         for flag in ("unaligned", "wrong_image"):
             self.assertEqual(check(code, site, PUBLISHED | PROVIDER,
                                    **{flag: True}), UNCOVERED)
+            self.assertEqual(check(code, site, PUBLISHED | PROVIDER,
+                                   authority_only=True, **{flag: True}), HOME_NONE)
+        # A captured lifecycle belongs to the frame adapter, not this active
+        # code-plan lookup. Never accept it as another published phase flag.
+        self.assertEqual(check(code, site, PUBLISHED | PROVIDER | (1 << 11),
+                               authority_only=True), HOME_NONE)
 
     def test_unknown_predecessor_never_acquires_callback_coverage(self):
         code, site, _ = binary_code(unknown=True)
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.check_ir_frame_phase(
                 admitted, site, PUBLISHED | PROVIDER), UNCOVERED)
+            self.assertEqual(_testinternalcapi.check_ir_frame_phase(
+                admitted, site, PUBLISHED | PROVIDER, authority_only=True), HOME_NONE)
 
     def test_nullable_join_is_a_shadow_candidate_not_a_required_value(self):
         code, original, destination = binary_code(move=False)
@@ -105,6 +116,10 @@ class PhasePlanTests(unittest.TestCase):
         for admitted in routes(joined):
             check = _testinternalcapi.check_ir_frame_phase
             self.assertEqual(check(admitted, 4, PUBLISHED | PROVIDER), EXACT)
+            self.assertEqual(check(admitted, 4, PUBLISHED | PROVIDER,
+                                   authority_only=True), SHADOW_CANDIDATE)
+            self.assertNotEqual(check(admitted, 4, PUBLISHED | PROVIDER,
+                                      authority_only=True), NULL_CONTROL_READABLE)
             # One predecessor has a survivor and the other has canonical
             # NULL. It cannot become a required nonNULL range at the join.
             with self.assertRaisesRegex(ValueError, "missing home must be required"):

@@ -246,15 +246,17 @@ class SimpleStmt(Stmt):
 
 @dataclass
 class StackEffect(Node):
-    name: str = field(compare=False)  # __eq__ only uses type, cond, size
+    name: str = field(compare=False)  # Equality compares extent and read qualifier.
     size: str = ""  # Optional `[size]`
+    nullable: bool = False
     # Note: size cannot be combined with type or cond
 
     def __repr__(self) -> str:
         items = [self.name, self.size]
         while items and items[-1] == "":
             del items[-1]
-        return f"StackEffect({', '.join(repr(item) for item in items)})"
+        annotation = ", nullable=True" if self.nullable else ""
+        return f"StackEffect({', '.join(repr(item) for item in items)}{annotation})"
 
 
 @dataclass
@@ -462,7 +464,13 @@ class Parser(PLexer):
                     raise self.make_syntax_error("Expected expression")
                 self.require(lx.RBRACKET)
                 size_text = size.text.strip()
-            return StackEffect(tkn.text, size_text)
+            nullable = False
+            if self.expect(lx.COLON):
+                annotation = self.require(lx.IDENTIFIER)
+                if annotation.text != "nullable":
+                    raise self.make_syntax_error("Expected nullable input annotation")
+                nullable = True
+            return StackEffect(tkn.text, size_text, nullable)
         return None
 
     @contextual

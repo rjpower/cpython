@@ -3276,6 +3276,30 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(ir_generator.releases_object(
             analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
 
+    def test_nullable_annotations_are_input_only(self):
+        analysis = self.analyze("""
+            inst(OP, (required, value:nullable, items[oparg]:nullable --)) {
+                opaque(required, value, items);
+            }
+        """)
+        inputs = analysis.instructions["OP"].parts[0].stack.inputs
+        self.assertEqual([item.nullable for item in inputs], [False, True, True])
+        self.assertEqual(inputs[2].size, "oparg")
+        analysis = self.analyze("""
+            inst(OP, (value:nullable, items[oparg]:nullable -- value, items[oparg])) {
+            }
+        """)
+        inputs = analysis.instructions["OP"].parts[0].stack.inputs
+        self.assertEqual([item.nullable for item in inputs], [True, True])
+        self.assertTrue(all(item.peek for item in inputs))
+        for source in (
+            "inst(OP, (-- value:nullable)) { value = PyValue_NULL; }",
+            "inst(OP, (value:unknown --)) { DEAD(value); }",
+        ):
+            with self.subTest(source=source), self.assertRaises(SyntaxError):
+                self.analyze("\n" + source + "\n")
+
+
     def test_input_drain_lowers_through_actual_storage(self):
         output = self.ir_output("""
             inst(OP, (items[oparg] --)) {

@@ -3987,14 +3987,7 @@ frame_tp_clear(PyObject *op)
     Py_CLEAR(f->f_locals_cache);
     Py_CLEAR(f->f_overwritten_fast_locals);
 
-    /* all slots */
-    PyValue *locals = _PyFrame_GetLocalsArray(f->f_frame);
-    PyValue *sp = locals + _PyFrame_NumSlots(f->f_frame);
-    while (sp > locals) {
-        sp--;
-        PyValue_CLEAR(*sp);
-    }
-    Py_CLEAR(f->f_frame->f_locals);
+    _PyFrame_ClearLocals(f->f_frame);
     return 0;
 }
 

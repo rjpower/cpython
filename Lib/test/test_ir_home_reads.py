@@ -4,9 +4,10 @@ import opcode
 import types
 import unittest
 
+import _opcode
 import _testinternalcapi
-from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import make_code
+from test.test_ir_call_roles import CONTRACT, HANDLERS, routes
+from test.test_ir_transfer_admission import encoded, make_code
 
 
 class HomeReadTests(unittest.TestCase):
@@ -79,6 +80,77 @@ class HomeReadTests(unittest.TestCase):
             self.assertEqual(vars(owner), {})
             with self.assertRaises(AttributeError):
                 function(owner, False)
+
+    def test_attribute_delete_before_and_after_assignment_warmup(self):
+        class Plain:
+            pass
+
+        class Slotted:
+            __slots__ = ("item",)
+
+        def assign(owner):
+            owner.item = 42
+
+        def delete(owner):
+            del owner.item
+
+        for owner_type in (Plain, Slotted):
+            for admitted in routes(assign.__code__):
+                owner = owner_type()
+                assigning = types.FunctionType(admitted, {})
+                assigning(owner)
+                delete(owner)
+                with self.assertRaises(AttributeError):
+                    delete(owner)
+                for _ in range(2 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+                    assigning(owner)
+                rows = _testinternalcapi.get_ir(admitted, True)
+                with self.subTest(owner_type=owner_type):
+                    self.assertTrue(any(row[0].startswith("STORE_ATTR_") for row in rows))
+                    self.assertEqual(owner.item, 42)
+                    delete(owner)
+                    with self.assertRaises(AttributeError):
+                        delete(owner)
+
+    def test_same_attribute_word_deopts_null_after_assignment_warmup(self):
+        def template(owner, fill):
+            if fill:
+                value = 42
+            owner.item = 0
+
+        # Read the conditionally bound local at the actual nullable store
+        # input. The same encoded word assigns on fill=True and deletes on
+        # fill=False; a Python expression cannot otherwise supply NULL.
+        words = _testinternalcapi.get_ir(template.__code__)
+        stores = [index for index, word in enumerate(words) if word[0] == "STORE_ATTR"]
+        self.assertEqual(len(stores), 1)
+        word = list(words[stores[0]])
+        field = CONTRACT[HANDLERS["STORE_ATTR"]].roles.index(_opcode.IR_ROLE_IN0)
+        word[field + 1] = template.__code__.co_varnames.index("value")
+        words[stores[0]] = tuple(word)
+        # The former store input may remain live; use general retirement.
+        words = [("RETURN_VALUE", *word[1:]) if word[0] == "RETURN_VALUE_EMPTY"
+                 else word for word in words]
+        code = template.__code__.replace(co_code=encoded(words),
+            co_linetable=b"", co_exceptiontable=b"")
+
+        class Owner:
+            pass
+
+        for admitted in routes(code):
+            function = types.FunctionType(admitted, {})
+            owner = Owner()
+            for _ in range(2 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+                function(owner, True)
+            self.assertTrue(any(row[0].startswith("STORE_ATTR_")
+                                for row in _testinternalcapi.get_ir(admitted, True)))
+            self.assertEqual(owner.item, 42)
+            function(owner, False)
+            self.assertEqual(vars(owner), {})
+            with self.assertRaises(AttributeError):
+                function(owner, False)
+            function(owner, True)
+            self.assertEqual(owner.item, 42)
 
     def test_other_binary_intrinsics_reject_absent_second_value(self):
         for name in ("INTRINSIC_GETATTR", "INTRINSIC_TYPEVAR_WITH_BOUND"):

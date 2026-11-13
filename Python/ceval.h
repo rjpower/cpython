@@ -348,6 +348,34 @@ typedef struct _PyEvalActivation {
     const _PyIRObserverSpec *observer_context;
 } _PyEvalActivation;
 
+typedef enum {
+    _PyIR_ERROR_HANDLED,
+    _PyIR_ERROR_EXIT,
+} _PyIRErrorDisposition;
+
+typedef struct {
+    _PyInstr *next;
+    _PyIRErrorDisposition disposition;
+} _PyIRErrorResult;
+
+enum {
+    _PyIR_ERROR_INGRESS_RAISE,
+    _PyIR_ERROR_INGRESS_UNWIND,
+    _PyIR_ERROR_INGRESS_EXIT,
+    _PyIR_ERROR_INGRESS_EXIT_NOTRACE,
+    _PyIR_ERROR_INGRESS_THROW,
+    _PyIR_ERROR_INGRESS_HANDLED_FAILURE,
+    _PyIR_ERROR_INGRESS_CALLER,
+    _PyIR_ERROR_INGRESS_SOURCE,
+};
+
+#define _PyIR_ERROR_ENTRY(ingress, checkpoint) \
+    (((uint32_t)(ingress) << 8) | (uint32_t)(checkpoint))
+
+#if SIZEOF_VOID_P == 8
+static_assert(sizeof(_PyIRErrorResult) == 16, "error return has no owning payload");
+#endif
+
 static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)

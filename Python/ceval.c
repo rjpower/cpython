@@ -2188,6 +2188,187 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pending;
 }
 
+static void clear_error_frame(PyThreadState *, _PyInterpreterFrame *);
+
+static void
+error_scope_disarm(PyThreadState *tstate, _PyTransitionRoots *scope)
+{
+    _PyInterpreterFrame *frame = scope->frame;
+    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+        frame->phase_state = 0;
+    }
+    scope->remaining = 0;
+    scope->home_authority = _PyIR_HOME_NONE;
+    scope->homes = NULL;
+    scope->frame = NULL;
+    _PyThreadState_PopTransitionRoots(tstate, scope);
+}
+
+static void
+error_scope_clear(_PyInterpreterFrame *frame, _PyTransitionRoots *scope,
+                  int first)
+{
+    const _PyIRHomeView *view = scope->homes;
+    assert(first >= view->nbindings && first <= _PyFrame_NumSlots(frame));
+    /* The descriptor stays pinned. The shared iterator and live cursor
+     * expose the same progressive selection to callbacks/readers. */
+    uint32_t cursor = UINT32_MAX;
+    int begin, end;
+    while (_PyFrame_PreviousHomeRange(view, &cursor, &begin, &end)) {
+        begin = Py_MAX(first, begin);
+        end = Py_MIN(scope->remaining, end);
+        while (end > begin) {
+            int home = --end;
+            scope->remaining = home;
+            PyValue owner = _PyFrame_TakeHome(frame, &frame->base[home]);
+            PyValue_XCLOSE(owner);
+        }
+    }
+    scope->remaining = first;
+}
+
+/* Entered before the generic label bridge finisher. All descriptors are local
+ * to this reached cold scope; no successful handler gains an owner record. */
+static Py_NO_INLINE _PyIRErrorResult
+_PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *origin, uint32_t entry,
+                     _PyValueTemps *value_temps)
+{
+    unsigned int ingress = (entry >> 8) & 15;
+    unsigned int checkpoint = entry & 255;
+    if ((entry & ~UINT32_C(4095)) || ingress > _PyIR_ERROR_INGRESS_SOURCE ||
+        checkpoint != 0)
+    {
+        Py_FatalError("invalid or unsupported emitted error checkpoint");
+    }
+    for (;;) {
+        assert(frame == tstate->current_frame);
+        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        _PyIRHomeView view;
+        /* Checkpoint zero is explicitly the initialized NULL control. It
+         * grants no static plan certificate or successful CHECKED status. */
+        _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), &view);
+        _PyTransitionRoots scope = {
+            .frame = frame,
+            .remaining = _PyFrame_NumSlots(frame),
+            .kind = _Py_TRANSITION_KIND_ERROR,
+            .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+            .homes = &view,
+        };
+        _PyThreadState_PushTransitionRoots(tstate, &scope);
+        frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
+
+        /* Retain a source callback's immutable recovery triple across bridge
+         * cleanup. Its visible source location survives until traceback and
+         * raise monitoring, just as on the original error path. */
+        _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+        int has_source = activation != NULL && activation->source_error_frame == frame;
+        _PyExceptionHandler source = {0};
+        if (has_source) {
+            source = activation->source_error_handler;
+        }
+        if (value_temps != NULL && value_temps->count != 0) {
+            int had_error = _PyErr_Occurred(tstate) != NULL;
+            if (finish_value_bridges(tstate, frame, origin + 1, value_temps) < 0 && !had_error) {
+                origin = frame->instr_ptr;
+                ingress = _PyIR_ERROR_INGRESS_RAISE;
+                has_source = 0;
+            }
+        }
+        if (ingress == _PyIR_ERROR_INGRESS_THROW) {
+            monitor_throw(tstate, frame, origin + 1);
+            ingress = _PyIR_ERROR_INGRESS_RAISE;
+        }
+        if (ingress == _PyIR_ERROR_INGRESS_RAISE ||
+            ingress == _PyIR_ERROR_INGRESS_CALLER ||
+            ingress == _PyIR_ERROR_INGRESS_SOURCE)
+        {
+#ifdef NDEBUG
+            if (!_PyErr_Occurred(tstate)) {
+                _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "error return without exception set");
+            }
+#else
+            assert(_PyErr_Occurred(tstate));
+#endif
+            if (!_PyFrame_IsIncomplete(frame)) {
+                PyFrameObject *f = _PyFrame_GetFrameObject(frame);
+                if (f != NULL) {
+                    PyTraceBack_Here(f);
+                }
+            }
+            _PyEval_MonitorRaise(tstate, frame, origin);
+        }
+        int exiting = ingress == _PyIR_ERROR_INGRESS_EXIT ||
+                      ingress == _PyIR_ERROR_INGRESS_EXIT_NOTRACE;
+        _PyExceptionHandler found = {0};
+        if (!exiting) {
+            found = get_frame_exception_handler(
+                frame, (int)_PyFrame_InstrOffset(frame, origin));
+            if (has_source) {
+                found = source;
+            }
+        }
+        if (found.handled) {
+            int first = found.exc_slot - found.lasti;
+            error_scope_clear(frame, &scope, first);
+            if (found.lasti) {
+                _PyFrame_WriteHome(frame, &frame->base[first],
+                    PyValue_TagIndex(_PyInterpreterFrame_LASTI(frame)));
+            }
+            PyObject *exc = _PyErr_GetRaisedException(tstate);
+            _PyFrame_WriteHome(frame, &frame->base[found.exc_slot],
+                              PyValue_FromObjectSteal(exc));
+            _PyInstr *next = _PyFrame_InstrAt(frame, found.handler);
+            /* The installed exception and tagged lasti are different roles.
+             * Publish the actual handler-entry prefix before its callback. */
+            scope.remaining = found.exc_slot + 1;
+            frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
+            int err = monitor_handled(tstate, frame, next, exc);
+            error_scope_disarm(tstate, &scope);
+            if (err < 0) {
+                /* Match the existing handler-entry error origin while using
+                 * a fresh initialized snapshot for the next cleanup. */
+                origin = next - 1;
+                ingress = _PyIR_ERROR_INGRESS_HANDLED_FAILURE;
+                value_temps = NULL;
+                continue;
+            }
+#ifdef Py_DEBUG
+            if (frame->lltrace >= 5) {
+                lltrace_resume_frame(frame);
+            }
+#endif
+            return (_PyIRErrorResult){next, _PyIR_ERROR_HANDLED};
+        }
+        assert(_PyErr_Occurred(tstate));
+        /* Even a direct evaluator exit owns its remaining scratch. Pass only
+         * bindings to M2, rather than asking GEN retirement to scan old N. */
+        error_scope_clear(frame, &scope, code->co_nlocalsplus);
+        if (!exiting) {
+            monitor_unwind(tstate, frame, origin);
+        }
+        if (ingress != _PyIR_ERROR_INGRESS_EXIT_NOTRACE) {
+            DTRACE_FUNCTION_RETURN();
+        }
+        error_scope_disarm(tstate, &scope);
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *dying = frame;
+        frame = tstate->current_frame = dying->previous;
+        frame->pending_redirect = 0;
+        clear_error_frame(tstate, dying);
+        frame->pending_redirect = 0;
+        if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+            tstate->current_frame = frame->previous;
+            return (_PyIRErrorResult){NULL, _PyIR_ERROR_EXIT};
+        }
+        origin = frame->instr_ptr;
+        ingress = _PyIR_ERROR_INGRESS_CALLER;
+        value_temps = NULL;
+    }
+}
+
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
@@ -2408,10 +2589,9 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
         _PyInstr *next_instr = frame->instr_ptr;
-        monitor_throw(tstate, frame, next_instr);
         PyValue *slots = _PyFrame_Slots(frame);
         _PyIRWord ir_word = 0;
-        result = enter_handlers(_TAIL_CALL_error, TAIL_CALL_ARGS);
+        result = enter_handlers(_TAIL_CALL_throw_error, TAIL_CALL_ARGS);
     }
     else {
         /* start_frame takes its word and slots from the frame */
@@ -3139,6 +3319,25 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // No escaping call may follow this store before evaluator return.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     return result;
+}
+
+static void
+clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
+    if (frame->owner == FRAME_OWNED_BY_THREAD) {
+        (void)clear_thread_frame(tstate, frame, PyValue_NULL, _PyIR_RETIRE_ERROR_UNWIND);
+        return;
+    }
+    assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+    PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+    FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
+    assert(tstate->exc_info == &gen->gi_exc_state);
+    tstate->exc_info = gen->gi_exc_state.previous_item;
+    gen->gi_exc_state.previous_item = NULL;
+    frame->previous = NULL;
+    (void)_PyFrame_ClearGeneratorBindings(gen, _PyIR_RETIRE_ERROR_UNWIND);
+    ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 
 static inline Py_ALWAYS_INLINE _PyIRStepResult

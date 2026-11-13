@@ -83,6 +83,13 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
              ((_PyThreadStateImpl *)tstate)->transition_roots;
          roots != NULL; roots = roots->previous)
     {
+        if (roots->kind == _Py_TRANSITION_KIND_ERROR) {
+            /* Active frame/container traversal owns these edges. This node
+             * only selects their view; treating it as an external root would
+             * hide cycles from heap-container subtraction. */
+            assert(roots->header_mask == 0 && !roots->result_present);
+            continue;
+        }
         _PyInterpreterFrame *frame = roots->frame;
         if (frame == NULL) {
             /* A provider scope outlives the frame consumed by its evaluator. */
@@ -1916,6 +1923,10 @@ verify(PyThreadState *tstate)
         goto done;
     }
     HEAD_LOCK(&_PyRuntime);
+    _PyThreadStateImpl *executing = (_PyThreadStateImpl *)tstate;
+    unsigned int old_head_depth = executing->head_locked_frame_walk;
+    assert(old_head_depth < UINT_MAX);
+    executing->head_locked_frame_walk = old_head_depth + 1;
     mark_precise_roots(&t);
     if (t.roots & _PyGC_TRACE_ROOT_STACKS) {
         scan_threads(&t, tstate);
@@ -1928,6 +1939,7 @@ verify(PyThreadState *tstate)
         scan_structs(&t);
         scan_queued(&t);
     }
+    executing->head_locked_frame_walk = old_head_depth;
     HEAD_UNLOCK(&_PyRuntime);
     if (t.oom) {
         goto done;

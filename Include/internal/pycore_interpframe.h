@@ -312,9 +312,40 @@ _PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
+/* Initialize cursor to UINT32_MAX. Each interval is returned once, from
+ * selected scratch down to bindings; callers may clip it by a live cursor. */
+static inline bool
+_PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
+                           int *begin, int *end)
+{
+    if (*cursor == UINT32_MAX) {
+        assert(view->nranges < UINT32_MAX);
+        *cursor = view->nranges + 1;
+    }
+    while (*cursor > 1) {
+        const _PyIRPhaseRange *range = &view->ranges[--*cursor - 1];
+        *begin = view->nbindings + range->begin;
+        *end = view->nbindings + Py_MIN(range->end, view->scratch_limit);
+        if (*begin < *end) {
+            return true;
+        }
+    }
+    if (*cursor == 1) {
+        *cursor = 0;
+        *begin = 0;
+        *end = view->nbindings;
+        return *end != 0;
+    }
+    return false;
+}
+
 /* The caller pins code for the entire view/copy commit. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyFrame_GetHomeView(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
+/* Copies metadata only. Foreign native scopes require the GIL or actual STW;
+ * owner_hint supplies identity, not quiescence or HEAD_LOCK ownership. */
+_PyIRHomeAuthority _PyFrame_GetErrorHomeView(
+    PyThreadState *owner_hint, _PyInterpreterFrame *frame, _PyIRHomeView *view);
 _PyIRHomeAuthority _PyFrame_GetCopyViewUnderNullControl(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
 void _PyFrame_GetNullControlHomeView(
@@ -582,6 +613,7 @@ enum {
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
 int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+PyValue _PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason);
 void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
                             int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);

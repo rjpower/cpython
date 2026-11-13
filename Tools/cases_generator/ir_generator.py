@@ -6637,7 +6637,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
                 emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
                 not emitter.abrupt_operand_uncovered and
-                not (boxes and emitter.error_source is not None
+                not ((boxes or formats[name].store_dst) and emitter.error_source is not None
                      and emitter.error_source.changes_origin))
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
@@ -6718,7 +6718,7 @@ def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tupl
     """Match complete typed source to actual flush and terminal receipts."""
     source = emitter.error_source
     if (source is None or source.homes == HomeEffect.UNKNOWN
-            or source.changes_origin and boxes
+            or source.changes_origin and (boxes or fmt.store_dst)
             or emitter.error_uncovered or emitter.abrupt_operand_uncovered
             or source.error_sources != emitter.abrupt_operand_sources
             or source.unwind_sources != emitter.error_unwind_sources

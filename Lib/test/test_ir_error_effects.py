@@ -199,6 +199,21 @@ class ErrorEffectTests(unittest.TestCase):
                     altered = analyzer.analyze_files([str(changed)])
                     self.assertIsNone(ir_generator.operand_error_sources(altered.instructions[name]))
 
+            before = "value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));"
+            changed.write_text(text.replace(
+                before, "if (oparg) { ERROR_NO_POP(); } " + before +
+                " next_instr = this_instr;", 1))
+            altered = analyzer.analyze_files([str(changed)])
+            instruction = altered.instructions["LOAD_CONST"]
+            self.assertIsNotNone(ir_generator.operand_error_sources(instruction))
+            altered_formats = ir_generator.compute_formats(altered)
+            self.assertTrue(altered_formats["LOAD_CONST"].store_dst)
+            # The final local publication/refresh can fail after PC adoption,
+            # even without a scalar box or a later explicit ERROR statement.
+            contracts = ir_generator.handler_contracts(altered, altered_formats)
+            self.assertFalse(contracts["LOAD_CONST"].error_routes)
+            self.assertFalse(contracts["LOAD_CONST"].abrupt_operands)
+
     def test_complete_routes_require_actual_error_and_publication_receipts(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():

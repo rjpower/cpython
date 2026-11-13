@@ -181,6 +181,8 @@ enum {
                                     // that receive the elements of an
                                     // unpack in order, or is IR_NO_DST: the
                                     // elements stay in the window
+#define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
+                                    // exceptional absence only, not readability
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree

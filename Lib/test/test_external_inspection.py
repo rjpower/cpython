@@ -4570,6 +4570,9 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             # Header size, previous, allocation-size field and data offset.
             for field in range(4):
                 reject(chunk + field * 8, struct.pack('=Q', (1 << 64) - 1))
+            executing = layout['code_exec_section']
+            for field in range(3):
+                reject(executing + field * 8, struct.pack('=Q', (1 << 64) - 1))
             assert RemoteUnwinder(os.getpid()).get_stack_trace()
         """))
 
@@ -4593,7 +4596,11 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                 slot = ctypes.c_uint16.from_address(address)
                 original = slot.value
                 assert coroutine.cr_await is not None
-                assert 2 <= original < layout['no_dst'], original
+                assert 0 <= original < layout['no_dst'], original
+                phase_address = id(coroutine) + layout['generator_frame'] + layout['phase_state']
+                phase = ctypes.c_uint16.from_address(phase_address)
+                original_phase = phase.value
+                assert original_phase & layout['phase_delegated'], original_phase
                 trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
                 targets = [target for info in trace for target in info.awaited_by
                            if target.task_name == 'bounded-target']
@@ -4602,11 +4609,16 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                            for coro in targets[0].coroutine_stack
                            for frame in coro.call_stack), targets
                 try:
-                    slot.value = layout['no_dst']
+                    phase.value = 0
+                    slot.value = 65535
                     assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
-                    # Both are non-sentinel uint16 values, above this target's
-                    # actual value-home count. Reject before receiver math.
-                    for invalid in (layout['no_dst'] - 1, 65534):
+                    slot.value = original
+                    phase.value = original_phase
+                    # The other two values are non-sentinel uint16 values,
+                    # above this target's actual home count. The sentinel
+                    # also fails here: this word's actual A is
+                    # not a discard, so the live recipient must match it.
+                    for invalid in (layout['no_dst'], layout['no_dst'] - 1, 65534):
                         slot.value = invalid
                         try:
                             RemoteUnwinder(os.getpid()).get_all_awaited_by()
@@ -4614,8 +4626,70 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                             assert 'return slot' in str(error), str(error)
                         else:
                             raise AssertionError(('accepted awaited slot', invalid))
+                    # A valid index cannot substitute for the certified A.
+                    limit = blocked.__code__.co_nlocals + max(blocked.__code__.co_stacksize, 1)
+                    slot.value = (original + 1) % limit
+                    try:
+                        RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                    except RuntimeError as error:
+                        assert 'return slot' in str(error), str(error)
+                    else:
+                        raise AssertionError('accepted unrelated resume recipient')
                 finally:
                     slot.value = original
+                    phase.value = original_phase
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            asyncio.run(main())
+        """))
+
+    def test_remote_delegated_discard_still_follows_receiver(self):
+        assert_python_ok("-c", textwrap.dedent("""
+            import asyncio
+            import opcode
+            import os
+            import _testinternalcapi
+            from _remote_debugging import RemoteUnwinder
+            from test.support.bytecode_helper import encode_words
+
+            async def delegate():
+                await asyncio.Future()
+
+            async def blocked():
+                await delegate()
+
+            # A public, admitted discard recipient is independent of D.
+            # Cancellation throws at the suspension; it does not execute a
+            # SEND with a discarded resume value in this control.
+            handlers = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
+            rows = [tuple(row) for row in _testinternalcapi.get_ir(blocked.__code__)]
+            site = next(i for i, row in enumerate(rows) if row[0] == 'YIELD_DELEGATED')
+            name, a, b, c, d = rows[site]
+            rows[site] = name, _testinternalcapi.remote_debug_layout()['no_dst'], b, c, d
+            # Rebuild source metadata for the changed recipient; the old
+            # observer recovery proof describes the original A role.
+            blocked.__code__ = blocked.__code__.replace(
+                co_code=encode_words(
+                    *((handlers[name], *fields) for name, *fields in rows)),
+                co_linetable=b'')
+
+            async def main():
+                task = asyncio.create_task(blocked(), name='discard-target')
+                await asyncio.sleep(0)
+                coroutine = task.get_coro()
+                assert coroutine.cr_await.cr_code is delegate.__code__
+                try:
+                    trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                    targets = [target for info in trace for target in info.awaited_by
+                               if target.task_name == 'discard-target']
+                    assert len(targets) == 1, trace
+                    assert any(frame.funcname == 'delegate'
+                               for coro in targets[0].coroutine_stack
+                               for frame in coro.call_stack), targets
+                finally:
                     task.cancel()
                     try:
                         await task

@@ -3111,31 +3111,6 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
-    def test_normal_vacate_checks_real_frame_home_footprints(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        for name in ("BUILD_MAP", "BUILD_SET", "BUILD_STRING", "LOAD_GLOBAL",
-                     "LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN", "LOAD_SPECIAL",
-                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TWO_TUPLE",
-                     "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
-            with self.subTest(handler=name):
-                inst = analysis.instructions[name]
-                self.assertTrue(ir_generator.normal_vacate_capability(inst, formats[name]))
-                for part in inst.parts:
-                    if not isinstance(part, analyzer.Uop):
-                        continue
-                    if not any(t.text == "frame" for t in part.body.tokens()):
-                        continue
-                    self.assertTrue(ir_generator.frame_home_footprint(part))
-                    extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-                    part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
-                    try:
-                        self.assertFalse(ir_generator.normal_vacate_capability(
-                            inst, formats[name]))
-                    finally:
-                        part.body.body.pop()
-
     def test_normal_vacate_rejects_unproved_renamed_frame_capabilities(self):
         for helper in ("_PyFrame_TakeHome", "_PyFrame_MoveHome",
                        "_PyFrame_SetHomeBit", "_PyFrame_InitHeapBitmap",
@@ -3147,45 +3122,39 @@ class TestIRCases(unittest.TestCase):
                 fmt = ir_generator.compute_formats(analysis)["OP"]
                 self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
 
-    def test_frame_home_footprints_reject_changed_bounds_storage_and_io(self):
-        def items(shape):
-            return ", ".join(name + (f"[{size}]" if size else "")
-                             for name, _, size in shape)
-
-        for inputs, outputs, body in ir_generator.FRAME_HOME_FOOTPRINTS:
-            declaration = f"\ninst(OP, ({items(inputs)} -- {items(outputs)})) "
-            # OP has no source-name privileges. The full body and IO still
-            # establish the same physical writer capability.
-            analysis = self.analyze(declaration + body + "\n")
-            part = analysis.instructions["OP"].parts[0]
-            self.assertTrue(ir_generator.frame_home_footprint(part))
-            fmt = ir_generator.compute_formats(analysis)["OP"]
-            for old, new in (("frame,", "other_frame,"),
-                             ("values++", "values + 1"),
-                             ("i < oparg", "i <= oparg"),
-                             ("--i >= 0", "--i >= -1"),
-                             ("pieces, oparg", "pieces, oparg + 1"),
-                             ("values, oparg", "values, oparg + 1"),
-                             ("&method_and_self[1]", "&method_and_self[2]")):
-                if old not in body:
-                    continue
-                with self.subTest(old=old, body=body):
-                    changed = self.analyze(declaration + body.replace(old, new) + "\n")
-                    inst = changed.instructions["OP"]
-                    self.assertFalse(ir_generator.frame_home_footprint(inst.parts[0]))
-                    self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
-            conditional = ("{\n#if ENABLE_BITMAP_FOOTPRINT\n" + body.strip()[1:-1]
-                           + "\n#endif\n}")
-            changed = self.analyze(declaration + conditional + "\n")
-            self.assertFalse(ir_generator.frame_home_footprint(
-                changed.instructions["OP"].parts[0]))
-            item = (part.stack.inputs or part.stack.outputs)[0]
-            original = item.size
-            item.size = "99"
+    def test_abrupt_prefix_requires_complete_suspension_source(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        names = ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE")
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name in names:
+            self.assertTrue(contracts[name].abrupt_prefix)
+        inst = analysis.instructions["YIELD_VALUE"]
+        producer = inst.parts[-1]
+        original = producer.body.body
+        for changed in (
+                "{ opaque(frame); }",
+                "{ gen_frame->return_slot = 0; }",
+                "{ frame->base[0] = PyValue_NULL; }"):
+            extra = self.analyze("\ninst(OP, (--)) " + changed + "\n")
+            producer.body.body = original + extra.instructions["OP"].parts[0].body.body
             try:
-                self.assertFalse(ir_generator.frame_home_footprint(part))
+                self.assertFalse(ir_generator.abrupt_suspend_contract(inst, formats["YIELD_VALUE"]))
             finally:
-                item.size = original
+                producer.body.body = original
+        # The twin's observer ingress must also be covered; a missing
+        # sibling revokes the canonical family's permission.
+        observer = analysis.instructions["INSTRUMENTED_YIELD_VALUE"].parts[0]
+        old = observer.body.body
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        observer.body.body = old + extra.instructions["OP"].parts[0].body.body
+        try:
+            changed = ir_generator.handler_contracts(analysis, formats)
+            for name in names:
+                self.assertFalse(changed[name].abrupt_prefix)
+        finally:
+            observer.body.body = old
 
     def test_normal_vacate_observer_frame_footprint(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -3254,6 +3223,207 @@ class TestIRCases(unittest.TestCase):
                     inst = analysis.instructions["OP"]
                     fmt = ir_generator.compute_formats(analysis)["OP"]
                     self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+
+    def test_home_helpers_keep_ordinary_escape_publication(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
+                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+        for name, helper in expected.items():
+            part = analysis.uops[name]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            self.assertNotIn(helper, analyzer.IR_MARKER_EFFECTS)
+            self.assertIn(helper, {escape.call.text
+                                  for escape in part.properties.escaping_calls.values()})
+        for name in ("_LOAD_GLOBAL", "_PUSH_NULL_CONDITIONAL", "_INSERT_NULL"):
+            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+
+    def test_home_arrays_reject_unproved_bounds_and_pointer_escapes(self):
+        def check(source):
+            analysis = self.analyze("\n" + source + "\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+        self.assertTrue(check("""inst(OP, (-- out[2])) {
+            IR_WRITE_OUTPUT(out, 1, PyValue_NULL);
+            int vacant = PyValue_IsNull(out[1]);
+        }"""))
+        self.assertTrue(check("""inst(OP, (-- out[oparg & 1])) {
+            if (oparg & 1) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }
+        }"""))
+        for source in (
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 2, PyValue_NULL); }",
+                "inst(OP, (out[2] --)) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[oparg & 1])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[oparg & 1])) { if (!(oparg & 1)) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } }",
+                "inst(OP, (-- out[oparg & 1])) { oparg = 1; if (oparg & 1) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(out); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = out; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&out[0]); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = &(out[0]); }",
+                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); PyValue *alias = &((pair[0])); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&(oparg)); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (oparg) = 1; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); int oparg; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); out[0] = PyValue_NULL; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (out[0]) = PyValue_NULL; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); out[0].bits = 0; }",
+                "inst(OP, (-- out[2])) { opaque(out[0]); IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[2])) { if (oparg) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } opaque(out[0]); }",
+                "inst(OP, (-- out[2])) { if (flag) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } flag = 1; if (flag) { int vacant = PyValue_IsNull(out[0]); } }",
+                "inst(OP, (-- out[2])) { if (flag) {} else { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } int vacant = PyValue_IsNull(out[0]); }",
+                "inst(OP, (values[2] -- result)) { result = IR_BUILD_MAP(values); }",
+                "inst(OP, (pair[3] -- pair[3])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }",
+                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(frame, name, pair); }",
+                "inst(OP, (-- out[2])) {\n#if FEATURE\nIR_WRITE_OUTPUT(out, 0, PyValue_NULL);\n#endif\n}"):
+            with self.subTest(source=source), self.assertRaises(SyntaxError):
+                check(source)
+
+    def test_home_loops_require_unique_all_path_induction(self):
+        def check(body, inputs="", outputs="out[oparg]"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {{ {body} }}\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+        loop = "for (int i = 0; i < oparg; i++) { IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"
+        self.assertTrue(check(loop))
+        self.assertTrue(check(loop.replace("i++", "++i")))
+        self.assertTrue(check("""for (Py_ssize_t i = 0; i < oparg; i++) {
+            PyValue value = IR_TAKE_INPUT(values, i);
+            PyValue_CLOSE(value);
+        } DEAD(values);""", inputs="values[oparg]", outputs=""))
+        for changed in (
+                loop.replace("i = 0", "i = 1"),
+                loop.replace("i < oparg", "i <= oparg"),
+                loop.replace("i < oparg", "i < oparg + 1"),
+                loop.replace("i++", "i += 2"),
+                loop.replace(" i", " frame"),
+                loop.replace("out, i", "out, 0"),
+                loop.replace("IR_WRITE_OUTPUT", "continue; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "SKIP(); IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "if (flag) IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "int i = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "(i) = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "opaque(&(i)); IR_WRITE_OUTPUT"),
+                loop.replace(" }", " break; }"),
+                loop.replace(" }", " IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"),
+                loop + loop):
+            with self.subTest(changed=changed), self.assertRaises(SyntaxError):
+                check(changed)
+        with self.assertRaisesRegex(SyntaxError, "published twice"):
+            check("IR_WRITE_OUTPUT(out, 0, PyValue_NULL); IR_WRITE_OUTPUT(out, 0, PyValue_NULL);",
+                  outputs="out[2]")
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
+            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+
+    def test_home_operations_lower_through_actual_storage(self):
+        output = self.ir_output("""
+            window inst(OP, (-- out[2])) {
+                IR_WRITE_OUTPUT(out, 0, PyValue_NULL);
+                IR_WRITE_OUTPUT(out, 1, PyValue_NULL);
+            }
+        """)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[0], PyValue_NULL)", output)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[1], PyValue_NULL)", output)
+        self.assertNotIn("IR_WRITE_OUTPUT", output)
+        output = self.ir_output("""
+            inst(OP, (values[oparg*2] -- map)) {
+                PyObject *object = IR_BUILD_MAP(values);
+                DEAD(values);
+                map = PyValue_FromObjectSteal(object);
+            }
+        """)
+        self.assertIn("_Py_BuildMap_ValueSteal(frame, values, oparg)", output)
+        self.assertNotIn("IR_BUILD_MAP", output)
+        self.assertIn("frame->phase_state = 0;", output)
+
+    def test_home_loop_operations_lower_through_actual_storage(self):
+        output = self.ir_output("""
+            window inst(OP, (-- out[oparg])) {
+                for (int i = 0; i < oparg; i++) {
+                    IR_WRITE_OUTPUT(out, i, PyValue_NULL);
+                }
+            }
+        """)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[i], PyValue_NULL)", output)
+        output = self.ir_output("""
+            inst(OP, (values[oparg] -- result)) {
+                for (int i = 0; i < oparg; i++) {
+                    PyValue value = IR_TAKE_INPUT(values, i);
+                    PyValue_CLOSE(value);
+                }
+                DEAD(values);
+                result = PyValue_None;
+            }
+        """)
+        self.assertIn("_PyFrame_TakeHome(frame, &values[i])", output)
+        self.assertNotIn("IR_TAKE_INPUT", output)
+
+    def test_disjoint_child_requires_actual_constructor_and_publication(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
+            inst = analysis.instructions[name]
+            fmt = formats[name]
+            with self.subTest(handler=name):
+                self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
+                parts = [p for p in inst.parts if isinstance(p, analyzer.Uop)]
+                for index, statement in (
+                        (-3, "frame->base[0] = PyValue_NULL;"),
+                        (-3, "pushed_frame->base[3] = PyValue_NULL;"),
+                        (-2, "frame->return_slot = 0;"),
+                        (-1, "frame->base[0] = PyValue_NULL;")):
+                    extra = self.analyze("\ninst(OP, (--)) { " + statement + " }\n")
+                    body = parts[index].body.body
+                    body.append(extra.instructions["OP"].parts[0].body.body[0])
+                    try:
+                        self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
+                    finally:
+                        body.pop()
+                producer = parts[-3]
+                for statement in producer.body.body:
+                    if not isinstance(statement, parser.SimpleStmt):
+                        continue
+                    for index, token in enumerate(statement.contents):
+                        if token.text not in ("_PyFrame_PushUnchecked", "TAKE", "SAVE_STACK"):
+                            continue
+                        original = token
+                        statement.contents[index] = token.replaceText("unknown_child_effect")
+                        try:
+                            self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
+                        finally:
+                            statement.contents[index] = original
+                # No instruction name is part of the constructor capability.
+                original = inst.name
+                inst.name = "UNNAMED_DISJOINT_CHILD"
+                try:
+                    self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
+                finally:
+                    inst.name = original
+
+    def test_disjoint_child_receipt_is_emitted_and_family_closed(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
+            events = contracts[name].ownership_events
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
+            self.assertTrue(events[0].flags & 2)
+            self.assertFalse(events[0].flags & 1)
+        for name, fmt in formats.items():
+            if fmt.group == "LOAD_ATTR":
+                self.assertTrue(contracts[name].ownership_events, name)
+        # An unknown constructor removes the whole family's final-clear grant.
+        producer = analysis.uops["_LOAD_ATTR_PROPERTY_FRAME"]
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        producer.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+        try:
+            contracts = ir_generator.handler_contracts(analysis, formats)
+            for name in ("LOAD_ATTR", "LOAD_ATTR_PROPERTY"):
+                self.assertFalse(contracts[name].ownership_events)
+        finally:
+            producer.body.body.pop()
 
     def test_created_copy_recipe_checks_actual_transport(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

@@ -290,6 +290,14 @@ void _PyFrame_GetNullControlHomeView(
 PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
     _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
 
+/* The terminal yield emitter calls this after its last home/header commit
+ * and immediately before releasing the suspended generator state. */
+static inline void
+_PyFrame_PublishDelegatedSuspension(_PyInterpreterFrame *frame)
+{
+    frame->phase_state = _PyIR_PHASE_YIELD_DELEGATED;
+}
+
 static inline void
 _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
@@ -333,6 +341,24 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
            authority == _PyIR_HOME_NULL_CONTROL_READABLE);
     assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
     assert(view->nbindings + view->scratch_limit <= nslots);
+    uint16_t delegated = 0;
+    if (src->phase_state == _PyIR_PHASE_YIELD_DELEGATED ||
+        src->phase_state == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
+    {
+        /* Select the finite role before CopyHeader invalidates its source.
+         * A clipped retirement view must not publish an uncopied receiver. */
+        int receiver = _PyIR_DelegatedReceiverHome(src);
+        uint32_t cursor = 0;
+        int begin, end;
+        while (receiver >= 0 &&
+               _PyFrame_NextHomeRange(view, &cursor, &begin, &end))
+        {
+            if (begin <= receiver && receiver < end) {
+                delegated = _PyIR_PHASE_YIELD_DELEGATED;
+                break;
+            }
+        }
+    }
     _PyFrame_CopyHeader(src, dest);
     uint32_t cursor = 0;
     int filled = 0, begin, end;
@@ -352,6 +378,7 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
     while (filled < nslots) {
         dest->base[filled++] = PyValue_NULL;
     }
+    dest->phase_state = delegated;
 }
 
 

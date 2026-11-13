@@ -349,6 +349,7 @@ _PyIR_Outcome(_PyIRWord word, int taken)
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
         case YIELD_VALUE:
+        case YIELD_DELEGATED:
             /* The outgoing value is taken; the next activation supplies A. */
             return (_PyIRSlotOutcome){1, base, 1, dst};
         case RETURN_GENERATOR:
@@ -456,6 +457,12 @@ _PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int through = _PyIR_Extent(fmt->through, arg);
     for (int f = 0; f < 4; f++) {
+        if (!(fmt->flags & _PyIR_WINDOW) && fmt->roles[f] >= _PyIR_ROLE_IN0 &&
+            fmt->roles[f] - _PyIR_ROLE_IN0 < through &&
+            (int)fields[f] == home)
+        {
+            return 0;
+        }
         if (fmt->roles[f] == _PyIR_ROLE_BASE &&
             home >= (int)fields[f] && home - (int)fields[f] < through)
         {
@@ -774,9 +781,17 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
     }
 
     if (fmt->effects & _PyIR_PUSHES_FRAME) {
-        /* A child activation may reuse scratch homes beyond this row's
-         * declared input and output window. */
-        return unknown;
+        /* Only an actual independent reservation preserves the parent's
+         * homes outside its consumed inputs and eventual recipient. */
+        if (fmt->owner_events != 1) {
+            return unknown;
+        }
+        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+        if (event->kind != _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
+            !(event->flags & _PyIR_NORMAL_DISJOINT_CHILD))
+        {
+            return unknown;
+        }
     }
 
     /* In every other format, a read outside the unchanged prefix or a

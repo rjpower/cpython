@@ -529,6 +529,7 @@ IR_MARKER_EFFECTS = {
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
+    "IR_SUSPEND_DELEGATED": frozenset(("escapes", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
@@ -537,6 +538,16 @@ IR_MARKER_EFFECTS = {
     **dict.fromkeys(CALL_INVOKE_MARKERS,
                     frozenset(("escapes", "error", "sync", "pc",
                                "terminal", "frame"))),
+}
+
+# These checked adapters use the ordinary escaping-call spill/reload path.
+# Unlike IR_MARKER_EFFECTS, their emitter does not own a manual protocol.
+IR_HELPER_EFFECTS = {
+    "IR_BUILD_STRING": frozenset(("escapes",)),
+    "IR_BUILD_MAP": frozenset(("escapes",)),
+    "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
+    "IR_WRITE_OUTPUT": frozenset(),
+    "IR_TAKE_INPUT": frozenset(),
 }
 
 
@@ -811,8 +822,9 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
             break
         if next_tkn.kind != lexer.LPAREN:
             continue
-        if tkn.text in IR_MARKER_EFFECTS:
-            if "escapes" in IR_MARKER_EFFECTS[tkn.text]:
+        effects = IR_MARKER_EFFECTS.get(tkn.text, IR_HELPER_EFFECTS.get(tkn.text))
+        if effects is not None:
+            if "escapes" in effects:
                 result[stmt] = EscapingCall(stmt, tkn, None)
             continue
         if tkn.kind == lexer.IDENTIFIER:

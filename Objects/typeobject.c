@@ -3255,9 +3255,10 @@ _PyObject_LookupSpecial(PyObject *self, PyObject *attr)
 
 // Lookup the method name `attr` on `*self`. On entry, `*method` is null.
 // On exit, `*method` is the method and `*self` is cleared if the method is
-// bound. A non-NULL frame supplies the physical home capability; NULL selects
-// native initialized C storage. `*self` keeps the receiver, which may be
-// inline, alive through a descriptor call.
+// bound. Both are the caller's slots: `*self` keeps the receiver, which may
+// be inline, alive through a descriptor call.
+// A non-NULL frame grants these two physical homes; NULL selects native
+// counted C owners. Publish replacements before any cleanup can reenter.
 // Return 1 on success, -1 on error, and 0 if the method is missing.
 int
 _PyObject_LookupSpecialMethod(_PyInterpreterFrame *frame, PyObject *attr, PyValue *method,

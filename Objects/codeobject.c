@@ -1834,6 +1834,13 @@ check_words(struct _PyCodeConstructor *con)
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
         int base = -1, dst = -1;
+        if ((handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) &&
+            (i + 1 >= nwords || IR_D(word) == IR_A(word) || IR_D(word) == IR_B(word)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has invalid delegated suspension operands", i);
+            goto error;
+        }
         for (int k = 0; k < 4; k++) {
             int role = fmt->roles[k];
             uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
@@ -1939,6 +1946,14 @@ check_words(struct _PyCodeConstructor *con)
             }
         }
         int opcode = _PyIR_BaseOpcode(handler);
+        if ((opcode == YIELD_VALUE || opcode == INSTRUMENTED_YIELD_VALUE) &&
+            handler != YIELD_DELEGATED &&
+            handler != INSTRUMENTED_YIELD_DELEGATED && arg != 0)
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd needs an explicit delegated yield", i);
+            goto error;
+        }
         if (opcode == COPY_FREE_VARS && arg != nfreevars) {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has an invalid free-variable count", i);
@@ -2007,12 +2022,22 @@ typedef struct {
     Py_ssize_t source_size;
 } semantic_image;
 
+enum { SEM_DELEGATED_NONE, SEM_DELEGATED_KNOWN, SEM_DELEGATED_UNKNOWN };
+
+typedef struct {
+    int receiver, outgoing, origin;
+    unsigned char kind;
+    unsigned char reserved[3];
+} semantic_delegated;
+static_assert(sizeof(semantic_delegated) == 16, "bounded delegated role tuple");
+
 typedef struct {
     int start;
     int end;
     unsigned char reached;
     unsigned char queued;
     unsigned char complete;
+    semantic_delegated delegated;
 } semantic_block;
 
 typedef struct {
@@ -2041,6 +2066,7 @@ typedef struct {
     semantic_phases *phases;
     int created_empty;
     int completion_destination_empty;
+    semantic_delegated delegated;
 } semantic_worklist;
 
 /* NULL, nonNULL and logical initialization are must-facts. Owner obligations
@@ -2061,6 +2087,25 @@ semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
     semantic_block *b = &work->blocks[block];
     uint64_t *stored = work->facts + (size_t)block * SEM_FACTS * work->nwords;
     int changed = !b->reached;
+    semantic_delegated next = work->delegated;
+    if (b->reached) {
+        const semantic_delegated *old = &b->delegated;
+        if (old->kind == SEM_DELEGATED_NONE && next.kind == SEM_DELEGATED_NONE) {
+            next = *old;
+        }
+        else if (old->kind == SEM_DELEGATED_KNOWN && next.kind == SEM_DELEGATED_KNOWN &&
+                 old->receiver == next.receiver && old->outgoing == next.outgoing)
+        {
+            if (old->origin != next.origin) {
+                next.origin = -1;
+            }
+        }
+        else {
+            next = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+        }
+    }
+    changed |= memcmp(&next, &b->delegated, sizeof(next)) != 0;
+    b->delegated = next;
     complete = !b->reached ? complete : b->complete && complete;
     changed |= b->complete != complete;
     b->complete = (unsigned char)complete;
@@ -2078,6 +2123,16 @@ semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
         work->tail = (work->tail + 1) % work->nblocks;
         work->count++;
     }
+}
+
+static void
+semantic_exception_enqueue(semantic_worklist *work, int block,
+                           const uint64_t *state)
+{
+    semantic_delegated normal = work->delegated;
+    work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+    semantic_enqueue(work, block, state, 0);
+    work->delegated = normal;
 }
 
 static unsigned int
@@ -2439,12 +2494,68 @@ semantic_empty_scratch(const semantic_image *image,
     return 1;
 }
 
+/* One pending pair suffices for the frontend SEND -> delegated-yield
+ * protocol. It denotes role homes, not object identity or a complete map. */
+static int
+semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
+                        const uint64_t *state, int pc, int inspect)
+{
+    _PyIRWord word = image->words[pc];
+    int handler = IR_HANDLER(word);
+    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
+        semantic_delegated pair = work->delegated;
+        int dst = (int)IR_A(word);
+        int valid = pair.kind == SEM_DELEGATED_KNOWN &&
+            pair.receiver == (int)IR_D(word) && pair.outgoing == (int)IR_B(word) &&
+            (dst < image->nl || dst == IR_NO_DST || dst == pair.outgoing ||
+             (semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)));
+        work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_NONE};
+        if (inspect && !valid) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d has no delegated SEND role proof", pc);
+            return -1;
+        }
+        return 0;
+    }
+    if (work->delegated.kind != SEM_DELEGATED_KNOWN) {
+        return 0;
+    }
+    int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->transfer_kind == _PyIR_TRANSFER_SWAP) {
+        int first = (int)IR_A(word), last = first + arg - 1;
+        int *homes[] = {&work->delegated.receiver, &work->delegated.outgoing};
+        for (int i = 0; i < 2; i++) {
+            if (*homes[i] == first) {
+                *homes[i] = last;
+            }
+            else if (*homes[i] == last) {
+                *homes[i] = first;
+            }
+        }
+        return 0;
+    }
+    int homes[] = {work->delegated.receiver, work->delegated.outgoing};
+    for (int i = 0; i < 2; i++) {
+        if (_PyIR_NormalPhysicalTransfer(word, arg, 0, homes[i], image->nl,
+                image->nl + image->scratch).kind != _PyIR_PHYSICAL_PRESERVE)
+        {
+            work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+            break;
+        }
+    }
+    return 0;
+}
+
 static int
 semantic_step(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
     work->created_empty = 0;
     work->completion_destination_empty = 0;
+    if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
+        return -1;
+    }
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (inspect && fmt->call_input_holes) {
@@ -2584,6 +2695,18 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 return 0;
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_YIELD_DELEGATED:
+                /* The finite SEND role proof authorizes these inputs, not
+                 * an arbitrary suspended scratch shape. The outgoing owner
+                 * is detached; a later activation supplies the recipient. */
+                semantic_set_facts(work, state, (int)IR_B(word), nl,
+                                   (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+                home = (int)IR_A(word);
+                if (home >= nl && home != IR_NO_DST) {
+                    semantic_set_facts(work, state, home, nl, 0);
+                }
+                *complete = 0;
+                return 0;
             case _PyIR_OWNER_NORMAL_COMPLETION:
                 /* Completion transport belongs to its selected edge. FOR's
                  * body destination is not produced on completion: retain
@@ -2694,9 +2817,22 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
     const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
     for (int at = 0; at < fmt->owner_events; at++) {
         const _PyIROwnershipEvent *event = program + at;
-        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != edge) {
+        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION) {
             continue;
         }
+        if (edge == 0 && (event->flags & _PyIR_COMPLETION_SEND_YIELDED)) {
+            assert(event->src == 3 && event->extent == 2);
+            /* This is the actual yielded/body publication, independently
+             * of A, which belongs to the SEND completion route. */
+            work->delegated = (semantic_delegated){
+                .receiver = (int)IR_B(word), .outgoing = (int)IR_B(word) + event->extent,
+                .origin = pc, .kind = SEM_DELEGATED_KNOWN};
+            continue;
+        }
+        if (event->dst != edge) {
+            continue;
+        }
+        work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_NONE};
         /* The actual completion consumes its full window before any result
          * publication. Logical absence does not imply physical NULL. */
         int has_result = event->flags & _PyIR_COMPLETION_HAS_RESULT;
@@ -2794,6 +2930,93 @@ semantic_handler_entry(const semantic_image *image,
     }
 }
 
+/* This is an abrupt footprint, independent of successful normal transfers.
+ * A suspension can detach B and later install an arbitrary resume value at A.
+ * The complete emitted contract covers monitoring, throw and bridge cleanup;
+ * nothing at or above either scratch home is preserved by this capability. */
+static int
+semantic_abrupt_floor(const semantic_image *image, int pc)
+{
+    _PyIRWord word = image->words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int base = (int)IR_B(word), dst = (int)IR_A(word);
+    int limit = image->nl + image->scratch;
+    int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+    if (fmt->flags & _PyIR_ABRUPT_OPERANDS) {
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        int floor = limit;
+        for (int field = 0; field < 4; field++) {
+            int role = fmt->roles[field];
+            if (role != _PyIR_ROLE_BASE && role != _PyIR_ROLE_DST &&
+                role < _PyIR_ROLE_IN0)
+            {
+                continue;
+            }
+            int home = (int)fields[field];
+            if (home >= image->nl && home != IR_NO_DST) {
+                assert(home < limit);
+                floor = Py_MIN(floor, home);
+            }
+        }
+        return floor;
+    }
+    int ordinary = (fmt->flags & _PyIR_WINDOW) &&
+        fmt->roles[1] == _PyIR_ROLE_BASE && fmt->roles[2] == _PyIR_ROLE_IMM &&
+        fmt->roles[3] == _PyIR_ROLE_NONE && arg >= 0 && arg <= 1 &&
+        _PyIR_Extent(fmt->reads, arg) == 1 && _PyIR_Extent(fmt->writes, arg) == 1;
+    /* The explicit delegated form has sparse independent input fields.
+     * Its retained D/cursor are not writes; only B and a scratch A set the
+     * abrupt floor. The same flag still requires its own emitted receipt. */
+    int delegated = !(fmt->flags & _PyIR_WINDOW) && fmt->ninputs == 3 &&
+        fmt->roles[1] == _PyIR_ROLE_IN0 + 2 && fmt->roles[2] == _PyIR_ROLE_NONE &&
+        fmt->roles[3] == _PyIR_ROLE_IN0 &&
+        _PyIR_Extent(fmt->reads, arg) == 3 && _PyIR_Extent(fmt->writes, arg) == 3 &&
+        _PyIR_Extent(fmt->through, arg) == 2;
+    if (!(fmt->flags & _PyIR_ABRUPT_PREFIX) ||
+        fmt->roles[0] != _PyIR_ROLE_DST || (!ordinary && !delegated) ||
+        base < image->nl || base >= limit ||
+        (dst != IR_NO_DST && dst >= limit))
+    {
+        return image->nl;
+    }
+    return dst >= image->nl && dst != IR_NO_DST ? Py_MIN(base, dst) : base;
+}
+
+static void
+semantic_exception_entry(const semantic_image *image,
+                         const semantic_worklist *work, uint64_t *out,
+                         const uint64_t *incoming, int floor,
+                         int slot, int lasti)
+{
+    semantic_handler_entry(image, work, out, slot, lasti);
+    if (incoming == NULL) {
+        return;
+    }
+    for (int home = image->nl; home < Py_MIN(floor, slot - lasti); home++) {
+        int bit = home - image->nl;
+        uint64_t mask = UINT64_C(1) << (bit % 64);
+        out[SEM_NO_HOME * work->nwords + bit / 64] |=
+            incoming[SEM_NO_HOME * work->nwords + bit / 64] & mask;
+    }
+}
+
+/* Exception ranges are already validated sorted and disjoint. */
+static const _PyIRExceptionEntry *
+semantic_exception_at(const _PyIRExceptionEntry *entries, int count, int pc)
+{
+    int low = 0, high = count;
+    while (low < high) {
+        int mid = low + (high - low) / 2;
+        if (entries[mid].end <= pc) {
+            low = mid + 1;
+        }
+        else {
+            high = mid;
+        }
+    }
+    return low < count && entries[low].start <= pc ? entries + low : NULL;
+}
+
 static int
 normal_transfer_proof(const semantic_image *image,
                       const _PyIRCodePlan **plan)
@@ -2835,6 +3058,7 @@ normal_transfer_proof(const semantic_image *image,
             block_at[i + 1] = 1;
         }
     }
+    int nexceptions = 0;
     const unsigned char *cursor = exceptions;
     while (cursor < exception_end) {
         _PyIRExceptionEntry entry = {0};
@@ -2842,6 +3066,7 @@ normal_transfer_proof(const semantic_image *image,
         assert(err == 0);
         (void)err;
         block_at[entry.target] = 1;
+        nexceptions++;
     }
     _PyIRSourceMap source;
     if (_PyIRSource_Decode(image->source, image->source_size, &source) < 0)
@@ -2850,11 +3075,13 @@ normal_transfer_proof(const semantic_image *image,
         PyErr_SetString(PyExc_ValueError, "code: malformed source map");
         return -1;
     }
+    int source_recovery = 0;
     for (uint32_t i = 0; i < source.nrecords; i++) {
         _PyIRSourceEvent event;
         _PyIRSource_Event(&source, i, &event);
         if (event.handler >= 0) {
             block_at[event.handler] = 1;
+            source_recovery = 1;
         }
     }
     int nblocks = 0;
@@ -2866,7 +3093,8 @@ normal_transfer_proof(const semantic_image *image,
     work.blocks = PyMem_Calloc((size_t)nblocks, sizeof(*work.blocks));
     work.queue = PyMem_Malloc((size_t)nblocks * sizeof(*work.queue));
     size_t state_words = (size_t)SEM_FACTS * work.nwords;
-    size_t vectors = (size_t)nblocks + 1 + (plan != NULL);
+    int has_abrupt = nexceptions != 0 || source_recovery;
+    size_t vectors = (size_t)nblocks + 1 + (plan != NULL) + has_abrupt;
     if (vectors > SIZE_MAX / sizeof(uint64_t) / state_words) {
         PyMem_Free(work.blocks);
         PyMem_Free(work.queue);
@@ -2896,61 +3124,143 @@ normal_transfer_proof(const semantic_image *image,
     work.blocks[block].end = n;
     uint64_t *state = work.facts + (size_t)nblocks * state_words;
     work.branch = plan != NULL ? state + state_words : NULL;
+    uint64_t *abrupt = has_abrupt
+        ? state + (1 + (plan != NULL)) * state_words : NULL;
+    _PyIRExceptionEntry *handlers = NULL;
+    int *source_links = NULL;
+    int result = 0;
+    semantic_phases phases = {0};
+    if (nexceptions) {
+        if ((size_t)nexceptions > SIZE_MAX / sizeof(*handlers) ||
+            (handlers = PyMem_Malloc((size_t)nexceptions * sizeof(*handlers))) == NULL)
+        {
+            PyErr_NoMemory();
+            result = -1;
+            goto done;
+        }
+        cursor = exceptions;
+        for (int i = 0; i < nexceptions; i++) {
+            int err = _PyIR_ExceptionNext(&cursor, exception_end, &handlers[i]);
+            assert(err == 0);
+            (void)err;
+        }
+    }
+    if (source_recovery) {
+        if (source.nrecords > INT_MAX ||
+            (size_t)source.nrecords > SIZE_MAX - (size_t)nblocks)
+        {
+            PyErr_NoMemory();
+            result = -1;
+            goto done;
+        }
+        size_t links = (size_t)nblocks + source.nrecords;
+        if (links > SIZE_MAX / sizeof(*source_links) ||
+            (source_links = PyMem_Malloc(links * sizeof(*source_links))) == NULL)
+        {
+            PyErr_NoMemory();
+            result = -1;
+            goto done;
+        }
+        for (int i = 0; i < nblocks; i++) {
+            source_links[i] = -1;
+        }
+        for (uint32_t i = 0; i < source.nrecords; i++) {
+            _PyIRSourceEvent event;
+            _PyIRSource_Event(&source, i, &event);
+            if (event.handler >= 0) {
+                int b = block_at[event.from];
+                source_links[(size_t)nblocks + i] = source_links[b];
+                source_links[b] = (int)i;
+            }
+        }
+    }
     for (int bit = 0; bit < scratch; bit++) {
         uint64_t mask = UINT64_C(1) << (bit % 64);
         state[SEM_NULL * work.nwords + bit / 64] |= mask;
         state[SEM_NO_HOME * work.nwords + bit / 64] |= mask;
     }
     semantic_enqueue(&work, 0, state, 1);
-    memset(state, 0, state_words * sizeof(uint64_t));
-    cursor = exceptions;
-    while (cursor < exception_end) {
-        _PyIRExceptionEntry entry = {0};
-        int err = _PyIR_ExceptionNext(&cursor, exception_end, &entry);
-        assert(err == 0);
-        (void)err;
-        semantic_handler_entry(image, &work, state, entry.slot, entry.lasti);
-        semantic_enqueue(&work, block_at[entry.target], state, 0);
-    }
-    for (uint32_t i = 0; i < source.nrecords; i++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, i, &event);
-        if (event.handler >= 0) {
-            semantic_handler_entry(image, &work, state, event.exc_slot, event.lasti);
-            semantic_enqueue(&work, block_at[event.handler], state, 0);
+    /* First propagate real exceptional predecessors. Only after that fixed
+     * point, seed unknown ingress for unvisited protected/source code. It
+     * must remain checked, but an upfront unknown seed would erase every
+     * reached positive prefix. The second pass can only remove must-facts. */
+    for (int pass = 0; pass < (has_abrupt ? 2 : 1); pass++) {
+        if (pass) {
+            for (int i = 0; i < nexceptions; i++) {
+                const _PyIRExceptionEntry *entry = &handlers[i];
+                for (int pc = entry->start; pc < entry->end; pc++) {
+                    if (!work.blocks[block_at[pc]].reached) {
+                        semantic_exception_entry(image, &work, abrupt, NULL, 0,
+                                                 entry->slot, entry->lasti);
+                        semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
+                        break;
+                    }
+                }
+            }
+            if (source_recovery) {
+                for (uint32_t i = 0; i < source.nrecords; i++) {
+                    _PyIRSourceEvent event;
+                    _PyIRSource_Event(&source, i, &event);
+                    if (event.handler >= 0 &&
+                        !work.blocks[block_at[event.from]].reached)
+                    {
+                        semantic_exception_entry(image, &work, abrupt, NULL, 0,
+                                                 event.exc_slot, event.lasti);
+                        semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
+                    }
+                }
+            }
         }
-    }
-    while (work.count) {
-        int b = work.queue[work.head];
-        work.head = (work.head + 1) % nblocks;
-        work.count--;
-        work.blocks[b].queued = 0;
-        memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
-        int complete = work.blocks[b].complete;
-        int end = work.blocks[b].end;
-        for (int i = work.blocks[b].start; i < end; i++) {
-            (void)semantic_step(image, &work, state, i, 0, &complete);
-        }
-        int last = end - 1;
-        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
-        int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
-        if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
-            semantic_normal_edge(image, &work, state, last, 0);
-            semantic_enqueue(&work, block_at[end], state, complete);
-        }
-        if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
-            !(fmt->flags & _PyIR_NAMES_TARGET))
-        {
-            int target = fmt->flags & _PyIR_FORWARD
-                ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
-            semantic_normal_edge(image, &work, state, last, 1);
-            semantic_enqueue(&work, block_at[target], state, complete);
+        while (work.count) {
+            int b = work.queue[work.head];
+            work.head = (work.head + 1) % nblocks;
+            work.count--;
+            work.blocks[b].queued = 0;
+            memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
+            int complete = work.blocks[b].complete;
+            work.delegated = work.blocks[b].delegated;
+            /* Source recovery has no abrupt footprint receipt yet. Its actual
+             * from-block contributes an unknown prefix, independently of EH. */
+            if (source_links != NULL) {
+                for (int i = source_links[b]; i >= 0; i = source_links[(size_t)nblocks + i]) {
+                    _PyIRSourceEvent event;
+                    _PyIRSource_Event(&source, (uint32_t)i, &event);
+                    semantic_exception_entry(image, &work, abrupt, NULL, 0,
+                                             event.exc_slot, event.lasti);
+                    semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
+                }
+            }
+            int end = work.blocks[b].end;
+            for (int i = work.blocks[b].start; i < end; i++) {
+                const _PyIRExceptionEntry *entry =
+                    semantic_exception_at(handlers, nexceptions, i);
+                if (entry != NULL) {
+                    semantic_exception_entry(image, &work, abrupt, state,
+                                             semantic_abrupt_floor(image, i),
+                                             entry->slot, entry->lasti);
+                    semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
+                }
+                (void)semantic_step(image, &work, state, i, 0, &complete);
+            }
+            int last = end - 1;
+            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
+            int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
+            if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
+                semantic_normal_edge(image, &work, state, last, 0);
+                semantic_enqueue(&work, block_at[end], state, complete);
+            }
+            if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+                !(fmt->flags & _PyIR_NAMES_TARGET))
+            {
+                int target = fmt->flags & _PyIR_FORWARD
+                    ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+                semantic_normal_edge(image, &work, state, last, 1);
+                semantic_enqueue(&work, block_at[target], state, complete);
+            }
         }
     }
     /* Allocate persistent storage only for mixed coverage. First count exact
      * sites without retaining a per-word map or another scratch-state array. */
-    int result = 0;
-    semantic_phases phases = {0};
     work.phases = plan != NULL ? &phases : NULL;
     uint32_t nreturns = 0, ncertified = 0, ncreated = 0, ncreated_empty = 0;
     if (plan != NULL) {
@@ -2963,6 +3273,13 @@ normal_transfer_proof(const semantic_image *image,
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
             for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+                if (IR_HANDLER(words[i]) == YIELD_DELEGATED ||
+                    IR_HANDLER(words[i]) == INSTRUMENTED_YIELD_DELEGATED) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has no delegated entry proof", i);
+                    result = -1;
+                    break;
+                }
                 if (_PyIR_FormatOf(IR_HANDLER(words[i]))->call_input_holes) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has no virtual call entry proof", i);
@@ -2974,6 +3291,7 @@ normal_transfer_proof(const semantic_image *image,
         }
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
         int complete = work.blocks[b].complete;
+        work.delegated = work.blocks[b].delegated;
         for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
             if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
@@ -3023,6 +3341,7 @@ normal_transfer_proof(const semantic_image *image,
                     memcpy(state, work.facts + (size_t)b * state_words,
                            state_words * sizeof(uint64_t));
                     int complete = work.blocks[b].complete;
+                    work.delegated = work.blocks[b].delegated;
                     for (int i = work.blocks[b].start;
                          i < work.blocks[b].end; i++)
                     {
@@ -3046,6 +3365,9 @@ normal_transfer_proof(const semantic_image *image,
             }
         }
     }
+done:
+    PyMem_Free(source_links);
+    PyMem_Free(handlers);
     if (phases.shapes != NULL) {
         _Py_hashtable_destroy(phases.shapes);
     }

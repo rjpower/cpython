@@ -416,6 +416,158 @@ class DeallocTest(unittest.TestCase):
                 self.assertEqual(internal.get_transition_root_ids(), [])
 
 
+class DelegatedPhaseTest(unittest.TestCase):
+    def test_marker_tracks_real_suspension_and_invalidates_before_resume(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        def delegate():
+            yield 'first'
+            return 'done'
+
+        def outer(receiver):
+            local = 'before'
+            result = yield from receiver
+            observations.append(internal.has_delegated_frame_phase(sys._getframe()))
+            yield result, local
+
+        receiver = delegate()
+        gen = outer(receiver)
+        frame = gen.gi_frame
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertEqual(next(gen), 'first')
+        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertIs(gen.gi_yieldfrom, receiver)
+        frame.f_locals['local'] = 'changed'
+        support.gc_collect()
+        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertEqual(next(gen), ('done', 'changed'))
+        self.assertEqual(observations, [False])
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        gen.close()
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+
+    def test_close_keeps_marker_through_delegate_callback(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+        gen = frame = None
+
+        class Receiver:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                return 1
+
+            def close(self):
+                observations.append((internal.has_delegated_frame_phase(frame),
+                                     gen.gi_yieldfrom))
+                support.gc_collect()
+
+        def outer(receiver):
+            yield from receiver
+
+        gen = outer(Receiver())
+        frame = gen.gi_frame
+        self.assertEqual(next(gen), 1)
+        gen.close()
+        self.assertEqual(observations, [(True, None)])
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+
+    def test_throw_claim_keeps_marker_until_actual_outer_resume(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+        gen = frame = None
+
+        class Receiver:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                return 1
+
+            def throw(self, *args):
+                observations.append((internal.has_delegated_frame_phase(frame),
+                                     gen.gi_yieldfrom))
+                support.gc_collect()
+                return 2
+
+        receiver = Receiver()
+
+        def outer():
+            yield from receiver
+
+        gen = outer()
+        frame = gen.gi_frame
+        self.assertEqual(next(gen), 1)
+        self.assertEqual(gen.throw(ValueError), 2)
+        self.assertEqual(observations, [(True, None)])
+        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertIs(gen.gi_yieldfrom, receiver)
+        gen.close()
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+
+    def test_clear_cannot_reacquire_marker_from_saved_continuation(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def outer():
+            yield from iter((1, 2))
+
+        gen = outer()
+        frame = gen.gi_frame
+        self.assertEqual(next(gen), 1)
+        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        with self.assertRaisesRegex(RuntimeError, 'suspended frame'):
+            frame.clear()
+        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        gen.close()
+        frame.clear()
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertIsNone(gen.gi_yieldfrom)
+        support.gc_collect()
+        self.assertFalse(internal.has_delegated_frame_phase(frame))
+
+    def test_yield_observer_precedes_marker_and_cannot_redirect(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        def outer(receiver):
+            yield from receiver
+
+        def observe(code, offset, value):
+            self.assertIs(code, outer.__code__)
+            frame = sys._getframe(1)
+            observations.append(internal.has_delegated_frame_phase(frame))
+            with self.assertRaisesRegex(ValueError, 'suspended or protected owner recipe'):
+                frame.f_lineno = frame.f_lineno
+
+        mon, tool = sys.monitoring, 4
+        gen = outer(iter((1,)))
+        mon.use_tool_id(tool, 'delegated-phase')
+        try:
+            mon.register_callback(tool, mon.events.PY_YIELD, observe)
+            mon.set_local_events(tool, outer.__code__, mon.events.PY_YIELD)
+            self.assertEqual(next(gen), 1)
+            self.assertEqual(observations, [False])
+            self.assertTrue(internal.has_delegated_frame_phase(gen.gi_frame))
+        finally:
+            mon.set_local_events(tool, outer.__code__, 0)
+            mon.register_callback(tool, mon.events.PY_YIELD, None)
+            mon.free_tool_id(tool)
+            gen.close()
+
+    def test_selected_copy_preserves_only_a_retained_receiver(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def outer(receiver):
+            yield from receiver
+
+        for payload in (object(), 17, 2.5):
+            with self.subTest(payload=type(payload)):
+                internal.check_delegated_frame_copy(outer.__code__, payload)
+                internal.check_clipped_delegated_frame_copy(outer.__code__, payload)
+
+
 class CopyHomeViewTest(unittest.TestCase):
     def test_created_home_view_requires_marker_and_tracks_current_locals(self):
         internal = import_helper.import_module('_testinternalcapi')

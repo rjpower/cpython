@@ -4702,8 +4702,54 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     return publish
 
 
+def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
+    """Only the matched-exception arm reaches a drained normal successor."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (len(parts) not in (1, 2) or len(parts) != len(inst.parts)
+            or not fmt.window or not fmt.names_target or fmt.n_inputs
+            or fmt.roles != [ROLE_BASE, ROLE_NONE, ROLE_IMM, ROLE_IMM]
+            or fmt.imm != LOC_CD or fmt.store_dst):
+        return False
+    producer = parts[-1]
+    if ([(i.name, i.peek, i.size) for i in producer.stack.inputs] !=
+            [("awaitable_st", False, ""), ("exc_st", False, "")]
+            or producer.stack.outputs):
+        return False
+    expected = """{
+        JUMPBY(0);
+        (void)oparg;
+        PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+        assert(exc && PyExceptionInstance_Check(exc));
+        int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
+        if (matches) {
+            DECREF_INPUTS();
+        }
+        else {
+            Py_INCREF(exc);
+            _PyErr_SetRaisedException(tstate, exc);
+            monitor_reraise(tstate, frame, this_instr);
+            goto exception_unwind;
+        }
+    }"""
+    if statement_shape(producer.body) != statement_shape(
+            Parser(expected, "<async exit transport>").block()):
+        return False
+    if len(parts) == 1:
+        return True
+    observer = parts[0]
+    expected = """{
+        assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
+        INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
+    }"""
+    return (not observer.stack.inputs and not observer.stack.outputs
+            and statement_shape(observer.body) == statement_shape(
+                Parser(expected, "<async exit observer>").block()))
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
+    if async_exit_transport(inst, fmt):
+        return True
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
     return (not inst.properties.switches_frame and not fmt.names_target
@@ -5488,7 +5534,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
     normal_edges = ({1} if fmt.jump_always else {0, 1}
-                    if fmt.jumps or fmt.forward else {0})
+                    if (fmt.jumps or fmt.forward) and not fmt.names_target else {0})
     if (not reachable and emitter.normal_observer_edges == normal_edges
             and normal_vacate_capability(inst, fmt)):
         # Checked terminal wrappers flush before their callbacks and dispatch

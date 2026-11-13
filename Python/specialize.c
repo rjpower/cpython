@@ -639,9 +639,9 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     }
     else if (handler == BINARY_OP_ADD_INT) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
-        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
-        if (IR_A(word) == IR_B(word) && IR_C(word) != IR_B(word)
-            && IR_B(word) >= (uint32_t)nlocalsplus && IR_B(word) != IR_NO_DST) {
+        PyCodeObject *code = _PyFrame_GetCode(current_frame());
+        if (_PyIR_InlineIntOverwriteGeometry(
+                word, code->co_nlocalsplus, _PyFrame_NumSlotsForCodeObject(code))) {
             handler = BINARY_OP_ADD_INT_OVERWRITE_TEMP;
         }
     }

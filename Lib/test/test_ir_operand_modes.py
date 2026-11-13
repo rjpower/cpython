@@ -3,22 +3,53 @@
 import dis
 import gc
 import io
+import marshal
 import opcode
 from pathlib import Path
 import sys
+import types
 import unittest
 import weakref
 from test import support, test_tools
 from test.support import import_helper
+from test.support.bytecode_helper import encode_words
 from unittest import mock
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 VARIANT = "LOAD_ATTR_SHAPE_LOCAL_TEMP"
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
+INTEGER_VARIANT = "BINARY_OP_ADD_INT_OVERWRITE_TEMP"
 
 
 def handlers(func):
     return [word[0] for word in _testinternalcapi.get_ir(func.__code__, True)]
+
+
+def overwrite_template():
+    def add(x, y):
+        return (x + y) + y
+
+    code = add.__code__.replace()
+    nlocalsplus = len(_testinternalcapi.get_co_localskinds(code))
+    candidates = [(index, word[1:]) for index, word in enumerate(
+        _testinternalcapi.get_ir(code))
+        if word[0].startswith("BINARY_OP")
+        and word[1] == word[2] >= nlocalsplus and word[2] != word[3]]
+    assert len(candidates) == 1, candidates
+    return code, *candidates[0]
+
+
+def overwrite_bytes(code, index, fields):
+    word = encode_words((opcode._ir_opmap[INTEGER_VARIANT], *fields))
+    return code.co_code[:index * 8] + word + code.co_code[(index + 1) * 8:]
+
+
+def replace_overwrite(code, index, fields, **changes):
+    # A different source-map object permits the structural change to reach
+    # validation; the same instruction family/extent retains its source edges.
+    return code.replace(co_code=overwrite_bytes(code, index, fields),
+                        co_linetable=memoryview(code.co_linetable).tobytes(),
+                        **changes)
 
 
 @unittest.skipUnless(support.Py_SHAPES and not support.Py_GIL_DISABLED,
@@ -333,6 +364,77 @@ class SameHomeIntegerTests(unittest.TestCase):
             self.assertIsNone(discarded(10, 20))
         self.assertNotIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(local))
         self.assertNotIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(discarded))
+
+
+class ConstructedIntegerOverwriteTests(unittest.TestCase):
+    def test_constructor_rejects_each_invalid_geometry(self):
+        code, index, fields = overwrite_template()
+        a, b, c, d = fields
+        nlocalsplus = len(_testinternalcapi.get_co_localskinds(code))
+        nslots = nlocalsplus + code.co_stacksize
+        invalid = {
+            "different destination": (0, b, c, d),
+            "same inputs": (a, b, b, d),
+            "local input": (0, 0, c, d),
+            "discard": (4095, 4095, c, d),
+            "B outside frame": (nslots, nslots, c, d),
+            "C outside frame": (a, b, nslots, d),
+            "C read sentinel": (a, b, 4095, d),
+        }
+        for name, changed in invalid.items():
+            with self.subTest(geometry=name):
+                with self.assertRaisesRegex(ValueError, "inline overwrite geometry"):
+                    replace_overwrite(code, index, changed)
+
+    def test_changed_frame_metadata_rechecks_geometry(self):
+        code, index, fields = overwrite_template()
+        valid = replace_overwrite(code, index, fields)
+        for changes in ({"co_stacksize": 0},
+                        {"co_nlocals": valid.co_nlocals + 1,
+                         "co_varnames": (*valid.co_varnames, "extra")}):
+            with self.subTest(changes=changes):
+                with self.assertRaisesRegex(ValueError, "inline overwrite geometry"):
+                    replace_overwrite(valid, index, fields, **changes)
+
+    def test_valid_constructed_variant_and_monitoring_restore(self):
+        code, index, fields = overwrite_template()
+        valid = replace_overwrite(code, index, fields)
+        add = types.FunctionType(valid, globals())
+        self.assertEqual(add(10, 20), 50)
+        self.assertEqual(add((1 << 50) - 4, 3), (1 << 50) + 2)
+        self.assertEqual(add(2.5, 3.5), 9.5)
+        events = []
+        mon = sys.monitoring
+        tool = mon.PROFILER_ID
+        mon.use_tool_id(tool, "constructed overwrite")
+        try:
+            mon.register_callback(tool, mon.events.INSTRUCTION,
+                                  lambda code, offset: events.append(offset))
+            mon.set_local_events(tool, valid, mon.events.INSTRUCTION)
+            self.assertEqual(add(10, 20), 50)
+        finally:
+            mon.set_local_events(tool, valid, 0)
+            mon.free_tool_id(tool)
+        self.assertIn(index, events)
+        self.assertEqual(add(10, 20), 50)
+        self.assertIn(INTEGER_VARIANT, handlers(add))
+
+    def test_marshal_valid_and_invalid_refinement(self):
+        code, index, fields = overwrite_template()
+        valid = replace_overwrite(code, index, fields)
+        payload = marshal.dumps(valid)
+        loaded = marshal.loads(payload)
+        self.assertEqual(types.FunctionType(loaded, globals())(10, 20), 50)
+        self.assertEqual(loaded.co_code, valid.co_code)
+        self.assertEqual(payload.count(valid.co_code), 1)
+        a, b, c, d = fields
+        for changed in ((0, b, c, d), (a, b, b, d),
+                        (a, b, 4095, d), (4095, 4095, c, d)):
+            with self.subTest(fields=changed):
+                malformed = payload.replace(
+                    valid.co_code, overwrite_bytes(valid, index, changed), 1)
+                with self.assertRaisesRegex(ValueError, "inline overwrite geometry"):
+                    marshal.loads(malformed)
 
 
 if __name__ == "__main__":

@@ -775,7 +775,7 @@ class TestIRCases(unittest.TestCase):
                 analysis.instructions["BINARY_OP_ADD_INT"],
                 formats["BINARY_OP_ADD_INT"], variant)
 
-    def test_same_home_overwrite_keeps_guarded_error_and_fallback(self):
+    def test_same_home_overwrite_keeps_guarded_error_and_admitted_geometry(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         Path(self.temp_input_filename).write_text(source)
@@ -783,11 +783,10 @@ class TestIRCases(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir([], analysis, output, False)
         body = self.handler(output.getvalue(), "BINARY_OP_ADD_INT_OVERWRITE_TEMP")
-        fallback = body.index("JUMP_TO_PREDICTED(BINARY_OP_ADD_INT)")
-        self.assertLess(fallback, body.index("value = IR_VIEW"))
-        self.assertIn("IR_A(ir_word) != IR_B(ir_word)", body)
-        self.assertIn("IR_C(ir_word) == IR_B(ir_word)", body)
-        self.assertIn("IR_IS_LOCAL(IR_B(ir_word))", body)
+        geometry = body.index("assert(_PyIR_InlineIntOverwriteGeometry(")
+        self.assertLess(geometry, body.index("value = IR_VIEW"))
+        self.assertIn("ir_word, IR_NLOCALSPLUS(), _PyFrame_NumSlots(frame)", body)
+        self.assertNotIn("JUMP_TO_PREDICTED(BINARY_OP_ADD_INT)", body)
         error = body.index("if (PyValue_IsNull(res))")
         adopted = body.index("ir_own_B = _PyIR_AdoptTemp(l)")
         self.assertLess(error, adopted)

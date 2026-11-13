@@ -240,9 +240,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            if (IR_A(ir_word) != IR_B(ir_word) || IR_C(ir_word) == IR_B(ir_word) || IR_B(ir_word) == IR_NO_DST || IR_IS_LOCAL(IR_B(ir_word))) {
-                JUMP_TO_PREDICTED(BINARY_OP_ADD_INT);
-            }
+            assert(_PyIR_InlineIntOverwriteGeometry(ir_word, IR_NLOCALSPLUS(), _PyFrame_NumSlots(frame)));
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValueBorrow value;

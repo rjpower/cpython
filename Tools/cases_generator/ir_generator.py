@@ -4884,13 +4884,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)this_instr;\n")
     if (emitter.execution_variant is not None
             and emitter.execution_variant.overwrite_input is not None):
-        # This release-mode fallback also protects direct execution of a
-        # malformed refinement. No input has been changed or consumed yet.
-        out.emit("if (IR_A(ir_word) != IR_B(ir_word) || "
-                 "IR_C(ir_word) == IR_B(ir_word) || "
-                 "IR_B(ir_word) == IR_NO_DST || IR_IS_LOCAL(IR_B(ir_word))) {\n")
-        out.emit(f"JUMP_TO_PREDICTED({emitter.execution_variant.base});\n")
-        out.emit("}\n")
+        # Construction and specialization share this geometry authority.
+        out.emit("assert(_PyIR_InlineIntOverwriteGeometry("
+                 "ir_word, IR_NLOCALSPLUS(), _PyFrame_NumSlots(frame)));\n")
     if record:
         # The handler's value record, the box area (R27 deletes it)
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")

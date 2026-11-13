@@ -2608,6 +2608,7 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
+        self._replacers["IR_CREATED_COPY"] = self.created_copy
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
@@ -2670,6 +2671,16 @@ class IREmitter(Emitter):
         self.out.start_line()
         self.emit("frame->phase_state = 0;\n")
         super().emit_save(storage)
+
+    def created_copy(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        args = self.macro_args(tkn, tkn_iter, 2)
+        if args != ["frame", "gen_frame"] or not created_copy_contract(
+                inst, self.format_of(inst)):
+            raise analysis_error("IR_CREATED_COPY needs its checked copy contract", tkn)
+        self.ownership_event("CREATED_COPY")
+        self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame)")
+        return True
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
@@ -5490,6 +5501,39 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
                 Parser(specialize, "<binary specialization contract>").block()))
 
 
+def created_copy_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """The actual copy boundary has no preceding scratch transport."""
+    inputs, outputs = external_io(inst)
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (inst.name != "RETURN_GENERATOR" or not fmt.window or inputs
+            or len(outputs) != 1 or len(parts) != 1
+            or len(inst.parts) != 1):
+        return False
+    expected = """{
+        PyFunctionObject *func = _PyFrame_GetFunction(frame);
+        PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, _PyFrame_GetCode(frame));
+        ERROR_IF(gen == NULL);
+        SAVE_STACK();
+        _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
+        IR_CREATED_COPY(frame, gen_frame);
+        gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+        assert(frame->frame_obj == NULL);
+        gen->gi_frame_state = FRAME_CREATED;
+        gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *prev = frame->previous;
+        _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
+        _PyThreadState_PopFrame(tstate, frame);
+        frame = tstate->current_frame = prev;
+        next_instr = frame->return_pc;
+        RELOAD_STACK();
+        res = PyValue_FromObjectSteal((PyObject *)gen);
+        LLTRACE_RESUME_FRAME();
+    }"""
+    return statement_shape(parts[0].body) == statement_shape(
+        Parser(expected, "<created copy contract>").block())
+
+
 def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     """Certify the bounded normal-edge subset from its actual owner operations.
 
@@ -5550,6 +5594,28 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                        for part, body in zip(parts, (instrument, periodic)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
+
+    if inst.name == "MAKE_CELL" and scalar_shape(0, 0):
+        body = """{
+            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
+            if (cell == NULL) { ERROR_NO_POP(); }
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            PyValue_XCLOSE(tmp);
+        }"""
+        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
+    if inst.name == "COPY_FREE_VARS" and scalar_shape(0, 0):
+        body = """{
+            PyCodeObject *co = _PyFrame_GetCode(frame);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
+            PyObject *closure = func->func_closure;
+            assert(oparg == co->co_nfreevars);
+            int offset = co->co_nlocalsplus - oparg;
+            for (int i = 0; i < oparg; ++i) {
+                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+            }
+        }"""
+        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
         "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",

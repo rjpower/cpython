@@ -1775,6 +1775,9 @@ check_words(struct _PyCodeConstructor *con)
     PyObject *consts = con->consts;
     int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
     int nslots = nl + Py_MAX(con->stacksize, 1);
+    int nfreevars;
+    get_localsplus_counts(con->localsplusnames, con->localspluskinds,
+                          NULL, NULL, &nfreevars);
     PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
     Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
@@ -1909,6 +1912,11 @@ check_words(struct _PyCodeConstructor *con)
             }
         }
         int opcode = _PyIR_BaseOpcode(handler);
+        if (opcode == COPY_FREE_VARS && arg != nfreevars) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid free-variable count", i);
+            goto error;
+        }
         if ((opcode == LOAD_COMMON_CONSTANT && arg >= NUM_COMMON_CONSTANTS) ||
             (opcode == LOAD_SMALL_INT && arg >= _PY_NSMALLPOSINTS))
         {
@@ -2002,6 +2010,7 @@ typedef struct {
     uint64_t *facts;
     uint64_t *branch;
     semantic_phases *phases;
+    int created_empty;
 } semantic_worklist;
 
 /* NULL, nonNULL and logical initialization are must-facts. Owner obligations
@@ -2355,10 +2364,42 @@ semantic_input_home(_PyIRWord word, const _PyIRFormat *fmt, int input)
     Py_UNREACHABLE();
 }
 
+/* The event census includes unreachable sites; only the fixed-point replay
+ * can certify a reached site's incoming shape. */
+static int
+semantic_has_created_copy(const _PyIRFormat *fmt)
+{
+    for (int i = 0; i < fmt->owner_events; i++) {
+        if (_PyIR_OwnerPrograms[fmt->owner_program + i].kind ==
+            _PyIR_OWNER_CREATED_COPY)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+semantic_empty_scratch(const semantic_image *image,
+                       const semantic_worklist *work, const uint64_t *state)
+{
+    for (int bit = 0; bit < image->scratch; bit++) {
+        uint64_t mask = UINT64_C(1) << (bit % 64);
+        if (!(state[SEM_NULL * work->nwords + bit / 64] & mask) ||
+            ((state[SEM_INITIALIZED * work->nwords + bit / 64] |
+              state[SEM_MAY_OWNER * work->nwords + bit / 64]) & mask))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static int
 semantic_step(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
+    work->created_empty = 0;
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->owner_events == 0) {
@@ -2455,6 +2496,13 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 }
                 return 0;
             case _PyIR_OWNER_ERROR_EXIT:
+                return 0;
+            case _PyIR_OWNER_CREATED_COPY:
+                work->created_empty = inspect && exact &&
+                    semantic_empty_scratch(image, work, state);
+                /* A future activation installs a new send home. It is not
+                 * the ordinary successor of the created copy snapshot. */
+                *complete = 0;
                 return 0;
             default:
                 Py_UNREACHABLE();

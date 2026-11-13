@@ -44,42 +44,36 @@ Never mutate a source while its native job or quiet measurement is running.
 
 ## Current static checkpoint
 
-Source4db1bb0b5e3 and both native builds complete117/79 modules. It contains
-IRSC1 semantic recovery, IRSM2 optional positions, shared typed projections,
-independent PRE observer ingress, checked CALL input cleanup and the actual
-outlined ERROR processor. Its direct ingress passes the current handler's
-bridge workspace; no successful-path record or extra handler argument is added.
-Checkpoint0 is initialized-NULL control; positive ERROR authority remains open.
+Source/native I dc6bad8a625, both117/79 builds. It composes shared input schema
+51360665d5f and positive ERROR source7a94d51e97d with the prior outlined
+processor, IRSC1 recovery/IRSM2 positions, PRE observer ingress and checked CALL
+drain. Generated code differs only at GET_ANEXT's two error checkpoint literals.
+Bootstrap5+27,18 focused runtime cases and233 IR/code cases pass per role.
+Source/non-native effect tests remain separate; no complete static map claim.
 
-The preceding d045 composition passes361 cases in eight debug modules and
-admits687/687 source files, including all189 stdlib entries. Fixture-only13b
-passes143 disassembly cases per role. Current4db freezer passes five bootstrap
-and all27 wider admission probes. Its ten-module runtime/monitoring group runs
-1,093 cases per role: nine modules pass, tracing retains exactly six selected54
-jump-error identities. Evidence: E/observer-pre-*, E/error-scope-*.
+One counted ERROR suffix shares the ownership-event allocation. A selector
+class byte in16-byte PhaseSite distinguishes ACTIVE/ERROR under an immutable
+site. Pure explicit-origin query selects GET_ANEXT projection/helper failures;
+actual RAISE/retirement roots have authority2 with clean GC and retained local
+mutation/capture. Missing proof uses initialized control3. New handler roles
+replace the view with control until their own transform is proved. Native
+frame header112, HomeView16 and format44 remain unchanged.
 
-Five new ERROR witnesses initially fail both roles on fixture assumptions.
-Outer kind2 transition records belong to the runner; require exact initial
-chain restoration. assertRaises clears retired traceback frames, erasing the
-captured local before inspection; inspect before explicit clearing. Reviewed
-fixture3881c3a9a18 preserves actual owner/GC/phase/cursor assertions and checks
-mutation both during cleanup and after capture. Root composes it and exact
-emitter fixture43c1b5b049a at I73ea72ad45d. Both native identity rebuilds complete
-117/79, and all five ERROR witnesses pass per role. The4db runtime is unchanged
-by these fixture-only source updates; quiet hot6 campaigns complete.
+Preceding4db runs1,093 lifecycle/monitoring cases per role: nine modules pass,
+tracing retains six selected54 jump-error identities. Its fixture-only73ea
+follow-up passes five ERROR witnesses per role. PRE d045/13b passes361 debug
+cases plus143 disassembly cases per role; census687/687 sources,189stdlib.
+Retain exact identities; these are not full/current-dc6 runtime qualifications.
 
-Retained4db release ELF is E/error-scope-native/python, SHA256
-1c8cb55439680d6f8c713ed07d4b6ccab8366d75cbdff99eb6915291dfcb0fd4.
-CALL_NO_SELF442 bytes, EMPTY return780, instrumented LINE356; prior d045 has
-402/747/311. The outlined processor is2,009 bytes. No code-size win is claimed.
-Static frame header stays112 bytes before homes; HomeView16, format44.
+Current two-pair54 screen in hot order DeltaBlue/generators/coroutines/Richards/
+comprehensions/logging:0.980768/1.029420/1.017063/0.983703/0.986702/1.037997.
+Logging range0.982866–1.096220; mixed, no promotion. The latest direct upstream
+screen remains73ea:1.155724/1.431449/1.285008/1.237290/1.382734/0.866682.
+Do not combine campaigns. No new PMU/all29 fordc6.
 
-The latest two-pair elapsed screen is I73ea72ad45d. Against54, hot order
-DeltaBlue/generators/coroutines/Richards/comprehensions/logging gives
-0.960034/1.023798/1.021070/0.993148/1.012176/1.183415. Direct upstream gives
-1.155724/1.431449/1.285008/1.237290/1.382734/0.866682. Pair ranges and stable
-campaign identities are in the report, E/error-scope-hot-screen-{golden,upstream}.
-This is mixed, with four cases losing both54 pairs. No new PMU or promotion.
+Evidence E/positive-error-snapshots-*; exact release ELF SHA256
+95e69c53868255c6883d03a4298887ae7e1d2bfbaec3d67f808fa96c9fc053fd.
+Earlier captures/campaigns remain at their recorded source heads in the report.
 
 ## Bitmap checkpoint
 

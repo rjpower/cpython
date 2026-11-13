@@ -265,6 +265,29 @@ pre-site survivor recipe or a source-only fallback. Existing PRE restoration
 and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
 transfers require separate stopped-state authority.
 
+## Active model55 ERROR metadata
+
+Candidate `dc6bad8a625` appends a counted ERROR suffix to the existing interned
+ownership-event program, behind format flag `0x8000`. Normal event counts keep
+their existing meaning. This adds no executable instruction, format-row field
+or second event allocation. The same Storage instance records the actual
+input-field reads and reached post-error-flush snapshot that supplies each
+literal checkpoint in generated C.
+
+The existing 16-byte PhaseSite row uses one reserved byte for selector class:
+ACTIVE0 or ERROR1. Its ordered key is `(immutable word site, class, uint8 id)`;
+checkpoint0 means uncovered. A cold query takes an explicit origin under the
+executing-code pin and reads metadata only. It cannot infer authority from a
+public frame PC, debug positions or the checkpoint number alone.
+
+The first ERROR slice preserves a complete incoming scalar shape without home
+writes. Required inputs need positive initialized/non-NULL facts; existing
+canonical homes may widen to canonical-or-NULL across an audited callback.
+MAY ownership alone never grants readability. Unknown transfers and ambiguous
+joins stay uncovered. General scalar actions, windows, call handoffs and
+transformed handler-entry shapes remain in the
+[migration plan](../issues/call-model55/semantic-phase-plan.md).
+
 ## Explicit boundary
 
 The baseline IR is an executable register instruction stream, not optimizing

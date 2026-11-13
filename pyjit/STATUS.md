@@ -8,17 +8,19 @@ and [report](issues/call-model55/report.md) own the active effort. The reviewed
 [target model](design/proposals/register-call-model55.md) is a proposal until
 its lifecycle and qualification gates pass.
 
-Current static source/native `73ea72ad45d` and presence composition
-`0af2ff5b66a` build all 117 modules, 79 shared, in release/debug. The static
-branch now includes the outlined error processor and direct ingress with each
-handler's actual bridge workspace. Bootstrap5+27 admission passes. Nine runtime
-modules pass in each role; the ten-module group runs1,093 cases and retains the
-same six selected54 debugger-jump errors. Five new error-scope witnesses pass
-both roles after reviewed fixture corrections: outer runner transition records
-are legitimate, and assertRaises itself clears the escaped traceback frame
-before its local check. Active/captured mutation and exact initial-chain
-restoration remain asserted. The preceding4db runtime is unchanged by these
-fixture-only follow-ups.
+Current static source/native `dc6bad8a625` and presence composition
+`0af2ff5b66a` build all117 modules,79 shared, in release/debug. The static
+checkpoint passes bootstrap5+27,18 focused runtime cases and233 IR/code cases
+per role. GET_ANEXT's first proved ERROR snapshots select surviving roots
+through raise monitoring, cleanup and escape; unknown/MAY-only states receive
+no certificate. New handler protocol publication uses explicit initialized
+control until its transformed shape is proved. This is partial static coverage.
+
+The preceding4db cold processor runs1,093 cases per role: nine runtime modules
+pass and tracing retains six selected54 debugger errors. Fixture-only73ea
+passes all five ERROR lifecycle witnesses after preserving the runner's outer
+transitions and inspecting capture before assertRaises clears traceback frames.
+That broader result is retained at its actual source identity.
 
 Required recovery is now separate from optional source positions: IRSC1 in
 `co_exceptiontable`, IRSM2 in `co_linetable`, with common admission and all
@@ -50,14 +52,14 @@ The static processor's checkpoint0 remains initialized-NULL control; positively
 proved error snapshots and full static authority are under implementation.
 No complete static or bitmap representation has earned selection.
 
-The latest static two-pair screen at73ea versus54 gives DeltaBlue **0.960034**,
-generators **1.023798**, coroutines **1.021070**, Richards **0.993148**,
-comprehensions **1.012176** and silent logging **1.183415**. Direct upstream
-ratios are respectively **1.155724**, **1.431449**, **1.285008**, **1.237290**,
-**1.382734** and **0.866682**. Lower is better. Both campaigns have stable
-identities and no failures. DeltaBlue improves in this screen; four cases lose
-to54 in both pairs. No broad gain or isolated outlining benefit is established.
-The report retains all pair ranges and prior screens.
+The latest static two-pair screen atdc6 versus54 gives DeltaBlue **0.980768**,
+generators **1.029420**, coroutines **1.017063**, Richards **0.983703**,
+comprehensions **0.986702** and silent logging **1.037997**. Logging spans
+0.982866–1.096220; the result is mixed and no new golden is selected.
+The latest direct upstream screen is the preceding73ea: **1.155724**,
+**1.431449**, **1.285008**, **1.237290**, **1.382734**, **0.866682** in the same
+order. Lower is better. Do not combine these distinct campaigns. The report
+retains their pair ranges, stable identities and earlier measurements.
 A native inventory finds identical logging hot-frame geometry and warm
 attribute/call families in candidate979 and54; hidden constant-local
 initialization does not explain that earlier gap.

@@ -326,6 +326,50 @@ Exact relaxation adapters normalize LINE landings while their helper words keep
 real INSTRUCTION events. Setter, exception and frame-clear paths invalidate the
 handoff before callbacks. Broader event parity remains under qualification.
 
+## Active model55 error processing
+
+Candidate `dc6bad8a625` runs errors through `_PyEval_ProcessError`, an outlined
+function in the evaluator translation unit. Golden54 remains unchanged; the
+[report](../issues/call-model55/report.md) owns measured identities and limits.
+The reached handler passes the immutable origin, emitted checkpoint and its
+actual bridge workspace before bridge disposal can call Python. Successful
+instructions gain no descriptor, lookup or handler argument.
+
+The cold function links a metadata-only ERROR scope on the thread. Active
+frame traversal owns its edges; external-root traversal skips this descriptor.
+Its selected view and descending remaining-home cursor survive bridge cleanup,
+traceback creation, monitoring and scratch release. Detach and advance before
+each close. Named bindings stay dynamic, and the executing-code pin lasts
+through the final selected-view use.
+
+```mermaid
+flowchart TD
+    H[Reached handler error: origin, checkpoint, bridge workspace] --> Q[Select code-owned ERROR snapshot]
+    Q --> S[Link metadata scope and remaining-home cursor]
+    S --> B[Finish bridges, traceback and raise monitoring]
+    B --> E{Matching semantic handler?}
+    E -->|yes| C[Drain consumed scratch before each close]
+    C --> P[Install exception and optional lasti]
+    P --> M[Replace view, then handled callback]
+    M -->|success| D[Unlink scope and resume dispatch]
+    M -->|callback raises| F[Unlink scope and select fresh error origin]
+    F --> Q
+    E -->|no| U[Drain scratch and report unwind]
+    U --> L[Unlink scope; retire bindings through M2]
+    L --> R{Python caller remains?}
+    R -->|yes| Q
+    R -->|no| X[Exit evaluator]
+```
+
+The first proved static snapshots cover GET_ANEXT's projection and native
+failure routes. Missing proof selects explicit initialized-NULL control while
+this migration is incomplete. Installing exception/lasti changes the shape;
+the handled callback likewise uses control until that transform is certified.
+The bitmap experiment selects its actual presence plane instead. Neither
+checkpoint zero nor an instruction's normal program grants static readability.
+The function loops over unwound Python frames and returns HANDLED or EXIT;
+it does not add one recursive native unwinder call per Python frame.
+
 ## Limits
 
 The active interpreter uses the selected universal PyValue/RC representation

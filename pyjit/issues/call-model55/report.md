@@ -4,7 +4,44 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-## Current qualification: semantic recovery and cold error processing
+## Static ERROR snapshot integration
+
+Current source/native `dc6bad8a625` composes schema513 and source7a94. Both
+117/79 builds, five bootstrap and27 wider admission probes pass. Eighteen
+focused runtime cases and233 IR/code cases pass per role. Actual GET_ANEXT
+projection/native failure routes select separate statically proved snapshots;
+RAISE, retirement, collection and escaped local mutation retain selected
+readable authority2. Unknown/MAY-only predecessors receive no certificate.
+Installing the new exception/lasti protocol explicitly replaces that snapshot
+with control authority3. No old sparse view is widened into a new shape.
+
+This is the first native positive ERROR slice. Its metadata shares the existing
+ownership-event allocation and a reserved byte in the16-byte PhaseSite row.
+Only GET_ANEXT's emitted error literals change (0 to1/2); normal dispatch gains
+no query, record or parameter. Full scalar actions and the rest of the eight
+closure groups remain open. Scratch NULL control is still the static reference.
+
+The two-pair selected54 screen completes with stable identities and no failures:
+
+| Workload | Candidate/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.980768 | 0.970164–0.991489 |
+| Generators | 1.029420 | 1.019337–1.039603 |
+| Coroutines | 1.017063 | 1.012769–1.021374 |
+| Richards | 0.983703 | 0.979716–0.987706 |
+| Comprehensions | 0.986702 | 0.985354–0.988052 |
+| Logging silent | 1.037997 | 0.982866–1.096220 |
+
+DeltaBlue, Richards and comprehensions improve in both pairs; generators and
+coroutines lose. Logging spans a small gain to a9.6% loss. This does not select
+a new golden or isolate a speedup from the cold ERROR feature. No new direct
+upstream or PMU campaign is claimed; do not multiply the previous73ea/upstream
+ratios by this screen. The broader qualification and complete ownership
+alternatives remain unfinished.
+Evidence: `E/positive-error-snapshots-*`; retained release ELF SHA256
+`95e69c53868255c6883d03a4298887ae7e1d2bfbaec3d67f808fa96c9fc053fd`.
+
+## Previous qualification: semantic recovery and cold error processing
 
 The IRSC1/IRSM2 split and independent PRE observer ingress are implemented.
 The preceding native d045 composition passes361 cases in eight debug modules;

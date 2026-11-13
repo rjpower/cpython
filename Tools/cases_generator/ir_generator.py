@@ -2623,6 +2623,10 @@ class IRStack(Stack):
         flags = int(temporary) | (int(same_value) << 1) | (int(canonical) << 2)
         self.home_action("_PyIR_OWNER_STORAGE_PUBLISH", index, var.ir_value, flags)
         self.home_values[index] = var.ir_value
+        # Scratch publication owns the count in the frame. Local/discard
+        # modes still owe a conditional final commit, but this is no longer
+        # definite permission to copy or close a native C owner.
+        self.native_owners.discard(var.ir_value)
         if not temporary:
             if var.ir_value in self.possible_native_owners:
                 self.expired_values.add(var.ir_value)
@@ -2684,9 +2688,9 @@ class IRStack(Stack):
         elif "next_instr" in texts and any(t in texts for t in ("=", "+=", "-=")):
             self.null_uncovered = True
 
-    def code_ran(self) -> None:
+    def code_ran(self, *, current_identity=False) -> None:
         "Code that can rebind a local may have run: each view may dangle"
-        self.home_action("_PyIR_OWNER_STORAGE_CALLBACK")
+        self.home_action("_PyIR_OWNER_STORAGE_CALLBACK", flags=2 if current_identity else 0)
         for names in self.views.values():
             self.stale.update(names)
         self.stale.update(self.view_objects)
@@ -3214,6 +3218,7 @@ class IREmitter(Emitter):
         # They have no certifying source contract or per-handler receipts.
         self.null_outputs: frozenset[str] | None = None
         self.error_source = None
+        self.callback_current_identity = False
         self.error_unwind_sources = set()
         self.error_terminal_sources = set()
         self.error_uncovered = True
@@ -4702,7 +4707,7 @@ class IREmitter(Emitter):
         if self.null_outputs is not None:
             stack.note_null_statement(stmt, self.null_outputs)
         if not leaf_marker and (escape is not None or transaction_marker):
-            stack.code_ran()
+            stack.code_ran(current_identity=self.callback_current_identity)
         if reachable:
             self.consume_killed(storage)
             for value in retired:
@@ -6645,6 +6650,18 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
     return prefix == [t.text for t in tokenize(expected_event)]
 
 
+def current_operation_preserves_scratch(inst: Instruction, fmt: IRFormat, source) -> bool:
+    """A complete plain value operation whose callbacks cannot redirect it."""
+    # The setter requires a matching current observer, or an active CALL
+    # ancestor recipe. A source/step/frame-switch adapter supplies neither
+    # proof merely by calling one of the same native helpers.
+    return bool(
+        source is not None and source.callbacks_without_current_observer and
+        source.homes in {HomeEffect.NO_ARENA_WRITE, HomeEffect.PRESERVES_CANONICAL_OR_NULL} and
+        not source.changes_origin and not fmt.window and
+        not inst.properties.switches_frame)
+
+
 def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  emitter: IREmitter, out: CWriter, record: bool,
                  roles: dict[str, set[str]]) -> None:
@@ -6657,6 +6674,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
     if emitter.error_source is None and emitter.send_source_parts is not None:
         emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
+    source = emitter.error_source
+    emitter.callback_current_identity = current_operation_preserves_scratch(inst, fmt, source)
     emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
     emitter.abrupt_operand_sources = set()
     emitter.abrupt_operand_origin = None

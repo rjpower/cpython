@@ -340,6 +340,7 @@ enum {
 #define _PyIR_STORAGE_RESULT_NONNULL 2u
 #define _PyIR_STORAGE_GUARD_NONNULL 1u
 #define _PyIR_STORAGE_CALLBACK_DST 1u
+#define _PyIR_STORAGE_CALLBACK_CURRENT_IDENTITY 2u
 
 /* owner_events counts only the normal prefix. ERROR_PROGRAM, when flagged,
  * follows that prefix and counts its suffix records in extent. Its src counts

@@ -114,7 +114,7 @@ swap_rename_region(_PyRegCfg *cfg, int start, int end)
         if (!ok || reader == NULL) {
             continue;
         }
-        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(reader->opcode);
+        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(reader->opcode, reader->oparg);
         if (fmt->flags & _PyIR_WINDOW) {
             continue;
         }
@@ -187,7 +187,7 @@ typedef struct {
 static int
 borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 {
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     if (fmt->borrow_mask == 0) {
         return -1;
     }
@@ -205,7 +205,7 @@ borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 static int
 written_local(const _PyRegOp *op)
 {
-    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     if (role == _PyIR_ROLE_LOCAL_OUT || role == _PyIR_ROLE_LOCAL_CLEAR
         || role == _PyIR_ROLE_LOCAL_MOVE)
     {
@@ -264,7 +264,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
             int *in = _PyReg_IN(cfg, op);
             int written = written_local(op);
             int runs_code = !keep_across_code
-                && _PyIR_MayRunPython(_PyRegCfg_FormatOf(op->opcode),
+                && _PyIR_MayRunPython(_PyRegCfg_FormatOf(op->opcode, op->oparg),
                                       op->dst >= 0);
             int n = 0;
             for (int p = 0; p < npend; p++) {
@@ -328,7 +328,7 @@ touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
         return 1;
     }
     // A handler that reads the slot its oparg names
-    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     if ((role == _PyIR_ROLE_LOCAL_IN || role == _PyIR_ROLE_CELL)
         && op->oparg == z)
     {
@@ -360,7 +360,7 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         // other code, as STORE_FAST does
         if (op->loc.lineno != store->loc.lineno || op->target >= 0
             || op->dst >= 0 || written_local(op) >= 0
-            || (_PyRegCfg_FormatOf(op->opcode)->effects
+            || (_PyRegCfg_FormatOf(op->opcode, op->oparg)->effects
                 & (_PyIR_RAISES | _PyIR_ESCAPES))
             || reads_count(cfg, op, value) > 0 || touches_local(cfg, op, z))
         {
@@ -394,7 +394,7 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
             {
                 continue;
             }
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }
@@ -602,7 +602,7 @@ pop_top_region(_PyRegCfg *cfg, int start, int end)
             continue;
         }
         _PyRegOp *prod = &cfg->ops[p];
-        int effects = _PyRegCfg_FormatOf(prod->opcode)->effects;
+        int effects = _PyRegCfg_FormatOf(prod->opcode, prod->oparg)->effects;
         if (!(effects & _PyIR_PURE) || (effects & (_PyIR_RAISES | _PyIR_ESCAPES))
             || prod->dst >= 0)
         {
@@ -658,7 +658,7 @@ discard_region(_PyRegCfg *cfg, int start, int end)
             }
         }
         if (other_read || prod == NULL || prod->dst >= 0 ||
-            !(_PyRegCfg_FormatOf(prod->opcode)->flags & _PyIR_DISCARDS))
+            !(_PyRegCfg_FormatOf(prod->opcode, prod->oparg)->flags & _PyIR_DISCARDS))
         {
             continue;
         }
@@ -846,7 +846,7 @@ loop_blocks(const _PyRegCfg *cfg, int *any)
         for (int i = blk->start; i < blk->end; i++) {
             const _PyRegOp *op = &cfg->ops[i];
             if (op->opcode == _PyReg_DEAD || op->target < 0
-                || (_PyRegCfg_FormatOf(op->opcode)->flags & _PyIR_NAMES_TARGET)
+                || (_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags & _PyIR_NAMES_TARGET)
                 || op->target > b)
             {
                 continue;
@@ -1002,7 +1002,7 @@ shift_slots(_PyRegCfg *cfg, int first_free, int k)
         if (op->opcode == _PyReg_DEAD) {
             continue;
         }
-        int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+        int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
         if ((role == _PyIR_ROLE_LOCAL_IN || role == _PyIR_ROLE_LOCAL_OUT
              || role == _PyIR_ROLE_LOCAL_CLEAR || role == _PyIR_ROLE_LOCAL_MOVE
              || role == _PyIR_ROLE_CELL)
@@ -1296,7 +1296,7 @@ static void
 call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
 {
     int *in = _PyReg_IN(cfg, op), *out = _PyReg_OUT(cfg, op);
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     int through = _PyIR_Extent(fmt->through, op->oparg);
     for (int j = 0; j < op->nout; j++) {
         int value = 0;
@@ -1396,7 +1396,7 @@ call_roles(_PyRegCfg *cfg, int verify)
                 call_null_merge(&proof, op->except, state, depth);
             }
             call_null_step(cfg, op, state, outputs);
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
             if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                 !(fmt->flags & _PyIR_NAMES_TARGET))
             {

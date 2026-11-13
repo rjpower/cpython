@@ -349,6 +349,7 @@ _PyIR_Outcome(_PyIRWord word, int taken)
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
         case YIELD_VALUE:
+        case YIELD_DELEGATED:
             /* The outgoing value is taken; the next activation supplies A. */
             return (_PyIRSlotOutcome){1, base, 1, dst};
         case RETURN_GENERATOR:

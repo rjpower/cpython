@@ -432,7 +432,7 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
             _PyRegOp *control = &cfg->ops[control_index];
             assert(control_index >= i && control_index < cfg->blocks[b].end);
             assert(control == op || control->nwords == 0);
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(control->opcode);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(control->opcode, control->oparg);
             if (control->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
                 int target = control->target;
                 if (assemble_source_edge(writer, cfg, op->word,
@@ -846,6 +846,9 @@ choose_handler(_PyRegOp *op, PyObject *consts)
 {
     int opcode = op->opcode;
     int oparg = op->oparg;
+    if (opcode == YIELD_VALUE && oparg == 1) {
+        return YIELD_DELEGATED;
+    }
     if (op->flags & _PyReg_CALL_NO_SELF) {
         switch (opcode) {
             case CALL:

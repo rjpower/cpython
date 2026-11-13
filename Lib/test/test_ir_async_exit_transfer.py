@@ -114,7 +114,7 @@ class AsyncExitTransferTests(unittest.TestCase):
         end = text.index("macro(END_ASYNC_FOR) = _END_ASYNC_FOR;", start)
         original = text[start:end]
         changes = (
-            original.replace("DECREF_INPUTS();", "opaque(alias);", 1),
+            original.replace("DECREF_INPUTS();", "DECREF_INPUTS(); opaque(alias);", 1),
             original.replace("DECREF_INPUTS();", "DECREF_INPUTS(); frame->base[0] = PyValue_NULL;", 1),
             original.replace("PyExc_StopAsyncIteration", "PyExc_StopIteration", 1),
             original.replace("Py_INCREF(exc);", "Py_XINCREF(exc);", 1),

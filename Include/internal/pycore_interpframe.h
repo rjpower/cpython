@@ -169,6 +169,14 @@ _PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
     *home = value;
 }
 
+static inline PyValue
+_PyFrame_TakeHome(_PyInterpreterFrame *frame, PyValue *home)
+{
+    PyValue value = *home;
+    _PyFrame_WriteHome(frame, home, PyValue_NULL);
+    return value;
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST

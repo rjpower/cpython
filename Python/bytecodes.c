@@ -1921,8 +1921,8 @@ dummy_func(
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
             STAT_INC(UNPACK_SEQUENCE, hit);
             PyValue *items = _PyTuple_ITEMS(seq_o);
-            for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_XDUP(items[i]);
+            for (int i = 0; i < oparg; i++) {
+                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
             }
             DECREF_INPUTS();
         }
@@ -1940,8 +1940,8 @@ dummy_func(
             }
             STAT_INC(UNPACK_SEQUENCE, hit);
             PyValue *items = _PyList_ITEMS(seq_o);
-            for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_XDUP(items[i]);
+            for (int i = 0; i < oparg; i++) {
+                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
             }
             UNLOCK_OBJECT(seq_o);
             DECREF_INPUTS();
@@ -2338,8 +2338,7 @@ dummy_func(
 
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = values[i];  // a move: cleared below
-                values[i] = PyValue_NULL;
+                PyValue value = IR_TAKE_INPUT(values, i);
                 if (err == 0) {
                     err = _PySet_AddValueTakeRef((PySetObject *)set_o,
                                                  value);

@@ -4,12 +4,87 @@ import gc
 import sys
 import types
 import unittest
+import weakref
 
 import _testinternalcapi
 from test.test_ir_call_roles import routes
 
 
 class HomeWriterTests(unittest.TestCase):
+    def test_tuple_and_list_fill_preserve_physical_order(self):
+        for count in (0, 3):
+            names = [f"a{i}" for i in range(count)]
+            target = ", ".join(names) if names else "()"
+            result = "(" + ", ".join(names) + ")"
+            namespace = {}
+            exec(f"def unpack(values):\n    {target} = values\n    return {result}\n", namespace)
+            code = namespace["unpack"].__code__
+            self.assertTrue(any(row[0] == "UNPACK_SEQUENCE"
+                                for row in _testinternalcapi.get_ir(code)))
+            values = tuple(object() for _ in range(count))
+            for admitted in routes(code):
+                function = types.FunctionType(admitted, globals())
+                for factory in (tuple, list):
+                    for _ in range(100):
+                        self.assertEqual(function(factory(values)), values)
+
+    def test_empty_set_builder_needs_no_input_home(self):
+        def build():
+            return {*()}
+
+        self.assertTrue(any(row[0] == "BUILD_SET" and row[3] == 0
+                            for row in _testinternalcapi.get_ir(build.__code__)))
+        for code in routes(build.__code__):
+            self.assertEqual(types.FunctionType(code, globals())(), set())
+
+    def test_set_take_precedes_hash_and_drains_after_failure(self):
+        def build(factory):
+            current = 17
+            result = {factory(0), factory(1), factory(2)}
+            return result, current
+
+        self.assertTrue(any(row[0] == "BUILD_SET"
+                            for row in _testinternalcapi.get_ir(build.__code__)))
+        for code in routes(build.__code__):
+            for failing in (False, True):
+                references = []
+                released = []
+                observed = []
+
+                class Key:
+                    def __init__(self, index):
+                        self.index = index
+                        references.append(weakref.ref(self))
+
+                    def __hash__(self):
+                        frame = sys._getframe(1)
+                        frame.f_locals["current"] = 42
+                        gc.collect()
+                        observed.append(self.index)
+                        if failing:
+                            raise LookupError("hash")
+                        return self.index
+
+                    def __del__(self):
+                        released.append(self.index)
+                        gc.collect()
+
+                function = types.FunctionType(code, globals())
+                with self.subTest(failing=failing):
+                    if failing:
+                        with self.assertRaisesRegex(LookupError, "hash"):
+                            function(Key)
+                        self.assertEqual(observed, [0])
+                    else:
+                        result, current = function(Key)
+                        self.assertEqual(current, 42)
+                        self.assertEqual(len(result), 3)
+                        self.assertEqual(observed, [0, 1, 2])
+                        del result
+                    gc.collect()
+                    self.assertEqual(sorted(released), [0, 1, 2])
+                    self.assertTrue(all(reference() is None for reference in references))
+
     def test_global_publication_preserves_callback_binding_writes(self):
         payload = object()
 

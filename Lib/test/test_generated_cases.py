@@ -1564,6 +1564,26 @@ class TestIRCases(unittest.TestCase):
             PyObject *ir_obj_right = NULL;
             right = IR_VIEW(IR_C(ir_word));
             left = IR_VIEW(IR_B(ir_word));
+            if (PyValue_IsNull(left)) {
+                if (IR_IS_LOCAL(IR_B(ir_word))) {
+                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
+                }
+                else {
+                    PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                }
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (PyValue_IsNull(right)) {
+                if (IR_IS_LOCAL(IR_C(ir_word))) {
+                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_C(ir_word));
+                }
+                else {
+                    PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                }
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
                 frame->phase_state = 0;
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
@@ -2521,7 +2541,17 @@ class TestIRCases(unittest.TestCase):
             PyValue *args;
             PyValue res;
             args = &window[1];
-            callable = window[0];
+            callable = _PyFrame_ReadHome(frame, &window[0]);
+            if (PyValue_IsNull(callable)) {
+                PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (!_PyFrame_RangeIsPresent(frame, args, oparg)) {
+                PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
             IR_PUBLISH_TEMP(window[0], res);
@@ -2782,6 +2812,16 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(owner)) {
+                    if (IR_IS_LOCAL(IR_B(ir_word))) {
+                        _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
+                    }
+                    else {
+                        PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                    }
+                    frame->phase_state = 0;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
                     frame->phase_state = 0;
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
@@ -2831,6 +2871,16 @@ class TestIRCases(unittest.TestCase):
             // _GUARD
             {
                 owner = IR_VIEW(IR_B(ir_word));
+                if (PyValue_IsNull(owner)) {
+                    if (IR_IS_LOCAL(IR_B(ir_word))) {
+                        _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), IR_B(ir_word));
+                    }
+                    else {
+                        PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                    }
+                    frame->phase_state = 0;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(OP);
@@ -2899,15 +2949,25 @@ class TestIRCases(unittest.TestCase):
             PyValue left;
             PyValue right;
             PyValue res;
-            right = IR_SLOT(IR_C(ir_word));
-            left = IR_SLOT(IR_B(ir_word));
+            right = _PyFrame_ReadHome(frame, &IR_SLOT(IR_C(ir_word)));
+            left = _PyFrame_ReadHome(frame, &IR_SLOT(IR_B(ir_word)));
+            if (PyValue_IsNull(left)) {
+                PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (PyValue_IsNull(right)) {
+                PyErr_SetString(PyExc_SystemError, "code reads an absent required input");
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
-            _PyFrame_WriteHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;

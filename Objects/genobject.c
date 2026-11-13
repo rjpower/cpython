@@ -1252,6 +1252,15 @@ static PyObject *
 gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
                       PyObject *name, PyObject *qualname)
 {
+    /* These public stealing constructors require independently owned frame
+     * storage; an associated live thread/generator frame cannot be moved. */
+    if (f->f_frame->owner != FRAME_OWNED_BY_FRAME_OBJECT ||
+        f->f_frame != (_PyInterpreterFrame *)f->_f_frame_data)
+    {
+        PyErr_SetString(PyExc_ValueError, "generator construction requires an owned frame");
+        Py_DECREF(f);
+        return NULL;
+    }
     PyCodeObject *code = _PyFrame_GetCode(f->f_frame);
     int size = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(
@@ -1274,21 +1283,35 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
         }
     }
     /* Copy the frame */
-    assert(f->f_frame->frame_obj == NULL);
-    assert(f->f_frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
+    int copied = 0;
     Py_BEGIN_CRITICAL_SECTION(f);
+    if (f->f_frame->owner != FRAME_OWNED_BY_FRAME_OBJECT ||
+        f->f_frame != (_PyInterpreterFrame *)f->_f_frame_data)
+    {
+        PyErr_SetString(PyExc_ValueError, "generator construction requires an owned frame");
+        goto copy_done;
+    }
+    assert(f->f_frame->frame_obj == NULL);
+    _PyIRHomeView copy_view;
+    _PyIRHomeAuthority copy_authority =
+        _PyFrame_GetHomeView(f->f_frame, &copy_view);
+    if (copy_authority != _PyIR_HOME_MUST_READABLE) {
+        PyErr_SetString(PyExc_ValueError, "frame has no protected copy view");
+        goto copy_done;
+    }
     /* Like RETURN_GENERATOR, discard the first None input instead of using
      * the ordinary frame initializer's default slot zero. */
     f->f_frame->return_slot = IR_NO_DST;
-    _PyIRHomeView copy_view;
-    _PyIRHomeAuthority copy_authority =
-        _PyFrame_GetCopyViewUnderNullControl(f->f_frame, &copy_view);
     _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame,
                   &copy_view, copy_authority);
     gen->gi_frame_state = FRAME_CREATED;
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
+    if (copy_view.kind == _PyIR_HOME_VIEW_PRESENCE) {
+        copy_view.presence = frame->presence_bits;
+        copy_view.first_bit = ((uintptr_t)frame->base >> 3) & 63;
+    }
     f->f_capture = copy_view;
     f->f_capture_authority = (uint8_t)copy_authority;
     assert(frame->phase_state == 0 ||
@@ -1313,7 +1336,15 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
         gen->gi_qualname = Py_NewRef(_PyGen_GetCode(gen)->co_qualname);
     f->f_frame = frame;
     _PyObject_GC_TRACK(gen);
+    copied = 1;
+copy_done:;
     Py_END_CRITICAL_SECTION();
+    if (!copied) {
+        Py_XDECREF(origin);
+        PyObject_GC_Del(gen);
+        Py_DECREF(f);
+        return NULL;
+    }
     Py_DECREF(f);
     return (PyObject *)gen;
 }

@@ -4229,9 +4229,9 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     init_frame(tstate, (_PyInterpreterFrame *)f->_f_frame_data, func, locals);
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
-    _PyFrame_GetNullControlHomeView(f->f_frame,
-                                   _PyFrame_NumSlots(f->f_frame), &f->f_capture);
-    f->f_capture_authority = _PyIR_HOME_NULL_CONTROL_READABLE;
+    _PyFrame_GetPresenceHomeView(f->f_frame,
+                                 _PyFrame_NumSlots(f->f_frame), &f->f_capture);
+    f->f_capture_authority = _PyIR_HOME_MUST_READABLE;
     f->f_frame->phase_state = _PyIR_PHASE_CAPTURED;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
     f->f_frame->instr_ptr = f->f_frame->ir_words + code->_co_firsttraceable + 1;

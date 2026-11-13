@@ -9,6 +9,23 @@
 #include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
+/* This is an actual dynamic readability provider, not a static plan proof.
+ * The caller owns the allocation and supplies its live ownership extent. */
+void
+_PyFrame_GetPresenceHomeView(_PyInterpreterFrame *frame, int remaining,
+                            _PyIRHomeView *view)
+{
+    int nl = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
+    *view = (_PyIRHomeView){
+        .nbindings = (uint16_t)nl,
+        .scratch_limit = (uint16_t)Py_MAX(remaining - nl, 0),
+        .kind = _PyIR_HOME_VIEW_PRESENCE,
+        .first_bit = ((uintptr_t)frame->base >> 3) & 63,
+        .presence = frame->presence_bits,
+    };
+}
+
 _PyIRHomeAuthority
 _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
 {
@@ -30,8 +47,7 @@ _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
             return _PyIR_HOME_NONE;
         }
         if (f == NULL || f->f_frame != frame ||
-            (f->f_capture_authority != _PyIR_HOME_MUST_READABLE &&
-             f->f_capture_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
+            f->f_capture_authority != _PyIR_HOME_MUST_READABLE)
         {
             return _PyIR_HOME_NONE;
         }
@@ -57,49 +73,46 @@ _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
         *view = (_PyIRHomeView){.nbindings = (uint16_t)code->co_nlocalsplus};
         return _PyIR_HOME_MUST_READABLE;
     }
-    return _PyIR_GetFrameHomeView(frame, view);
-}
-
-void
-_PyFrame_GetNullControlHomeView(_PyInterpreterFrame *frame, int remaining,
-                               _PyIRHomeView *view)
-{
-    static const _PyIRPhaseRange all_scratch = {
-        .begin = 0, .end = IR_MAX_SLOTS, .flags = _PyIR_PHASE_RANGE_NULLABLE};
-    int nl = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
-    *view = (_PyIRHomeView){
-        .nbindings = (uint16_t)nl,
-        .scratch_limit = (uint16_t)Py_MAX(remaining - nl, 0),
-        .nranges = remaining > nl,
-        .ranges = &all_scratch,
-    };
-}
-
-/* This development adapter is explicit: candidate/unsupported phases still
- * rely on the initialized NULL control, not on a must-readable static proof. */
-_PyIRHomeAuthority
-_PyFrame_GetCopyViewUnderNullControl(_PyInterpreterFrame *frame,
-                                    _PyIRHomeView *view)
-{
-    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(frame, view);
-    if (authority == _PyIR_HOME_MUST_READABLE ||
-        authority == _PyIR_HOME_NULL_CONTROL_READABLE)
-    {
-        return authority;
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return _PyIR_HOME_NONE;
     }
-    _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), view);
-    return _PyIR_HOME_NULL_CONTROL_READABLE;
+    int remaining = _PyFrame_NumSlots(frame);
+    if (frame->owner == FRAME_OWNED_BY_THREAD) {
+        /* Presence alone cannot distinguish a waiting caller from the child
+         * that now owns its shared suffix. Foreign generic queries need an
+         * explicit protected extent; they cannot guess full-frame ownership. */
+        _PyInterpreterFrame *child = NULL;
+        _PyInterpreterFrame *active = _PyThreadState_GET()->current_frame;
+        while (active != NULL && active != frame) {
+            child = active;
+            active = active->previous;
+        }
+        if (active == NULL) {
+            return _PyIR_HOME_NONE;
+        }
+        if (child != NULL && child->owner == FRAME_OWNED_BY_THREAD) {
+            uintptr_t base = (uintptr_t)frame->base;
+            uintptr_t cut = (uintptr_t)child->base;
+            uintptr_t end = base + (size_t)remaining * sizeof(PyValue);
+            if (base < cut && cut < end) {
+                remaining = (int)((cut - base) / sizeof(PyValue));
+                assert(remaining >= _PyFrame_GetCode(frame)->co_nlocalsplus);
+            }
+        }
+    }
+    _PyFrame_GetPresenceHomeView(frame, remaining, view);
+    return _PyIR_HOME_MUST_READABLE;
 }
 
 static Py_NO_INLINE void
 copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
     _PyIRHomeView view;
-    _PyIRHomeAuthority authority =
-        _PyFrame_GetCopyViewUnderNullControl(src, &view);
+    /* This reached marker still owns the complete current source extent. */
+    assert(_PyThreadState_GET()->current_frame == src);
+    _PyFrame_GetPresenceHomeView(src, _PyFrame_NumSlots(src), &view);
     src->instr_ptr++;
-    _PyFrame_Copy(src, dest, &view, authority);
+    _PyFrame_Copy(src, dest, &view, _PyIR_HOME_MUST_READABLE);
 }
 
 /* Only the actual RETURN_GENERATOR marker calls this entry. The whole-image
@@ -225,12 +238,13 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
     if (authority == _PyIR_HOME_NONE) {
         assert(roots->remaining == 0 && roots->homes == NULL);
         assert(_PyFrame_GetCode(frame)->co_nlocalsplus == 0);
-        _PyFrame_GetNullControlHomeView(frame, 0, &view);
-        authority = _PyIR_HOME_NULL_CONTROL_READABLE;
+        _PyFrame_GetPresenceHomeView(frame, 0, &view);
+        authority = _PyIR_HOME_MUST_READABLE;
     }
-    else if (authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+    else if (authority == _PyIR_HOME_FRAME_PRESENCE) {
         assert(roots->homes == NULL);
-        _PyFrame_GetNullControlHomeView(frame, roots->remaining, &view);
+        _PyFrame_GetPresenceHomeView(frame, roots->remaining, &view);
+        authority = _PyIR_HOME_MUST_READABLE;
     }
     else {
         assert(authority == _PyIR_HOME_MUST_READABLE);
@@ -250,6 +264,10 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
         (roots->header_mask & _Py_TRANSITION_EXCEPTION);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
+    if (view.kind == _PyIR_HOME_VIEW_PRESENCE) {
+        view.presence = new_frame->presence_bits;
+        view.first_bit = ((uintptr_t)new_frame->base >> 3) & 63;
+    }
     f->f_capture = view;
     f->f_capture_authority = (uint8_t)authority;
     assert(new_frame->phase_state == 0 ||
@@ -325,9 +343,9 @@ check_frame_extent(_PyInterpreterFrame *frame, int extent)
                 "malformed value 0x%" PRIx64 " in slot %d",
                 (uint64_t)_PyValue_Word(*sp), (int)(sp - frame->base));
         }
-        if (PyValue_RefcountOnObject(*sp) != _PyFrame_HomeOwnsCount(frame, sp)) {
+        if (!PyValue_IsNull(*sp) != _PyFrame_HomeIsPresent(frame, sp)) {
             _Py_FatalErrorFormat(__func__,
-                "counted-home bitmap mismatch in slot %d",
+                "present-home bitmap mismatch in slot %d",
                 (int)(sp - frame->base));
         }
     }
@@ -354,10 +372,8 @@ clear_slots(_PyInterpreterFrame *frame, int n)
 #endif
     int end = n;
     while (end > 0) {
-        int owner = _PyFrame_PreviousCountedHome(frame, 0, end);
-        while (end > owner + 1) {
-            frame->base[--end] = PyValue_NULL;
-        }
+        int owner = _PyFrame_PreviousPresentHome(frame, 0, end);
+        end = owner < 0 ? 0 : owner;
         if (owner >= 0) {
             end = owner;
             PyValue ref = _PyFrame_TakeHome(frame, frame->base + owner);
@@ -391,11 +407,9 @@ try_clear_except_code(_PyInterpreterFrame *frame, int remaining)
     check_frame_extent(frame, remaining);
 #endif
     while (remaining > 0) {
-        int owner = _PyFrame_PreviousCountedHome(frame, 0, remaining);
-        while (remaining > owner + 1) {
-            frame->base[--remaining] = PyValue_NULL;
-        }
+        int owner = _PyFrame_PreviousPresentHome(frame, 0, remaining);
         if (owner < 0) {
+            remaining = 0;
             break;
         }
         PyValue ref = frame->base[owner];
@@ -450,7 +464,7 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, int initial_exten
     *roots = (_PyTransitionRoots){
         .frame = frame,
         .remaining = remaining,
-        .home_authority = remaining ? _PyIR_HOME_NULL_CONTROL_READABLE
+        .home_authority = remaining ? _PyIR_HOME_FRAME_PRESENCE
                                     : _PyIR_HOME_NONE,
         .header_mask = _Py_TRANSITION_CODE |
             (frame->owner == FRAME_OWNED_BY_GENERATOR
@@ -483,10 +497,8 @@ _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
         Py_DECREF(f);
     }
     while (roots->remaining > 0) {
-        int owner = _PyFrame_PreviousCountedHome(frame, 0, roots->remaining);
-        while (roots->remaining > owner + 1) {
-            frame->base[--roots->remaining] = PyValue_NULL;
-        }
+        int owner = _PyFrame_PreviousPresentHome(frame, 0, roots->remaining);
+        roots->remaining = owner < 0 ? 0 : owner;
         if (owner >= 0) {
             roots->remaining = owner;
             PyValue ref = _PyFrame_TakeHome(frame, frame->base + owner);

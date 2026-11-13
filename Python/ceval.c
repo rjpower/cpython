@@ -2375,7 +2375,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.f_executable = NULL;
     entry->frame.f_funcobj = NULL;
     entry->frame.base = entry->frame.owned_slots;
-    entry->frame.owner_bits = NULL; /* Native entry homes have no arena bits. */
+    entry->frame.presence_bits = NULL; /* Native entry homes have no arena bits. */
     /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
@@ -3366,7 +3366,7 @@ stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     *staged = (_PyTransitionRoots){
         .frame = frame,
         .remaining = _PyFrame_NumSlots(frame),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+        .home_authority = _PyIR_HOME_FRAME_PRESENCE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         /* A custom evaluator may install nullable headers before handoff. */
         .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
@@ -3578,7 +3578,7 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
     _PyTransitionRoots shim_roots = {
         .frame = shim,
         .remaining = _PyFrame_NumSlots(shim),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+        .home_authority = _PyIR_HOME_FRAME_PRESENCE,
         .header_mask = _Py_TRANSITION_CODE,
         .kind = _Py_TRANSITION_KIND_STAGED,
         .caller_staged = 1,
@@ -4516,8 +4516,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     assert(sp <= frame->base + _PyFrame_NumSlots(frame));
     _PyTransitionPrefix prefix = {
         .base = sp - capacity,
-        .owner_bits = _PyHomeBitmap_Word(
-            frame->owner_bits, frame->base, sp - capacity),
         .capacity = capacity,
         .begin = capacity,
         .end = capacity,
@@ -4561,7 +4559,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        _PyFrame_WriteHome(frame, --sp, step.value);
+        *--sp = step.value;
         prefix.begin--;
         _PyValue_CheckTemp(*sp);
     }
@@ -4596,7 +4594,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     l = _PyValue_SequenceList(PyValue_FromObjectBorrow(it));
     if (l == NULL)
         goto Error;
-    _PyFrame_WriteHome(frame, --sp, PyValue_FromObjectSteal(l));
+    *--sp = PyValue_FromObjectSteal(l);
     prefix.begin--;
     i++;
 
@@ -4610,7 +4608,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
 
     /* Pop the "after-variable" args off the list. */
     for (j = argcntafter; j > 0; j--, i++) {
-        _PyFrame_WriteHome(frame, --sp, _PyList_ITEMS(l)[ll - j]);
+        *--sp = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
         prefix.begin--;
     }
@@ -4632,8 +4630,12 @@ Error:
 Done:
     Py_XDECREF(it);
     Py_DECREF(v);
-    /* Cleanup may reenter while outputs still belong to this prefix. Hand
-     * them back to the initialized/NULL frame without an intervening call. */
+    /* Installed values are external prefix owners until cleanup completes.
+     * Publish their frame authority before disarming, without a callback. */
+    for (int home = prefix.begin; home < prefix.end; home++) {
+        _PyFrame_SetHomeBit(frame, prefix.base + home,
+                           !PyValue_IsNull(prefix.base[home]));
+    }
     prefix.begin = prefix.end;
     _PyThreadState_PopTransitionRoots(tstate, &roots);
     return result;

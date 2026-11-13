@@ -77,20 +77,22 @@ visit_transition_value(PyValue value, visitproc visit, void *arg)
 }
 
 #ifndef Py_GIL_DISABLED
-/* Counted bits authorize these object reads independently of logical value
- * maps. No-count objects remain the immortal-root pass's responsibility. */
+/* Positive frame presence authorizes classification independently of static
+ * maps. This root mode retains its existing counted-edge policy. */
 static int
-visit_counted_home_range(uint64_t *owner_bits, const PyValue *base,
+visit_counted_home_range(uint64_t *presence_bits, const PyValue *base,
                          int begin, int end, visitproc visit, void *arg)
 {
-    for (int i = _PyHomeBitmap_NextCountedHome(owner_bits, base, begin, end);
+    for (int i = _PyHomeBitmap_NextPresentHome(presence_bits, base, begin, end);
          i < end;
-         i = _PyHomeBitmap_NextCountedHome(owner_bits, base, i + 1, end))
+         i = _PyHomeBitmap_NextPresentHome(presence_bits, base, i + 1, end))
     {
         PyValue value = base[i];
-        assert(PyValue_IsObject(value) && PyValue_RefcountOnObject(value));
-        _PyValue_RecheckHome(value);
-        Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+        assert(!PyValue_IsNull(value));
+        if (PyValue_IsObject(value) && PyValue_RefcountOnObject(value)) {
+            _PyValue_RecheckHome(value);
+            Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+        }
     }
     return 0;
 }
@@ -106,13 +108,14 @@ visit_transition_home_range(_PyInterpreterFrame *frame, int begin, int end,
         if (frame->owner == FRAME_OWNED_BY_THREAD) {
             return 0;
         }
-        return visit_counted_home_range(frame->owner_bits, frame->base,
+        return visit_counted_home_range(frame->presence_bits, frame->base,
                                         begin, end, visit, arg);
     }
 #else
     assert(!counted);
 #endif
-    for (int i = begin; i < end; i++) {
+    for (int i = _PyFrame_NextPresentHome(frame, begin, end); i < end;
+         i = _PyFrame_NextPresentHome(frame, i + 1, end)) {
         int err = visit_transition_value(frame->base[i], visit, arg);
         if (err) {
             return err;
@@ -120,25 +123,6 @@ visit_transition_home_range(_PyInterpreterFrame *frame, int begin, int end,
     }
     return 0;
 }
-
-#ifndef Py_GIL_DISABLED
-static int
-transition_prefix_is_arena(PyThreadState *tstate, const _PyTransitionPrefix *prefix)
-{
-    uintptr_t begin = (uintptr_t)prefix->base;
-    uintptr_t end = (uintptr_t)(prefix->base + prefix->end);
-    for (_PyStackChunk *chunk = tstate->datastack_chunk;
-         chunk != NULL; chunk = chunk->previous)
-    {
-        if (begin >= (uintptr_t)chunk->data && end <= (uintptr_t)chunk->owner_bits) {
-            assert(prefix->owner_bits == _PyHomeBitmap_Word(
-                chunk->owner_bits, _PyDataStack_Slots(chunk->data), prefix->base));
-            return 1;
-        }
-    }
-    return 0;
-}
-#endif
 
 static int
 visit_transition_roots(PyThreadState *tstate, visitproc visit, void *arg,
@@ -163,7 +147,7 @@ visit_transition_roots(PyThreadState *tstate, visitproc visit, void *arg,
             assert(roots->remaining == 0);
             assert(roots->home_authority == _PyIR_HOME_NONE);
         }
-        else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+        else if (roots->home_authority == _PyIR_HOME_FRAME_PRESENCE) {
             assert(roots->homes == NULL);
             int err = visit_transition_home_range(
                 frame, 0, roots->remaining, counted, visit, arg);
@@ -221,21 +205,14 @@ visit_transition_roots(PyThreadState *tstate, visitproc visit, void *arg,
         if (prefix != NULL) {
             assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
             assert(prefix->end <= prefix->capacity);
-#ifndef Py_GIL_DISABLED
-            if (counted && prefix->owner_bits != NULL) {
-                if (!transition_prefix_is_arena(tstate, prefix)) {
-                    int err = visit_counted_home_range(
-                        prefix->owner_bits, prefix->base, prefix->begin,
-                        prefix->end, visit, arg);
-                    if (err) {
-                        return err;
-                    }
-                }
-                continue;
-            }
-#endif
+            /* Pending prefix values are external owners even when their
+             * storage is in an arena. Their frame presence bits are clear. */
             for (int i = prefix->begin; i < prefix->end; i++) {
-                int err = visit_transition_value(prefix->base[i], visit, arg);
+                PyValue value = prefix->base[i];
+                if (counted && !PyValue_RefcountOnObject(value)) {
+                    continue;
+                }
+                int err = visit_transition_value(value, visit, arg);
                 if (err) {
                     return err;
                 }
@@ -1217,23 +1194,10 @@ scan_thread_struct(trace_t *t, PyThreadState *p)
 {
     scan_struct_except(t, p, sizeof(_PyThreadStateImpl),
                        &((_PyThreadStateImpl *)p)->asyncio_tasks_head);
-    /* The data stack.  A frame that is returning is unlinked from
-     * current_frame before its slots are cleared, and a finalizer that
-     * clearing a slot triggers can collect while the later slots still
-     * hold their objects.  The current chunk holds slots up to
-     * datastack_top and frame headers from datastack_limit; earlier
-     * chunks are scanned whole. */
-    _PyStackChunk *chunk = p->datastack_chunk;
-    if (chunk == NULL) {
-        return;
-    }
-    uintptr_t end = (uintptr_t)chunk + chunk->size;
-    scan_range(t, (uintptr_t)&chunk->data[0], (uintptr_t)p->datastack_top);
-    scan_range(t, (uintptr_t)p->datastack_limit, end);
-    for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
-        scan_range(t, (uintptr_t)&chunk->data[0],
-                   (uintptr_t)chunk + chunk->size);
-    }
+    /* Arena homes use the FRAMES presence walk, including staged and retiring
+     * reservations. STRUCTS does not provide an alternate arena scan; turning
+     * FRAMES off intentionally omits that root class. Native stack/register
+     * and PyMem conservative discovery remain separate policies. */
 }
 
 static void
@@ -1264,9 +1228,9 @@ trace_visit_arena_owners(PyThreadState *p, visitproc visit, void *arg)
          chunk != NULL; chunk = chunk->previous)
     {
         const PyValue *base = _PyDataStack_Slots(chunk->data);
-        int end = (int)(((uintptr_t)chunk->owner_bits - (uintptr_t)base) /
+        int end = (int)(((uintptr_t)chunk->presence_bits - (uintptr_t)base) /
                         sizeof(PyValue));
-        int err = visit_counted_home_range(chunk->owner_bits, base, 0, end,
+        int err = visit_counted_home_range(chunk->presence_bits, base, 0, end,
                                            visit, arg);
         if (err) {
             return err;
@@ -1302,7 +1266,7 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         Py_VISIT(f->f_funcobj);
         Py_VISIT(f->f_executable);
         if (f->owner != FRAME_OWNED_BY_THREAD) {
-            err = visit_counted_home_range(f->owner_bits, f->base, 0,
+            err = visit_counted_home_range(f->presence_bits, f->base, 0,
                                            _PyFrame_NumSlots(f), visit, arg);
             if (err) {
                 return err;

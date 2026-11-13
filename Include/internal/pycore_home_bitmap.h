@@ -9,8 +9,9 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_value.h"
 
-/* Counted physical edges only. Bits never establish value initialization,
- * language boundness, or the presence of a deferred/no-count object. */
+/* Canonical non-NULL frame-owned homes. A positive bit authorizes a value
+ * load; zero only authorizes NULL synthesis by an absence-aware consumer.
+ * Named-local boundness and execution/protocol reads have separate contracts. */
 static_assert(sizeof(PyValue) == sizeof(uint64_t), "bitmap cells are eight bytes");
 
 static inline size_t
@@ -37,8 +38,8 @@ static inline void
 _PyFrame_BindChunkBitmap(_PyInterpreterFrame *frame, _PyStackChunk *chunk,
                          PyValue *base)
 {
-    frame->owner_bits = _PyHomeBitmap_Word(
-        chunk->owner_bits, (const PyValue *)chunk->data, base);
+    frame->presence_bits = _PyHomeBitmap_Word(
+        chunk->presence_bits, (const PyValue *)chunk->data, base);
 }
 
 static inline uint64_t
@@ -58,34 +59,34 @@ _PyHomeBitmap_InitStorage(PyValue *base, int nslots)
 static inline void
 _PyFrame_InitHeapBitmap(_PyInterpreterFrame *frame, int nslots)
 {
-    frame->owner_bits = _PyHomeBitmap_InitStorage(frame->owned_slots, nslots);
+    frame->presence_bits = _PyHomeBitmap_InitStorage(frame->owned_slots, nslots);
 }
 
 static inline uint64_t *
 _PyFrame_BitmapWord(_PyInterpreterFrame *frame, const PyValue *home)
 {
-    assert(frame->owner_bits != NULL);
+    assert(frame->presence_bits != NULL);
     assert(home >= frame->base);
-    return _PyHomeBitmap_Word(frame->owner_bits, frame->base, home);
+    return _PyHomeBitmap_Word(frame->presence_bits, frame->base, home);
 }
 
 static inline int
-_PyFrame_HomeOwnsCount(_PyInterpreterFrame *frame, const PyValue *home)
+_PyFrame_HomeIsPresent(_PyInterpreterFrame *frame, const PyValue *home)
 {
     uint64_t *word = _PyFrame_BitmapWord(frame, home);
     return (FT_ATOMIC_LOAD_UINT64_RELAXED(*word) & _PyHomeBitmap_Mask(home)) != 0;
 }
 
 static inline void
-_PyFrame_SetHomeBit(_PyInterpreterFrame *frame, const PyValue *home, int counted)
+_PyFrame_SetHomeBit(_PyInterpreterFrame *frame, const PyValue *home, int present)
 {
     uint64_t *word = _PyFrame_BitmapWord(frame, home);
     uint64_t mask = _PyHomeBitmap_Mask(home);
     uint64_t old = FT_ATOMIC_LOAD_UINT64_RELAXED(*word);
-    if (((old & mask) != 0) == counted) {
+    if (((old & mask) != 0) == present) {
         return;
     }
-    if (counted) {
+    if (present) {
         FT_ATOMIC_OR_UINT64(*word, mask);
     }
     else {
@@ -99,7 +100,7 @@ static inline void
 _PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
 {
     *home = value;
-    _PyFrame_SetHomeBit(frame, home, PyValue_RefcountOnObject(value));
+    _PyFrame_SetHomeBit(frame, home, !PyValue_IsNull(value));
 }
 
 static inline PyValue
@@ -130,8 +131,35 @@ _PyHomeBitmap_HighBit(uint64_t word)
     return high ? 31 + _Py_bit_length(high) : _Py_bit_length((uint32_t)word) - 1;
 }
 
+/* The view carries the physical first bit without retaining a home pointer. */
 static inline int
-_PyHomeBitmap_NextCountedHome(uint64_t *owner_bits, const PyValue *base,
+_PyHomeBitmap_NextBit(const uint64_t *bits, unsigned int first,
+                      int begin, int end, int present)
+{
+    while (begin < end) {
+        unsigned int position = first + begin;
+        unsigned int bit = position & 63;
+        int width = Py_MIN(64 - bit, (unsigned int)(end - begin));
+        uint64_t mask = UINT64_MAX << bit;
+        if (width < 64 - bit) {
+            mask &= (UINT64_C(1) << (bit + width)) - 1;
+        }
+        uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(bits[position / 64]);
+        if (!present) {
+            word = ~word;
+        }
+        word &= mask;
+        if (word) {
+            unsigned int low = _PyHomeBitmap_HighBit(word & (UINT64_C(0) - word));
+            return begin + low - bit;
+        }
+        begin += width;
+    }
+    return end;
+}
+
+static inline int
+_PyHomeBitmap_NextPresentHome(uint64_t *presence_bits, const PyValue *base,
                              int begin, int end)
 {
     while (begin < end) {
@@ -143,7 +171,7 @@ _PyHomeBitmap_NextCountedHome(uint64_t *owner_bits, const PyValue *base,
             mask &= (UINT64_C(1) << (bit + width)) - 1;
         }
         uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(
-            *_PyHomeBitmap_Word(owner_bits, base, home)) & mask;
+            *_PyHomeBitmap_Word(presence_bits, base, home)) & mask;
         if (word) {
             unsigned int low = _PyHomeBitmap_HighBit(word & (UINT64_C(0) - word));
             return begin + low - bit;
@@ -154,7 +182,7 @@ _PyHomeBitmap_NextCountedHome(uint64_t *owner_bits, const PyValue *base,
 }
 
 static inline int
-_PyHomeBitmap_PreviousCountedHome(uint64_t *owner_bits, const PyValue *base,
+_PyHomeBitmap_PreviousPresentHome(uint64_t *presence_bits, const PyValue *base,
                                  int begin, int end)
 {
     while (end > begin) {
@@ -166,7 +194,7 @@ _PyHomeBitmap_PreviousCountedHome(uint64_t *owner_bits, const PyValue *base,
             mask &= UINT64_MAX << (bit + 1 - width);
         }
         uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(
-            *_PyHomeBitmap_Word(owner_bits, base, home)) & mask;
+            *_PyHomeBitmap_Word(presence_bits, base, home)) & mask;
         if (word) {
             return end - 1 - bit + _PyHomeBitmap_HighBit(word);
         }
@@ -176,17 +204,17 @@ _PyHomeBitmap_PreviousCountedHome(uint64_t *owner_bits, const PyValue *base,
 }
 
 static inline int
-_PyFrame_NextCountedHome(_PyInterpreterFrame *frame, int begin, int end)
+_PyFrame_NextPresentHome(_PyInterpreterFrame *frame, int begin, int end)
 {
-    assert(frame->owner_bits != NULL);
-    return _PyHomeBitmap_NextCountedHome(frame->owner_bits, frame->base, begin, end);
+    assert(frame->presence_bits != NULL);
+    return _PyHomeBitmap_NextPresentHome(frame->presence_bits, frame->base, begin, end);
 }
 
 static inline int
-_PyFrame_PreviousCountedHome(_PyInterpreterFrame *frame, int begin, int end)
+_PyFrame_PreviousPresentHome(_PyInterpreterFrame *frame, int begin, int end)
 {
-    assert(frame->owner_bits != NULL);
-    return _PyHomeBitmap_PreviousCountedHome(frame->owner_bits, frame->base, begin, end);
+    assert(frame->presence_bits != NULL);
+    return _PyHomeBitmap_PreviousPresentHome(frame->presence_bits, frame->base, begin, end);
 }
 
 #endif

@@ -1374,8 +1374,8 @@ allocate_chunk(int size_in_bytes, _PyStackChunk* previous)
     res->initialized = &res->data[0];
     unsigned int first_bit = ((uintptr_t)res->data >> 3) & 63;
     size_t words = _PyStackChunk_BitmapWords(size_in_bytes, first_bit);
-    res->owner_bits = (uint64_t *)((char *)res + size_in_bytes) - words;
-    memset(res->owner_bits, 0, words * sizeof(uint64_t));
+    res->presence_bits = (uint64_t *)((char *)res + size_in_bytes) - words;
+    memset(res->presence_bits, 0, words * sizeof(uint64_t));
     return res;
 }
 
@@ -3111,7 +3111,7 @@ _PyInterpreterState_HasFeature(PyInterpreterState *interp, unsigned long feature
 static PyObject **
 chunk_frames_end(_PyStackChunk *chunk)
 {
-    return (PyObject **)chunk->owner_bits - 1;
+    return (PyObject **)chunk->presence_bits - 1;
 }
 
 /* The initialized hit stays inline; only newly exposed storage needs this
@@ -3148,7 +3148,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     }
     _PyStackChunk *new;
     if (tstate->datastack_cached_chunk != NULL &&
-        (size_t)((PyObject **)tstate->datastack_cached_chunk->owner_bits -
+        (size_t)((PyObject **)tstate->datastack_cached_chunk->presence_bits -
                  tstate->datastack_cached_chunk->data) >= needed_cells)
     {
         new = tstate->datastack_cached_chunk;

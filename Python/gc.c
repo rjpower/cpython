@@ -482,33 +482,22 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    if (frame->phase_state & _PyIR_PHASE_PUBLISHED) {
-        uint8_t status = _PyIR_ShadowFramePhase(frame);
-        frame->phase_state = (uint16_t)(
-            (frame->phase_state & ~_PyIR_PHASE_STATUS_MASK) |
-            (status << _PyIR_PHASE_STATUS_SHIFT));
-        assert(status != _PyIR_SHADOW_MISMATCH);
-    }
+    /* Only the owning heap container exposes these edges. A frame object
+     * associated with a live thread frame does not traverse that storage. */
+    assert(frame->owner == FRAME_OWNED_BY_GENERATOR ||
+           frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
     _PyIRHomeView view;
-    int selected = frame->phase_state == _PyIR_PHASE_CREATED &&
-        _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
     uint32_t cursor = 0;
-    int begin = 0, limit = _PyFrame_NumSlots(frame);
-    if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
-        return 0;
-    }
-    /* Other lifecycle states retain the initialized NULL-control scan. */
-    do {
-        PyValue *ref = _PyFrame_GetLocalsArray(frame) + begin;
-        PyValue *end = _PyFrame_GetLocalsArray(frame) + limit;
-        for (; ref < end; ref++) {
+    int begin, limit;
+    while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
+        for (PyValue *ref = frame->base + begin; ref < frame->base + limit; ref++) {
             if (!PyValue_IsTaggedIndex(*ref)) {
                 _PyValue_RecheckHome(*ref);
             }
             _Py_VISIT_VALUE(*ref);
         }
-    } while (selected &&
-             _PyFrame_NextHomeRange(&view, &cursor, &begin, &limit));
+    }
     return 0;
 }
 

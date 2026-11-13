@@ -61,7 +61,7 @@ typedef struct _stack_chunk {
     /* Cells below this frontier have defined values; inactive cells are NULL.
      * A frame header write truncates it before reusing that storage. */
     PyObject **initialized;
-    uint64_t *owner_bits; /* Coallocated bitmap tail; outside frame storage. */
+    uint64_t *presence_bits; /* Coallocated bitmap tail; outside frame storage. */
     PyObject * data[1]; /* Variable sized */
 } _PyStackChunk;
 

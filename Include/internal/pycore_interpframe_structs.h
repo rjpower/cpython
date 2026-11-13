@@ -74,7 +74,7 @@ struct _PyInterpreterFrame {
     /* Last reached publication, with phase ID/validity and shadow status.
      * Only a collector/suspended-state protocol establishes its validity. */
     uint16_t phase_state;
-    uint64_t *owner_bits; /* Physical counted-edge word covering base. */
+    uint64_t *presence_bits; /* Physical non-NULL frame-home word covering base. */
     /* The slots of a frame that owns them, which base then points to */
     PyValue owned_slots[1];
 };

@@ -452,9 +452,10 @@ typedef struct {
 typedef enum _PyIRHomeAuthority {
     _PyIR_HOME_NONE,
     _PyIR_HOME_SHADOW_CANDIDATE,
+    /* An already selected readable view, with either range or presence kind. */
     _PyIR_HOME_MUST_READABLE,
-    /* Explicit development adapter, never emitted by a code-plan builder. */
-    _PyIR_HOME_NULL_CONTROL_READABLE,
+    /* Resolve frame + remaining into a presence view; no homes descriptor. */
+    _PyIR_HOME_FRAME_PRESENCE,
 } _PyIRHomeAuthority;
 
 typedef struct {
@@ -574,11 +575,23 @@ PyAPI_FUNC(uint8_t) _PyIR_ShadowFramePhase(struct _PyInterpreterFrame *frame);
  * cell readability without join normalization/validity at the authority switch.
  * Bindings retain dynamic NULL authority. Borrow ranges only while independently
  * pinning code; this active view does not survive callbacks or transitions. */
+enum {
+    _PyIR_HOME_VIEW_RANGES = 0,
+    _PyIR_HOME_VIEW_PRESENCE = 1,
+};
+
 typedef struct {
     uint16_t nbindings, scratch_limit;
-    uint32_t nranges;
-    const _PyIRPhaseRange *ranges;
+    uint32_t nranges:24, kind:2, first_bit:6;
+    union {
+        const _PyIRPhaseRange *ranges;
+        const uint64_t *presence;
+    };
 } _PyIRHomeView;
+
+#if SIZEOF_VOID_P == 8
+static_assert(sizeof(_PyIRHomeView) == 16, "home views keep their cold size");
+#endif
 
 /* Returns NONE before reading homes if the active publication is not covered.
  * Candidate authority permits the NULL-shadow comparison only. MUST_READABLE

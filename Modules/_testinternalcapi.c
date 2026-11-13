@@ -4681,10 +4681,15 @@ dirty_frame_arena_free(void *context, void *memory, size_t size)
 }
 
 static void
-assert_frame_arena_null(_PyInterpreterFrame *frame, int count)
+assert_frame_arena_vacant(_PyInterpreterFrame *frame, int count)
 {
     for (int i = 0; i < count; i++) {
+#ifdef Py_GIL_DISABLED
         assert(PyValue_IsNull(frame->base[i]));
+#else
+        assert(!_PyFrame_HomeIsPresent(frame, frame->base + i));
+        assert(PyValue_IsNull(_PyFrame_ReadHome(frame, frame->base + i)));
+#endif
     }
 }
 
@@ -4693,6 +4698,14 @@ assert_frame_arena_null(_PyInterpreterFrame *frame, int count)
 static PyObject *
 test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
+    PyObject *compiled = Py_CompileString("lambda value: value",
+                                        "<frame arena binding>", Py_eval_input);
+    if (compiled == NULL) {
+        return NULL;
+    }
+    PyCodeObject *bindings = (PyCodeObject *)PyTuple_GET_ITEM(
+        ((PyCodeObject *)compiled)->co_consts, 0);
+    assert(PyCode_Check(bindings) && bindings->co_nlocalsplus == 1);
     PyThreadState state = {0};
     DirtyFrameArena arena = {0};
     PyObject_GetArenaAllocator(&arena.original);
@@ -4704,10 +4717,29 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
         &state, FRAME_SPECIALS_SIZE + 1);
     PyObject_SetArenaAllocator(&arena.original);
     if (frame == NULL) {
+        Py_DECREF(compiled);
         return PyErr_NoMemory();
     }
     assert(arena.allocations == 1);
-    assert_frame_arena_null(frame, 1);
+    assert_frame_arena_vacant(frame, 1);
+#ifndef Py_GIL_DISABLED
+    unsigned char poison[sizeof(PyValue)];
+    memset(poison, 0xa5, sizeof(poison));
+    assert(memcmp(frame->base, poison, sizeof(poison)) == 0);
+#endif
+    PyValue value = PyValue_FromInlineInt(42);
+    _PyFrame_WriteHome(frame, frame->base, value);
+    assert(_PyFrame_HomeIsPresent(frame, frame->base));
+    assert(PyValue_Is(_PyFrame_ReadHome(frame, frame->base), value));
+    PyValue taken = _PyFrame_TakeKnownHome(frame, frame->base, PyValue_Borrow(value));
+    assert(PyValue_Is(taken, value));
+    PyValue_XCLOSE(taken);
+    assert_frame_arena_vacant(frame, 1);
+#ifndef Py_GIL_DISABLED
+    assert(memcmp(frame->base, &value, sizeof(value)) == 0);
+#endif
+    _PyFrame_InitializeBindings(frame, bindings, 0);
+    assert(PyValue_IsNull(frame->base[0]));
     _PyThreadState_PopFrame(&state, frame);
 
     _PyStackChunk *root = state.datastack_chunk;
@@ -4715,23 +4747,34 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
                 FRAME_SPECIALS_SIZE - 1;
     assert(_PyThreadState_HasStackSpace(&state, large + FRAME_SPECIALS_SIZE));
     frame = _PyThreadState_PushFrameUnchecked(&state, large);
-    assert_frame_arena_null(frame, large);
+    assert_frame_arena_vacant(frame, large);
+    PyValue *large_end = frame->base + large;
+    (void)large_end;
     _PyThreadState_PopFrame(&state, frame);
+#ifdef Py_GIL_DISABLED
     PyObject **high = root->initialized;
+#endif
 
     _PyInterpreterFrame *headers[8];
     for (int i = 0; i < 8; i++) {
         assert(_PyThreadState_HasStackSpace(&state, FRAME_SPECIALS_SIZE + 1));
         headers[i] = _PyThreadState_PushFrameUnchecked(&state, 1);
-        assert_frame_arena_null(headers[i], 1);
+        assert_frame_arena_vacant(headers[i], 1);
     }
+#ifdef Py_GIL_DISABLED
     assert(root->initialized < high);
+#else
+    assert(state.datastack_limit < _PyDataStack_Address(large_end));
+#endif
     for (int i = 8; i-- > 0;) {
         _PyThreadState_PopFrame(&state, headers[i]);
     }
     frame = _PyThreadState_PushFrameUnchecked(&state, large);
-    assert_frame_arena_null(frame, large);
+    assert_frame_arena_vacant(frame, large);
+    assert(frame->base + large == large_end);
+#ifdef Py_GIL_DISABLED
     assert(root->initialized == _PyDataStack_Address(frame->base + large));
+#endif
     _PyThreadState_PopFrame(&state, frame);
 
     _PyInterpreterFrame *anchor = _PyThreadState_PushFrameUnchecked(&state, 1);
@@ -4747,12 +4790,13 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
             if (cached != NULL) {
                 arena.original.free(arena.original.ctx, cached, arena.sizes[1]);
             }
+            Py_DECREF(compiled);
             return PyErr_NoMemory();
         }
         if (repeat) {
             assert(state.datastack_chunk == cached);
         }
-        assert_frame_arena_null(frame, 2 * large);
+        assert_frame_arena_vacant(frame, 2 * large);
         _PyThreadState_PopFrame(&state, frame);
         assert(state.datastack_chunk == root);
     }
@@ -4762,6 +4806,7 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
     assert(arena.memory[0] == root && arena.memory[1] == cached);
     arena.original.free(arena.original.ctx, cached, arena.sizes[1]);
     arena.original.free(arena.original.ctx, root, arena.sizes[0]);
+    Py_DECREF(compiled);
     Py_RETURN_NONE;
 }
 

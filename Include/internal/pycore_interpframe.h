@@ -486,6 +486,7 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
               const _PyIRHomeView *view, _PyIRHomeAuthority authority)
 {
     int nslots = _PyFrame_NumSlots(src);
+    (void)nslots;  // GIL release uses only the selected view, not a tail fill.
     assert(authority == _PyIR_HOME_MUST_READABLE);
     assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
     assert(view->nbindings + view->scratch_limit <= nslots);

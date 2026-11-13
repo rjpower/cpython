@@ -3300,6 +3300,49 @@ class TestIRCases(unittest.TestCase):
                 self.analyze("\n" + source + "\n")
 
 
+    def test_execution_read_proofs_follow_current_c_values(self):
+        from ir_read_effects import error_nonnull_value, value_nonnull_changes
+
+        def changes(source):
+            return value_nonnull_changes(lexer.tokenize(source), {"value"},
+                                         {"value", "result"})
+
+        self.assertEqual(changes("result = value;"), {"result": True})
+        self.assertEqual(changes("result = PyValue_DUP(value);"), {"result": True})
+        self.assertEqual(changes("result = OWNER(value);"),
+                         {"value": False, "result": False})
+        self.assertEqual(changes("result = flag ? PyValue_True : PyValue_False;"),
+                         {"result": True})
+        self.assertEqual(changes("result = flag ? value : PyValue_NULL;"),
+                         {"result": False})
+        self.assertFalse(changes("result = (value = PyValue_NULL) ? value : PyValue_True;")["result"])
+        self.assertEqual(error_nonnull_value(lexer.tokenize("ERROR_IF(PyValue_IsNull(value));")),
+                         "value")
+        self.assertIsNone(error_nonnull_value(lexer.tokenize(
+            "ERROR_IF(flag && PyValue_IsNull(value));")))
+        for source in ("value = opaque();", "value = PyValue_NULL;",
+                       "value.bits &= 0;", "value++;", "opaque(&((value)));",
+                       "PyValue value;", "PyValue value = PyValue_None;",
+                       "PyValue_CLEAR(value);", "PyValue_XSETREF(value, PyValue_NULL);",
+                       "PyValue_CLOSE(value);"):
+            with self.subTest(source=source):
+                self.assertFalse(changes(source)["value"])
+
+        local = stack.Local.register("value")
+        local.nonnull = True
+        copied = local.copy()
+        copied.kill()
+        self.assertTrue(local.nonnull)
+        self.assertFalse(copied.nonnull)
+
+        left, right = stack.Stack(), stack.Stack()
+        left.variables = [local]
+        right.variables = [local.copy()]
+        right.variables[0].nonnull = False
+        left.merge(right, CWriter(io.StringIO(), 0, False))
+        self.assertFalse(left.variables[0].nonnull)
+
+
     def test_input_drain_lowers_through_actual_storage(self):
         output = self.ir_output("""
             inst(OP, (items[oparg] --)) {

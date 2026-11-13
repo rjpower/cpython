@@ -482,6 +482,7 @@ enum {
 #define _PyIR_PHASE_STATUS_SHIFT 9
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
 #define _PyIR_PHASE_CAPTURED (1u << 11)
+#define _PyIR_PHASE_CREATED (1u << 12)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;

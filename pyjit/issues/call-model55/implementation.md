@@ -1,5 +1,12 @@
 # Model55 implementation ledger
 
+Historical model55 execution ledger. The active work is now the
+[combined interpreter-performance plan](../interpreter-performance56/plan.md).
+Its [checkpoint report](../interpreter-performance56/report.md) and
+[project status](../../STATUS.md) own current selection and execution. The
+records below retain their actual source identities; unqualified components
+remain inputs to the new review.
+
 Status: active. The user authorized implementation of the reviewed M0–M7 plan,
 Sol high-effort workers and coordinator integration. The
 [plan](plan.md), [target design](../../design/proposals/register-call-model55.md)

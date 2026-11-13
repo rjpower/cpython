@@ -6,18 +6,14 @@ with the JIT disabled against matched immutable controls. Assess throughput,
 Python behavior and tooling separately; exact CPython display or destruction
 timing is not a performance gate.
 
-The [current report](../../issues/frame-state54/report.md) records five reviewed,
-implemented and measured register-state/frame-layout experiments, their revisions
-and compositions. None earns performance admission. A separate public-constructor
-correction is selected as a correctness checkpoint with explicit diagnostic
-limits. Round54 is closed. The [active plan](../../issues/call-model55/plan.md)
-and [proposed call model](../../design/proposals/register-call-model55.md)
-define a reviewed whole-lifecycle call/frame/register architecture, including
-a complete bitmap comparison. Research and independent post-review are complete;
-implementation is active; the [execution ledger](../../issues/call-model55/implementation.md)
-records coverage and measurements. [Status](../../STATUS.md) records actual
-selection, qualification and performance limits. Native method and tracing JIT
-tiers belong to later stages; owning bridges support incremental extension ports.
+The [active plan](../../issues/interpreter-performance56/plan.md) combines
+value transport, borrowing, calls/returns and specialization. Astra's broad
+review precedes implementation. The coordinator integrates reviewed increments
+and reports their native work and performance. [Status](../../STATUS.md) owns
+selection and qualification; selected54 remains golden. The
+[model55 report](../../issues/call-model55/report.md) retains previous results
+and pending source components. Native method and tracing JIT tiers belong to
+later stages.
 
 The durable contracts are [register IR](../../design/register-ir.md),
 [interpreter](../../design/interpreter.md), and

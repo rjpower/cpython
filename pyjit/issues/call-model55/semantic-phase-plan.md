@@ -187,9 +187,9 @@ checked input interface.
 
 ## Source attribution and observer recovery
 
-The frozen source component `6dccb599c17`, together with reader packet
-`486b406189d`, stores executable EH and observer recovery in IRSC1
-`co_exceptiontable`. IRSM2 `co_linetable` holds optional positions only. The
+Executable EH and observer recovery are code-owned in `co_exceptiontable`.
+IRSM2 `co_linetable` holds optional positions only. The retained-transfer source
+component `9c297510ac3` uses IRSC2; its combined native gate remains pending. The
 common worklist, runtime EH search and observer recovery use semantic rows even
 when the position array is empty. A missing position cannot suppress a real
 backedge trace; it supplies no replacement source-line event.
@@ -319,18 +319,23 @@ permanent fallback.
 
 ## Separating semantic recovery from optional positions
 
-The integrated source component has passed independent source review and native
-component qualification. It keeps the existing
-`co_exceptiontable` reference and existing code plan. The code pin retains both
-semantic and position bytes; add no code/frame pointer or side allocation.
+Position-independent recovery has passed native qualification. The IRSC2
+retained-transfer component is source-frozen and independently reviewed;
+combined generation and native qualification remain pending. It keeps the
+existing `co_exceptiontable` reference and existing code plan. The code pin
+retains semantic and position bytes; no new code-object or hot-frame pointer
+or separate plan allocation is added.
 
 The implemented byte grammar is:
 
 | Stored field | Representation | Meaning |
 | --- | --- | --- |
 | `co_exceptiontable == b""` | Shared canonical empty sentinel | No EH ranges or semantic recovery records; no allocation/header for the common empty case |
-| Nonempty `co_exceptiontable` | `IRSC`, little-endian u32 version 1, EH byte length, recovery count; then marked EH bytes and recovery rows | One semantic container, exact length `16 + eh_size + 24 * count` |
-| Recovery row | Six little-endian signed32 fields `(from, to, edge, handler, exc_slot, lasti)` | Existing physical edge and recovery tuple, independent of locations |
+| Nonempty `co_exceptiontable` | `IRSC`, little-endian u32 version 2, EH byte length, recovery count, transfer count and retained-range count; then the four sections | Exact length `24 + eh_size + 16 * (recovery_count + transfer_count) + 6 * range_count` |
+| Ordinary EH entry | Marked varints `(start, length, transfer)` | Protected words select the same transfer IDs as recovery rows |
+| Recovery row | Four little-endian signed32 fields `(from, to, edge, transfer)` | Stable physical edge and transfer ID; `-1` explicitly means no handler |
+| Transfer descriptor | Little-endian `(target32, first_range32, nranges32, exception16, lasti16)` | Explicit protocol homes; `IR_NO_DST` omits lasti |
+| Retained range | Little-endian `(begin16, end16, flags8, reserved8)` | Sorted, disjoint, coalesced scratch-relative membership; flags/reserved are zero |
 | Stored `co_linetable` | `IRSM`, little-endian u32 version 2, physical-location byte length, position count; then locations and position rows | Optional positions only, exact length `16 + locations_size + 16 * count` |
 | Position row | Four little-endian signed32 fields `(line, end_line, column, end_column)` | Dense index matches the semantic recovery row; count is either0 or the semantic count |
 
@@ -342,7 +347,7 @@ input and normalize to version 2. Codes with neither semantic kind retain the
 shared empty bytes object.
 
 Semantic row index is the stable edge ID. Preserve duplicate rows: two elided
-origins can have equal `(from,to,edge,handler,exc_slot,lasti)` but distinct ordered
+origins can have equal `(from,to,edge,transfer)` but distinct ordered
 observer occurrences. Do not sort, deduplicate or renumber semantic rows while
 stripping columns/lines. Compiler edge traversal and within-edge lexical order
 define IDs before optional locations are emitted. Remove the current
@@ -353,16 +358,17 @@ count 0. Physical compact-PC locations can normalize to NONE entries as today.
 
 Admit semantic geometry once: exact container length/overflow, marked sorted
 nonoverlapping EH ranges, bounded word sites/actual successors, edge 0/1,
-`handler == -1` with zero `exc_slot/lasti`, or a valid handler and canonical
-exception/optional-lasti scratch homes. Reuse current completion/observer
-retired-owner and virtual-kwargs proofs on those rows. Admit position geometry
+`transfer == -1` or a bounded transfer ID. Every descriptor has a valid target,
+explicit distinct exception/optional-lasti scratch homes, and sorted coalesced
+retained ranges that exclude those protocol homes. Reuse current
+completion/observer retired-owner and virtual-kwargs proofs on those rows. Admit position geometry
 separately: exact bytes, dense count 0-or-semantic-count, valid optional location
 fields and physical-word coverage. Position changes cannot add an exceptional
 predecessor, supply an owner fact or remove a failed semantic validation.
 
 Use the existing `pycore_ir_exception.h` for `_PyIRSemanticMap` (EH slice plus
-recovery slice/count), `_PyIRRecoveryEvent`, and the single bounded C container
-decoder. `_PyIR_ExceptionNext` continues to decode only the admitted EH slice.
+recovery, transfer and retained-range slices/counts), `_PyIRRecoveryEvent`, and
+the single bounded C container decoder. `_PyIR_ExceptionNext` continues to decode only the admitted EH slice.
 Rename the line-only view to `_PyIRPositions`; remove the old combined source
 map API rather than leave a compatibility typedef/decoder. Observation may
 assemble a cold `_PyIRObservationEvent` by semantic row ID plus optional
@@ -374,11 +380,11 @@ unowned target memory.
 The shared spelling is `_PyIRSemantic_{Decode,Stored,Event,EncodeEvent,Pack}`
 for the EH/recovery container, and
 `_PyIRPositions_{Decode,Stored,Event,EncodeEvent,Pack}` for positions. Semantic
-decode accepts only IRSC1 or the canonical empty sentinel. Position decode
+decode accepts only IRSC2 or the canonical empty sentinel. Position decode
 distinguishes raw optional constructor locations from normalized IRSM2 and a
 malformed envelope. `_PyIRObservation_Stored(code)` returns a cold
 `_PyIRObservationMap` joining these two admitted views;
-`_PyIRObservation_Event(map, id, event)` supplies the six semantic fields and
+`_PyIRObservation_Event(map, id, event)` supplies the four semantic fields and
 either the matching four position fields or four `-1` values. The map and
 event are temporary C views, never code-owned allocations. Edge constants
 become `_PyIR_EDGE_FALLTHROUGH` and `_PyIR_EDGE_TAKEN`; observation wrapper
@@ -415,9 +421,9 @@ image validation; it is not synthesized from a missing line array. General to
 EMPTY return normalization preserves sites/operand roles and does not rewrite
 semantic IDs.
 
-The component reserves pyc magic 64422 after the general-return change.
-IRSC1/IRSM2 and rebuilt frozen/deepfreeze artifacts must compose together. Direct marshal reads receive structural ValueError for obsolete or
-malformed envelopes rather than a hidden old-IRSM interpretation. Generic
+The retained-transfer component reserves pyc magic 64423.
+IRSC2/IRSM2 and rebuilt frozen/deepfreeze artifacts must compose together.
+Direct marshal reads receive structural ValueError for obsolete or malformed envelopes rather than a hidden old-IRSM interpretation. Generic
 marshal field order/version need not change because both fields remain bytes.
 No stored old-format or runtime dual-decoder period is proposed.
 
@@ -434,12 +440,16 @@ execution controls. Full position stripping may remove line callbacks that
 have no line to report; it must not change the ownership/EH of remaining real
 instruction/branch callbacks.
 
-With positions present, existing 40-byte combined records become 24 semantic
-bytes plus 16 position bytes, so record payload size is unchanged. A nonempty
-semantic field adds a 16-byte envelope. A previously empty exception field that
-now owns recovery rows also needs a nonempty bytes allocation; measure that
-allocator cost rather than count headers alone. Codes with no EH/recovery keep
-the shared empty bytes. No extra code/frame field, plan or ordinary-dispatch
+With positions present, each recovery occurrence uses 16 semantic bytes plus
+16 position bytes. A nonempty semantic field adds a 24-byte envelope; each
+interned transfer uses 16 bytes and each retained interval uses 6 bytes. The
+same existing code plan owns decoded descriptors and interns their ranges
+with phase ranges. Its header grows from 16 to 20 bytes. The cold HomeView
+and captured-frame descriptor grow from 16 to 32 bytes; the 112-byte hot frame
+header and 40-byte transition roots remain unchanged. A previously empty
+exception field that now owns recovery rows also needs a nonempty bytes allocation; measure that
+allocator cost rather than count headers alone. The common empty semantic
+case keeps the shared empty bytes. No extra code/frame field, plan or ordinary-dispatch
 lookup is added. Reached error lookup adds constant-time envelope slicing
 before its current search; observer line handling joins the same index across
 two immutable slices. Construction stays linear in payload size plus existing
@@ -452,6 +462,16 @@ are reached phase stores, range/cursor iteration, binding validity checks,
 code-plan bytes and preparation work. Native roots remain governed by their
 selected policy. None of these removals is authorized merely by a successful
 normal admission census.
+
+Retained membership is not a readable-home certificate. On a reached error,
+release intersects the selected base view with retained homes plus the pending
+release cursor; retained homes above that cursor remain visible. Protocol
+publication then replaces the old snapshot: static handler entry remains honest
+initialized CONTROL until its transformed sparse shape is certified. The
+compiler records retained virtual identities before allocation and assembly
+resolves their actual homes. The current allocator still uses canonical slots;
+this component does not yet authorize the full stale static switch or remove
+all remaining allocation constraints.
 
 ## Next grouped authority packet
 
@@ -529,14 +549,15 @@ freezer probes, 23 focused cases and 233 IR/code cases per role. This includes
 the actual UNARY_NOT post-retirement selected snapshot and alias controls;
 GET_ANEXT's earlier qualified boundary remains intact.
 
-The next source-frozen packet, `00706926b6a`, adds explicit native helper-result
+The source-frozen VALUE packet `00706926b6a`, with live error-stack copy repair
+`5e623722ed5`, adds explicit native helper-result
 ownership, canonicality and non-NULL contracts, exact token-bound NULL guards,
 and a normal endpoint in the same action suffix. A valid native value is not
 necessarily a canonical frame value: actual normalizing publication establishes
 frame initialization; a canonical store requires prior canonicality. Native
 OBJECT conversions additionally require their actual non-NULL precondition.
 Normal replay retains only complete incoming shapes and identical family-wide
-transport. Its 31 narrow source controls pass; full generation and the native
+transport. Its 32 narrow source/emission controls pass; full generation and the native
 UNARY_INVERT-to-GET_ANEXT publication witness remain integration gates. It adds
 no runtime normal lookup and does not close the remaining M4 groups.
 

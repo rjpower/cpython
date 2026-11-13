@@ -566,7 +566,7 @@ CPython's former destructor order.
 
 ### Runtime retained-view interface
 
-The proposed cold `_PyIRHomeView` grows from 16 to 32 bytes. Its existing
+The frozen cold `_PyIRHomeView` grows from 16 to 32 bytes. Its existing
 base provider remains intact. The extension is a code-owned retained-range
 pointer, a uint32 range count, a uint16 release limit and uint16 flags.
 Ranges and the release limit are scratch-relative. Zero flags preserves the
@@ -601,21 +601,33 @@ membership/partition work only when its explicit flag is present; ordinary
 views should retain their existing iteration path. Native stack reservation
 and code-size effects require root's generated/native measurements.
 
-Source ownership must freeze before implementation. Frames proposes the
-runtime `ProcessError`/drain, common iterators, error lookup/capture and runtime
-fixtures. GC/IR own retained identity transport, the semantic container,
-admission and the shared schema. The runtime starts from a clean qualified B
-base with the actual metadata scope and HEAD-held lookup; the older P base
-must not replace those functions wholesale.
+Frames owns the runtime `ProcessError`/drain, common iterators, error
+lookup/capture and runtime fixtures. GC/IR own retained identity transport,
+the semantic container, admission and transfer-plan schema. The isolated P
+runtime packet `80b3de991c6` starts from B `ade9` plus the reviewed base-binding
+repair,
+preserving the actual metadata scope and HEAD-held lookup. Its source ABI
+uses transfer IDs throughout, with no old handler/slot/lasti override.
+The runtime consumes the immutable transfer table, releases selected
+homes outside keep, and publishes a fresh presence view after the explicit
+protocol stores. GC and IR reviewed the bounded runtime source; AST and diff
+checks pass. It is not yet composed or native-qualified. Composition must
+combine the IRSC2 table/getter and explicitly reconcile this base's cp0-only
+entry with current positive checkpoint emission. The static adapter preserves
+its positive checkpoint lookup and uses initialized CONTROL at handler entry
+until a transformed sparse entry shape is certified.
 
-The first runtime fixtures cover an interleaved retained/released selection,
-a retained owner above the release cursor observed during another finalizer,
-GC plus frame escape and named-local mutation, and explicit exception/lasti
-publication observed by a handled callback that then fails. A common-iterator
-probe must cover both providers, retained holes outside the base selection,
-all bitmap first-bit positions and plane mutation between reverse steps.
-Ordinary and source recovery must select the same transfer. Existing nested
-ERROR scopes, foreign protected lookup and bindings-only M2 tests remain.
+The source fixtures include the shared iterator with both providers at every
+physical bit alignment, explicit captured-view size, and actual factory
+owners moved into interleaved retained/released homes. The runtime fixture
+checks finalizer-time visibility above the cursor, GC, frame escape, local
+mutation, explicit exception/optional lasti, and handled-callback failure.
+
+The iterator probe also covers retained holes outside the base selection and
+plane mutation between reverse steps; the private copy probe keeps an owner
+above the release cursor and checks the rebased captured view. Ordinary and
+source recovery must select the same transfer. Existing nested ERROR scopes,
+foreign protected lookup and bindings-only M2 tests remain.
 
 ### Semantic and compiler component boundary
 

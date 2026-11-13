@@ -1,16 +1,15 @@
 # Development process
 
-Start with the [goal](GOAL.md), [active plan](issues/call-model55/plan.md),
+Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md),
 [status](STATUS.md) and [stage map](ROADMAP.md). Use [HANDOFF](HANDOFF.md) when
 taking over execution. The coordinator owns integration, merged validation,
 measurement and current project state.
 
-Round55 architecture research and independent post-review are complete;
-implementation is active under coordinator-owned integration and native execution.
-See the [execution ledger](issues/call-model55/implementation.md). The [proposal](design/proposals/register-call-model55.md)
-and [resolution](issues/call-model55/review-resolution.md) define the target and
-remaining implementation gates. Keep proposed contracts distinct from the
-selected runtime and preserve round54's rejected evidence.
+The active stage combines value transport, borrowing, calls and specialization.
+Astra reviews the architecture as a whole; Sol workers implement and peer-review
+bounded components. Root owns integration and native evidence. The active plan
+selects which frozen model55 pieces are prerequisites and keeps proposed
+contracts separate from selected architecture.
 
 ## Rebuild policy
 

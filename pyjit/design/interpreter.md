@@ -2,8 +2,9 @@
 
 This page describes the selected register interpreter and its call paths.
 [Status](../STATUS.md) records qualification, measurements and limits.
-The [proposed call model](proposals/register-call-model55.md) defines a reviewed
-research direction; its maps and transfer contracts are not implemented here.
+The [active performance plan](../issues/interpreter-performance56/plan.md)
+reviews a combined architecture. Its proposed contracts do not change the
+selected implementation described here.
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
 and [observer contract](handler-and-observer-contract.md) describe the same

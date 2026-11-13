@@ -1,8 +1,8 @@
 # Documentation ownership
 
 Keep a clear path from the [goal](GOAL.md) to the active
-[plan](issues/call-model55/plan.md),
-[proposed call model](design/proposals/register-call-model55.md),
+[plan](issues/interpreter-performance56/plan.md),
+[architecture](design/runtime-architecture.md),
 [status](STATUS.md), and durable
 [designs](design/runtime-architecture.md). Readers should not need an experiment
 chronology to understand a project decision.
@@ -23,8 +23,8 @@ tested, integrated, qualified and measured; identify the runtime on which
 evidence was obtained. Keep exact operational details in the handoff and
 experiment records. Label planned JIT tiers explicitly.
 
-Round54 is closed at a correctness checkpoint with recorded qualification
-limits and no selected performance experiment. Round55 has a reviewed design
-and complete migration plan; implementation is active in isolated worktrees. Its proposal
-stays separate from as-built runtime contracts until implementation and
-qualification establish a replacement.
+The active interpreter-performance plan combines values, borrowing, calls and
+specialization. Its broad Astra review precedes implementation. Model55 source
+components and earlier measurements remain evidence; they do not establish
+selected architecture. Retire duplicate proposal/progress pages and obsolete
+Loom mirrors after their decisions and evidence have one durable owner.

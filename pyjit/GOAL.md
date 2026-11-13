@@ -10,20 +10,25 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Compiler line restrictions need an
 observer reconstruction contract before removal.
 
-Improve unchanged-workload performance toward upstream parity while retaining
-logging parity and examining broad regressions. The
-[active plan](issues/call-model55/plan.md) defines the reviewed call/frame/register
-architecture and migration sequence, including occupancy maps, storage, handoff
-and observation. Research and independent post-review are complete;
-implementation is active with Sol high-effort workers and coordinator integration.
-The [execution ledger](issues/call-model55/implementation.md) tracks M0–M7. The
-[reviewed proposal](design/proposals/register-call-model55.md) accounts for
-complete lifecycles and recurring costs; neither a bitmap nor native JIT is
-an automatic answer. Round54 selects only a cold constructor correctness
-checkpoint with qualification limits, and rejects all performance variants.
-The [prior report](issues/frame-state54/report.md) records that closure;
-the [active report](issues/call-model55/report.md) records model55 integrations;
-[status](STATUS.md) records results and limits.
+Current stage: **register-interpreter performance**, within stage 2 of the
+[roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
+combines value transport, borrowing, call/return conventions and specialization
+under one architecture. Astra is reviewing the combined design at high effort
+before implementation. Sol workers will implement reviewed increments; the
+coordinator owns integration, qualification and selection.
+
+Remove repeated work from ordinary execution and improve unchanged workloads
+toward upstream parity while preserving logging performance. Frame clearing is
+one hypothesis, not an established explanation for the gap. PyValue integration
+is complete; remaining work concerns transport, ownership and how established
+facts survive lowering and native boundaries.
+
+Start here, then read the active plan, [architecture](design/runtime-architecture.md)
+and [status](STATUS.md). Status distinguishes selected, measured and experimental
+source. Selected54 remains golden. The [model55 report](issues/call-model55/report.md)
+retains its measured results and unresolved qualification; its pending ownership
+and exception-transfer components are inputs to the combined plan, not an
+independent requirement to finish every old experiment first.
 
 ## Standing decisions
 

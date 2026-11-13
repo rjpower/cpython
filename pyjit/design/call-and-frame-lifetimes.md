@@ -2,8 +2,9 @@
 
 This page defines frame ownership, call completion and observation in the
 selected runtime. [Status](../STATUS.md) records qualification and limits.
-The [model55 proposal](proposals/register-call-model55.md) reviews a different
-register-ownership and call architecture; it does not change this as-built ABI.
+The [active performance plan](../issues/interpreter-performance56/plan.md)
+reviews the next value, ownership and call architecture; it does not change
+this as-built ABI.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization

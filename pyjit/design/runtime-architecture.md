@@ -5,9 +5,11 @@ register interpreter and reference counting with cyclic collection. The
 method/tracing JIT is planned. [Status](../STATUS.md) owns current
 qualification, measurements and limits.
 
-The [reviewed call-model proposal](proposals/register-call-model55.md) describes
-the next frame/register ownership architecture. It is not implemented; the
-contracts below describe the selected runtime.
+The [active plan](../issues/interpreter-performance56/plan.md) combines value
+transport, borrowing, call/return conventions and specialization. Its broad
+review precedes implementation. The contracts below describe the selected
+runtime; experimental ownership/IRSC2 source is identified in status and is not
+an implemented replacement.
 
 ```mermaid
 flowchart TD

@@ -1,5 +1,12 @@
 # Register call model: architecture and migration plan
 
+Historical model55 migration plan. The active work is now the
+[combined interpreter-performance plan](../interpreter-performance56/plan.md).
+Its [checkpoint report](../interpreter-performance56/report.md) and
+[project status](../../STATUS.md) own current selection and execution. The
+records below retain their actual source identities; unqualified components
+remain inputs to the new review.
+
 Status: implementation authorized and active. Architecture research, source
 audit and independent post-review are complete. Follow the
 [execution ledger](implementation.md) for worktree ownership, integration and measurements.

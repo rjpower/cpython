@@ -3,8 +3,9 @@
 This page defines the executable and ownership contract of the selected runtime.
 [Status](../STATUS.md) owns qualification and performance. The observer and
 debugger rules below do not authorize every source transfer.
-The [model55 proposal](proposals/register-call-model55.md) describes planned
-ownership, operand and call contracts separately from this current encoding.
+The [active performance plan](../issues/interpreter-performance56/plan.md)
+reviews borrowing, values, calls and specialization separately from this
+selected encoding.
 
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
 [observer contract](handler-and-observer-contract.md) define ownership and

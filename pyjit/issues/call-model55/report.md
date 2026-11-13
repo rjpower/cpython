@@ -1,5 +1,12 @@
 # Model55 integration results
 
+Historical model55 experiment report. The active work is now the
+[combined interpreter-performance plan](../interpreter-performance56/plan.md).
+Its [checkpoint report](../interpreter-performance56/report.md) and
+[project status](../../STATUS.md) own current selection and execution. The
+records below retain their actual source identities; unqualified components
+remain inputs to the new review.
+
 This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.

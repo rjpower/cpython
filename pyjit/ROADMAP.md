@@ -22,5 +22,5 @@ flowchart LR
 | [5. Extensions](stages/05-extensions/README.md) | Incremental source ports and opaque interfaces | Declared extensions rebuild and pass behavior and lifetime tests |
 
 Workstreams can proceed in parallel when ownership is disjoint. The coordinator
-validates composition and stage exit evidence. The [active plan](issues/call-model55/plan.md)
+validates composition and stage exit evidence. The [active plan](issues/interpreter-performance56/plan.md)
 describes the reviewed target and migration; [designs](design/runtime-architecture.md) describe contracts.

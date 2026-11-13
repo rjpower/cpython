@@ -4,7 +4,7 @@ Status: historical M0 audit and implemented M1 admission design. The common
 admission increment was peer approved, integrated and passed root's focused
 release/debug checks. The audit below describes selected54
 `61015a9452d9069646fb5fede9ff963896833b89`, not the current implementation.
-See [progress](ir-progress.md) for integration history and
+See [historical progress](https://github.com/rjpower/cpython/blob/11dae1fcd98740be63d9630b1e0c41493754b04a/pyjit/issues/call-model55/ir-progress.md) for integration history and
 [semantic phase plan](semantic-phase-plan.md) for current follow-on work.
 
 The existing admission proofs should become one construction boundary. Do not

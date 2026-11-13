@@ -1,5 +1,10 @@
 # Register execution and call ownership, model55
 
+Frozen model55 design input. The active successor is the
+[combined performance plan](../../issues/interpreter-performance56/plan.md).
+This proposal is not the selected runtime; status records which source pieces
+are implemented, measured or still awaiting qualification.
+
 Status: reviewed target architecture; independent post-review accepts the design contract. Implementation is active; this target is not the selected runtime and has no complete-model performance claim. See the [review resolution](../../issues/call-model55/review-resolution.md) and [migration plan](../../issues/call-model55/plan.md).
 Research date: 2026-11-12. Scope: the GIL interpreter first, with explicit requirements for later free-threaded support. Native JIT compilation is not a prerequisite or the proposed explanation for interpreter regressions.
 

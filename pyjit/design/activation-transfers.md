@@ -7,8 +7,8 @@ This document describes its call, construction and resume boundaries. The
 Round53's [report](../issues/activation53/report.md) and
 [review](../issues/activation53/astra-review.md) record rejected alternatives;
 none changes this selected contract. Golden54 adds only the public C-constructor
-repair below. The [model55 proposal](proposals/register-call-model55.md) is a
-separate architecture and migration plan, not implemented behavior.
+repair below. The [active performance plan](../issues/interpreter-performance56/plan.md)
+reviews successor contracts separately from implemented behavior.
 
 ## Ordinary calls and returns
 

@@ -1482,7 +1482,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.previous = NULL;
     _tstate->base_frame.f_executable = PyValue_None;
     _tstate->base_frame.f_funcobj = PyValue_NULL;
-    _tstate->base_frame.f_locals = NULL;
     _tstate->base_frame.frame_obj = NULL;
     _tstate->base_frame.instr_ptr = NULL;
     _tstate->base_frame.return_slot = 0;

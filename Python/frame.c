@@ -26,7 +26,6 @@ int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     Py_VISIT(frame->frame_obj);
-    Py_VISIT(frame->f_locals);
     _Py_VISIT_VALUE(frame->f_funcobj);
     _Py_VISIT_VALUE(frame->f_executable);
     return _PyGC_VisitFrameStack(frame, visit, arg);
@@ -97,7 +96,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     assert(frame->owner < FRAME_OWNED_BY_INTERPRETER);
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
-    _PyFrame_Copy(frame, new_frame);
+    _PyFrame_Copy(frame, new_frame, FRAME_OWNED_BY_FRAME_OBJECT);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
     frame->f_executable = PyValue_DUP(new_frame->f_executable);
@@ -191,13 +190,16 @@ clear_slots(_PyInterpreterFrame *frame, int n)
         *sp = PyValue_NULL;
         PyValue_XCLOSE(ref);
     }
-    Py_CLEAR(frame->f_locals);
 }
 
 void
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 {
     clear_slots(frame, _PyFrame_NumSlots(frame));
+    PyFrameObject *f = _PyFrame_GetLocalsOwner(frame);
+    if (f != NULL) {
+        Py_CLEAR(f->f_locals_mapping);
+    }
 }
 
 void
@@ -211,6 +213,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     // crucial that this frame has been unlinked, and is no longer visible:
     assert(_PyThreadState_GET()->current_frame != frame);
     PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
+    PyObject *locals_mapping = NULL;
     if (f != NULL) {
         f->f_line_next = -1;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
@@ -219,6 +222,10 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
             Py_DECREF(f);
             return;
         }
+        /* Keep the mapping alive until after homes retire, even though its
+         * unique frame object can be destroyed before their callbacks. */
+        locals_mapping = f->f_locals_mapping;
+        f->f_locals_mapping = NULL;
         Py_DECREF(f);
     }
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
@@ -228,8 +235,9 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
         clear_slots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
     }
     else {
-        _PyFrame_ClearLocals(frame);
+        clear_slots(frame, _PyFrame_NumSlots(frame));
     }
+    Py_XDECREF(locals_mapping);
     PyValue_CLEAR(frame->f_funcobj);
 }
 

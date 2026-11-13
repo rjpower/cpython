@@ -40,7 +40,6 @@ struct _PyInterpreterFrame {
      * was pushed, which popping it restores */
     PyValue *saved_top;
     PyValue f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
-    PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL. Only valid if not on C stack */
     _PyInstr *instr_ptr; /* Instruction currently executing (or about to begin) */
     /* Word 0 of the executing image, immediately after its _PyCodeExec

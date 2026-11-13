@@ -446,6 +446,25 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
     return _PyIR_ReadsWindowHome(word, arg, home);
 }
 
+/* The successful final stack commit consumes inputs outside its unchanged
+ * window prefix. Through homes retain their logical values even when they
+ * are read; fresh outputs are handled independently by the caller. */
+static inline int
+_PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int through = _PyIR_Extent(fmt->through, arg);
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_BASE &&
+            home >= (int)fields[f] && home - (int)fields[f] < through)
+        {
+            return 0;
+        }
+    }
+    return _PyIR_ReadsHome(word, arg, home);
+}
+
 enum {
     _PyIR_BINDING_NO_READ,
     _PyIR_BINDING_CHECKED_NULL,
@@ -833,6 +852,17 @@ _PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
         }
         if (home == dst) {
             return _PyIR_ABSENCE_SET_VALUE;
+        }
+        if (opcode == FOR_ITER && reads == 2 &&
+            fmt->owner_events == 1 &&
+            _PyIR_OwnerPrograms[fmt->owner_program].kind ==
+                _PyIR_OWNER_NORMAL_COMPLETION)
+        {
+            /* The body result is published to A, including a named binding.
+             * A nonselected BASE+2 is neither an input nor an output home:
+             * retain only its incoming absence, never create a new one. */
+            return home >= base && home - base < reads
+                ? _PyIR_ABSENCE_UNKNOWN : _PyIR_ABSENCE_PRESERVE;
         }
         if (home >= base && home - base < Py_MAX(reads, writes)) {
             return opcode == YIELD_VALUE && reads == 1 && writes == 1 && home == base

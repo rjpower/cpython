@@ -2018,6 +2018,7 @@ typedef struct {
     uint64_t *branch;
     semantic_phases *phases;
     int created_empty;
+    int completion_destination_empty;
 } semantic_worklist;
 
 /* NULL, nonNULL and logical initialization are must-facts. Owner obligations
@@ -2421,6 +2422,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
     work->created_empty = 0;
+    work->completion_destination_empty = 0;
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (inspect && fmt->call_input_holes) {
@@ -2560,6 +2562,17 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 return 0;
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_NORMAL_COMPLETION:
+                /* Completion transport belongs to a selected outgoing edge,
+                 * not to this common pre-branch state. Its body destination
+                 * is not produced on completion: retain only an existing
+                 * absence proof for that home, never invent one. */
+                home = (int)IR_A(word);
+                work->completion_destination_empty = home >= nl &&
+                    home < nl + image->scratch &&
+                    (semantic_home_facts(work, state, home, nl) & (1u << SEM_NO_HOME));
+                return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
                 /* The actual same-frame successful flush/vacate, with all
@@ -2569,11 +2582,37 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                     return -1;
                 }
                 for (int home = nl; home < nl + image->scratch; home++) {
-                    if (_PyIR_ReadsHome(word, arg, home) &&
+                    if (_PyIR_ConsumesNormalInput(word, arg, home) &&
                         !_PyIR_DefinesHome(word, arg, home))
                     {
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
                         state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                    }
+                }
+                if (event->kind == _PyIR_OWNER_UNPACK_LOCAL_DRAIN) {
+                    assert(fmt->flags & _PyIR_UNPACKS);
+                    int dst = -1, base = -1;
+                    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                    for (int f = 0; f < 4; f++) {
+                        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                            dst = (int)fields[f];
+                        }
+                        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                            base = (int)fields[f];
+                        }
+                    }
+                    /* The actual successful helper moves every output to
+                     * the validated local run. Sentinel destinations retain
+                     * their scratch outputs. Neither route proves values
+                     * readable or supplies a physical NULL fact. */
+                    if (dst >= 0 && dst < nl) {
+                        int count = _PyIR_Extent(fmt->writes, arg);
+                        assert(_PyIR_Extent(fmt->through, arg) == 0);
+                        assert(base >= nl && base <= nl + image->scratch - count);
+                        for (int home = base; home < base + count; home++) {
+                            uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
+                            state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                        }
                     }
                 }
                 return 0;
@@ -2597,6 +2636,43 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
         }
     }
     Py_UNREACHABLE();
+}
+
+static void
+semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
+                     uint64_t *state, int pc, int edge)
+{
+    _PyIRWord word = image->words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (fmt->owner_events != 1) {
+        return;
+    }
+    const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
+    for (int at = 0; at < fmt->owner_events; at++) {
+        const _PyIROwnershipEvent *event = program + at;
+        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != edge) {
+            continue;
+        }
+        /* The family-closed emitted completion route consumes receiver and
+         * cursor. Logical absence survives child retirement even when its
+         * nonowning overlay bytes do not provide physical NULL. */
+        assert(event->src == 2 && edge == 1);
+        int base = (int)IR_B(word);
+        assert(base >= image->nl && base <= image->nl + image->scratch - 2);
+        for (int home = base; home < base + event->src; home++) {
+            unsigned int old = semantic_home_facts(work, state, home, image->nl);
+            semantic_set_facts(work, state, home, image->nl,
+                (old & (1u << SEM_NULL)) | (1u << SEM_NO_HOME));
+        }
+        int dst = (int)IR_A(word);
+        if (dst >= image->nl && dst != IR_NO_DST &&
+            (dst < base || dst >= base + event->src) &&
+            work->completion_destination_empty)
+        {
+            uint64_t mask = UINT64_C(1) << ((dst - image->nl) % 64);
+            state[SEM_NO_HOME * work->nwords + (dst - image->nl) / 64] |= mask;
+        }
+    }
 }
 
 /* Common-image normal-edge hardening, still under NULL authority. Per-block
@@ -2807,15 +2883,17 @@ normal_transfer_proof(const semantic_image *image,
         int last = end - 1;
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
         int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
+        if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
+            semantic_normal_edge(image, &work, state, last, 0);
+            semantic_enqueue(&work, block_at[end], state, complete);
+        }
         if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
             !(fmt->flags & _PyIR_NAMES_TARGET))
         {
             int target = fmt->flags & _PyIR_FORWARD
                 ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+            semantic_normal_edge(image, &work, state, last, 1);
             semantic_enqueue(&work, block_at[target], state, complete);
-        }
-        if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
-            semantic_enqueue(&work, block_at[end], state, complete);
         }
     }
     /* Allocate persistent storage only for mixed coverage. First count exact

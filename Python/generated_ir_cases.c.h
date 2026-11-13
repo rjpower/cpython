@@ -5159,6 +5159,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5169,23 +5170,27 @@
                 callable = window[0];
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (!PyType_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5194,6 +5199,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5212,12 +5218,14 @@
                 PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
                 PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
                 if (init_func->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyCodeObject *code = (PyCodeObject *)init_func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5287,6 +5295,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_ALLOC_AND_ENTER_INIT:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_BOUND_METHOD_EXACT_ARGS) {
@@ -5318,6 +5339,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5327,16 +5349,19 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (Py_TYPE(PyValue_AsKnownObjectBorrow(callable)) != &PyMethod_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5365,18 +5390,21 @@
             {
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5389,6 +5417,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5400,6 +5429,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5408,6 +5438,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5464,6 +5495,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_BOUND_METHOD_EXACT_ARGS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_BOUND_METHOD_GENERAL) {
@@ -5626,18 +5670,21 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyType_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 if (tp->tp_vectorcall == NULL) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5702,6 +5749,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_BUILTIN_CLASS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_BUILTIN_FAST) {
@@ -5731,12 +5791,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5744,6 +5806,7 @@
                 int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
                 if (flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5808,6 +5871,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_BUILTIN_FAST:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_BUILTIN_FAST_WITH_KEYWORDS) {
@@ -5837,12 +5913,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5850,6 +5928,7 @@
                 int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
                 if (flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5914,6 +5993,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_BUILTIN_FAST_WITH_KEYWORDS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_BUILTIN_O) {
@@ -5943,18 +6035,21 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((PyCFunction_GET_FLAGS(callable_o) &
                      _Py_METH_CALL_FLAGS) != METH_O) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5964,6 +6059,7 @@
                     total_args++;
                 }
                 if (total_args != 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5972,6 +6068,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6020,6 +6117,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_BUILTIN_O:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_EX_NON_PY_GENERAL) {
@@ -7235,6 +7345,7 @@
             // _GUARD_THIRD_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7244,6 +7355,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7252,6 +7364,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.isinstance) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7305,6 +7418,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_ISINSTANCE:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_KW) {
@@ -8128,6 +8254,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8137,6 +8264,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8145,6 +8273,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.len) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8198,6 +8327,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_LEN:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_LIST_APPEND) {
@@ -8232,6 +8374,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8240,6 +8383,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.list_append) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8249,6 +8393,7 @@
             {
                 nos = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 if (PyValue_IsNull(nos)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8257,12 +8402,14 @@
             // _GUARD_NOS_LIST
             {
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[1]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *o = PyValue_AsKnownObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8275,6 +8422,7 @@
                 assert(oparg == 1);
                 PyObject *self_o = PyValue_AsKnownObjectBorrow(self);
                 if (!LOCK_OBJECT(self_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8333,6 +8481,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_LIST_APPEND:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_METHOD_DESCRIPTOR_FAST) {
@@ -8365,6 +8526,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8372,6 +8534,7 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8379,6 +8542,7 @@
                 int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
                 if (flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8388,12 +8552,14 @@
                     total_args++;
                 }
                 if (total_args == 0) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8456,6 +8622,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) {
@@ -8486,6 +8665,7 @@
                 args = &window[2];
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8493,6 +8673,7 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8500,6 +8681,7 @@
                 int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
                 if (flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8511,11 +8693,13 @@
                     total_args++;
                 }
                 if (total_args == 0) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (PyValue_TYPE(arguments[0]) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8578,6 +8762,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_METHOD_DESCRIPTOR_NOARGS) {
@@ -8615,6 +8812,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8622,12 +8820,14 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_NOARGS) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8637,12 +8837,14 @@
                     total_args++;
                 }
                 if (total_args != 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8651,6 +8853,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8729,6 +8932,20 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS:;
+            assert(value_temps->count == 0);
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_METHOD_DESCRIPTOR_O) {
@@ -8767,6 +8984,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8774,12 +8992,14 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_O) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8789,12 +9009,14 @@
                     total_args++;
                 }
                 if (total_args != 2) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8803,6 +9025,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8896,6 +9119,20 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O:;
+            assert(value_temps->count == 0);
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NON_PY_GENERAL) {
@@ -9102,6 +9339,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9112,23 +9350,27 @@
                 callable = window[0];
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (!PyType_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9137,6 +9379,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9155,12 +9398,14 @@
                 PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
                 PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
                 if (init_func->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyCodeObject *code = (PyCodeObject *)init_func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9230,6 +9475,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_ALLOC_AND_ENTER_INIT:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS) {
@@ -9261,6 +9519,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9270,16 +9529,19 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (Py_TYPE(PyValue_AsKnownObjectBorrow(callable)) != &PyMethod_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9308,18 +9570,21 @@
             {
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9332,6 +9597,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9343,6 +9609,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9351,6 +9618,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9407,6 +9675,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_BOUND_METHOD_GENERAL) {
@@ -9569,18 +9850,21 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyType_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 if (tp->tp_vectorcall == NULL) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_CLASS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9645,6 +9929,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_BUILTIN_CLASS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_BUILTIN_FAST) {
@@ -9674,12 +9971,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9687,6 +9986,7 @@
                 int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
                 if (flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9751,6 +10051,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS) {
@@ -9780,12 +10093,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9793,6 +10108,7 @@
                 int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
                 if (flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9857,6 +10173,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_BUILTIN_O) {
@@ -9886,18 +10215,21 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((PyCFunction_GET_FLAGS(callable_o) &
                      _Py_METH_CALL_FLAGS) != METH_O) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9907,6 +10239,7 @@
                     total_args++;
                 }
                 if (total_args != 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9915,6 +10248,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BUILTIN_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9963,6 +10297,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_BUILTIN_O:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_ISINSTANCE) {
@@ -9991,6 +10338,7 @@
             // _GUARD_THIRD_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10000,6 +10348,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10008,6 +10357,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.isinstance) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_ISINSTANCE; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10061,6 +10411,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_ISINSTANCE:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_LEN) {
@@ -10090,6 +10453,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10099,6 +10463,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10107,6 +10472,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.len) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LEN; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10160,6 +10526,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_LEN:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_LIST_APPEND) {
@@ -10194,6 +10573,7 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10202,6 +10582,7 @@
                 if (!PyValue_IsObject(callable)
                     || PyValue_AsKnownObjectBorrow(callable)
                     != interp->callable_cache.list_append) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10211,6 +10592,7 @@
             {
                 nos = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 if (PyValue_IsNull(nos)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10219,12 +10601,14 @@
             // _GUARD_NOS_LIST
             {
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[1]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *o = PyValue_AsKnownObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10237,6 +10621,7 @@
                 assert(oparg == 1);
                 PyObject *self_o = PyValue_AsKnownObjectBorrow(self);
                 if (!LOCK_OBJECT(self_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_LIST_APPEND; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10295,6 +10680,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_LIST_APPEND:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_FAST) {
@@ -10327,6 +10725,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10334,6 +10733,7 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10341,6 +10741,7 @@
                 int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
                 if (flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10350,12 +10751,14 @@
                     total_args++;
                 }
                 if (total_args == 0) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10418,6 +10821,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) {
@@ -10448,6 +10864,7 @@
                 args = &window[2];
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10455,6 +10872,7 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10462,6 +10880,7 @@
                 int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
                 if (flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10473,11 +10892,13 @@
                     total_args++;
                 }
                 if (total_args == 0) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (PyValue_TYPE(arguments[0]) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10540,6 +10961,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS) {
@@ -10577,6 +11011,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10584,12 +11019,14 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_NOARGS) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10599,12 +11036,14 @@
                     total_args++;
                 }
                 if (total_args != 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10613,6 +11052,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10691,6 +11131,20 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS:;
+            assert(value_temps->count == 0);
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_O) {
@@ -10729,6 +11183,7 @@
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10736,12 +11191,14 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_O) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10751,12 +11208,14 @@
                     total_args++;
                 }
                 if (total_args != 2) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10765,6 +11224,7 @@
             // _CHECK_RECURSION_LIMIT
             {
                 if (_Py_ReachedRecursionLimit(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10858,6 +11318,20 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_METHOD_DESCRIPTOR_O:;
+            assert(value_temps->count == 0);
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_NON_PY_GENERAL) {
@@ -10959,6 +11433,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10969,18 +11444,21 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -10993,6 +11471,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11004,6 +11483,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11012,6 +11492,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11068,6 +11549,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_PY_EXACT_ARGS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_PY_GENERAL) {
@@ -11199,6 +11693,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11208,12 +11703,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyUnicode_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11262,6 +11759,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_STR_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_TUPLE_1) {
@@ -11292,6 +11802,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11301,12 +11812,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyTuple_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11355,6 +11868,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_TUPLE_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_NO_SELF_TYPE_1) {
@@ -11385,6 +11911,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11394,12 +11921,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyType_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11431,6 +11960,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_NO_SELF_TYPE_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_PY_EXACT_ARGS) {
@@ -11461,6 +12003,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11471,18 +12014,21 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11495,6 +12041,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11506,6 +12053,7 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11514,6 +12062,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_EXACT_ARGS; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11570,6 +12119,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_PY_EXACT_ARGS:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_PY_GENERAL) {
@@ -11701,6 +12263,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11710,12 +12273,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyUnicode_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_STR_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11764,6 +12329,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_STR_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_TUPLE_1) {
@@ -11794,6 +12372,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11803,12 +12382,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyTuple_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TUPLE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11857,6 +12438,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_TUPLE_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CALL_TYPE_1) {
@@ -11887,6 +12481,7 @@
             // _GUARD_NOS_NULL
             {
                 if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11896,12 +12491,14 @@
             {
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyType_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_TYPE_1; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11933,6 +12530,19 @@
                 }
             }
             DISPATCH();
+            call_transaction_fallback_CALL_TYPE_1:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
         }
 
         TARGET(CHECK_EG_MATCH) {

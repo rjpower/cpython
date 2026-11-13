@@ -3096,6 +3096,11 @@ class IREmitter(Emitter):
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         edge, _ = contracts[tkn]
+        # This checked terminal path has performed its final owner commit.
+        # Only its successful intended normal edge gets the normal recipe;
+        # callback errors/redirects retain their separate recovery protocols.
+        if normal_vacate_capability(inst, fmt):
+            self.normal_observer_edges.add(edge)
         self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
         self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
         self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
@@ -3115,11 +3120,16 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n}\n")
         return False
 
-    def unpack_to_locals(self, fmt, count, canonical=False):
+    def unpack_to_locals(self, inst, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
         release that may run Python is out of line."""
+        if (not fmt.unpacks or not fmt.window or fmt.n_inputs != 0 or
+                through_items(inst, *external_io(inst)) or
+                fmt.field_of(ROLE_BASE) is None or
+                fmt.field_of(ROLE_DST) is None):
+            raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
         self.emit(f"int ir_n = {count};\n")
@@ -3132,6 +3142,7 @@ class IREmitter(Emitter):
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
+        self.unpack_local_drained = True
         self.emit("}\n")
 
     def reader_reload(self):
@@ -4125,6 +4136,8 @@ class IREmitter(Emitter):
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER" and distance == "oparg":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4136,6 +4149,19 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         return False
+
+    def normal_completion(self, inst, fmt):
+        inputs, _ = external_io(inst)
+        if (not fmt.window or len(inputs) != 2 or
+                any(item.is_array() for item in inputs) or
+                fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A" or
+                fmt.dst_offset != 2):
+            raise analysis_error("unsupported normal completion window", inst.where)
+        # This actual helper route drains receiver/cursor only on its taken
+        # completion edge. A resumed generator reaches the same helper on
+        # return; a yielded body result does not take this edge.
+        self.normal_completions.add(OwnershipEvent(
+            "_PyIR_OWNER_NORMAL_COMPLETION", src=2, dst=1))
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
@@ -4168,6 +4194,8 @@ class IREmitter(Emitter):
         gen, kind = self.macro_args(tkn, tkn_iter, 2)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4484,6 +4512,15 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
             or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 ) ;"):
 
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
+
+
+def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
+    """Conditions shared by actual final commits, never a source-name grant."""
+    return (not inst.properties.switches_frame and not fmt.names_target
+            and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
+            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+                                  "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
+                        for t in uop_token_list(inst)))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
@@ -5077,6 +5114,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.unpack_local_drained = False
+    emitter.normal_observer_edges = set()
+    emitter.normal_completions = set()
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
@@ -5249,22 +5289,28 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         emit_final_outputs(inst, fmt, mode, stack, out)
         if call_window:
             emitter.call_normal_drained = True
-        # The fact comes from the actual successful flush/vacate path. Rows
-        # with other normal exits or raw frame access need their own recipe.
-        emitter.normal_inputs_cleared = (
-            not inst.properties.switches_frame and not fmt.jumps and not fmt.forward
-            and not through_items(inst, *external_io(inst))
-            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
-                                  "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
-                        for t in uop_token_list(inst)))
+        # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
+        # this final flush. Stack alignment/merge has checked both branch arms
+        # at their common point, so consumed inputs are empty on either edge.
+        # The unchanged through prefix retains its inputs. Other normal
+        # exits, outcome protocols and raw frame access need their own recipe.
+        emitter.normal_inputs_cleared = normal_vacate_capability(inst, fmt)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
             emitter.unpack_to_locals(
-                fmt, UNPACKS[fmt.group], canonical=inst.name in (
+                inst, fmt, UNPACKS[fmt.group], canonical=inst.name in (
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
+    normal_edges = ({1} if fmt.jump_always else {0, 1}
+                    if fmt.jumps or fmt.forward else {0})
+    if (not reachable and emitter.normal_observer_edges == normal_edges
+            and normal_vacate_capability(inst, fmt)):
+        # Checked terminal wrappers flush before their callbacks and dispatch
+        # themselves. Every ordinary successor must have such a commit; a
+        # nonbranching handler has only its fallthrough successor to cover.
+        emitter.normal_inputs_cleared = True
     if call_window and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
         emitter.call_completion()
@@ -5286,9 +5332,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 "_PyIR_OWNER_LEAF", src=kind))
         elif emitter.call_normal_drained:
             emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"))
+        elif emitter.normal_inputs_cleared and emitter.unpack_local_drained:
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_UNPACK_LOCAL_DRAIN"))
         elif emitter.normal_inputs_cleared:
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
+    emitter.ownership_events.extend(sorted(emitter.normal_completions,
+                                          key=lambda event: (event.dst, event.src)))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
@@ -5587,6 +5638,20 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
+            if not all(programs.get(name) == unpack_drain for name in members):
+                for name in members:
+                    if programs.get(name) == unpack_drain:
+                        del programs[name]
+            common_completions = set.intersection(*(
+                {event for event in programs.get(name, ())
+                 if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION"}
+                for name in members))
+            for name in members:
+                if name in programs:
+                    programs[name] = tuple(event for event in programs[name]
+                        if event.kind != "_PyIR_OWNER_NORMAL_COMPLETION" or
+                        event in common_completions)
             if all(programs.get(name) for name in members):
                 continue
             for name in members:

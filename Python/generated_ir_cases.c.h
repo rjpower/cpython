@@ -17697,6 +17697,79 @@
             }
         }
 
+        TARGET(INSTRUMENTED_YIELD_DELEGATED) {
+            int opcode = INSTRUMENTED_YIELD_DELEGATED;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_YIELD_DELEGATED);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue val;
+            PyValue retval;
+            // _YIELD_VALUE_EVENT
+            {
+                val = IR_SLOT(IR_B(ir_word));
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = _Py_call_instrumentation_arg(
+                    tstate, PY_MONITORING_EVENT_PY_YIELD,
+                    frame, this_instr, val);
+                if (err) {
+                    // Explicit stack reload
+                    slots = _PyFrame_Slots(frame);
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                if (frame->instr_ptr != this_instr) {
+                    // Explicit stack reload
+                    slots = _PyFrame_Slots(frame);
+                    next_instr = frame->instr_ptr;
+                    if (!PyValue_IsNull(ir_displaced)) {
+                        frame->phase_state = 0;
+                        if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                    }
+                    DISPATCH();
+                }
+            }
+            // _YIELD_DELEGATED
+            {
+                retval = val;
+                PyValue outgoing = retval;
+                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                frame->phase_state = 0;
+                assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+                frame->instr_ptr = next_instr;
+                PyGenObject *ir_yield_gen = _PyGen_GetGeneratorFromFrame(frame);
+                assert(_PyValue_IsHome(outgoing));
+                DTRACE_FUNCTION_RETURN();
+                tstate->exc_info = ir_yield_gen->gi_exc_state.previous_item;
+                ir_yield_gen->gi_exc_state.previous_item = NULL;
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *ir_yield_frame = frame;
+                ir_yield_frame->return_slot = (uint16_t)IR_A(ir_word);
+                _PyThreadState_UpdateLastProfiledFrame(tstate, frame, frame->previous);
+                frame = tstate->current_frame = frame->previous;
+                ir_yield_frame->previous = NULL;
+                ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
+                FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
+                slots = _PyFrame_Slots(frame);
+                next_instr = frame->return_pc;
+                if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
+                LLTRACE_RESUME_FRAME();
+                DISPATCH();
+            }
+        }
+
         TARGET(INSTRUMENTED_YIELD_VALUE) {
             int opcode = INSTRUMENTED_YIELD_VALUE;
             (void)(opcode);
@@ -25172,6 +25245,46 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            DISPATCH();
+        }
+
+        TARGET(YIELD_DELEGATED) {
+            int opcode = YIELD_DELEGATED;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(YIELD_DELEGATED);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue retval;
+            retval = IR_SLOT(IR_B(ir_word));
+            PyValue outgoing = retval;
+            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+            frame->phase_state = 0;
+            assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
+            frame->instr_ptr = next_instr;
+            PyGenObject *ir_yield_gen = _PyGen_GetGeneratorFromFrame(frame);
+            assert(_PyValue_IsHome(outgoing));
+            DTRACE_FUNCTION_RETURN();
+            tstate->exc_info = ir_yield_gen->gi_exc_state.previous_item;
+            ir_yield_gen->gi_exc_state.previous_item = NULL;
+            _Py_LeaveRecursiveCallPy(tstate);
+            _PyInterpreterFrame *ir_yield_frame = frame;
+            ir_yield_frame->return_slot = (uint16_t)IR_A(ir_word);
+            _PyThreadState_UpdateLastProfiledFrame(tstate, frame, frame->previous);
+            frame = tstate->current_frame = frame->previous;
+            ir_yield_frame->previous = NULL;
+            ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+            _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
+            FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
+            slots = _PyFrame_Slots(frame);
+            next_instr = frame->return_pc;
+            if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
+            LLTRACE_RESUME_FRAME();
             DISPATCH();
         }
 

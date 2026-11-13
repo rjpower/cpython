@@ -982,6 +982,19 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const uint8_t *in_loop,
 static void
 shift_slots(_PyRegCfg *cfg, int first_free, int k)
 {
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *block = &cfg->blocks[b];
+        if (!block->is_handler) {
+            continue;
+        }
+        int *values = _PyReg_EH_KEEP(cfg, block);
+        int count = block->nretained + 1 + block->preserve_lasti;
+        for (int j = 0; j < count; j++) {
+            if (values[j] >= first_free) {
+                values[j] += k;
+            }
+        }
+    }
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
         int *in = _PyReg_IN(cfg, op);
@@ -1245,6 +1258,7 @@ _PyRegPass_ElideNull(_PyRegCfg *cfg)
  * Canonical registers can have several definitions. Intersect predecessor
  * facts before selecting a role, including the retained exception prefix. */
 typedef struct {
+    const _PyRegCfg *cfg;
     int nwords, nblocks, count, head, tail;
     uint64_t *entries;
     int *queue;
@@ -1271,13 +1285,28 @@ call_null_set(const _PyRegCfg *cfg, uint64_t *state, int v, int value)
 
 static void
 call_null_merge(call_null_proof *proof, int block, const uint64_t *state,
-                int limit)
+                int limit, int exceptional)
 {
     uint64_t *entry = proof->entries + (size_t)block * proof->nwords;
     int changed = !proof->reached[block];
+    const _PyRegBlock *handler = exceptional ? &proof->cfg->blocks[block] : NULL;
+    const int *retained = handler ? _PyReg_EH_KEEP(proof->cfg, handler) : NULL;
+    int next_retained = 0;
     for (int w = 0; w < proof->nwords; w++) {
         int bits = Py_MIN(Py_MAX(limit - w * 64, 0), 64);
         uint64_t mask = bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
+        if (handler != NULL) {
+            mask = 0;
+            while (next_retained < handler->nretained) {
+                int bit = retained[next_retained] - proof->cfg->nlocalsplus;
+                if (bit >= w * 64 + bits) {
+                    break;
+                }
+                assert(bit >= w * 64);
+                mask |= UINT64_C(1) << (bit % 64);
+                next_retained++;
+            }
+        }
         uint64_t incoming = state[w] & mask;
         uint64_t next = proof->reached[block] ? entry[w] & incoming : incoming;
         changed |= entry[w] != next;
@@ -1352,7 +1381,7 @@ call_roles(_PyRegCfg *cfg, int verify)
         PyErr_NoMemory();
         return ERROR;
     }
-    call_null_proof proof = {.nwords = nwords, .nblocks = n};
+    call_null_proof proof = {.cfg = cfg, .nwords = nwords, .nblocks = n};
     proof.entries = PyMem_Calloc((size_t)n * nwords, sizeof(uint64_t));
     uint64_t *state = PyMem_Calloc(work_words, sizeof(uint64_t));
     proof.queue = PyMem_New(int, n);
@@ -1370,7 +1399,7 @@ call_roles(_PyRegCfg *cfg, int verify)
         goto done;
     }
     proof.queued = proof.reached + n;
-    call_null_merge(&proof, 0, state, canonical);
+    call_null_merge(&proof, 0, state, canonical, 0);
     while (proof.count) {
         int b = proof.queue[proof.head];
         proof.head = (proof.head + 1) % n;
@@ -1391,20 +1420,18 @@ call_roles(_PyRegCfg *cfg, int verify)
                 continue;
             }
             if (op->except >= 0) {
-                _PyRegBlock *handler = &cfg->blocks[op->except];
-                int depth = handler->startdepth - 1 - handler->preserve_lasti;
-                call_null_merge(&proof, op->except, state, depth);
+                call_null_merge(&proof, op->except, state, canonical, 1);
             }
             call_null_step(cfg, op, state, outputs);
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
             if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                 !(fmt->flags & _PyIR_NAMES_TARGET))
             {
-                call_null_merge(&proof, op->target, state, canonical);
+                call_null_merge(&proof, op->target, state, canonical, 0);
             }
         }
         if (cfg->blocks[next - 1].falls_through) {
-            call_null_merge(&proof, next, state, canonical);
+            call_null_merge(&proof, next, state, canonical, 0);
         }
     }
     /* Only the stable meet can select a canonical input role. */

@@ -107,6 +107,8 @@ typedef struct _PyRegBlock {
     int end;
     int startdepth;         // stack depth at entry, -1 if unreachable
     int word;               // index of its first word, set by the assembler
+    int handler_in;         // operand-pool slice: retained IDs, exception, lasti
+    int nretained;          // lasti is present only when preserve_lasti is set
     unsigned reachable : 1;
     unsigned is_handler : 1;
     unsigned preserve_lasti : 1;
@@ -151,6 +153,25 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
     ((V) >= (CFG)->nlocalsplus && (V) < _PyReg_FRESH0(CFG))
 #define _PyReg_IN(CFG, OP)      (&(CFG)->operands[(OP)->in])
 #define _PyReg_OUT(CFG, OP)     (&(CFG)->operands[(OP)->out])
+
+/* Exceptional transfers name virtual identities before allocation. Their
+ * physical homes are resolved by the assembler, like ordinary operands. */
+#define _PyReg_EH_KEEP(CFG, BLOCK) (&(CFG)->operands[(BLOCK)->handler_in])
+
+static inline int
+_PyReg_EH_EXC(const _PyRegCfg *cfg, const _PyRegBlock *block)
+{
+    assert(block->is_handler && block->handler_in >= 0);
+    return _PyReg_EH_KEEP(cfg, block)[block->nretained];
+}
+
+static inline int
+_PyReg_EH_LASTI(const _PyRegCfg *cfg, const _PyRegBlock *block)
+{
+    assert(block->is_handler && block->handler_in >= 0);
+    return block->preserve_lasti
+        ? _PyReg_EH_KEEP(cfg, block)[block->nretained + 1] : -1;
+}
 
 /* Whether op writes local z through its dst (a run of nout locals for an
  * unpack) */

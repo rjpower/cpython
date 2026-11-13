@@ -145,6 +145,10 @@ grow(void **array, int *alloc, int needed, size_t item)
         }
         n *= 2;
     }
+    if ((size_t)n > SIZE_MAX / item) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
     void *p = PyMem_Realloc(*array, (size_t)n * item);
     if (p == NULL) {
         PyErr_NoMemory();
@@ -169,6 +173,7 @@ _PyRegCfg_AddBlock(_PyRegCfg *cfg, int handler_depth, int preserve_lasti,
     memset(b, 0, sizeof(*b));
     b->start = b->end = cfg->nops;
     b->startdepth = handler_depth;
+    b->handler_in = -1;
     b->is_handler = handler_depth >= 0;
     b->preserve_lasti = preserve_lasti != 0;
     b->word = depth_hint;   // until mark_blocks() has the depths
@@ -486,6 +491,10 @@ canonicalise_below(converter *c, int depth)
 int
 _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index)
 {
+    if (n < 0 || n > INT_MAX - cfg->noperands) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
     RETURN_IF_ERROR(grow((void **)&cfg->operands, &cfg->aoperands,
                          cfg->noperands + n, sizeof(int)));
     *index = cfg->noperands;
@@ -589,6 +598,30 @@ convert(_PyRegCfg *cfg)
 {
     RETURN_IF_ERROR(mark_blocks(cfg));
     resolve_next_locations(cfg);
+    /* Capture the frontend's actual handler inputs while they still name
+     * virtual values. No reader reconstructs their homes from stack depth. */
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *block = &cfg->blocks[b];
+        if (!block->is_handler) {
+            continue;
+        }
+        block->nretained = handler_base(cfg, b);
+        if (block->nretained < 0) {
+            PyErr_SetString(PyExc_SystemError, "invalid handler input shape");
+            return ERROR;
+        }
+        int count = block->startdepth;
+        RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, count, &block->handler_in));
+        int *values = _PyReg_EH_KEEP(cfg, block);
+        for (int k = 0; k < block->nretained; k++) {
+            values[k] = _PyReg_CANON(cfg, k);
+        }
+        values[block->nretained] = _PyReg_CANON(cfg, block->startdepth - 1);
+        if (block->preserve_lasti) {
+            values[block->nretained + 1] =
+                _PyReg_CANON(cfg, block->startdepth - 2);
+        }
+    }
     converter c = {.cfg = cfg};
     int err = SUCCESS;
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
@@ -684,8 +717,7 @@ _PyRegCfg_FreeLiveness(_PyRegLiveness *lv)
  * last is not NULL, record which operands the op reads last or writes
  * dead. */
 static void
-transfer(_PyRegCfg *cfg, _PyRegLiveness *lv, _PyRegOp *op, uint64_t *live,
-         uint8_t *last)
+transfer(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *live, uint8_t *last)
 {
     if (op->opcode == _PyReg_DEAD) {
         return;
@@ -719,15 +751,13 @@ transfer(_PyRegCfg *cfg, _PyRegLiveness *lv, _PyRegOp *op, uint64_t *live,
             BIT_SET(live, temp_bit(cfg, in[k]));
         }
     }
-    // The handler finds the values below its depth where they are, so
-    // they are live while the op runs
+    // Retained owners survive the exceptional edge even if the handler
+    // does not subsequently read them. Protocol values are published later.
     if (op->except >= 0) {
-        int hd = handler_base(cfg, op->except);
-        uint64_t *h = lv->live_in[op->except];
-        for (int k = 0; k < hd; k++) {
-            if (BIT_GET(h, k)) {
-                BIT_SET(live, k);
-            }
+        const _PyRegBlock *handler = &cfg->blocks[op->except];
+        const int *retained = _PyReg_EH_KEEP(cfg, handler);
+        for (int k = 0; k < handler->nretained; k++) {
+            BIT_SET(live, temp_bit(cfg, retained[k]));
         }
     }
 }
@@ -785,7 +815,7 @@ _PyRegCfg_Liveness(_PyRegCfg *cfg, _PyRegLiveness *lv)
             }
             memcpy(lout, work, nwords * sizeof(uint64_t));
             for (int i = blk->end - 1; i >= blk->start; i--) {
-                transfer(cfg, lv, &cfg->ops[i], work, NULL);
+                transfer(cfg, &cfg->ops[i], work, NULL);
             }
             uint64_t *lin = lv->live_in[b];
             if (memcmp(lin, work, nwords * sizeof(uint64_t)) != 0) {
@@ -799,7 +829,7 @@ _PyRegCfg_Liveness(_PyRegCfg *cfg, _PyRegLiveness *lv)
         _PyRegBlock *blk = &cfg->blocks[b];
         memcpy(work, lv->live_out[b], nwords * sizeof(uint64_t));
         for (int i = blk->end - 1; i >= blk->start; i--) {
-            transfer(cfg, lv, &cfg->ops[i], work, lv->last);
+            transfer(cfg, &cfg->ops[i], work, lv->last);
         }
     }
     return SUCCESS;
@@ -1298,10 +1328,66 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
     return SUCCESS;
 }
 
+static int
+verify_handler_inputs(_PyRegCfg *cfg, const char *after, int physical,
+                      uint64_t *seen, int nwords)
+{
+    for (int b = 0; b < cfg->nblocks; b++) {
+        const _PyRegBlock *block = &cfg->blocks[b];
+        if (!block->is_handler) {
+            if (block->handler_in != -1 || block->nretained != 0) {
+                return verify_error(after, NULL, "handler inputs on an ordinary block");
+            }
+            continue;
+        }
+        if (block->handler_in < 0 || block->handler_in > cfg->noperands ||
+            block->nretained < 0 || block->nretained >
+                cfg->noperands - block->handler_in - 1 - block->preserve_lasti)
+        {
+            return verify_error(after, NULL, "invalid handler operand slice");
+        }
+        const int *values = _PyReg_EH_KEEP(cfg, block);
+        int count = block->nretained + 1 + block->preserve_lasti;
+        if (seen != NULL) {
+            memset(seen, 0, (size_t)nwords * sizeof(*seen));
+        }
+        for (int k = 0; k < count; k++) {
+            int v = values[k];
+            if (v < cfg->nlocalsplus || v >= cfg->nvregs) {
+                return verify_error(after, NULL, "handler input outside the virtual registers");
+            }
+            if (k > 0 && k < block->nretained && v <= values[k - 1]) {
+                return verify_error(after, NULL, "unordered retained identities");
+            }
+            if (seen != NULL) {
+                int bit = temp_bit(cfg, v);
+                if (BIT_GET(seen, bit)) {
+                    return verify_error(after, NULL, "aliased retained and protocol identities");
+                }
+                BIT_SET(seen, bit);
+            }
+        }
+        if (physical) {
+            memset(seen, 0, (size_t)nwords * sizeof(*seen));
+            for (int k = 0; k < count; k++) {
+                int slot = _PyRegCfg_Slot(cfg, values[k]) - cfg->nlocalsplus;
+                if (slot < 0 || slot >= cfg->ntemps || slot >= IR_MAX_SLOTS ||
+                    BIT_GET(seen, slot))
+                {
+                    return verify_error(after, NULL, "aliased or invalid handler input homes");
+                }
+                BIT_SET(seen, slot);
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 int
 _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
 {
     int nl = cfg->nlocalsplus;
+    RETURN_IF_ERROR(verify_handler_inputs(cfg, after, 0, NULL, 0));
     _PyRegLiveness lv;
     RETURN_IF_ERROR(_PyRegCfg_Liveness(cfg, &lv));
     int err = SUCCESS;
@@ -1311,6 +1397,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
         err = ERROR;
         goto done;
     }
+    err = verify_handler_inputs(cfg, after, physical, work, lv.nwords);
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         uint64_t *lin = lv.live_in[b];
@@ -1521,7 +1608,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                         }
                     }
                 }
-                transfer(cfg, &lv, op, work, NULL);
+                transfer(cfg, op, work, NULL);
             }
         }
     }

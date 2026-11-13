@@ -5045,14 +5045,14 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
             // _SPECIALIZE_CALL
             {
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 #if ENABLE_SPECIALIZATION
                 {
@@ -5061,7 +5061,7 @@
                         frame->phase_state = 0;
                         call_state |= CALL_EFFECTS;
                         frame->phase_state = 0;
-                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                         frame->phase_state = 0;
                         if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
                             JUMP_TO_LABEL(error);
@@ -5083,11 +5083,10 @@
             {
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -5095,7 +5094,7 @@
                 window = slots + call_base;
                 fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // _DO_CALL
             {
@@ -5145,7 +5144,11 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
             PyValue init;
@@ -5163,7 +5166,6 @@
             }
             // _CHECK_OBJECT
             {
-                self_or_null = window[1];
                 callable = window[0];
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
@@ -5172,7 +5174,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5199,8 +5201,9 @@
             }
             // _ALLOCATE_OBJECT
             {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                assert(PyValue_IsNull(self_or_null));
+                assert(!(call_state & CALL_SELF_PRESENT));
                 assert(PyType_Check(callable_o));
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 assert(tp->tp_new == PyBaseObject_Type.tp_new);
@@ -5233,12 +5236,15 @@
                     JUMP_TO_LABEL(error);
                 }
                 self_or_null = PyValue_FromObjectSteal(self_o);
+                call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
                 PyValue temp = callable;
                 callable = init_owner;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 IR_PUBLISH_TEMP(window[0], callable);
-                IR_PUBLISH_TEMP(window[1], self_or_null);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
                 PyValue_CLOSE(temp);
             }
             // _CREATE_INIT_FRAME
@@ -5254,7 +5260,7 @@
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
-                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
+                call_clear_owned_slots(window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 init_frame = PyValue_Wrap(temp);
             }
             // _PUSH_FRAME
@@ -5300,9 +5306,12 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
-            PyValue null;
             PyValue self_or_null;
             PyValue *args;
             PyValue new_frame;
@@ -5316,14 +5325,13 @@
             }
             // _CHECK_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                null = window[1];
-                callable = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                callable = window[-1 + oparg];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5336,24 +5344,25 @@
             }
             // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                self_or_null = null;
-                assert(PyValue_IsNull(self_or_null));
+                self_or_null = window[oparg];
+                assert(!(call_state & CALL_SELF_PRESENT));
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 STAT_INC(CALL, hit);
                 self_or_null = PyValue_DUP(((PyMethodObject *)callable_o)->im_self);
+                call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
                 PyValue temp = callable;
                 callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_PUBLISH_TEMP(window[0], callable);
-                IR_PUBLISH_TEMP(window[1], self_or_null);
+                IR_PUBLISH_TEMP(window[-1 + oparg], callable);
+                IR_PUBLISH_TEMP(window[oparg], self_or_null);
                 PyValue_CLOSE(temp);
             }
             // flush
             // _CHECK_FUNCTION_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5377,7 +5386,7 @@
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + (!PyValue_IsNull(self_or_null))) {
+                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5404,8 +5413,8 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[2];
-                int has_self = !PyValue_IsNull(self_or_null);
+                args = &window[1 + oparg];
+                int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
                 PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
@@ -5419,7 +5428,8 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg);
+                    call_transfer_exact_args(base, window_base, oparg,
+                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -5473,11 +5483,10 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
-            PyValue null;
             PyValue self_or_null;
             // _CHECK_PEP_523
             {
@@ -5490,7 +5499,6 @@
             }
             // _CHECK_METHOD_VERSION
             {
-                null = window[1];
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
@@ -5519,7 +5527,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -5528,14 +5536,13 @@
             }
             // _EXPAND_METHOD
             {
-                self_or_null = null;
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -5543,11 +5550,13 @@
                 window = slots + call_base;
                 fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // flush
             IR_PUBLISH_TEMP(window[0], callable);
-            IR_PUBLISH_TEMP(window[1], self_or_null);
+            if (call_state & CALL_SELF_PRESENT) {
+                IR_PUBLISH_TEMP(window[1], self_or_null);
+            }
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
@@ -5604,9 +5613,11 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
-            PyValue self_or_null;
             PyValue *args;
             PyValue value;
             // _GUARD_CALLABLE_BUILTIN_CLASS
@@ -5633,10 +5644,9 @@
             // _CALL_BUILTIN_CLASS
             {
                 args = &window[2];
-                self_or_null = window[1];
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -5665,10 +5675,10 @@
             }
             // _POP_TOP
             {
-                value = self_or_null;
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -5708,9 +5718,11 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
-            PyValue self_or_null;
             PyValue *args;
             PyValue value;
             // _GUARD_CALLABLE_BUILTIN_FAST
@@ -5738,10 +5750,9 @@
             // _CALL_BUILTIN_FAST
             {
                 args = &window[2];
-                self_or_null = window[1];
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -5770,10 +5781,10 @@
             }
             // _POP_TOP
             {
-                value = self_or_null;
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -5813,9 +5824,11 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
-            PyValue self_or_null;
             PyValue *args;
             PyValue value;
             // _GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS
@@ -5843,10 +5856,9 @@
             // _CALL_BUILTIN_FAST_WITH_KEYWORDS
             {
                 args = &window[2];
-                self_or_null = window[1];
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -5875,10 +5887,10 @@
             }
             // _POP_TOP
             {
-                value = self_or_null;
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -5918,14 +5930,15 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
-            PyValue self_or_null;
             PyValue *args;
             PyValue res;
             // _GUARD_CALLABLE_BUILTIN_O
             {
-                self_or_null = window[1];
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
@@ -5945,7 +5958,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     total_args++;
                 }
                 if (total_args != 1) {
@@ -5965,14 +5978,15 @@
             // _CALL_BUILTIN_O
             {
                 args = &window[2];
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     args--;
                 }
                 STAT_INC(CALL, hit);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 PyValue result = native_call_builtin_o(
-                    tstate, frame, next_instr,IR_B(ir_word), oparg + 2, callable, args);
+                    tstate, frame, next_instr,IR_B(ir_word), oparg + 2, callable, args,
+                    call_state);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
@@ -5982,7 +5996,7 @@
                 slots = _PyFrame_Slots(frame);
                 window = &slots[IR_B(ir_word)];
                 res = result;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
             }
             // _CHECK_PERIODIC_AT_END
@@ -6022,8 +6036,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 0);
+            (void)call_state;
             PyValue func_st;
             PyValue func;
             PyValue callargs;
@@ -6047,7 +6061,7 @@
             }
             // _MAKE_CALLARGS_A_TUPLE
             {
-                kwargs = window[3];
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
                 callargs = window[2];
                 func = func_st;
                 frame->phase_state = 0;
@@ -6061,7 +6075,7 @@
                 window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
-                kwargs = window[3];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
             }
             // _CHECK_IS_NOT_PY_CALLABLE_EX
             {
@@ -6111,6 +6125,664 @@
             }
         }
 
+        TARGET(CALL_EX_NO_SELF_KW) {
+            int opcode = CALL_FUNCTION_EX;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_FUNCTION_EX);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_C(ir_word);
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _SPECIALIZE_CALL_FUNCTION_EX
+            {
+                func = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    frame->phase_state = 0;
+                    call_state |= CALL_EFFECTS;
+                    frame->phase_state = 0;
+                    _Py_Specialize_CallFunctionEx(func, this_instr);
+                    frame->phase_state = 0;
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    this_instr = frame->instr_ptr;
+                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                    slots = _PyFrame_Slots(frame);
+                    window = slots + call_base;
+                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW; }
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _DO_CALL_FUNCTION_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_KW:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_EX_NO_SELF_KW_NON_PY_GENERAL) {
+            int opcode = CALL_EX_NON_PY_GENERAL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 2);
+            (void)call_state;
+            PyValue func_st;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _CHECK_IS_NOT_PY_CALLABLE_EX
+            {
+                func_st = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = func_st;
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _CHECK_IS_NOT_PY_CALLABLE_EX
+            {
+                func_st = func;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _CALL_FUNCTION_EX_NON_PY_GENERAL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_KW_NON_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_EX_NO_SELF_KW_PY) {
+            int opcode = CALL_EX_PY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_EX_PY);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 2);
+            (void)call_state;
+            PyValue func_st;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _CHECK_IS_PY_CALLABLE_EX
+            {
+                func_st = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) != &PyFunction_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = func_st;
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _CHECK_IS_PY_CALLABLE_EX
+            {
+                func_st = func;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) != &PyFunction_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _PY_FRAME_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_KW_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_EX_NO_SELF_NO_KW) {
+            int opcode = CALL_FUNCTION_EX;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_FUNCTION_EX);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 10);
+            (void)call_state;
+            uint32_t call_feedback = IR_C(ir_word);
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _SPECIALIZE_CALL_FUNCTION_EX
+            {
+                func = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    frame->phase_state = 0;
+                    call_state |= CALL_EFFECTS;
+                    frame->phase_state = 0;
+                    _Py_Specialize_CallFunctionEx(func, this_instr);
+                    frame->phase_state = 0;
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    this_instr = frame->instr_ptr;
+                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                    slots = _PyFrame_Slots(frame);
+                    window = slots + call_base;
+                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW; }
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _DO_CALL_FUNCTION_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_NO_KW:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL) {
+            int opcode = CALL_EX_NON_PY_GENERAL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 10);
+            (void)call_state;
+            PyValue func_st;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _CHECK_IS_NOT_PY_CALLABLE_EX
+            {
+                func_st = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = func_st;
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _CHECK_IS_NOT_PY_CALLABLE_EX
+            {
+                func_st = func;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _CALL_FUNCTION_EX_NON_PY_GENERAL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_EX_NO_SELF_NO_KW_PY) {
+            int opcode = CALL_EX_PY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_EX_PY);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 10);
+            (void)call_state;
+            PyValue func_st;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _CHECK_IS_PY_CALLABLE_EX
+            {
+                func_st = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) != &PyFunction_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = func_st;
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _CHECK_IS_PY_CALLABLE_EX
+            {
+                func_st = func;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                if (Py_TYPE(func) != &PyFunction_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY; }
+                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
+                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
+                }
+            }
+            // _PY_FRAME_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NO_SELF_NO_KW_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
         TARGET(CALL_EX_PY) {
             int opcode = CALL_EX_PY;
             (void)(opcode);
@@ -6127,8 +6799,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 0);
+            (void)call_state;
             PyValue func_st;
             PyValue func;
             PyValue callargs;
@@ -6167,7 +6839,7 @@
             }
             // _MAKE_CALLARGS_A_TUPLE
             {
-                kwargs = window[3];
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
                 callargs = window[2];
                 func = func_st;
                 frame->phase_state = 0;
@@ -6181,7 +6853,7 @@
                 window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
-                kwargs = window[3];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
             }
             // _CHECK_IS_PY_CALLABLE_EX
             {
@@ -6254,8 +6926,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_C(ir_word);
             PyValue func;
             PyValue callargs;
@@ -6288,7 +6960,7 @@
             }
             // _MAKE_CALLARGS_A_TUPLE
             {
-                kwargs = window[3];
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
                 callargs = window[2];
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
@@ -6302,7 +6974,7 @@
                 fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 func = window[0];
                 callargs = window[2];
-                kwargs = window[3];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
             }
             // _DO_CALL_FUNCTION_EX
             {
@@ -6549,16 +7221,18 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1) + (1));
-            PyValue null;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
+            PyValue null;
             PyValue instance;
             PyValue cls;
             PyValue res;
             // _GUARD_THIRD_NULL
             {
-                null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6585,6 +7259,7 @@
             {
                 cls = window[3];
                 instance = window[2];
+                null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 int retval;
                 if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
@@ -6605,16 +7280,15 @@
                 (void)null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[3] = PyValue_NULL;
+                call_clear_owned_slots(window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(cls);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_CLOSE(instance);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
+                call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_CLOSE_POINTER(callable);
                 res = retval ? PyValue_True : PyValue_False;
                 assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
@@ -6650,8 +7324,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
@@ -6659,7 +7333,7 @@
             // _SPECIALIZE_CALL_KW
             {
                 kwnames = window[2 + oparg];
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
@@ -6688,11 +7362,10 @@
             {
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6700,7 +7373,7 @@
                 window = slots + call_base;
                 fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // _DO_CALL_KW
             {
@@ -6752,11 +7425,10 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
-            PyValue null;
             PyValue self_or_null;
             // _CHECK_PEP_523
             {
@@ -6769,7 +7441,6 @@
             }
             // _CHECK_METHOD_VERSION_KW
             {
-                null = window[1];
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
@@ -6798,7 +7469,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -6807,14 +7478,13 @@
             }
             // _EXPAND_METHOD_KW
             {
-                self_or_null = null;
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6822,11 +7492,13 @@
                 window = slots + call_base;
                 fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // flush
             IR_PUBLISH_TEMP(window[0], callable);
-            IR_PUBLISH_TEMP(window[1], self_or_null);
+            if (call_state & CALL_SELF_PRESENT) {
+                IR_PUBLISH_TEMP(window[1], self_or_null);
+            }
             // _PY_FRAME_KW
             {
                 frame->phase_state = 0;
@@ -6876,8 +7548,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 0);
+            (void)call_state;
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE_KW
             {
@@ -6929,6 +7601,403 @@
             }
         }
 
+        TARGET(CALL_KW_NO_SELF) {
+            int opcode = CALL_KW;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue kwnames;
+            // _SPECIALIZE_CALL_KW
+            {
+                kwnames = window[2 + oparg];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    frame->phase_state = 0;
+                    call_state |= CALL_EFFECTS;
+                    frame->phase_state = 0;
+                    _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
+                    frame->phase_state = 0;
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    this_instr = frame->instr_ptr;
+                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                    slots = _PyFrame_Slots(frame);
+                    window = slots + call_base;
+                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF; }
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CALL_KW);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAYBE_EXPAND_METHOD_KW
+            {
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _DO_CALL_KW
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_NO_SELF:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_KW_NO_SELF_BOUND_METHOD) {
+            int opcode = CALL_KW_BOUND_METHOD;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+            }
+            // _CHECK_METHOD_VERSION_KW
+            {
+                callable = window[0];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+            }
+            // _EXPAND_METHOD_KW
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // flush
+            IR_PUBLISH_TEMP(window[0], callable);
+            if (call_state & CALL_SELF_PRESENT) {
+                IR_PUBLISH_TEMP(window[1], self_or_null);
+            }
+            // _PY_FRAME_KW
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_NO_SELF_BOUND_METHOD:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_KW_NO_SELF_NON_PY) {
+            int opcode = CALL_KW_NON_PY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW_NON_PY);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 2);
+            (void)call_state;
+            PyValue callable;
+            // _CHECK_IS_NOT_PY_CALLABLE_KW
+            {
+                callable = window[0];
+                if (PyValue_IsObject(callable)) {
+                    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                    if (PyFunction_Check(callable_o)) {
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_NON_PY; }
+                        UPDATE_MISS_STATS(CALL_KW);
+                        assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                        JUMP_TO_PREDICTED(CALL_KW);
+                    }
+                    if (Py_TYPE(callable_o) == &PyMethod_Type) {
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_NON_PY; }
+                        UPDATE_MISS_STATS(CALL_KW);
+                        assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                        JUMP_TO_PREDICTED(CALL_KW);
+                    }
+                }
+            }
+            // _CALL_KW_NON_PY
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_NO_SELF_NON_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_KW_NO_SELF_PY) {
+            int opcode = CALL_KW_PY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW_PY);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_PY; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+            }
+            // _CHECK_FUNCTION_VERSION_KW
+            {
+                callable = window[0];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_PY; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_PY; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_PY; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NO_SELF_PY; }
+                    UPDATE_MISS_STATS(CALL_KW);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
+                    JUMP_TO_PREDICTED(CALL_KW);
+                }
+            }
+            // _PY_FRAME_KW_GUARDED
+            {
+                frame->phase_state = 0;
+                assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_KEYWORDS, fb, call_state);
+                    if (call_result.status > 0) {
+                        call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
+                    }
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_NO_SELF_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
         TARGET(CALL_KW_PY) {
             int opcode = CALL_KW_PY;
             (void)(opcode);
@@ -6948,8 +8017,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             // _CHECK_PEP_523
@@ -7001,7 +8070,7 @@
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_KEYWORDS, fb);
+                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_KEYWORDS, fb, call_state);
                     if (call_result.status > 0) {
                         call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
@@ -7044,8 +8113,10 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1));
-            PyValue null;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue arg;
             PyValue res;
@@ -7054,8 +8125,7 @@
             PyValue value;
             // _GUARD_NOS_NULL
             {
-                null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7102,9 +8172,11 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
-                IR_PUBLISH_TEMP(window[1], a);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], a);
+                }
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
@@ -7112,7 +8184,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -7142,7 +8214,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue nos;
             PyValue self;
@@ -7170,7 +8245,7 @@
             }
             // _GUARD_NOS_NOT_NULL
             {
-                nos = window[1];
+                nos = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 if (PyValue_IsNull(nos)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7206,20 +8281,21 @@
                 PyValue item = arg;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
                     PyValue tmp = self;
                     self = PyValue_NULL;
-                    IR_PUBLISH_TEMP(window[1], self);
+                    if (call_state & CALL_SELF_PRESENT) {
+                        IR_PUBLISH_TEMP(window[1], self);
+                    }
                     _PyValue_CLOSE_POINTER(tmp);
                     tmp = callable;
                     callable = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[0], callable);
                     _PyValue_CLOSE_POINTER(tmp);
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
+                    call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
                 }
@@ -7233,7 +8309,9 @@
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 IR_PUBLISH_TEMP(window[0], none);
-                IR_PUBLISH_TEMP(window[1], c);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
@@ -7241,7 +8319,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -7271,7 +8349,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
@@ -7279,7 +8360,7 @@
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST
             {
                 args = &window[2];
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
@@ -7301,7 +8382,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     total_args++;
                 }
                 if (total_args == 0) {
@@ -7309,7 +8390,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7320,7 +8401,7 @@
             {
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -7351,7 +8432,7 @@
                 value = self_or_null;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -7391,15 +8472,16 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
-            PyValue self_or_null;
             PyValue *args;
             PyValue value;
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
                 args = &window[2];
-                self_or_null = window[1];
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
@@ -7422,7 +8504,7 @@
                 }
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -7441,7 +8523,7 @@
             {
                 int total_args = oparg;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                     total_args++;
                 }
@@ -7469,10 +8551,10 @@
             }
             // _POP_TOP
             {
-                value = self_or_null;
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -7514,7 +8596,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
@@ -7525,7 +8610,7 @@
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS
             {
                 args = &window[2];
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
@@ -7546,7 +8631,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     total_args++;
                 }
                 if (total_args != 1) {
@@ -7554,7 +8639,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7573,8 +8658,8 @@
             {
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                assert(oparg == 1 || !PyValue_IsNull(self_or_null));
-                if (!PyValue_IsNull(self_or_null)) {
+                assert(oparg == 1 || (call_state & CALL_SELF_PRESENT));
+                if (call_state & CALL_SELF_PRESENT) {
                     args--;
                 }
                 PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
@@ -7608,9 +8693,11 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[2], oparg);
+                call_clear_owned_slots(window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
-                IR_PUBLISH_TEMP(window[1], c);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
                 PyValue_XCLOSE(value);
             }
             // _POP_TOP
@@ -7618,7 +8705,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -7660,7 +8747,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
@@ -7672,7 +8762,7 @@
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_O
             {
                 args = &window[2];
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
@@ -7693,7 +8783,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     total_args++;
                 }
                 if (total_args != 2) {
@@ -7701,7 +8791,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
                 if (PyValue_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7721,7 +8811,7 @@
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     arguments--;
                 }
                 STAT_INC(CALL, hit);
@@ -7761,9 +8851,11 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_CLEAR_SLOTS(&window[3], -1 + oparg);
+                call_clear_owned_slots(window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
-                IR_PUBLISH_TEMP(window[1], c);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
                 IR_PUBLISH_TEMP(window[2], s);
                 PyValue_XCLOSE(value);
             }
@@ -7772,7 +8864,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
                 PyValue_XCLOSE(value);
             }
             // _POP_TOP
@@ -7780,7 +8872,7 @@
                 value = c;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
                 _PyValue_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
@@ -7822,8 +8914,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE
             {
@@ -7875,16 +8967,16 @@
             }
         }
 
-        TARGET(CALL_PY_EXACT_ARGS) {
-            int opcode = CALL_PY_EXACT_ARGS;
+        TARGET(CALL_NO_SELF) {
+            int opcode = CALL;
             (void)(opcode);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
+            INSTRUCTION_STATS(CALL);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
@@ -7892,7 +8984,274 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (oparg));
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            // _SPECIALIZE_CALL
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                #if ENABLE_SPECIALIZATION
+                {
+                    _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                        frame->phase_state = 0;
+                        call_state |= CALL_EFFECTS;
+                        frame->phase_state = 0;
+                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
+                        frame->phase_state = 0;
+                        if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                            JUMP_TO_LABEL(error);
+                        }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                        window = slots + call_base;
+                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF; }
+                        DISPATCH_SAME_OPARG();
+                    }
+                    OPCODE_DEFERRED_INC(CALL);
+                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                }
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAYBE_EXPAND_METHOD
+            {
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _DO_CALL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_NO_SELF:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_NO_SELF_ALLOC_AND_ENTER_INIT) {
+            int opcode = CALL_ALLOC_AND_ENTER_INIT;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue init;
+            PyValue self;
+            PyValue *args;
+            PyValue init_frame;
+            PyValue new_frame;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_OBJECT
+            {
+                callable = window[0];
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (!PyType_Check(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyTypeObject *tp = (PyTypeObject *)callable_o;
+                if (FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _ALLOCATE_OBJECT
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                assert(!(call_state & CALL_SELF_PRESENT));
+                assert(PyType_Check(callable_o));
+                PyTypeObject *tp = (PyTypeObject *)callable_o;
+                assert(tp->tp_new == PyBaseObject_Type.tp_new);
+                assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
+                assert(tp->tp_alloc == PyType_GenericAlloc);
+                PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
+                PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
+                if (init_func->vectorcall != _PyFunction_Vectorcall) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyCodeObject *code = (PyCodeObject *)init_func->func_code;
+                if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *self_o = PyType_GenericAlloc(tp, 0);
+                if (self_o == NULL) {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    PyValue_CLOSE(init_owner);
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                self_or_null = PyValue_FromObjectSteal(self_o);
+                call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
+                PyValue temp = callable;
+                callable = init_owner;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
+                PyValue_CLOSE(temp);
+            }
+            // _CREATE_INIT_FRAME
+            {
+                args = &window[2];
+                self = self_or_null;
+                init = callable;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
+                    tstate, frame, args-2, oparg,IR_A(ir_word), next_instr);
+                if (temp == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                call_clear_owned_slots(window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                init_frame = PyValue_Wrap(temp);
+            }
+            // _PUSH_FRAME
+            {
+                new_frame = init_frame;
+                assert(!IS_PEP523_HOOKED(tstate));
+                _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+                frame->phase_state = 0;
+                assert(temp->previous == frame || temp->previous->previous == frame);
+                CALL_STAT_INC(inlined_py_calls);
+                frame = tstate->current_frame = temp;
+                tstate->py_recursion_remaining--;
+                slots = _PyFrame_Slots(frame);
+                LOAD_IP(0);
+                IR_SKIP_RESUME();
+                DTRACE_FUNCTION_ENTRY();
+                LLTRACE_RESUME_FRAME();
+            }
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS) {
+            int opcode = CALL_BOUND_METHOD_EXACT_ARGS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
@@ -7905,11 +9264,46 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _CHECK_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                callable = window[-1 + oparg];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (Py_TYPE(PyValue_AsKnownObjectBorrow(callable)) != &PyMethod_Type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                self_or_null = window[oparg];
+                assert(!(call_state & CALL_SELF_PRESENT));
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                STAT_INC(CALL, hit);
+                self_or_null = PyValue_DUP(((PyMethodObject *)callable_o)->im_self);
+                call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
+                PyValue temp = callable;
+                callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[-1 + oparg], callable);
+                IR_PUBLISH_TEMP(window[oparg], self_or_null);
+                PyValue_CLOSE(temp);
+            }
+            // flush
             // _CHECK_FUNCTION_VERSION
             {
-                callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7929,12 +9323,11 @@
             }
             // _CHECK_FUNCTION_EXACT_ARGS
             {
-                self_or_null = window[1];
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + (!PyValue_IsNull(self_or_null))) {
+                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7961,8 +9354,8 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[2];
-                int has_self = !PyValue_IsNull(self_or_null);
+                args = &window[1 + oparg];
+                int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
                 PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
@@ -7976,7 +9369,2171 @@
                 _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
                 if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg);
+                    call_transfer_exact_args(base, window_base, oparg,
+                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+                }
+                window_base[0] = PyValue_NULL;
+                new_frame = PyValue_Wrap(pushed_frame);
+            }
+            // _SAVE_RETURN_SLOT
+            {
+                frame->return_slot = (uint16_t)IR_A(ir_word);
+                frame->return_pc = next_instr;
+            }
+            // _PUSH_FRAME
+            {
+                assert(!IS_PEP523_HOOKED(tstate));
+                _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+                frame->phase_state = 0;
+                assert(temp->previous == frame || temp->previous->previous == frame);
+                CALL_STAT_INC(inlined_py_calls);
+                frame = tstate->current_frame = temp;
+                tstate->py_recursion_remaining--;
+                slots = _PyFrame_Slots(frame);
+                LOAD_IP(0);
+                IR_SKIP_RESUME();
+                DTRACE_FUNCTION_ENTRY();
+                LLTRACE_RESUME_FRAME();
+            }
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_BOUND_METHOD_GENERAL) {
+            int opcode = CALL_BOUND_METHOD_GENERAL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_METHOD_VERSION
+            {
+                callable = window[0];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _EXPAND_METHOD
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // flush
+            IR_PUBLISH_TEMP(window[0], callable);
+            if (call_state & CALL_SELF_PRESENT) {
+                IR_PUBLISH_TEMP(window[1], self_or_null);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _PY_FRAME_GENERAL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_NO_SELF_BOUND_METHOD_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_NO_SELF_BUILTIN_CLASS) {
+            int opcode = CALL_BUILTIN_CLASS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BUILTIN_CLASS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue *args;
+            PyValue value;
+            // _GUARD_CALLABLE_BUILTIN_CLASS
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyType_Check(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyTypeObject *tp = (PyTypeObject *)callable_o;
+                if (tp->tp_vectorcall == NULL) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_BUILTIN_CLASS
+            {
+                args = &window[2];
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = _PyValue_VectorcallTstate(
+                    tstate, callable, arguments, total_args, NULL);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyValue temp = callable;
+                callable = result;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                PyValue_CLOSE(temp);
+            }
+            // _POP_TOP_OPARG
+            {
+                args = &window[2];
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValue_CloseStack(args, oparg);
+            }
+            // _POP_TOP
+            {
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_BUILTIN_FAST) {
+            int opcode = CALL_BUILTIN_FAST;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BUILTIN_FAST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue *args;
+            PyValue value;
+            // _GUARD_CALLABLE_BUILTIN_FAST
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyCFunction_CheckExact(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+                if (flags != METH_FASTCALL
+                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_BUILTIN_FAST
+            {
+                args = &window[2];
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = _PyValue_VectorcallTstate(
+                    tstate, callable, arguments, total_args, NULL);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyValue temp = callable;
+                callable = result;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                PyValue_CLOSE(temp);
+            }
+            // _POP_TOP_OPARG
+            {
+                args = &window[2];
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValue_CloseStack(args, oparg);
+            }
+            // _POP_TOP
+            {
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_BUILTIN_FAST_WITH_KEYWORDS) {
+            int opcode = CALL_BUILTIN_FAST_WITH_KEYWORDS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BUILTIN_FAST_WITH_KEYWORDS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue *args;
+            PyValue value;
+            // _GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyCFunction_CheckExact(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+                if (flags != (METH_FASTCALL | METH_KEYWORDS)
+                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_BUILTIN_FAST_WITH_KEYWORDS
+            {
+                args = &window[2];
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = _PyValue_VectorcallTstate(
+                    tstate, callable, arguments, total_args, NULL);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyValue temp = callable;
+                callable = result;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                PyValue_CLOSE(temp);
+            }
+            // _POP_TOP_OPARG
+            {
+                args = &window[2];
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValue_CloseStack(args, oparg);
+            }
+            // _POP_TOP
+            {
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_BUILTIN_O) {
+            int opcode = CALL_BUILTIN_O;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_BUILTIN_O);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue *args;
+            PyValue res;
+            // _GUARD_CALLABLE_BUILTIN_O
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyCFunction_CheckExact(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if ((PyCFunction_GET_FLAGS(callable_o) &
+                     _Py_METH_CALL_FLAGS) != METH_O) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int total_args = oparg;
+                if (call_state & CALL_SELF_PRESENT) {
+                    total_args++;
+                }
+                if (total_args != 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_BUILTIN_O
+            {
+                args = &window[2];
+                if (call_state & CALL_SELF_PRESENT) {
+                    args--;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = native_call_builtin_o(
+                    tstate, frame, next_instr,IR_B(ir_word), oparg + 2, callable, args,
+                    call_state);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = &slots[IR_B(ir_word)];
+                res = result;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_ISINSTANCE) {
+            int opcode = CALL_ISINSTANCE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_ISINSTANCE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue null;
+            PyValue instance;
+            PyValue cls;
+            PyValue res;
+            // _GUARD_THIRD_NULL
+            {
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_CALLABLE_ISINSTANCE
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyInterpreterState *interp = tstate->interp;
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.isinstance) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_ISINSTANCE
+            {
+                cls = window[3];
+                instance = window[2];
+                null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                STAT_INC(CALL, hit);
+                int retval;
+                if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    retval = _PyEval_IsInstanceValue(instance, cls);
+                }
+                else {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    retval = PyObject_IsInstance(PyValue_AsKnownObjectBorrow(instance),
+                        PyValue_AsKnownObjectBorrow(cls));
+                }
+                if (retval < 0) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                (void)null;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 3, 1, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_CLOSE(cls);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_CLOSE(instance);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                _PyValue_CLOSE_POINTER(callable);
+                res = retval ? PyValue_True : PyValue_False;
+                assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
+            }
+            IR_PUBLISH_TEMP(window[0], res);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_LEN) {
+            int opcode = CALL_LEN;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_LEN);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue arg;
+            PyValue res;
+            PyValue a;
+            PyValue c;
+            PyValue value;
+            // _GUARD_NOS_NULL
+            {
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_CALLABLE_LEN
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyInterpreterState *interp = tstate->interp;
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.len) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_LEN
+            {
+                arg = window[2];
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                Py_ssize_t len_i = _PyValue_Size(arg);
+                if (len_i < 0) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                res = PyValue_FromInt64(len_i);
+                if (PyValue_IsNull(res)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                a = arg;
+                c = callable;
+            }
+            // _POP_TOP
+            {
+                value = c;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], a);
+                }
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            // _POP_TOP
+            {
+                value = a;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_LIST_APPEND) {
+            int opcode = CALL_LIST_APPEND;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_LIST_APPEND);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue nos;
+            PyValue self;
+            PyValue arg;
+            PyValue none;
+            PyValue c;
+            PyValue s;
+            PyValue value;
+            // _GUARD_CALLABLE_LIST_APPEND
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyInterpreterState *interp = tstate->interp;
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.list_append) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_NOS_NOT_NULL
+            {
+                nos = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                if (PyValue_IsNull(nos)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_NOS_LIST
+            {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[1]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                if (!PyList_CheckExact(o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_LIST_APPEND
+            {
+                arg = window[2];
+                self = nos;
+                assert(oparg == 1);
+                PyObject *self_o = PyValue_AsKnownObjectBorrow(self);
+                if (!LOCK_OBJECT(self_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                STAT_INC(CALL, hit);
+                PyValue item = arg;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
+                UNLOCK_OBJECT(self_o);
+                if (err) {
+                    PyValue tmp = self;
+                    self = PyValue_NULL;
+                    if (call_state & CALL_SELF_PRESENT) {
+                        IR_PUBLISH_TEMP(window[1], self);
+                    }
+                    _PyValue_CLOSE_POINTER(tmp);
+                    tmp = callable;
+                    callable = PyValue_NULL;
+                    IR_PUBLISH_TEMP(window[0], callable);
+                    _PyValue_CLOSE_POINTER(tmp);
+                    call_clear_owned_slots(window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                c = callable;
+                s = self;
+                none = PyValue_None;
+            }
+            // _POP_TOP
+            {
+                value = s;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], none);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            // _POP_TOP
+            {
+                value = c;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_FAST) {
+            int opcode = CALL_METHOD_DESCRIPTOR_FAST;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            PyValue value;
+            // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST
+            {
+                args = &window[2];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+                if (flags != METH_FASTCALL
+                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int total_args = oparg;
+                if (call_state & CALL_SELF_PRESENT) {
+                    total_args++;
+                }
+                if (total_args == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_METHOD_DESCRIPTOR_FAST
+            {
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = _PyValue_VectorcallTstate(
+                    tstate, callable, arguments, total_args, NULL);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyValue temp = callable;
+                callable = result;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                PyValue_CLOSE(temp);
+            }
+            // _POP_TOP_OPARG
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValue_CloseStack(args, oparg);
+            }
+            // _POP_TOP
+            {
+                value = self_or_null;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) {
+            int opcode = CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue *args;
+            PyValue value;
+            // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
+            {
+                args = &window[2];
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+                if (flags != (METH_FASTCALL | METH_KEYWORDS)
+                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                if (total_args == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (PyValue_TYPE(arguments[0]) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
+            {
+                int total_args = oparg;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                    total_args++;
+                }
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyValue result = _PyValue_VectorcallTstate(
+                    tstate, callable, arguments, total_args, NULL);
+                if (PyValue_IsNull(result)) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyValue temp = callable;
+                callable = result;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                PyValue_CLOSE(temp);
+            }
+            // _POP_TOP_OPARG
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValue_CloseStack(args, oparg);
+            }
+            // _POP_TOP
+            {
+                value = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_NOARGS) {
+            int opcode = CALL_METHOD_DESCRIPTOR_NOARGS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
+            PyObject *value_boxes[16];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 16};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            PyValue res;
+            PyValue c;
+            PyValue s;
+            PyValue value;
+            // _GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS
+            {
+                args = &window[2];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
+                    METH_NOARGS) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int total_args = oparg;
+                if (call_state & CALL_SELF_PRESENT) {
+                    total_args++;
+                }
+                if (total_args != 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_METHOD_DESCRIPTOR_NOARGS
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                assert(oparg == 1 || (call_state & CALL_SELF_PRESENT));
+                if (call_state & CALL_SELF_PRESENT) {
+                    args--;
+                }
+                PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
+                if (self == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                STAT_INC(CALL, hit);
+                PyCFunction cfunc = method->d_method->ml_meth;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyBorrowScope_Exit(tstate, borrow_mark);
+                _Py_LeaveRecursiveCallTstate(tstate);
+                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+                if (res_o == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                c = callable;
+                s = args[0];
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            // _POP_TOP
+            {
+                value = s;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 2, oparg, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
+                PyValue_XCLOSE(value);
+            }
+            // _POP_TOP
+            {
+                value = c;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_METHOD_DESCRIPTOR_O) {
+            int opcode = CALL_METHOD_DESCRIPTOR_O;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
+            PyObject *value_boxes[18];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 18};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            PyValue res;
+            PyValue c;
+            PyValue s;
+            PyValue a;
+            PyValue value;
+            // _GUARD_CALLABLE_METHOD_DESCRIPTOR_O
+            {
+                args = &window[2];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
+                    METH_O) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                int total_args = oparg;
+                if (call_state & CALL_SELF_PRESENT) {
+                    total_args++;
+                }
+                if (total_args != 2) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_METHOD_DESCRIPTOR_O
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                PyValue *arguments = args;
+                if (call_state & CALL_SELF_PRESENT) {
+                    arguments--;
+                }
+                STAT_INC(CALL, hit);
+                PyCFunction cfunc = method->d_method->ml_meth;
+                PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
+                if (self == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                PyObject *arg = _PyValueTemps_Object(value_temps, arguments[1]);
+                if (arg == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyBorrowScope_Exit(tstate, borrow_mark);
+                _Py_LeaveRecursiveCallTstate(tstate);
+                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+                if (res_o == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                c = callable;
+                s = arguments[0];
+                a = arguments[1];
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            // _POP_TOP
+            {
+                value = a;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 3, -1 + oparg, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], c);
+                }
+                IR_PUBLISH_TEMP(window[2], s);
+                PyValue_XCLOSE(value);
+            }
+            // _POP_TOP
+            {
+                value = s;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
+                PyValue_XCLOSE(value);
+            }
+            // _POP_TOP
+            {
+                value = c;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 1, CALL_TRANSACTION_VECTOR, call_state);
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_NON_PY_GENERAL) {
+            int opcode = CALL_NON_PY_GENERAL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_NON_PY_GENERAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            // _CHECK_IS_NOT_PY_CALLABLE
+            {
+                callable = window[0];
+                if (PyValue_IsObject(callable)) {
+                    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                    if (PyFunction_Check(callable_o)) {
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_NON_PY_GENERAL; }
+                        UPDATE_MISS_STATS(CALL);
+                        assert(_PyOpcode_Deopt[opcode] == (CALL));
+                        JUMP_TO_PREDICTED(CALL);
+                    }
+                    if (Py_TYPE(callable_o) == &PyMethod_Type) {
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_NON_PY_GENERAL; }
+                        UPDATE_MISS_STATS(CALL);
+                        assert(_PyOpcode_Deopt[opcode] == (CALL));
+                        JUMP_TO_PREDICTED(CALL);
+                    }
+                }
+            }
+            // _CALL_NON_PY_GENERAL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_NO_SELF_NON_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_NO_SELF_PY_EXACT_ARGS) {
+            int opcode = CALL_PY_EXACT_ARGS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue *args;
+            PyValue new_frame;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_VERSION
+            {
+                callable = window[-1 + oparg];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyFunction_Check(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                if (func->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_EXACT_ARGS
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                assert(PyFunction_Check(callable_o));
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_STACK_SPACE
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _INIT_CALL_PY_EXACT_ARGS
+            {
+                args = &window[1 + oparg];
+                int has_self = (call_state & CALL_SELF_PRESENT) != 0;
+                STAT_INC(CALL, hit);
+                PyValue *window_base = args - 2;
+                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                PyValue *base = args - has_self;
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    base = _PyDataStack_Slots(tstate->datastack_top);
+                }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
+                    tstate, code, base, oparg + has_self, frame);
+                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                code, base, frame);
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    call_transfer_exact_args(base, window_base, oparg,
+                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+                }
+                window_base[0] = PyValue_NULL;
+                new_frame = PyValue_Wrap(pushed_frame);
+            }
+            // _SAVE_RETURN_SLOT
+            {
+                frame->return_slot = (uint16_t)IR_A(ir_word);
+                frame->return_pc = next_instr;
+            }
+            // _PUSH_FRAME
+            {
+                assert(!IS_PEP523_HOOKED(tstate));
+                _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+                frame->phase_state = 0;
+                assert(temp->previous == frame || temp->previous->previous == frame);
+                CALL_STAT_INC(inlined_py_calls);
+                frame = tstate->current_frame = temp;
+                tstate->py_recursion_remaining--;
+                slots = _PyFrame_Slots(frame);
+                LOAD_IP(0);
+                IR_SKIP_RESUME();
+                DTRACE_FUNCTION_ENTRY();
+                LLTRACE_RESUME_FRAME();
+            }
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_PY_GENERAL) {
+            int opcode = CALL_PY_GENERAL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_PY_GENERAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_VERSION
+            {
+                callable = window[0];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyFunction_Check(callable_o)) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                if (func->func_version != func_version) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NO_SELF_PY_GENERAL; }
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _PY_FRAME_GENERAL_GUARDED
+            {
+                frame->phase_state = 0;
+                assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_VECTOR, fb, call_state);
+                    if (call_result.status > 0) {
+                        call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
+                    }
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_NO_SELF_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                slots = _PyFrame_Slots(frame);
+                DISPATCH();
+            }
+        }
+
+        TARGET(CALL_NO_SELF_STR_1) {
+            int opcode = CALL_STR_1;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_STR_1);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue arg;
+            PyValue res;
+            PyValue a;
+            PyValue value;
+            // _GUARD_NOS_NULL
+            {
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_CALLABLE_STR_1
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (callable_o != (PyObject *)&PyUnicode_Type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_STR_1
+            {
+                arg = window[2];
+                assert(oparg == 1);
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *res_o = _PyValue_Str(arg);
+                if (res_o == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                a = arg;
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            // _POP_TOP
+            {
+                value = a;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_TUPLE_1) {
+            int opcode = CALL_TUPLE_1;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_TUPLE_1);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue arg;
+            PyValue res;
+            PyValue a;
+            PyValue value;
+            // _GUARD_NOS_NULL
+            {
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_CALLABLE_TUPLE_1
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (callable_o != (PyObject *)&PyTuple_Type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_TUPLE_1
+            {
+                arg = window[2];
+                assert(oparg == 1);
+                STAT_INC(CALL, hit);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *res_o = _PyValue_SequenceTuple(arg);
+                if (res_o == NULL) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                a = arg;
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            // _POP_TOP
+            {
+                value = a;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                PyValue_XCLOSE(value);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_NO_SELF_TYPE_1) {
+            int opcode = CALL_TYPE_1;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_TYPE_1);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue arg;
+            PyValue res;
+            PyValue a;
+            PyValue value;
+            // _GUARD_NOS_NULL
+            {
+                if (call_state & CALL_SELF_PRESENT) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _GUARD_CALLABLE_TYPE_1
+            {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (callable_o != (PyObject *)&PyType_Type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_TYPE_1
+            {
+                arg = window[2];
+                assert(oparg == 1);
+                STAT_INC(CALL, hit);
+                res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
+                a = arg;
+            }
+            // _POP_TOP
+            {
+                value = a;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
+                IR_PUBLISH_TEMP(window[0], res);
+                PyValue_XCLOSE(value);
+            }
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(CALL_PY_EXACT_ARGS) {
+            int opcode = CALL_PY_EXACT_ARGS;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue *args;
+            PyValue new_frame;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_VERSION
+            {
+                callable = window[-1 + oparg];
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                if (!PyFunction_Check(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                if (func->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_EXACT_ARGS
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                assert(PyFunction_Check(callable_o));
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_STACK_SPACE
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _INIT_CALL_PY_EXACT_ARGS
+            {
+                args = &window[1 + oparg];
+                int has_self = (call_state & CALL_SELF_PRESENT) != 0;
+                STAT_INC(CALL, hit);
+                PyValue *window_base = args - 2;
+                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                PyValue *base = args - has_self;
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    base = _PyDataStack_Slots(tstate->datastack_top);
+                }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
+                    tstate, code, base, oparg + has_self, frame);
+                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                code, base, frame);
+                if (frame->owner != FRAME_OWNED_BY_THREAD) {
+                    call_transfer_exact_args(base, window_base, oparg,
+                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -8030,8 +11587,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             // _CHECK_PEP_523
@@ -8083,7 +11640,7 @@
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_VECTOR, fb);
+                    _PyCallResult call_result = call_bind_known_python(tstate, frame, call_base, call_destination, oparg, CALL_TRANSACTION_VECTOR, fb, call_state);
                     if (call_result.status > 0) {
                         call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
@@ -8128,8 +11685,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1));
-            PyValue null;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue arg;
             PyValue res;
@@ -8137,8 +11696,7 @@
             PyValue value;
             // _GUARD_NOS_NULL
             {
-                null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8179,8 +11737,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -8221,8 +11778,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1));
-            PyValue null;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue arg;
             PyValue res;
@@ -8230,8 +11789,7 @@
             PyValue value;
             // _GUARD_NOS_NULL
             {
-                null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8272,8 +11830,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -8314,8 +11871,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyValue_RecheckWindow(window, (1) + (1) + (1));
-            PyValue null;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue arg;
             PyValue res;
@@ -8323,8 +11882,7 @@
             PyValue value;
             // _GUARD_NOS_NULL
             {
-                null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8358,8 +11916,7 @@
                 value = a;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+                call_clear_owned_slots(window, 1, 2, CALL_TRANSACTION_VECTOR, call_state);
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
@@ -11454,8 +15011,8 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 0);
+            (void)call_state;
             PyValue callable;
             PyValue self_or_null;
             PyValue func;
@@ -11463,22 +15020,21 @@
             PyValue *args;
             // _MAYBE_EXPAND_METHOD
             {
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // _MONITOR_CALL
             {
@@ -11487,9 +15043,11 @@
                 func = callable;
                 frame->phase_state = 0;
                 IR_PUBLISH_TEMP(window[0], func);
-                IR_PUBLISH_TEMP(window[1], maybe_self);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], maybe_self);
+                }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
-                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR) < 0) {
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR, call_state) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -11497,7 +15055,7 @@
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
                 func = window[0];
-                maybe_self = window[1];
+                maybe_self = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
                 args = window + 2;
             }
             // _DO_CALL
@@ -11506,6 +15064,120 @@
                 assert(frame->instr_ptr == this_instr);
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+        }
+
+        TARGET(INSTRUMENTED_CALL_EX_NO_SELF_KW) {
+            int opcode = INSTRUMENTED_CALL_FUNCTION_EX;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 2);
+            (void)call_state;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = window[0];
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _DO_CALL_FUNCTION_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+        }
+
+        TARGET(INSTRUMENTED_CALL_EX_NO_SELF_NO_KW) {
+            int opcode = INSTRUMENTED_CALL_FUNCTION_EX;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 10);
+            (void)call_state;
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                func = window[0];
+                frame->phase_state = 0;
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _DO_CALL_FUNCTION_EX
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -11534,14 +15206,14 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, 0);
+            (void)call_state;
             PyValue func;
             PyValue callargs;
             PyValue kwargs;
             // _MAKE_CALLARGS_A_TUPLE
             {
-                kwargs = window[3];
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
                 callargs = window[2];
                 func = window[0];
                 frame->phase_state = 0;
@@ -11555,7 +15227,7 @@
                 window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
-                kwargs = window[3];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
             }
             // _DO_CALL_FUNCTION_EX
             {
@@ -11593,38 +15265,39 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = 0;
-            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 0);
+            (void)call_state;
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
             // _MAYBE_EXPAND_METHOD_KW
             {
-                self_or_null = window[1];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 callable = window[0];
                 frame->phase_state = 0;
                 {
-                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
-                    if (ir_expanded < 0) {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
                         JUMP_TO_LABEL(error);
                     }
-                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             }
             // _MONITOR_CALL_KW
             {
                 args = &window[2];
                 frame->phase_state = 0;
                 IR_PUBLISH_TEMP(window[0], callable);
-                IR_PUBLISH_TEMP(window[1], self_or_null);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
-                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS) < 0) {
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS, call_state) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -11632,7 +15305,7 @@
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
                 callable = window[0];
-                self_or_null = window[1];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
                 args = window + 2;
             }
             // _DO_CALL_KW
@@ -11641,6 +15314,168 @@
                 assert(frame->instr_ptr == this_instr);
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+        }
+
+        TARGET(INSTRUMENTED_CALL_KW_NO_SELF) {
+            int opcode = INSTRUMENTED_CALL_KW;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_CALL_KW);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            // _MAYBE_EXPAND_METHOD_KW
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _MONITOR_CALL_KW
+            {
+                args = &window[2];
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], callable);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
+                call_state |= CALL_MONITORED | CALL_EFFECTS;
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS, call_state) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+                args = window + 2;
+            }
+            // _DO_CALL_KW
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+        }
+
+        TARGET(INSTRUMENTED_CALL_NO_SELF) {
+            int opcode = INSTRUMENTED_CALL;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_CALL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, 2);
+            (void)call_state;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue func;
+            PyValue maybe_self;
+            PyValue *args;
+            // _MAYBE_EXPAND_METHOD
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                frame->phase_state = 0;
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _MONITOR_CALL
+            {
+                args = &window[2];
+                maybe_self = self_or_null;
+                func = callable;
+                frame->phase_state = 0;
+                IR_PUBLISH_TEMP(window[0], func);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], maybe_self);
+                }
+                call_state |= CALL_MONITORED | CALL_EFFECTS;
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR, call_state) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                slots = _PyFrame_Slots(frame);
+                window = slots + call_base;
+                func = window[0];
+                maybe_self = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+                args = window + 2;
+            }
+            // _DO_CALL
+            {
+                frame->phase_state = 0;
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         JUMP_TO_LABEL(error);
                     }

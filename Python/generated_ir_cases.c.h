@@ -18140,7 +18140,8 @@
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
             frame->phase_state = 0;
             frame->phase_state = 0;
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
+            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
+                func, _PyFrame_GetCode(frame));
             if (gen == NULL) {
                 frame->phase_state = 0;
                 JUMP_TO_LABEL(error);

@@ -4514,13 +4514,164 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+# Complete source and declared IO bound every accepted use of the frame
+# capability. These are physical window writes, not general frame access.
+# The builder helpers drain exactly their declared input count before return;
+# special lookup can only replace its declared method/receiver pair.
+FRAME_HOME_HELPERS = {"_PyFrame_WriteHome", "_Py_BuildString_ValueSteal",
+                      "_Py_BuildMap_ValueSteal", "_PyObject_LookupSpecialMethod"}
+FRAME_HOME_FOOTPRINTS = (
+    ((('seq', False, ''),), (('values', False, 'oparg'),), """
+    {
+        PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+        assert(PyTuple_CheckExact(seq_o));
+        EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
+        STAT_INC(UNPACK_SEQUENCE, hit);
+        PyValue *items = _PyTuple_ITEMS(seq_o);
+        for (int i = oparg; --i >= 0; ) {
+            _PyFrame_WriteHome(frame, values++, PyValue_XDUP(items[i]));
+        }
+        DECREF_INPUTS();
+    }
+    """),
+    ((('seq', False, ''),), (('values', False, 'oparg'),), """
+    {
+        PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+        assert(PyList_CheckExact(seq_o));
+        DEOPT_IF(!LOCK_OBJECT(seq_o));
+        if (PyList_GET_SIZE(seq_o) != oparg) {
+            UNLOCK_OBJECT(seq_o);
+            DEOPT_IF(true);
+        }
+        STAT_INC(UNPACK_SEQUENCE, hit);
+        PyValue *items = _PyList_ITEMS(seq_o);
+        for (int i = oparg; --i >= 0; ) {
+            _PyFrame_WriteHome(frame, values++, PyValue_XDUP(items[i]));
+        }
+        UNLOCK_OBJECT(seq_o);
+        DECREF_INPUTS();
+    }
+    """),
+    ((), (('res', False, '1'),), """
+    {
+        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+        _PyFrame_WriteHome(frame, res,
+                           value_load_global(GLOBALS(), BUILTINS(), name));
+        IR_FINISH_VALUE_OPERATION();
+        ERROR_IF(PyValue_IsNull(*res));
+    }
+    """),
+    ((), (('null', False, 'oparg & 1'),), """
+    {
+        if (oparg & 1) {
+            _PyFrame_WriteHome(frame, null, PyValue_NULL);
+        }
+    }
+    """),
+    ((('self', False, ''),), (('method_and_self', False, '2'),), """
+    {
+        _PyFrame_WriteHome(frame, method_and_self + 1, self);
+        _PyFrame_WriteHome(frame, method_and_self, PyValue_NULL);
+        DEAD(self);
+    }
+    """),
+    ((('method_and_self', True, '2'),), (('method_and_self', True, '2'),), """
+    {
+        PyObject *name = _Py_SpecialMethods[oparg].name;
+        int err = _PyObject_LookupSpecialMethod(frame, name, &method_and_self[0],
+                                                &method_and_self[1]);
+        if (err <= 0) {
+            if (err == 0) {
+                PyObject *owner = _PyValueTemps_Object(value_temps, method_and_self[1]);
+                if (owner == NULL) {
+                    ERROR_NO_POP();
+                }
+                const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner, oparg)
+                    ? _Py_SpecialMethods[oparg].error_suggestion
+                    : _Py_SpecialMethods[oparg].error;
+                assert(!_PyErr_Occurred(tstate));
+                assert(errfmt != NULL);
+                _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
+            }
+            ERROR_NO_POP();
+        }
+    }
+    """),
+    ((('values', False, 'oparg'),), (('set', False, ''),), """
+    {
+        PyObject *set_o = PySet_New(NULL);
+        if (set_o == NULL) {
+            DECREF_INPUTS();
+            ERROR_IF(true);
+        }
+
+        int err = 0;
+        for (Py_ssize_t i = 0; i < oparg; i++) {
+            PyValue value = values[i];  // a move: cleared below
+            _PyFrame_WriteHome(frame, values + i, PyValue_NULL);
+            if (err == 0) {
+                err = _PySet_AddValueTakeRef((PySetObject *)set_o,
+                                             value);
+            }
+            else {
+                PyValue_CLOSE(value);
+            }
+        }
+        DEAD(values);
+        if (err) {
+            Py_DECREF(set_o);
+            ERROR_IF(true);
+        }
+
+        INPUTS_DEAD();
+        set = PyValue_FromObjectSteal(set_o);
+    }
+    """),
+    ((('pieces', False, 'oparg'),), (('str', False, ''),), """
+    {
+        PyObject *str_o = _Py_BuildString_ValueSteal(frame, pieces, oparg);
+        DEAD(pieces);
+        ERROR_IF(str_o == NULL);
+        str = PyValue_FromObjectSteal(str_o);
+    }
+    """),
+    ((('values', False, 'oparg*2'),), (('map', False, ''),), """
+    {
+        PyObject *map_o = _Py_BuildMap_ValueSteal(frame, values, oparg);
+        DEAD(values);
+        int failed = map_o == NULL;
+        map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
+        SYNC_SP();
+        IR_FINISH_VALUE_OPERATION();
+        ERROR_IF(failed);
+    }
+    """),
+)
+
+
+def frame_home_footprint(part: Uop) -> bool:
+    """A checked active-frame capability confined to declared stack homes."""
+    inputs = tuple((i.name, i.peek, i.size) for i in part.stack.inputs)
+    outputs = tuple((i.name, i.peek, i.size) for i in part.stack.outputs)
+    actual = statement_shape(part.body)
+    return any(inputs == expected_inputs and outputs == expected_outputs
+               and actual == statement_shape(
+                   Parser(body, "<frame home footprint>").block())
+               for expected_inputs, expected_outputs, body in FRAME_HOME_FOOTPRINTS)
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
     return (not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
-            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+            and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
-                        for t in uop_token_list(inst)))
+                        for t in uop_token_list(inst))
+            and all(not any(t.text == "frame" or t.text in FRAME_HOME_HELPERS
+                            or t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
+                            for t in part.body.tokens())
+                    or frame_home_footprint(part)
+                    for part in inst.parts if isinstance(part, Uop)))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:

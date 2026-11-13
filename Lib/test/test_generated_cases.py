@@ -3111,6 +3111,82 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
+    def test_normal_vacate_checks_real_frame_home_footprints(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        for name in ("BUILD_MAP", "BUILD_SET", "BUILD_STRING", "LOAD_GLOBAL",
+                     "LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN", "LOAD_SPECIAL",
+                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TWO_TUPLE",
+                     "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
+            with self.subTest(handler=name):
+                inst = analysis.instructions[name]
+                self.assertTrue(ir_generator.normal_vacate_capability(inst, formats[name]))
+                for part in inst.parts:
+                    if not isinstance(part, analyzer.Uop):
+                        continue
+                    if not any(t.text == "frame" for t in part.body.tokens()):
+                        continue
+                    self.assertTrue(ir_generator.frame_home_footprint(part))
+                    extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+                    part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+                    try:
+                        self.assertFalse(ir_generator.normal_vacate_capability(
+                            inst, formats[name]))
+                    finally:
+                        part.body.body.pop()
+
+    def test_normal_vacate_rejects_unproved_renamed_frame_capabilities(self):
+        for helper in ("_PyFrame_TakeHome", "_PyFrame_MoveHome",
+                       "_PyFrame_SetHomeBit", "_PyFrame_InitHeapBitmap",
+                       "_PyFrame_BindChunkBitmap", "_PyHomeBitmap_InitStorage"):
+            with self.subTest(helper=helper):
+                analysis = self.analyze(
+                    f"\ninst(OP, (--)) {{ {helper}(other, other->base); }}\n")
+                inst = analysis.instructions["OP"]
+                fmt = ir_generator.compute_formats(analysis)["OP"]
+                self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+
+    def test_frame_home_footprints_reject_changed_bounds_storage_and_io(self):
+        def items(shape):
+            return ", ".join(name + (f"[{size}]" if size else "")
+                             for name, _, size in shape)
+
+        for inputs, outputs, body in ir_generator.FRAME_HOME_FOOTPRINTS:
+            declaration = f"\ninst(OP, ({items(inputs)} -- {items(outputs)})) "
+            # OP has no source-name privileges. The full body and IO still
+            # establish the same physical writer capability.
+            analysis = self.analyze(declaration + body + "\n")
+            part = analysis.instructions["OP"].parts[0]
+            self.assertTrue(ir_generator.frame_home_footprint(part))
+            fmt = ir_generator.compute_formats(analysis)["OP"]
+            for old, new in (("frame,", "other_frame,"),
+                             ("values++", "values + 1"),
+                             ("i < oparg", "i <= oparg"),
+                             ("--i >= 0", "--i >= -1"),
+                             ("pieces, oparg", "pieces, oparg + 1"),
+                             ("values, oparg", "values, oparg + 1"),
+                             ("&method_and_self[1]", "&method_and_self[2]")):
+                if old not in body:
+                    continue
+                with self.subTest(old=old, body=body):
+                    changed = self.analyze(declaration + body.replace(old, new) + "\n")
+                    inst = changed.instructions["OP"]
+                    self.assertFalse(ir_generator.frame_home_footprint(inst.parts[0]))
+                    self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+            conditional = ("{\n#if ENABLE_BITMAP_FOOTPRINT\n" + body.strip()[1:-1]
+                           + "\n#endif\n}")
+            changed = self.analyze(declaration + conditional + "\n")
+            self.assertFalse(ir_generator.frame_home_footprint(
+                changed.instructions["OP"].parts[0]))
+            item = (part.stack.inputs or part.stack.outputs)[0]
+            original = item.size
+            item.size = "99"
+            try:
+                self.assertFalse(ir_generator.frame_home_footprint(part))
+            finally:
+                item.size = original
+
     def test_created_copy_recipe_checks_actual_transport(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

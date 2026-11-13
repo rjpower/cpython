@@ -1,106 +1,64 @@
 # Project status
 
-Round54 is closed. Published branch `pyjit/round54-golden` and annotated tag
-`pyjit-golden-20261112-frame-state` select
-`61015a9452d9069646fb5fede9ff963896833b89`: a three-file public frame-to-generator
-construction correction with explicit qualification limits. All nine performance
-experiments/revisions/compositions are rejected; none enters the checkpoint.
-This is a correctness selection with no demonstrated performance lift.
+Selected54 remains golden: `61015a9452d9069646fb5fede9ff963896833b89`,
+branch `pyjit/round54-golden`, tag `pyjit-golden-20261112-frame-state`.
+No round55 candidate has earned promotion. The [goal](GOAL.md),
+[plan](issues/call-model55/plan.md), [execution ledger](issues/call-model55/implementation.md)
+and [report](issues/call-model55/report.md) own the active effort. The reviewed
+[target model](design/proposals/register-call-model55.md) is a proposal until
+its lifecycle and qualification gates pass.
 
-Round55 has completed **architecture research and a reviewed migration plan**. Start with the
-[goal](GOAL.md), [plan](issues/call-model55/plan.md), and
-[proposed call model](design/proposals/register-call-model55.md). The
-[review resolution](issues/call-model55/review-resolution.md) closes all five
-initial must-fix findings. Static scratch maps plus initialized locals are the
-first candidate; a complete physical-bitmap rival remains required before
-representation selection. Implementation is active; the
-[execution ledger](issues/call-model55/implementation.md) records current lanes and gates.
-No new candidate has earned admission. The proposal
-does not replace as-built contracts.
+Current static native checkpoint `979f624cac1` builds all 117 modules,
+79 shared, in release and debug. The preceding composition passes 167 focused
+cases per role, including all 123 `test_ir` cases. Its semantic CFG correction
+closes the newly introduced debugger-jump regression without weakening setter
+permissions. The latest exceptional-effect extension passes 13 focused cases
+per role. These are overlapping groups, not a deduplicated qualification total.
 
-Latest broadly measured candidate `ed08ab64c7e` composes typed pins, common admission,
-nested transition roots, staged binding/provider/unpack/constructor ownership,
-fixed-last heap teardown, classify-once retirement and the first shared-emitter
-phase plans. NULL scratch homes and conservative arena scanning remain authority.
-The GIL header remains 112 bytes; exact CALL/RETURN reserve 64/16 native stack
-bytes with no phase-table lookup. New phase stores are real preparatory costs.
+Source `25585dd6a46` separates required semantic recovery (IRSC1 in
+`co_exceptiontable`) from optional source positions (IRSM2 in `co_linetable`).
+It includes common admission, execution, observation, disassembly and remote
+reader changes. Both native builds complete 117/79; focused integration finds
+fixture ports and real admission gaps still to resolve. SEND is now covered,
+but an actual predecessor trace finds the remaining async proof loss in two
+read-only metadata/instruction projections. Their reviewed shared grammar
+correction is current source `9be99bb3d3f`, pending native admission. No
+admission exception or additional quarantine has been introduced.
 
-Both roles pass 675 core tests, nine phase tests and nine selected generator
-contract tests. Groups overlap and are not a deduplicated total. The phase
-fixtures cover nonempty provider/operand-retirement collection, mutable locals,
-actual error cleanup, full 4095-home geometry and public admission routes.
-The bounded continuing cross-lane post-review is GO, not a fresh-context audit.
+Static scratch NULL homes and conservative arena scanning remain authority.
+M4 has not switched. Normal phase programs cover 284/328 handlers, but only
+12 exceptional contracts are complete; those counts are different obligations.
+The outlined error processor and complete callback/readability coverage remain
+open. Exact calls already overlap argument storage, and direct hot caches and
+the 112-byte fixed GIL header are retained.
 
-Two-pair elapsed screens remain mixed: versus selected54, DeltaBlue is 5.5%
-slower and silent logging 15.2% slower, with a wide logging range. Direct all 29
-versus upstream has geometric mean **1.165467**, six faster; DeltaBlue is
-22.7% slower, generators 46.5% slower, coroutines 23.8% slower, and logging
-17.5% faster. Matched PMU finds DeltaBlue still executes **36.8% more
-instructions**. No candidate is promoted. The [active report](issues/call-model55/report.md)
-retains campaign scopes, pair ranges, profiles and qualification limits.
+Bitmap native checkpoint `0ee3a61aba3` builds both 117/79 roles and passes
+176 focused cases per role, eight skips. Its counted-bit preparation still pays
+for NULL maintenance and loses every hot-screen pair. The isolated source lane
+is converting the same bytes to one non-NULL presence plane, including roots,
+heap capture, staged prefixes and sparse teardown. The ownership composition `20576b58f4b` builds both roles and passes17
+targeted presence/provider cases per role. A raw CALL cleanup writer still
+needs conversion before qualification. Execution retains initialized NULL values until
+actual readers have an explicit policy; a zero presence bit permits no load.
+See the [authority assessment](issues/call-model55/bitmap-authority-assessment.md).
 
-Full foundation diagnostics at `0851fd51801` run 54,763 tests per role and
-find a new allocation-injection crash beside recorded diagnostic limits.
-Specialization conflated zero success/failure sentinels. `7c42db43224` requires
-positive execution readiness before cache nomination; the unchanged OOM case
-and 837 focused cases pass both roles afterward. This does not turn the failed
-full diagnostics into a green suite.
+The latest static two-pair screen versus54 gives DeltaBlue **1.130007**,
+generators **1.008836**, coroutines **1.017062**, Richards **1.032109**,
+comprehensions **1.023607** and silent logging **1.278120**. Lower is better.
+No broad gain is established. Logging varies substantially across screens;
+these are separate campaigns, not isolated source-effect measurements.
+A native inventory finds identical logging hot-frame geometry and warm
+attribute/call families in candidate and54; hidden constant-local initialization
+does not explain this gap. Pair ranges and evidence are in the report.
 
-The newer CALL composition includes explicit input roles, independent child
-transport, exceptional-prefix and async-exit receipts, and a delegated YIELD
-whose receiver D is independent of outgoing B and resume recipient A.
-Local/remote getters, throw, close and capture use that operand contract.
-`a2653e18206` passes 198 targeted tests per role, 11 skips. Its two-pair hot
-screen versus selected54 is DeltaBlue 1.013629, generators 1.026487, coroutines
-1.041078, Richards 0.998792, comprehensions 1.022872 and logging 0.921104.
-A separate direct-upstream screen is respectively 1.163485, 1.475615,
-1.312553, 1.260601, 1.382747 and 0.696498. These are screens, not all 29 or
-confirmation. Earlier copy/created/recipient ports and their limits remain
-in the [report](issues/call-model55/report.md).
-
-Checked home writers at `50f1124fd7a` pass both full 117/79 module builds and
-37 writer/CALL/transfer cases per role. Its separate two-pair selected54
-screen is respectively 1.033000, 1.013630, 0.997996, 0.987920, 1.040724 and
-1.006214; no broad gain is established. It still pays for NULL maintenance
-and arena scans. Five bootstrap and 26/27 broader compile probes pass; the
-remaining async source needs complete exceptional-producer and redirect/error
-contracts beyond GET_ANEXT's now-certified operand footprint.
-
-Current static source/native `ff14b98be4b` adds per-edge NULL results,
-general RETURN and independently certified EMPTY, plus direct tuple/list
-steal-success receipts. Both builds complete 117/79 with no failed imports.
-Six focused modules pass 67 cases per role after four fixture corrections; Expanded `test_ir` has stale CALL/EMPTY fixtures and a
-source-debugger jump regression: selected54 passes the identical fixture in
-both roles, while candidate fails. This remains partial qualification.
-Forged EMPTY negatives and actual remaining-owner assertions stay intact.
-Its two-pair hot screen versus54 is1.039263,1.043308,1.052147,0.984842,
-1.007455,1.004977; direct-upstream1.230703,1.504706,1.326683,1.230958,
-1.356191,0.728430. No broad gain. Source admission compiles 682/684 images,
-including all 189 stdlib entries. The remaining two images share async EH gaps.
-Known-home source 3b4547380d0 builds both 117/79 roles and passes 36 focused
-cases per role; its selected54 hot screen loses broadly (logging 1.199787). It carries existing
-value/physical vacancy facts through common commits instead of rediscovering
-them in B.
-
-Bitmap `bf7d6bf0d20` also builds both 117/79 roles and passes 150 focused
-tests per role, eight skips, including physical invariants and capture.
-Its nine copied instruction-body guards have been replaced by shared checked
-home operations. The NULL-control rival's two-pair selected54 screen is
-respectively 1.335421, 1.222776, 1.333615, 1.210015, 1.279180 and 1.603326.
-All pairs are slower. This prices current bookkeeping plus old NULL work;
-it does not evaluate a complete stale-scratch rival. The
-[writer ledger](issues/call-model55/writer-closure-ledger.md) and
-[authority assessment](issues/call-model55/bitmap-authority-assessment.md)
-own its remaining gates. Neither representation has switched authority or
-earned golden selection. Shared storage with initialized NULL named locals
-remains the reviewed M4 reference, not a measured layout winner.
-Current B `0ee3a61aba3` composes matching known-home commits, builds both 117/79
-and passes 176 focused cases per role, eight skips. Its separate selected54
-screen is1.327228,1.228186,1.350701,1.217027,1.250380,1.587998; every pair
-loses. Root selects single non-NULL occupancy as the next full-rival direction,
-with exact interfaces pending peer freeze; no authority switch is claimed.
-The semantic CFG correction and actual exceptional-route producer/consumer
-compose at static e90c6a4b7f9, with native qualification running.
+Latest broad direct-upstream evidence remains `ed08ab64c7e`: all29 geometric
+mean **1.165467**, six faster; matched DeltaBlue instruction ratio **1.368099**.
+No newer hot screen replaces that breadth or PMU result. The latest full55
+foundation diagnostics run 54,763 cases per role and find an allocation-injection
+crash. Its positive-readiness fix passes the original OOM test and 837 focused
+cases per role, but there has been no green full55 run afterward. Existing
+qualification limits below remain explicit. Only the GDB pretty-print class
+is quarantined. Current qualification is GIL-only.
 
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and

@@ -4,7 +4,99 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-Latest measured delegated runtime is `a2653e18206`: explicit CALL roles, shared
+## Current integration: exceptional effects and semantic CFG
+
+Static `979f624cac1` is the current clean source and native identity in both
+roles. Both builds complete 117 modules, 79 shared, without failed imports.
+The preceding `e90c6a4b7f9` composition passes 167 focused cases per role,
+including all 123 `test_ir` cases. This closes the new debugger-jump regression:
+five CFG readers now classify encoded EMPTY returns through their semantic
+base, removing a false fallthrough edge without relaxing debugger permissions.
+
+The current composition adds a shared, source-checked exceptional-effect
+grammar and its admission consumer. Monotone absence receipts for RESUME and
+CLEANUP_THROW preserve already absent scratch homes across callbacks that may
+vacate scratch but cannot populate it. A changed error origin revokes local
+destination receipts. Thirteen focused cases pass per role. Source census
+finds 328 handlers and 284 nonempty normal programs, but only 12 complete
+exceptional contracts: normal-program coverage is not full ownership authority.
+
+The freezer still passes five bootstrap and 26/27 broader compile probes.
+The remaining async image loses absence facts across protected SEND at word24;
+the shared SEND entry/completion/error producer is under peer review. No
+test-specific admission exception has been added. Separating semantic recovery
+from optional source positions and the outlined error processor remain open.
+
+The latest two-pair screen versus selected54 has stable clean identities:
+
+| Workload | Candidate/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.130007 | 1.105958–1.154578 |
+| Generators | 1.008836 | 1.003526–1.014175 |
+| Coroutines | 1.017062 | 1.009114–1.025073 |
+| Richards | 1.032109 | 1.029103–1.035124 |
+| Comprehensions | 1.023607 | 1.020340–1.026884 |
+| Logging silent | 1.278120 | 1.201957–1.359109 |
+
+This is not a speedup or an isolated A/B of exceptional metadata. There is no
+new direct-upstream campaign or PMU capture for this head. Logging has varied
+widely across the separate screens; do not pool them. A native code inventory
+finds identical frame geometry in both controls for the logging hot functions
+and unchanged warm attribute/call families. Those functions have no hidden
+constant locals. This rules out that proposed explanation; it does not locate
+the remaining cycles.
+
+Evidence: `E/exceptional-routes-scope-*`, `E/monotone-absence-*`,
+`E/authority-census-{e90,979}`, and `E/logging-code-inventory-979`.
+The census's initial wrong-field script failure remains alongside its corrected
+run. M4 static authority is not switched. B's single-presence-plane ownership
+conversion is still source work; execution keeps initialized NULL storage until
+all actual read paths have an explicit policy. Neither candidate is golden.
+
+## Semantic recovery and presence integration
+
+Static `25585dd6a46` separates IRSC1 semantic recovery from IRSM2 optional
+positions and composes the shared SEND error/entry/completion contract. Both
+native builds complete 117/79. The release nine-module integration runs720
+cases: container, boundaries, completion and absence modules pass; readers,
+code, disassembly and remote checks find stale fixtures and admission gaps.
+The five-module debug check runs53 cases, with only the reader module failing.
+These are partial checks, not a qualified checkpoint.
+
+Six `sys_settrace` incoming-owner failures reproduce exactly on selected54 in
+both roles (six selected cases each). No new quarantine is added. Separate
+native GDB traces stop at the actual disassembly/equality admission errors and
+retain immutable words, EH and recovery rows; optimized-out block locals stop
+the initial scripts after those useful captures. Do not label the incomplete
+scripts successful full traces.
+
+The actual coroutine trace finds the first lost absence at word23's constant
+metadata projection, then a second independent loss at word27's instruction
+target projection. SEND coverage alone cannot close them. A reviewed shared
+typed-projection grammar is integrated at source9be99bb3d3f with independent
+mutation negatives; its native admission outcome is still pending.
+
+Bitmap `20576b58f4b` composes the single-presence-plane ownership conversion
+with matching IRSC/SEND contracts. Both builds complete117/79. The targeted
+presence and provider checks pass17 cases per role, including pending unpack,
+waiting-parent overlap, foreign-query rejection, no-count referents and unlinked
+header collection. Four lifecycle modules pass25 release cases; that driver
+also names a nonexistent copy module and therefore fails overall. The mistaken
+module selection is a harness error, not a runtime failure or a green run.
+
+The next must-fix is concrete: raw `_PyValue_CloseStack` in a CALL cleanup
+uop can clear argument cells without updating presence before a finalizer.
+The shared frame-aware drain must land before representation qualification.
+Execution NULL initialization also remains until the read-policy conversion
+closes. There is no new performance measurement or golden selection for these
+partial source compositions.
+
+Evidence: `E/irsc-send-*`, `E/irsc-native-diagnosis`,
+`E/metadata-projections-*`, and `E/bitmap-presence-*`.
+
+## Earlier component evidence
+
+The earlier measured delegated runtime is `a2653e18206`: explicit CALL roles, shared
 attribute-child and exceptional-prefix proofs, async-exit completion, and an
 explicit delegated-yield receiver. Both release and debug build all 117
 modules (79 shared), with no failed imports. The five-module delegated-yield,
@@ -156,11 +248,12 @@ encoded handler was mistaken for a fallthrough operation. Its false successor
 propagated exception-handler scratch requirements into an ordinary return.
 Five encoded-image CFG checks now project through the existing semantic
 shadow and canonical base (`c381fca17ba`); setter permissions are unchanged.
-This is source-reviewed and generated, with native qualification pending.
+This is source-reviewed, generated and now native-qualified by the 167-case
+composition above.
 Actual exceptional-route metadata and its cold EH consumer compose at
 `e90c6a4b7f9`; the producer uses one shared typed effect grammar, replacing the
-duplicated parser found during review. RESUME/CLEANUP_THROW remain explicitly
-unknown until their actual callback/redirect footprints are supplied.
+duplicated parser found during review. The subsequent RESUME/CLEANUP_THROW
+receipts and their limits are recorded in the current integration above.
 
 ## Checked physical-home writer checkpoint
 

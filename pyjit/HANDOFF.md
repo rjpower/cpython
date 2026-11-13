@@ -44,55 +44,54 @@ Never mutate a source while its native job or quiet measurement is running.
 
 ## Current static checkpoint
 
-`ff14b98be4b` is clean source and exact native build identity for both
-`BASE/call55-integrated-{release,debug}`. Both builds complete117/79 with no
-failed imports. It composes explicit CALL roles and delegated suspension,
-checked fixed/loop/helper writers, conditional NULL outputs, general RETURN
-and proved EMPTY, plus direct tuple/list steal-success receipts.
+`979f624cac1` is the exact native identity in both
+`BASE/call55-integrated-{release,debug}` builds; each completes 117/79.
+The preceding e90 composition passes 167 focused cases per role, including all
+123 `test_ir` cases. Its semantic-base projection in five CFG readers closes
+the new bool source-jump regression; setter permissions and fixture semantics
+are unchanged. Current monotone exceptional receipts pass 13 cases per role.
+The initial 8 source-generator methods are expensive under debug: run pure
+producer tests once on the host and native metadata/runtime controls separately.
+Evidence: `E/exceptional-routes-scope-*` and `E/monotone-absence-*`.
 
-Six focused modules pass 67 tests per role: general/empty return, edge NULL,
-completion, retirement plan and home writers. Initial four failures were
-fixture errors: inherited EMPTY after geometry edits, old CALL naming and
-missing RESUME in two synthetic frame/monitor images. The fixes preserve
-forged-EMPTY negatives and actual owner lifetime/capture assertions. Expanded
-`test_ir` runs123 cases with12 errors and3 failures: old CALL/EMPTY fixtures
-plus a debugger jump regression. Matched identical-AST control passes both
-selected54 builds and fails both candidate builds
-(`E/bool-source-jump-control`); do not classify it as preexisting. Do not call full qualification green.
-Evidence: `E/general-return-{handoff,fixture}-*` and
-`E/general-return-ir-detail-release-focus.log`.
+Current source `7a70dc35b75` additionally composes reader84e81 and main7a70:
+IRSC1 semantic recovery, IRSM2 optional positions, common admission and all
+execution/observation/dis/remote adapters. Source peers and host checks pass;
+both-role 117/79 builds pass, but focused integration finds fixture and real
+admission gaps; see E/irsc-send-* logs. W source main commit is6dccb599c17;
+GC reader source486b406189d. Root resolved one absence-fixture conflict by
+preserving normalized physical positions and the new separate recovery table.
+SEND is composed at25585. Current I9be99bb3d3f adds the reviewed typed
+projection grammar after the actual async trace; freezer/native gates pending.
 
-The actual source-admission census compiles 682/684 images. All189 stdlib
-entry modules pass; remaining failures are nested async comprehensions in
-`test_coroutines` (CALL44, virtual SELF7) and `test_ir_abrupt_operands`
-(CALL29, SELF4). Earlier curses/long/random failures are closed. This is
-compile-only, not execution. Evidence: `E/general-return-source-admission`.
-The freezer passes 5 bootstrap and26/27 broader probes, failing the same
-coroutine gap. Finish actual exceptional/redirect contracts, not successful
-normal receipts, to preserve held absence there.
+The freezer still passes five bootstrap and 26/27 broader probes. Remaining
+async admission loses absence across protected SEND at word24; GC owns the
+shared entry/error/completion receipt and guard family closure, with IR/frames
+actual peers. No getter or test-specific exception. The earlier compile-only
+census passes682/684 images, including all189 standard-library entries.
 
-Retained ELF plus five handler/helper dumps: `E/general-return-native`,
-SHA256 `50c271cb461bfcf2d3ea990bc6379657571b44b5391cdb7b92a185e0a7117ab8`.
-Two-pair hot screens complete with stable clean identities at
-`E/general-return-hot-screen-{golden,upstream}`. Candidate/54 ratios are
-1.039263,1.043308,1.052147,.984842,1.007455,1.004977 in hot-set order;
-direct-upstream1.230703,1.504706,1.326683,1.230958,1.356191,.728430.
-Keep pair ranges in the report; no broad gain or selection. The preceding
-writer50f and delegateda265 campaigns remain separate. I advances through known-home3b4547380d0 (both 117/79 builds,36 focused
-cases per role, eight host source tests) and fixture002, exceptional-route
-producer/consumer and CFG fix to current e90c6a4b7f9. Regeneration passes;
-metadata adds the actual route byte. Both-role builds are running at
-`E/exceptional-routes-scope-checkpoint-*`; do not mutate I until completion.
-The known-home selected54 hot screen finishes with stable identities and no
-broad gain; logging 1.199787 (range1.136662–1.266417), other ratios/ranges in
-report. No isolated source effect is established.
+Source coverage at979:328 handlers,284 nonempty normal phase programs,
+12 COMPLETE exceptional contracts, four ordinary abrupt and four suspend abrupt.
+These counts do not establish complete ownership/readability authority.
+`E/authority-census-e90` retains its initial wrong-field script failure and
+corrected result; `E/authority-census-979` is the current successful census.
 
-Static NULL homes and arena scanning remain authoritative. M4 has not
-switched. General RETURN uses a real full-N NULL-control retirement route;
-EMPTY retains the small path. This does not permit full-N stale reads later.
-Logical NO_HOME, physical NULL, initialized/readable and counted edge facts
-remain distinct. Bound-method/constructor promotion can write virtual SELF;
-its absence proof is still necessary unless that actual call ABI changes.
+The latest two-pair selected54 screen is
+`E/monotone-absence-hot-screen-golden`: DeltaBlue1.130007,
+generators1.008836,coroutines1.017062,Richards1.032109,
+comprehensions1.023607,logging1.278120. Ranges are in the report. This is no
+broad gain and no isolated A/B attribution. There is no new979 direct-upstream
+or PMU campaign. `E/logging-code-inventory-979` finds matching hot-frame
+geometry and warm families, with no hidden constant locals in logging's hot
+functions. Do not attribute that gap to constant initialization.
+
+Exact ELF/dumps at `E/monotone-absence-native`, SHA256
+`d5aa77f5015bee3ff846525f76272067e4b607e8c801718d964501c17073b4c9`.
+Format metadata stays44 bytes, new error_routes uses padding byte27;
+HomeView stays16 bytes; fixed frame header is owned_slots offset112
+(`sizeof`120 includes the first value cell). Static NULL homes and conservative
+arena scanning remain authority. General RETURN uses real residual-owner
+cleanup; EMPTY retains the small path. M4 has not switched.
 
 ## Bitmap checkpoint
 
@@ -111,17 +110,31 @@ work, not the final representation. Old-value/bit checks are redundant where
 emission already holds the canonical owner; the bounded known-home packet
 carries those facts without another frame field or record.
 
-Keep counted bits: zero is not permission to read inline/control/no-count
-homes. See [writer closure](issues/call-model55/writer-closure-ledger.md),
+That checkpoint uses counted bits: zero is not permission to read
+inline/control/no-count homes. See [writer closure](issues/call-model55/writer-closure-ledger.md),
 [authority assessment](issues/call-model55/bitmap-authority-assessment.md)
 and [known-home proposal](issues/call-model55/known-home-capabilities.md).
 The three matching known-home bodies are now composed and qualified under
 NULL control. Their new B screen also loses every pair:1.327228,1.228186,
 1.350701,1.217027,1.250380,1.587998 in hot order. Evidence
 `E/bitmap-known-home-{checkpoint,focus,native,hot-screen-golden}`. Root selects
-same-byte non-NULL occupancy as the next complete-rival direction; exact typed
-view/partition interfaces still require peer freeze. No second plane, FT claim
-or zero-bit read permission. Frames owns implementation after freeze.
+same-byte non-NULL occupancy as the next complete-rival direction. Its typed
+16-byte HomeView now distinguishes immutable ranges from positive presence;
+capture rebinds the view to destination storage. Local active-child lookup
+clips overlap, and unsupported foreign queries return NONE explicitly. Pending
+unpack cells remain externally owned until callback-free publication. GC and
+private drains consume presence; conservative arena enumeration is removed
+in the draft. Native stack/register/PyMem discovery policy is unchanged.
+
+Presence packet4a1a39fa9e3 and I25585 compose cleanly at B20576b58f4b.
+Both builds complete117/79; the presence/provider focus passes17 cases per role.
+Four lifecycle modules pass25 release cases, but that driver also requested a
+nonexistent copy module and fails overall. Corrected debug selection pending.
+Frames has found a real raw CloseStack CALL writer; its shared checked drain
+must land before presence qualification. Keep B frozen during native work. Execution frontier, copy gap
+initialization and physical Take NULL writes remain: raw nullable readers still
+need readable NULL. This is an ownership authority change, not yet a complete
+stale-scratch candidate. No second plane, FT claim or zero-bit load permission.
 
 The first B full build lacked UUID headers because pkg-config's sysroot was
 missing. Reconfigure used exact I CONFIG_ARGS and

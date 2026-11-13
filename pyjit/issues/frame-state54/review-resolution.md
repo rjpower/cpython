@@ -22,8 +22,9 @@ validation. Astra is not in the implementation loop.
   include removing work that selected51 does not perform.
 - A GC root map, future-read liveness and RC occupancy are different contracts.
   A dynamic bitmap must cover every read/write, callback, overlap, unwind and
-  escaped frame. Its scope and recurring updates reject it as this round's first
-  implementation; the user's idea is assessed, not silently substituted.
+  escaped frame. It was not selected for this round's first implementation;
+  this is not a measured rejection of bitmap architecture. Round55 reopens
+  the complete architecture and recurring costs before implementation.
 - The interpreter-exit trampoline has an execution prefix with NULL entries;
   the thread base sentinel has no words. Feedback derivation keeps those
   distinct contracts without a new guard on every normal access.
@@ -58,9 +59,34 @@ validation. Astra is not in the implementation loop.
 
 ## Integration decision
 
-Use unchanged hot workloads, then all29 for promising lanes. Compose only
+The original integration gate was to use unchanged hot workloads, then all29
+for promising lanes, and compose only
 qualified winners or a bounded near-neutral field-layout combination whose
 owner proofs are complete. Expected F+N+L header geometry is 80 bytes, but added
 loads/allocation do not disappear at that size. Measure the composition directly.
 Retain semantic, native and performance rejection evidence. No automatic golden
 promotion follows a source cleanup, smaller header or individual microbenchmark.
+
+
+## Final resolution and selection
+
+All nine performance candidates are rejected after their own isolated and
+composition measurements. Compact F+N+L's actual header is 80 bytes, but its
+screen loses; R2+S2's modest all29 aggregate does not compensate its material
+coroutine regression. None is in the selected checkpoint. This is a measured
+tradeoff decision, not a rule that every workload must improve.
+
+The separate three-file cold constructor correction is independently reviewed,
+qualified and selected at `61015a9452d9069646fb5fede9ff963896833b89`.
+Published `pyjit/round54-golden` and annotated tag
+`pyjit-golden-20261112-frame-state` resolve there. The full diagnostic suites
+failed with recorded limits, including the unresolved profiling finding;
+selection does not establish a green suite or performance lift. Final all29
+versus golden51 is 1.006381, separate hot6 is 0.996669, and upstream all29 is
+1.156543. See [qualification](qualification.md),
+[admission review](checkpoint-admission-review.md) and [tables](benchmark-tables.md).
+
+All rejected branches and verified retirement evidence are retained. Round54
+is closed; [round55](../call-model55/plan.md) now researches the whole
+call/frame/register architecture and bitmap alternatives before implementation.
+As-built designs remain current until a reviewed proposal is implemented.

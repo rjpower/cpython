@@ -1,96 +1,116 @@
 # Project status
 
-Golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected.
-Round54's [active plan](issues/frame-state54/plan.md) has built and focused-tested
-all five reviewed experiments. F and R complete all29 screens and six-pair hot
-confirmation; their all29 means are 0.993748 and 0.989479 of selected51, but
-coroutine regressions remain. The 80-byte F+N+L composition passes focused
-checks and fails its initial hot screen. Constructor-validated same-home S2
-passes focused checks and has all29 mean 0.992128, with mixed hot confirmation.
-The recipient-NONE revision now passes 813 focused tests and the remote
-recipient check per role; three constructor failure probes retain code/mapping
-owners across 48 injected failure points per subtype and role. Timing is next. No round54 candidate is
-admitted. [Tables](issues/frame-state54/benchmark-tables.md) and
-[qualification](issues/frame-state54/qualification.md) retain sample scopes and
-failures; these are component results, not combined golden performance.
+Round54 is closed. Published branch `pyjit/round54-golden` and annotated tag
+`pyjit-golden-20261112-frame-state` select
+`61015a9452d9069646fb5fede9ff963896833b89`: a three-file public frame-to-generator
+construction correction with explicit qualification limits. All nine performance
+experiments/revisions/compositions are rejected; none enters the checkpoint.
+This is a correctness selection with no demonstrated performance lift.
 
-All three activation53 candidates are rejected after six-pair confirmation:
-direct final-home construction, shared completion and native-only construction.
-Native-only improves generators 5.9%, but repeatedly loses 2.4% on DeltaBlue
-and 2.7% on Richards. No experimental code is absorbed.
+Round55 has completed **architecture research and a reviewed migration plan**. Start with the
+[goal](GOAL.md), [plan](issues/call-model55/plan.md), and
+[proposed call model](design/proposals/register-call-model55.md). The
+[review resolution](issues/call-model55/review-resolution.md) closes all five
+initial must-fix findings. Static scratch maps plus initialized locals are the
+first candidate; a complete physical-bitmap rival remains required before
+representation selection. Implementation has not started. The proposal
+does not replace as-built contracts.
+Round54's [report](issues/frame-state54/report.md),
+[tables](issues/frame-state54/benchmark-tables.md) and
+[qualification](issues/frame-state54/qualification.md) retain closure evidence.
+[HANDOFF](HANDOFF.md) owns paths and recovery. Canonical documentation is this
+checkout; its C files are not the measured runtime.
 
-Start with the [goal](GOAL.md), [active plan](issues/frame-state54/plan.md),
-[current report](issues/activation53/report.md), [tables](issues/activation53/benchmark-tables.md)
-and [next decision](issues/activation53/next-steps.md).
-[HANDOFF](HANDOFF.md) owns exact paths and recovery. Canonical documentation is
-in this checkout; its C files are not the measured runtime.
+## Selected implementation and performance
 
-## Selected performance
+Universal eight-byte PyValues span the runtime and rebuilt extensions. The
+register interpreter is implemented; native method/tracing JIT tiers remain
+unfinished. Exact calls already overlap arguments in one frame stack, reserve
+and initialize once, and publish ordinary returns inline. Warm arena storage
+uses an initialized frontier. Generator resume dispatches inside the evaluator;
+hidden constants initialize at construction, not every resume.
 
-Unchanged workloads, GCC15.2, CPU15, hash0, JIT disabled. Ratios are elapsed
-golden51/upstream; lower is faster. The fresh all29 two-pair geometric mean is
-**1.156831**, with 6/29 cases faster. Separate six-pair hot confirmation:
+Final round54 measurements use the actual selected61015 checkpoint, unchanged
+workloads, GCC15.2, CPU15, hash0 and JIT disabled. Against golden51, all29
+(two balanced pairs) has geometric mean **1.006381**, 11/29 lower; separate
+six-pair hot confirmation has mean **0.996669**. Neither establishes a general
+speedup. Logging silent differs substantially by scope: all29 is 1.138347,
+while hot6 is 0.978879 with range 0.876076–1.005017. Keep both observations.
 
-| Case | Geometric mean | Pair range |
+Against upstream, completed all29 mean is **1.156543**, 6/29 faster. Valid
+six-pair confirmation is `final54-hot6-confirm2-upstream`:
+
+| Case | Selected54/upstream elapsed | Pair range |
 | --- | ---: | ---: |
-| Generators | 1.450583 | 1.441005–1.462817 |
-| Coroutines | 1.257081 | 1.240689–1.271521 |
-| DeltaBlue | 1.174507 | 1.170100–1.186879 |
-| Richards | 1.245939 | 1.208283–1.271766 |
-| Comprehensions | 1.376346 | 1.355705–1.402835 |
-| Logging silent | 0.730916 | 0.662089–0.771119 |
+| Generators |1.450207 |1.424808–1.472757 |
+| Coroutines |1.254281 |1.240417–1.265182 |
+| DeltaBlue |1.154663 |1.134484–1.184544 |
+| Richards |1.280930 |1.229266–1.407654 |
+| Comprehensions |1.390876 |1.347206–1.511459 |
+| Logging silent |0.712216 |0.671358–0.779797 |
 
-Logging has a wide spread. The all29 generator screen also has a wide pair
-range, 1.437–1.784; retain it separately from the longer confirmation. These
-campaigns measure unchanged selected source and are not evidence of a new
-implementation gain. Do not multiply independent comparison ratios.
+Richards, comprehensions and logging have wide ranges. The initial
+`final54-hot6-upstream` failed its load guard and is retained but excluded;
+its partial results are not confirmation. All accepted campaigns keep stable
+clean source/native identities before and after. Do not pool campaigns or
+multiply independent comparison ratios.
 
-The [checkpoint report](issues/interpreter-round51/report.md) retains direct
-prior50 and golden39 comparisons, selected PMU data and incremental regressions.
-The [round52 report](issues/generator-delegation52/report.md) records two rejected
-delegation variants. Round53's full construction candidate reduces coroutine
-instructions to 0.985784 of golden51 but takes 1.027712 times elapsed time.
-Neither that result nor flat samples establishes a hardware cause.
+Final matched PMU instruction ratios versus upstream are 1.353135 for
+DeltaBlue, 1.413895 for generators and 1.386260 for coroutines; cycles are
+1.210496, 1.434569 and 1.249114. Both stat groups complete 18/18 valid
+invocations; record completes 6/6, with stable identities and no lost records.
+Flat profiles and instruction differences identify repeated work, not exclusive
+removable cycle budgets. See the [tables](issues/frame-state54/benchmark-tables.md).
 
-## Selected design and gaps
+## Frame-state decision
 
-Universal eight-byte PyValues span the runtime and rebuilt extensions.
-The register interpreter is implemented; native method/tracing JIT tiers remain
-unfinished. Exact calls reserve and initialize once, overlap thread arguments
-and publish ordinary returns inline. Function and executing code remain separate
-owners. Warm thread storage avoids repeated NULL initialization.
+Keep the 112-byte GIL header, direct feedback/environment caches, direct locals
+mapping owner, NULL homes and initialized frontier. The measured F+N+L layout
+has an 80-byte header but loses its screen; recovering omitted state and eager
+mapping records cost work. A bitmap migration must cover every physical-home
+reader/producer and reentrant phase, not just teardown.
 
-The remaining activation costs include a 112-byte header versus upstream's 80,
-value classification, recipient/continuation state, construction-time physical
-home movement and callback-safe retirement. Generator resume already dispatches
-inside the evaluator; hidden constants are initialized at construction, not
-each resume. The workload's frequent SEND/YIELD transitions and recursive
-coroutine creation/completion need different treatment. These are concrete
-mechanisms, not a complete causal accounting of the elapsed gap.
+R's two-pair all29 mean improves most cases, but its six-pair coroutine loss is
+6.9%; F loses 4.1% there. Validated S2 removes four repeated geometry checks
+and a reached intermediate NULL store, but hot coroutine timing is 2.4% worse.
+These are rejected experiments, not selected alternate contracts. Full tables
+and independent source/native reports retain all sample scopes and limits.
 
-Current contracts: [IR](design/register-ir.md),
-[interpreter](design/interpreter.md), [calls/frames](design/call-and-frame-lifetimes.md),
-[activation transfers](design/activation-transfers.md) and [values](design/pyvalue.md).
-Source positions do not authorize ordinary dispatch or call admission.
+The public-constructor correction acquires the frame association owner, sets
+first-input discard, constructs coroutine origin before moving owners, and
+initializes subtype state before publication. Both-role native review finds
+normalized hot CALL/SEND/YIELD/RETURN and ordinary construction unchanged.
+Focused checks pass 808 tests per role (10 release skips, 9 debug); the strict
+value API gate passes 306 units. The candidate's own failure probe checks 48
+allocation points per subtype per role with stable code/mapping owners.
+Full diagnostics and direct timing are complete. The checkpoint is selected
+with the limits below; the full-run profiling finding remains open.
 
-## Qualification and next decision
+## Qualification limits and retention
 
-Selected release/debug builds each check 117 modules. Prior focused checks pass
-821 tests with nine skips plus five generator tests per role; the value API gate
-passes 306 units. Full diagnostics run 54689 filtered tests in each role:
-release retains nine debugger-jump errors; debug retains those nine plus one
-LLTrace failure. These are documented failed diagnostics, not green full suites.
-Only the GDB pretty-printer class is quarantined; other GDB groups remain active.
+Selected51 prior full diagnostics run 54,689 filtered tests per role: release
+retains nine debugger-jump errors; debug those nine plus one LLTrace failure.
+Only `test.test_gdb.test_pretty_print.PrettyPrintTests.*` is quarantined.
+Current final diagnostics run 54,692 tests per role. Release has the same nine
+debugger errors and an unstable GC-verifier failure; debug has those nine,
+LLTrace and one profiling failure. Verbose debugger/LLTrace repeats have the
+same failure identities as selected51. Six
+independent targeted runs fail four times on each of selected51 and the new
+candidate for the GC-verifier case. Profiling targeted, tracing-module and
+complete-package reruns pass both builds, but its original full-run finding is
+unexplained, not proven preexisting or fixed. These failures are recorded,
+not quarantined or called a green full suite.
+All current qualification is for the measured GIL configurations.
 
-Round53 followed thesis, one broad Astra review, independent implementation/
-post-review, focused release/debug checks, native route probes and balanced
-timing. Full suites were omitted once its candidates failed performance.
-All three branches are pushed. Verified archives retain patches, six native
-ELFs/extensions/configurations and hashes; only the nine task source/build
-directories were retired. Selected builds and controls remain intact.
+All nine rejected round54 branches are published. Verified retirement evidence
+retains their patches, commit logs and 18 archives containing 3,042 native and
+configuration files. Only their 27 task-owned source/build directories were
+removed. Selected54, golden51, upstream and older controls remain.
+Rounds52/53 also retain their published rejected branches and verified archives;
+see their reports rather than historical source copies.
 
-The [next decision](issues/activation53/next-steps.md) prioritizes reducing eager
-activation state using existing authority, with alternatives for carrying resume
-proofs and bounded compiled regions. Require named removed work, peer review and
-cross-benchmark gates before implementation. Astra reviews broad designs rather
-than the inner loop.
+Round55 reopens bitmap/static-map/NULL-home tradeoffs within a holistic
+call/frame architecture, including complete lifecycle and recurring costs. No
+bitmap or native-JIT answer is predetermined. Astra owns architecture research;
+implementation awaits the complete plan and review. The coordinator owns native
+evidence and measured selection.

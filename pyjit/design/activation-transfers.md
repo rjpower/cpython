@@ -1,12 +1,14 @@
 # Activation transfers
 
-Selected runtime: golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`.
+Selected runtime: golden54 `61015a9452d9069646fb5fede9ff963896833b89`.
 This document describes its call, construction and resume boundaries. The
 [frame ABI](call-and-frame-lifetimes.md), [register IR](register-ir.md) and
 [interpreter](interpreter.md) define storage, encoding and observation in detail.
 Round53's [report](../issues/activation53/report.md) and
 [review](../issues/activation53/astra-review.md) record rejected alternatives;
-none changes this selected contract.
+none changes this selected contract. Golden54 adds only the public C-constructor
+repair below. The [model55 proposal](proposals/register-call-model55.md) is a
+separate architecture and migration plan, not implemented behavior.
 
 ## Ordinary calls and returns
 
@@ -78,6 +80,16 @@ each resume.
 The physical-home move is broader than upstream's live-stack copy. Its source
 NULL stores maintain the arena's initialized-frontier invariant; deleting them
 requires a replacement lifetime proof. Constants also move with the frame.
+
+Public `PyGen_New`, `PyCoro_New` and `PyAsyncGen_New` construction from an
+existing frame bypasses ordinary RETURN_GENERATOR. This cold ingress explicitly
+installs the initial discard recipient, acquires the frame-object association
+owner, and completes subtype state before publishing that association and
+GC-tracking the object. Fallible coroutine-origin construction precedes the
+ownership move. Failure frees the untracked allocation and consumes the stolen
+input frame reference. The subtype wrappers return the common constructor
+directly. These repairs do not redirect normal Python creation through this
+public helper or change the ordinary call/resume ABI.
 
 ## Resume, suspension and completion
 

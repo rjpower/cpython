@@ -1,146 +1,140 @@
 # Coordinator handoff
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
-are not the measured runtime. Start with [goal](GOAL.md),
-[status](STATUS.md), [active plan](issues/frame-state54/plan.md),
-[current report](issues/activation53/report.md), [tables](issues/activation53/benchmark-tables.md)
-and [next decision](issues/activation53/next-steps.md).
+are not the measured runtime. Start with [goal](GOAL.md), [status](STATUS.md),
+[active plan](issues/call-model55/plan.md), [report](issues/frame-state54/report.md),
+[tables](issues/frame-state54/benchmark-tables.md) and
+[next decision](issues/frame-state54/next-steps.md).
 
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
-Current evidence E=`BASE/pyjit-link-wave1/activation53`.
+Current evidence E=`BASE/pyjit-link-wave1/frame-state54`.
 
-## Round54: measured experiments and bounded revisions
+## Current checkpoint
 
-Packet `pyjit/issues/frame-state54`; new evidence
-`BASE/pyjit-link-wave1/frame-state54`. One broad Astra review and independent
-Sol inventories accepted five isolated experiments, not five predicted wins.
-The [resolution](issues/frame-state54/review-resolution.md) records corrections
-and the [plan](issues/frame-state54/plan.md) owns admission.
+Round54 is closed. Local and remote `pyjit/round54-golden`, and annotated tag
+`pyjit-golden-20261112-frame-state`, resolve to
+`61015a9452d9069646fb5fede9ff963896833b89`. The interrupted push completed;
+do not treat publication as pending. This is the cold-only correctness
+checkpoint, selected with diagnostic limits and no performance lift.
 
-| Branch under pyjit/ | Current head | State |
-| --- | --- | --- |
-| frame54-recipient |612fb4e9d17 | Focused both roles; hot6/all29 screen;22/29 wins but coroutine loss |
-| frame54-feedback |7ea40d5d67c | Focused both roles; hot6/all29 screen; modest mean gain with coroutine loss |
-| frame54-globals |c2cc6777e4d | Focused both roles; hot6 mixed/worse |
-| frame54-locals |b48fe2d3989 | Focused both roles; initial hot screen; exec6 +22.2%, class6 +4.2% |
-| frame54-clears |4fbd16a1462 | Focused both roles; screen; native successful-route counts retained |
-| frame54-clears-validated |e95328ba1d6 | Shared constructor/selection proof; focused453+2 per role; hot6/all29 mixed |
-| frame54-compact |82afe7aef2d | F+N+L header80 actual; focused946 per role; hot screen rejected |
-| frame54-recipient-default |fcc82220ddd | NONE + cold C-API fix; both-role813 focus, remote and48-point/subtype ownership probes pass; screen running |
+Selected source `BASE/worktrees/frame54-cold-construction`, implementation
+branch `pyjit/frame54-cold-construction`, builds
+`BASE/frame54-cold-construction-{release,debug}` are retained. Only genobject.c's
+public constructor/wrappers, a testcapi helper and three constructor regression
+methods differ from golden51. No NONE/R/S/header/hot change is absorbed.
 
-Sources are `BASE/worktrees/frame54-SUFFIX`, builds
-`BASE/frame54-SUFFIX-{release,debug}`. [Tables](issues/frame-state54/benchmark-tables.md)
-and [qualification](issues/frame-state54/qualification.md) retain actual manifests,
-logs, sample counts and failed attempts. Root owns generation, builds, runtime
-checks and quiet timings. Do not overlap them. The initial recipient generator
-effect annotation, namespace debug sentinel, mapping publication/first-input
-and overwrite debug-publication bugs were fixed; failed logs remain evidence.
+Round55 holistic call/frame/bitmap architecture research and independent
+post-review are complete. Follow [plan](issues/call-model55/plan.md),
+[proposal](design/proposals/register-call-model55.md) and
+[resolution](issues/call-model55/review-resolution.md). No runtime implementation
+has started. No native jobs or performance rescue lanes are active.
 
-The corrected S2 removes four repeated geometry checks using one pure proof in
-common code validation and specialization; actual type guards remain. Explicit
-NONE prevents fresh-frame defaults from masquerading as a real discarded child
-in debugger recipes. R2 separately fixes public frame-to-generator association,
-first-send discard and complete subtype publication; no optional-mapping layout
-is absorbed. All prior candidates/controls remain unchanged and no round54
-performance admission follows these source improvements alone.
+Completed candidate evidence under E:
 
-## Selected runtime and controls
+- `cold-construction-initial-{release,debug}-build.log`:117 modules/79 shared.
+- `cold-construction-focus-focus-checks.json` and role logs:808 tests per role,
+  10 skips release,9 debug; matching clean source/native/magic64418.
+- `cold-construction-allocation-commands.json` and role logs:48 points per
+  subtype per role; generator3 failures/45 successes,coroutine5/43,asyncgen3/45;
+  code/namespace owners checked after each collection.
+- `cold-construction-value-api.log`, command JSON and rebased CDB:306 units,
+  0 failing findings,0 parse errors; informational counts93/151/1.
+- `cold-construction-{release,debug}-full-full-checks.json` and
+  `cold-construction-{release,debug}-full-{release,debug}-full.log`: completed
+  54,692 tests per role. Release retains nine debugger errors and an unstable
+  GC-verifier failure. Debug retains nine debugger errors, LLTrace and one
+  unexplained profiling failure. These are failed full diagnostics.
+- `gc-verifier-repeat-commands.json` and12 logs:6 alternating targeted runs
+  per release build;4 failures/2 passes on both oldgolden and coldcandidate.
+  Source hypothesis is conservative-root sensitivity, not an established cause.
+- `cold-diagnostic-repeat-commands.json`: same nine debugger error identities
+  and debug LLTrace failure as selected51. Profiling targeted, tracing-module
+  and complete-package repeats pass both debug builds; see the three
+  `profiling-*-commands.json` journals. The original full-run profiling finding
+  remains open, not proven preexisting or fixed.
 
-Selected source is `BASE/worktrees/round51-golden`, branch
-`pyjit/round51-golden`, commit
-`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`.
-Release/debug builds are `BASE/round51-golden-{release,debug}`.
-The branch and annotated tag `pyjit-golden-20261111-runtime` are published.
-Source is clean. Universal PyValues and the register interpreter are integrated;
-native method/tracing JIT tiers remain unfinished.
+Independent proposal/source/native/cold reports live in the canonical packet.
+Both-role normalized hot call/send/yield/return/ordinary-construction sequences
+match selected51; native placement and elapsed equality do not follow from that.
+All qualification and final measurement jobs are complete. Final all29 versus
+golden51 is 1.006381 (11/29 lower); separate hot6 is 0.996669. Upstream all29
+is 1.156543 (6/29 faster), with valid hot6 in
+`final54-hot6-confirm2-upstream`. Preserve excluded failed-load
+`final54-hot6-upstream`. Final PMU `final54-stat-{cycles,branches}` complete
+18/18 each; `final54-record` completes 6/6, no lost records. See
+[final tables](issues/frame-state54/benchmark-tables.md) for ranges and scope.
+No performance improvement is claimed for selection.
 
-All paths below are relative to BASE. Controls remain immutable.
+## Immutable prior runtime and controls
 
-| Role | Source under worktrees/ | Release build | Commit |
+Prior selected source `BASE/worktrees/round51-golden`, branch `pyjit/round51-golden`,
+head `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`; builds
+`BASE/round51-golden-{release,debug}`. Published annotated tag
+`pyjit-golden-20261111-runtime` remains immutable. Universal PyValues and the
+register interpreter are integrated; native method/tracing tiers are unfinished.
+
+| Role | Source under BASE/worktrees/ | Release build under BASE/ | Commit |
 | --- | --- | --- | --- |
-| Prior checkpoint50 | execution-boundaries-20261108 | execution-boundaries-release | bf810ec1a33 |
-| Golden39 | golden-20261109-runtime | golden-20261109-release | 4d666e1b482 |
-| Upstream | upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695 |
+| Prior checkpoint50 |execution-boundaries-20261108 |execution-boundaries-release |bf810ec1a33 |
+| Golden39 |golden-20261109-runtime |golden-20261109-release |4d666e1b482 |
+| Upstream |upstream-3a440b6 |upstream-release-devlibs-3a440b6 |3a440b65695 |
 
-One GCC15.2 release configuration, CPU15, hash0, JIT off; magic64418,
-ATTR/polymorphic geometry 48/120 bytes. Selected builds check 117 modules,
-including 79 shared extensions; upstream 116/78. Matching selected module log:
+One GCC15.2 release configuration,CPU15,hash0,JIT off; magic64418,
+ATTR/polymorphic geometry48/120 bytes. Selected54 and golden51 each117 modules/79 shared; upstream
+116/78. Golden51 module log:
 `BASE/pyjit-link-wave1/interpreter-round51/combined34-release-build.log`.
 Upstream module log:
 `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log`.
+Golden51 prior full limits:54,689 tests per role,9 debugger-jump errors release,
+those9 plus1 LLTrace debug. Only the GDB pretty-print class is quarantined.
 
-## Activation53: closed, all candidates rejected
+## Closed performance experiments
 
-One broad Astra review corrected the thesis before implementation. Independent
-Sol implementation/review lanes and Terra documentation work are complete.
-Root owned generation, native checks, focused release/debug tests, GDB route
-probes and quiet timings. All candidates remove the intended native boundary,
-but fail confirmed breadth. None is absorbed.
+One broad Astra review and independent Sol inventories/implementation/peer and
+post-reviews covered five options, two revisions and two compositions.
+All performance candidates are rejected; no component result is selected.
 
-| Retained pushed branch | Commit | Rejection |
+| Published branch under pyjit/ | Commit | Decision |
 | --- | --- | --- |
-| pyjit/activation53-completion | 4d40da15b6e2bb9299fa56ef5d08d884a927e7d1 | Coroutines +3.1%, Richards +1.1% |
-| pyjit/activation53-final-homes | 4b339980d020ae4f6026474e8942b7174ce57d16 | Coroutines +2.8%, logging +24.4%, comprehensions +1.5% |
-| pyjit/activation53-native-construction | 779a1568a41652736dbd4c93b968d3381a9693b5 | DeltaBlue +2.4%, Richards +2.7% despite generators −5.9% |
+| frame54-recipient |612fb4e9d17 |All29.989479,22/29lower; hot coroutine1.068741 |
+| frame54-feedback |7ea40d5d67c |All29.993748; hot coroutine1.040777 |
+| frame54-globals |c2cc6777e4d |Header96; hot mixed/worse |
+| frame54-locals |b48fe2d3989 |Header104; exec1.222247,class1.042134 |
+| frame54-clears |4fbd16a1462 |Initial four repeated geometry checks; screen rejected |
+| frame54-clears-validated |e95328ba1d6 |Shared admission proof; all29.992128; hot coroutine1.024050 |
+| frame54-compact |82afe7aef2d |Actual header80; screen rejected |
+| frame54-recipient-default |fcc82220ddd |All29.999754; hot coroutine1.063816 |
+| frame54-combined |f3c464a54c8 |All29.993149; hot generator.956948,coroutine1.098464 |
 
-Every listed regression appears in all six confirmation pairs.
-Component reports own qualification and limits. No rejected candidate ran full
-suites or all29. The full-construction instruction diagnostic has coroutine
-instructions 0.985784 but elapsed 1.027712 versus golden51; it does not establish
-a hardware cause. Native-only CALL/RETURN normalized instruction sequences
-match selected51, but that does not prove unchanged placement or zero native
-provider cost.
+Ratios are candidate/golden51 elapsed. All29 screens have2pairs; hot6where
+specified. Do not infer one candidate's result from another or multiply ratios.
+The report records why broad modest wins do not compensate material target loss.
 
-Fresh selected/upstream campaigns are E/`selected51-refresh-all29-upstream`
-and `selected51-refresh-hot-upstream`. All29 two-pair geometric mean is 1.156831
-with 6/29 wins. Separate six-pair ratios: generators 1.450583,
-coroutines 1.257081, DeltaBlue 1.174507, Richards 1.245939,
-comprehensions 1.376346, logging_silent 0.730916. Logging has a wide spread;
-the all29 generator screen has a noisy 1.437–1.784 range. Retain both campaigns.
+All27 rejected source/build directories are retired. E/`retired-experiments`
+contains9 source patches/commit logs,18 verified native/configuration archives,
+3,042 archived files, SHA256 manifest and retirement.json. Recover source from
+published branch heads; `issues/frame-state54/build.py` and archived configs
+provide inputs. Archived ELFs are experimental, not selected. Source citations
+use pinned published commits. Raw timing/native/build/test evidence is unchanged.
 
-All nine round53 source/build directories are retired. E/`retired-experiments`
-retains three source patches/commit logs and six verified tar archives containing
-1014 native/configuration files, with SHA256 manifest and `retirement.json`.
-No round53 native job remains. Recreate sources from the pushed branch heads;
-`issues/activation53/build.py` and archived configurations provide build inputs.
-Archived experimental ELFs are not selected binaries. Selected builds, all
-controls, preexisting worktrees and raw evidence remain intact.
+Rounds52/53 are also closed and rejected. Their reports and archives remain
+under their issue/evidence directories. Selected/upstream round53 refresh lives
+under `BASE/pyjit-link-wave1/activation53/selected51-refresh-{all29,hot}-upstream`.
+That historical all29 mean is1.156831; current selected54 results are in STATUS.
+The selected checkpoint51 report retains direct prior50/golden39 comparisons.
 
-## Qualification and prior evidence
+## Operating rules
 
-Selected51 focused checks pass 821 tests with nine skips plus five generator
-tests per role; the strict value API gate passes 306 units. Full diagnostics
-run 54689 filtered tests per role: release retains nine debugger-jump errors,
-debug those nine plus one LLTrace failure. These are failed diagnostics with
-documented limits. Only `test.test_gdb.test_pretty_print.PrettyPrintTests.*`
-is quarantined; other GDB groups remain enabled.
-
-The [selected checkpoint report](issues/interpreter-round51/report.md) retains
-prior50/golden39 comparisons, prior diagnostics and PMU evidence.
-The [round52 report](issues/generator-delegation52/report.md) records two rejected
-delegation variants. Their branches, raw evidence and verified retirement
-archives remain available under `BASE/pyjit-link-wave1/generator-delegation52`.
-Do not revive those variants or subtract independent campaign ratios.
-
-## Next work and operating rules
-
-The [next decision](issues/activation53/next-steps.md) prioritizes eager activation
-state contraction, then existing-proof SEND/YIELD specialization or bounded
-compiled regions. Require a weighted native work-removal case before code.
-Constants need a weighted hidden-home census; feedback already uses direct
-scaled offsets rather than an entry-pointer table. Astra reviews broad designs,
-not implementation revisions. Round54 owns the new implementation decision.
-
-Never overlap quiet timing/profiles with builds, tests, GDB or bulk cleanup.
-Root owns integration, native execution, timing, commits and publication.
-Host scripts use `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
-Loom mirrors canonical documents under
+Never overlap quiet timing/profiles with builds,tests,running GDB or bulkcleanup.
+Root owns generation, integration, native execution, commits and publication.
+Use `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B` for host
+scripts. Current final build/source must remain clean and stable through evidence.
+Loom mirrors canonical docs under
 `http://127.0.0.1:7878/s/xzzlxx17/artifacts/`.
-Authenticated GitHub publication works through gh's HTTPS credential helper
-without changing origin.
+Authenticated GitHub publication uses gh's HTTPS credential helper without
+changing origin. Preserve old golden tags and unrelated controls/caches/worktrees.
 
 Never stage/reset/delete the preexisting report/log/lock:
 `pyjit/bench/results/checkpoint-6a0e4c12c17.md`,
 `pyjit/issues/checkpoint-closure/ctypes-rawpin-build.log`,
 `pyjit/issues/checkpoint-closure/w5-release.lock`.
-Preserve unrelated controls, caches, sources and artifacts.

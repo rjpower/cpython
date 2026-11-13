@@ -34,10 +34,10 @@ their differences to instruction placement, caches or branch prediction.
 **Mapping ownership and visibility are coherent, but costly.** Compact prepares
 the mapping-bearing record before thread reservation, transfers its mapping
 only after reservation succeeds, and leaves it private through binding
-([ceval.c:3143](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Python/ceval.c:3143)).
+([ceval.c:3143](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Python/ceval.c#L3143)).
 That record is a full variable-sized frame allocation, including capacity for
 all homes, rather than a small mapping box
-([frameobject.c:4088](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Objects/frameobject.c:4088)).
+([frameobject.c:4088](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Objects/frameobject.c#L4088)).
 Thus removing one fixed word can add an allocation and unused home capacity on
 every supplied-mapping entry. This is a concrete total-work objection to L,
 independent of any hardware explanation for its timings. Do not rescue it by
@@ -46,9 +46,9 @@ silently adding a second mapping-owner mode.
 Its private/untracked phase and complete/tracked phase are real invariants.
 Observer publication materializes kwargs using the association protected by
 the record lock, then tracks it
-([pycore_interpframe.h:476](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Include/internal/pycore_interpframe.h:476)).
+([pycore_interpframe.h:476](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Include/internal/pycore_interpframe.h#L476)).
 Generator copying installs homes and owner/association before release-publishing
-CREATED ([pycore_interpframe.h:282](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Include/internal/pycore_interpframe.h:282)).
+CREATED ([pycore_interpframe.h:282](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Include/internal/pycore_interpframe.h#L282)).
 The untracked record's counted mapping edge protects the mapping during ordinary
 cyclic GC; complete heap publication tracks the record so mapping/generator
 cycles can be collected. Moving tracking back into Initialize would reopen the
@@ -57,16 +57,16 @@ previously fixed incomplete-frame enumeration bug.
 Unique retirement holds the mapping in C until after home retirement, then
 closes it before the function owner. Escaped takeover keeps the owner on the
 same frame object
-([frame.c:213](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Python/frame.c:213)).
+([frame.c:213](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Python/frame.c#L213)).
 Traversal visits the mapping once from that object
-([frameobject.c:3931](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Objects/frameobject.c:3931)).
+([frameobject.c:3931](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Objects/frameobject.c#L3931)).
 These details justify retaining the corrected implementation for measurement;
 the smaller header alone would not.
 
 **Derived state retains the right authority.** Feedback comes from the prefix
 of the executing word image, while globals/builtins come from the retained
-function ([pycore_interpframe.h:69](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Include/internal/pycore_interpframe.h:69),
-[pycore_interpframe.h:166](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-compact/Include/internal/pycore_interpframe.h:166)).
+function ([pycore_interpframe.h:69](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Include/internal/pycore_interpframe.h#L69),
+[pycore_interpframe.h:166](https://github.com/rjpower/cpython/blob/82afe7aef2d86c0c01f60c681b082712171a92b4/Include/internal/pycore_interpframe.h#L166)).
 Neither derives execution from mutable function code. The accessors deliberately
 assume an admitted normal frame; cold sentinel paths must establish that class
 before using them. Existing sentinel fixes should remain at those boundaries.
@@ -79,27 +79,27 @@ caches that could themselves outlive their source members.
 transfers.** Descriptor accessors consistently separate index, discard and
 replacement. Publication handles redirect before rereading the descriptor,
 and the empty route retains its physical NULL assertion
-([pycore_interpframe.h:218](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-recipient/Include/internal/pycore_interpframe.h:218)).
+([pycore_interpframe.h:218](https://github.com/rjpower/cpython/blob/612fb4e9d170532947c007f0ccaaa04aff623329/Include/internal/pycore_interpframe.h#L218)).
 The remote reader also validates and decodes the changed representation
-([asyncio.c:345](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-recipient/Modules/_remote_debugging/asyncio.c:345)).
+([asyncio.c:345](https://github.com/rjpower/cpython/blob/612fb4e9d170532947c007f0ccaaa04aff623329/Modules/_remote_debugging/asyncio.c#L345)).
 This removes real old-home work, but producer encoding and consumer branching
 remain recurring work. Its coroutine regression is sufficient reason to avoid
 promotion even though the ownership contract is sound.
 
 **Revised S moves geometry proof to the correct boundaries.** Common constructor
 validation rejects malformed directly supplied refined words
-([codeobject.c:1390](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-clears-validated/Objects/codeobject.c:1390));
+([codeobject.c:1390](https://github.com/rjpower/cpython/blob/e95328ba1d6f3ea74dd92d0870213367287d64ef/Objects/codeobject.c#L1390));
 specialization checks the same predicate against the executing code's extent
-([specialize.c:640](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-clears-validated/Python/specialize.c:640)).
+([specialize.c:640](https://github.com/rjpower/cpython/blob/e95328ba1d6f3ea74dd92d0870213367287d64ef/Python/specialize.c#L640)).
 The generated handler asserts geometry before loading inputs, guards both
 inline types, performs fallible boxing before consumption, and overwrites B
 after a nonescaping suffix
-([generated_ir_cases.c.h:233](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-clears-validated/Python/generated_ir_cases.c.h:233)).
+([generated_ir_cases.c.h:233](https://github.com/rjpower/cpython/blob/e95328ba1d6f3ea74dd92d0870213367287d64ef/Python/generated_ir_cases.c.h#L233)).
 The intervening specialized closes receive inline integers and cannot call
 destructors. The output may be boxed; that does not invalidate the input-owner
 proof. The shared generator certificate checks the actual body, rather than
 trusting the ADD name
-([ir_generator.py:4528](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/frame54-clears-validated/Tools/cases_generator/ir_generator.py:4528)).
+([ir_generator.py:4528](https://github.com/rjpower/cpython/blob/e95328ba1d6f3ea74dd92d0870213367287d64ef/Tools/cases_generator/ir_generator.py#L4528)).
 This is a substantive improvement over four repeated release geometry checks.
 Keep constructor/marshal/instrumentation restoration and generator negative
 proof cases as admission gates; debug assertions cannot replace them.
@@ -136,3 +136,21 @@ does not supply RC ownership, dynamic local boundness or callback mutation
 authority. A bitmap proposal remains a separate representation migration with
 all readers, transfers and exceptional phases owned; nothing in these results
 justifies starting that migration as a clear-loop optimization.
+
+## Final integrated source verdict
+
+Follow-up review inspected actual `frame54-combined@f3c464a54c8`, combining
+R2 `fcc82220ddd` and validated S2 `e95328ba1d6`, with no F/N/L field removals.
+[Combined peer review](combined-peer.md) records source GO for coordinator
+regeneration/build/qualification and no new source blocker. It checks NONE
+versus ready/discard, pure recording versus callback-capable publication,
+generated handoffs, constructor-certified overwrite/monitoring restoration,
+and complete cold public-constructor ownership/publication. No native job ran.
+
+The user's later selection direction permits a mostly better increment based
+on broad measured results. Accordingly the initial review's automatic breadth
+rejection recommendation is superseded by that direction: retain material
+coroutine losses in the decision, assess direct combined results and their
+variability, and do not infer R2+S2 performance from older R or S campaigns.
+The final candidate still needs its matching runtime/native qualification and
+direct performance evidence; this verdict makes no admission claim.

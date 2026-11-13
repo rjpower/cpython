@@ -12,10 +12,15 @@ observer reconstruction contract before removal.
 
 Improve unchanged-workload performance toward upstream parity while retaining
 logging parity and examining broad regressions. The
-[active plan](issues/frame-state54/plan.md) researches five register-state,
-frame-layout and handoff improvements, then measures isolated and combined
-implementations. Golden51 remains selected. The [prior report](issues/activation53/report.md)
-records rejected activation experiments;
+[active plan](issues/call-model55/plan.md) defines the reviewed call/frame/register
+architecture and migration sequence, including occupancy maps, storage, handoff
+and observation. Research and independent post-review are complete;
+implementation has not started. The
+[reviewed proposal](design/proposals/register-call-model55.md) accounts for
+complete lifecycles and recurring costs; neither a bitmap nor native JIT is
+an automatic answer. Round54 selects only a cold constructor correctness
+checkpoint with qualification limits, and rejects all performance variants.
+The [current report](issues/frame-state54/report.md) records that closure;
 [status](STATUS.md) records results and limits.
 
 ## Standing decisions

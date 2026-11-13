@@ -1,21 +1,23 @@
 # Register state and frame layout: round54
 
-Status: all five isolated implementations build and pass focused release/debug
-qualification after independent peer and source/native review. Quiet component
-screens and confirmations are underway. All tested changes have costs as well
-as savings; none has performance admission. The constructor-validated overwrite revision is qualified and measured. The
-80-byte F+N+L composition passed focused checks but failed its hot screen. A
-bounded recipient revision now starts frames with explicit NONE, distinct from
-a real discard; it also corrects public native generator construction. It passes focused release/debug, remote-recipient and injected constructor
-allocation checks; direct timing is underway. Selected golden51
-`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains immutable.
+Status: **closed**. All five implementations, two revisions and two
+compositions are measured and rejected for performance admission. Published
+branch `pyjit/round54-golden` and annotated tag
+`pyjit-golden-20261112-frame-state` select only the separate three-file cold
+public-construction correction at
+`61015a9452d9069646fb5fede9ff963896833b89`, with explicit qualification limits.
+Final direct measurements establish no general performance lift. Golden51
+`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains an immutable control.
+Active [round55](../call-model55/plan.md) is holistic architecture research and
+plan only; review the [proposal](../../design/proposals/register-call-model55.md)
+before implementation.
 
-The user requests one broad Astra review with five concrete improvements,
+The completed round requested one broad Astra review with five concrete improvements,
 followed by Sol implementation lanes, measured selection and a combined golden.
 Assess bitmap/tag tracking versus NULL homes, producer/instruction ownership
 proofs, fixed frame headers and variable/cold activation storage together.
 
-## Work and admission
+## Completed work and admission process
 
 1. Independent Sol inventories document every frame field and every consumer
    of register-home validity. Astra researches these choices against selected
@@ -47,10 +49,25 @@ without tracing all readers and owner lifetimes.
 
 Canonical C=`/home/power/code/cpython/.worktrees/python-jit`.
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
-Selected source `BASE/worktrees/round51-golden`; native builds
-`BASE/round51-golden-{release,debug}`. Upstream source
+Selected source `BASE/worktrees/frame54-cold-construction`; native builds
+`BASE/frame54-cold-construction-{release,debug}`. Prior golden51 source
+`BASE/worktrees/round51-golden` and builds `BASE/round51-golden-{release,debug}`
+remain immutable controls. Upstream source
 `BASE/worktrees/upstream-3a440b6`; build `BASE/upstream-release-devlibs-3a440b6`.
 Packet `pyjit/issues/frame-state54`; evidence `BASE/pyjit-link-wave1/frame-state54`.
 The selected [activation design](../../design/activation-transfers.md),
 [previous report](../activation53/report.md) and [handoff](../../HANDOFF.md)
 define baseline facts and prior negative evidence.
+
+## Closed checkpoint
+
+The [report](report.md), [tables](benchmark-tables.md) and
+[qualification](qualification.md) retain the selection and its limits. Both
+54,692-test full diagnostics failed; the original profiling finding remains
+unresolved despite ten passing comparative subprocesses. Selection is a
+bounded correctness checkpoint, not a clean full-suite or performance claim.
+All nine experimental branches are published; 27 task-owned directories were
+retired after verification of 18 archives containing 3,042 files. The selected
+source/builds, golden51 and upstream controls remain. No further runtime work
+is authorized by this closed plan. Follow [round55](../call-model55/plan.md)
+for the new architecture request.

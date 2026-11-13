@@ -2,6 +2,8 @@
 
 This page defines frame ownership, call completion and observation in the
 selected runtime. [Status](../STATUS.md) records qualification and limits.
+The [model55 proposal](proposals/register-call-model55.md) reviews a different
+register-ownership and call architecture; it does not change this as-built ABI.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -18,6 +20,35 @@ base, storage checkpoint and real executable continuation complete the frame.
 A borrowed mortal C view requires an owner; no ordinary borrowed frame-home bank
 has been introduced.
 
+### Fixed header and variable storage
+
+The measured GIL header is 112 bytes, excluding owning homes. It is a record
+on the thread arena's downward-growing header stack, not a separate allocation
+for each ordinary call. Its fields serve these roles:
+
+| State | Fixed representation and reason |
+| --- | --- |
+| Lifetime authority | Independent owning executing-code and function values; function.__code__ is mutable |
+| Storage authority | Previous frame, home base, saved value-stack top and storage owner; overlap means base alone cannot restore the old top |
+| Execution authority | Current semantic instruction, executing word base, result continuation and recipient; current and future PCs have different meanings |
+| Hot derived caches | Globals, builtins and feedback bases; reconstructing these on use adds dependent loads |
+| Dynamic bindings | Nullable owning locals mapping and pending-empty-kwargs index; NULL alone cannot distinguish a virtual binding from an unbound local |
+| Observation | Nullable owning frame object and redirect/debug metadata; observer publication shares the same semantic frame |
+
+Owning homes have variable capacity determined by code locals and scratch.
+Thread headers and homes occupy opposing stacks in a shared chunk. Heap
+generators/coroutines and escaped frame objects instead embed the header and a
+variable home tail. Frame objects are optional for ordinary optimized calls;
+class/module/exec locals mappings can be required by execution itself.
+
+Round54 measured removing the feedback cache, the two environment caches and
+the direct mapping owner, separately and together. The composed header really
+shrinks to 80 bytes, but extra loads, mapping-record allocation and retirement
+work lose elapsed performance. Those removals are rejected, not an alternate
+selected ABI. See the [field census](../issues/frame-state54/field-inventory.md)
+and [experiment report](../issues/frame-state54/report.md). A future header
+change must account for the frequency of all readers, not just its setup size.
+
 | Fact | Meaning | Representation |
 | --- | --- | --- |
 | Initialized | Bits can be safely inspected | Canonical PyValue or NULL throughout physical value storage |
@@ -33,6 +64,15 @@ GC traversal and frame copies inspect the physical homes. Unwind retires the
 appropriate suffix and preserves handler-required anchors. Normal thread clear
 is already local-only after asserting scratch owners NULL; generator/exposed
 paths have their corresponding complete ownership handling.
+
+NULL remains the empty-home authority. There is no parallel occupancy bitmap.
+A bitmap replacing NULL would have to govern every physical-home read, move,
+overlap, local mutation, callback, traversal, unwind, copy and suspension.
+Static root maps at admitted GC stops do not establish RC ownership between
+stops. A proved instruction refinement may omit an intermediate store within a
+non-reentrant commit, but does not authorize persistent stale homes. Round54's
+validated overwrite experiment demonstrates that proof boundary; it is not
+selected after its performance evaluation.
 
 ## Initialized storage frontier
 

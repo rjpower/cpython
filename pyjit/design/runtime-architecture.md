@@ -5,6 +5,10 @@ register interpreter and reference counting with cyclic collection. The
 method/tracing JIT is planned. [Status](../STATUS.md) owns current
 qualification, measurements and limits.
 
+The [reviewed call-model proposal](proposals/register-call-model55.md) describes
+the next frame/register ownership architecture. It is not implemented; the
+contracts below describe the selected runtime.
+
 ```mermaid
 flowchart TD
     Source[Python source] --> CFG[Stack CFG and register lowering]

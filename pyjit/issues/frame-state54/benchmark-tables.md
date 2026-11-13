@@ -1,6 +1,8 @@
 # Round54 benchmark tables
 
-Draft of completed campaigns; no selection or admission decision. Ratios are
+Completed campaign evidence. The coordinator rejects the performance candidates;
+only cold correctness checkpoint54 is selected, with explicit diagnostic limits
+and no performance lift. Ratios in the experimental sections are
 candidate elapsed / golden51 elapsed: **lower is better**. Golden51 is
 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`. Do not multiply ratios across
 campaigns or pool their samples. Tables round to six decimals; JSON retains
@@ -23,11 +25,13 @@ geometric mean of pair ratios. GCC15.2, CPU15, hash0, JIT disabled.
 | L, mapping | `b48fe2d3989` | initial hot two-pair screen; separate mapping six-pair diagnostic |
 | S, initial overwrite | `4fbd16a1462` | initial hot two-pair screen; separate native census |
 | S2, validated overwrite | `e95328ba1d6` | hot two-pair screen and six-pair confirmation; all29 two-pair screen; separate native census |
+| R2, recipient NONE | `fcc82220ddd` | hot six-pair confirmation; all29 two-pair screen |
+| Combined R2+S2 | `f3c464a54c8` | initial hot two-pair screen; six-pair hot confirmation; all29 two-pair screen |
 | Compact F+N+L | `82afe7aef2d` | hot two-pair screen; rejected by coordinator |
 
 S is the original four-geometry-check version. Its results do not describe S2.
-R2-NONE at `fcc82220ddd` has source review but no native or timing result in
-this snapshot.
+R2-NONE and combined results below use their own matching identities; neither
+inherits measurements from an earlier component candidate.
 
 ## All29: complete two-pair screens
 
@@ -218,3 +222,341 @@ Both runs exited normally. Sources:
 relabeling of initial S's census. The counts agree at these two reached
 workloads; the distinct executable removes the recurring geometry checks as
 documented in [S2's native review](option5-validated-post-review.md).
+
+## R2-NONE: completed six-pair hot confirmation
+
+Source: `E/recipient-default-hot6-golden/summary.json`; candidate
+`fcc82220ddd42fc49ffd1885dcd79e6964889703`. Every row has six balanced pairs.
+
+| Workload | Pair 1 | Pair 2 | Pair 3 | Pair 4 | Pair 5 | Pair 6 | Geomean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| generators | 0.960946 | 0.959553 | 0.938469 | 0.963368 | 0.960291 | 0.953867 | 0.956045 |
+| coroutines | 1.064701 | 1.068543 | 1.053558 | 1.085006 | 1.054671 | 1.056746 | 1.063816 |
+| deltablue | 1.008816 | 1.009609 | 1.024618 | 1.007841 | 1.013422 | 1.010292 | 1.012417 |
+| richards | 1.001118 | 1.014092 | 1.013312 | 1.013497 | 1.005845 | 1.021929 | 1.011610 |
+| comprehensions | 1.015778 | 1.032690 | 0.997369 | 1.023417 | 1.001169 | 1.006976 | 1.012824 |
+| logging_silent | 1.004083 | 1.132908 | 1.213036 | 0.995123 | 1.065574 | 1.000152 | 1.065518 |
+
+This confirmation remains separate from R2's initial screen and all29 screen.
+Only generators has a geomean below 1 among these six workloads; this is
+not an admission decision.
+
+## R2-NONE all29: completed two-pair screen
+
+Source: `E/recipient-default-screen-all29-golden/summary.json`; same R2 head.
+
+| Workload | Pair 1 | Pair 2 | Geomean |
+| --- | ---: | ---: | ---: |
+| richards | 0.988275 | 1.007414 | 0.997799 |
+| go | 0.990848 | 1.008014 | 0.999394 |
+| nbody | 1.018548 | 1.006206 | 1.012358 |
+| float | 0.982192 | 0.981966 | 0.982079 |
+| spectral_norm | 0.945181 | 0.935427 | 0.940291 |
+| raytrace | 1.007617 | 1.011025 | 1.009319 |
+| deltablue | 1.020456 | 1.008594 | 1.014507 |
+| chaos | 0.983501 | 0.976118 | 0.979803 |
+| nqueens | 0.995115 | 0.999699 | 0.997404 |
+| fannkuch | 0.951263 | 0.958423 | 0.954836 |
+| generators | 0.959004 | 0.976301 | 0.967614 |
+| comprehensions | 1.005541 | 1.033393 | 1.019372 |
+| coroutines | 1.086325 | 1.096270 | 1.091286 |
+| unpack_sequence | 0.986971 | 1.004525 | 0.995709 |
+| deepcopy | 1.007105 | 0.995764 | 1.001419 |
+| deepcopy_reduce | 1.014251 | 1.004132 | 1.009179 |
+| deepcopy_memo | 0.954278 | 0.957299 | 0.955788 |
+| json_dumps | 0.972568 | 0.986946 | 0.979731 |
+| json_loads | 0.989900 | 0.973278 | 0.981554 |
+| pickle | 1.016328 | 0.996780 | 1.006506 |
+| unpickle | 0.997738 | 1.008089 | 1.002900 |
+| regex_compile | 0.993267 | 1.004390 | 0.998813 |
+| logging_format | 1.033677 | 1.001755 | 1.017591 |
+| logging_silent | 1.049928 | 1.039837 | 1.044870 |
+| logging_simple | 1.016118 | 1.049897 | 1.032870 |
+| xml_etree_generate | 1.009015 | 1.013954 | 1.011481 |
+| xml_etree_iterparse | 1.009360 | 1.001435 | 1.005390 |
+| xml_etree_parse | 0.981458 | 0.994366 | 0.987891 |
+| xml_etree_process | 1.004720 | 1.008402 | 1.006559 |
+| Equal-weight all29 geomean | — | — | 0.999754 |
+
+Workloads with geomean below 1: 14/29. Do not pool these two pairs with the
+six-pair hot confirmation.
+
+## Combined R2+S2: completed initial two-pair hot screen
+
+Source: `E/combined-screen-hot-golden/summary.json`; candidate
+`f3c464a54c89783e50af1ce9f3cffec6f5e7279d`.
+
+| Workload | Pair 1 | Pair 2 | Geomean |
+| --- | ---: | ---: | ---: |
+| generators | 0.914672 | 0.942939 | 0.928698 |
+| coroutines | 1.090260 | 1.099600 | 1.094920 |
+| deltablue | 1.018645 | 0.998823 | 1.008685 |
+| richards | 1.001059 | 1.010597 | 1.005817 |
+| comprehensions | 0.995747 | 0.990500 | 0.993120 |
+| logging_silent | 0.997627 | 0.992174 | 0.994897 |
+
+All three completed campaigns above have matching before/after identity,
+clean source and status with stable_identity=true, failure=null and
+postflight_error=null. Their raw samples and commands remain beside the
+summary files. The completed combined confirmation and all29 screen follow;
+none of these campaigns is pooled with another.
+
+## Combined R2+S2: completed six-pair hot confirmation
+
+Source: `E/combined-confirm-hot6-golden/summary.json`; same combined head
+`f3c464a54c89783e50af1ce9f3cffec6f5e7279d`.
+
+| Workload | Pair 1 | Pair 2 | Pair 3 | Pair 4 | Pair 5 | Pair 6 | Geomean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| generators | 0.958237 | 0.953360 | 0.959557 | 0.952030 | 0.951194 | 0.967407 | 0.956948 |
+| coroutines | 1.099099 | 1.095934 | 1.100366 | 1.095058 | 1.099069 | 1.101271 | 1.098464 |
+| deltablue | 1.005578 | 0.994587 | 1.007046 | 1.007653 | 1.017790 | 1.006824 | 1.006557 |
+| richards | 1.004044 | 1.010270 | 0.998244 | 0.992784 | 1.004877 | 1.003866 | 1.002332 |
+| comprehensions | 0.995508 | 0.989136 | 0.997825 | 0.993431 | 0.991667 | 1.000776 | 0.994716 |
+| logging_silent | 0.990656 | 1.135058 | 0.989046 | 0.991354 | 0.993350 | 0.992683 | 1.014028 |
+
+
+## Combined R2+S2 all29: completed two-pair screen
+
+Source: `E/combined-screen-all29-golden/summary.json`.
+
+| Workload | Pair 1 | Pair 2 | Geomean |
+| --- | ---: | ---: | ---: |
+| richards | 0.960269 | 0.997733 | 0.978822 |
+| go | 1.013942 | 1.009195 | 1.011566 |
+| nbody | 1.003173 | 1.008512 | 1.005839 |
+| float | 0.983195 | 0.979318 | 0.981255 |
+| spectral_norm | 0.894912 | 0.895859 | 0.895385 |
+| raytrace | 1.000227 | 1.004931 | 1.002577 |
+| deltablue | 0.985864 | 0.999141 | 0.992480 |
+| chaos | 1.002944 | 1.005852 | 1.004397 |
+| nqueens | 1.003917 | 0.994756 | 0.999326 |
+| fannkuch | 0.973842 | 0.999891 | 0.986781 |
+| generators | 0.953754 | 0.960540 | 0.957141 |
+| comprehensions | 0.992048 | 0.993622 | 0.992835 |
+| coroutines | 1.094975 | 1.038459 | 1.066342 |
+| unpack_sequence | 0.994380 | 1.001913 | 0.998139 |
+| deepcopy | 0.991294 | 0.997912 | 0.994597 |
+| deepcopy_reduce | 1.005333 | 1.006298 | 1.005815 |
+| deepcopy_memo | 0.944402 | 0.946007 | 0.945204 |
+| json_dumps | 0.992851 | 1.003843 | 0.998332 |
+| json_loads | 0.968013 | 0.943063 | 0.955456 |
+| pickle | 1.037965 | 1.005311 | 1.021508 |
+| unpickle | 1.002422 | 1.008979 | 1.005695 |
+| regex_compile | 1.015157 | 1.010011 | 1.012581 |
+| logging_format | 1.013893 | 0.996914 | 1.005368 |
+| logging_silent | 0.985544 | 0.990014 | 0.987776 |
+| logging_simple | 1.061274 | 0.998432 | 1.029374 |
+| xml_etree_generate | 0.980729 | 1.000652 | 0.990641 |
+| xml_etree_iterparse | 1.003850 | 1.009986 | 1.006913 |
+| xml_etree_parse | 1.007346 | 0.990948 | 0.999113 |
+| xml_etree_process | 0.982336 | 0.982927 | 0.982631 |
+| Equal-weight all29 geomean | — | — | 0.993149 |
+
+Workloads with geomean below 1: 17/29.
+
+Both completed campaigns retain clean stable before/after identities and no
+campaign/postflight errors. Raw process samples and commands remain beside
+the summaries. The coordinator rejects all performance candidates, including
+original R despite its breadth, because the material call-heavy coroutine
+regression persists. Combined hot confirmation has generators 0.956948 and
+coroutines 1.098464; its all29 geomean 0.993149 does not override that loss.
+These are recorded workload outcomes, not an explanation of elapsed cause.
+The separate cold correctness-only candidate is still under qualification;
+selected51 has not changed.
+
+## Final cold correctness candidate versus golden51
+
+Candidate is `61015a9452d9069646fb5fede9ff963896833b89`; baseline is
+selected51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`. These are direct
+measurements of the three-file cold correction, not relabeled R2 evidence.
+Both completed campaigns have identical before/after identity records, clean
+source, stable_identity=true, failure=null and postflight_error=null.
+They use the unchanged driver and seven observations per process described
+above; sample sets remain separate. This candidate is a correctness checkpoint,
+not a claimed performance winner.
+
+### Final all29: two balanced pairs
+
+Source: `E/final54-all29-golden/summary.json`.
+
+| Workload | Pair 1 | Pair 2 | Geomean |
+| --- | ---: | ---: | ---: |
+| richards | 0.969965 | 1.006287 | 0.987959 |
+| go | 1.003051 | 1.006938 | 1.004993 |
+| nbody | 1.008787 | 0.991008 | 0.999858 |
+| float | 0.979056 | 1.003086 | 0.990998 |
+| spectral_norm | 1.020103 | 1.012324 | 1.016206 |
+| raytrace | 0.999064 | 1.002855 | 1.000957 |
+| deltablue | 1.005428 | 0.994732 | 1.000066 |
+| chaos | 1.006708 | 1.000914 | 1.003807 |
+| nqueens | 0.991261 | 0.994285 | 0.992772 |
+| fannkuch | 0.997555 | 0.994681 | 0.996117 |
+| generators | 1.010890 | 1.004554 | 1.007717 |
+| comprehensions | 1.001140 | 0.992226 | 0.996673 |
+| coroutines | 0.989233 | 0.998549 | 0.993880 |
+| unpack_sequence | 1.006381 | 0.999638 | 1.003004 |
+| deepcopy | 0.993353 | 1.003521 | 0.998424 |
+| deepcopy_reduce | 0.998140 | 1.002955 | 1.000544 |
+| deepcopy_memo | 1.002165 | 0.998349 | 1.000255 |
+| json_dumps | 1.009829 | 0.990561 | 1.000148 |
+| json_loads | 1.023282 | 0.996046 | 1.009572 |
+| pickle | 1.024294 | 0.997288 | 1.010701 |
+| unpickle | 1.001376 | 1.003459 | 1.002417 |
+| regex_compile | 1.005372 | 0.998365 | 1.001863 |
+| logging_format | 1.031238 | 1.020070 | 1.025639 |
+| logging_silent | 1.139660 | 1.137035 | 1.138347 |
+| logging_simple | 1.005476 | 1.011206 | 1.008337 |
+| xml_etree_generate | 1.006681 | 0.982405 | 0.994469 |
+| xml_etree_iterparse | 0.999289 | 0.976010 | 0.987581 |
+| xml_etree_parse | 0.997439 | 1.049157 | 1.022971 |
+| xml_etree_process | 0.996101 | 1.000182 | 0.998139 |
+| Equal-weight all29 geomean | — | — | 1.006381 |
+
+Workloads with geomean below 1: 11/29. The unrounded aggregate is
+1.0063812430291168. This two-pair scope does not establish a general gain.
+
+### Final hot confirmation: six balanced pairs
+
+Source: `E/final54-hot6-golden/summary.json`.
+
+| Workload | Paired samples | Geomean | Pair minimum | Pair maximum |
+| --- | ---: | ---: | ---: | ---: |
+| generators | 6 | 0.996988 | 0.959719 | 1.013777 |
+| coroutines | 6 | 0.997860 | 0.986398 | 1.009610 |
+| deltablue | 6 | 1.005646 | 0.994954 | 1.020668 |
+| richards | 6 | 1.007019 | 1.001649 | 1.016567 |
+| comprehensions | 6 | 0.993883 | 0.984551 | 0.999321 |
+| logging_silent | 6 | 0.978879 | 0.876076 | 1.005017 |
+
+Four of six geomeans are below 1; equal-weight hot6 geomean is 0.996669.
+Do not pool these pairs with all29 or treat that six-workload aggregate as
+the all29 result. In particular logging_silent is 1.138347 in all29 (two
+pairs 1.139660/1.137035), but 0.978879 in hot6 with a 0.876076–1.005017 pair
+range. The wide, differing observations remain visible; no hardware cause,
+stable logging improvement or elapsed equivalence is inferred.
+
+Raw commands, per-process samples and identity/status files are retained in
+`E/final54-all29-golden` and `E/final54-hot6-golden`. Direct upstream results
+are reported below only for a completed campaign. The coordinator owns any
+final checkpoint selection, recorded below.
+
+## Final cold candidate versus upstream: completed all29 screen
+
+Ratios in this section are **cold61015 elapsed / upstream elapsed**, not
+cold/golden51. Baseline is upstream `3a440b65695`; candidate remains
+`61015a9452d9069646fb5fede9ff963896833b89`. Source:
+`E/final54-all29-upstream/summary.json`. This has two balanced pairs per
+workload, clean identical before/after identities, stable_identity=true and
+no campaign/postflight error. Keep it separate from golden comparisons.
+
+| Workload | Pair 1 | Pair 2 | Geomean |
+| --- | ---: | ---: | ---: |
+| richards | 1.229727 | 1.244033 | 1.236860 |
+| go | 1.164815 | 1.170263 | 1.167536 |
+| nbody | 0.861732 | 0.860083 | 0.860907 |
+| float | 0.789106 | 0.782442 | 0.785767 |
+| spectral_norm | 0.806653 | 0.796973 | 0.801799 |
+| raytrace | 0.950372 | 0.927872 | 0.939055 |
+| deltablue | 1.186064 | 1.085506 | 1.134672 |
+| chaos | 0.960655 | 0.919440 | 0.939821 |
+| nqueens | 1.194882 | 1.186347 | 1.190607 |
+| fannkuch | 1.258960 | 1.197840 | 1.228020 |
+| generators | 1.449262 | 1.450931 | 1.450097 |
+| comprehensions | 1.359034 | 1.358308 | 1.358671 |
+| coroutines | 1.273974 | 1.265055 | 1.269507 |
+| unpack_sequence | 1.169938 | 1.164474 | 1.167203 |
+| deepcopy | 1.352384 | 1.340086 | 1.346221 |
+| deepcopy_reduce | 1.353835 | 1.339872 | 1.346835 |
+| deepcopy_memo | 1.333761 | 1.262223 | 1.297499 |
+| json_dumps | 1.327753 | 1.350888 | 1.339271 |
+| json_loads | 1.215000 | 1.216235 | 1.215617 |
+| pickle | 1.106569 | 1.122564 | 1.114538 |
+| unpickle | 1.217441 | 1.187163 | 1.202207 |
+| regex_compile | 1.170163 | 1.178463 | 1.174306 |
+| logging_format | 1.345038 | 1.313189 | 1.329018 |
+| logging_silent | 0.739646 | 0.756964 | 0.748255 |
+| logging_simple | 1.276266 | 1.317639 | 1.296788 |
+| xml_etree_generate | 1.282355 | 1.269258 | 1.275790 |
+| xml_etree_iterparse | 1.278535 | 1.270199 | 1.274360 |
+| xml_etree_parse | 1.151358 | 1.154616 | 1.152986 |
+| xml_etree_process | 1.391138 | 1.392048 | 1.391593 |
+| Equal-weight all29 geomean | — | — | 1.156543 |
+
+Workloads with geomean below 1: 6/29. The unrounded aggregate is
+1.1565432755153398. This does not establish an upstream performance win.
+
+The first `E/final54-hot6-upstream` campaign failed its load gate during
+round 6 comprehensions candidate despite that subprocess returning 0. Its
+status has failure set and stable identity; it is not a completed six-pair
+comparison. No partial ratios are included here. The completed replacement below has its own successful summary and status;
+keep the failed initial campaign excluded.
+
+
+## Final selected54 versus upstream: valid hot6 confirmation
+
+Source: `E/final54-hot6-confirm2-upstream/summary.json`. Six balanced pairs
+per workload, failure=null, postflight_error=null and stable_identity=true.
+This is the completed replacement for the failed-load campaign above. Ratios
+are selected61015/upstream elapsed; do not pool them with the all29 screen.
+
+| Workload | Pairs | Geomean | Pair minimum | Pair maximum |
+| --- | ---: | ---: | ---: | ---: |
+| generators | 6 | 1.450207 | 1.424808 | 1.472757 |
+| coroutines | 6 | 1.254281 | 1.240417 | 1.265182 |
+| deltablue | 6 | 1.154663 | 1.134484 | 1.184544 |
+| richards | 6 | 1.280930 | 1.229266 | 1.407654 |
+| comprehensions | 6 | 1.390876 | 1.347206 | 1.511459 |
+| logging_silent | 6 | 0.712216 | 0.671358 | 0.779797 |
+
+Richards, comprehensions and logging have wide pair ranges; preserve those
+ranges rather than describing a precise stable gap. Before/after identities
+are clean and stable in all accepted final timing campaigns. The earlier
+failed-load evidence remains retained and excluded.
+
+## Final matched PMU and record evidence
+
+Sources: `E/final54-stat-cycles` and `E/final54-stat-branches`. Each completes
+18/18 valid invocations: three cases × two runtimes × three rounds. Status
+reports complete=true, stable_identity=true, no failure/postflight error.
+The following ratios compare actual selected61015 with upstream; they are
+PMU counts, not elapsed benchmark ratios or an exclusive cycle partition.
+
+| Workload | Instructions | Cycles | Branches | Branch misses |
+| --- | ---: | ---: | ---: | ---: |
+| deltablue | 1.353135 | 1.210496 | 1.403099 | 0.892484 |
+| generators | 1.413895 | 1.434569 | 1.642096 | 0.965225 |
+| coroutines | 1.386260 | 1.249114 | 1.479239 | 1.073262 |
+
+`E/final54-record` completes 6/6 valid invocations (three cases × two runtimes),
+with stable identities and no lost records. Candidate flat reports are
+`flat-{deltablue,generators,coroutines}-candidate.txt` in that directory.
+
+| Candidate case | Flat symbol/mechanism | Sample share |
+| --- | --- | ---: |
+| generators | SEND | 26.96% |
+| generators | YIELD | 11.78% |
+| coroutines | call | 10.43% |
+| coroutines | RETURN_GENERATOR | 7.70% |
+| coroutines | ClearLocals | 5.84% |
+| coroutines | completion | 6.00% |
+| deltablue | call | 12.78% |
+| deltablue | clear | 5.42% |
+
+These flat symbols identify reached execution work. They do not form an
+exclusive ownership/dispatch/GC budget, establish how much can be removed,
+or predict elapsed improvement from adding a bitmap or compiler tier.
+
+## Coordinator selection
+
+Select only the three-file cold constructor correctness correction at
+`61015a9452d9069646fb5fede9ff963896833b89`, published as
+`pyjit/round54-golden` and annotated tag
+`pyjit-golden-20261112-frame-state`. All nine performance variants are rejected.
+Final prior-golden all29 is 1.006381 (11/29 lower), separate hot6 is 0.996669;
+upstream all29 is 1.156543 (6/29 faster). These samples establish no general
+performance lift. In particular keep the all29 logging loss and wide hot
+results visible. Selection retains the failed full diagnostics and unresolved
+profiling finding in [qualification](qualification.md); it does not convert
+those runs into passes. Round54 is closed; active work is the plan-only
+[round55 architecture review](../call-model55/plan.md).

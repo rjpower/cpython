@@ -6,12 +6,16 @@ with the JIT disabled against matched immutable controls. Assess throughput,
 Python behavior and tooling separately; exact CPython display or destruction
 timing is not a performance gate.
 
-The [round 52 report](../../issues/generator-delegation52/report.md) records
-the closed delegation experiment; round 51 remains selected. The
-[active plan](../../issues/activation53/plan.md) investigates activation
-construction and completion; its source/native audits are complete and one broad
-Astra review is in progress. No source candidate or measured build win exists
-yet. [Status](../../STATUS.md) records qualification, performance and limits. Native method and tracing JIT
+The [current report](../../issues/frame-state54/report.md) records five reviewed,
+implemented and measured register-state/frame-layout experiments, their revisions
+and compositions. None earns performance admission. A separate public-constructor
+correction is selected as a correctness checkpoint with explicit diagnostic
+limits. Round54 is closed. The [active plan](../../issues/call-model55/plan.md)
+and [proposed call model](../../design/proposals/register-call-model55.md)
+define a reviewed whole-lifecycle call/frame/register architecture, including
+a complete bitmap comparison. Research and independent post-review are complete;
+implementation has not started. [Status](../../STATUS.md) records actual
+selection, qualification and performance limits. Native method and tracing JIT
 tiers belong to later stages; owning bridges support incremental extension ports.
 
 The durable contracts are [register IR](../../design/register-ir.md),

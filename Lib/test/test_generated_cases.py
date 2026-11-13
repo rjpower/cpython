@@ -3036,11 +3036,14 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_ERROR_RESTORE : 0", output)
         # Opaque body edits cannot retain this positive recipe merely because
         # the marker, name and IO are still present.
-        for body in ("opaque(frame); IR_BINARY_READER(left, right, result);",
-                     "IR_BINARY_READER(right, left, result);",
-                     "if (oparg) { IR_BINARY_READER(left, right, result); }"):
+        for body, reason in (
+                ("opaque(frame); IR_BINARY_READER(left, right, result);",
+                 "view 'left' is read after a call.*\\(S7\\)"),
+                ("IR_BINARY_READER(right, left, result);", "checked binary IO contract"),
+                ("if (oparg) { IR_BINARY_READER(left, right, result); }",
+                 "checked binary IO contract")):
             with self.subTest(body=body):
-                with self.assertRaisesRegex(SyntaxError, "checked binary IO contract"):
+                with self.assertRaisesRegex(SyntaxError, reason):
                     self.ir_output("\ninst(OP, (left, right -- result)) { " + body + " }\n")
 
     def test_binary_recipe_requires_complete_real_specializer(self):

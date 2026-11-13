@@ -30,7 +30,9 @@ def binary_code(*, slots=4, move=True, unknown=False):
     # scratch home rather than a hidden constant binding or native snapshot.
     words = [tuple(resume[0]), ("LOAD_CONST", 2)]
     if unknown:
-        words.append(("NOP",))
+        # A real admitted operation whose effects are not yet certified.
+        # It reads/replaces the initialized survivor, rather than an empty home.
+        words.append(("UNARY_NOT", 2, 2))
     left, right = 0, 1
     if move:
         words += [("LOAD_FAST_AND_CLEAR", 3, 0),
@@ -98,7 +100,8 @@ class PhasePlanTests(unittest.TestCase):
         joined = code.replace(co_code=encoded([
             rows[0], ("POP_JUMP_IF_NONE", 0, 0, 4),
             ("LOAD_CONST", 2), ("IR_JUMP", 0, 0, 4),
-            rows[original], ("POP_TOP", 2), ("RETURN_VALUE", destination)]))
+            rows[original], ("POP_TOP", 2), ("RETURN_VALUE", destination)]),
+            co_linetable=b"")
         for admitted in routes(joined):
             check = _testinternalcapi.check_ir_frame_phase
             self.assertEqual(check(admitted, 4, PUBLISHED | PROVIDER), EXACT)
@@ -112,7 +115,7 @@ class PhasePlanTests(unittest.TestCase):
         rows = _testinternalcapi.get_ir(code)
         loop = code.replace(co_code=encoded([
             rows[0], rows[1], rows[site], ("POP_TOP", destination),
-            ("IR_JUMP", 0, 0, 2)]))
+            ("IR_JUMP", 0, 0, 2)]), co_linetable=b"")
         # This image is admitted and inspected only. It deliberately has no
         # terminating path; the backedge cannot keep the first entry's proof.
         for admitted in routes(loop):
@@ -176,6 +179,7 @@ class ReachedPhaseTests(unittest.TestCase):
         import sys
         code, site, _ = binary_code(move=False)
         observations = []
+        bindings = []
 
         def record(label):
             holes = _testinternalcapi.gc_verify()
@@ -189,8 +193,43 @@ class ReachedPhaseTests(unittest.TestCase):
                 target = sys._getframe(1)
                 target.f_locals["left"] = None
                 target.f_locals["right"] = None
+                bindings.append((target.f_locals["left"], target.f_locals["right"]))
+                record("mutated")
                 # Let the native numeric provider raise after this Python
                 # frame has returned, so its traceback cannot retain owners.
+                return NotImplemented
+
+            def __del__(self):
+                record("operand")
+
+        f = types.FunctionType(code, {})
+        with self.assertRaisesRegex(TypeError, "unsupported operand"):
+            f(Operand(), Operand())
+        self.assertEqual(bindings, [(None, None)])
+        self.assertEqual([label for label, _, _ in observations],
+                         ["provider", "mutated", "operand", "operand"])
+        for label, holes, states in observations:
+            self.assertEqual(holes, [])
+            if label == "operand":
+                # The locals proxy deliberately retains replaced mortal
+                # bindings until frame destruction, beyond the active chain.
+                self.assertEqual(states, [])
+            else:
+                self.assertEqual(states, [PUBLISHED | PROVIDER | (EXACT << STATUS_SHIFT)])
+
+    def test_error_restored_scratch_owners_survive_until_unwind(self):
+        code, site, _ = binary_code()
+        observations = []
+
+        def record(label):
+            holes = _testinternalcapi.gc_verify()
+            states = [state for current, state in
+                      _testinternalcapi.get_ir_frame_phases() if current is code]
+            observations.append((label, holes, states))
+
+        class Operand:
+            def __add__(self, other):
+                record("provider")
                 return NotImplemented
 
             def __del__(self):
@@ -202,9 +241,14 @@ class ReachedPhaseTests(unittest.TestCase):
         self.assertEqual([label for label, _, _ in observations],
                          ["provider", "operand", "operand"])
         for label, holes, states in observations:
-            phase = PROVIDER if label == "provider" else RESTORE
             self.assertEqual(holes, [])
-            self.assertEqual(states, [PUBLISHED | phase | (EXACT << STATUS_SHIFT)])
+            if label == "provider":
+                self.assertEqual(states, [PUBLISHED | PROVIDER | (EXACT << STATUS_SHIFT)])
+            else:
+                # RESTORE moves each owner home; it does not retire it. The
+                # actual last-owner callbacks occur in ClearTemporaries, which
+                # invalidates the active phase before clearing any scratch.
+                self.assertEqual(states, [0])
 
 
 if __name__ == "__main__":

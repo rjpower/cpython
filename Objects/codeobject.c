@@ -2441,16 +2441,33 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
             semantic_set_facts(work, state, homes[h], nl, next[h]);
         }
     }
-    if (inspect && fmt->transfer_kind == _PyIR_TRANSFER_EXIT) {
-        for (int w = 0; w < work->nwords; w++) {
-            if (state[SEM_MAY_OWNER * work->nwords + w]) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %d leaves an unretired scratch owner", pc);
-                return -1;
-            }
+    return 0;
+}
+
+static int
+semantic_empty_return(int handler)
+{
+    return handler == RETURN_VALUE_EMPTY ||
+           handler == INSTRUMENTED_RETURN_VALUE_EMPTY;
+}
+
+/* This is logical vacancy, independent of physical NULL/readable maps.
+ * The fast return never examines scratch homes after transferring its result. */
+static int
+semantic_scratch_absent(const semantic_image *image,
+                        const semantic_worklist *work, const uint64_t *state)
+{
+    for (int w = 0; w < work->nwords; w++) {
+        int remaining = image->scratch - w * 64;
+        uint64_t mask = remaining >= 64 ? UINT64_MAX :
+            (UINT64_C(1) << remaining) - 1;
+        if ((state[SEM_NO_HOME * work->nwords + w] & mask) != mask ||
+            (state[SEM_MAY_OWNER * work->nwords + w] & mask))
+        {
+            return 0;
         }
     }
-    return 0;
+    return 1;
 }
 
 static int
@@ -3041,8 +3058,12 @@ semantic_exception_at(const _PyIRExceptionEntry *entries, int count, int pc)
 
 static int
 normal_transfer_proof(const semantic_image *image,
-                      const _PyIRCodePlan **plan)
+                      const _PyIRCodePlan **plan, PyObject **normalized)
 {
+    assert(plan == NULL || normalized == NULL);
+    if (normalized != NULL) {
+        *normalized = NULL;
+    }
     if (plan != NULL) {
         *plan = NULL;
     }
@@ -3303,6 +3324,12 @@ normal_transfer_proof(const semantic_image *image,
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
             for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+                if (semantic_empty_return(IR_HANDLER(words[i]))) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has an unproved empty return", i);
+                    result = -1;
+                    break;
+                }
                 if (IR_HANDLER(words[i]) == YIELD_DELEGATED ||
                     IR_HANDLER(words[i]) == INSTRUMENTED_YIELD_DELEGATED) {
                     PyErr_Format(PyExc_ValueError,
@@ -3326,6 +3353,37 @@ normal_transfer_proof(const semantic_image *image,
             if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
+            }
+            int handler = IR_HANDLER(words[i]);
+            if (semantic_empty_return(handler) || handler == RETURN_VALUE ||
+                handler == INSTRUMENTED_RETURN_VALUE)
+            {
+                int empty = semantic_scratch_absent(image, &work, state);
+                if (semantic_empty_return(handler) && !empty) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has an unproved empty return", i);
+                    result = -1;
+                    break;
+                }
+                if (normalized != NULL && !semantic_empty_return(handler) && empty) {
+                    /* Constructor bytes may be borrowed from the caller.
+                     * Copy only when a stable proof first selects a fast form;
+                     * all remaining proofs still inspect the original image. */
+                    if (*normalized == NULL) {
+                        *normalized = PyBytes_FromStringAndSize((const char *)words,
+                            (Py_ssize_t)n * sizeof(*words));
+                        if (*normalized == NULL) {
+                            result = -1;
+                            break;
+                        }
+                    }
+                    int selected = handler == RETURN_VALUE ? RETURN_VALUE_EMPTY :
+                        INSTRUMENTED_RETURN_VALUE_EMPTY;
+                    _PyIRWord selected_word = words[i];
+                    _PyIR_SetHandler(&selected_word, selected);
+                    memcpy(PyBytes_AS_STRING(*normalized) + (size_t)i * sizeof(*words),
+                           &selected_word, sizeof(selected_word));
+                }
             }
             if (plan != NULL) {
                 ncertified += semantic_exact_return(image, &work, state, i, complete);
@@ -3396,6 +3454,9 @@ normal_transfer_proof(const semantic_image *image,
         }
     }
 done:
+    if (result < 0 && normalized != NULL) {
+        Py_CLEAR(*normalized);
+    }
     PyMem_Free(source_links);
     PyMem_Free(handlers);
     if (phases.shapes != NULL) {
@@ -3412,7 +3473,7 @@ done:
 }
 
 static int
-validate_normal_transfers(struct _PyCodeConstructor *con)
+validate_normal_transfers(struct _PyCodeConstructor *con, PyObject **normalized)
 {
     semantic_image image = {
         .words = (const _PyIRWord *)PyBytes_AS_STRING(con->code),
@@ -3428,7 +3489,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         .source = PyBytes_AS_STRING(con->linetable),
         .source_size = PyBytes_GET_SIZE(con->linetable),
     };
-    int result = normal_transfer_proof(&image, NULL);
+    int result = normal_transfer_proof(&image, NULL, normalized);
     if (result < 0 && PyErr_ExceptionMatches(PyExc_ValueError)) {
         _PyErr_FormatNote("while admitting %U (%U)", con->qualname, con->filename);
     }
@@ -3462,7 +3523,7 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
         .source = PyBytes_AS_STRING(co->co_linetable),
         .source_size = PyBytes_GET_SIZE(co->co_linetable),
     };
-    return normal_transfer_proof(&image, plan);
+    return normal_transfer_proof(&image, plan, NULL);
 }
 
 /* The normalized words and all semantic proofs refer to the same immutable
@@ -3479,12 +3540,16 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     }
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
+    PyObject *normalized = NULL;
     if (validate_completion_words(&checked) < 0 ||
         validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
-        validate_normal_transfers(&checked) < 0)
+        validate_normal_transfers(&checked, &normalized) < 0)
     {
         Py_DECREF(words);
         return NULL;
+    }
+    if (normalized != NULL) {
+        Py_SETREF(words, normalized);
     }
     return words;
 }

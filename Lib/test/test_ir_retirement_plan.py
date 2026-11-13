@@ -15,7 +15,8 @@ RETIRING = 1
 
 def return_sites(code):
     return [i for i, row in enumerate(_testinternalcapi.get_ir(code))
-            if row[0] == "RETURN_VALUE"]
+            if row[0] in {"RETURN_VALUE", "RETURN_VALUE_EMPTY",
+                          "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
 
 
 def retiring_states():

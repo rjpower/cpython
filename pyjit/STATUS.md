@@ -18,7 +18,7 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Latest measured candidate `de95475accb` composes typed pins, common admission,
+Latest broadly measured candidate `de95475accb` composes typed pins, common admission,
 partial transfer/retirement proof, nested roots, staged unpack/binding and
 provider handoff, plus classify-once callback-free retirement. It passes
 1,487 core tests, 28 C API cases and eight precise provider/reader cases per
@@ -34,8 +34,17 @@ executes 34.1% more instructions. Classify-once retirement substantially
 reduces the preparatory cleanup regression, but no general win is confirmed.
 No candidate is promoted. The [active report](issues/call-model55/report.md)
 retains exact sample scopes, ranges, profiles and qualification limits.
-Constructor shim ownership is next in integration; heap deallocation and the
-shared-emitter phase work continue. Complete static authority and a physical
+Constructor and heap-deallocation ownership ports are integrated through
+`0851fd51801`. Their focused checks pass, but full diagnostics found a new
+allocation-failure crash in both roles. Specialization conflated its zero
+success and failure sentinels; `7c42db43224` separates signature classification
+from positive execution readiness. The unchanged failing test now passes in
+both roles and on selected54 controls; 837 focused core cases pass per role.
+Its two-pair screen versus selected54 has DeltaBlue 6.7% faster, coroutines
+2.5% slower and silent logging 13.2% slower (wide range). The source-reviewed
+shared-emitter phase work is integrated at `6ff13875cfe`, with merged builds
+and validation running.
+Complete static authority and a physical
 bitmap rival remain unqualified. Shared storage with NULL named locals is
 the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),

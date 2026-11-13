@@ -59,3 +59,70 @@ homes need an outer lifetime descriptor spanning provider/caller cleanup.
 Complete callback/error/suspend maps and lifecycle readers remain required;
 this change removes neither NULL homes nor arena scanning. Actual whole-model
 publication, storage and spill costs still determine admission.
+
+## GC composition peer at 9136c202e8e
+
+This is a continuing cross-lane review, not a fresh-agent review. The GC lane
+independently reread frames' retirement/binding/provider and IR's admission/
+certificate source in the integrated checkpoint, plus root's retained native
+evidence. It authored the constructor and collector observation components;
+those components are **not** claimed as independently reviewed here. Frames'
+separate constructor source GO remains in init-shim-peer.md. Root independently
+reviews the complete composition. Later heap-deallocator source `0851fd51801`
+has its own peer file and is outside the native checkpoint below.
+
+No new MUSTFIX was found in the reviewed cross-lane composition under current
+NULL authority. Provider handoff matches explicit kind and a live frame before
+dereference, excludes constructor-only flagged scopes, and disarms authority
+before default/custom retirement. Empty LIFO provider nodes remain through
+post-default hooks, so recycled frame storage is not probed afterward. Typed
+nullable LOCALS/FRAME_OBJECT authority is dynamic while staged. Object and value
+providers preserve their different result conventions; the extra selected-code
+pin closes before evaluator entry while the child's execution pin remains.
+
+Unlinked thread/gen retirement retains the result, remaining homes, headers and
+generator exception through their actual closes. Code remains available through
+the final cursor/map read; records use only stored fields after code detach.
+Heap takeover removes source edge authority before the destination is observed.
+Fast retirement consumes only callback-free releases and leaves a dangerous
+owner in its home until the outlined bridge is linked. Unpack's installed suffix
+and binder's not-current child remain rooted through actual outer cleanup.
+No external marking visitor is reused for cyclic subtraction/deferred adjustment.
+
+The IR worklist keeps must-NULL/readability intersections separate from
+MAY_OWNER unions and inspects only after fixpoint. Unsupported/error/observer
+seeds cannot acquire complete certificate coverage. The persistent return plan
+is built from the normalized image, accounts for normalized physical scratch,
+uses shared-empty or sorted sparse storage and balances size/free paths. The
+cold query validates reason, independent code/image identity, PC bounds and
+alignment and immutable exit-site role before scanning canonical NULL control;
+inline/index leftovers also mismatch. This certifies only the stated empty
+normal-return shape, not callback/error/suspend authority.
+
+Root's retained provider native dumps show the outlined object/value provider
+stack reservations of 200/168 bytes respectively, plus saved registers. The
+handoff remains an outlined chain walk; retained exact CALL/RETURN dumps contain
+no provider lookup and reserve 64/16 bytes respectively. Those dumps predate the
+constructor flag exclusion, whose source and focused fixtures are checked
+separately; they are not native proof of that later instruction sequence.
+
+Evidence inspected, without running candidate jobs in this review:
+
+- `m3-provider-precise-{release,debug}-focus.log`: seven provider methods plus
+  malformed remote-location degradation, eight passes per role at clean de954.
+- `m3-provider-core-debug-debug-focus.log`: 1,487 tests across 27 modules passed.
+  The release campaign's one failure was a wrong `test_borrow_scope` module
+  name, not an execution failure; the corrected CAPI/borrow-scope campaign ran
+  28 tests successfully in each role. Do not label the original release log
+  wholly green.
+- `m3-shadow-precise-{release,debug}-focus.log`: 13 focused certificate/retirement
+  tests per role at a95. Command manifests pin clean source and native paths.
+- At clean 9136, `m3-init-precise-*` records three constructor fixtures per role;
+  `m3-init-core-*` records 942 tests across 13 modules per role, release skips12
+  and debug skips9. This is execution evidence, not independent authorship.
+
+Performance admission, FT execution, the complete suite and the atomic map
+switch remain separate gates. [lifecycle-readers.md](lifecycle-readers.md) now
+names the concrete copy, suffix-close, resume old-load, elided-self, suspended
+receiver, observer and full-range GC consumers that still assume initialized
+NULL scratch. Passing current NULL-control fixtures does not remove those ports.

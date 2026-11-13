@@ -241,3 +241,24 @@ GC's full heap source/fixture postreview is GO. The two-file patch is frozen
 over `56a8a38fcf8` (129 insertions/17 deletions), with the phase reset retained
 as an explicit coherent-integration requirement. Root has its manifest and
 focused test group; native evidence remains pending.
+
+M5's concrete rival design is in `bitmap-implementation.md`: chunk-tail and
+heap-tail physical bits, a priced eight-byte frame pointer, unchanged handler
+arguments, actual generated/raw write ports and local mutation/teardown rules.
+GC bounded storage/handoff peer is positive after correcting worked heap-tail
+arithmetic and endpoint masking; FT deferred roots retain the separate tag
+scan. IR design peer is pending. No bitmap source is implemented. Root next
+prioritizes the M4 selected-home copy/escape packet; active code-plan lookup,
+explicit remaining-record authority and durable cold captured state must share
+one view before editing the full-N copy loop.
+
+The full-foundation injected-OOM crash takes priority over copy preparation.
+Root identified the SIMPLE_FUNCTION/SPEC_FAIL_OTHER zero collision in optional
+specialization. `exec-preparation-oom-proposal.md` records the bounded diagnosis
+and selected fix: pure typed signature classification plus explicit bool image
+readiness before every cache nomination. GC/IR design and source peers are GO.
+The frozen patch is only Python/specialize.c (53+/23-) over `b722330ef3f`;
+stats-only StoreSubscr classification no longer prepares code. GENERAL/KW,
+property/getattribute, init and getitem all require positive readiness before
+publication. The original dict OOM fixture is unchanged. Root owns the fault,
+retry, control and both-role checks; no native job ran in this lane.

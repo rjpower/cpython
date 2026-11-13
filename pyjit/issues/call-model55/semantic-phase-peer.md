@@ -157,3 +157,38 @@ closure, but its query must never decode the old frame or descriptor afterward.
 No ordinary inline lookup/reset or handler-local owner array is needed by this
 increment. Root owns generation, both-role execution and the emitted-store,
 stack/spill and persistent-plan cost review.
+
+## GC source peer of first shared-emitter shapes
+
+2026-11-12. Bounded source GO for the IR lane's first generic-binary phase
+increment under NULL authority, with the separately reviewed GC collector/probe
+and accepted-redirect reset ports integrated. This is a continuing cross-lane
+source review, not a fresh independent review of the GC-authored components.
+No generation or native execution ran in this lane.
+
+The worklist intersects NULL/initialized/nonNULL facts, unions possible owner
+obligations, and builds phase rows after convergence. The error branch restores
+its own snapshot; its restored owners cannot alter the normal successor state.
+Unconverted specialization families deliberately stop subsequent completeness.
+Code-owned rows remain sorted, equal ranges are hash-interned, and allocation
+failure/free/sizeof paths cover the single plan and temporary builder storage.
+
+The cold selector validates the independent code/image/site/alignment before
+home reads. Generic binary emission takes each evaluated input before provider
+publication, publishes a scratch result before operand retirement, restores
+only scratch inputs on error, and preserves callback-mutated named bindings.
+Republishing after the provider requires the same PC and unreplaced published
+phase; observer invalidation cannot silently regain exactness.
+
+The accepted redirect port resets before any committed home mutation or
+retired-value callback; rejected attempts retain their current state. The cold
+probe uses only inline values in a full initialized unpublished native buffer,
+and perturbs image/PC only for the actual query. Stored-status observation does
+not start comparisons.
+
+Nullable joined ranges are NULL-control owner candidates, not a guarantee that
+every path initializes a readable value. Their header contract now says so.
+Future stale-cell copy/GC readers require normalization or explicit validity;
+the shadow comparison and this review do not admit M4. Root still must verify
+actual regenerated events/stores, complete lifecycle initialization/reset,
+reached nonempty-survivor collection, FT stopped-state gating and native costs.

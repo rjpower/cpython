@@ -114,5 +114,19 @@ the two existing frame-stack walks and `get_ir_frame_phases()` observation,
 with the frozen IR phase field/ABI and shared trampoline initialization. FT
 comparison requires an actual stopped world, since generic traversal is not a
 foreign-frame quiescence protocol. Existing tag/edge policies remain unchanged.
-This delta requires IR's real plan/query/publication implementation and tests;
-source peer is pending. No scanner or NULL authority has changed.
+This delta is committed as `b27a1a21330` after IR source peer GO. It requires
+IR's real plan/query/publication implementation and tests. No scanner or NULL
+authority has changed.
+
+The following bounded GC delta adds accepted-redirect phase resets and
+`check_ir_frame_phase` to exercise the actual cold selector/comparison with
+initialized inline-only control homes. IR source peer is GO; no native run is
+claimed. Integration uses IR's unified home-view declarations rather than the
+temporary declarations copied into the GC lane.
+
+The remaining CALL-hole prerequisite is specified in `call-role-proposal.md`:
+canonical no-self and EX-kwargs roles preserve virtual NULL provenance without
+reading reserved inactive cells. Runtime helpers use explicit roles; arena
+windows initially withhold vectorcall OFFSET and retain native-copy prepend.
+IR design peer is GO, frames peer and root encoding/source freeze are pending.
+Selected-home capture/record lifetime conditions are in `copy-home-view-peer.md`.

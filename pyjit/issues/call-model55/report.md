@@ -339,7 +339,7 @@ Eight precise provider/remote-reader tests pass per role. Core coverage passes
 which is a recorded command failure rather than a runtime failure. The actual
 `test_capi.test_borrow_scope` and EvalCodeEx group runs separately: 28 tests per
 role pass. Debug's core command names only the 27 real modules and passes.
-These focused groups overlap. No full55 qualification has run yet.
+These focused groups overlap. Full foundation diagnostics are recorded below.
 
 Independent [cold source/native review](m3-shadow-integrated-cold-review.md) is
 GO for this bounded composition. External object/value providers reserve
@@ -422,3 +422,86 @@ No promotion follows from this screen. Logging remains variable and the
 preparatory composition still loses generators/coroutines. This closes an
 ownership gap and gives exact constructors a coherent fast entry; it does
 not establish an isolated throughput improvement over the provider checkpoint.
+
+### Heap teardown and full foundation diagnostics
+
+`0851fd51801` adds the reviewed owned-heap-frame teardown. Its full-home/pin
+root scope starts before weakref callbacks; the reverse retirement cursor
+shrinks the actual remaining owner set. Five observer metadata owners move
+callback-free into native workspace, and code remains pinned until the end.
+Nonowned frame deallocation never dereferences an expired external frame.
+The precise nested/non-nested deallocation fixture and 420 core tests pass per
+role. Both builds retain 117/79 modules and zero failed imports. The actual
+ELF and outlined/hot native dumps are retained as `E/m3-heap-dealloc-native-*`.
+
+`E/m3-heap-dealloc-hot-screen-golden` completes two balanced pairs with stable
+clean identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.965879 | 0.947184–0.984944 |
+| Generators | 0.982174 | 0.981860–0.982489 |
+| Coroutines | 1.035898 | 1.035215–1.036582 |
+| Richards | 0.963935 | 0.962555–0.965317 |
+| Comprehensions | 0.970366 | 0.957506–0.983400 |
+| Logging silent | 1.122722 | 1.048128–1.202623 |
+
+These are foundation-composition comparisons, not isolated heap-port gains.
+No promotion follows. Full diagnostics run 54,763 tests per role, with 635/646
+files run, 74 skipped, 11 denied resources and the existing GDB class empty.
+Release retains GC-verifier instability and nine debugger-jump errors; debug
+retains LLTrace and nine debugger errors. Debug's profiling and GC-verifier
+modules pass this run. Individual debugger identities are not yet rechecked
+verbosely at55. Both builds newly fail the unchanged dictionary iterator OOM
+subprocess: release SIGSEGV, debug assertion/SIGABRT. The suites are failures,
+not qualified passes. Logs and commands are `E/m3-null-foundation-*`.
+
+### Specialization readiness failure
+
+The crash reaches `_PyFrame_InitIRInstrPtr` from specialized exact CALL with
+NULL code exec. `function_kind` returned zero both for SIMPLE_FUNCTION and
+for SPEC_FAIL_OTHER after clearing failed `_PyCode_GetExec`. The cold plan's
+extra allocation points expose this ambiguous interface. Source is unchanged
+from selected54 at that helper; selected54 passes the original OOM test in
+both roles, whereas the foundation fails both focused repeats. That establishes
+the new candidate failure, not a claim that the baseline fault reproduces.
+
+`7c42db43224` integrates the [reviewed fix](exec-preparation-oom-proposal.md):
+pure typed signature classification, plus positive boolean execution readiness
+before every ready-dependent cache nomination. Diagnostic-only shape checking
+does not allocate. General and keyword call nomination also require readiness.
+No guard is added to warmed CALL/property/getitem execution. The original OOM
+fixture is unchanged; it passes both roles after the fix. Broader dict, call,
+specialization, class, property, descriptor, frame, C eval and admission checks
+pass 837 tests per role (11 release skips, nine debug). These focused checks do
+not replace the failed full diagnostics or prove every allocator fault path.
+Commands/logs are `E/m3-oom-{before-*,selected54,fixed,fix-core}*`.
+
+The two-pair unchanged screen `E/m3-oom-fix-hot-screen-golden` has stable clean
+identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.932542 | 0.924295–0.940864 |
+| Generators | 0.983220 | 0.978364–0.988100 |
+| Coroutines | 1.024588 | 1.024037–1.025139 |
+| Richards | 0.984563 | 0.979096–0.990061 |
+| Comprehensions | 0.974889 | 0.969928–0.979876 |
+| Logging silent | 1.132377 | 1.062399–1.206963 |
+
+This remains a mixed foundation composition, not a nominated golden or a
+causal estimate of the cold readiness fix's throughput effect.
+
+### Shared-emitter phase integration
+
+`6ff13875cfe` composes the IR phase component, GC reached-walk comparison,
+cold mismatch probe, accepted-redirect resets and regenerated cases/metadata.
+The GIL phase word fits the existing padding: header remains 112 bytes.
+One immutable code-owned semantic plan contains normal-return certificates
+and interned site/phase scratch ranges. The generic binary provider emits its
+actual owner TAKE, provider, result-retirement and error-restoration events;
+admission and plan construction consume that same graph. Nullable shadow
+candidate ranges are not stale-word readability certificates. Unsupported
+families remain uncovered; NULL homes and arena scanning are still authority.
+Merged builds/runtime/native checks are pending. This is partial coverage,
+not the M4 representation switch.

@@ -261,15 +261,15 @@ namespace; matching external IO does not itself prove equivalent phases.
 Normalize/split or reject a family that cannot fit. Unknown coverage is separate
 from the PhaseId, so PRE=0 is not confused with unpublished state.
 
-Tentative frame ABI is a uint16 `phase_state` in the GIL header's existing
+The frozen frame ABI is a uint16 `phase_state` in the GIL header's existing
 padding at offset 110: bits 0..7 PhaseId, bit 8 PUBLISHED, bits 9..10 stored shadow
 status (UNCOVERED/EXACT/MISMATCH), other bits zero. This preserves the measured
 112-byte header and 32-byte function offset. All frame producers initialize zero;
 this includes interpreter/base sentinels, trampolines, generic/partial binding,
 heap generators and public frame construction. Copy/escape/RETURN_GENERATOR
 must preserve an explicitly matched state or publish their new lifecycle state;
-advancing the PC and blindly copying an old PRE is invalid. Root freezes this
-field with frames and GC before implementation.
+advancing the PC and blindly copying an old PRE is invalid. Root froze this
+field with frames and GC; source ports are in progress.
 
 Publish one literal state after its required owner stores and existing
 `instr_ptr` save, immediately before a reached callback, allocation that can
@@ -465,3 +465,53 @@ do not silently ignore a malformed source container as a way to grant coverage.
 The remote corruption fixture is repaired independently by preparing its valid
 executing image before tampering with source bytes. This preserves remote-memory
 decoder coverage; it does not change this semantic-source separation obligation.
+
+## Current shared-emitter source and limits
+
+The isolated implementation now replaces `_PyIRRetirementPlan` with the unified
+`_PyIRCodePlan` and the executing field with `semantic_plan`; there is no alias
+or second pointer. One allocation stores a 16-byte header, four bytes per sparse
+normal-return site, 16 bytes per reached phase site, and six bytes per distinct
+interned range. The all-return/no-phase default remains shared. Unsupported code
+still allocates no side plan. `_PyIRFormat` gains program offset/count fields;
+the first generated ownership table has 23 eight-byte events shared by handlers.
+Root must measure actual struct alignment, readonly table growth and native
+handler costs; these are source counts, not a performance result.
+
+The generic binary marker emits its normal/error event program together with
+the actual consuming C. It publishes provider5, successful operand retirement6
+and restored-error7 only at those reached boundaries. The close/restore phase
+is selected only if the provider PC and prior publication survived; a debugger
+invalidation cannot regain coverage merely by returning from the provider.
+Helpers clear publication before invalid cleanup and after covered closes.
+Unconverted family refinements make subsequent normal completeness false;
+covered generic callback phases do not certify specialized family completion.
+Existing audited leaf templates remain LEAF regression guards while transport
+is ported; the first increment does not claim a general C effect inference.
+
+The common `_PyIR_GetFrameHomeView` validates code/image/site/phase and borrows
+immutable selected ranges under the independent code pin. The current shadow
+uses this same view immediately, then compares all scratch against canonical
+NULL control. Absent homes must be NULL even for inline/index leftovers;
+nullable candidate ranges may contain NULL or a canonical language value.
+MAY_OWNER joins do not establish readable stale cells: before M4, normalize
+those joins, carry independent validity, or reject incomplete shapes. Current
+roles do not certify index/control families. Bindings remain dynamically
+initialized/nullable, including hidden constants.
+
+The producer census covers ordinary initialization, the C-entry sentinel,
+shared trampoline initialization, both sides of copy, resume/return recipient
+installation, clear/retirement entry, accepted redirects and the private heap
+deallocator. Unsupported escaping statements/markers, SAVE_STACK and error
+edges invalidate publication; cold boxing and unpack continuations do likewise.
+The actual emitted zero stores, including conservatively guarded callouts, must
+be priced. There is no instruction-entry phase decode or blanket dispatch reset.
+GC's collector component and cold probe are separate source components; root
+must merge their exact ABI with the producer ports before execution.
+
+Design/source peers are GO for this bounded NULL-shadow increment. Root's first
+host generation smoke passed; Python source syntax and diff checks pass. The
+new cold probes and reached tracing-collector fixtures still require root's
+release/debug execution, merged regeneration and native inspection. Complete
+callback/poll/error/suspended/observer coverage, fixed static images and lifecycle
+selected-home consumers remain gates before any static authority switch.

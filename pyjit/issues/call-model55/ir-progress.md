@@ -113,8 +113,8 @@ reached collector phase shadowing during generic binary operations with live
 scratch survivors. It includes an explicit padding-field validity protocol,
 nullable joins, helper capabilities, call NULL forms, multi-exit examples,
 instrumentation/error/observer requirements and full M4 coverage gates. Frames
-and GC source-design peer review is pending; no emitter implementation is mixed
-with the independent remote fixture repair.
+and GC design peer review are GO. The source implementation is in progress in
+the isolated IR lane; the independent remote fixture repair is already committed.
 
 The remote fixture repair is source-reviewed commit `08a5dc225b0`: prepare the
 valid executing image before deliberately corrupting the child source bytes.
@@ -122,3 +122,24 @@ The cold normal proof currently reads only observer recovery handler targets
 from IRSM, not source positions; this semantic-container coupling is documented
 as debt. Shared phase metadata must separate recovery edges from optional debug
 positions. Ordinary dispatch and retirement shadow queries do not decode IRSM.
+
+The shared-emitter source now emits a compact ownership program beside the
+generic binary transaction's actual TAKE, provider, result and restore commits.
+The existing audited leaf contracts enter that same consumer as LEAF events;
+their old positive source guards remain until their emission is ported. Normal
+admission consumes the program. A unified `_PyIRCodePlan` owns sparse reached
+phase rows and hash-interned scratch ranges through home4094, using the existing
+execution-image pointer. `_PyIR_GetFrameHomeView` selects one borrowed view for
+the actual collector shadow and later lifecycle ports. Nullable joined ranges
+are canonical NULL-shadow candidates, not permission to read inactive stale
+cells after the authority switch.
+
+GC's bounded source postreview is GO, subject to the separately owned accepted
+redirect resets and complete producer manifest. Root's host generator smoke
+succeeded for cases and metadata without changing generated files. A subsequent
+formatting correction separates generated closing braces and continuation
+lines; final root regeneration remains required. New fixtures cover cold shape
+mismatches, image/site/phase rejection, full extent and all public admission
+routes, duplicate scratch TAKE, actual provider/finalizer frame-root walks with
+a scratch survivor, and dynamic binding changes before error restore. Runtime
+results, native layout/costs and performance are not yet claimed.

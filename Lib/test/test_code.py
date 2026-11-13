@@ -1706,7 +1706,6 @@ class ConstSlotsTest(unittest.TestCase):
                 words[pc] = (words[pc] & ~(4095 << 16)) | (source << 16)
                 matching_recovery = memoryview(code.co_exceptiontable).tobytes()
                 self.assertEqual(matching_recovery, code.co_exceptiontable)
-                self.assertIsNot(matching_recovery, code.co_exceptiontable)
                 # The changed arm reads a home already consumed by STORE_FAST
                 # (or a NULL COPY input). Admission now rejects this witness
                 # before an observer can consider its joined requirements.

@@ -3189,7 +3189,8 @@ class IREmitter(Emitter):
                 field = stack.input_field(local.ir_input)
                 self.emit(f"if (IR_IS_LOCAL({field})) {{\n")
                 self.emit(f"_PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), {field});\n")
-                self.emit("}\nelse {\n")
+                self.emit("}\n")
+                self.emit("else {\n")
                 self.emit('PyErr_SetString(PyExc_SystemError, "code reads an absent required input");\n')
                 self.emit("}\n")
             else:
@@ -5331,17 +5332,29 @@ def array_read_span(part: Uop, item: StackItem) -> tuple[str, str]:
     return "0", item.size if any(token.text == "DECREF_INPUTS" for token in tokens) else "0"
 
 
-def execution_read_routes(inst: Instruction, call_window: bool) -> frozenset[tuple[int, str, int]]:
+def execution_read_routes(inst: Instruction, call_window: bool,
+                          native_step: tuple[Uop, ...] | None = None
+                          ) -> frozenset[tuple[int, str, int]]:
     if native_entry_input_contract(inst):
         return frozenset()
-    routes = frozenset((occurrence, "read", index)
-        for occurrence, part in enumerate(inst.parts) if isinstance(part, Uop)
-        for index, item in enumerate(part.stack.inputs)
-        if item.used and item.name != "unused" and not item.nullable
-        and (not item.is_array() or array_read_span(part, item)[1] != "0"))
+    # Only a complete checked native-step source contract may make a tail
+    # unreachable here. Its actual terminal receipt is still checked
+    # independently when the handler's error capability is assembled.
+    terminal = (native_step[-1] if native_step and
+                native_step[-1].properties.always_exits else None)
+    routes = set()
+    for occurrence, part in enumerate(inst.parts):
+        if not isinstance(part, Uop):
+            continue
+        routes.update((occurrence, "read", index)
+            for index, item in enumerate(part.stack.inputs)
+            if item.used and item.name != "unused" and not item.nullable
+            and (not item.is_array() or array_read_span(part, item)[1] != "0"))
+        if part is terminal:
+            break
     if call_window:
         routes |= {(-1, "call-window", 0)}
-    return routes
+    return frozenset(routes)
 
 
 def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
@@ -6425,7 +6438,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
     if emitter.error_source is None and emitter.send_source_parts is not None:
         emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
-    emitter.execution_read_expected = execution_read_routes(inst, call_window)
+    emitter.execution_read_expected = execution_read_routes(
+        inst, call_window, emitter.send_source_parts)
     emitter.execution_read_sources = set()
     emitter.execution_read_proven = set()
     if emitter.error_source is not None and emitter.execution_read_expected:

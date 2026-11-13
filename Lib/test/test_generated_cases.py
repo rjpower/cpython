@@ -3429,6 +3429,33 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.array_read_span(part, part.stack.inputs[0]),
                          ("1", "1"))
 
+    def test_execution_read_routes_require_checked_terminal_prefix(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        inst = analysis.instructions["SEND_GEN"]
+        prefix = ir_generator.send_source_contract(inst, formats[inst.name])
+        self.assertIsNotNone(prefix)
+        terminal = prefix[-1]
+        self.assertTrue(terminal.properties.always_exits)
+        full = ir_generator.execution_read_routes(inst, False)
+        selected = ir_generator.execution_read_routes(inst, False, prefix)
+        tail = {(occurrence, "read", index)
+                for occurrence, part in enumerate(inst.parts)
+                if isinstance(part, analyzer.Uop) and part.name == "_PUSH_FRAME"
+                for index, item in enumerate(part.stack.inputs) if item.used}
+        self.assertTrue(tail)
+        self.assertEqual(full - selected, tail)
+        with mock.patch.object(terminal.properties, "always_exits", False):
+            self.assertEqual(ir_generator.execution_read_routes(inst, False, prefix), full)
+        with mock.patch.object(terminal, "body", parser.Parser(
+                "{ DEAD(receiver); DEAD(null); DEAD(v); }", "<terminal mutation>").block()):
+            rejected = ir_generator.send_source_contract(inst, formats[inst.name])
+            self.assertIsNone(rejected)
+            self.assertEqual(ir_generator.execution_read_routes(inst, False, rejected), full)
+        inst = analysis.instructions["FOR_ITER_GEN"]
+        self.assertIsNone(ir_generator.send_source_contract(inst, formats[inst.name]))
+
     def test_execution_reads_lower_through_actual_storage(self):
         output = self.ir_output("\ninst(OP, (value -- result)) { result = TAKE(value); }\n")
         self.assertIn("PyValue_IsNull(value)", output)

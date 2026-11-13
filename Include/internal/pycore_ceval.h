@@ -381,9 +381,14 @@ typedef struct {
 PyAPI_FUNC(_PyIRStepResult) _PyIR_ObserveStep(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *,
     PyValueBorrow, enum _PyIRStepKind, int);
-PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteStep(
+PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteForIter(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, _PyInstr *, PyValue);
+PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSend(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
-    _PyInstr *, PyValue, enum _PyIRStepKind);
+    _PyInstr *, PyValue);
+PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSendThrow(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
+    _PyInstr *, PyValue);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteGeneratorReturn(
     PyThreadState *, _PyInterpreterFrame *, PyValue);
 

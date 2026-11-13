@@ -5141,8 +5141,15 @@ class IREmitter(Emitter):
         """
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
+        entries = {
+            "_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
+            "_PY_IR_SEND": "_PyEval_CompleteSend",
+            "_PY_IR_SEND_THROW": "_PyEval_CompleteSendThrow",
+        }
+        if kind not in entries:
+            raise analysis_error("unsupported completion kind", tkn)
         fmt = self.format_of(inst)
-        if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND", "_PY_IR_SEND_THROW"} and distance == "oparg":
+        if distance == "oparg":
             self.normal_completion(inst, fmt, kind)
         else:
             self.normal_completion_uncovered = True
@@ -5151,7 +5158,8 @@ class IREmitter(Emitter):
         self.emit("{\n")
         target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
                   else f"next_instr + {distance}")
-        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, {base}, {dst}, {target}, {value}, {kind});\n")
+        recipient = "" if kind == "_PY_IR_FOR_ITER" else f"{dst}, "
+        self.emit(f"_PyIRStepResult ir_step_result = {entries[kind]}(tstate, frame, this_instr, {base}, {recipient}{target}, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
         self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
         self.emit("DISPATCH();\n")

@@ -793,7 +793,17 @@ class TestIRCases(unittest.TestCase):
         self.assertLess(error, adopted)
         self.assertIn("IR_CONSUME_INPUT(IR_C(ir_word), r)", body)
         self.assertNotIn("IR_CONSUME_INPUT(IR_B(ir_word)", body)
-        self.assertIn("IR_SLOT(IR_B(ir_word)) = res;", body)
+        self.assertIn("IR_OVERWRITE_INLINE_INT_TEMP(IR_SLOT(IR_B(ir_word)), res);", body)
+        self.assertNotIn("IR_STORE_TEMP(IR_SLOT(IR_B(ir_word))", body)
+        self.assertNotIn("IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_B(ir_word))", body)
+        macros = (Path(__file__).resolve().parents[2] /
+                  "Python" / "ceval_macros.h").read_text()
+        overwrite = macros.split("#define IR_OVERWRITE_INLINE_INT_TEMP", 1)[1]
+        overwrite = overwrite.split("while (0)", 1)[0]
+        self.assertIn("assert(PyValue_IsInlineInt(SLOT));", overwrite)
+        self.assertIn("_PyValue_IsHome(V)", overwrite)
+        self.assertIn("_PyValue_CheckTemp(SLOT)", overwrite)
+        self.assertNotIn("PyValue_XCLOSE", overwrite)
 
     def test_canonical_inline_int_renamed_source(self):
         source = (Path(__file__).resolve().parents[2] /

@@ -552,6 +552,16 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
+/* A checked numeric commit replaces its inline input at the exact same
+ * scratch home. The old inline value owns no count; V is already canonical. */
+#define IR_OVERWRITE_INLINE_INT_TEMP(SLOT, V) \
+    do { \
+        assert(PyValue_IsInlineInt(SLOT)); \
+        assert(!PyValue_IsNull(V) && _PyValue_IsHome(V)); \
+        (SLOT) = (V); \
+        _PyValue_CheckTemp(SLOT); \
+    } while (0)
+
 #define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
     do { \
         (SLOT) = (V); \

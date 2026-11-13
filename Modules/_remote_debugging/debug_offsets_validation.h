@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1032,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1080,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -291,6 +291,7 @@ validate_fixed_field(
     APPLY(interpreter_frame, ir_words, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(interpreter_frame, owner, sizeof(char), _Alignof(char), buffer_size); \
     APPLY(interpreter_frame, return_slot, sizeof(uint16_t), _Alignof(uint16_t), buffer_size); \
+    APPLY(interpreter_frame, phase_state, sizeof(uint16_t), _Alignof(uint16_t), buffer_size); \
     APPLY(interpreter_frame, tlbc_index, sizeof(int32_t), _Alignof(int32_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_CODE_OBJECT_FIELDS(APPLY, buffer_size) \
@@ -301,12 +302,18 @@ validate_fixed_field(
     APPLY(code_object, nlocalsplus, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, stacksize, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, co_words, sizeof(uint64_t), _Alignof(uint64_t), buffer_size); \
+    APPLY(code_object, exec, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
+    APPLY(code_object, nwords, sizeof(Py_ssize_t), _Alignof(Py_ssize_t), buffer_size); \
     APPLY(code_object, co_tlbc, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_SET_OBJECT_FIELDS(APPLY, buffer_size) \
     APPLY(set_object, used, sizeof(Py_ssize_t), _Alignof(Py_ssize_t), buffer_size); \
     APPLY(set_object, mask, sizeof(Py_ssize_t), _Alignof(Py_ssize_t), buffer_size); \
     APPLY(set_object, table, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
+
+#define PY_REMOTE_DEBUG_CODE_EXEC_FIELDS(APPLY, buffer_size) \
+    APPLY(code_exec, words, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
+    APPLY(code_exec, nwords, sizeof(uint32_t), _Alignof(uint32_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_LONG_OBJECT_FIELDS(APPLY, buffer_size) \
     APPLY(long_object, lv_tag, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
@@ -436,6 +443,11 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
         PY_REMOTE_DEBUG_VALIDATE_FIELD,
         SIZEOF_CODE_OBJ);
 
+    PY_REMOTE_DEBUG_VALIDATE_READ_SECTION(code_exec, SIZEOF_CODE_EXEC);
+    PY_REMOTE_DEBUG_CODE_EXEC_FIELDS(
+        PY_REMOTE_DEBUG_VALIDATE_FIELD,
+        SIZEOF_CODE_EXEC);
+
     PY_REMOTE_DEBUG_VALIDATE_SECTION(pyobject);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(
         pyobject,
@@ -517,6 +529,7 @@ _PyRemoteDebug_ValidateAsyncDebugOffsets(
 #undef PY_REMOTE_DEBUG_INTERPRETER_STATE_FIELDS
 #undef PY_REMOTE_DEBUG_INTERPRETER_FRAME_FIELDS
 #undef PY_REMOTE_DEBUG_CODE_OBJECT_FIELDS
+#undef PY_REMOTE_DEBUG_CODE_EXEC_FIELDS
 #undef PY_REMOTE_DEBUG_SET_OBJECT_FIELDS
 #undef PY_REMOTE_DEBUG_LONG_OBJECT_FIELDS
 #undef PY_REMOTE_DEBUG_BYTES_OBJECT_FIELDS

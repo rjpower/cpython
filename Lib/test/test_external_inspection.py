@@ -4593,7 +4593,8 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                 slot = ctypes.c_uint16.from_address(address)
                 original = slot.value
                 assert coroutine.cr_await is not None
-                assert 2 <= original < layout['no_dst'], original
+                index = original & layout['no_dst']
+                assert 2 <= index < layout['no_dst'], original
                 trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
                 targets = [target for info in trace for target in info.awaited_by
                            if target.task_name == 'bounded-target']
@@ -4602,11 +4603,20 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                            for coro in targets[0].coroutine_stack
                            for frame in coro.call_stack), targets
                 try:
+                    # Both descriptor classes name the same physical home.
+                    # Inspect while suspended and restore before resuming.
+                    awaited = coroutine.cr_await
+                    slot.value = index | (layout['no_dst'] + 1)
+                    assert coroutine.cr_await is awaited
+                    assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
                     slot.value = layout['no_dst']
                     assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
-                    # Both are non-sentinel uint16 values, above this target's
-                    # actual value-home count. Reject before receiver math.
-                    for invalid in (layout['no_dst'] - 1, 65534):
+                    # Reject an out-of-frame index, tagged discard, and
+                    # reserved descriptor bits before receiver arithmetic.
+                    for invalid in (layout['no_dst'] - 1,
+                                    layout['no_dst'] | (layout['no_dst'] + 1),
+                                    index | (2 * (layout['no_dst'] + 1)),
+                                    65534):
                         slot.value = invalid
                         try:
                             RemoteUnwinder(os.getpid()).get_all_awaited_by()

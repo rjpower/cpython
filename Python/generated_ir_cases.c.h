@@ -3075,7 +3075,7 @@
                 pushed_frame->base[0] = IR_TAKE(container, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), sub);
                 pushed_frame->base[1] = IR_TAKE(sub, ir_own_C);
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
                 new_frame = PyValue_Wrap(pushed_frame);
             }
@@ -4780,7 +4780,7 @@
                     _PyEval_FrameClearAndPop(tstate, shim);
                     JUMP_TO_LABEL(error);
                 }
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
                 tstate->py_recursion_remaining--;
                 init_frame = PyValue_Wrap(temp);
@@ -4949,7 +4949,8 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                IR_PUBLISH_TEMP(window[0], new_frame);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
             // _PUSH_FRAME
@@ -7295,7 +7296,8 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                IR_PUBLISH_TEMP(window[0], new_frame);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
             // _PUSH_FRAME
@@ -9654,7 +9656,7 @@
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                         IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                     }
-                    frame->return_slot = (uint16_t)(_PY_IR_FOR_ITER == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    _PyFrame_SetReturnSlot(frame, _PY_IR_FOR_ITER == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
                     ir_resumed_frame->previous = frame;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -12105,7 +12107,7 @@
                 gen->gi_exc_state.previous_item = NULL;
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *gen_frame = frame;
-                gen_frame->return_slot = (uint16_t)IR_A(ir_word);
+                _PyFrame_SetReturnSlot(gen_frame,IR_A(ir_word));
                 _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
                 frame = tstate->current_frame = frame->previous;
                 gen_frame->previous = NULL;
@@ -12947,13 +12949,15 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), new_frame);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -13594,13 +13598,15 @@
             }
             // _SAVE_RETURN_SLOT
             {
-                frame->return_slot = (uint16_t)IR_A(ir_word);
+                IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), new_frame);
+                _PyFrame_SetReturnSlot(frame,IR_A(ir_word));
                 frame->return_pc = next_instr;
             }
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
                 _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -16615,7 +16621,7 @@
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
             frame->instr_ptr++;
             _PyFrame_Copy(frame, gen_frame);
-            gen_frame->return_slot = (uint16_t)IR_A(ir_word);
+            _PyFrame_SetReturnSlot(gen_frame,IR_A(ir_word));
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
@@ -16745,7 +16751,7 @@
                             ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                             IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                         }
-                        frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                        _PyFrame_SetReturnSlot(frame, _PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                         frame->return_pc = next_instr;
                         ir_resumed_frame->previous = frame;
                         gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -16926,7 +16932,7 @@
                         ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
                         IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
                     }
-                    frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    _PyFrame_SetReturnSlot(frame, _PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
                     frame->return_pc = next_instr;
                     ir_resumed_frame->previous = frame;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
@@ -19047,7 +19053,7 @@
                 gen->gi_exc_state.previous_item = NULL;
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *gen_frame = frame;
-                gen_frame->return_slot = (uint16_t)IR_A(ir_word);
+                _PyFrame_SetReturnSlot(gen_frame,IR_A(ir_word));
                 _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
                 frame = tstate->current_frame = frame->previous;
                 gen_frame->previous = NULL;

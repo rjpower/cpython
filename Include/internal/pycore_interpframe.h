@@ -162,6 +162,52 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
+#define _Py_RETURN_SLOT_REPLACE_REQUIRED (IR_FIELD_MAX + 1U)
+
+static inline int
+_PyFrame_ReturnSlotIsValid(uint16_t recipient)
+{
+    return (recipient & ~(IR_FIELD_MAX | _Py_RETURN_SLOT_REPLACE_REQUIRED)) == 0
+        && recipient != (IR_NO_DST | _Py_RETURN_SLOT_REPLACE_REQUIRED);
+}
+
+static inline int
+_PyFrame_ReturnSlotIndex(uint16_t recipient)
+{
+    assert(_PyFrame_ReturnSlotIsValid(recipient));
+    return recipient & IR_FIELD_MAX;
+}
+
+static inline int
+_PyFrame_ReturnSlotIsDiscard(uint16_t recipient)
+{
+    assert(_PyFrame_ReturnSlotIsValid(recipient));
+    return recipient == IR_NO_DST;
+}
+
+static inline int
+_PyFrame_ReturnSlotNeedsReplace(uint16_t recipient)
+{
+    assert(_PyFrame_ReturnSlotIsValid(recipient));
+    return (recipient & _Py_RETURN_SLOT_REPLACE_REQUIRED) != 0;
+}
+
+static inline uint16_t
+_PyFrame_EncodeReturnSlot(int slot, int nlocalsplus)
+{
+    assert(slot >= 0 && slot <= IR_NO_DST);
+    assert(nlocalsplus >= 0 && nlocalsplus <= IR_NO_DST);
+    return (uint16_t)(slot | (slot < nlocalsplus
+        ? _Py_RETURN_SLOT_REPLACE_REQUIRED : 0));
+}
+
+static inline void
+_PyFrame_SetReturnSlot(_PyInterpreterFrame *frame, int slot)
+{
+    const _PyCodeExec *exec = (const _PyCodeExec *)frame->ir_words - 1;
+    frame->return_slot = _PyFrame_EncodeReturnSlot(slot, exec->nlocalsplus);
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named.  A temporary's slot holds NULL; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST
@@ -169,17 +215,26 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 static inline void
 _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
+    uint16_t recipient = f->return_slot;
+    int slot = _PyFrame_ReturnSlotIndex(recipient);
+    assert(!_PyFrame_ReturnSlotIsDiscard(recipient));
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
-        assert(f->return_slot < _PyFrame_NumSlots(f));
-        assert(f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus
-               || PyValue_IsNull(f->base[f->return_slot]));
+        assert(slot < _PyFrame_NumSlots(f));
+        assert(_PyFrame_ReturnSlotNeedsReplace(recipient)
+               == (slot < _PyFrame_GetCode(f)->co_nlocalsplus));
     }
 #endif
-    PyValue old = f->base[f->return_slot];  // a move: replaced below
-    f->base[f->return_slot] = v;
+    if (_PyFrame_ReturnSlotNeedsReplace(recipient)) {
+        PyValue old = f->base[slot];  // a move: replaced below
+        f->base[slot] = v;
+        _PyValue_CheckHome(v);
+        PyValue_XCLOSE(old);
+        return;
+    }
+    assert(PyValue_IsNull(f->base[slot]));
+    f->base[slot] = v;
     _PyValue_CheckHome(v);
-    PyValue_XCLOSE(old);
 }
 
 void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
@@ -191,7 +246,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     if (redirected) {
         _PyFrame_CompleteRedirect(f);
     }
-    if (f->return_slot == IR_NO_DST) {
+    if (_PyFrame_ReturnSlotIsDiscard(f->return_slot)) {
         PyValue_XCLOSE(v);
         return redirected;
     }
@@ -314,7 +369,7 @@ _PyFrame_Initialize(
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->return_pc = frame->instr_ptr;
-    frame->return_slot = 0;
+    frame->return_slot = _PyFrame_EncodeReturnSlot(0, code->co_nlocalsplus);
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
@@ -662,7 +717,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     frame->lltrace = 0;
 #endif
     assert(return_slot < nslots);
-    frame->return_slot = (uint16_t)return_slot;
+    _PyFrame_SetReturnSlot(frame, return_slot);
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;

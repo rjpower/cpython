@@ -55,7 +55,9 @@ struct _PyInterpreterFrame {
     /* Index of thread-local bytecode containing instr_ptr. */
     int32_t tlbc_index;
 #endif
-    /* The slot that receives the value when control comes back to this
+    /* Recipient descriptor: low 12 bits name the slot; bit 12 requires
+     * replacement of its old owner. IR_NO_DST alone discards the value.
+     * The slot receives the value when control comes back to this
      * frame: the dst of the call it is making, or for a suspended
      * generator the slot of the value it yielded, where the value sent in
      * goes. */

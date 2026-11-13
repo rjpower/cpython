@@ -12,7 +12,7 @@ void
 _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
     assert(frame->pending_redirect);
-    assert(frame->return_slot == IR_NO_DST);
+    assert(_PyFrame_ReturnSlotIsDiscard(frame->return_slot));
     /* The child has retired its overlap. Publish the new state before
      * closing remaining scratch owners, whose finalizers can inspect it. */
     frame->pending_redirect = 0;

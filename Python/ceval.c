@@ -2282,7 +2282,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry->frame.visited = 0;
     /* What the frame returns or yields lands in entry->stack[0] */
-    entry->frame.return_slot = 1;
+    entry->frame.return_slot = _PyFrame_EncodeReturnSlot(1, 1);
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
@@ -3341,7 +3341,7 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     if (flags & CO_VARKEYWORDS) {
         child->base[extra] = PyValue_FromObjectSteal(kwdict);
     }
-    call->frame->return_slot = (uint16_t)call->destination;
+    _PyFrame_SetReturnSlot(call->frame, call->destination);
     call->frame->return_pc = call->frame->instr_ptr + 1;
     call->tstate->current_frame = child;
     *out = child;
@@ -3444,7 +3444,7 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     PyValue *retired = storage + call->count;
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    call->frame->return_slot = (uint16_t)call->destination;
+    _PyFrame_SetReturnSlot(call->frame, call->destination);
     call->frame->return_pc = call->frame->instr_ptr + 1;
     assert(child->previous == call->frame);
     call->tstate->current_frame = child;
@@ -3691,7 +3691,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     _PyTuple_ITEMS(defaults)[i - first_default]);
             }
         }
-        frame->return_slot = (uint16_t)destination;
+        _PyFrame_SetReturnSlot(frame, destination);
         frame->return_pc = frame->instr_ptr + 1;
         tstate->current_frame = child;
         CALL_STAT_INC(keyword_plan_hits);
@@ -3758,7 +3758,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     child->base[binding->binding.positional.kwargs_slot] = PyValue_FromObjectSteal(kwargs);
                 }
             }
-            frame->return_slot = (uint16_t)destination;
+            _PyFrame_SetReturnSlot(frame, destination);
             frame->return_pc = frame->instr_ptr + 1;
             tstate->current_frame = child;
             return (_PyCallResult){0, child};

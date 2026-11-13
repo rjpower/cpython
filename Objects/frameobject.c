@@ -3513,7 +3513,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     if (child != NULL) {
         int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
         if (child->external || PyBytes_GET_SIZE(code->co_exceptiontable) ||
-            self->f_frame->return_slot != IR_NO_DST ||
+            !_PyFrame_ReturnSlotIsDiscard(self->f_frame->return_slot) ||
             (opcode != CALL && opcode != CALL_KW))
         {
             PyMem_Free(lines);

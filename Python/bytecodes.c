@@ -1236,7 +1236,7 @@ dummy_func(
             pushed_frame->base[0] = TAKE(container);
             pushed_frame->base[1] = TAKE(sub);
             INPUTS_DEAD();
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyFrame_SetReturnSlot(frame, IR_DST_SLOT);
             frame->return_pc = next_instr;
             new_frame = PyValue_Wrap(pushed_frame);
         }
@@ -1724,7 +1724,7 @@ dummy_func(
             _PyInterpreterFrame *gen_frame = frame;
             // The value sent in when the generator resumes takes the slot
             // of the value it yields
-            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyFrame_SetReturnSlot(gen_frame, IR_DST_SLOT);
             _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
             frame = tstate->current_frame = frame->previous;
             gen_frame->previous = NULL;
@@ -4527,7 +4527,7 @@ dummy_func(
                 _PyEval_FrameClearAndPop(tstate, shim);
                 ERROR_NO_POP();
             }
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyFrame_SetReturnSlot(frame, IR_DST_SLOT);
             frame->return_pc = next_instr;
             /* Account for pushing the extra frame.
              * We don't check recursion depth here,
@@ -5263,7 +5263,7 @@ dummy_func(
             frame->instr_ptr++;
             _PyFrame_Copy(frame, gen_frame);
             // The value of the first send takes the slot of res
-            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyFrame_SetReturnSlot(gen_frame, IR_DST_SLOT);
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
@@ -5556,7 +5556,7 @@ dummy_func(
         }
 
         op(_SAVE_RETURN_SLOT, (--)) {
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyFrame_SetReturnSlot(frame, IR_DST_SLOT);
             frame->return_pc = next_instr;
         }
 

@@ -342,7 +342,12 @@ get_awaited_coro_address(
     /* The receiver of the SEND whose yield suspended the frame is two
      * slots below the slot of the yielded value, return_slot.  A generator
      * keeps its slots in its frame, in owned_slots. */
-    uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
+    uint16_t recipient = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
+    if (!_PyFrame_ReturnSlotIsValid(recipient)) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
+        return -1;
+    }
+    int return_slot = _PyFrame_ReturnSlotIndex(recipient);
 
     if (return_slot >= 2 && return_slot != IR_NO_DST) {
         uintptr_t code_addr = GET_MEMBER_NO_TAG(uintptr_t, iframe,

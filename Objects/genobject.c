@@ -266,10 +266,10 @@ _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
     /* Delegating yields always retain a real receiver window. Ordinary
      * ignored resume inputs use IR_NO_DST and never reach this lookup. */
-    assert(frame->return_slot != IR_NO_DST);
-    assert(frame->return_slot >= 2 &&
-           frame->return_slot < _PyFrame_NumSlots(frame));
-    PyValueBorrow ref = PyValue_Borrow(frame->base[frame->return_slot - 2]);
+    assert(!_PyFrame_ReturnSlotIsDiscard(frame->return_slot));
+    int slot = _PyFrame_ReturnSlotIndex(frame->return_slot);
+    assert(slot >= 2 && slot < _PyFrame_NumSlots(frame));
+    PyValueBorrow ref = PyValue_Borrow(frame->base[slot - 2]);
     assert(!PyValue_IsNull(ref));
     return ref;
 }

@@ -3931,7 +3931,7 @@ class IREmitter(Emitter):
         self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
         self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
         self.emit("}\n")
-        self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
+        self.emit(f"_PyFrame_SetReturnSlot(frame, {kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
         self.emit("frame->return_pc = next_instr;\n")
         self.emit("ir_resumed_frame->previous = frame;\n")
         self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
@@ -4734,7 +4734,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                 gen->gi_exc_state.previous_item = NULL;
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *gen_frame = frame;
-                gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+                _PyFrame_SetReturnSlot(gen_frame, IR_DST_SLOT);
                 _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
                 frame = tstate->current_frame = frame->previous;
                 gen_frame->previous = NULL;

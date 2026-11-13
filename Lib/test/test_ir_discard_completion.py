@@ -300,6 +300,82 @@ class DiscardCompletionTests(unittest.TestCase):
                 self.assertEqual(calls[0][1], 4095)
 
 
+class RecipientPublicationTests(unittest.TestCase):
+    def test_local_replacement_commits_before_finalizer_mutates_local(self):
+        for general in (False, True):
+            with self.subTest(general=general):
+                armed = False
+                seen = []
+                result = object()
+                replacement = object()
+
+                class Old:
+                    def __del__(self):
+                        if armed:
+                            frame = sys._getframe(1)
+                            seen.append(frame.f_locals["value"])
+                            frame.f_locals["value"] = replacement
+
+                def exact():
+                    return result
+
+                def general_call(*args):
+                    return result
+
+                def caller(make):
+                    value = Old()
+                    value = make()
+                    return value
+
+                make = general_call if general else exact
+                for _ in range(ROUNDS):
+                    self.assertIs(caller(make), result)
+                armed = True
+                self.assertIs(caller(make), replacement)
+                self.assertEqual(seen, [result])
+
+    def test_sent_local_replacement_survives_finalizer_mutation(self):
+        seen = []
+        result = object()
+        replacement = object()
+
+        class Old:
+            def __del__(self):
+                frame = sys._getframe(1)
+                seen.append(frame.f_locals["value"])
+                frame.f_locals["value"] = replacement
+
+        def generator():
+            value = Old()
+            value = yield "ready"
+            yield value
+
+        gen = generator()
+        self.assertEqual(next(gen), "ready")
+        self.assertIs(gen.send(result), replacement)
+        self.assertEqual(seen, [result])
+        gen.close()
+
+    def test_nested_yieldfrom_inspection_and_native_resume(self):
+        def child():
+            value = yield "ready"
+            return value
+
+        def parent():
+            return (yield from child())
+
+        gen = parent()
+        self.assertEqual(next(gen), "ready")
+        suspended = gen.gi_yieldfrom
+        self.assertIsNotNone(suspended)
+        self.assertEqual(suspended.gi_code.co_name, "child")
+        with self.assertRaises(StopIteration) as raised:
+            gen.send(37)
+        self.assertEqual(raised.exception.value, 37)
+        self.assertIsNone(gen.gi_yieldfrom)
+        self.assertIsNone(suspended.gi_frame)
+
+
 @unittest.skipIf(test_tools.basepath is None, "needs the source tree")
 class DiscardCompletionGeneratorTests(unittest.TestCase):
     def test_one_protocol_for_both_python_entry_routes(self):
@@ -318,7 +394,7 @@ class DiscardCompletionGeneratorTests(unittest.TestCase):
         self.assertNotIn("CALL_POSTCALL_DISCARD", generated)
         self.assertNotIn("TARGET(CALL_PY_EXACT_ARGS_DISCARD)", generated)
         self.assertNotIn("TARGET(CALL_PY_GENERAL_DISCARD)", generated)
-        self.assertIn("frame->return_slot = (uint16_t)IR_A(ir_word)", generated)
+        self.assertIn("_PyFrame_SetReturnSlot(frame, IR_A(ir_word))", generated)
 
 
 if __name__ == "__main__":

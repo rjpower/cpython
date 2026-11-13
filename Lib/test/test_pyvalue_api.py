@@ -428,6 +428,170 @@ class TransitionRootTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
+class BinderStagingTests(unittest.TestCase):
+    def test_partial_arguments_visible_during_keyword_comparison(self):
+        for native_provider in (False, True):
+            with self.subTest(native_provider=native_provider):
+                observations = []
+                payload = Item()
+                keyword_value = Item()
+                caller = sys._getframe()
+                changed = 'before'
+
+                def target(remaining, *, keyword):
+                    return remaining, keyword
+
+                class Keyword(str):
+                    __hash__ = str.__hash__
+
+                    def __eq__(self, other):
+                        ids = set(_testinternalcapi.get_transition_root_ids())
+                        observations.append((id(target) in ids,
+                                             id(payload) in ids,
+                                             id(target.__code__) in ids))
+                        caller.f_locals['changed'] = 'during'
+                        support.gc_collect()
+                        return str.__eq__(self, other)
+
+                arguments = {Keyword('keyword'): keyword_value}
+                provider = target.__call__ if native_provider else target
+                self.assertEqual(provider(payload, **arguments),
+                                 (payload, keyword_value))
+                self.assertTrue(observations)
+                self.assertTrue(all(all(entry) for entry in observations))
+                self.assertEqual(changed, 'during')
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_prior_keyword_and_defaults(self):
+        observations = []
+        payload = Item()
+        installed = Item()
+        extra = Item()
+        positional_default = Item()
+        keyword_default = Item()
+
+        def target(remaining, default=positional_default, *, keyword,
+                   optional=keyword_default, **extras):
+            return remaining, default, keyword, optional, extras
+
+        class Keyword(str):
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                if str.__eq__(self, 'extra'):
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append((id(payload) in ids,
+                                         id(installed) in ids,
+                                         id(target) in ids))
+                    support.gc_collect()
+                return str.__eq__(self, other)
+
+        result = target(payload, **{Keyword('keyword'): installed,
+                                    Keyword('extra'): extra})
+        self.assertEqual(result[:4], (payload, positional_default, installed,
+                                      keyword_default))
+        self.assertEqual(len(result[4]), 1)
+        self.assertIs(next(iter(result[4].values())), extra)
+        self.assertTrue(observations)
+        self.assertTrue(all(all(entry) for entry in observations))
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_nested_binding_keeps_outer_partial_frame(self):
+        observations = []
+        outer_payload = Item()
+        inner_payload = Item()
+
+        def inner(remaining, *, keyword):
+            return remaining
+
+        def outer(remaining, *, keyword):
+            return remaining
+
+        class InnerKeyword(str):
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append(all(id(value) in ids for value in
+                                        (outer, inner, outer_payload,
+                                         inner_payload)))
+                support.gc_collect()
+                return str.__eq__(self, other)
+
+        class OuterKeyword(str):
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                result = inner(inner_payload,
+                               **{InnerKeyword('keyword'): None})
+                observations.append(result is inner_payload)
+                return str.__eq__(self, other)
+
+        self.assertIs(outer(outer_payload, **{OuterKeyword('keyword'): None}),
+                      outer_payload)
+        self.assertTrue(observations)
+        self.assertTrue(all(observations))
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_keyword_failure_retires_partial_frame(self):
+        observations = []
+        payload = Item()
+        installed = Item()
+
+        def target(remaining, *, first, second):
+            self.fail('binding should fail before entry')
+
+        class Keyword(str):
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                if str.__eq__(self, 'second'):
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append((id(payload) in ids,
+                                         id(installed) in ids,
+                                         id(target) in ids))
+                    support.gc_collect()
+                    raise ValueError('keyword equality')
+                return str.__eq__(self, other)
+
+        with self.assertRaisesRegex(ValueError, 'keyword equality'):
+            target(payload, **{Keyword('first'): installed,
+                               Keyword('second'): None})
+        self.assertTrue(observations)
+        self.assertTrue(all(all(entry) for entry in observations))
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_code_mutation_keeps_selected_binding_geometry(self):
+        observations = []
+        payload = Item()
+
+        def target(remaining, *, keyword):
+            return remaining, keyword
+
+        def replacement(remaining, *, keyword):
+            return 'replacement'
+
+        selected_code = target.__code__
+
+        class Keyword(str):
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                target.__code__ = replacement.__code__
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append((id(selected_code) in ids,
+                                     id(payload) in ids, id(target) in ids))
+                support.gc_collect()
+                return str.__eq__(self, other)
+
+        self.assertEqual(target(payload, **{Keyword('keyword'): None}),
+                         (payload, None))
+        self.assertEqual(target(payload, keyword=None), 'replacement')
+        self.assertTrue(observations)
+        self.assertTrue(all(all(entry) for entry in observations))
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+
 class UnpackPrefixTests(unittest.TestCase):
     def test_prefix_survives_iterator_and_sequence_cleanup(self):
         references = []

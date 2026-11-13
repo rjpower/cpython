@@ -3179,13 +3179,37 @@ _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame)
     (void)_PyEval_FrameClearAndPopWithResult(tstate, frame, PyValue_NULL);
 }
 
+/* Binding owns initialized arena homes before the child is current. The
+ * outlined caller keeps this descriptor through all later provider cleanup. */
+static void
+stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    _PyTransitionRoots *staged)
+{
+    *staged = (_PyTransitionRoots){
+        .frame = frame,
+        .remaining = _PyFrame_NumSlots(frame),
+        .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
+            (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0),
+    };
+    _PyThreadState_PushTransitionRoots(tstate, staged);
+}
+
+static void
+unstage_binding_frame(PyThreadState *tstate, _PyTransitionRoots *staged)
+{
+    staged->remaining = 0;
+    staged->header_mask = 0;
+    _PyThreadState_PopTransitionRoots(tstate, staged);
+}
+
 /* code is independently pinned through preparation and binding. Consumes
  * func, locals and args, but never reselects the function's mutable code. */
 static _PyInterpreterFrame *
 eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
                         PyObject *locals, PyValue *args,
                         size_t argcount, PyObject *kwnames,
-                        _PyInterpreterFrame *previous, PyCodeObject *code)
+                        _PyInterpreterFrame *previous, PyCodeObject *code,
+                        _PyTransitionRoots *staged)
 {
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     CALL_STAT_INC(frames_pushed);
@@ -3198,9 +3222,12 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
+    stage_binding_frame(tstate, frame, staged);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
+        /* Transfer to retirement without a callback or poll. */
+        unstage_binding_frame(tstate, staged);
         (void)clear_thread_frame(tstate, frame, PyValue_NULL);
         return NULL;
     }
@@ -3223,16 +3250,21 @@ fail:
 
 /* Consumes references to func, locals and all the args. Explicit locals is
  * an input of this public provider; inferred policy belongs to its caller. */
-_PyInterpreterFrame *
+Py_NO_INLINE _PyInterpreterFrame *
 _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
                       PyObject *locals, PyValue *args, size_t argcount,
                       PyObject *kwnames, _PyInterpreterFrame *previous)
 {
     PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
+    _PyTransitionRoots staged;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
-        tstate, func, locals, args, argcount, kwnames, previous, code);
+        tstate, func, locals, args, argcount, kwnames, previous, code, &staged);
     Py_DECREF(code);
+    if (frame != NULL) {
+        /* The caller must activate this child before it can reenter. */
+        unstage_binding_frame(tstate, &staged);
+    }
     return frame;
 }
 
@@ -3242,7 +3274,8 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
 static _PyInterpreterFrame *
 eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
-    _PyInterpreterFrame *previous, PyCodeObject *code)
+    _PyInterpreterFrame *previous, PyCodeObject *code,
+    _PyTransitionRoots *staged)
 {
     bool has_dict = (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0);
     PyObject *kwnames = NULL;
@@ -3283,7 +3316,7 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     }
     new_frame = eval_frame_push_and_init_code(
         tstate, func, locals,
-        newargs, nargs, kwnames, previous, code
+        newargs, nargs, kwnames, previous, code, staged
     );
     goto done;
 fail_func:
@@ -3302,16 +3335,20 @@ done:
     return new_frame;
 }
 
-_PyInterpreterFrame *
+Py_NO_INLINE _PyInterpreterFrame *
 _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
     _PyInterpreterFrame *previous)
 {
     PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
+    _PyTransitionRoots staged;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
-        tstate, func, locals, nargs, callargs, kwargs, previous, code);
+        tstate, func, locals, nargs, callargs, kwargs, previous, code, &staged);
     Py_DECREF(code);
+    if (frame != NULL) {
+        unstage_binding_frame(tstate, &staged);
+    }
     return frame;
 }
 
@@ -3420,6 +3457,8 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
     PyCodeObject *code = NULL;
     _PyInterpreterFrame *child = NULL;
+    _PyTransitionRoots staged;
+    bool child_staged = false;
     if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
         storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
         if (storage == NULL) {
@@ -3454,7 +3493,7 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
         child = eval_frame_push_and_init_ex_code(
             call->tstate, consumed_function, consumed_locals,
             PyTuple_GET_SIZE(consumed_tuple), consumed_tuple, consumed_kwargs,
-            call->frame, code);
+            call->frame, code, &staged);
     }
     else {
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
@@ -3471,8 +3510,9 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
         copied = 0;
         child = eval_frame_push_and_init_code(
             call->tstate, consumed_function, consumed_locals, storage,
-            positional, names, call->frame, code);
+            positional, names, call->frame, code, &staged);
     }
+    child_staged = child != NULL;
     if (call_record_refresh(call) < 0 || child == NULL) {
         status = -1;
         goto done;
@@ -3496,6 +3536,8 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     call->frame->return_pc = call->frame->instr_ptr + 1;
     assert(child->previous == call->frame);
     call->tstate->current_frame = child;
+    unstage_binding_frame(call->tstate, &staged);
+    child_staged = false;
     status = 0;
 done:
     PyValue_CLEAR(function);
@@ -3529,6 +3571,9 @@ done:
          * the actual parent before clearing it; do not unwind it as executed. */
         call->tstate->current_frame = call->frame;
         call_transaction_publish_pc(call);
+        if (child_staged) {
+            unstage_binding_frame(call->tstate, &staged);
+        }
         _PyEval_FrameClearAndPop(call->tstate, child);
         child = NULL;
     }

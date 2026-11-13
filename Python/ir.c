@@ -26,6 +26,9 @@
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
+static_assert(sizeof(_PyCodeExec) - offsetof(_PyCodeExec, nlocalsplus) ==
+              sizeof(void *) + sizeof(uint32_t),
+              "keep the local-count offset relative to executing words");
 static_assert(sizeof(_PyFbBlock) % sizeof(_PyIRWord) == 0,
               "entries must follow the feedback header aligned");
 static_assert(sizeof(_PyFbHeader) == IR_FB_FIRST_UNIT << IR_FB_UNIT_SHIFT,
@@ -433,6 +436,10 @@ make_exec(PyCodeObject *co)
         .nwords = (uint32_t)nwords,
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
+    if (_PyCode_BuildRetirementPlan(co, &exec->retirement_plan) < 0) {
+        _PyMem_NoScanFree(exec);
+        return NULL;
+    }
     memcpy(words, _PyCode_WORDS(co), words_size);
     if (fb_size == 0) {
         return exec;
@@ -515,6 +522,9 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
+    if (exec->retirement_plan != NULL && exec->retirement_plan->nsites != 0) {
+        PyMem_Free((void *)exec->retirement_plan);
+    }
     _PyMem_NoScanFree(exec);
 }
 
@@ -526,6 +536,10 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
+    if (exec->retirement_plan != NULL && exec->retirement_plan->nsites != 0) {
+        res += sizeof(_PyIRRetirementPlan) +
+            (size_t)exec->retirement_plan->nsites * sizeof(uint32_t);
+    }
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
         res += feedback->size;
@@ -539,4 +553,62 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         }
     }
     return res;
+}
+
+uint8_t
+_PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
+{
+    assert(reason <= _PyIR_RETIRE_STAGED_FAILURE);
+    if (reason != _PyIR_RETIRE_NORMAL_RETURN || frame->f_executable == NULL) {
+        return _PyIR_SHADOW_UNCOVERED;
+    }
+    PyCodeObject *co = frame->f_executable;
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
+    if (exec == NULL || exec->retirement_plan == NULL ||
+        frame->ir_words != exec->words)
+    {
+        return _PyIR_SHADOW_UNCOVERED;
+    }
+    /* Integer bounds/alignment checks precede word decoding. This also
+     * excludes static executable images attached to an ordinary code pin. */
+    uintptr_t pc = (uintptr_t)frame->instr_ptr;
+    uintptr_t start = (uintptr_t)exec->words;
+    if (pc < start || pc - start >= (size_t)exec->nwords * sizeof(_PyIRWord) ||
+        (pc - start) % sizeof(_PyIRWord))
+    {
+        return _PyIR_SHADOW_UNCOVERED;
+    }
+    uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
+    if (_PyIR_FormatOf(IR_HANDLER(co->co_words[site]))->transfer_kind !=
+        _PyIR_TRANSFER_EXIT)
+    {
+        return _PyIR_SHADOW_UNCOVERED;
+    }
+    const _PyIRRetirementPlan *plan = exec->retirement_plan;
+    if (plan->nsites != 0) {
+        uint32_t low = 0, high = plan->nsites;
+        while (low < high) {
+            uint32_t mid = low + (high - low) / 2;
+            if (plan->sites[mid] < site) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
+            }
+        }
+        if (low == plan->nsites || plan->sites[low] != site) {
+            return _PyIR_SHADOW_UNCOVERED;
+        }
+    }
+    /* Nullable bindings, including hidden constants, keep their dynamic
+     * authority. The first exact scratch shape is empty, so an inline value
+     * is a mismatch too; testing mortal counts alone would miss it. */
+    for (int home = co->co_nlocalsplus;
+         home < _PyFrame_NumSlotsForCodeObject(co); home++)
+    {
+        if (!PyValue_IsNull(frame->base[home])) {
+            return _PyIR_SHADOW_MISMATCH;
+        }
+    }
+    return _PyIR_SHADOW_EXACT;
 }

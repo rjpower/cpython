@@ -268,6 +268,7 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
             (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0) |
             (frame->frame_obj != NULL ? _Py_TRANSITION_FRAME_OBJECT : 0),
         .result_present = !PyValue_IsNull(result),
+        .kind = _Py_TRANSITION_KIND_RETIRING,
         .result = result,
     };
 }
@@ -303,7 +304,7 @@ _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
 }
 
 static Py_NO_INLINE PyValue
-clear_generator_slow(PyGenObject *gen, int stage, PyValue result)
+clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     _PyInterpreterFrame *frame = &gen->gi_iframe;
@@ -314,7 +315,10 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result)
 #endif
     _PyTransitionRoots roots;
     _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
+    roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
+    assert(roots.shadow_status != _PyIR_SHADOW_MISMATCH);
     Py_BEGIN_CRITICAL_SECTION(gen);
     if (stage != _Py_FRAME_CLEAR_DONE) {
         _PyFrame_FinishClearExceptCode(frame, stage, &roots);
@@ -337,7 +341,7 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result)
 }
 
 PyValue
-_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
+_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result, uint8_t reason)
 {
     int stage;
     Py_BEGIN_CRITICAL_SECTION(gen);
@@ -346,7 +350,7 @@ _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
     if (stage != _Py_FRAME_CLEAR_DONE ||
         _PyFrame_ObjectMayReenter(gen->gi_exc_state.exc_value))
     {
-        return clear_generator_slow(gen, stage, result);
+        return clear_generator_slow(gen, stage, result, reason);
     }
     _PyErr_ClearExcState(&gen->gi_exc_state);
     return result;

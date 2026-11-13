@@ -4473,9 +4473,100 @@ get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ids;
 }
 
+/* Observe every node, including prefix-only and disarmed provider records.
+ * Code and frame geometry may already be gone; do not rerun a shadow check. */
+static PyObject *
+get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *states = PyList_New(0);
+    if (states == NULL) {
+        return NULL;
+    }
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        PyObject *state = Py_BuildValue("(iiiO)", roots->kind,
+                                       roots->retire_reason, roots->shadow_status,
+                                       roots->frame != NULL ? Py_True : Py_False);
+        if (state == NULL) {
+            Py_DECREF(states);
+            return NULL;
+        }
+        int status = PyList_Append(states, state);
+        Py_DECREF(state);
+        if (status < 0) {
+            Py_DECREF(states);
+            return NULL;
+        }
+    }
+    return states;
+}
+
+/* Probe the cold query with initialized control homes, never executable
+ * malformed code. The argument pins the borrowed code in this unpublished frame. */
+static PyObject *
+check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *code_object;
+    int site, reason, dirty_home = -1, unaligned = 0;
+    static char *keywords[] = {
+        "code", "site", "reason", "dirty_home", "unaligned", NULL,
+    };
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|ip:check_ir_retirement",
+                                    keywords, &code_object, &site, &reason,
+                                    &dirty_home, &unaligned))
+    {
+        return NULL;
+    }
+    if (!PyCode_Check(code_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    if (site < 0 || site > Py_SIZE(code) ||
+        reason < _PyIR_RETIRE_NONE || reason > _PyIR_RETIRE_STAGED_FAILURE ||
+        (dirty_home != -1 &&
+         (dirty_home < code->co_nlocalsplus || dirty_home >= nslots)))
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid retirement control probe");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    if (homes == NULL) {
+        return PyErr_NoMemory();
+    }
+    for (int i = 0; i < nslots; i++) {
+        homes[i] = PyValue_NULL;
+    }
+    if (dirty_home >= 0) {
+        homes[dirty_home] = PyValue_FromInlineInt(17);
+    }
+    uintptr_t pc = (uintptr_t)exec->words + (size_t)site * sizeof(*exec->words)
+                   + unaligned;
+    _PyInterpreterFrame frame = {
+        .f_executable = code,
+        .base = homes,
+        .ir_words = exec->words,
+        .instr_ptr = (_PyInstr *)pc,
+        .owner = FRAME_OWNED_BY_THREAD,
+    };
+    uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason);
+    PyMem_Free(homes);
+    return PyLong_FromLong(status);
+}
+
 static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
+    {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
+    {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
+     METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,

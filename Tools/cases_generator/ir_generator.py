@@ -5311,6 +5311,42 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
 
+    if inst.name == "RESUME" and scalar_shape(0, 0):
+        # These audited helper contracts may poll/instrument and change
+        # control flow; ordinary completion writes no scratch. Require the
+        # complete bodies, not a token blacklist that can miss pointer stores.
+        # Callback/error phases remain uncovered.
+        if [part.name for part in parts] != [
+                "_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]:
+            return unknown
+        instrument = """{
+            #ifdef Py_GIL_DISABLED
+            int check_instrumentation = 1;
+            #else
+            int check_instrumentation = (tstate->tracing == 0);
+            #endif
+            if (check_instrumentation) {
+                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
+                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
+                if (code_version != global_version) {
+                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
+                    if (err) { ERROR_NO_POP(); }
+                    next_instr = this_instr;
+                    DISPATCH();
+                }
+            }
+        }"""
+        periodic = """{
+            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                int err = check_periodics(tstate);
+                ERROR_IF(err != 0);
+            }
+        }"""
+        if (any(part.stack.inputs or part.stack.outputs for part in parts)
+                or not bodies_match(instrument, periodic)):
+            return unknown
+        return "_PyIR_TRANSFER_PRESERVE"
+
     scalar = {
         "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",
         "LOAD_CONST_INLINE_INT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineInt(value)); }",

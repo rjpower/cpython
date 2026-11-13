@@ -3939,6 +3939,34 @@ static PyGetSetDef frame_getsetlist[] = {
     {0}
 };
 
+static Py_NO_INLINE void
+frame_dealloc_owned(PyFrameObject *f, _PyInterpreterFrame *frame,
+                    PyObject **observers, size_t nobservers)
+{
+    assert(frame->frame_obj == NULL);
+    PyThreadState *tstate = _PyThreadState_GET();
+    int nslots = _PyFrame_NumSlots(frame);
+    _PyTransitionRoots roots;
+    _PyFrame_InitClearRoots(frame, nslots, PyValue_NULL, &roots);
+    roots.retire_reason = _PyIR_RETIRE_HEAP_CLEAR;
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+
+    FT_CLEAR_WEAKREFS((PyObject *)f, f->f_weakreflist);
+    roots.header_mask &= ~_Py_TRANSITION_FUNCTION;
+    Py_CLEAR(frame->f_funcobj);
+    roots.header_mask &= ~_Py_TRANSITION_LOCALS;
+    Py_CLEAR(frame->f_locals);
+    _PyFrame_FinishClearExceptCode(frame, nslots, &roots);
+    for (size_t i = 0; i < nobservers; i++) {
+        Py_CLEAR(observers[i]);
+    }
+    /* Code also owns constants with finalizers. Keep its pin through every
+     * home/metadata close, then remove authority before its final close. */
+    roots.header_mask &= ~_Py_TRANSITION_CODE;
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+}
+
 static void
 frame_dealloc(PyObject *op)
 {
@@ -3949,7 +3977,18 @@ frame_dealloc(PyObject *op)
         _PyObject_GC_UNTRACK(f);
     }
 
-    FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
+    /* This refcount-zero object has no Python observer that can mutate its
+     * bindings. Move metadata owners to actual native workspace before any
+     * callback; the untracked object's fields are not conservative roots. */
+    PyObject *observers[] = {
+        (PyObject *)f->f_back, f->f_trace, f->f_extra_locals,
+        f->f_locals_cache, f->f_overwritten_fast_locals,
+    };
+    f->f_back = NULL;
+    f->f_trace = NULL;
+    f->f_extra_locals = NULL;
+    f->f_locals_cache = NULL;
+    f->f_overwritten_fast_locals = NULL;
 
     /* GH-106092: If f->f_frame was on the stack and we reached the maximum
      * nesting depth for deallocations, the trashcan may have delayed this
@@ -3959,22 +3998,14 @@ frame_dealloc(PyObject *op)
 
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
-        int nslots = _PyFrame_NumSlots(frame);
-        Py_CLEAR(frame->f_executable);
-        Py_CLEAR(frame->f_funcobj);
-        Py_CLEAR(frame->f_locals);
-        PyValue *locals = _PyFrame_GetLocalsArray(frame);
-        PyValue *sp = locals + nslots;
-        while (sp > locals) {
-            sp--;
-            PyValue_CLEAR(*sp);
+        frame_dealloc_owned(f, frame, observers, Py_ARRAY_LENGTH(observers));
+    }
+    else {
+        FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
+        for (size_t i = 0; i < Py_ARRAY_LENGTH(observers); i++) {
+            Py_CLEAR(observers[i]);
         }
     }
-    Py_CLEAR(f->f_back);
-    Py_CLEAR(f->f_trace);
-    Py_CLEAR(f->f_extra_locals);
-    Py_CLEAR(f->f_locals_cache);
-    Py_CLEAR(f->f_overwritten_fast_locals);
     PyObject_GC_Del(f);
 }
 

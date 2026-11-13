@@ -1762,12 +1762,12 @@ class TestIRCases(unittest.TestCase):
     """
         output = self.handler(self.ir_output(input), "OP")
         self.assertIn("_PyValuePair ir_rest = value_operation_restore2(tstate, "
-                      "frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));\n"
+                      "frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word), 0);\n"
                       "                    held_left = ir_rest.first;\n"
                       "                    held_right = ir_rest.second;", output)
         self.assertIn("(void)value_operation_finish(tstate, frame, this_instr, ", output)
         self.assertIn("pending = value_reader_complete(tstate, frame, this_instr, "
-                      "NULL, IR_A(ir_word), pending, held_right, held_left);\n"
+                      "NULL, IR_A(ir_word), pending, held_right, held_left, 0);\n"
                       "            if (PyValue_IsNull(pending)) {", output)
         self.assertNotIn("operation", output.replace("value_operation", ""))
         # The record form is gone
@@ -2945,6 +2945,7 @@ class TestIRCases(unittest.TestCase):
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
+                ".owner_program = 0, .owner_events = 0, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -2966,6 +2967,7 @@ class TestIRCases(unittest.TestCase):
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
+            ".owner_program = 0, .owner_events = 0, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -3003,6 +3005,65 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_binary_events_follow_actual_owner_commits(self):
+        source = "\ninst(OP, (left, right -- result)) { IR_BINARY_READER(left, right, result); }\n"
+        analysis = self.analyze(source)
+        formats = ir_generator.compute_formats(analysis)
+        contract = ir_generator.handler_contracts(analysis, formats)["OP"]
+        events = contract.ownership_events
+        self.assertEqual([(e.kind.removeprefix("_PyIR_OWNER_"), e.src)
+                          for e in events], [
+            ("READ", 0), ("TAKE", 0), ("READ", 1), ("TAKE", 1),
+            ("PHASE", 5), ("ERROR_BRANCH", 0), ("FRESH", 0),
+            ("PHASE", 6), ("NORMAL_EXIT", 0), ("RESTORE", 0),
+            ("RESTORE", 1), ("PHASE", 7), ("ERROR_EXIT", 0)])
+        self.assertEqual(events[5].dst, 9)
+        self.assertEqual(formats["OP"].borrow_mask, 3)
+        output = self.handler(self.ir_output(source), "OP")
+        take_left = output.index("PyValue ir_binary_left = IR_TAKE")
+        take_right = output.index("PyValue ir_binary_right = IR_TAKE")
+        provider_phase = output.index("frame->phase_state = _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_PROVIDER")
+        provider = output.index("_PyValue_BinaryOps[oparg]")
+        revalidate = output.index("int ir_binary_phase_valid")
+        self.assertLess(take_left, take_right)
+        self.assertLess(take_right, provider_phase)
+        self.assertLess(provider_phase, provider)
+        self.assertLess(provider, revalidate)
+        self.assertIn("frame->instr_ptr == this_instr", output)
+        self.assertIn("frame->phase_state & ~_PyIR_PHASE_STATUS_MASK", output)
+        self.assertIn("ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0", output)
+        self.assertIn("ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_ERROR_RESTORE : 0", output)
+        # Opaque body edits cannot retain this positive recipe merely because
+        # the marker, name and IO are still present.
+        for body in ("opaque(frame); IR_BINARY_READER(left, right, result);",
+                     "IR_BINARY_READER(right, left, result);",
+                     "if (oparg) { IR_BINARY_READER(left, right, result); }"):
+            with self.subTest(body=body):
+                with self.assertRaisesRegex(SyntaxError, "checked binary IO contract"):
+                    self.ir_output("\ninst(OP, (left, right -- result)) { " + body + " }\n")
+
+    def test_binary_recipe_requires_complete_real_specializer(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        inst = analysis.instructions["BINARY_OP"]
+        fmt = ir_generator.compute_formats(analysis)["BINARY_OP"]
+        self.assertTrue(ir_generator.binary_reader_contract(inst, fmt))
+        prefix = [part for part in inst.parts if isinstance(part, analyzer.Uop)][0]
+        extra = self.analyze("\ninst(OP, (--)) { *slots = PyValue_NULL; }\n")
+        prefix.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+        try:
+            self.assertFalse(ir_generator.binary_reader_contract(inst, fmt))
+        finally:
+            prefix.body.body.pop()
+
+    def test_transparent_leaf_still_has_a_consumer_recipe(self):
+        source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
+        analysis = self.analyze(source)
+        fmt = ir_generator.compute_formats(analysis)
+        contract = ir_generator.handler_contracts(analysis, fmt)["IR_JUMP"]
+        self.assertEqual(contract.ownership_events, (
+            ir_generator.OwnershipEvent("_PyIR_OWNER_LEAF", src="_PyIR_TRANSFER_PRESERVE"),))
 
     def test_normal_transfer_requires_matching_io(self):
         # The same body with a different window cannot acquire COPY geometry.

@@ -278,6 +278,25 @@ enum {
     _PyIR_TRANSFER_EXIT,
 };
 
+enum {
+    _PyIR_OWNER_LEAF,
+    _PyIR_OWNER_READ,
+    _PyIR_OWNER_TAKE,
+    _PyIR_OWNER_FRESH,
+    _PyIR_OWNER_RESTORE,
+    _PyIR_OWNER_PHASE,
+    _PyIR_OWNER_ERROR_BRANCH,
+    _PyIR_OWNER_NORMAL_EXIT,
+    _PyIR_OWNER_ERROR_EXIT,
+};
+
+typedef struct {
+    uint8_t kind, flags;
+    uint16_t dst, src, extent;
+} _PyIROwnershipEvent;
+static_assert(sizeof(_PyIROwnershipEvent) == 8,
+              "ownership event encoding must remain fixed");
+
 /* A checked observer edge whose terminal provider has committed its physical
  * outputs before the callback. Generated from the provider, not inferred from
  * its event name. An absent fact cannot authorize POST inspection. */
@@ -310,6 +329,8 @@ typedef struct _PyIRFormat {
                             // OUTCOME: use the semantic per-edge contract.
                             // UNPACKS additionally transfers to its local run.
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
+    uint32_t owner_program;
+    uint16_t owner_events;
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -379,13 +400,50 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
-/* The first used shadow shape has nullable bindings and no scratch owners.
- * Zero sites is the shared default for all certified normal-return sites;
- * a nonempty plan lists only its certified canonical sites in sorted order. */
+/* One immutable semantic plan owns normal-return certificates and reached
+ * callback shapes. Sparse sites precede sorted (site, phase) rows and interned
+ * scratch ranges. Bindings retain dynamic NULL authority in every shape. */
 typedef struct {
     uint32_t nsites;
+    uint32_t nphases;
+    uint32_t nranges;
+    uint32_t flags;
     uint32_t sites[];
-} _PyIRRetirementPlan;
+} _PyIRCodePlan;
+
+#define _PyIR_PLAN_ALL_RETURNS 1u
+#define _PyIR_PHASE_RANGE_NULLABLE 1u
+
+typedef struct {
+    uint32_t site, first, count;
+    uint8_t phase;
+    uint8_t reserved[3];
+} _PyIRPhaseSite;
+
+typedef struct {
+    uint16_t begin, end;
+    uint8_t flags, reserved;
+} _PyIRPhaseRange;
+
+static inline const _PyIRPhaseSite *
+_PyIR_PlanPhases(const _PyIRCodePlan *plan)
+{
+    return (const _PyIRPhaseSite *)(plan->sites + plan->nsites);
+}
+
+static inline const _PyIRPhaseRange *
+_PyIR_PlanRanges(const _PyIRCodePlan *plan)
+{
+    return (const _PyIRPhaseRange *)(_PyIR_PlanPhases(plan) + plan->nphases);
+}
+
+static inline size_t
+_PyIR_PlanSize(const _PyIRCodePlan *plan)
+{
+    return sizeof(*plan) + (size_t)plan->nsites * sizeof(uint32_t) +
+        (size_t)plan->nphases * sizeof(_PyIRPhaseSite) +
+        (size_t)plan->nranges * sizeof(_PyIRPhaseRange);
+}
 
 enum {
     _PyIR_RETIRE_NONE,
@@ -420,7 +478,7 @@ typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction
                             // has an entry
-    const _PyIRRetirementPlan *retirement_plan;
+    const _PyIRCodePlan *semantic_plan;
     uint32_t nwords;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
@@ -453,8 +511,7 @@ PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
 
 /* Build from the admitted immutable image. NULL means no certified site;
  * allocation failure returns -1 with an exception. */
-int _PyCode_BuildRetirementPlan(PyCodeObject *co,
-                              const _PyIRRetirementPlan **plan);
+int _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan);
 
 /* No allocation or callback. Query once before retirement cursor changes;
  * this development comparison never changes NULL authority. */
@@ -465,6 +522,22 @@ PyAPI_FUNC(uint8_t) _PyIR_ShadowRetirement(struct _PyInterpreterFrame *frame,
 /* Read-only NULL-control comparison, called only in a reached frame walk.
  * The published bit alone does not grant an arbitrary reader home access. */
 PyAPI_FUNC(uint8_t) _PyIR_ShadowFramePhase(struct _PyInterpreterFrame *frame);
+
+/* NULL-shadow candidate scratch ranges are relative to nbindings. A nullable
+ * joined candidate may be canonical NULL on another path; it grants no stale
+ * cell readability without join normalization/validity at the authority switch.
+ * Bindings retain dynamic NULL authority. Borrow ranges only while independently
+ * pinning code; this active view does not survive callbacks or transitions. */
+typedef struct {
+    uint16_t nbindings, scratch_limit;
+    uint32_t nranges;
+    const _PyIRPhaseRange *ranges;
+} _PyIRHomeView;
+
+/* Returns zero before reading homes if the active publication is not covered.
+ * A successful lookup selects a shape; it does not compare runtime values. */
+PyAPI_FUNC(int) _PyIR_GetFrameHomeView(struct _PyInterpreterFrame *frame,
+                                    _PyIRHomeView *out);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

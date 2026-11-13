@@ -184,6 +184,7 @@ _PyValue_CheckFrame(_PyInterpreterFrame *frame)
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
+    frame->phase_state = 0;
 #ifdef Py_DEBUG
     _PyValue_CheckFrame(frame);
 #endif
@@ -210,6 +211,7 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 int
 _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
 {
+    frame->phase_state = 0;
     assert(_PyThreadState_GET()->current_frame != frame);
     assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
            FT_ATOMIC_LOAD_INT8_RELAXED(
@@ -247,6 +249,7 @@ void
 _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
                         _PyTransitionRoots *roots)
 {
+    frame->phase_state = 0;
     int remaining = stage > 0 ? stage : 0;
     if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
         remaining = frame->owner == FRAME_OWNED_BY_THREAD

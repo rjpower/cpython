@@ -4,6 +4,7 @@ import re
 import sys
 import textwrap
 import threading
+import types
 import unittest
 import weakref
 try:
@@ -233,6 +234,86 @@ class ClearTest(unittest.TestCase):
             self.assertIsNot(None, wr())
             self.clear_traceback_frames(exc.__traceback__)
             self.assertIs(None, wr())
+
+
+class DeallocTest(unittest.TestCase):
+    def test_code_pin_and_remaining_homes_survive_finalizers(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                observations = []
+
+                def target(lower, trigger):
+                    return sys._getframe()
+
+                class Lower:
+                    def __del__(self):
+                        observations.append(('lower', code_ref() is not None))
+
+                class NestedTrigger:
+                    def __del__(self):
+                        ids = set(internal.get_transition_root_ids())
+                        observations.append(('nested', code_id in ids,
+                                             id(target.__code__) in ids))
+                        support.gc_collect()
+
+                class Trigger:
+                    def __del__(self):
+                        ids = set(internal.get_transition_root_ids())
+                        observations.append(('home', frame_ref() is None,
+                                             function_ref() is None,
+                                             code_ref() is not None,
+                                             code_id in ids, lower_id in ids,
+                                             trace_ref() is not None))
+                        if nested:
+                            nested_frame = target(None, NestedTrigger())
+                            del nested_frame
+                        support.gc_collect()
+
+                class Trace:
+                    def __call__(self, frame, event, arg):
+                        return self
+
+                    def __del__(self):
+                        ids = set(internal.get_transition_root_ids())
+                        observations.append(('trace', code_ref() is not None,
+                                             code_id in ids,
+                                             lower_ref() is None))
+                        support.gc_collect()
+
+                def frame_gone(ref):
+                    ids = set(internal.get_transition_root_ids())
+                    observations.append(('weakref', function_ref() is not None,
+                                         code_id in ids, lower_id in ids,
+                                         trace_ref() is not None))
+                    support.gc_collect()
+
+                code = target.__code__.replace()
+                code_id = id(code)
+                code_ref = weakref.ref(code)
+                function = types.FunctionType(code, globals())
+                function_ref = weakref.ref(function)
+                lower = Lower()
+                lower_id = id(lower)
+                lower_ref = weakref.ref(lower)
+                frame = function(lower, Trigger())
+                trace = Trace()
+                trace_ref = weakref.ref(trace)
+                frame.f_trace = trace
+                frame_ref = weakref.ref(frame, frame_gone)
+                del lower, trace, function, code
+                del frame
+                expected = [('weakref', True, True, True, True),
+                            ('home', True, True, True, True, True, True)]
+                if nested:
+                    expected.append(('nested', True, True))
+                expected.extend([('lower', True), ('trace', True, True, True)])
+                self.assertEqual(observations, expected)
+                self.assertIsNone(code_ref())
+                self.assertIsNone(function_ref())
+                self.assertIsNone(lower_ref())
+                self.assertIsNone(trace_ref())
+                self.assertEqual(internal.get_transition_root_ids(), [])
 
 
 class FrameAttrsTest(unittest.TestCase):

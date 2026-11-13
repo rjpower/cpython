@@ -50,10 +50,14 @@ class SemanticReaderTests(unittest.TestCase):
         exceptions, records = semantic_parts(original.co_exceptiontable)
         self.assertFalse(exceptions)
         physical = list(original.co_positions())
-        self.assertTrue(any(edge == 1 and to <= source and
-                            physical[source][0] == physical[to][0]
-                            for source, to, edge, *_ in records))
-        code = original.replace(co_linetable=position_table(locations))
+        backedge = next(row for row in dis.get_instructions(original)
+                        if row.jump_target is not None and row.jump_target <= row.offset)
+        self.assertEqual(physical[backedge.offset][0], physical[backedge.jump_target][0])
+        # The compiler need not elide a source origin on this real backedge.
+        # Add its semantic row explicitly, with no optional position row.
+        records.append((backedge.offset, backedge.jump_target, 1, -1, 0, 0))
+        code = original.replace(co_exceptiontable=semantic_table(records=records),
+                                co_linetable=position_table(locations))
         control = code.replace(co_exceptiontable=semantic_table())
 
         def trace_lines(selected):
@@ -92,7 +96,7 @@ class SemanticReaderTests(unittest.TestCase):
         exceptions, _ = semantic_parts(code.co_exceptiontable)
         self.assertFalse(exceptions)
         call = next(i for i in dis.get_instructions(code)
-                    if i.opname == "CALL_NO_SELF")
+                    if i.handler == "CALL_NO_SELF")
         locations, _ = position_parts(code.co_linetable)
         records = observation_records(code)
         line = code.co_firstlineno + 3

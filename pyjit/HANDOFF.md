@@ -83,7 +83,12 @@ This is mixed, with four cases losing both54 pairs. No new PMU or promotion.
 
 ## Bitmap checkpoint
 
-B0c47a4616ef and both builds complete117/79. All27 ownership/provider/writer
+Current B0af2ff5b66a and both builds complete117/79. It adds the reviewed
+PRE/ERROR cohort732c7cbe2b7, four literal fixture ports and generated products.
+Bootstrap5+27,13 ownership/error cases and617 runtime cases per role pass.
+Retained ELF E/bitmap-error-scope-native, SHA256
+e36785fe8bb3f238adbfbccd36996c6670e8f92853555770f3f3fc0fa0895ba6.
+Preceding B0c47a4616ef also completes117/79. All27 ownership/provider/writer
 cases and510 cases across eight lifecycle/runtime modules pass per role.
 The one non-NULL presence plane includes inline, control, immortal and counted
 values; zero never permits loading a stale word. HomeView has typed range and
@@ -95,17 +100,17 @@ conservative arena enumeration is removed only in this rival.
 
 Old execution frontier, copy-gap and Take NULL stores remain in the measured
 checkpoint. Its two-pair54 screen loses every pair: hot order
-1.239062/1.227331/1.340243/1.173746/1.261055/1.684383. This prices presence plus
-old execution work, not the complete rival. Evidence:
-E/bitmap-presence-gc-integration-*, E/bitmap-presence-drain-*.
+1.252746/1.203232/1.291231/1.140563/1.239636/1.723286 at0af2. This prices presence
+plus old execution work, not the complete rival. Evidence:
+E/bitmap-error-scope-*, E/bitmap-presence-gc-integration-*, E/bitmap-presence-drain-*.
 
 Frames develops complete GIL stale-scratch execution policy in P, merged from
 exact B0c47. Shared input-only required/nullable roles and positive array reads
 must close every C/generated/observer/remote consumer before fill removal.
 Bindings stay physically initialized. Under Py_GIL_DISABLED the existing
 physical-NULL policy remains; concurrent stale storage is a separate gate.
-GC composes current ERROR scope into an isolated branch in G, coordinating
-shared files with frames. Root alone mutates B and generates/builds it.
+GC completed ERROR/presence composition in G and now peers P/IR; it owns
+a disjoint matching runtime-query hunk in W by explicit IR coordination. Root alone mutates B and generates/builds it.
 
 ## Remaining work and diagnostic limits
 

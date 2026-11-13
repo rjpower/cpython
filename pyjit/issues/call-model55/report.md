@@ -44,6 +44,38 @@ from747 to780, and instrumented LINE from311 to356; the outlined processor is
 Evidence: `E/observer-pre-*`, `E/error-scope-*`. Current release ELF SHA256
 `1c8cb55439680d6f8c713ed07d4b6ccab8366d75cbdff99eb6915291dfcb0fd4`.
 
+## Bitmap error integration
+
+Presence source/native `0af2ff5b66a` composes the same PRE and ERROR source
+contracts as the static checkpoint. Both117/79 builds, bootstrap5+27 admission,
+13 ownership/error witnesses and617 cases in nine runtime modules pass per
+role. The new reverse iterator reloads actual presence after callbacks and is
+checked at all64 physical alignments; handler-entry publication updates the
+live selection. ERROR roots use selected presence authority2, never a renamed
+static full-N control view. These focused and runtime groups overlap.
+
+The two-pair selected54 screen completes without failures and with stable
+identities. Lower is better:
+
+| Workload | Presence/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.252746 | 1.230115–1.275793 |
+| Generators | 1.203232 | 1.199707–1.206767 |
+| Coroutines | 1.291231 | 1.282303–1.300222 |
+| Richards | 1.140563 | 1.139297–1.141831 |
+| Comprehensions | 1.239636 | 1.236021–1.243262 |
+| Logging silent | 1.723286 | 1.611871–1.842402 |
+
+Every pair loses. This remains presence plus the old execution NULL policy,
+so it does not decide the complete stale-scratch alternative. That separate
+packet ports actual required/nullable reads and removes GIL scratch frontier,
+copy-gap and known-detach NULL work. Its source review catches nullable drain
+release, special-method array offset and current-value provenance mistakes;
+corrections are required before generation/native admission. No new direct
+upstream or PMU campaign is claimed for this B checkpoint. Golden remains54.
+Evidence: `E/bitmap-error-scope-*`; retained release ELF SHA256
+`e36785fe8bb3f238adbfbccd36996c6670e8f92853555770f3f3fc0fa0895ba6`.
+
 ## Latest measured checkpoint: cold error processor
 
 Two balanced-pair campaigns measure clean source/native73ea72ad45d against

@@ -9,7 +9,7 @@ and [report](issues/call-model55/report.md) own the active effort. The reviewed
 its lifecycle and qualification gates pass.
 
 Current static source/native `73ea72ad45d` and presence composition
-`0c47a4616ef` build all 117 modules, 79 shared, in release/debug. The static
+`0af2ff5b66a` build all 117 modules, 79 shared, in release/debug. The static
 branch now includes the outlined error processor and direct ingress with each
 handler's actual bridge workspace. Bootstrap5+27 admission passes. Nine runtime
 modules pass in each role; the ten-module group runs1,093 cases and retains the
@@ -37,7 +37,11 @@ M4 has not switched. The bitmap ownership composition has one non-NULL presence
 plane, shared-arena partitioning, external pending-prefix ownership, rebinding
 on heap capture and sparse drains. Its earlier presence/provider checks pass
 17 cases per role. The checked CALL drain composition passes27 ownership cases
-and510 cases in eight runtime modules per role. Execution still keeps
+and510 cases in eight runtime modules per role. The matching PRE/ERROR
+composition0af2 passes13 ownership/error cases and617 runtime cases per role;
+its54 screen loses every pair (DeltaBlue1.252746, generators1.203232,
+coroutines1.291231, Richards1.140563, comprehensions1.239636, logging1.723286).
+Execution still keeps
 initialized NULL storage: its separate read-policy implementation must cover
 required values, nullable/control inputs, arrays, observation and remote access
 before removing those fills. See the

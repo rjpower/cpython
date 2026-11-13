@@ -1427,6 +1427,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         # may read in place unless it keeps or passes them on
         assert len(members) == 1, group
         m_inputs, m_outputs = io[head.name]
+        if n_inputs > len(m_inputs) or any(item.is_array()
+                                          for item in m_inputs[-n_inputs:]):
+            raise analysis_error("window input fields require trailing scalar inputs",
+                                 head.where)
         first = len(m_inputs) - n_inputs
         uses = classify_inputs(head, len(m_inputs))
         passthrough = {e.external for e in m_outputs if e.external >= 0}
@@ -3092,7 +3096,7 @@ class IREmitter(Emitter):
         storage.push_outputs()
         fmt = self.format_of(inst)
         mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
-        emit_final_outputs(inst, fmt, mode, stack, self.out)
+        self.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, self.out))
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         edge, _ = contracts[tkn]
@@ -4668,21 +4672,89 @@ def frame_home_footprint(part: Uop) -> bool:
                for expected_inputs, expected_outputs, body in FRAME_HOME_FOOTPRINTS)
 
 
+# These events permit observer callbacks and dynamic named-local writes, but
+# not a scratch redirect. Normal completion still reaches the emitted final
+# vacate; an instrumentation error follows the existing error route instead.
+NORMAL_FRAME_OBSERVERS = {
+    "_Py_call_instrumentation_2args": {
+        "PY_MONITORING_EVENT_CALL", "PY_MONITORING_EVENT_C_RETURN"},
+    "_Py_call_instrumentation_exc2": {"PY_MONITORING_EVENT_C_RAISE"},
+}
+
+
+def normal_observer_frame_footprint(part: Uop) -> bool:
+    """Explain every frame use by an audited observer-call argument."""
+    source = canonical_body_tokens(part)
+    if not source or any(text.lstrip().startswith("#") for text in source):
+        return False
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
+    if any(item.name in reserved for item in
+           (*part.stack.inputs, *part.stack.outputs, *part.caches)):
+        return False
+    tokens = [t for t in part.body.tokens() if t.kind != "COMMENT"]
+    covered: set[int] = set()
+    for at, token in enumerate(tokens):
+        if token.text not in NORMAL_FRAME_OBSERVERS:
+            continue
+        if (at + 1 >= len(tokens) or tokens[at + 1].text != "("
+                or at > 0 and tokens[at - 1].text in {".", "->"}):
+            return False
+        args: list[list[int]] = [[]]
+        depth = 0
+        for end in range(at + 2, len(tokens)):
+            text = tokens[end].text
+            if text == ")" and depth == 0:
+                break
+            if text == "," and depth == 0:
+                args.append([])
+                continue
+            if text in {"(", "[", "{"}:
+                depth += 1
+            elif text in {")", "]", "}"}:
+                depth -= 1
+            args[-1].append(end)
+        else:
+            return False
+        prefix = [[tokens[i].text for i in arg] for arg in args[:4]]
+        if (len(args) != 6 or prefix[0] != ["tstate"]
+                or len(prefix[1]) != 1
+                or prefix[1][0] not in NORMAL_FRAME_OBSERVERS[token.text]
+                or prefix[2:] != [["frame"], ["this_instr"]]):
+            return False
+        covered.add(args[2][0])
+    return all(token.text != "frame" or at in covered
+               for at, token in enumerate(tokens))
+
+
+def normal_frame_footprint(part: Uop) -> bool:
+    tokens = list(part.body.tokens())
+    if any(t.text in FRAME_HOME_HELPERS or
+           t.text.startswith(("_PyFrame_", "_PyHomeBitmap_")) for t in tokens):
+        return frame_home_footprint(part)
+    if any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS for t in tokens):
+        return normal_observer_frame_footprint(part)
+    return True
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS, *FRAME_HOME_HELPERS}
+    macro_names = {*reserved, "_PyFrame_", "_PyHomeBitmap_"}
     return (not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
+            and not any(item.name in reserved for part in parts for item in
+                        (*part.stack.inputs, *part.stack.outputs, *part.caches))
+            and not any(t.kind.startswith("CMACRO") and
+                        any(name in t.text for name in macro_names)
+                        for t in uop_token_list(inst))
             and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
                         for t in uop_token_list(inst))
-            and all(not any(t.text == "frame" or t.text in FRAME_HOME_HELPERS
-                            or t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
-                            for t in part.body.tokens())
-                    or frame_home_footprint(part)
-                    for part in inst.parts if isinstance(part, Uop)))
+            and all(normal_frame_footprint(part) for part in parts))
 
 
-def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
+def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | None:
     """The physical final publication shared by ordinary and observed paths."""
     stack.final = True
     stack.flush(out)
@@ -4696,6 +4768,8 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
             expression = f"{macro}({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
         out.emit(f"{expression};\n")
+        return fmt.dst_offset
+    return None
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
@@ -5273,6 +5347,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.normal_result_offsets = set()
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
@@ -5446,7 +5521,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
-        emit_final_outputs(inst, fmt, mode, stack, out)
+        emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
         if call_window:
             emitter.call_normal_drained = True
         # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
@@ -5496,8 +5571,11 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_UNPACK_LOCAL_DRAIN"))
         elif emitter.normal_inputs_cleared:
+            offsets = emitter.normal_result_offsets
+            result_offset = next(iter(offsets)) if len(offsets) == 1 else None
             emitter.ownership_events.append(OwnershipEvent(
-                "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
+                "_PyIR_OWNER_NORMAL_CLEAR_INPUTS",
+                flags=int(result_offset is not None), src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         emitter.ownership_events.extend(sorted(emitter.normal_completions,
                                               key=lambda event: (event.dst, event.src)))
@@ -5799,6 +5877,15 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            moved_results = [programs[name] for name in members
+                             if len(programs.get(name, ())) == 1
+                             and programs[name][0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"
+                             and programs[name][0].flags]
+            if moved_results and not all(programs.get(name) == moved_results[0]
+                                         for name in members):
+                for name in members:
+                    if programs.get(name) in moved_results:
+                        programs[name] = (OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),)
             unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
             if not all(programs.get(name) == unpack_drain for name in members):
                 for name in members:

@@ -1782,6 +1782,20 @@ admitted_word_arg(_PyIRWord word, const uint32_t *table, int nfb)
     return (int)_PyIR_FBINIT_ARG(table[ordinal]);
 }
 
+static int
+normal_window_result_offset(const _PyIRFormat *fmt)
+{
+    if (fmt->owner_events == 1) {
+        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+        if (event->kind == _PyIR_OWNER_NORMAL_CLEAR_INPUTS &&
+            (event->flags & _PyIR_NORMAL_WINDOW_RESULT))
+        {
+            return event->src;
+        }
+    }
+    return -1;
+}
+
 /* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -1883,6 +1897,14 @@ check_words(struct _PyCodeConstructor *con)
             goto error;
         }
         int outputs = writes - through;
+        int result_offset = normal_window_result_offset(fmt);
+        if (result_offset >= 0 && dst >= nl && dst != IR_NO_DST &&
+            dst != base + result_offset)
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid window result destination", i);
+            goto error;
+        }
         if ((fmt->transfer_kind == _PyIR_TRANSFER_COPY && arg < 1) ||
             (fmt->transfer_kind == _PyIR_TRANSFER_SWAP && arg < 2))
         {
@@ -2585,6 +2607,28 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                     if (_PyIR_ConsumesNormalInput(word, arg, home) &&
                         !_PyIR_DefinesHome(word, arg, home))
                     {
+                        uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
+                        state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                    }
+                }
+                int moved_offset = normal_window_result_offset(fmt);
+                if (moved_offset >= 0) {
+                    int dst = -1, base = -1;
+                    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                    for (int f = 0; f < 4; f++) {
+                        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                            dst = (int)fields[f];
+                        }
+                        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                            base = (int)fields[f];
+                        }
+                    }
+                    assert(dst >= 0 && base >= nl);
+                    if (dst < nl ||
+                        (dst == IR_NO_DST && (fmt->flags & _PyIR_DISCARDS)))
+                    {
+                        int home = base + moved_offset;
+                        assert(home >= nl && home < nl + image->scratch);
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
                         state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
                     }

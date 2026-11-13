@@ -99,6 +99,20 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         if (roots->result_present && PyValue_IsObject(roots->result)) {
             Py_VISIT(PyValue_AsKnownObjectBorrow(roots->result));
         }
+        _PyTransitionPrefix *prefix = roots->prefix;
+        if (prefix != NULL) {
+            assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
+            assert(prefix->end <= prefix->capacity);
+            for (int i = prefix->begin; i < prefix->end; i++) {
+                PyValue value = prefix->base[i];
+                if (!PyValue_IsTaggedIndex(value)) {
+                    _PyValue_RecheckHome(value);
+                }
+                if (PyValue_IsObject(value)) {
+                    Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+                }
+            }
+        }
     }
     return 0;
 }

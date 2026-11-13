@@ -20,6 +20,15 @@ enum {
     _Py_TRANSITION_EXCEPTION = 16,
 };
 
+/* The adapter installs each value before advancing end, and advances begin
+ * before closing or transferring it. Entries outside [begin, end) are unread. */
+typedef struct {
+    PyValue *base;
+    int capacity;
+    int begin;
+    int end;
+} _PyTransitionPrefix;
+
 /* External owners during an outlined, potentially reentrant retirement.
  * NULL homes remain authoritative: [0, remaining) is an initialized prefix.
  * A producer advances remaining or removes a header bit before closing that
@@ -37,6 +46,7 @@ typedef struct _PyTransitionRoots {
     unsigned char header_mask;
     unsigned char result_present;
     PyValue result;
+    _PyTransitionPrefix *prefix;
 } _PyTransitionRoots;
 
 static inline void
@@ -50,6 +60,12 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
            roots->frame->owner == FRAME_OWNED_BY_GENERATOR);
     assert(roots->remaining == 0 ||
            (roots->header_mask & _Py_TRANSITION_CODE));
+    if (roots->prefix != NULL) {
+        assert(roots->prefix->base != NULL);
+        assert(roots->prefix->begin >= 0);
+        assert(roots->prefix->begin <= roots->prefix->end);
+        assert(roots->prefix->end <= roots->prefix->capacity);
+    }
     roots->previous = ((_PyThreadStateImpl *)tstate)->transition_roots;
     ((_PyThreadStateImpl *)tstate)->transition_roots = roots;
 }
@@ -62,6 +78,8 @@ _PyThreadState_PopTransitionRoots(PyThreadState *tstate,
     assert(roots->remaining == 0);
     assert(roots->header_mask == 0);
     assert(!roots->result_present);
+    assert(roots->prefix == NULL ||
+           roots->prefix->begin == roots->prefix->end);
     ((_PyThreadStateImpl *)tstate)->transition_roots = roots->previous;
 }
 

@@ -1831,12 +1831,24 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
             (status << _PyIR_PHASE_STATUS_SHIFT));
         assert(status != _PyIR_SHADOW_MISMATCH);
     }
-    PyValue *ref = _PyFrame_GetLocalsArray(frame);
-    PyValue *end = ref + _PyFrame_NumSlots(frame);
-    /* all slots, of which NULL ones are dead */
-    for (; ref < end; ref++) {
-        _Py_VISIT_VALUE(*ref);
+    _PyIRHomeView view;
+    int selected = _PyInterpreterState_GET()->stoptheworld.world_stopped &&
+        frame->phase_state == _PyIR_PHASE_CREATED &&
+        _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    uint32_t cursor = 0;
+    int begin = 0, limit = _PyFrame_NumSlots(frame);
+    if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
+        return 0;
     }
+    /* Unstopped traversals and other states retain NULL-control reads. */
+    do {
+        PyValue *ref = _PyFrame_GetLocalsArray(frame) + begin;
+        PyValue *end = _PyFrame_GetLocalsArray(frame) + limit;
+        for (; ref < end; ref++) {
+            _Py_VISIT_VALUE(*ref);
+        }
+    } while (selected &&
+             _PyFrame_NextHomeRange(&view, &cursor, &begin, &limit));
     return 0;
 }
 

@@ -316,6 +316,157 @@ class DeallocTest(unittest.TestCase):
                 self.assertEqual(internal.get_transition_root_ids(), [])
 
 
+class CopyHomeViewTest(unittest.TestCase):
+    def test_created_home_view_requires_marker_and_tracks_current_locals(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            yield value
+
+        payload = object()
+        gen = body(None)
+        frame = gen.gi_frame
+        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
+        self.assertEqual((authority, limit, nranges), (2, 0, 0))
+        self.assertGreaterEqual(bindings, 1)
+        internal.check_created_home_view_invalidation(frame)
+        frame.f_locals['value'] = payload
+        support.gc_collect()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
+        self.assertIs(next(gen), payload)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+        gen.close()
+        frame.clear()
+
+    def test_empty_created_copy_uses_certified_kind_and_skips_scratch(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def gen(value):
+            yield value
+
+        async def coro(value):
+            return value
+
+        async def asyncgen(value):
+            yield value
+
+        for function in (gen, coro, asyncgen):
+            with self.subTest(function=function.__name__):
+                self.assertTrue(internal.has_empty_created_copy_plan(function.__code__))
+                for payload in (object(), 17, 2.5):
+                    internal.check_created_frame_copy(function.__code__, payload)
+
+    def test_empty_created_copy_preserves_cells_and_free_variables(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        captured = object()
+
+        def body(value):
+            def read():
+                return value, captured
+            yield read
+
+        self.assertTrue(internal.has_empty_created_copy_plan(body.__code__))
+        payload = object()
+        gen = body(payload)
+        try:
+            read = next(gen)
+            self.assertEqual(read(), (payload, captured))
+        finally:
+            gen.close()
+
+    def test_genexpr_iterator_is_not_empty_created_scratch(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        payload = object()
+        gen = (value for value in (payload,))
+        self.assertFalse(internal.has_empty_created_copy_plan(gen.gi_code))
+        self.assertIs(next(gen), payload)
+        with self.assertRaises(StopIteration):
+            next(gen)
+
+    def test_zero_binding_escape_keeps_empty_control(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body():
+            return sys._getframe()
+
+        frame = body()
+        self.assertEqual(internal.get_frame_home_view(frame), (3, 0, 0, 0))
+        frame.clear()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+
+    def test_selected_copy_skips_inactive_words(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            return value, object(), object()
+
+        for payload in (object(), 17, 2.5):
+            with self.subTest(payload=type(payload)):
+                internal.check_frame_selected_copy(body.__code__, payload)
+
+    def test_escaped_frame_keeps_explicit_control(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            scalar = 17
+            return sys._getframe()
+
+        def replacement(value):
+            return value
+
+        payload = object()
+        code = body.__code__
+        frame = body(payload)
+        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
+        self.assertEqual((authority, limit, nranges), (3, 0, 0))
+        self.assertGreaterEqual(bindings, code.co_nlocals)
+        body.__code__ = replacement.__code__
+        self.assertIs(frame.f_code, code)
+        self.assertIs(frame.f_locals['value'], payload)
+        self.assertEqual(frame.f_locals['scalar'], 17)
+        frame.clear()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+
+    def test_created_generator_and_suspended_escape_values(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            scalar = 17
+            yield value, scalar
+
+        def replacement(value):
+            yield None
+
+        payload = object()
+        code = body.__code__
+        gen = body(payload)
+        frame = gen.gi_frame
+        self.assertIs(frame.f_locals['value'], payload)
+        body.__code__ = replacement.__code__
+        self.assertEqual(next(gen), (payload, 17))
+        gen.close()
+        self.assertIs(frame.f_code, code)
+        self.assertIs(frame.f_locals['value'], payload)
+        self.assertEqual(frame.f_locals['scalar'], 17)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        frame.clear()
+
+    @unittest.skipIf(_testcapi is None, '_testcapi required')
+    def test_public_frame_generator_keeps_capture_until_resume(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body():
+            yield 17
+
+        gen = _testcapi.frame_new_generator(body.__code__, globals(), {})
+        frame = gen.gi_frame
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        self.assertEqual(next(gen), 17)
+        gen.close()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
+        frame.clear()
+
+
 class FrameAttrsTest(unittest.TestCase):
 
     def make_frames(self):

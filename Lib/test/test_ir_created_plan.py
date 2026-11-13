@@ -37,10 +37,12 @@ class CreatedPlanTests(unittest.TestCase):
                  ("RETURN_GENERATOR", 4095, 1),
                  ("LOAD_CONST", 1), ("RETURN_VALUE", 1)]
         self.assert_plan(make_code(words, locals=("value",)), True)
-        changed = words.copy()
         # The first marker still qualifies, but the other retains a value.
-        changed[4:4] = [("LOAD_CONST", 1)]
-        changed[3] = ("IR_JUMP", 0, 0, 6)
+        # Retire that value on its own branch before joining the return path.
+        changed = [("LOAD_CONST", 1), ("POP_JUMP_IF_NONE", 1, 0, 4),
+                   ("RETURN_GENERATOR", 4095, 1), ("IR_JUMP", 0, 0, 7),
+                   ("LOAD_CONST", 2), ("RETURN_GENERATOR", 4095, 1),
+                   ("POP_TOP", 2), ("LOAD_CONST", 1), ("RETURN_VALUE", 1)]
         self.assert_plan(make_code(changed, locals=("value",)), False)
         # An unreachable physical marker must not disappear from the census.
         self.assert_plan(make_code([

@@ -4930,15 +4930,15 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     PyObject *code_object;
     int site, phase, dirty_home = -1, missing_home = -1;
-    int unaligned = 0, wrong_image = 0;
+    int unaligned = 0, wrong_image = 0, authority_only = 0;
     static char *keywords[] = {
         "code", "site", "phase", "dirty_home", "missing_home",
-        "unaligned", "wrong_image", NULL,
+        "unaligned", "wrong_image", "authority_only", NULL,
     };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iipp:check_ir_frame_phase",
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iippp:check_ir_frame_phase",
                                     keywords, &code_object, &site, &phase,
                                     &dirty_home, &missing_home, &unaligned,
-                                    &wrong_image))
+                                    &wrong_image, &authority_only))
     {
         return NULL;
     }
@@ -4978,7 +4978,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .phase_state = (uint16_t)phase,
     };
     _PyIRHomeView view;
-    int covered = _PyIR_GetFrameHomeView(&frame, &view);
+    _PyIRHomeAuthority covered = _PyIR_GetFrameHomeView(&frame, &view);
     int dirty_selected = 0, missing_required = 0;
     if (covered) {
         for (uint32_t r = 0; r < view.nranges; r++) {
@@ -5011,12 +5011,198 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         frame.ir_words = &other_image;
     }
     frame.instr_ptr = (_PyInstr *)(pc + unaligned);
-    uint8_t status = _PyIR_ShadowFramePhase(&frame);
+    int status = authority_only ? (int)_PyIR_GetFrameHomeView(&frame, &view)
+                               : _PyIR_ShadowFramePhase(&frame);
     PyMem_Free(homes);
     return PyLong_FromLong(status);
 }
 
+static PyObject *
+get_frame_home_view(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyIRHomeView view = {0};
+    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(
+        ((PyFrameObject *)arg)->f_frame, &view);
+    return Py_BuildValue("(iiii)", authority, view.nbindings,
+                         view.scratch_limit, view.nranges);
+}
+
+static PyObject *
+check_created_home_view_invalidation(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
+    _PyIRHomeView view;
+    if (frame->phase_state != _PyIR_PHASE_CREATED ||
+        _PyFrame_GetHomeView(frame, &view) != _PyIR_HOME_MUST_READABLE)
+    {
+        PyErr_SetString(PyExc_ValueError, "expected certified created frame");
+        return NULL;
+    }
+    /* No callback or home mutation occurs during this invalidation probe. */
+    frame->phase_state = 0;
+    int denied = _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_NONE;
+    frame->phase_state = _PyIR_PHASE_CREATED;
+    if (!denied) {
+        PyErr_SetString(PyExc_AssertionError, "created authority was reacquired");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* A cold protocol probe: inactive words are never exposed as Python values,
+ * executed, or closed. Only the selected home owns payload. */
+#ifndef Py_GIL_DISABLED
+static int
+count_frame_probe_owners(PyObject *object, void *arg)
+{
+    (*(int *)arg)++;
+    return 0;
+}
+#endif
+
+static PyObject *
+check_frame_copy(PyObject *args, int created)
+{
+    PyObject *code_object, *payload;
+    if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
+                          &code_object, &payload))
+    {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+    int n = _PyFrame_NumSlotsForCodeObject(code);
+    int nl = code->co_nlocalsplus;
+    if ((!created && n - nl < 2) || (created && nl == 0)) {
+        PyErr_SetString(PyExc_ValueError, "insufficient probe homes");
+        return NULL;
+    }
+    _PyCodeExec *exec = NULL;
+    int site = 0;
+    if (created) {
+        exec = _PyCode_GetExec(code);
+        if (exec == NULL) {
+            return NULL;
+        }
+        if (exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+        {
+            PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
+            return NULL;
+        }
+        while (site < exec->nwords &&
+               _PyIR_BaseOpcode(IR_HANDLER(exec->words[site])) != RETURN_GENERATOR)
+        {
+            site++;
+        }
+        assert(site < exec->nwords);
+    }
+    size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
+        (size_t)n * sizeof(PyValue);
+    _PyInterpreterFrame *src = PyMem_Calloc(1, size);
+    /* Created traversal derives its container from the embedded frame. This
+     * private, untracked storage never executes or invokes a gen destructor. */
+    void *dst_storage = PyMem_Calloc(1, created
+        ? offsetof(PyGenObject, gi_iframe) + size : size);
+    _PyInterpreterFrame *dst = dst_storage == NULL ? NULL : created
+        ? &((PyGenObject *)dst_storage)->gi_iframe : dst_storage;
+    if (src == NULL || dst == NULL) {
+        PyMem_Free(src);
+        PyMem_Free(dst_storage);
+        return PyErr_NoMemory();
+    }
+    src->f_executable = (PyCodeObject *)Py_NewRef(code);
+    src->base = src->owned_slots;
+    const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
+    for (int i = nl; i < n; i++) {
+        src->base[i].bits = poison;
+    }
+    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
+    int selected_home = created ? 0 : nl + 1;
+    src->base[selected_home] = _PyValue_Publish(&value);
+    const _PyIRPhaseRange selected = {.begin = 1, .end = 2};
+    const _PyIRHomeView view = {
+        .nbindings = (uint16_t)nl, .scratch_limit = 2,
+        .nranges = 1, .ranges = &selected,
+    };
+    if (created) {
+        src->ir_words = exec->words;
+        src->instr_ptr = exec->words + site;
+        _PyFrame_CopyCreatedGenerator(src, dst);
+    }
+    else {
+        _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
+    }
+    int correct = dst->base[selected_home].bits == value.bits &&
+        PyValue_IsNull(src->base[selected_home]);
+    for (int i = nl; i < n; i++) {
+        if (i != selected_home) {
+            correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
+        }
+    }
+#ifndef Py_GIL_DISABLED
+    if (created) {
+        ((PyGenObject *)dst_storage)->gi_frame_state = FRAME_CREATED;
+        dst->owner = FRAME_OWNED_BY_GENERATOR;
+        for (int i = nl; i < n; i++) {
+            dst->base[i].bits = poison;
+        }
+        int visited = 0;
+        int status = _PyGC_VisitFrameStack(dst, count_frame_probe_owners, &visited);
+        correct &= status == 0 && visited == PyValue_IsObject(value);
+    }
+#endif
+    PyValue_XCLOSE(dst->base[selected_home]);
+    Py_DECREF(dst->f_executable);
+    PyMem_Free(src);
+    PyMem_Free(dst_storage);
+    if (!correct) {
+        PyErr_SetString(PyExc_AssertionError, "copy touched an inactive home");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+check_frame_selected_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 0);
+}
+
+static PyObject *
+check_created_frame_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 1);
+}
+
+static PyObject *
+has_empty_created_copy_plan(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected code");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec((PyCodeObject *)arg);
+    if (exec == NULL) {
+        return NULL;
+    }
+    return PyBool_FromLong(exec->semantic_plan != NULL &&
+        (exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY));
+}
+
 static PyMethodDef module_functions[] = {
+    {"check_created_home_view_invalidation", check_created_home_view_invalidation, METH_O},
+    {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
+    {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
+    {"get_frame_home_view", get_frame_home_view, METH_O},
+    {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},

@@ -74,6 +74,7 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         if (frame == NULL) {
             /* A provider scope outlives the frame consumed by its evaluator. */
             assert(roots->kind == _Py_TRANSITION_KIND_STAGED);
+            assert(!roots->caller_staged);
             assert(roots->remaining == 0 && roots->header_mask == 0);
             assert(!roots->result_present && roots->prefix == NULL);
             continue;

@@ -55,6 +55,8 @@ typedef struct _PyTransitionRoots {
     unsigned char header_mask;
     unsigned char result_present:1;
     unsigned char kind:2;
+    /* Only the owning constructor scope may consume this shim node. */
+    unsigned char caller_staged:1;
     /* Producer outcome, retained after code detach; observers never recheck. */
     unsigned char retire_reason;
     unsigned char shadow_status;
@@ -78,6 +80,8 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
     assert(roots->frame != NULL);
     assert(roots->remaining >= 0);
     assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
+    assert(!roots->caller_staged ||
+           roots->kind == _Py_TRANSITION_KIND_STAGED);
     assert((roots->header_mask & ~31) == 0);
     assert(roots->retire_reason <= _PyIR_RETIRE_STAGED_FAILURE);
     assert(roots->shadow_status <= _PyIR_SHADOW_MISMATCH);
@@ -104,6 +108,7 @@ _PyThreadState_PopTransitionRoots(PyThreadState *tstate,
     assert(((_PyThreadStateImpl *)tstate)->transition_roots == roots);
     assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
     assert(roots->frame != NULL || roots->kind == _Py_TRANSITION_KIND_STAGED);
+    assert(!roots->caller_staged);
     assert(roots->remaining == 0);
     assert(roots->header_mask == 0);
     assert(!roots->result_present);

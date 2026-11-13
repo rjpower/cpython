@@ -161,7 +161,7 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 }
 
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
- * slot that f named.  A temporary's slot holds NULL; a local's old value,
+ * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST
  * releases it. */
 static inline void
@@ -171,11 +171,16 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
-        assert(f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus
-               || PyValue_IsNull(f->base[f->return_slot]));
     }
 #endif
-    PyValue old = f->base[f->return_slot];  // a move: replaced below
+    /* Caller publication reserves a vacant scratch recipient. Its physical
+     * word is not a displaced owner; interpreter entry also receives once. */
+    PyValue old = PyValue_NULL;
+    if (f->owner != FRAME_OWNED_BY_INTERPRETER &&
+        f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus)
+    {
+        old = f->base[f->return_slot];
+    }
     f->base[f->return_slot] = v;
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);

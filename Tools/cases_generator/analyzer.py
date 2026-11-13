@@ -156,6 +156,7 @@ class StackItem:
     size: str
     peek: bool = False
     used: bool = False
+    nullable: bool = False
 
     def __str__(self) -> str:
         size = f"[{self.size}]" if self.size else ""
@@ -380,7 +381,7 @@ def override_error(
 def convert_stack_item(
     item: parser.StackEffect, replace_op_arg_1: str | None
 ) -> StackItem:
-    return StackItem(item.name, item.size)
+    return StackItem(item.name, item.size, nullable=item.nullable)
 
 def check_unused(stack: list[StackItem], input_names: dict[str, lexer.Token]) -> None:
     "Unused items cannot be on the stack above used, non-peek items"
@@ -397,6 +398,9 @@ def check_unused(stack: list[StackItem], input_names: dict[str, lexer.Token]) ->
 def analyze_stack(
     op: parser.InstDef | parser.Pseudo, replace_op_arg_1: str | None = None
 ) -> StackEffect:
+    for output in op.outputs:
+        if output.nullable:
+            raise analysis_error("nullable is an input read annotation", output.first_token)
     inputs: list[StackItem] = [
         convert_stack_item(i, replace_op_arg_1)
         for i in op.inputs

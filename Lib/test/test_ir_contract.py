@@ -171,11 +171,24 @@ class ContractTests(unittest.TestCase):
             "CALL_ALLOC_AND_ENTER_INIT", "CALL_PY_GENERAL",
             "CALL_BOUND_METHOD_GENERAL", "CALL_NON_PY_GENERAL",
         }
-        self.assertEqual(calls, {name for name, row in BY_NAME.items()
-                                 if row.base == opcode.opmap["CALL"]}
-                         | {"INSTRUMENTED_CALL"})
+        legacy = calls - {"INSTRUMENTED_CALL"}
+        self.assertEqual(legacy, {name for name, row in BY_NAME.items()
+                                 if row.base == opcode.opmap["CALL"]
+                                 and row.call_input_holes == 0})
+        virtual = {"CALL_NO_SELF" + name[len("CALL"):] for name in legacy}
+        self.assertEqual(virtual, {name for name, row in BY_NAME.items()
+                                  if row.base == opcode.opmap["CALL"]
+                                  and row.call_input_holes == 2})
+        instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL_NO_SELF"}
+        self.assertEqual({BY_NAME[name].call_input_holes for name in instrumented},
+                         {0, 2})
+        self.assertEqual(legacy | virtual | instrumented,
+                         {name for name, row in BY_NAME.items()
+                          if row.base in (opcode.opmap["CALL"],
+                                          opcode.opmap["INSTRUMENTED_CALL"])})
         unknown = (2, -1)
         set_null = (1, -1)
+        preserve = (0, -1)
 
         def transfer(name, dst, home, *, argc=1, encoded_arg=None,
                      edge=0, base=4):
@@ -185,19 +198,19 @@ class ContractTests(unittest.TestCase):
                 named[name], dst, base, encoded_arg, 0,
                 argc, edge, home, 2, 10)
 
-        for name in sorted(calls):
-            argc = 2 if name == "CALL_ISINSTANCE" else 1
+        for name in sorted(legacy | virtual):
+            argc = 2 if name.endswith("_ISINSTANCE") else 1
             with self.subTest(handler=name):
                 # A new result at BASE is a value, not a known NULL.
                 self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)
                 for home in range(5, 6 + argc):
                     self.assertEqual(transfer(name, 4, home, argc=argc),
-                                     set_null)
+                                     preserve if name in virtual and home == 5 else set_null)
                 # Folded local and sink destinations drain the whole window.
                 for dst in (0, 4095):
                     for home in range(4, 6 + argc):
                         self.assertEqual(transfer(name, dst, home, argc=argc),
-                                         set_null)
+                                         preserve if name in virtual and home == 5 else set_null)
                 for home in (3, 9):
                     self.assertEqual(transfer(name, 4, home, argc=argc),
                                      unknown)
@@ -210,6 +223,13 @@ class ContractTests(unittest.TestCase):
                                           encoded_arg=argc + 1), unknown)
                 self.assertEqual(transfer(name, 9, 9, argc=argc, base=9),
                                  unknown)
+        # The observer/typed-runner path has no shared physical-NULL
+        # contract. Its logical drain/virtual-hole proof is separate.
+        for name in sorted(instrumented):
+            for dst in (0, 4, 4095):
+                for home in range(3, 10):
+                    with self.subTest(handler=name, dst=dst, home=home):
+                        self.assertEqual(transfer(name, dst, home), unknown)
         for name in ("CALL_KW", "INSTRUMENTED_CALL_KW"):
             self.assertEqual(transfer(name, 4, 5), unknown)
 

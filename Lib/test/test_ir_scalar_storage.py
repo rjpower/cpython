@@ -172,6 +172,21 @@ class ScalarStorageTests(unittest.TestCase):
         with mock.patch.object(ir_generator.IRStack, "take_field", missing_receipt):
             self.assertFalse(emitted("UNARY_NOT"))
 
+    def test_instrumented_yield_error_copies_only_the_live_stack(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        for record in (False, True):
+            with self.subTest(record=record):
+                stream = io.StringIO()
+                out = cwriter.CWriter(stream, 0, False)
+                emitter = ir_generator.IREmitter(out, analysis, formats)
+                name = "INSTRUMENTED_YIELD_VALUE"
+                emitter.handler_format = formats[name]
+                ir_generator.generate_handler(name, analysis.instructions[name],
+                                              formats[name], emitter, out, record)
+                self.assertIn("PROCESS_ERROR_AT(RAISE, 0, this_instr)", stream.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

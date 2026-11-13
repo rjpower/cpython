@@ -4775,13 +4775,19 @@ class IREmitter(Emitter):
         left above its stack pointer, and leave the rest to
         exception_unwind."""
         self.emit("frame->phase_state = 0;\n")
-        error_storage = storage.copy()
-        stack = error_storage.stack
+        # Releases may already have removed dead inputs from Stack while
+        # Storage still names them for the uop. Only the live stack is
+        # flushed on this edge; cloning Storage would require those inputs.
+        stack = storage.stack.copy()
         assert isinstance(stack, IRStack)
         if self.statement is not None:
             guarded = error_nonnull_value(self.statement.contents)
-            if guarded is not None:
-                self.refine_current_value(error_storage, guarded, False)
+            value = next((var for var in self.current_value_locals(storage)
+                          if var.name == guarded), None)
+            if value is not None:
+                # Branch facts belong to the copied error state, never to
+                # the original output identity used on normal continuation.
+                stack.refine_value(value.copy(), False)
         stack.error_exit = True
         stack.flush(self.out)
         self.operand_error_flush(stack)

@@ -3111,6 +3111,40 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
+    def test_abrupt_prefix_requires_complete_suspension_source(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        names = ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE")
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name in names:
+            self.assertTrue(contracts[name].abrupt_prefix)
+        inst = analysis.instructions["YIELD_VALUE"]
+        producer = inst.parts[-1]
+        original = producer.body.body
+        for changed in (
+                "{ opaque(frame); }",
+                "{ gen_frame->return_slot = 0; }",
+                "{ frame->base[0] = PyValue_NULL; }"):
+            extra = self.analyze("\ninst(OP, (--)) " + changed + "\n")
+            producer.body.body = original + extra.instructions["OP"].parts[0].body.body
+            try:
+                self.assertFalse(ir_generator.abrupt_suspend_contract(inst, formats["YIELD_VALUE"]))
+            finally:
+                producer.body.body = original
+        # The twin's observer ingress must also be covered; a missing
+        # sibling revokes the canonical family's permission.
+        observer = analysis.instructions["INSTRUMENTED_YIELD_VALUE"].parts[0]
+        old = observer.body.body
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        observer.body.body = old + extra.instructions["OP"].parts[0].body.body
+        try:
+            changed = ir_generator.handler_contracts(analysis, formats)
+            for name in names:
+                self.assertFalse(changed[name].abrupt_prefix)
+        finally:
+            observer.body.body = old
+
     def test_created_copy_recipe_checks_actual_transport(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

@@ -187,8 +187,8 @@ parse_linetable(const uintptr_t addrq, const char* linetable, Py_ssize_t linetab
         return false;
     }
 
-    _PyIRSourceMap source;
-    if (_PyIRSource_Decode(linetable, linetable_size, &source) < 0) {
+    _PyIRPositions source;
+    if (_PyIRPositions_Decode(linetable, linetable_size, &source) != 1) {
         return false;
     }
     const uint8_t* ptr = source.locations;

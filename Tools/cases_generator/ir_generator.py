@@ -73,6 +73,9 @@ Invariants:
 
 import argparse
 import ir_numbers
+from ir_error_effects import (
+    HomeEffect, analyze_error_effects, checked_native_step_effects,
+)
 import re
 from dataclasses import dataclass, fields, replace
 
@@ -1324,24 +1327,25 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
-def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
-    """The yielded receiver/output transport, separate from completion A.
+def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
+    """The native-step source footprint shared by normal and abrupt edges.
 
     The raw frame-bearing adapter has a bounded helper contract: successful
     VirtualIteratorNext can write only its cursor pointer. The other calls
     receive value snapshots, not home pointers. Full AST/IO matching keeps
     this temporary source bridge from accepting additional opaque writes.
-    The actual final flush or child-return publication supplies the event.
+    Normal transport still requires its final flush or child publication;
+    exceptional transport independently requires every error/exit receipt.
     """
     if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
             or fmt.dst_offset != 2 or
             any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
-        return False
+        return None
     inputs, outputs = external_io(inst)
     if (len(inputs) != 3 or len(outputs) not in (2, 3) or
         any(item.is_array() for item in inputs) or
         any(entry.item.is_array() for entry in outputs)):
-        return False
+        return None
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
@@ -1453,7 +1457,7 @@ def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
             # Guard/specializer prefixes may inspect or redispatch unchanged
             # inputs, but cannot acquire a frame/home-pointer capability.
             if index != len(parts) - 1 and not part.properties.always_exits:
-                return False
+                return None
             for prefix in parts[:index]:
                 if not any(
                     tuple(item.name for item in prefix.stack.inputs) == expected_in and
@@ -1463,9 +1467,9 @@ def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
                     statement_shape(prefix.body) == statement_shape(
                         Parser(expected_body, "<SEND guard footprint>").block())
                     for expected_in, expected_out, expected_body in prefixes):
-                    return False
-            return True
-    return False
+                    return None
+            return tuple(parts[:index + 1])
+    return None
 
 
 def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
@@ -1757,7 +1761,7 @@ def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
                        ["PY_MONITORING_EVENT_BRANCH_RIGHT"],
                        ["PY_MONITORING_EVENT_JUMP"]):
         raise analysis_error("terminal observer requires a literal event", tokens[0])
-    edges = {"_PyIR_SOURCE_FALLTHROUGH": 0, "_PyIR_SOURCE_TAKEN": 1}
+    edges = {"_PyIR_EDGE_FALLTHROUGH": 0, "_PyIR_EDGE_TAKEN": 1}
     if len(args[3]) != 1 or args[3][0] not in edges:
         raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
     edge = edges[args[3][0]]
@@ -2974,7 +2978,17 @@ class IREmitter(Emitter):
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
         self.formats = formats
+        # Global labels use the same emitter without entering emit_handler.
+        # They have no certifying source contract or per-handler receipts.
         self.null_outputs: frozenset[str] | None = None
+        self.error_source = None
+        self.error_unwind_sources = set()
+        self.error_terminal_sources = set()
+        self.error_uncovered = True
+        self.error_finalized = False
+        self.error_local_dst = False
+        self.send_source_parts = None
+        self.error_redispatch_origin = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -3438,6 +3452,7 @@ class IREmitter(Emitter):
         """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
         displaced, with the input boxes, then revalidate: the release can
         run __del__ or a weakref callback, which can run any Python."""
+        self.error_local_dst = True
         self.emit("if (!PyValue_IsNull(ir_displaced)) {\n")
         self.emit("frame->phase_state = 0;\n")
         self.emit("if (finish_displaced_local(tstate, frame, next_instr, "
@@ -4374,11 +4389,21 @@ class IREmitter(Emitter):
 
     def deopt_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.error_redispatch_origin
+        self.error_redispatch_origin = id(tkn)
+        try:
+            return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.error_redispatch_origin = previous
 
     def exit_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        return super().exit_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.error_redispatch_origin
+        self.error_redispatch_origin = id(tkn)
+        try:
+            return super().exit_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.error_redispatch_origin = previous
 
     def check_error_outputs(self, tkn: Token, storage: Storage) -> None:
         """An error exit stores no output, so no output may hold a TAKE()
@@ -4403,6 +4428,10 @@ class IREmitter(Emitter):
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
         super().goto_label(goto, label, storage)
+        if label.text == "exception_unwind":
+            self.error_unwind_sources.add(id(goto))
+        else:
+            self.error_uncovered = True
 
     def error_no_pop(
         self,
@@ -4437,6 +4466,8 @@ class IREmitter(Emitter):
         storage.stack.flush(self.out)
         if inst is not None and self.format_of(inst).store_dst:
             self.release_displaced()
+        self.error_terminal_sources.add(id(tkn))
+        self.error_finalized = True
         self.emit(tkn)
         return False
 
@@ -4516,15 +4547,30 @@ class IREmitter(Emitter):
         if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
+        self.error_terminal_sources.add(id(tkn))
         self.emit(tkn)
         return False
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
+        fmt = self.format_of(inst)
+        target = self.formats.get(inst.family.name) if inst.family is not None else None
+        if (self.send_source_parts is not None and self.error_redispatch_origin is not None
+                and inst.family is not None and inst.family.name == fmt.group
+                and target is not None and target.group == fmt.group
+                and (target.roles, target.window, target.n_inputs,
+                     target.dst_offset, target.imm, target.fb, target.borrow_mask) ==
+                    (fmt.roles, fmt.window, fmt.n_inputs,
+                     fmt.dst_offset, fmt.imm, fmt.fb, fmt.borrow_mask)):
+            # The positive adapter proof excludes effects before these guards.
+            # check_exit_inputs has checked their actual Storage state. The
+            # emitted target is exactly this same canonical protocol family.
+            self.error_terminal_sources.add(self.error_redispatch_origin)
+        else:
+            self.error_uncovered = True
         if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
-        fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
         if binary_op:
             # The handler of the operation that the entry records
@@ -4588,6 +4634,11 @@ class IREmitter(Emitter):
         self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
+        # The reached helper owns its result and whole encoded window on
+        # every error exit. Its status check and dispatch are terminal here.
+        self.abrupt_operand_sources.add(id(tkn))
+        self.error_terminal_sources.add(id(tkn))
+        self.error_finalized = True
         return False
 
     def normal_completion(self, inst, fmt, kind):
@@ -4642,7 +4693,7 @@ class IREmitter(Emitter):
             self.normal_completion(inst, fmt, kind)
         else:
             self.normal_completion_uncovered = True
-        if kind == "_PY_IR_SEND" and send_yielded_source_contract(inst, fmt):
+        if kind == "_PY_IR_SEND" and self.send_source_parts is not None:
             self.send_yielded_published = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
@@ -4671,6 +4722,10 @@ class IREmitter(Emitter):
         self.emit("LLTRACE_RESUME_FRAME();\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
+        # The entered heap frame cannot overlap the parent's values. Its
+        # failed entry/return retires the child before error re-enters parent.
+        self.abrupt_operand_sources.add(id(tkn))
+        self.error_terminal_sources.add(id(tkn))
         return False
 
     def ir_instruction_size(
@@ -4718,7 +4773,13 @@ class IREmitter(Emitter):
                     self.check_exit_inputs(inst.where, storage,
                                            f"The guard of {uop.name}")
                 self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
-                self.emit_jump_to_predicted(inst)
+                previous = self.error_redispatch_origin
+                if self.send_source_parts is not None and uop in self.send_source_parts:
+                    self.error_redispatch_origin = (id(uop), var.name)
+                try:
+                    self.emit_jump_to_predicted(inst)
+                finally:
+                    self.error_redispatch_origin = previous
                 self.emit("}\n")
                 var.known_object = True
                 continue
@@ -5370,139 +5431,20 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     return publish
 
 
-# These are helper interfaces, not instruction-body permissions. They receive
-# native values/objects, never an arena address, and cannot write frame homes.
-# Callback effects remain the ordinary analyzer's separate responsibility.
-OPERAND_HELPERS = {
-    "_PyEval_GetANext": (("object",), "object"),
-    "PyValue_AsKnownObjectBorrow": (("value",), "object"),
-    "PyValue_FromObjectSteal": (("object",), "value"),
-    "PyValue_IsNull": (("value",), "scalar"),
-    "PyValue_IsNone": (("value",), "scalar"),
-    "PyValue_CLOSE": (("value",), "void"),
-    "PyValue_XCLOSE": (("value",), "void"),
-    "TAKE": (("value",), "value"),
-    "DEAD": (("value",), "void"),
-    "DECREF_INPUTS": ((), "void"),
-    "INPUTS_DEAD": ((), "void"),
-}
-
-
 def operand_error_sources(inst: Instruction) -> frozenset[int] | None:
-    """Prove ordinary scalar source cannot access an undeclared home.
+    """Only encoded transport can destroy incoming scratch absence.
 
-    The emitter still has to supply every actual error-flush receipt. This
-    grammar accepts native scalar/object expressions with checked helper
-    interfaces, not arbitrary C pointers, casts, stores or manual protocols.
+    Native callbacks may vacate other scratch homes through a redirect. That
+    preserves the NO_HOME fact imported by this absence-only capability.
     """
-    errors: set[int] = set()
+    return operand_errors_from_summary(analyze_error_effects(inst, HANDLER_LOCALS))
 
-    def expression(tokens, variables):
-        tokens = [token for token in tokens if token.kind != "COMMENT"]
-        if not tokens:
-            return None
-        depth = 0
-        for at, token in enumerate(tokens):
-            text = token.text
-            if text == "(":
-                depth += 1
-            elif text == ")":
-                depth -= 1
-            elif depth == 0 and text in {"==", "!=", "<", ">", "<=", ">=", "&&", "||"}:
-                left = expression(tokens[:at], variables)
-                right = expression(tokens[at + 1:], variables)
-                return "scalar" if left in {"scalar", "object", "null"} and right in {"scalar", "object", "null"} else None
-        if tokens[0].text == "!":
-            return "scalar" if expression(tokens[1:], variables) == "scalar" else None
-        if len(tokens) == 1:
-            token = tokens[0]
-            if token.text == "NULL":
-                return "null"
-            if token.text == "PyValue_NULL":
-                return "value"
-            if token.text in {"true", "false"} or token.text.isdigit():
-                return "scalar"
-            return variables.get(token.text)
-        if tokens[0].text == "(" and tokens[-1].text == ")":
-            return expression(tokens[1:-1], variables)
-        helper = tokens[0]
-        contract = OPERAND_HELPERS.get(helper.text)
-        if contract is None or helper.text in variables:
-            return None
-        iterator = TokenIterator(tokens[1:])
-        try:
-            arguments, _ = instruction_macro_args(helper, iterator)
-        except (SyntaxError, StopIteration):
-            return None
-        if iterator.peek() is not None:
-            return None
-        inputs, result = contract
-        if (len(arguments) != len(inputs) or
-                any(expression(argument, variables) != kind
-                    for argument, kind in zip(arguments, inputs))):
-            return None
-        return result
 
-    def statement(stmt, variables):
-        if isinstance(stmt, BlockStmt):
-            return all(statement(child, variables) for child in stmt.body)
-        if isinstance(stmt, IfStmt):
-            return (expression(stmt.condition, variables) == "scalar"
-                    and statement(stmt.body, variables.copy())
-                    and (stmt.else_body is None or statement(stmt.else_body, variables.copy())))
-        if not isinstance(stmt, SimpleStmt):
-            return False
-        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
-        if not tokens or tokens[-1].text != ";":
-            return False
-        tokens = tokens[:-1]
-        if tokens and tokens[0].text in {"ERROR_IF", "ERROR_NO_POP"}:
-            iterator = TokenIterator(tokens[1:])
-            try:
-                arguments, _ = instruction_macro_args(tokens[0], iterator)
-            except (SyntaxError, StopIteration):
-                return False
-            valid = (not arguments if tokens[0].text == "ERROR_NO_POP" else
-                     len(arguments) == 1 and expression(arguments[0], variables) == "scalar")
-            if valid and iterator.peek() is None:
-                errors.add(id(tokens[0]))
-                return True
-            return False
-        declaration = 0
-        kind = None
-        if len(tokens) >= 4 and [token.text for token in tokens[:2]] == ["PyObject", "*"]:
-            declaration, kind = 2, "object"
-        elif tokens and tokens[0].text in {"PyValue", "int"}:
-            declaration, kind = 1, "value" if tokens[0].text == "PyValue" else "scalar"
-        if declaration:
-            name = tokens[declaration]
-            if (name.kind != "IDENTIFIER" or name.text in variables or
-                    name.text in OPERAND_HELPERS or name.text in HANDLER_LOCALS or len(tokens) <= declaration + 2 or
-                    tokens[declaration + 1].text != "="):
-                return False
-            if expression(tokens[declaration + 2:], variables) != kind:
-                return False
-            variables[name.text] = kind
-            return True
-        if len(tokens) >= 3 and tokens[0].text in variables and tokens[1].text == "=":
-            return tokens[0].text != "oparg" and expression(tokens[2:], variables) == variables[tokens[0].text]
-        return expression(tokens, variables) == "void"
-
-    for part in inst.parts:
-        if isinstance(part, Skip):
-            continue
-        if (not isinstance(part, Uop) or part.caches or
-                any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs))
-                or not canonical_body_tokens(part)):
-            return None
-        if any(item.name in HANDLER_LOCALS or item.name in OPERAND_HELPERS
-               for item in (*part.stack.inputs, *part.stack.outputs)):
-            return None
-        variables = {item.name: "value" for item in (*part.stack.inputs, *part.stack.outputs)}
-        variables["oparg"] = "scalar"
-        if not statement(part.body, variables):
-            return None
-    return frozenset(errors) if errors else None
+def operand_errors_from_summary(source) -> frozenset[int] | None:
+    if (source is None or source.homes == HomeEffect.UNKNOWN
+            or not source.error_sources):
+        return None
+    return source.error_sources
 
 
 def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
@@ -6175,12 +6117,22 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
-    emitter.abrupt_operand_expected = operand_error_sources(inst)
+    emitter.send_source_parts = send_source_contract(inst, fmt)
+    emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
+    if emitter.error_source is None and emitter.send_source_parts is not None:
+        emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
+    emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
     emitter.abrupt_operand_sources = set()
     emitter.abrupt_operand_origin = None
     emitter.abrupt_operand_bridge_expected = set()
     emitter.abrupt_operand_bridges = set()
     emitter.abrupt_operand_uncovered = False
+    emitter.error_unwind_sources = set()
+    emitter.error_terminal_sources = set()
+    emitter.error_uncovered = False
+    emitter.error_finalized = False
+    emitter.error_local_dst = False
+    emitter.error_redispatch_origin = None
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
@@ -6363,7 +6315,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
         emitter.normal_null_receipts.append(
             {edge: stack.null_stores.get(edge, False) for edge in stack.null_paths})
-        if send_yielded_source_contract(inst, fmt):
+        if emitter.send_source_parts is not None:
             emitter.send_yielded_published = True
         if call_window:
             emitter.call_normal_drained = True
@@ -6382,6 +6334,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
+        emitter.error_finalized = True
     normal_edges = ({1} if fmt.jump_always else {0, 1}
                     if (fmt.jumps or fmt.forward) and not fmt.names_target else {0})
     if (not reachable and emitter.normal_observer_edges == normal_edges
@@ -6700,7 +6653,8 @@ def boxes_into_record(code: str) -> bool:
 def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
                     abrupt: dict[str, bool] | None = None,
-                    operand_abrupt: dict[str, bool] | None = None
+                    operand_abrupt: dict[str, bool] | None = None,
+                    error_routes: dict[str, tuple[str, ...]] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -6717,6 +6671,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.handler_format = formats[name]
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
+        boxes = boxes_into_record(buffer.getvalue())
         if abrupt is not None:
             abrupt[name] = emitter.abrupt_prefix
         if operand_abrupt is not None:
@@ -6724,10 +6679,18 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 emitter.abrupt_operand_expected is not None and
                 emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
                 emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
-                not emitter.abrupt_operand_uncovered)
+                not emitter.abrupt_operand_uncovered and
+                not emitter.error_uncovered and
+                emitter.error_source is not None and
+                emitter.error_source.unwind_sources == emitter.error_unwind_sources and
+                emitter.error_source.terminal_sources == emitter.error_terminal_sources and
+                not ((boxes or formats[name].store_dst) and emitter.error_source is not None
+                     and emitter.error_source.changes_origin))
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
-        if boxes_into_record(buffer.getvalue()):
+        if error_routes is not None:
+            error_routes[name] = emitted_error_routes(emitter, formats[name], boxes)
+        if boxes:
             if any(isinstance(p, Uop) and any(
                     t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
                    for p in inst.parts):
@@ -6794,6 +6757,34 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
     return result
 
 
+ERROR_ROUTE_FLAGS = ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_DIRECT",
+                     "_PyIR_ERROR_BRIDGE", "_PyIR_ERROR_LOCAL_DST")
+
+
+def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tuple[str, ...]:
+    """Match complete typed source to actual flush and terminal receipts."""
+    source = emitter.error_source
+    if (source is None or source.homes == HomeEffect.UNKNOWN
+            or source.changes_origin and (boxes or fmt.store_dst)
+            or emitter.error_uncovered or emitter.abrupt_operand_uncovered
+            or source.error_sources != emitter.abrupt_operand_sources
+            or source.unwind_sources != emitter.error_unwind_sources
+            or source.terminal_sources != emitter.error_terminal_sources
+            or emitter.abrupt_operand_bridge_expected != emitter.abrupt_operand_bridges
+            or fmt.store_dst and not emitter.error_local_dst
+            or not (emitter.error_finalized or source.error_sources
+                    or source.unwind_sources or source.terminal_sources)):
+        return ()
+    routes = [ERROR_ROUTE_FLAGS[0]]
+    if source.error_sources or source.unwind_sources or source.may_fail:
+        routes.append(ERROR_ROUTE_FLAGS[1])
+    if boxes:
+        routes.append(ERROR_ROUTE_FLAGS[2])
+    if emitter.error_local_dst:
+        routes.append(ERROR_ROUTE_FLAGS[3])
+    return tuple(routes)
+
+
 @dataclass
 class HandlerContract:
     "The columns of the contract that are the handler's own"
@@ -6810,6 +6801,7 @@ class HandlerContract:
     call_input_holes: int
     abrupt_prefix: bool
     abrupt_operands: bool
+    error_routes: tuple[str, ...]
 
 
 def statement_shape(node):
@@ -7681,7 +7673,8 @@ def handler_contracts(analysis: Analysis,
     programs = {}
     abrupt = {}
     operand_abrupt = {}
-    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt)
+    error_routes = {}
+    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt, error_routes)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
@@ -7691,6 +7684,15 @@ def handler_contracts(analysis: Analysis,
         if not all(operand_abrupt.get(name, False) for name in members):
             for name in members:
                 operand_abrupt[name] = False
+        # A word may run any specialization or its instrumented twin. Every
+        # member must have a complete route census; possible routes union.
+        if all(error_routes.get(name) for name in members):
+            combined = set().union(*(error_routes[name] for name in members))
+            common = tuple(flag for flag in ERROR_ROUTE_FLAGS if flag in combined)
+        else:
+            common = ()
+        for name in members:
+            error_routes[name] = common
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -7714,6 +7716,7 @@ def handler_contracts(analysis: Analysis,
             call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
+            error_routes=error_routes.get(name, ()),
         )
     return result
 

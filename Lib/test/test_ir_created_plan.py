@@ -1,8 +1,8 @@
 """Whole-image created-copy certificates, queried without executing raw images."""
 
 import marshal
-import struct
 import unittest
+from test.support.ir_semantics import observation_tables, position_parts
 
 import _testinternalcapi
 from test.test_ir_admission import construct
@@ -51,13 +51,9 @@ class CreatedPlanTests(unittest.TestCase):
 
     def test_observer_recovery_entry_cannot_inherit_normal_entry_proof(self):
         code = make_code([("RETURN_GENERATOR", 4095, 1)], locals=("value",))
-        raw = code.co_linetable
-        version, size, _ = struct.unpack_from("<III", raw, 4)
-        event = struct.pack("<10i", 0, 0, 0, code.co_firstlineno,
-                            code.co_firstlineno, 0, 1, 0, 1, 0)
-        source = (b"IRSM" + struct.pack("<III", version, size, 1) +
-                  raw[16:16 + size] + event)
-        self.assert_plan(code.replace(co_linetable=source), False)
+        locations, _ = position_parts(code.co_linetable)
+        event = (0, 0, 0, code.co_firstlineno, code.co_firstlineno, 0, 1, 0, 1, 0)
+        self.assert_plan(code.replace(**observation_tables(locations, [event])), False)
 
     def test_free_variable_count_is_admitted_before_local_only_transfer(self):
         code = make_code([("COPY_FREE_VARS", 0),

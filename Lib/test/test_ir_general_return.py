@@ -94,6 +94,7 @@ class GeneralReturnTests(unittest.TestCase):
         # The callback escapes the actual returning frame. Its scratch owner
         # must move into that frame's heap storage rather than disappear at L.
         code = make_code([
+            ("RESUME", 0),
             ("LOAD_FAST_AND_CLEAR", 4, 0),
             ("LOAD_FAST_AND_CLEAR", 5, 1),
             ("LOAD_FAST", 6, 2),
@@ -114,7 +115,9 @@ class GeneralReturnTests(unittest.TestCase):
                     events.append("owner")
 
             def observe():
-                frames.append(sys._getframe(1))
+                frame = sys._getframe(1)
+                self.assertIs(frame.f_code, admitted)
+                frames.append(frame)
 
             function = types.FunctionType(admitted, {})
             result = object()

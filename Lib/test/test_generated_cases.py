@@ -3194,6 +3194,74 @@ class TestIRCases(unittest.TestCase):
         finally:
             part.body.body = original
 
+    def test_disjoint_child_requires_actual_constructor_and_publication(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
+            inst = analysis.instructions[name]
+            fmt = formats[name]
+            with self.subTest(handler=name):
+                self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
+                parts = [p for p in inst.parts if isinstance(p, analyzer.Uop)]
+                for index, statement in (
+                        (-3, "frame->base[0] = PyValue_NULL;"),
+                        (-3, "pushed_frame->base[3] = PyValue_NULL;"),
+                        (-2, "frame->return_slot = 0;"),
+                        (-1, "frame->base[0] = PyValue_NULL;")):
+                    extra = self.analyze("\ninst(OP, (--)) { " + statement + " }\n")
+                    body = parts[index].body.body
+                    body.append(extra.instructions["OP"].parts[0].body.body[0])
+                    try:
+                        self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
+                    finally:
+                        body.pop()
+                producer = parts[-3]
+                for statement in producer.body.body:
+                    if not isinstance(statement, parser.SimpleStmt):
+                        continue
+                    for index, token in enumerate(statement.contents):
+                        if token.text not in ("_PyFrame_PushUnchecked", "TAKE", "SAVE_STACK"):
+                            continue
+                        original = token
+                        statement.contents[index] = token.replaceText("unknown_child_effect")
+                        try:
+                            self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
+                        finally:
+                            statement.contents[index] = original
+                # No instruction name is part of the constructor capability.
+                original = inst.name
+                inst.name = "UNNAMED_DISJOINT_CHILD"
+                try:
+                    self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
+                finally:
+                    inst.name = original
+
+    def test_disjoint_child_receipt_is_emitted_and_family_closed(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
+            events = contracts[name].ownership_events
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
+            self.assertTrue(events[0].flags & 2)
+            self.assertFalse(events[0].flags & 1)
+        for name, fmt in formats.items():
+            if fmt.group == "LOAD_ATTR":
+                self.assertTrue(contracts[name].ownership_events, name)
+        # An unknown constructor removes the whole family's final-clear grant.
+        producer = analysis.uops["_LOAD_ATTR_PROPERTY_FRAME"]
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        producer.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+        try:
+            contracts = ir_generator.handler_contracts(analysis, formats)
+            for name in ("LOAD_ATTR", "LOAD_ATTR_PROPERTY"):
+                self.assertFalse(contracts[name].ownership_events)
+        finally:
+            producer.body.body.pop()
+
     def test_created_copy_recipe_checks_actual_transport(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

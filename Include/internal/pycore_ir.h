@@ -299,6 +299,7 @@ enum {
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
 #define _PyIR_NORMAL_WINDOW_RESULT 1u
+#define _PyIR_NORMAL_DISJOINT_CHILD 2u
 
 typedef struct {
     uint8_t kind, flags;

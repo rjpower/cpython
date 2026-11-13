@@ -407,6 +407,22 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         }
         return opcode;
     }
+    if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {
+        if (opcode == RETURN_VALUE) {
+            return RETURN_VALUE_EMPTY;
+        }
+        if (opcode == INSTRUMENTED_RETURN_VALUE) {
+            return INSTRUMENTED_RETURN_VALUE_EMPTY;
+        }
+    }
+    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
+        if (opcode == YIELD_VALUE) {
+            return YIELD_DELEGATED;
+        }
+        if (opcode == INSTRUMENTED_YIELD_VALUE) {
+            return INSTRUMENTED_YIELD_DELEGATED;
+        }
+    }
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
@@ -634,35 +650,90 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     return _PyIR_SHADOW_EXACT;
 }
 
+/* Validate a pinned frame image before either an active shape or finite
+ * suspension-role reader inspects its immutable instruction. */
+static _PyCodeExec *
+frame_image_site(_PyInterpreterFrame *frame, uint32_t *site)
+{
+    if (frame->f_executable == NULL) {
+        return NULL;
+    }
+    PyCodeObject *co = frame->f_executable;
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
+    int nl = co->co_nlocalsplus;
+    int scratch = Py_MAX(co->co_stacksize, 1);
+    if (exec == NULL || frame->base == NULL ||
+        frame->ir_words != exec->words || exec->nwords != Py_SIZE(co) ||
+        exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
+        scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
+    {
+        return NULL;
+    }
+    uintptr_t pc = (uintptr_t)frame->instr_ptr;
+    uintptr_t start = (uintptr_t)exec->words;
+    size_t size = (size_t)exec->nwords * sizeof(_PyIRWord);
+    if (pc < start || pc - start >= size ||
+        (pc - start) % sizeof(_PyIRWord))
+    {
+        return NULL;
+    }
+    *site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
+    return exec;
+}
+
+int
+_PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
+{
+    unsigned int phase = frame->phase_state;
+    if (!((phase == _PyIR_PHASE_YIELD_DELEGATED &&
+           frame->owner == FRAME_OWNED_BY_GENERATOR) ||
+          (phase == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED) &&
+           (frame->owner == FRAME_OWNED_BY_GENERATOR ||
+            frame->owner == FRAME_OWNED_BY_FRAME_OBJECT))))
+    {
+        return -1;
+    }
+    uint32_t continuation;
+    _PyCodeExec *exec = frame_image_site(frame, &continuation);
+    if (exec == NULL || continuation == 0) {
+        return -1;
+    }
+    PyCodeObject *co = frame->f_executable;
+    _PyIRWord word = co->co_words[continuation - 1];
+    int handler = IR_HANDLER(word);
+    if (handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) {
+        return -1;
+    }
+    int dst = (int)IR_A(word), outgoing = (int)IR_B(word), receiver = (int)IR_D(word);
+    if (dst != frame->return_slot ||
+        outgoing < co->co_nlocalsplus || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
+        receiver < co->co_nlocalsplus ||
+        receiver >= _PyFrame_NumSlotsForCodeObject(co) ||
+        receiver == dst || receiver == outgoing)
+    {
+        return -1;
+    }
+    return receiver;
+}
+
 _PyIRHomeAuthority
 _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
 {
     unsigned int published = frame->phase_state;
     if (!(published & _PyIR_PHASE_PUBLISHED) ||
         (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
-        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3 || frame->f_executable == NULL)
+        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3)
     {
+        return _PyIR_HOME_NONE;
+    }
+    uint32_t site;
+    _PyCodeExec *exec = frame_image_site(frame, &site);
+    if (exec == NULL || exec->semantic_plan == NULL) {
         return _PyIR_HOME_NONE;
     }
     PyCodeObject *co = frame->f_executable;
-    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
     int nl = co->co_nlocalsplus;
     int scratch = Py_MAX(co->co_stacksize, 1);
-    if (exec == NULL || exec->semantic_plan == NULL || frame->base == NULL ||
-        frame->ir_words != exec->words || exec->nwords != Py_SIZE(co) ||
-        exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
-        scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
-    {
-        return _PyIR_HOME_NONE;
-    }
-    uintptr_t pc = (uintptr_t)frame->instr_ptr;
-    uintptr_t start = (uintptr_t)exec->words;
-    if (pc < start || pc - start >= (size_t)exec->nwords * sizeof(_PyIRWord) ||
-        (pc - start) % sizeof(_PyIRWord))
-    {
-        return _PyIR_HOME_NONE;
-    }
-    uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
     uint8_t phase = (uint8_t)published;
     const _PyIRCodePlan *plan = exec->semantic_plan;
     const _PyIRPhaseSite *sites = _PyIR_PlanPhases(plan);

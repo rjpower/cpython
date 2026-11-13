@@ -183,6 +183,8 @@ enum {
                                     // elements stay in the window
 #define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
                                     // exceptional absence only, not readability
+#define _PyIR_ABRUPT_OPERANDS 0x4000 // actual ordinary error stores confined
+                                     // to encoded operands; absence only
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -295,11 +297,15 @@ enum {
     _PyIR_OWNER_CALL_DRAIN,
     _PyIR_OWNER_NORMAL_COMPLETION,
     _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
+    _PyIR_OWNER_YIELD_DELEGATED,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
+#define _PyIR_COMPLETION_SEND_YIELDED 2u
 #define _PyIR_NORMAL_WINDOW_RESULT 1u
 #define _PyIR_NORMAL_DISJOINT_CHILD 2u
+#define _PyIR_NORMAL_NULL_FALLTHROUGH 4u
+#define _PyIR_NORMAL_NULL_TAKEN 8u
 
 typedef struct {
     uint8_t kind, flags;
@@ -512,6 +518,7 @@ enum {
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
 #define _PyIR_PHASE_CAPTURED (1u << 11)
 #define _PyIR_PHASE_CREATED (1u << 12)
+#define _PyIR_PHASE_YIELD_DELEGATED (1u << 13)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -580,6 +587,12 @@ typedef struct {
  * A successful lookup selects a shape; it does not compare runtime values. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
     struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
+
+/* A finite admitted protocol role, independent of whole-home map authority.
+ * The caller holds a suspended-frame read claim or its actual successful
+ * saved-state execution claim. Returns the receiver home or -1 without
+ * allocating, preparing code or reading a home. */
+PyAPI_FUNC(int) _PyIR_DelegatedReceiverHome(struct _PyInterpreterFrame *frame);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

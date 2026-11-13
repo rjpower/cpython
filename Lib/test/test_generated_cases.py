@@ -1115,11 +1115,13 @@ class TestIRCases(unittest.TestCase):
                 if name != "FOR_ITER_GEN":
                     detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
                     self.assertLess(detached, entered)
-        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                     "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
-                retired = handler.index(
-                    "temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);")
+                helper = ("_PyEval_FrameClearAndPopWithResult" if name.endswith("_EMPTY")
+                          else "_PyEval_FrameClearAndPopGeneralWithResult")
+                retired = handler.index(f"temp = {helper}(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")
                 published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
                 self.assertLess(retired, completed)

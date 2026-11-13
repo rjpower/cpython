@@ -131,6 +131,7 @@ typedef enum _WIN32_THREADSTATE {
 /* Size macros for opaque buffers */
 #define SIZEOF_BYTES_OBJ sizeof(PyBytesObject)
 #define SIZEOF_CODE_OBJ sizeof(PyCodeObject)
+#define SIZEOF_CODE_EXEC sizeof(_PyCodeExec)
 #define SIZEOF_GEN_OBJ sizeof(PyGenObject)
 #define SIZEOF_INTERP_FRAME sizeof(_PyInterpreterFrame)
 #define SIZEOF_LLIST_NODE sizeof(struct llist_node)

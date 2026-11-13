@@ -246,20 +246,6 @@ _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
     }
 }
 
-/* Whether every temporary of f is NULL, as when it returns */
-static inline void
-_PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
-{
-#ifdef Py_DEBUG
-    int nslots = _PyFrame_NumSlots(f);
-    for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
-        assert(PyValue_IsNull(f->base[i]));
-    }
-#else
-    (void)f;
-#endif
-}
-
 /* Bindings stay dynamic. Scratch ranges are clipped before touching homes. */
 static inline bool
 _PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
@@ -556,7 +542,9 @@ enum {
 
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
-void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
+                            int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);
 void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
                                   struct _PyTransitionRoots *roots);

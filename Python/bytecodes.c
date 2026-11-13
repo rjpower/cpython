@@ -1481,7 +1481,22 @@ dummy_func(
             PyValue temp = retval;
             DEAD(retval);
             SAVE_STACK();
-            _PyFrame_AssertTemporariesClear(frame);
+            DTRACE_FUNCTION_RETURN();
+            _Py_LeaveRecursiveCallPy(tstate);
+            // GH-99729: We need to unlink the frame *before* clearing it:
+            _PyInterpreterFrame *dying = frame;
+            int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+            frame = tstate->current_frame = dying->previous;
+            temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
+            RELOAD_STACK();
+            IR_RETURN_TO_CALLER(temp, generator_return);
+        }
+
+        ir_only returns op(_RETURN_VALUE_EMPTY, (retval --)) {
+            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+            PyValue temp = retval;
+            DEAD(retval);
+            SAVE_STACK();
             DTRACE_FUNCTION_RETURN();
             _Py_LeaveRecursiveCallPy(tstate);
             // GH-99729: We need to unlink the frame *before* clearing it:
@@ -1496,6 +1511,10 @@ dummy_func(
         macro(RETURN_VALUE) =
             _MAKE_HEAP_SAFE +
             _RETURN_VALUE;
+
+        macro(RETURN_VALUE_EMPTY) =
+            _MAKE_HEAP_SAFE +
+            _RETURN_VALUE_EMPTY;
 
         // The value is taken before the event, which can run code
         tier1 op(_RETURN_VALUE_EVENT, (val -- taken)) {
@@ -1513,6 +1532,10 @@ dummy_func(
         macro(INSTRUMENTED_RETURN_VALUE) =
             _RETURN_VALUE_EVENT +
             _RETURN_VALUE;
+
+        macro(INSTRUMENTED_RETURN_VALUE_EMPTY) =
+            _RETURN_VALUE_EVENT +
+            _RETURN_VALUE_EMPTY;
 
         inst(GET_AITER, (obj -- iter)) {
             unaryfunc getter = NULL;
@@ -1768,6 +1791,18 @@ dummy_func(
             _YIELD_VALUE_EVENT +
             _MAKE_HEAP_SAFE +
             _YIELD_VALUE;
+
+        ir_only no_fold op(_YIELD_DELEGATED,
+            (receiver, unused_cursor, retval -- receiver, unused_cursor, value)) {
+            IR_METADATA_PASSTHROUGH(1);
+            PyValue outgoing = TAKE(retval);
+            IR_SUSPEND_DELEGATED(outgoing);
+        }
+
+        macro(YIELD_DELEGATED) = _YIELD_DELEGATED;
+
+        macro(INSTRUMENTED_YIELD_DELEGATED) =
+            _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
         inst(POP_EXCEPT, (exc_value -- )) {
             _PyErr_StackItem *exc_info = tstate->exc_info;

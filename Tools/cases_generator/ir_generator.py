@@ -358,6 +358,7 @@ class IRFormat:
     names_target: bool = False      # see names_target_only()
     fb_layout: str | None = None    # the entry type, see FEEDBACK_LAYOUTS
     fb_kind: str | None = None      # its _PyFbKind
+    metadata_inputs: frozenset[int] = frozenset()
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -442,7 +443,8 @@ RELEASES = {
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "IR_BINARY_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
-    "_PyEval_FrameClearAndPopWithResult", "_PyErr_Clear",
+    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
+    "_PyErr_Clear",
 }
 NOT_RELEASES = {
     # A release whose destructor, that of an exact type, runs no Python
@@ -1322,6 +1324,196 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
+def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """The yielded receiver/output transport, separate from completion A.
+
+    The raw frame-bearing adapter has a bounded helper contract: successful
+    VirtualIteratorNext can write only its cursor pointer. The other calls
+    receive value snapshots, not home pointers. Full AST/IO matching keeps
+    this temporary source bridge from accepting additional opaque writes.
+    The actual final flush or child-return publication supplies the event.
+    """
+    if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
+            or fmt.dst_offset != 2 or
+            any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
+        return False
+    inputs, outputs = external_io(inst)
+    if (len(inputs) != 3 or len(outputs) not in (2, 3) or
+        any(item.is_array() for item in inputs) or
+        any(entry.item.is_array() for entry in outputs)):
+        return False
+    specialize = """{
+        #if ENABLE_SPECIALIZATION
+        _PyFbHeader *feedback = FB_COUNTER();
+        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            next_instr = this_instr;
+            _Py_Specialize_Send(receiver, next_instr);
+            DISPATCH_SAME_OPARG();
+        }
+        OPCODE_DEFERRED_INC(SEND);
+        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        #endif  /* ENABLE_SPECIALIZATION */
+    }"""
+    prefixes = [
+        (("receiver", "unused", "unused"), ("receiver", "unused", "unused"), specialize),
+        ((), (), "{ DEOPT_IF(IS_PEP523_HOOKED(tstate)); }"),
+        (("val",), ("val",), "{ EXIT_IF(!PyValue_IsNone(val)); }"),
+        (("nos", "unused"), ("nos", "unused"), "{ EXIT_IF(PyValue_IsNull(nos)); }"),
+        (("iter", "null_or_index", "value"), ("iter", "null_or_index", "value"), """{
+            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+            EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
+        }"""),
+    ]
+    candidates = [
+        (("receiver", "null_or_index", "v"),
+         ("receiver", "null_or_index", "retval"), """{
+            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+            if (!IS_PEP523_HOOKED(tstate) &&
+                (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
+                gen_try_set_executing((PyGenObject *)receiver_o)) {
+                PyGenObject *gen = (PyGenObject *)receiver_o;
+                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
+            }
+            if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                null_or_index = window[1];
+                PyValue item = next.value;
+                int found = next.status;
+                if (found <= 0) {
+                    if (found < 0) { ERROR_NO_POP(); }
+                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+                }
+                retval = item;
+                DEAD(v);
+            }
+            else {
+                _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                if (sent.status == PYGEN_ERROR) { ERROR_NO_POP(); }
+                if (sent.status == PYGEN_RETURN) {
+                    PyValue completed = sent.value;
+                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+                }
+                PyValue_CLOSE(v);
+                retval = sent.value;
+            }
+        }"""),
+        (("receiver", "null", "v"), ("receiver", "null", "gen_frame"), """{
+            EXIT_IF(!PyValue_IsObject(receiver));
+            PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v));
+            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
+            STAT_INC(SEND, hit);
+            IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
+        }"""),
+        (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"), """{
+            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+            Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+            index = next_index.index;
+            if (PyValue_IsNull(next_index.value)) {
+                if (index < 0) { ERROR_NO_POP(); }
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+            }
+            DEAD(none);
+            next = next_index.value;
+            null_or_index = PyValue_TagIndex(index);
+        }"""),
+        (("iter", "null_in", "v"), ("asend", "null_out", "retval"), """{
+            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+            assert(PyAsyncGenASend_CheckExact(iter_o));
+            _PyStatusValue sent = _PyValue_Send(iter_o, v);
+            PySendResult what = (PySendResult)sent.status;
+            if (what == PYGEN_ERROR) { ERROR_NO_POP(); }
+            if (what == PYGEN_RETURN) {
+                PyValue completed = sent.value;
+                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+            }
+            PyValue_CLOSE(v);
+            asend = iter;
+            DEAD(iter);
+            null_out = null_in;
+            DEAD(null_in);
+            retval = sent.value;
+        }"""),
+    ]
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    for index, part in enumerate(parts):
+        for incoming, outgoing, body in candidates:
+            if (tuple(item.name for item in part.stack.inputs) != incoming or
+                tuple(item.name for item in part.stack.outputs) != outgoing or
+                any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)) or
+                statement_shape(part.body) != statement_shape(
+                    Parser(body, "<SEND yielded transport contract>").block())):
+                continue
+            # Guard/specializer prefixes may inspect or redispatch unchanged
+            # inputs, but cannot acquire a frame/home-pointer capability.
+            if index != len(parts) - 1 and not part.properties.always_exits:
+                return False
+            for prefix in parts[:index]:
+                if not any(
+                    tuple(item.name for item in prefix.stack.inputs) == expected_in and
+                    tuple(item.name for item in prefix.stack.outputs) == expected_out and
+                    not any(item.is_array() for item in
+                            (*prefix.stack.inputs, *prefix.stack.outputs)) and
+                    statement_shape(prefix.body) == statement_shape(
+                        Parser(expected_body, "<SEND guard footprint>").block())
+                    for expected_in, expected_out, expected_body in prefixes):
+                    return False
+            return True
+    return False
+
+
+def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
+    """An unread unchanged cursor whose dependency stays in the compiler."""
+    markers = [token for token in uop_token_list(inst)
+               if token.text == "IR_METADATA_PASSTHROUGH"]
+    if not markers:
+        return frozenset()
+    inputs, outputs = external_io(inst)
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    expected = """{
+        IR_METADATA_PASSTHROUGH(1);
+        PyValue outgoing = TAKE(retval);
+        IR_SUSPEND_DELEGATED(outgoing);
+    }"""
+    shape = lambda items: [(item.name, item.peek, item.size) for item in items]
+    incoming = [("receiver", True, ""), ("unused_cursor", True, ""),
+                ("retval", False, "")]
+    outgoing = [("receiver", True, ""), ("unused_cursor", True, ""),
+                ("value", False, "")]
+    producer = parts[-1]
+    observer = """{
+        int err = _Py_call_instrumentation_arg(
+            tstate, PY_MONITORING_EVENT_PY_YIELD, frame, this_instr, val);
+        if (err) { RELOAD_STACK(); ERROR_NO_POP(); }
+        if (frame->instr_ptr != this_instr) {
+            RELOAD_STACK(); next_instr = frame->instr_ptr; DISPATCH();
+        }
+    }"""
+    if (len(markers) != 1 or len(inputs) != 3 or len(outputs) != 3
+            or len(parts) != len(inst.parts)
+            or shape(producer.stack.inputs) != incoming
+            or shape(producer.stack.outputs) != outgoing
+            or outputs[0].external != 0 or outputs[1].external != 1
+            or any(item.is_array() for item in inputs)
+            or len(parts) > 2
+            or any(statement_shape(part.body) != statement_shape(
+                Parser(observer, "<delegated yield observer contract>").block())
+                   for part in parts[:-1])
+            or statement_shape(producer.body) != statement_shape(
+                Parser(expected, "<delegated transport contract>").block())
+            or any(token.text == "unused_cursor" for part in parts[:-1]
+                   for token in part.body.tokens())):
+        raise analysis_error("metadata passthrough requires the unchanged unread delegated cursor",
+                             markers[0])
+    return frozenset({1})
+
+
 def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     """The format of a group; members[0] is its head.
 
@@ -1333,6 +1525,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     deepest = max(members, key=lambda m: len(io[m.name][0]))
     inputs = io[deepest.name][0]
     n_inputs = len(inputs)
+    metadata_inputs = metadata_only_passthroughs(head)
+    if any(metadata_only_passthroughs(member) != metadata_inputs for member in members):
+        raise analysis_error("metadata passthroughs must match the complete family", head.where)
     # Members that pass their first outputs through write later slots, which
     # follow dst. Members that push a frame and no outputs write none, and
     # members that return write theirs to the caller's frame.
@@ -1367,7 +1562,12 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         e.aliased for m in members for e in io[m.name][1])
 
     placed = None
-    if not array_inputs:
+    if metadata_inputs:
+        # The cursor is an unchanged compiler dependency, not a physical
+        # input window. Receiver and outgoing homes remain independent.
+        placed = ([ROLE_DST, f"{ROLE_IN0} + 2", ROLE_NONE, f"{ROLE_IN0} + 0"],
+                  LOC_NONE, LOC_NONE)
+    elif not array_inputs:
         slots = [ROLE_DST] if dst_offset is not None else []
         order = list(range(n_inputs))
         if group in STORES and dst_offset is None and n_inputs > 1:
@@ -1398,7 +1598,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         if role is not None and roles[k] == ROLE_IMM:
             roles = roles[:k] + [role] + roles[k + 1:]
     for m, m_dst in zip(members, new_outputs):
-        if (not window and m_dst is not None and m.properties.switches_frame
+        if (not window and not metadata_inputs and m_dst is not None and m.properties.switches_frame
                 and not m.properties.returns):
             # Outputs that follow the switch belong to another frame
             raise analysis_error(
@@ -1444,7 +1644,12 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
                 continue
             if uses[first + k] in ("object", "raw"):
                 borrow_mask |= 1 << k
-    store_dst = stores_to_dst(members, io, dst_offset, window)
+    if metadata_inputs:
+        # The finite suspension certificate retains scratch-role identities
+        # across the monitoring callback. Neither input may borrow a mutable
+        # binding, even when its individual C uses would permit a view.
+        borrow_mask = 0
+    store_dst = bool(metadata_inputs) or stores_to_dst(members, io, dst_offset, window)
     fb_layout = fb_kind = None
     if has_fb:
         if group not in FEEDBACK_LAYOUTS:
@@ -1464,11 +1669,12 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=(store_dst and store_mode(head, io[head.name][1]) in
             (STORE_RESULT, STORE_RETURN)) or group in
-            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "RETURN_GENERATOR"},
+            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "YIELD_DELEGATED", "RETURN_GENERATOR"},
         unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
+        metadata_inputs=metadata_inputs,
     )
 
 
@@ -1975,7 +2181,8 @@ def names_return_slot(inst: Instruction) -> bool:
     slot dst names.  A generator's frame also hands each value it yields to
     that slot, and its return value at the end of a FOR_ITER."""
     tokens = uop_tokens(inst)
-    return "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens
+    return ("IR_SUSPEND_DELEGATED" in tokens or
+            "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens)
 
 
 def pushes_always(inst: Instruction) -> bool:
@@ -2174,6 +2381,37 @@ def object_source(tokens: list[Token], views: dict[str, int],
     return None
 
 
+def null_output_names(inst: Instruction, fmt: IRFormat) -> frozenset[str] | None:
+    """Names whose direct assignments may reach the actual scalar DST store.
+
+    Native address/member aliases and shadowed declarations are deliberately
+    outside this transport. They must not leave a remembered NULL assignment
+    live across a later indirect C write.
+    """
+    if fmt.window or fmt.field_of(ROLE_DST) != "A":
+        return None
+    outputs = frozenset(item.item.name for item in external_io(inst)[1]
+                        if not item.item.is_array())
+    tokens = uop_token_list(inst)
+    bindings = declared_locals(tokens)
+    if ((outputs | {"PyValue_NULL"}) & bindings.keys() or
+            any(kind in {"pointer", "array"} for kind in bindings.values()) or
+            any(cache.name in outputs | {"PyValue_NULL"}
+                for part in inst.parts if isinstance(part, Uop) for cache in part.caches)):
+        return None
+    for index, token in enumerate(tokens):
+        if (token.text in {"for", "while"} or token.kind.startswith("CMACRO") or
+                (token.kind == "AND" and is_unary_and(tokens, index))):
+            return None
+        if token.text in outputs:
+            before = tokens[index - 1].text if index else ""
+            after = tokens[index + 1].text if index + 1 < len(tokens) else ""
+            if before in {"&", "++", "--", ".", "->"} or after in {
+                    "[", ".", "->", "++", "--"}:
+                return None
+    return outputs
+
+
 class IRStack(Stack):
     """The frame's slots in place of the stack, the SlotStack of the design
     note.  Every slot holds a value that the frame owns or NULL: a handler
@@ -2237,6 +2475,11 @@ class IRStack(Stack):
         self.dst_stores: list[str] = []
         self.observer_deferred: str | None = None
         self.observer_inputs: list[str] = []
+        # Must-NULL output facts follow the actual structured storage paths.
+        # Distinct normal successors keep distinct facts until the final store.
+        self.null_paths: dict[int, set[str]] = {0: set()}
+        self.null_stores: dict[int, bool] = {}
+        self.null_uncovered = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2250,7 +2493,37 @@ class IRStack(Stack):
         other.roles = self.roles
         other.window_taken = self.window_taken
         other.observer_inputs = list(self.observer_inputs)
+        other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
+        other.null_stores = dict(self.null_stores)
+        other.null_uncovered = self.null_uncovered
         return other
+
+    def select_null_edge(self, edge: int) -> None:
+        facts = set.intersection(*(set(names) for names in self.null_paths.values()))
+        self.null_paths = {edge: facts}
+
+    def note_null_statement(self, stmt: SimpleStmt, outputs: frozenset[str]) -> None:
+        texts = _statement_text(stmt)
+        for name in outputs:
+            if name not in texts:
+                continue
+            # An unknown macro may retain an lvalue without spelling '&'.
+            # Only direct assignments participate in this source transport.
+            if texts[:2] != [name, "="]:
+                self.null_uncovered = True
+            for names in self.null_paths.values():
+                names.discard(name)
+                if texts == [name, "=", "PyValue_NULL", ";"]:
+                    names.add(name)
+        if texts[:1] == ["JUMPTO"]:
+            if texts == ["JUMPTO", "(", "oparg", ")", ";"]:
+                self.select_null_edge(1)
+            else:
+                self.null_uncovered = True
+        elif texts[:1] == ["JUMPBY"] and texts != ["JUMPBY", "(", "0", ")", ";"]:
+            self.null_uncovered = True
+        elif "next_instr" in texts and any(t in texts for t in ("=", "+=", "-=")):
+            self.null_uncovered = True
 
     def code_ran(self) -> None:
         "Code that can rebind a local may have run: each view may dangle"
@@ -2332,6 +2605,8 @@ class IRStack(Stack):
         return None
 
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        for names in self.null_paths.values():
+            names.discard(var.name)
         lay = self.layout
         if not var.is_array():
             role = self.call_input_role(memory_offset)
@@ -2455,6 +2730,9 @@ class IRStack(Stack):
             self.consume(out, p)
             self.owner[p] = "out"
             previous = None
+        if self.final and p == lay.dst_offset and not self.published_temporary_result:
+            self.null_stores = {edge: not self.null_uncovered and var.name in names
+                                for edge, names in self.null_paths.items()}
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
             if lay.dst in lay.temp_fields:
@@ -2617,6 +2895,17 @@ class IRStack(Stack):
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
         super().merge(other, out)
+        paths = {}
+        for edge in self.null_paths.keys() | other.null_paths.keys():
+            if edge in self.null_paths and edge in other.null_paths:
+                paths[edge] = self.null_paths[edge] & other.null_paths[edge]
+            else:
+                paths[edge] = set((self.null_paths if edge in self.null_paths
+                                   else other.null_paths)[edge])
+        self.null_uncovered |= other.null_uncovered
+        other.null_uncovered = self.null_uncovered
+        self.null_paths = {edge: set(names) for edge, names in paths.items()}
+        other.null_paths = paths
         # A variable views an input after the join if it does on both
         # paths, and may dangle if it may on either
         for p in set(self.views) | set(other.views):
@@ -2681,6 +2970,7 @@ class IREmitter(Emitter):
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
         self.formats = formats
+        self.null_outputs: frozenset[str] | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -2704,6 +2994,8 @@ class IREmitter(Emitter):
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
         self._replacers["IR_CREATED_COPY"] = self.created_copy
+        self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
+        self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_BUILD_STRING"] = self.home_helper
@@ -2846,6 +3138,44 @@ class IREmitter(Emitter):
         self.out.start_line()
         self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame);\n")
         return True
+
+    def metadata_passthrough(self, tkn, tkn_iter, uop, storage, inst):
+        args, _ = self.instruction_macro_args(tkn, tkn_iter)
+        assert next(tkn_iter).kind == "SEMI"
+        if (len(args) != 1 or [token.text for token in args[0]] != ["1"]
+                or inst is None or metadata_only_passthroughs(inst) != frozenset({1})):
+            raise analysis_error("uncertified metadata-only passthrough", tkn)
+        return True
+
+    def suspend_delegated(self, tkn, tkn_iter, uop, storage, inst):
+        value, = self.macro_args(tkn, tkn_iter, 1)
+        if inst is None or metadata_only_passthroughs(inst) != frozenset({1}):
+            raise analysis_error("delegated suspension requires its checked transport", tkn)
+        self.ownership_event("YIELD_DELEGATED")
+        dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
+        self.emit("assert(frame->owner == FRAME_OWNED_BY_GENERATOR);\n")
+        self.emit("frame->instr_ptr = next_instr;\n")
+        self.emit("PyGenObject *ir_yield_gen = _PyGen_GetGeneratorFromFrame(frame);\n")
+        self.emit(f"assert(_PyValue_IsHome({value}));\n")
+        self.emit("DTRACE_FUNCTION_RETURN();\n")
+        self.emit("tstate->exc_info = ir_yield_gen->gi_exc_state.previous_item;\n")
+        self.emit("ir_yield_gen->gi_exc_state.previous_item = NULL;\n")
+        self.emit("_Py_LeaveRecursiveCallPy(tstate);\n")
+        self.emit("_PyInterpreterFrame *ir_yield_frame = frame;\n")
+        self.emit(f"ir_yield_frame->return_slot = (uint16_t){dst};\n")
+        self.emit("_PyThreadState_UpdateLastProfiledFrame(tstate, frame, frame->previous);\n")
+        self.emit("frame = tstate->current_frame = frame->previous;\n")
+        self.emit("ir_yield_frame->previous = NULL;\n")
+        self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
+        self.emit("_PyFrame_PublishDelegatedSuspension(ir_yield_frame);\n")
+        self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
+        self.abrupt_prefix = True
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("next_instr = frame->return_pc;\n")
+        self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
+        return False
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
@@ -3154,10 +3484,12 @@ class IREmitter(Emitter):
         storage.push_outputs()
         fmt = self.format_of(inst)
         mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+        edge, _ = contracts[tkn]
+        stack.select_null_edge(edge)
         self.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, self.out))
+        self.normal_null_receipts.append({edge: stack.null_stores.get(edge, False)})
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
-        edge, _ = contracts[tkn]
         # This checked terminal path has performed its final owner commit.
         # Only its successful intended normal edge gets the normal recipe;
         # callback errors/redirects retain their separate recovery protocols.
@@ -3812,6 +4144,12 @@ class IREmitter(Emitter):
     def emit_IfStmt(self, stmt, uop, storage, inst):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
+        # A condition may assign/address an output through C syntax. Such
+        # effects are not part of the checked NULL assignment transport.
+        if any(t.kind in ASSIGNMENTS or t.text in {"&", "++", "--"} or
+               (self.null_outputs is not None and t.text in self.null_outputs)
+               for t in stmt.condition):
+            storage.stack.null_uncovered = True
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
         return super().emit_IfStmt(stmt, uop, storage, inst)
 
@@ -3913,6 +4251,8 @@ class IREmitter(Emitter):
                 if var is not None and var.ir_inplace is None and not var.is_array():
                     stack.bind(var.name, None)
         self.note_view_object(stmt, storage, escape is not None)
+        if self.null_outputs is not None:
+            stack.note_null_statement(stmt, self.null_outputs)
         if not leaf_marker and (escape is not None or transaction_marker):
             stack.code_ran()
         if reachable:
@@ -3983,7 +4323,21 @@ class IREmitter(Emitter):
         assert isinstance(stack, IRStack)
         stack.error_exit = True
         stack.flush(self.out)
+        self.operand_error_flush(stack)
         return f"{self.jump_prefix}JUMP_TO_LABEL(error);"
+
+    def operand_error_flush(self, stack, bridge=None):
+        # These are actual error stores from the same IRStack used to emit C.
+        # Scalar layouts address only encoded inputs and the recipient; the
+        # source gate has excluded independent aliases and manual protocols.
+        if not isinstance(stack, IRStack):
+            self.abrupt_operand_uncovered = True
+        if bridge is not None:
+            self.abrupt_operand_bridges.add(bridge)
+        elif self.abrupt_operand_origin is not None:
+            self.abrupt_operand_sources.add(self.abrupt_operand_origin)
+        else:
+            self.abrupt_operand_uncovered = True
 
     def check_exit_inputs(self, tkn: Token, storage: Storage,
                           what: str | None = None) -> None:
@@ -4035,7 +4389,12 @@ class IREmitter(Emitter):
     def error_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_owner_exit(tkn)
         self.check_error_outputs(tkn, storage)
-        return super().error_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.abrupt_operand_origin
+        self.abrupt_operand_origin = id(tkn)
+        try:
+            return super().error_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.abrupt_operand_origin = previous
 
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
@@ -4054,7 +4413,12 @@ class IREmitter(Emitter):
         self.check_error_outputs(tkn, storage)
         self.emit("frame->phase_state = 0;\n")
         self.out.start_line()
-        return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
+        previous = self.abrupt_operand_origin
+        self.abrupt_operand_origin = id(tkn)
+        try:
+            return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.abrupt_operand_origin = previous
 
     def dispatch(
         self,
@@ -4274,6 +4638,8 @@ class IREmitter(Emitter):
             self.normal_completion(inst, fmt, kind)
         else:
             self.normal_completion_uncovered = True
+        if kind == "_PY_IR_SEND" and send_yielded_source_contract(inst, fmt):
+            self.send_yielded_published = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4358,8 +4724,11 @@ class IREmitter(Emitter):
             self.emit("frame->phase_state = 0;\n")
             self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
             self.emit(f"if ({box} == NULL) {{\n")
+            bridge = (id(uop), var.name)
+            self.abrupt_operand_bridge_expected.add(bridge)
             # Every input is still in its slot: exception_unwind has them
             storage.stack.copy().flush(self.out)
+            self.operand_error_flush(storage.stack, bridge)
             self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
             self.emit("}\n")
             if inst is not None:
@@ -4446,7 +4815,7 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
         return SlotLayout(True, get_stack_effect(inst).base_offset, in_fields,
                           borrowable)
     in_fields = {k - fmt.n_inputs: fmt.input_field(k)
-                 for k in range(fmt.n_inputs)}
+                 for k in range(fmt.n_inputs) if k not in fmt.metadata_inputs}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
                            if fmt.borrow_mask & (1 << k))
     return SlotLayout(False, PointerOffset.zero(), in_fields, borrowable,
@@ -4997,8 +5366,189 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     return publish
 
 
+# These are helper interfaces, not instruction-body permissions. They receive
+# native values/objects, never an arena address, and cannot write frame homes.
+# Callback effects remain the ordinary analyzer's separate responsibility.
+OPERAND_HELPERS = {
+    "_PyEval_GetANext": (("object",), "object"),
+    "PyValue_AsKnownObjectBorrow": (("value",), "object"),
+    "PyValue_FromObjectSteal": (("object",), "value"),
+    "PyValue_IsNull": (("value",), "scalar"),
+    "PyValue_IsNone": (("value",), "scalar"),
+    "PyValue_CLOSE": (("value",), "void"),
+    "PyValue_XCLOSE": (("value",), "void"),
+    "TAKE": (("value",), "value"),
+    "DEAD": (("value",), "void"),
+    "DECREF_INPUTS": ((), "void"),
+    "INPUTS_DEAD": ((), "void"),
+}
+
+
+def operand_error_sources(inst: Instruction) -> frozenset[int] | None:
+    """Prove ordinary scalar source cannot access an undeclared home.
+
+    The emitter still has to supply every actual error-flush receipt. This
+    grammar accepts native scalar/object expressions with checked helper
+    interfaces, not arbitrary C pointers, casts, stores or manual protocols.
+    """
+    errors: set[int] = set()
+
+    def expression(tokens, variables):
+        tokens = [token for token in tokens if token.kind != "COMMENT"]
+        if not tokens:
+            return None
+        depth = 0
+        for at, token in enumerate(tokens):
+            text = token.text
+            if text == "(":
+                depth += 1
+            elif text == ")":
+                depth -= 1
+            elif depth == 0 and text in {"==", "!=", "<", ">", "<=", ">=", "&&", "||"}:
+                left = expression(tokens[:at], variables)
+                right = expression(tokens[at + 1:], variables)
+                return "scalar" if left in {"scalar", "object", "null"} and right in {"scalar", "object", "null"} else None
+        if tokens[0].text == "!":
+            return "scalar" if expression(tokens[1:], variables) == "scalar" else None
+        if len(tokens) == 1:
+            token = tokens[0]
+            if token.text == "NULL":
+                return "null"
+            if token.text == "PyValue_NULL":
+                return "value"
+            if token.text in {"true", "false"} or token.text.isdigit():
+                return "scalar"
+            return variables.get(token.text)
+        if tokens[0].text == "(" and tokens[-1].text == ")":
+            return expression(tokens[1:-1], variables)
+        helper = tokens[0]
+        contract = OPERAND_HELPERS.get(helper.text)
+        if contract is None or helper.text in variables:
+            return None
+        iterator = TokenIterator(tokens[1:])
+        try:
+            arguments, _ = instruction_macro_args(helper, iterator)
+        except (SyntaxError, StopIteration):
+            return None
+        if iterator.peek() is not None:
+            return None
+        inputs, result = contract
+        if (len(arguments) != len(inputs) or
+                any(expression(argument, variables) != kind
+                    for argument, kind in zip(arguments, inputs))):
+            return None
+        return result
+
+    def statement(stmt, variables):
+        if isinstance(stmt, BlockStmt):
+            return all(statement(child, variables) for child in stmt.body)
+        if isinstance(stmt, IfStmt):
+            return (expression(stmt.condition, variables) == "scalar"
+                    and statement(stmt.body, variables.copy())
+                    and (stmt.else_body is None or statement(stmt.else_body, variables.copy())))
+        if not isinstance(stmt, SimpleStmt):
+            return False
+        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+        if not tokens or tokens[-1].text != ";":
+            return False
+        tokens = tokens[:-1]
+        if tokens and tokens[0].text in {"ERROR_IF", "ERROR_NO_POP"}:
+            iterator = TokenIterator(tokens[1:])
+            try:
+                arguments, _ = instruction_macro_args(tokens[0], iterator)
+            except (SyntaxError, StopIteration):
+                return False
+            valid = (not arguments if tokens[0].text == "ERROR_NO_POP" else
+                     len(arguments) == 1 and expression(arguments[0], variables) == "scalar")
+            if valid and iterator.peek() is None:
+                errors.add(id(tokens[0]))
+                return True
+            return False
+        declaration = 0
+        kind = None
+        if len(tokens) >= 4 and [token.text for token in tokens[:2]] == ["PyObject", "*"]:
+            declaration, kind = 2, "object"
+        elif tokens and tokens[0].text in {"PyValue", "int"}:
+            declaration, kind = 1, "value" if tokens[0].text == "PyValue" else "scalar"
+        if declaration:
+            name = tokens[declaration]
+            if (name.kind != "IDENTIFIER" or name.text in variables or
+                    name.text in OPERAND_HELPERS or name.text in HANDLER_LOCALS or len(tokens) <= declaration + 2 or
+                    tokens[declaration + 1].text != "="):
+                return False
+            if expression(tokens[declaration + 2:], variables) != kind:
+                return False
+            variables[name.text] = kind
+            return True
+        if len(tokens) >= 3 and tokens[0].text in variables and tokens[1].text == "=":
+            return tokens[0].text != "oparg" and expression(tokens[2:], variables) == variables[tokens[0].text]
+        return expression(tokens, variables) == "void"
+
+    for part in inst.parts:
+        if isinstance(part, Skip):
+            continue
+        if (not isinstance(part, Uop) or part.caches or
+                any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs))
+                or not canonical_body_tokens(part)):
+            return None
+        if any(item.name in HANDLER_LOCALS or item.name in OPERAND_HELPERS
+               for item in (*part.stack.inputs, *part.stack.outputs)):
+            return None
+        variables = {item.name: "value" for item in (*part.stack.inputs, *part.stack.outputs)}
+        variables["oparg"] = "scalar"
+        if not statement(part.body, variables):
+            return None
+    return frozenset(errors) if errors else None
+
+
+def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
+    """Only the matched-exception arm reaches a drained normal successor."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (len(parts) not in (1, 2) or len(parts) != len(inst.parts)
+            or not fmt.window or not fmt.names_target or fmt.n_inputs
+            or fmt.roles != [ROLE_BASE, ROLE_NONE, ROLE_IMM, ROLE_IMM]
+            or fmt.imm != LOC_CD or fmt.store_dst):
+        return False
+    producer = parts[-1]
+    if ([(i.name, i.peek, i.size) for i in producer.stack.inputs] !=
+            [("awaitable_st", False, ""), ("exc_st", False, "")]
+            or producer.stack.outputs):
+        return False
+    expected = """{
+        JUMPBY(0);
+        (void)oparg;
+        PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+        assert(exc && PyExceptionInstance_Check(exc));
+        int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
+        if (matches) {
+            DECREF_INPUTS();
+        }
+        else {
+            Py_INCREF(exc);
+            _PyErr_SetRaisedException(tstate, exc);
+            monitor_reraise(tstate, frame, this_instr);
+            goto exception_unwind;
+        }
+    }"""
+    if statement_shape(producer.body) != statement_shape(
+            Parser(expected, "<async exit transport>").block()):
+        return False
+    if len(parts) == 1:
+        return True
+    observer = parts[0]
+    expected = """{
+        assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
+        INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
+    }"""
+    return (not observer.stack.inputs and not observer.stack.outputs
+            and statement_shape(observer.body) == statement_shape(
+                Parser(expected, "<async exit observer>").block()))
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
+    if async_exit_transport(inst, fmt):
+        return True
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
     steals = [part for part in parts if any(
@@ -5549,10 +6099,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     and canonical_body_tokens(transfer)
                     == [token.text for token in tokenize(expected_yield)]):
                 return True
-    if [p.name for p in parts] not in (
-        ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
-        ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
-    ):
+    if (len(parts) != 2 or parts[0].name not in {
+            "_MAKE_HEAP_SAFE", "_RETURN_VALUE_EVENT"} or
+            parts[1].name not in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"}):
         return False
     prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
     body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
@@ -5561,7 +6110,6 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         PyValue temp = retval;
         DEAD(retval);
         SAVE_STACK();
-        _PyFrame_AssertTemporariesClear(frame);
         DTRACE_FUNCTION_RETURN();
         _Py_LeaveRecursiveCallPy(tstate);
         _PyInterpreterFrame *dying = frame;
@@ -5571,6 +6119,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
+    if parts[1].name == "_RETURN_VALUE":
+        expected_body = expected_body.replace("_PyEval_FrameClearAndPopWithResult",
+                                              "_PyEval_FrameClearAndPopGeneralWithResult")
     if body != [t.text for t in tokenize(expected_body)]:
         return False
     if parts[0].name == "_MAKE_HEAP_SAFE":
@@ -5596,9 +6147,18 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
+    emitter.abrupt_operand_expected = operand_error_sources(inst)
+    emitter.abrupt_operand_sources = set()
+    emitter.abrupt_operand_origin = None
+    emitter.abrupt_operand_bridge_expected = set()
+    emitter.abrupt_operand_bridges = set()
+    emitter.abrupt_operand_uncovered = False
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
+    emitter.normal_null_receipts = []
+    emitter.null_outputs = null_output_names(inst, fmt)
+    emitter.send_yielded_published = False
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
@@ -5772,6 +6332,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if reachable:
         assert isinstance(stack, IRStack)
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
+        emitter.normal_null_receipts.append(
+            {edge: stack.null_stores.get(edge, False) for edge in stack.null_paths})
+        if send_yielded_source_contract(inst, fmt):
+            emitter.send_yielded_published = True
         if call_window:
             emitter.call_normal_drained = True
         # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
@@ -5790,7 +6354,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
     normal_edges = ({1} if fmt.jump_always else {0, 1}
-                    if fmt.jumps or fmt.forward else {0})
+                    if (fmt.jumps or fmt.forward) and not fmt.names_target else {0})
     if (not reachable and emitter.normal_observer_edges == normal_edges
             and normal_vacate_capability(inst, fmt)):
         # Checked terminal wrappers flush before their callbacks and dispatch
@@ -5827,10 +6391,18 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS",
                 flags=(int(result_offset is not None) |
-                       (2 if emitter.disjoint_child_drained else 0)),
+                       (2 if emitter.disjoint_child_drained else 0) |
+                       sum(4 << edge for edge in normal_edges
+                           if emitter.null_outputs is not None and
+                           any(edge in receipt for receipt in emitter.normal_null_receipts) and
+                           all(receipt.get(edge, True) for receipt in emitter.normal_null_receipts))),
                 src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
-        emitter.ownership_events.extend(sorted(emitter.normal_completions,
+        completions = emitter.normal_completions
+        if emitter.send_yielded_published:
+            completions = {replace(event, flags=event.flags | 2, extent=2)
+                           for event in completions}
+        emitter.ownership_events.extend(sorted(completions,
                                               key=lambda event: (event.dst, event.src)))
 
 
@@ -6098,7 +6670,8 @@ def boxes_into_record(code: str) -> bool:
 
 def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
-                    abrupt: dict[str, bool] | None = None
+                    abrupt: dict[str, bool] | None = None,
+                    operand_abrupt: dict[str, bool] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -6117,6 +6690,12 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         generate_handler(name, inst, formats[name], emitter, out, True)
         if abrupt is not None:
             abrupt[name] = emitter.abrupt_prefix
+        if operand_abrupt is not None:
+            operand_abrupt[name] = (
+                emitter.abrupt_operand_expected is not None and
+                emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
+                emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
+                not emitter.abrupt_operand_uncovered)
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
         if boxes_into_record(buffer.getvalue()):
@@ -6133,6 +6712,25 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            yielded = [programs[name] for name in members
+                       if len(programs.get(name, ())) == 1 and
+                       programs[name][0].kind == "_PyIR_OWNER_NORMAL_COMPLETION" and
+                       programs[name][0].flags & 2]
+            if yielded and not all(programs.get(name) == yielded[0] for name in members):
+                for name in members:
+                    programs[name] = tuple(
+                        replace(event, flags=event.flags & ~2, extent=0)
+                        if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION" else event
+                        for event in programs.get(name, ()))
+            null_flags = 12
+            for name in members:
+                program = programs.get(name, ())
+                null_flags &= (program[0].flags if len(program) == 1 and
+                               program[0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS" else 0)
+            for name in members:
+                program = programs.get(name, ())
+                if len(program) == 1 and program[0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS":
+                    programs[name] = (replace(program[0], flags=(program[0].flags & ~12) | null_flags),)
             moved_results = [programs[name] for name in members
                              if len(programs.get(name, ())) == 1
                              and programs[name][0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"
@@ -6182,6 +6780,7 @@ class HandlerContract:
     ownership_events: tuple[OwnershipEvent, ...]
     call_input_holes: int
     abrupt_prefix: bool
+    abrupt_operands: bool
 
 
 def statement_shape(node):
@@ -6513,7 +7112,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
-    if inst.name == "RETURN_VALUE" and canonical_frame_transfer_input(inst):
+    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
+            canonical_frame_transfer_input(inst)):
         return "_PyIR_TRANSFER_EXIT"
     return unknown
 
@@ -7004,7 +7605,7 @@ def result_publication_contract(
 def writes_suspended_frame_state(inst: Instruction) -> bool:
     """Recognize state writes, rather than guards mentioning a child state."""
     tokens = " ".join(uop_tokens(inst))
-    return bool(re.search(
+    return "IR_SUSPEND_DELEGATED" in uop_tokens(inst) or bool(re.search(
         r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
         or re.search(
             r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
@@ -7050,13 +7651,17 @@ def handler_contracts(analysis: Analysis,
     ids = handler_ids(analysis)
     programs = {}
     abrupt = {}
-    boxing = boxing_handlers(analysis, formats, programs, abrupt)
+    operand_abrupt = {}
+    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
         if not all(abrupt.get(name, False) for name in members):
             for name in members:
                 abrupt[name] = False
+        if not all(operand_abrupt.get(name, False) for name in members):
+            for name in members:
+                operand_abrupt[name] = False
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -7079,6 +7684,7 @@ def handler_contracts(analysis: Analysis,
             ownership_events=programs.get(name, ()),
             call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
             abrupt_prefix=abrupt.get(name, False),
+            abrupt_operands=operand_abrupt.get(name, False),
         )
     return result
 

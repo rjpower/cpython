@@ -347,8 +347,10 @@ Known values:
    64416: fused branch source coverage follows the encoded control edge
    64417: attribute feedback separates guarded values in 48-byte entries
    64418: class-receiver classmethod forwarding reuses retired opcode 111
-   64419: canonical CALL families certify virtual self and kwargs holes */
-#define PYC_MAGIC_NUMBER 64419
+   64419: canonical CALL families certify virtual self and kwargs holes
+   64420: delegated yield names its retained receiver explicitly
+   64421: general return and certified empty-scratch return forms */
+#define PYC_MAGIC_NUMBER 64421
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

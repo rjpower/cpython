@@ -563,3 +563,107 @@ ordinary/source recovery selecting the same transfer, and invalid retained
 or protocol aliases through every public image route. Tests should assert
 ownership, cleanup/context effects and valid observations, without requiring
 CPython's former destructor order.
+
+### Runtime retained-view interface
+
+The proposed cold `_PyIRHomeView` grows from 16 to 32 bytes. Its existing
+base provider remains intact. The extension is a code-owned retained-range
+pointer, a uint32 range count, a uint16 release limit and uint16 flags.
+Ranges and the release limit are scratch-relative. Zero flags preserves the
+ordinary view and ignores the extension. A partitioned view selects dynamic
+bindings plus `base_selection ∩ (retained_ranges ∪ [0, release_limit))`.
+In particular, a bitmap retained range cannot expose a zero-bit word. The
+static range provider retains its own established readability contract.
+
+`scope.remaining` stays the absolute release cursor. The cold lookup copies
+the descriptor and derives its release limit from that cursor; it does not
+truncate the base scratch limit or hide retained homes above the cursor.
+Cleanup uses the common reverse iterator, excludes retained membership, and
+advances the scope cursor before taking and closing each owner. Named locals
+remain dynamic and outside the scratch partition. No-handler cleanup uses an
+empty retained set and hands only bindings to M2 without a callback gap.
+
+After cleanup, exception and optional tagged lasti are written into their
+separately validated vacant homes. Before the handled callback, the scope
+must publish a fresh handler-entry view containing retained homes and these
+new roles. An error in that callback carries this actual view into its next
+ingress; the old checkpoint or a changed PC cannot reconstruct it. Range
+pointers remain code-owned, presence pointers remain allocation-owned, and
+neither pointer may refer to a native processor-local descriptor after
+capture. Capture copies the view and rebases its presence pointer while the
+code pin remains live.
+
+The cost is +16 bytes per cold view and per embedded observer capture, with
+corresponding outlined-stack and heap-object charges. The 112-byte static
+frame header and 40-byte transition record do not grow. The bitmap frame's
+existing presence pointer is unchanged. Selected iteration adds retained
+membership/partition work only when its explicit flag is present; ordinary
+views should retain their existing iteration path. Native stack reservation
+and code-size effects require root's generated/native measurements.
+
+Source ownership must freeze before implementation. Frames proposes the
+runtime `ProcessError`/drain, common iterators, error lookup/capture and runtime
+fixtures. GC/IR own retained identity transport, the semantic container,
+admission and the shared schema. The runtime starts from a clean qualified B
+base with the actual metadata scope and HEAD-held lookup; the older P base
+must not replace those functions wholesale.
+
+The first runtime fixtures cover an interleaved retained/released selection,
+a retained owner above the release cursor observed during another finalizer,
+GC plus frame escape and named-local mutation, and explicit exception/lasti
+publication observed by a handled callback that then fails. A common-iterator
+probe must cover both providers, retained holes outside the base selection,
+all bitmap first-bit positions and plane mutation between reverse steps.
+Ordinary and source recovery must select the same transfer. Existing nested
+ERROR scopes, foreign protected lookup and bindings-only M2 tests remain.
+
+### Semantic and compiler component boundary
+
+The source interface is agreed; the component is not yet integrated or
+qualified. IR owns the container, assembler, universal admission and plan;
+GC owns compiler retained identities and semantic debugger readers; frames
+owns the runtime retained view, cleanup, capture and runtime fixtures.
+
+IRSC version 2 has a 24-byte header: magic, version, EH byte count, recovery
+count, transfer count and retained-range count, each four bytes. Its payload
+contains the marked EH stream, recovery rows, transfer descriptors and
+retained ranges. Ordinary EH entries encode `(start, length, transfer_id)`.
+Recovery rows contain four signed 32-bit fields `(from, to, edge,
+transfer_id)`; only `-1` denotes no handler. Position-row IDs remain unchanged.
+There is no old-encoding fallback. The shared empty bytes object remains the
+no-EH/no-recovery/no-transfer representation.
+
+Each 16-byte transfer descriptor contains a 32-bit handler target, retained
+range offset and count, then separate 16-bit exception and lasti homes.
+`IR_NO_DST` denotes absent lasti. Retained intervals reuse the six-byte
+`_PyIRPhaseRange` encoding with flags and reserved bytes zero. IDs are bounded
+to `INT32_MAX`; counts, byte products, home bounds, sorted/coalesced intervals
+and protocol aliases are checked by universal admission. Serialized fields
+are decoded with byte reads or `memcpy`, rather than aligned typed loads.
+The existing execution plan owns aligned transfer copies and its interned
+range pool. Transfer IDs keep their table identity; there is no second map
+from semantic IDs to runtime IDs.
+
+Ordinary lookup and a failed source callback carry the same transfer ID.
+The activation's old independent handler/exception/lasti triple is replaced
+by that identity. Plan creation must supply transfers even when no optional
+phase certificate is available; an absent phase map cannot erase recovery
+semantics. Retained membership never supplies readability or a missing owner.
+
+The compiler adds `handler_in` and `nretained` to each register block, an
+eight-byte compiler-only cost. Before physical allocation it records one
+operand-pool slice containing retained virtual identities, the exception
+identity and optional lasti identity. `_PyReg_EH_KEEP`, `_PyReg_EH_EXC` and
+`_PyReg_EH_LASTI` expose these roles. The assembler resolves each through
+`_PyRegCfg_Slot`; it does not calculate a protocol home from stack depth.
+Constant-slot insertion and other operand remaps must update this slice.
+Protocol identities are not ordinary consumed operands. Verification checks
+distinct identities and physical homes, and liveness retains the selected
+owners independently of later handler reads.
+
+The first component keeps the current allocator's layout while replacing
+the runtime's inferred floor with this explicit transfer. Raw interleaved
+retained sets exercise the general representation. Changing canonical
+register placement is a later allocator change against that same interface,
+not another exception format. Compiler and runtime source land only as one
+used component, with the shared public-construction and recovery gates.

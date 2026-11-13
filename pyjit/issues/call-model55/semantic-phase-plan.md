@@ -506,6 +506,40 @@ collection; handler-entry publication explicitly uses control authority 3.
 Other transports still select initialized control until their actual operations
 are replayed. This qualifies the first slice, not complete map coverage.
 
+The qualified scalar extension replaces separate error-read records
+with one topological action prefix: SAVE, VACATE, PUBLISH, canonical literals,
+COPY, CALLBACK and JOIN. Checkpoints name a node in that prefix. Replay first
+coalesces the actual encoded A/B/C/D aliases, then uses four physical-home facts
+per node and immutable native-value snapshots. It allocates one reusable cold
+workspace; it does not allocate a register vector for every action or word.
+Each actual home write needs its own receipt, including each pre-join path.
+
+Native identities come from the shared scoped `Local` provenance parser.
+Non-NULL facts do not confer a count: TAKE/DUP, actual release and publication
+control native ownership. Retirement and transfer expire old aliases; a new
+home load must establish a new identity. Every owning native token must be
+rehomed or retired before a checkpoint, apart from the explicit `value_temps`
+workspace passed to the processor. Conditional TEMP_DST publication cannot
+claim that a local recipient holds the temporary. Native PyObject-result
+closure is checked by the same typed helper analyzer at each explicit error,
+pre-uop bridge entry and instruction exit. Ambiguous native value joins,
+unsupported arrays/helpers and changed-origin paths remain uncovered.
+Integrated I8232 passed both 117/79 builds, all 5 bootstrap and 27 broader
+freezer probes, 23 focused cases and 233 IR/code cases per role. This includes
+the actual UNARY_NOT post-retirement selected snapshot and alias controls;
+GET_ANEXT's earlier qualified boundary remains intact.
+
+The next source-frozen packet, `00706926b6a`, adds explicit native helper-result
+ownership, canonicality and non-NULL contracts, exact token-bound NULL guards,
+and a normal endpoint in the same action suffix. A valid native value is not
+necessarily a canonical frame value: actual normalizing publication establishes
+frame initialization; a canonical store requires prior canonicality. Native
+OBJECT conversions additionally require their actual non-NULL precondition.
+Normal replay retains only complete incoming shapes and identical family-wide
+transport. Its 31 narrow source controls pass; full generation and the native
+UNARY_INVERT-to-GET_ANEXT publication witness remain integration gates. It adds
+no runtime normal lookup and does not close the remaining M4 groups.
+
 Readability is a must-fact distinct from MAY_OWNER. An actual read must have its
 required initialized role on every predecessor; a nullable owner range permits
 canonical NULL only where the protocol declares it. Reads of an absent home

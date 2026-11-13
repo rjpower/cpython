@@ -44,7 +44,7 @@ Never mutate a source while its native job or quiet measurement is running.
 
 ## Current static checkpoint
 
-Source/native I dc6bad8a625, both117/79 builds. It composes shared input schema
+Preceding source/native I dc6bad8a625, both117/79 builds. It composes shared input schema
 51360665d5f and positive ERROR source7a94d51e97d with the prior outlined
 processor, IRSC1 recovery/IRSM2 positions, PRE observer ingress and checked CALL
 drain. Generated code differs only at GET_ANEXT's two error checkpoint literals.
@@ -76,9 +76,20 @@ Evidence E/positive-error-snapshots-*; exact release ELF SHA256
 95e69c53868255c6883d03a4298887ae7e1d2bfbaec3d67f808fa96c9fc053fd.
 Earlier captures/campaigns remain at their recorded source heads in the report.
 
+Current I source/native8232dd8adde adds the shared scalar storage-action graph and
+native-only admission. E/scalar-storage-host passes20 source methods and full
+cases/metadata/contracts emission; full regeneration and both117/79 builds
+pass. E/scalar-storage-runtime-* passes23 cases per role; admission passes233
+per role, one skip. Its stable two-pair54 screen is1.017884/0.997913/1.022717/
+0.978000/0.981699/0.981101; mixed, no promotion. Its separate direct upstream
+screen is1.177991/1.430017/1.292308/1.242869/1.332579/0.756278. Both campaigns
+finish stable and without failures. No all29/PMU for8232 yet.
+E/scalar-storage-native retains its ELF, SHA256
+2aba9d15fc2092083917d8998083a59cf4e3d038c131801084b2c9b49827223a.
+
 ## Bitmap checkpoint
 
-Current B0af2ff5b66a and both builds complete117/79. It adds the reviewed
+Last completed native B0af2ff5b66a and both builds complete117/79. It adds the reviewed
 PRE/ERROR cohort732c7cbe2b7, four literal fixture ports and generated products.
 Bootstrap5+27,13 ownership/error cases and617 runtime cases per role pass.
 Retained ELF E/bitmap-error-scope-native, SHA256
@@ -106,6 +117,42 @@ Bindings stay physically initialized. Under Py_GIL_DISABLED the existing
 physical-NULL policy remains; concurrent stale storage is a separate gate.
 GC completed ERROR/presence composition in G and now peers P/IR; it owns
 a disjoint matching runtime-query hunk in W by explicit IR coordination. Root alone mutates B and generates/builds it.
+
+Current B source is1ee9cae4ece, with the complete GIL stale-reader packet,
+terminal read-route correction and explicit native-entry read. The host gate
+passes nine focused methods plus full cases/metadata/contracts at frozen
+20b830; corrected generated metadata matches0af2. Bootstrap5+27 admission
+passes at8aa. Full native build exposes old arena-probe fields/API, fixed in
+7e692/688, then crashes on native INTERPRETER_EXIT reading a nonexistent
+presence map. Exact GDB/ELF evidence is retained. Native read495/productsd0
+removes that crash. Grouped deletion protocols now include STORE_NAME,
+large-name SETATTR and a shared nullable-value deoptimization guard for all
+specialized STORE_ATTR handlers. Full emission passes atade9. The next native
+startup crashes in LOAD_FAST_BORROW: a hardware watchpoint proves that the
+overlapping reservation initializes bindings through a reused frame header's
+old base before installing the new base. Frames is correcting the construction
+ordering across all entry paths in sourcef1b. The repeated failure atf1b uses
+an old ceval.o: the inline bitmap header is missing from PYTHON_HEADERS.
+Root1ee9 corrects that dependency and full rebuilding passes frozen-module
+execution, then fails during regex compilation at FOR_ITER_LIST's required
+cursor check. The failing activation is entering this loop for the first
+time after GET_ITER_VIRTUAL deoptimizes. LIST/TUPLE need the existing nullable
+cursor deoptimization guard before their required cursor projection, as
+FOR_ITER_VIRTUAL already does. Frames is implementing that grouped correction.
+Evidence E/bitmap-base-bind-deps-* and E/bitmap-base-bind-required-gdb. Raw
+FFF8...2 is stale inline integer2, not an index; early unsuccessful watchpoint
+attempts used the wrong tag and establish nothing. iteration-trace.log and
+getiter-trace.log identify the first-entry/deoptimization route. No current B full build or timing
+pass exists. Its shared builds are in development and must pass strict module
+and native identity gates before reuse. Evidence E/bitmap-stale-reader-*,
+E/bitmap-stale-bootstrap-freeze-gdb, E/bitmap-native-entry-*,
+E/bitmap-native-absence-gdb. The latter homes.log pointer inspection is excluded
+for a reserved GDB-register assignment; its original error backtrace and source
+lowering independently establish the deletion-role finding.
+Current crash ELF, backtrace and valid handoff watchpoint are retained at
+E/bitmap-delete-closure-gdb; the release build failure is
+E/bitmap-delete-closure-release-build.log. The earlier watch.log follows a
+successful invocation's ordinary clear; handoff-watch.log identifies the bug.
 
 ## Remaining work and diagnostic limits
 

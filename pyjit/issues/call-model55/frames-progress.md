@@ -552,3 +552,96 @@ stale-reader packet is now WIP in P; FT retains physical-NULL policy. Required
 and nullable input roles, positive array checks and actual finite/helper/
 observer/remote readers must close before source freeze. No WIP source or
 store-count estimate is a native stale-execution pass.
+
+The shared input qualifier schema is committed separately as 51360665d5f
+(parser, StackItem and pure source tests), with IR/GC source GO. The complete
+GIL stale-reader draft is frozen for root host emission at that HEAD plus
+23 staged paths, diff SHA256
+`d603891b62bde67c50668424ccc624c1195d20ce152db61728c1865a9e12cf81`.
+GC's actual source review closed nullable DUP/guard/helper-shadow/provenance
+and special-pair offset findings. Root's draft review closed the nullable
+drain CLOSE mismatch, remote descriptor declaration/size, early observer
+partition and named-unbound error details. Pure source checks pass; the
+prepared runner also exercises actual lowering and full emission under root.
+No native stale checkpoint or representation winner is claimed. The pending
+B ERROR merge must preserve its common reverse iterator and metadata scope.
+
+The first root host gate passed four focused source/lowering methods, then
+full emission failed in BINARY_OP_ADD_FLOAT: a repeated required check on a
+validated C-only cleanup operand attempted an impossible failure flush.
+The retained witness is `E/reader-policy-host/root-check.log`; no generated
+product or native qualification resulted. The repair carries current
+non-NULL facts on existing Python `Local` identities, intersects branches,
+and revokes writes, aliases, scalar-mutating macros and loop assignments.
+Elided checks require separate positive-C receipts. Nullable transitions
+remain checked when a real home exists and fail closed when their error
+cleanup has no home. The retry includes the actual float macro in both
+record modes plus overwrite, mutation and zero-iteration controls; root
+owns full generation and native validation.
+
+The retry passed seven focused methods but full generation found another
+unhomed conditional-result check. Root's fresh 325-handler emission census
+isolated 23 failures: Boolean branch results and return-observer retained
+values. The follow-up tracks typed native C temporaries with scoped Python
+`Local` identities, proves non-NULL ternary arms, and refines the exact
+surviving `ERROR_IF(PyValue_IsNull(value))` path. It introduces no runtime
+field. Peer controls cover nullable transitions, mutation, conditional
+guards, loops and initialized/uninitialized shadows; unsupported qualified
+or preprocessor-dependent shadow declarations fail closed. The focused
+cohort now includes all 29 related handlers in both record modes. Full
+generation and native qualification remain root gates; previous failed
+outputs are retained under `E/reader-policy-host-retry`.
+
+Root's fresh cohort gate passed nine focused methods plus full cases,
+metadata and contracts emission at diff `20b830d0`. The exact source is
+committed as shared proof `756191a50dc` followed by stale GIL reader policy
+`5e07fcfcc21`; schema remains separate `51360665d5f`. B composition then
+revealed three SEND specialization proof rows lost because read-route
+expectations included an un-emitted `_PUSH_FRAME` after a checked terminal
+native step. Correction `aa442adf21b` clips only that independently certified
+always-exiting source prefix and retains actual terminal receipt checks;
+FOR_ITER remains uncovered. Its source mutation controls pass and GC source
+review reports GO. Root's corrected B regeneration/native gate is pending.
+
+Native qualification found two reader-policy gaps after host emission passed.
+The arena probe still used the removed GIL initialized frontier; `c4f58d61e1b`
+ports it to presence/vacancy plus a poisoned scratch witness and actual named
+binding initialization. Tuple projection correction is `6058bdbb63e` in P.
+The interpreter-exit borrow then reached the ordinary bitmap reader on its
+native C-stack home. `33bc3a063e6` selects an asserted raw native borrow only
+under the existing exact native-entry body/IO contract; both record variants
+and ordinary-input negatives pass the focused host check.
+
+Bootstrap next exposed compiler-generated deletion through STORE_NAME.
+`a967f3424fc` marks only its value nullable and audits the actual helper's
+value argument. The grouped delete census also found the large-name SETATTR
+intrinsic: its second value may be NULL, while other binary intrinsics now
+reject NULL and clean their detached owners before any projection. Source
+argument/guard controls pass; module/class/global/attribute/subscript/slice,
+large-name and non-delete intrinsic runtime controls await root's native gate.
+These are qualification fixes, not a complete stale-rival runtime claim.
+
+Attribute-family follow-up `1da750fbe95` makes the specialization probe's value
+nullable and prepends one shared NULL-deopt guard to all five specialized
+stores before locks or required-value reads. GC source review and the focused
+source-order test pass. A constructed image keeps one store word, selects a
+conditionally bound local as its actual IN0 field, warms assignment, then
+supplies unbound NULL to test deletion fallback and refill. Native admission
+and execution remain root gates.
+
+The separate M0 diagnostic patch is retained at
+`E/m0-binding-copy-census/census.patch` with source identity, API/cost notes and
+GC seven-path source GO. It counts actual binding NULL writes, constant
+preclear/install overlap, default stores, copied L and positive S by source
+cause; it does not infer dirty Q. P is restored clean and ordinary source has
+no diagnostic symbols. Root owns its later dedicated build/run after the
+ordinary bitmap qualification and timing screen.
+
+Root's full regeneration exposed a retained-view collision in the new guard:
+its lower input C name `value` was reused by `_LOCK_OBJECT` for the receiver.
+The generator rejected the later TAKE because no current alias retained the
+original input. `11b529219b2` names that real guard alias `store_value`, keeping
+it distinct until the final store rename. It weakens no emitter check. The
+expanded focused test emits all five actual specialized handlers in both
+record modes and passes; GC actual source review is GO. Root retains the
+failed full-regeneration evidence and owns the fresh full gate.

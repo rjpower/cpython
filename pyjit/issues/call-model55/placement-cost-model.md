@@ -145,8 +145,62 @@ on the same admitted images/workloads; M5 must retain the selected M4 placement.
 This cost model neither predicts timing from byte counts nor selects an
 unimplemented validity representation for production.
 
-GC's bounded source/arithmetic peer reports GO. Root selects shared storage
-with initialized NULL named locals as the M4 reference. Its costs are the
-112-byte header, actual Q admission writes, current overlap/reservation and
+GC's bounded placement source/arithmetic peer reports GO. Root selects shared
+storage with initialized NULL named locals as the M4 reference. Its costs are
+the 112-byte header, actual Q admission writes, current overlap/reservation and
 NULL local readers described above. Dynamic local validity remains an optional
 bounded alternative; splitting bases does not eliminate its semantic work.
+
+## Bounded diagnostic census after the stale-reader gate
+
+Use a separate retained patch and diagnostic binary after ordinary B
+qualification and timing. Apply it only to that diagnostic source snapshot,
+then revert it; ordinary source carries no counter branch, symbol or frame field.
+This GIL-only census reports stores and copy traffic, not timing and not
+physical cleanliness. It must never inspect a zero-presence value word.
+
+The interface is `_PyM0_RecordEntry(route, code, first)`,
+`_PyM0_RecordDefault(route)`, and `_PyM0_RecordCopy(cause, src, view)`.
+They update a fixed `_Py_thread_local` bank of uint64 totals and bounded
+L/selected-S histograms, with no allocation or callbacks. A diagnostic-only
+test-CAPI reset/snapshot returns the attached OS thread's totals; worker
+threads require their own snapshots. There is no process-wide enable check
+and no inference from a frame address to its constructor.
+
+| Producer | Exact observation |
+| --- | --- |
+| `ReserveForCall`, split by actual THREAD versus heap caller | One entry, L, preserved argument prefix `first=A`, and W=`L-first` actual named NULL stores. Its two callers proceed callback-free and without failure to `_Initialize`; the executing code is pinned. |
+| `PushUnchecked`, generic binding constructor, trampoline, direct heap construction | Separate source-route rows; first is zero and W=L where that actual constructor fills L. No unexecuted initialization is charged. |
+| Constant installation | K=`co_nconstslots` actual installs, plus `K_preclear`: constant table destinations inside `[first,L)`. These cells are NULLed by `_InitializeBindings` and then overwritten by `_FillConstSlots`; record this concrete double write per entry route. Count the actual const loop independently to check the entry accounting. |
+| Positional/keyword defaults | Increment at each actual write in generic positional, generic keyword-only, cached positional and cached keyword binding loops. Keep these source-route totals separate; do not invent a per-frame join or call them additional NULL fills. |
+| Created-empty copy, created fallback, retirement takeover, public generator construction | Count copied L separately from selected positive S, using the already protected/clipped view. The created certificate supplies S=0. Include view kind and callback-free capture cause; fake test probes do not enter the production-copy totals. |
+
+Entry instrumentation belongs in runtime constructors, not copied opcode
+bodies. The const-table overlap calculation reads only pinned code metadata.
+Copy instrumentation walks the same validated view before ownership moves;
+it reads range metadata and presence bits, never home values. A selected range
+may include initialized NULL, so positive-S totals intersect it with the source
+plane; MUST does not imply non-NULL. No existing production helper ABI
+or layout change is needed. Defaults are tagged at their existing C store
+sites, and the diagnostic-only copy observer is placed at the three actual
+production callers. Preserve every current owner/phase publication.
+
+W is the loop's store count, not dirty Q. A zero presence bit cannot prove an
+old word is NULL. The first result should show W, K_preclear, default stores,
+copied L and positive S by source route/cause, and entry/copy counts. A later
+cleanliness census would need independent provenance; it is not part of this
+patch or a second authority plane. Likewise, skipping constant preclear
+requires a separate combined-initialization proof across every constructor
+and all callback/publication boundaries; these counters grant no such edit.
+
+Root applies, builds and runs the diagnostic patch, records its identity and
+snapshots, then restores the ordinary binary. Counter increments, metadata
+walks and TLS traffic are deliberately excluded from performance comparison.
+
+The reviewed source is retained at
+`E/m0-binding-copy-census/census.patch`, SHA256
+`e7a958b0d3df9070ca2afd4040b618594b3d56e975b3877a4bdf8411b8d7f493`,
+with a usage/cost README beside it. GC gave actual seven-path source GO;
+`git apply --check` passes on P `1da750fbe95`. P was restored clean afterward.
+No diagnostic binary or counter result exists yet. The temporary APIs and
+symbols are absent from ordinary selected source.

@@ -8,8 +8,8 @@ and [report](issues/call-model55/report.md) own the active effort. The reviewed
 [target model](design/proposals/register-call-model55.md) is a proposal until
 its lifecycle and qualification gates pass.
 
-Current static source/native `dc6bad8a625` and presence composition
-`0af2ff5b66a` build all117 modules,79 shared, in release/debug. The static
+Prior static checkpoint `dc6bad8a625` and the last completed presence
+composition `0af2ff5b66a` build all117 modules,79 shared, in release/debug. The static
 checkpoint passes bootstrap5+27,18 focused runtime cases and233 IR/code cases
 per role. GET_ANEXT's first proved ERROR snapshots select surviving roots
 through raise monitoring, cleanup and escape; unknown/MAY-only states receive
@@ -51,6 +51,25 @@ before removing those fills. See the
 The static processor's checkpoint0 remains initialized-NULL control; positively
 proved error snapshots and full static authority are under implementation.
 No complete static or bitmap representation has earned selection.
+The full GIL stale-reader source is integrated in B1ee9; full emission passes.
+Native integration corrects the old arena-probe API, native-entry map boundary
+and grouped deletion protocols. The next bootstrap execution exposes a reused
+frame header whose old home base is used to initialize the new bindings. A
+hardware watchpoint identifies the erroneous argument overwrite. Sourcef1b
+corrects the base/plane construction order;1ee9 adds the missing inline-header
+build dependency. Rebuilding passes frozen-module execution, then regex
+compilation exposes a specialized iterator checking a required cursor before
+its nullable deoptimization guard. That grouped guard correction is pending.
+The current B builds are in development; the0af2 measurements do not describe
+this source.
+
+Static source/native8232 adds the shared scalar action graph and native-only
+admission. Both117/79 builds pass23 targeted and233 IR/code cases per role.
+Its two-pair54 screen in the same hot order is1.017884/0.997913/1.022717/
+0.978000/0.981699/0.981101. Its separate direct upstream screen is1.177991/
+1.430017/1.292308/1.242869/1.332579/0.756278. Both campaigns complete with
+stable identities and no failures. This is mixed, with no promotion and no
+same-head all29/PMU evidence yet. The report retains pair ranges and identity.
 
 The latest static two-pair screen atdc6 versus54 gives DeltaBlue **0.980768**,
 generators **1.029420**, coroutines **1.017063**, Richards **0.983703**,

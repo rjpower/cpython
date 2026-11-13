@@ -4,9 +4,101 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
+## Scalar storage-action integration
+
+Static source/native8232dd8adde builds117 modules,79 shared, in both roles.
+The shared scalar action graph now tracks native owners separately from frame
+publication and prevents retired aliases from recreating an owner. GET_ANEXT
+keeps its two proved checkpoints; UNARY_NOT gains a proved post-retirement
+checkpoint. Native activation handlers are rejected by every public image
+route. The only generated handler change is UNARY_NOT's checkpoint literal;
+ordinary dispatch gains no metadata query.
+
+The root full host gate passes20 source methods and full emission. Both native
+roles pass23 ownership/phase/admission cases and233 IR/code cases, with one
+skip in the latter. Cross-lane source and generated-product post-review find
+no remaining issue. This remains partial static coverage, not the M4 switch.
+
+Two balanced pairs against selected54 complete with stable identities and no
+errors. Lower elapsed ratios are better:
+
+| Benchmark | Candidate/54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue |1.017884 |1.002705–1.033292 |
+| Generators |0.997913 |0.989817–1.006075 |
+| Coroutines |1.022717 |1.014778–1.030718 |
+| Richards |0.978000 |0.976435–0.979568 |
+| Comprehensions |0.981699 |0.980158–0.983242 |
+| Silent logging |0.981101 |0.979771–0.982432 |
+
+The screen is mixed and establishes no general speedup. A separate direct
+upstream two-pair campaign at the same source/native identity completes with
+stable identities and no errors:
+
+| Benchmark | Candidate/upstream | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue |1.177991 |1.152459–1.204088 |
+| Generators |1.430017 |1.421912–1.438169 |
+| Coroutines |1.292308 |1.281182–1.303531 |
+| Richards |1.242869 |1.241195–1.244545 |
+| Comprehensions |1.332579 |1.322621–1.342613 |
+| Silent logging |0.756278 |0.745550–0.767161 |
+
+There is no same-head all29 or PMU result yet. Do not combine the two campaigns
+or multiply comparison ratios. Evidence E/scalar-storage-*, E/scalar-storage-host and
+E/scalar-storage-hot-screen-golden. Retained release ELF SHA256
+2aba9d15fc2092083917d8998083a59cf4e3d038c131801084b2c9b49827223a.
+
+## Bitmap reader integration: native gates in progress
+
+B source1ee9cae4ece includes the complete GIL stale-reader source, explicit
+required/nullable inputs, typed native-entry read and generated products.
+The frozen host gate passes nine focused source methods and full cases,
+metadata and contracts emission. The terminal-prefix correction restores the
+three SEND proof rows; generated metadata then matches0af2. The eight GIL
+chunk-frontier bytes and scratch initialization/fill/known-detach stores are
+removed; initialized named bindings and FT physical-NULL policy remain.
+These are source changes, not measured savings.
+
+Bootstrap5+27 admission passes at8aa. Full native integration finds an arena
+probe still using the removed frontier and tuple API, fixed in7e692/688.
+Actual bootstrap execution then crashes when synthetic INTERPRETER_EXIT uses
+the new presence reader. That C-stack home has no plane; source495/productsd0
+uses the same exact native capability as its existing native consume. The
+crash is removed. Grouped deletion protocols now cover STORE_NAME's legitimate
+PUSH_NULL input, large-name SETATTR and a shared NULL deoptimization guard before
+all five specialized STORE_ATTR bodies. Guard aliases use a distinct C identity;
+full handler emission passes without weakening the retained-input checks.
+Native build atade9 then crashes in LOAD_FAST_BORROW. Its second binding is
+already NULL on entry. A hardware watchpoint shows the valid parent argument
+being overwritten by InitializeBindings through a reused header's previous
+base, before ReserveForCall installs the new base. Sourcef1b binds the base and
+plane together and extends the real arena reuse probe with the exact alias.
+The next build reveals that the new inline header is missing from core build
+dependencies: ceval.o predates the fix, so that repeated crash does not test
+it. Source1ee9 adds the dependency; rebuilding passes frozen-module execution.
+Regex compilation then reaches FOR_ITER_LIST after GET_ITER_VIRTUAL
+deoptimizes for a different iterable. A legitimate NULL cursor hits the new
+required-input check before the specialized type guard can deoptimize.
+Frames is adding the existing nullable cursor guard to LIST/TUPLE, as already
+used by FOR_ITER_VIRTUAL. No cursor producer or bitmap rule is weakened.
+These are implementation bugs,
+not a requirement of overlapping frame storage.
+No full native stale build, broad runtime qualification or timing is claimed.
+The previous0af2 screen still prices presence plus old NULL maintenance.
+Evidence is retained at E/reader-policy-host-cohort,
+E/bitmap-stale-reader-*, E/bitmap-stale-bootstrap-freeze-gdb and
+E/bitmap-native-entry-*. The valid first-error backtrace at
+E/bitmap-native-absence-gdb/gdb.log agrees with compiler/helper source; its
+separate homes.log pointer dump is excluded after a reserved GDB register
+was assigned during inspection.
+The new native failure and retained ELF are E/bitmap-delete-closure-gdb;
+handoff-watch.log is the valid overwrite witness. The earlier watch.log catches
+ordinary retirement of a successful invocation and is not that witness.
+
 ## Static ERROR snapshot integration
 
-Current source/native `dc6bad8a625` composes schema513 and source7a94. Both
+Preceding source/native `dc6bad8a625` composes schema513 and source7a94. Both
 117/79 builds, five bootstrap and27 wider admission probes pass. Eighteen
 focused runtime cases and233 IR/code cases pass per role. Actual GET_ANEXT
 projection/native failure routes select separate statically proved snapshots;

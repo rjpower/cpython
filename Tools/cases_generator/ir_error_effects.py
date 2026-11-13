@@ -5,7 +5,7 @@ source has no summary. The emitter must match the returned source identities
 to actual flush/terminal receipts before exporting a complete route contract.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 
 from analyzer import Instruction, Skip, Uop
@@ -50,14 +50,18 @@ class HelperEffect:
     callback: bool = False
     result_owned: bool | None = None
     steals: tuple[int, ...] = ()
+    result_canonical: bool = False
+    result_nonnull: bool = False
 
 
 def native_helper(inputs, result, may_fail=False, callback=False, *,
-                  canonical_clear=False, result_owned=None, steals=()):
+                  canonical_clear=False, result_owned=None, steals=(),
+                  result_canonical=False, result_nonnull=False):
     homes = (HomeEffect.PRESERVES_CANONICAL_OR_NULL if callback and canonical_clear
              else HomeEffect.PRESERVES_SCRATCH_ABSENCE if callback
              else HomeEffect.NO_ARENA_WRITE)
-    return HelperEffect(inputs, result, homes, may_fail, callback, result_owned, steals)
+    return HelperEffect(inputs, result, homes, may_fail, callback, result_owned, steals,
+                        result_canonical, result_nonnull)
 
 
 # These interfaces receive native values, never an arena-home address. A
@@ -80,10 +84,15 @@ HELPERS = {
     "PyValue_IsInlineFloat": native_helper((Kind.VALUE,), Kind.SCALAR),
     "_PyValue_IsTrue": native_helper((Kind.VALUE,), Kind.SCALAR, True, True,
                                      canonical_clear=True),
-    "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE),
+    "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE,
+        result_owned=True, result_canonical=True, result_nonnull=True),
     "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT,
                                                  result_owned=False),
-    "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,)),
+    "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),
+        result_owned=True, result_canonical=True, result_nonnull=True),
+    **{name: native_helper((Kind.VALUE,), Kind.VALUE, True, True,
+            canonical_clear=True, result_owned=True)
+       for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
     "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
     "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
     "DEAD": native_helper((Kind.VALUE,), Kind.VOID),
@@ -151,10 +160,12 @@ class _Origin:
     native_pending: set[int] = field(default_factory=set)
     native_bindings: dict[str, int] = field(default_factory=dict)
     native_valid: bool = True
+    native_nonnull: set[int] = field(default_factory=set)
 
     def copy(self):
         return _Origin(self.reachable, self.changed, self.native_pending.copy(),
-                       self.native_bindings.copy(), self.native_valid)
+                       self.native_bindings.copy(), self.native_valid,
+                       self.native_nonnull.copy())
 
     def native_closed(self):
         return self.native_valid and not self.native_pending
@@ -169,28 +180,38 @@ class _Expression:
     valid: bool = True
     # The true arm proves this native owner absent when the boolean is true.
     null_guard: tuple[int, bool] | None = None
+    value_result: HelperEffect | None = None
+    nonnull: bool = False
 
 
 def _expression(kind, *operands, owner=None, created=(), consumed=(), valid=True,
-                null_guard=None):
+                null_guard=None, value_result=None, nonnull=False):
     made, taken = set(created), set(consumed)
     for operand in operands:
         valid &= operand.valid and not (taken & operand.consumed)
         made.update(operand.created)
         taken.update(operand.consumed)
     return _Expression(kind, owner, frozenset(made), frozenset(taken), valid,
-                       null_guard)
+                       null_guard, value_result, nonnull)
 
 
 def _apply_native(value, origin):
     available = origin.native_pending | value.created
     origin.native_valid &= value.valid and value.consumed <= available
     origin.native_pending = available - value.consumed
+    origin.native_nonnull.difference_update(value.consumed)
+    if value.owner is not None and value.nonnull:
+        origin.native_nonnull.add(value.owner)
 
 
 def _null_arm(value, origin, truth):
-    if value.null_guard is not None and value.null_guard[1] == truth:
-        origin.native_pending.discard(value.null_guard[0])
+    if value.null_guard is not None:
+        owner, absent = value.null_guard
+        if absent == truth:
+            origin.native_pending.discard(owner)
+            origin.native_nonnull.discard(owner)
+        else:
+            origin.native_nonnull.add(owner)
 
 
 @dataclass(frozen=True)
@@ -208,6 +229,9 @@ class SourceErrorEffects:
     native_closed_errors: frozenset[int] = frozenset()
     native_closed_entries: frozenset[int] = frozenset()
     native_exit_closed: bool = False
+    # Actual assignment-statement identity, not a helper/name inference in
+    # the emitter. VALUE ownership is accounted by the Storage ledger.
+    value_results: tuple[tuple[int, HelperEffect], ...] = ()
 
 
 def checked_native_step_effects(parts: tuple[Uop, ...]) -> SourceErrorEffects | None:
@@ -268,6 +292,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
     helpers: set[str] = set()
     native_closed_errors: set[int] = set()
     native_closed_entries: set[int] = set()
+    value_results: dict[int, HelperEffect] = {}
     changes_origin = False
     reserved = {"frame", "slots", "window", "tstate", "next_instr", "this_instr",
                 "oparg", "PyValue_NULL", "FRAME_CO_CONSTS", "NULL", "true", "false",
@@ -380,7 +405,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                 return _expression(Kind.OBJECT)
             owner = origin.native_bindings.get(texts[0])
             return _expression(variables.get(texts[0]), owner=owner,
-                               valid=owner is None or owner in origin.native_pending)
+                               valid=owner is None or owner in origin.native_pending,
+                               nonnull=owner in origin.native_nonnull)
         if texts[0] == "(" and texts[-1] == ")":
             return expression(tokens[1:-1], variables, origin)
         # Code projection is read-only, and does not grant the caller a frame
@@ -416,11 +442,17 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         # PyValue ledger. Hiding that temporary inside another call has no
         # such publication/retirement receipt yet.
         valid &= not any(value.kind == Kind.VALUE and value.consumed for value in values)
-        owner = id(tokens[0]) if contract.result_owned else None
+        owner = id(tokens[0]) if contract.result == Kind.OBJECT and contract.result_owned else None
+        result = contract if contract.result == Kind.VALUE else None
+        if result is not None and any(not values[index].nonnull for index in contract.steals):
+            # FromObjectSteal's non-NULL assertion is a precondition. An
+            # owning pointer may still be NULL before its actual guard.
+            result = replace(result, result_owned=None)
         return _expression(contract.result, *values, owner=owner,
                            created=() if owner is None else (owner,),
                            consumed=(token for token in stolen if token is not None),
-                           valid=valid)
+                           valid=valid, value_result=result,
+                           nonnull=contract.result_nonnull)
 
     def statement(stmt, variables, origin):
         nonlocal changes_origin
@@ -561,6 +593,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             if not matches_kind(value.kind, kind):
                 return False
             assign_native(texts[declaration], value, origin)
+            if value.value_result is not None:
+                value_results[id(stmt)] = (value.value_result if value.valid else
+                    replace(value.value_result, result_owned=None))
             variables[texts[declaration]] = value.kind
             return True
         if len(tokens) >= 3 and texts[1] == "=" and texts[0] in variables:
@@ -571,6 +606,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                     actual in SCALAR_KINDS and expected in SCALAR_KINDS):
                 return False
             assign_native(texts[0], value, origin)
+            if value.value_result is not None:
+                value_results[id(stmt)] = (value.value_result if value.valid else
+                    replace(value.value_result, result_owned=None))
             variables[texts[0]] = actual
             return True
         value = expression(tokens, variables, origin)
@@ -598,6 +636,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             return
         origin.native_pending = set().union(*(arm.native_pending for arm in reached))
         origin.native_valid = all(arm.native_valid for arm in reached)
+        origin.native_nonnull = set.intersection(*(arm.native_nonnull for arm in reached))
         common = reached[0].native_bindings
         origin.native_bindings = {name: owner for name, owner in common.items()
             if all(arm.native_bindings.get(name) == owner for arm in reached[1:])}
@@ -637,4 +676,5 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                               frozenset(helpers), homes, any(h.may_fail for h in used),
                               any(h.callback for h in used), changes_origin,
                               frozenset(native_closed_errors), frozenset(native_closed_entries),
-                              origin.reachable and origin.native_closed())
+                              origin.reachable and origin.native_closed(),
+                              tuple(value_results.items()))

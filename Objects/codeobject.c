@@ -2099,7 +2099,7 @@ typedef struct {
     uint32_t stamps[4];
     unsigned int value;
     uint32_t value_stamp;
-    uint8_t value_home, valid, widens_nonnull;
+    uint8_t value_home, valid, widens_nonnull, value_ready;
 } semantic_scalar_state;
 
 typedef struct {
@@ -2420,6 +2420,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
         semantic_scalar_state *node = nodes + at;
         *node = nodes[event->dst];
         node->value = 0;
+        node->value_ready = 0;
         node->value_home = 4;
         node->value_stamp = UINT32_MAX;
         if (event->kind == _PyIR_OWNER_STORAGE_JOIN) {
@@ -2438,6 +2439,13 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
             continue;
         }
         if (event->kind == _PyIR_OWNER_STORAGE_CALLBACK) {
+            if (event->flags & _PyIR_STORAGE_CALLBACK_DST) {
+                assert(event->src < 4 && fmt->roles[event->src] == _PyIR_ROLE_DST);
+                int dst = (int)((word >> (16 + 12 * event->src)) & IR_FIELD_MAX);
+                if (dst >= image->nl && dst != IR_NO_DST) {
+                    continue;
+                }
+            }
             node->widens_nonnull = 1;
             for (int h = 0; h < *nhomes; h++) {
                 node->facts[h] &= ~(1u << SEM_NONNULL);
@@ -2446,9 +2454,30 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
             continue;
         }
         if (event->kind == _PyIR_OWNER_STORAGE_LITERAL) {
+            node->value_ready = 1;
             node->value = (1u << SEM_INITIALIZED) |
                 (event->flags & _PyIR_STORAGE_LITERAL_NONNULL ?
                     (1u << SEM_NONNULL) : (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+            continue;
+        }
+        if (event->kind == _PyIR_OWNER_STORAGE_RESULT) {
+            /* A native result may be TEMP/private. Only the actual
+             * normalizing publication can make it a canonical frame cell. */
+            node->value_ready = 1;
+            node->value = (1u << SEM_MAY_OWNER) |
+                (event->flags & _PyIR_STORAGE_RESULT_CANONICAL ? 1u << SEM_INITIALIZED : 0) |
+                (event->flags & _PyIR_STORAGE_RESULT_NONNULL ? 1u << SEM_NONNULL : 0);
+            continue;
+        }
+        if (event->kind == _PyIR_OWNER_STORAGE_GUARD) {
+            assert(event->extent > 0 && event->extent < at);
+            const semantic_scalar_state *value = nodes + event->extent;
+            node->valid &= value->valid && value->value_ready;
+            node->value_ready = value->value_ready;
+            node->value = event->flags & _PyIR_STORAGE_GUARD_NONNULL ?
+                (value->value & ~((1u << SEM_NULL) | (1u << SEM_NO_HOME))) |
+                    (1u << SEM_NONNULL) :
+                (1u << SEM_INITIALIZED) | (1u << SEM_NULL) | (1u << SEM_NO_HOME);
             continue;
         }
         if (event->kind == _PyIR_OWNER_STORAGE_COPY) {
@@ -2462,6 +2491,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                 }
             }
             node->value = value->value;
+            node->value_ready = value->value_ready;
             /* DUP owns a distinct count. It is never permission to replace
              * an owner still stored in the source home. */
             continue;
@@ -2470,8 +2500,9 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
         if (event->kind == _PyIR_OWNER_STORAGE_PUBLISH) {
             assert(event->extent > 0 && event->extent < at);
             const semantic_scalar_state *value = nodes + event->extent;
-            node->valid &= value->valid &&
-                           !!(value->value & (1u << SEM_INITIALIZED));
+            node->valid &= value->valid && value->value_ready &&
+                (!(event->flags & _PyIR_STORAGE_PUBLISH_CANONICAL) ||
+                 !!(value->value & (1u << SEM_INITIALIZED)));
         }
         int h = aliases[event->src];
         if (h == 4) {
@@ -2484,6 +2515,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
         switch (event->kind) {
             case _PyIR_OWNER_STORAGE_SAVE:
                 node->value = node->facts[h];
+                node->value_ready = !!(node->value & (1u << SEM_INITIALIZED));
                 node->value_home = (uint8_t)h;
                 node->value_stamp = node->stamps[h];
                 node->valid &= !!(node->value & (1u << SEM_INITIALIZED));
@@ -2508,7 +2540,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                     node->valid &= !!(event->flags & _PyIR_STORAGE_PUBLISH_SAME_VALUE) && value->value_home == h &&
                                    value->value_stamp == node->stamps[h];
                 }
-                node->facts[h] = value->value;
+                node->facts[h] = value->value | (1u << SEM_INITIALIZED);
                 node->stamps[h] = at;
                 break;
             }
@@ -2542,6 +2574,10 @@ semantic_error_snapshots(const semantic_image *image, semantic_worklist *work,
         return -1;
     }
     for (const _PyIROwnershipEvent *event = header + 1 + header->src; event < end;) {
+        if (event->kind == _PyIR_OWNER_STORAGE_NORMAL) {
+            event++;
+            continue;
+        }
         assert(event->kind == _PyIR_OWNER_ERROR_CHECKPOINT);
         assert(event->src > 0 && event->src <= UINT8_MAX);
         assert(event->extent == 0);
@@ -2849,7 +2885,7 @@ semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
 }
 
 static int
-semantic_step(const semantic_image *image, semantic_worklist *work,
+semantic_step_core(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
     work->created_empty = 0;
@@ -3111,6 +3147,51 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
         }
     }
     Py_UNREACHABLE();
+}
+
+static int
+semantic_step(const semantic_image *image, semantic_worklist *work,
+              uint64_t *state, int pc, int inspect, int *complete)
+{
+    _PyIRWord word = image->words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    semantic_scalar_state normal = {0};
+    int homes[4], nhomes = 0;
+    int incoming_complete = *complete;
+    if (fmt->flags & _PyIR_ERROR_PROGRAM) {
+        const _PyIROwnershipEvent *header =
+            _PyIR_OwnerPrograms + fmt->owner_program + fmt->owner_events;
+        const _PyIROwnershipEvent *end = header + 1 + header->extent;
+        for (const _PyIROwnershipEvent *event = header + 1 + header->src;
+             event < end; event++)
+        {
+            if (event->kind != _PyIR_OWNER_STORAGE_NORMAL) {
+                continue;
+            }
+            if (semantic_scalar_actions(image, work, state, word, header, homes, &nhomes) < 0) {
+                return -1;
+            }
+            assert(event->dst <= header->src);
+            normal = work->error_nodes[event->dst];
+            break;
+        }
+    }
+    if (semantic_step_core(image, work, state, pc, inspect, complete) < 0) {
+        return -1;
+    }
+    if (normal.valid) {
+        if (normal.widens_nonnull) {
+            memset(state + SEM_NONNULL * work->nwords, 0,
+                   (size_t)work->nwords * sizeof(uint64_t));
+        }
+        for (int h = 0; h < nhomes; h++) {
+            if (homes[h] >= image->nl) {
+                semantic_set_facts(work, state, homes[h], image->nl, normal.facts[h]);
+            }
+        }
+        *complete = incoming_complete;
+    }
+    return 0;
 }
 
 static void

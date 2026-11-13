@@ -798,6 +798,9 @@ class Emitter:
         return reachable, None, storage
 
 
+    def branch_storage(self, storage: Storage, condition: list[Token], truth: bool) -> Storage:
+        return storage
+
     def emit_IfStmt(
         self,
         stmt: IfStmt,
@@ -808,7 +811,7 @@ class Emitter:
         self.out.emit(stmt.if_)
         for tkn in stmt.condition:
             self.out.emit(tkn)
-        if_storage = storage.copy()
+        if_storage = self.branch_storage(storage.copy(), stmt.condition, True)
         rbrace: Token | None = stmt.if_
         try:
             reachable, rbrace, if_storage = self._emit_stmt(stmt.body, uop, if_storage, inst)
@@ -817,6 +820,7 @@ class Emitter:
                 self.out.emit(rbrace)
                 self.out.emit(stmt.else_)
             if stmt.else_body is not None:
+                storage = self.branch_storage(storage, stmt.condition, False)
                 else_reachable, rbrace, else_storage = self._emit_stmt(stmt.else_body, uop, storage, inst)
                 if not reachable:
                     reachable, storage = else_reachable, else_storage
@@ -828,6 +832,7 @@ class Emitter:
                     else_storage.merge(if_storage, self.out)
                     storage = else_storage
             else:
+                storage = self.branch_storage(storage, stmt.condition, False)
                 if reachable:
                     if_storage.merge(storage, self.out)
                     storage = if_storage

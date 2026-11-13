@@ -185,7 +185,7 @@ enum {
                                     // exceptional absence only, not readability
 #define _PyIR_ABRUPT_OPERANDS 0x4000 // only encoded transport can destroy prior
                                      // scratch absence; no readability grant
-#define _PyIR_ERROR_PROGRAM 0x8000  // actual error suffix follows normal events
+#define _PyIR_ERROR_PROGRAM 0x8000  // actual Storage suffix follows normal events
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -317,6 +317,9 @@ enum {
     _PyIR_OWNER_STORAGE_JOIN,
     _PyIR_OWNER_STORAGE_LITERAL,
     _PyIR_OWNER_STORAGE_COPY,
+    _PyIR_OWNER_STORAGE_RESULT,
+    _PyIR_OWNER_STORAGE_GUARD,
+    _PyIR_OWNER_STORAGE_NORMAL,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
@@ -330,13 +333,18 @@ enum {
 #define _PyIR_STORAGE_TAKES_HOME 1u
 #define _PyIR_STORAGE_PUBLISH_TEMPORARY 1u
 #define _PyIR_STORAGE_PUBLISH_SAME_VALUE 2u
+#define _PyIR_STORAGE_PUBLISH_CANONICAL 4u
 #define _PyIR_STORAGE_LITERAL_NONNULL 1u
 #define _PyIR_STORAGE_COPY_OWNED_SOURCE 1u
+#define _PyIR_STORAGE_RESULT_CANONICAL 1u
+#define _PyIR_STORAGE_RESULT_NONNULL 2u
+#define _PyIR_STORAGE_GUARD_NONNULL 1u
+#define _PyIR_STORAGE_CALLBACK_DST 1u
 
 /* owner_events counts only the normal prefix. ERROR_PROGRAM, when flagged,
- * follows that prefix and counts its suffix records in extent. Each
- * Its src counts the shared topological Storage action prefix. Each following
- * ERROR_CHECKPOINT names a reached literal ID and its final action node. */
+ * follows that prefix and counts its suffix records in extent. Its src counts
+ * the shared topological Storage action prefix. The remaining records name
+ * reached error IDs or the normal endpoint and their final action nodes. */
 typedef struct {
     uint8_t kind, flags;
     uint16_t dst, src, extent;

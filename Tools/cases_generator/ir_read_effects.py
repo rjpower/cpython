@@ -161,7 +161,12 @@ def error_nonnull_value(tokens):
     args, end = instruction_macro_args(tokens[0], TokenIterator(tokens[1:]))
     if len(args) != 1 or end is not tokens[-1]:
         return None
-    condition = strip_value_expression(args[0])
+    return null_value_condition(args[0])
+
+
+def null_value_condition(tokens):
+    """An exact NULL predicate on one current scalar C identity."""
+    condition = strip_value_expression(tokens)
     if (len(condition) == 4 and condition[0].text == "PyValue_IsNull"
             and condition[1].text == "(" and condition[2].kind == "IDENTIFIER"
             and condition[3].text == ")"):

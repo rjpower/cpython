@@ -169,6 +169,61 @@ class ErrorCheckpointTests(unittest.TestCase):
             for code in routes(make_code(words, slots=2, locals=("unbound",))):
                 self.assertEqual(self.authority(code, len(words) - 2), 0)
 
+    def test_published_native_result_supplies_the_following_selected_error(self):
+        monitor = sys.monitoring
+        tool = monitor.DEBUGGER_ID
+        current = None
+        observations = []
+        payload_id = 0
+
+        class Iterator:
+            def __anext__(self):
+                raise LookupError("published scalar result")
+
+        class Value:
+            def __invert__(self):
+                return Iterator()
+
+        def raised(code, offset, exception):
+            if code is current:
+                frame = sys._getframe(1)
+                observations.append((
+                    _testinternalcapi.get_frame_home_view(frame)[0],
+                    payload_id in _testinternalcapi.get_frame_selected_object_ids(frame),
+                    _testinternalcapi.gc_verify()))
+
+        image = make_code([
+            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
+            ("LOAD_FAST", 4, 1), ("DELETE_FAST", 1),
+            ("UNARY_INVERT", 5, 4), ("GET_ANEXT", 6, 5),
+            ("RETURN_VALUE", 6),
+        ], slots=5, locals=("payload", "value", "mutable")).replace(co_argcount=2)
+        monitor.use_tool_id(tool, "published-result-error")
+        try:
+            monitor.register_callback(tool, monitor.events.RAISE, raised)
+            for current in routes(image):
+                self.assertEqual(self.authority(current, 4), 2)
+                # This read needs the previous native result's actual
+                # canonical publication and successful NULL-guard arm.
+                self.assertEqual(self.authority(current, 5), 2)
+                function = types.FunctionType(current, globals())
+                payload = object()
+                payload_id = id(payload)
+                monitor.set_local_events(tool, current, monitor.events.RAISE)
+                try:
+                    try:
+                        function(payload, Value())
+                    except LookupError as error:
+                        self.assertEqual(str(error), "published scalar result")
+                    else:
+                        self.fail("the published iterator must fail")
+                finally:
+                    monitor.set_local_events(tool, current, 0)
+                self.assertEqual(observations[-1], (2, True, []))
+        finally:
+            monitor.register_callback(tool, monitor.events.RAISE, None)
+            monitor.free_tool_id(tool)
+
     def test_unknown_and_joined_may_shape_cannot_supply_readability(self):
         # The opaque operation is valid, but its whole incoming shape is not
         # a positive checkpoint certificate.

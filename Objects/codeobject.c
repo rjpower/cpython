@@ -1429,6 +1429,10 @@ validate_code_structure(struct _PyCodeConstructor *con)
             PyErr_SetString(PyExc_ValueError, "code: invalid executable handler");
             return -1;
         }
+        if (_PyIR_FormatOf(handler)->effects & _PyIR_NATIVE_ONLY) {
+            PyErr_SetString(PyExc_ValueError, "code: native-only executable handler");
+            return -1;
+        }
         if (handler == NOP) {
             PyErr_SetString(PyExc_ValueError,
                             "code: empty or release-only executable instruction");

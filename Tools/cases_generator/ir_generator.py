@@ -8041,7 +8041,8 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
             ("_PyIR_ALLOCATES", allocates),
             ("_PyIR_PURE", p.pure),
             ("_PyIR_SPECIALIZES", specializes),
-            ("_PyIR_BOXES", boxes)):
+            ("_PyIR_BOXES", boxes),
+            ("_PyIR_NATIVE_ONLY", native_entry_input_contract(inst))):
         if present:
             effects.append(bit)
     return effects

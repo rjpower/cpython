@@ -1755,7 +1755,7 @@ def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
                        ["PY_MONITORING_EVENT_BRANCH_RIGHT"],
                        ["PY_MONITORING_EVENT_JUMP"]):
         raise analysis_error("terminal observer requires a literal event", tokens[0])
-    edges = {"_PyIR_SOURCE_FALLTHROUGH": 0, "_PyIR_SOURCE_TAKEN": 1}
+    edges = {"_PyIR_EDGE_FALLTHROUGH": 0, "_PyIR_EDGE_TAKEN": 1}
     if len(args[3]) != 1 or args[3][0] not in edges:
         raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
     edge = edges[args[3][0]]

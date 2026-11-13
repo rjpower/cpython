@@ -1,6 +1,7 @@
 # Testing the line trace facility.
 
 from test import support
+from test.support.ir_semantics import observation_records
 import unittest
 import sys
 import struct
@@ -333,14 +334,8 @@ def lineno_matches_lasti(frame, event):
         return False
     # Source-only LINE keeps f_lasti at the actual predecessor. Independently
     # validate that exact edge span, rather than accepting any line in code.
-    raw = frame.f_code.co_linetable
-    if len(raw) < 16:
-        return False
-    magic, version, size, count = struct.unpack_from('<4sIII', raw)
-    if magic != b'IRSM' or version != 1 or 16 + size + count * 40 != len(raw):
-        return False
     words = len(frame.f_code.co_code) // 8
-    for record in struct.iter_unpack('<10i', raw[16 + size:]):
+    for record in observation_records(frame.f_code):
         source, target, edge, line = record[:4]
         if (source != frame.f_lasti or line != frame.f_lineno or
                 not 0 <= source < words or not 0 <= target < words or edge not in (0, 1)):

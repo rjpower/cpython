@@ -4644,7 +4644,7 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             address.argtypes = [ctypes.py_object]
             address.restype = ctypes.c_void_p
             pointer = address(table)
-            for offset, payload in ((4, b'\\x02\\0\\0\\0'),
+            for offset, payload in ((4, b'\\x03\\0\\0\\0'),
                                     (8, b'\\xff' * 4),
                                     (12, b'\\xff' * 4)):
                 saved = table[offset:offset + 4]

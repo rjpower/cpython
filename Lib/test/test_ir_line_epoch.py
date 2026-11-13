@@ -7,7 +7,7 @@ import unittest
 class LineEpochTests(unittest.TestCase):
     def assert_source_body(self, target):
         magic, version, size, records = struct.unpack_from('<4sIII', target.__code__.co_linetable)
-        self.assertEqual((magic, version), (b'IRSM', 1))
+        self.assertEqual((magic, version), (b'IRSM', 2))
         self.assertGreater(records, 0)
 
     def test_instruction_enable_does_not_repeat_source_line(self):

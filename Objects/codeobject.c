@@ -588,7 +588,7 @@ fbinit_is_valid(PyObject *fbinit)
 /* Validate location payloads before the variable-length runtime readers see
  * them. Raw constructors may omit trailing locations; stored maps may not. */
 static int
-location_words(const _PyIRSourceMap *map, uint32_t *covered)
+location_words(const _PyIRPositions *map, uint32_t *covered)
 {
     const unsigned char *p = map->locations;
     const unsigned char *end = p + map->locations_size;
@@ -630,7 +630,7 @@ location_words(const _PyIRSourceMap *map, uint32_t *covered)
 }
 
 static PyObject *
-normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
+normalize_positions(const _PyIRPositions *map, uint32_t nwords)
 {
     uint32_t covered;
     if (location_words(map, &covered) < 0 || covered > nwords) {
@@ -638,6 +638,9 @@ normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
         return NULL;
     }
     uint32_t padding = (nwords - covered + 7) / 8;
+    if ((uint64_t)map->locations_size + padding > UINT32_MAX) {
+        return PyErr_NoMemory();
+    }
     PyObject *locations = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)map->locations_size + padding);
     if (locations == NULL) {
         return NULL;
@@ -651,7 +654,7 @@ normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
         *p++ = (unsigned char)(0xF8 | (run - 1));
         covered += run;
     }
-    PyObject *result = _PyIRSource_Pack(
+    PyObject *result = _PyIRPositions_Pack(
         (const unsigned char *)PyBytes_AS_STRING(locations),
         (uint32_t)PyBytes_GET_SIZE(locations), map->records, map->nrecords);
     Py_DECREF(locations);
@@ -664,52 +667,69 @@ static int observer_handler_safe(struct _PyCodeConstructor *, _PyIRWord, int,
                                  int, int, int, int);
 
 static int
-validate_source_map(struct _PyCodeConstructor *con)
+validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
 {
-    _PyIRSourceMap map;
-    int format = _PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
-                                    PyBytes_GET_SIZE(con->linetable), &map);
+    _PyIRPositions positions;
+    int format = _PyIRPositions_Decode(PyBytes_AS_STRING(con->linetable),
+                                    PyBytes_GET_SIZE(con->linetable), &positions);
     if (format < 0) {
         PyErr_SetString(PyExc_ValueError, "code: malformed source map");
         return -1;
     }
     int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
-    int nslots = (int)PyTuple_GET_SIZE(con->localsplusnames) + con->stacksize;
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int nslots = nl + Py_MAX(con->stacksize, 1);
     uint32_t covered;
-    if (location_words(&map, &covered) < 0 || covered > (uint32_t)nwords ||
+    if (location_words(&positions, &covered) < 0 || covered > (uint32_t)nwords ||
         (format && covered != (uint32_t)nwords))
     {
         PyErr_SetString(PyExc_ValueError, "code: source map locations do not fit code");
         return -1;
     }
+    _PyIRSemanticMap map;
+    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
+                             PyBytes_GET_SIZE(con->exceptiontable), &map) < 0 ||
+        !_PyIR_ExceptionTableValid(map.exceptions,
+                                  map.exceptions + map.exceptions_size,
+                                  nwords, nl, nslots))
+    {
+        PyErr_SetString(PyExc_ValueError, "code: malformed semantic recovery map");
+        return -1;
+    }
+    if (positions.nrecords && positions.nrecords != map.nrecords) {
+        PyErr_SetString(PyExc_ValueError,
+                        "code: position IDs do not match semantic recovery");
+        return -1;
+    }
     for (uint32_t i = 0; i < map.nrecords; i++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&map, i, &event);
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(&map, i, &event);
         if (event.from < 0 || event.from >= nwords ||
             event.to < 0 || event.to >= nwords ||
-            event.edge < 0 || event.edge > _PyIR_SOURCE_TAKEN ||
-            event.line <= 0 || event.handler < -1 || event.handler >= nwords ||
+            event.edge < 0 || event.edge > _PyIR_EDGE_TAKEN ||
+            event.handler < -1 || event.handler >= nwords ||
+            (event.handler == -1 && (event.exc_slot != 0 || event.lasti != 0)) ||
             (event.handler >= 0 &&
              ((event.lasti != 0 && event.lasti != 1) ||
               event.exc_slot < PyTuple_GET_SIZE(con->localsplusnames) + event.lasti ||
               event.exc_slot >= nslots)))
         {
-            PyErr_SetString(PyExc_ValueError, "code: source map does not fit code");
+            PyErr_SetString(PyExc_ValueError, "code: semantic recovery does not fit code");
             return -1;
         }
         const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
         if (_PyIR_HandlerBase[IR_HANDLER(words[event.to])] == RESUME) {
             PyErr_SetString(PyExc_ValueError,
-                            "code: source map cannot precede an entry RESUME");
+                            "code: semantic recovery cannot precede an entry RESUME");
             return -1;
         }
         if (event.handler >= 0) {
             _PyIRWord from = words[event.from];
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(from));
             bool completed = ((opcode == FOR_ITER || opcode == SEND) &&
-                              event.edge == _PyIR_SOURCE_TAKEN) ||
+                              event.edge == _PyIR_EDGE_TAKEN) ||
                              (opcode == CLEANUP_THROW &&
-                              event.edge == _PyIR_SOURCE_TAKEN);
+                              event.edge == _PyIR_EDGE_TAKEN);
             int observer = _PyIR_ObserverOutcome(from, event.edge);
             if (observer || completed) {
                 int safe = observer
@@ -728,6 +748,24 @@ validate_source_map(struct _PyCodeConstructor *con)
                     return -1;
                 }
             }
+        }
+    }
+    for (uint32_t i = 0; i < positions.nrecords; i++) {
+        _PyIRPosition position;
+        _PyIRPositions_Event(&positions, i, &position);
+        if ((position.line == -1 &&
+             (position.end_line != -1 || position.column != -1 ||
+              position.end_column != -1)) ||
+            position.line == 0 || position.line < -1 ||
+            position.end_line < -1 ||
+            (position.end_line != -1 && position.end_line < position.line) ||
+            position.column < -1 || position.end_column < -1 ||
+            ((position.column == -1) != (position.end_column == -1)) ||
+            (position.line == position.end_line &&
+             position.column > position.end_column))
+        {
+            PyErr_SetString(PyExc_ValueError, "code: malformed optional source position");
+            return -1;
         }
     }
     return 0;
@@ -815,8 +853,9 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
             goto invalid_allocated;
         }
     }
-    const unsigned char *p = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
-    const unsigned char *end = p + PyBytes_GET_SIZE(con->exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(con->exceptiontable);
+    const unsigned char *p = semantic.exceptions;
+    const unsigned char *end = p + semantic.exceptions_size;
     while (p < end) {
         unsigned int fields[4] = {0};
         for (int k = 0; k < 4; k++) {
@@ -838,14 +877,14 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
             todo[count++] = (int)target;
         }
     }
-    _PyIRSourceMap source;
-    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
-                          PyBytes_GET_SIZE(con->linetable), &source) < 0) {
+    _PyIRSemanticMap source;
+    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
+                          PyBytes_GET_SIZE(con->exceptiontable), &source) < 0) {
         goto invalid_allocated;
     }
     for (uint32_t j = 0; j < source.nrecords; j++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, j, &event);
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(&source, j, &event);
         if (event.handler >= 0 && !seen[event.handler]) {
             seen[event.handler] = 1;
             todo[count++] = event.handler;
@@ -985,9 +1024,9 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
     }
     const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
     int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
-    _PyIRSourceMap source;
-    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
-                          PyBytes_GET_SIZE(con->linetable), &source) < 0)
+    _PyIRSemanticMap source;
+    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
+                          PyBytes_GET_SIZE(con->exceptiontable), &source) < 0)
     {
         return 0;
     }
@@ -1042,8 +1081,8 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
             safe = -1;
             break;
         }
-        const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
-        const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+        const unsigned char *cursor = source.exceptions;
+        const unsigned char *end = cursor + source.exceptions_size;
         while (cursor < end) {
             int start, size, target, slot_lasti;
             if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
@@ -1104,8 +1143,8 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                 edge &= ~defs;
             }
             for (uint32_t j = 0; j < source.nrecords; j++) {
-                _PyIRSourceEvent event;
-                _PyIRSource_Event(&source, j, &event);
+                _PyIRRecoveryEvent event;
+                _PyIRSemantic_Event(&source, j, &event);
                 if (event.from == i && event.edge == taken && event.handler >= 0 &&
                     !completion_exception_edge(&work, event.handler, event.exc_slot,
                                                event.lasti, edge, edge_nonnull))
@@ -1246,12 +1285,13 @@ validate_completion_words(struct _PyCodeConstructor *con)
             }
         }
     }
-    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
-    const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(con->exceptiontable);
+    const unsigned char *cursor = semantic.exceptions;
+    const unsigned char *end = cursor + semantic.exceptions_size;
     if (!_PyIR_ExceptionTableValid(cursor, end, n, nl, limit)) {
         goto invalid;
     }
-    cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    cursor = semantic.exceptions;
     while (cursor < end) {
         int start, size, target, slot_lasti;
         if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
@@ -1555,8 +1595,8 @@ static PyObject *
 remove_column_info(PyObject *locations)
 {
     Py_ssize_t offset = 0;
-    _PyIRSourceMap source;
-    if (_PyIRSource_Decode(PyBytes_AS_STRING(locations),
+    _PyIRPositions source;
+    if (_PyIRPositions_Decode(PyBytes_AS_STRING(locations),
                           PyBytes_GET_SIZE(locations), &source) < 0)
     {
         PyErr_SetString(PyExc_ValueError, "code: malformed source map");
@@ -1598,18 +1638,18 @@ remove_column_info(PyObject *locations)
     if (body == NULL) {
         return NULL;
     }
-    PyObject *result = _PyIRSource_Pack(
+    PyObject *result = _PyIRPositions_Pack(
         (const unsigned char *)PyBytes_AS_STRING(body),
         (uint32_t)PyBytes_GET_SIZE(body), source.records, source.nrecords);
     Py_DECREF(body);
     if (result != NULL) {
-        _PyIRSourceMap stripped = _PyIRSource_Stored(result);
+        _PyIRPositions stripped = _PyIRPositions_Stored(result);
         for (uint32_t i = 0; i < stripped.nrecords; i++) {
-            _PyIRSourceEvent event;
-            _PyIRSource_Event(&stripped, i, &event);
+            _PyIRPosition event;
+            _PyIRPositions_Event(&stripped, i, &event);
             event.column = event.end_column = -1;
-            _PyIRSource_EncodeEvent((unsigned char *)stripped.records +
-                                     i * _PyIR_SOURCE_RECORD, &event);
+            _PyIRPositions_EncodeEvent((unsigned char *)stripped.records +
+                                     i * _PyIR_POSITION_RECORD, &event);
         }
     }
     return result;
@@ -1649,8 +1689,8 @@ new_code(struct _PyCodeConstructor *con)
         return NULL;
     }
 
-    _PyIRSourceMap source;
-    int source_format = _PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+    _PyIRPositions source;
+    int source_format = _PyIRPositions_Decode(PyBytes_AS_STRING(con->linetable),
                                           PyBytes_GET_SIZE(con->linetable), &source);
     if (source_format < 0) {
         PyErr_SetString(PyExc_ValueError, "code: malformed source map");
@@ -1658,7 +1698,7 @@ new_code(struct _PyCodeConstructor *con)
     }
     PyObject *replacement_locations = source_format
         ? Py_NewRef(con->linetable)
-        : normalize_source_map(&source,
+        : normalize_positions(&source,
             (uint32_t)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)));
     if (replacement_locations == NULL) {
         return NULL;
@@ -2016,10 +2056,7 @@ typedef struct {
     int scratch;
     const uint32_t *fbinit;
     int nfb;
-    const unsigned char *exceptions;
-    Py_ssize_t exception_size;
-    const char *source;
-    Py_ssize_t source_size;
+    _PyIRSemanticMap semantic;
 } semantic_image;
 
 enum { SEM_DELEGATED_NONE, SEM_DELEGATED_KNOWN, SEM_DELEGATED_UNKNOWN };
@@ -3107,8 +3144,8 @@ normal_transfer_proof(const semantic_image *image,
         return 0;
     }
     int nl = image->nl;
-    const unsigned char *exceptions = image->exceptions;
-    const unsigned char *exception_end = exceptions + image->exception_size;
+    const unsigned char *exceptions = image->semantic.exceptions;
+    const unsigned char *exception_end = exceptions + image->semantic.exceptions_size;
     int scratch = image->scratch;
     if (!_PyIR_ExceptionTableValid(exceptions, exception_end, n, nl, nl + scratch)) {
         PyErr_SetString(PyExc_ValueError, "code: invalid exception table");
@@ -3147,17 +3184,11 @@ normal_transfer_proof(const semantic_image *image,
         block_at[entry.target] = 1;
         nexceptions++;
     }
-    _PyIRSourceMap source;
-    if (_PyIRSource_Decode(image->source, image->source_size, &source) < 0)
-    {
-        PyMem_Free(block_at);
-        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
-        return -1;
-    }
+    _PyIRSemanticMap source = image->semantic;
     int source_recovery = 0;
     for (uint32_t i = 0; i < source.nrecords; i++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, i, &event);
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(&source, i, &event);
         if (event.handler >= 0) {
             block_at[event.handler] = 1;
             source_recovery = 1;
@@ -3245,8 +3276,8 @@ normal_transfer_proof(const semantic_image *image,
             source_links[i] = -1;
         }
         for (uint32_t i = 0; i < source.nrecords; i++) {
-            _PyIRSourceEvent event;
-            _PyIRSource_Event(&source, i, &event);
+            _PyIRRecoveryEvent event;
+            _PyIRSemantic_Event(&source, i, &event);
             if (event.handler >= 0) {
                 int b = block_at[event.from];
                 source_links[(size_t)nblocks + i] = source_links[b];
@@ -3281,8 +3312,8 @@ normal_transfer_proof(const semantic_image *image,
             }
             if (source_recovery) {
                 for (uint32_t i = 0; i < source.nrecords; i++) {
-                    _PyIRSourceEvent event;
-                    _PyIRSource_Event(&source, i, &event);
+                    _PyIRRecoveryEvent event;
+                    _PyIRSemantic_Event(&source, i, &event);
                     if (event.handler >= 0 &&
                         !work.blocks[block_at[event.from]].reached)
                     {
@@ -3305,8 +3336,8 @@ normal_transfer_proof(const semantic_image *image,
              * from-block contributes an unknown prefix, independently of EH. */
             if (source_links != NULL) {
                 for (int i = source_links[b]; i >= 0; i = source_links[(size_t)nblocks + i]) {
-                    _PyIRSourceEvent event;
-                    _PyIRSource_Event(&source, (uint32_t)i, &event);
+                    _PyIRRecoveryEvent event;
+                    _PyIRSemantic_Event(&source, (uint32_t)i, &event);
                     semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                              event.exc_slot, event.lasti);
                     semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
@@ -3526,10 +3557,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con, PyObject **normalized)
             (const uint32_t *)PyBytes_AS_STRING(con->fbinit),
         .nfb = con->fbinit == NULL ? 0 :
             (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t)),
-        .exceptions = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable),
-        .exception_size = PyBytes_GET_SIZE(con->exceptiontable),
-        .source = PyBytes_AS_STRING(con->linetable),
-        .source_size = PyBytes_GET_SIZE(con->linetable),
+        .semantic = _PyIRSemantic_Stored(con->exceptiontable),
     };
     int result = normal_transfer_proof(&image, NULL, normalized);
     if (result < 0 && PyErr_ExceptionMatches(PyExc_ValueError)) {
@@ -3560,10 +3588,7 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
         .scratch = scratch,
         .fbinit = _PyCode_FBINIT(co),
         .nfb = co->co_nfeedback,
-        .exceptions = (const unsigned char *)PyBytes_AS_STRING(co->co_exceptiontable),
-        .exception_size = PyBytes_GET_SIZE(co->co_exceptiontable),
-        .source = PyBytes_AS_STRING(co->co_linetable),
-        .source_size = PyBytes_GET_SIZE(co->co_linetable),
+        .semantic = _PyIRSemantic_Stored(co->co_exceptiontable),
     };
     return normal_transfer_proof(&image, plan, NULL);
 }
@@ -3583,8 +3608,8 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
     PyObject *normalized = NULL;
-    if (validate_completion_words(&checked) < 0 ||
-        validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
+    if (validate_semantic_and_position_maps(&checked) < 0 ||
+        validate_completion_words(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
         validate_normal_transfers(&checked, &normalized) < 0)
     {
         Py_DECREF(words);
@@ -3955,11 +3980,11 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
 void
 _PyLineTable_InitAddressRange(const char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
 {
-    _PyIRSourceMap source;
-    int valid = _PyIRSource_Decode(linetable, length, &source);
+    _PyIRPositions source;
+    int valid = _PyIRPositions_Decode(linetable, length, &source);
     assert(valid >= 0);
     if (valid < 0) {
-        source = (_PyIRSourceMap){(const unsigned char *)linetable, 0, NULL, 0};
+        source = (_PyIRPositions){(const unsigned char *)linetable, 0, NULL, 0};
     }
     range->opaque.lo_next = source.locations;
     range->opaque.limit = range->opaque.lo_next + source.locations_size;
@@ -4362,7 +4387,7 @@ new_linesiterator(PyCodeObject *code)
     li->li_range_line = -1;
     li->li_last_line = INT_MIN;
     _PyCode_InitAddressRange(code, &li->li_line);
-    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    _PyIRObservationMap source = _PyIRObservation_Stored(code);
     if (source.nrecords) {
         li->li_sources = PyMem_Calloc(source.nrecords, sizeof(line_source_row));
         if (li->li_sources == NULL) {
@@ -4371,8 +4396,8 @@ new_linesiterator(PyCodeObject *code)
             return NULL;
         }
         for (uint32_t i = 0; i < source.nrecords; i++) {
-            _PyIRSourceEvent event;
-            _PyIRSource_Event(&source, i, &event);
+            _PyIRObservationEvent event;
+            _PyIRObservation_Event(&source, i, &event);
             li->li_sources[i] = (line_source_row){event.to, event.line};
         }
         qsort(li->li_sources, source.nrecords, sizeof(line_source_row), compare_source_rows);
@@ -4382,7 +4407,7 @@ new_linesiterator(PyCodeObject *code)
         _PyCode_InitAddressRange(code, &future);
         for (uint32_t i = 0; i < source.nrecords; i++) {
             line_source_row row = li->li_sources[i];
-            if (row.line == _PyCode_CheckLineNumber(row.offset, &future)) {
+            if (row.line < 0 || row.line == _PyCode_CheckLineNumber(row.offset, &future)) {
                 continue;
             }
             uint32_t count = li->li_source_count;
@@ -5791,7 +5816,7 @@ code.replace
     co_name: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_name") = unchanged
     co_qualname: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_qualname") = unchanged
     co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_linetable") = unchanged
-    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_exceptiontable") = unchanged
+    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
     co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
     co_constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
 
@@ -5809,7 +5834,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_qualname, PyObject *co_linetable,
                   PyObject *co_exceptiontable, PyObject *co_fbinit,
                   PyObject *co_constslots)
-/*[clinic end generated code: output=44d80c045ef0ae97 input=1930c01ae3d96ab3]*/
+/*[clinic end generated code: output=44d80c045ef0ae97 input=04e92ba26bb63103]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -5835,21 +5860,30 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_nlocals != self->co_nlocals || co_stacksize != self->co_stacksize ||
         (co_flags & ~CO_VIRTUAL_KWARGS) != (self->co_flags & ~CO_VIRTUAL_KWARGS) ||
         co_varnames != NULL || co_freevars != NULL || co_cellvars != NULL;
+    bool recovery_geometry_change =
+        co_nlocals != self->co_nlocals ||
+        Py_MAX(co_stacksize, 1) != Py_MAX(self->co_stacksize, 1) ||
+        (co_varnames != NULL && PyTuple_GET_SIZE(co_varnames) != self->co_nlocals) ||
+        (co_freevars != NULL && PyTuple_GET_SIZE(co_freevars) != self->co_nfreevars) ||
+        (co_cellvars != NULL && PyTuple_GET_SIZE(co_cellvars) != self->co_ncellvars);
     if (co_code != NULL) {
-        structural_change |= PyBytes_GET_SIZE(co_code) != Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord) ||
+        bool changed_words = PyBytes_GET_SIZE(co_code) != Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord) ||
             memcmp(PyBytes_AS_STRING(co_code), self->co_words,
                    (size_t)Py_MIN(PyBytes_GET_SIZE(co_code),
                                  Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord))) != 0;
-        if (structural_change && co_linetable == self->co_linetable) {
-            _PyIRSourceMap source;
-            int decoded = _PyIRSource_Decode(PyBytes_AS_STRING(co_linetable),
-                                             PyBytes_GET_SIZE(co_linetable), &source);
-            if (decoded < 0 || source.nrecords) {
-                PyErr_SetString(PyExc_ValueError,
-                                "code.replace: changed code requires a matching source map");
-                return PyValue_NULL;
-            }
+        structural_change |= changed_words;
+        recovery_geometry_change |= changed_words;
+    }
+    if (recovery_geometry_change && co_exceptiontable == NULL) {
+        _PyIRSemanticMap semantic = _PyIRSemantic_Stored(self->co_exceptiontable);
+        if (semantic.nrecords) {
+            PyErr_SetString(PyExc_ValueError,
+                            "code.replace: changed code requires matching semantic recovery");
+            return PyValue_NULL;
         }
+    }
+    if (co_exceptiontable == NULL) {
+        co_exceptiontable = self->co_exceptiontable;
     }
     if (structural_change) {
         co_flags &= ~CO_VIRTUAL_KWARGS;

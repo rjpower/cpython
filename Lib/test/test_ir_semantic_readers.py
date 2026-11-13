@@ -11,7 +11,7 @@ import _testinternalcapi
 
 from test.support.ir_semantics import (
     observation_records, observation_tables, position_parts, position_table,
-    semantic_parts,
+    semantic_parts, semantic_table,
 )
 
 
@@ -39,6 +39,45 @@ def monitoring(code, callbacks):
 
 
 class SemanticReaderTests(unittest.TestCase):
+    def test_missing_edge_positions_keep_real_backedge_trace(self):
+        def target(values):
+            total = 0
+            for item in values: total += item
+            return total
+
+        original = target.__code__
+        locations, _ = position_parts(original.co_linetable)
+        exceptions, records = semantic_parts(original.co_exceptiontable)
+        self.assertFalse(exceptions)
+        physical = list(original.co_positions())
+        self.assertTrue(any(edge == 1 and to <= source and
+                            physical[source][0] == physical[to][0]
+                            for source, to, edge, *_ in records))
+        code = original.replace(co_linetable=position_table(locations))
+        control = code.replace(co_exceptiontable=semantic_table())
+
+        def trace_lines(selected):
+            seen = []
+
+            def trace(frame, event, arg):
+                if frame.f_code is selected and event == "line":
+                    seen.append(frame.f_lineno)
+                return trace
+
+            previous = sys.gettrace()
+            sys.settrace(trace)
+            try:
+                self.assertEqual(types.FunctionType(selected, globals())((1, 2, 3)), 6)
+            finally:
+                sys.settrace(previous)
+            return seen
+
+        expected = trace_lines(control)
+        loop_line = original.co_firstlineno + 2
+        self.assertGreaterEqual(expected.count(loop_line), 3)
+        self.assertEqual(trace_lines(code), expected)
+        self.assertEqual(_opcode.get_recovery_entries(code), tuple(records))
+
     def test_active_child_redirect_with_recovery_but_no_eh(self):
         def parent(child):
             child()

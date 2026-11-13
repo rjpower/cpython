@@ -8,6 +8,8 @@ import unittest
 
 from test import test_ir
 from test.support import import_helper
+from test.support.ir_semantics import (semantic_table, semantic_parts, position_parts,
+                                       observation_tables, observation_records)
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -27,7 +29,7 @@ def exception_item(value):
 def exception_entry(*values):
     data = bytearray(b''.join(exception_item(value) for value in values))
     data[0] |= 128
-    return bytes(data)
+    return semantic_table(bytes(data))
 
 
 class SemanticCompletionTests(unittest.TestCase):
@@ -224,10 +226,11 @@ class SemanticCompletionTests(unittest.TestCase):
         count = len(_testinternalcapi.get_co_localskinds(code)) + code.co_stacksize
         words[site] = (words[site] & ~(4095 << 28)) | ((count - 1) << 28)
         with self.assertRaisesRegex(ValueError, 'invalid register window'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words), co_linetable=b'')
+            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                         co_linetable=b'', co_exceptiontable=code.co_exceptiontable)
         table = exception_entry(site, 1, len(words) - 1, (base + 1) << 1)
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_exceptiontable=table)
+            code.replace(co_exceptiontable=table, co_linetable=b'')
 
         # A preserved prefix cannot grant an explicit read of the old iterator
         # after completion, even when its physical home still exists.
@@ -297,14 +300,16 @@ class SemanticCompletionTests(unittest.TestCase):
         base = (words[site] >> 28) & 4095
         words[entry.target] = dis.opmap['LOAD_FAST'] | (base << 28)
         with self.assertRaisesRegex(ValueError, 'names local slot'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words), co_linetable=b'')
-        table = code.co_exceptiontable
-        malformed = (bytes([table[0] & 127]) + table[1:], table + table,
-                     exception_entry(site, 1, entry.target, entry.slot << 1) +
-                     exception_entry(0, 1, entry.target, entry.slot << 1))
+            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                         co_linetable=b'', co_exceptiontable=code.co_exceptiontable)
+        table, _ = semantic_parts(code.co_exceptiontable)
+        first, _ = semantic_parts(exception_entry(site, 1, entry.target, entry.slot << 1))
+        second, _ = semantic_parts(exception_entry(0, 1, entry.target, entry.slot << 1))
+        malformed = (semantic_table(bytes([table[0] & 127]) + table[1:]),
+                     semantic_table(table + table), semantic_table(first + second))
         for data in malformed:
             with self.subTest(table=data):
-                with self.assertRaisesRegex(ValueError, 'semantic completion'):
+                with self.assertRaisesRegex(ValueError, 'semantic recovery'):
                     code.replace(co_exceptiontable=data)
 
     def test_constructor_rejects_preserved_receiver_as_nullable_call_self(self):
@@ -434,13 +439,12 @@ class SemanticCompletionTests(unittest.TestCase):
                     locations = raw[16:16 + size]
                     # Deliberately specify the source-only edge independently
                     # of which empty statements the compiler coalesces.
-                    records = b''.join(struct.pack(
-                        '<10i', site.offset, site.jump_target, 1,
-                        code.co_firstlineno + line, code.co_firstlineno + line,
-                        0, 1, -1, 0, 0) for line in source_lines)
-                    consume.__code__ = code.replace(co_linetable=(
-                        b'IRSM' + struct.pack('<III', version, size, len(source_lines)) +
-                        locations + records))
+                    records = [(site.offset, site.jump_target, 1,
+                                code.co_firstlineno + line, code.co_firstlineno + line,
+                                0, 1, -1, 0, 0) for line in source_lines]
+                    exceptions, _ = semantic_parts(code.co_exceptiontable)
+                    consume.__code__ = code.replace(
+                        **observation_tables(locations, records, exceptions))
                     lines = []
                     changed = []
 
@@ -674,13 +678,14 @@ class SemanticCompletionTests(unittest.TestCase):
         raw = code.co_linetable
         version, locations_size, _ = struct.unpack_from('<III', raw, 4)
         locations = raw[16:16 + locations_size] + b'\xf8'
-        event = struct.pack('<10i', entry.target, entry.target + 1, 0,
-                            code.co_firstlineno, code.co_firstlineno, 0, 1,
-                            new_handler, entry.slot, int(entry.lasti))
-        source = b'IRSM' + struct.pack('<III', version, len(locations), 1) + locations + event
+        event = (entry.target, entry.target + 1, 0,
+                 code.co_firstlineno, code.co_firstlineno, 0, 1,
+                 new_handler, entry.slot, int(entry.lasti))
+        exceptions, _ = semantic_parts(code.co_exceptiontable)
+        maps = observation_tables(locations, [event], exceptions)
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_linetable=source)
+                         **maps)
 
     def test_constructor_terminal_observer_owners(self):
         def iterate(values):
@@ -724,29 +729,23 @@ class SemanticCompletionTests(unittest.TestCase):
                 words.append(dis.opmap['RETURN_VALUE'])
             else:
                 words.append(dis.opmap['RETURN_VALUE'] | (home << 16))
-            raw = code.co_linetable
-            version, size, count = struct.unpack_from('<III', raw, 4)
-            locations = raw[16:16 + size] + bytes((0xf8 + len(words) - handler - 1,))
-            records = raw[16 + size:]
+            locations, _ = position_parts(code.co_linetable)
+            locations += bytes((0xf8 + len(words) - handler - 1,))
+            records = observation_records(code)
+            exceptions, _ = semantic_parts(code.co_exceptiontable)
             if ordinary:
-                source = (b'IRSM' + struct.pack('<III', version, len(locations), count)
-                          + locations + records)
-                exceptiontable = exception_entry(site, 1, handler,
-                                                 (base + 4) << 1)
+                exceptions, _ = semantic_parts(exception_entry(
+                    site, 1, handler, (base + 4) << 1))
             else:
-                event = struct.pack('<10i', site,
-                                    instruction.jump_target if edge else site + 1,
-                                    edge,
-                                    code.co_firstlineno, code.co_firstlineno,
-                                    0, 1, handler, base + 4, 0)
-                source = (b'IRSM' + struct.pack('<III', version, len(locations), count + 1)
-                          + locations + records + event)
-                exceptiontable = code.co_exceptiontable
+                records.append((site,
+                                instruction.jump_target if edge else site + 1,
+                                edge, code.co_firstlineno, code.co_firstlineno,
+                                0, 1, handler, base + 4, 0))
+            maps = observation_tables(locations, records, exceptions)
             stacksize = max(code.co_stacksize, base + 5 - code.co_nlocals)
             return code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
                                 co_names=code.co_names + ('terminal_sink',),
-                                co_linetable=source, co_exceptiontable=exceptiontable,
-                                co_stacksize=stacksize)
+                                co_stacksize=stacksize, **maps)
 
         loop = iterate.__code__
         self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,

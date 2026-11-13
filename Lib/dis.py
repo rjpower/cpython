@@ -829,32 +829,10 @@ def _get_name_info(name_index, get_name, **extrainfo):
     else:
         return UNKNOWN, ''
 
-def _parse_varint(iterator):
-    b = next(iterator)
-    val = b & 63
-    while b&64:
-        val <<= 6
-        b = next(iterator)
-        val |= b&63
-    return val
-
 def _parse_exception_table(code):
-    iterator = iter(code.co_exceptiontable)
-    entries = []
-    try:
-        while True:
-            start = _parse_varint(iterator)
-            length = _parse_varint(iterator)
-            end = start + length
-            target = _parse_varint(iterator)
-            # The slot that receives the exception; lasti, if the entry
-            # keeps it, goes to the slot below
-            sl = _parse_varint(iterator)
-            slot = sl >> 1
-            lasti = bool(sl&1)
-            entries.append(_ExceptionTableEntry(start, end, target, slot, lasti))
-    except StopIteration:
-        return entries
+    return [_ExceptionTableEntry(*entry)
+            for entry in _opcode.get_exception_entries(code)]
+
 
 def _feedback_info(fb, fbinit, feedback):
     """The cache_info of the feedback entry at unit fb: of the executing copy

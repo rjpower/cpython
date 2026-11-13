@@ -13,6 +13,25 @@ from test.test_ir_transfer_admission import encoded, make_code
 
 
 class FoldedInputTransferTests(unittest.TestCase):
+    def test_scalar_peek_preserves_unrelated_tail_absence(self):
+        words = [("LOAD_CONST", 1), ("POP_TOP", 3), ("GET_LEN", 2, 1),
+                 ("POP_TOP", 1), ("POP_TOP", 2), ("LOAD_CONST", 2),
+                 ("CALL_NO_SELF", 2, 2, 0, 0), ("RETURN_VALUE", 2)]
+        code = make_code(words, slots=5, locals=("value",))
+        for admitted in routes(code):
+            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
+                             _testinternalcapi.get_ir(code))
+        bad = words.copy()
+        bad[1] = ("LOAD_CONST", 3)
+        replacement = encoded(bad)
+        for route in (construct, lambda co, **kw: co.replace(**kw)):
+            with self.assertRaisesRegex(ValueError, "virtual call input"):
+                route(code, co_code=replacement)
+        payload = marshal.dumps(code)
+        self.assertEqual(payload.count(code.co_code), 1)
+        with self.assertRaisesRegex(ValueError, "virtual call input"):
+            marshal.loads(payload.replace(code.co_code, replacement, 1))
+
     def test_folded_input_preserves_only_prior_tail_absence(self):
         for name in ("LIST_APPEND", "SET_ADD"):
             for depth in (1, 2, 8):

@@ -2563,12 +2563,12 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
             case _PyIR_OWNER_NORMAL_COMPLETION:
-                /* Completion transport belongs to a selected outgoing edge,
-                 * not to this common pre-branch state. Its body destination
-                 * is not produced on completion: retain only an existing
-                 * absence proof for that home, never invent one. */
+                /* Completion transport belongs to its selected edge. FOR's
+                 * body destination is not produced on completion: retain
+                 * only its incoming absence. SEND produces an actual A. */
                 home = (int)IR_A(word);
-                work->completion_destination_empty = home >= nl &&
+                work->completion_destination_empty =
+                    !(event->flags & _PyIR_COMPLETION_HAS_RESULT) && home >= nl &&
                     home < nl + image->scratch &&
                     (semantic_home_facts(work, state, home, nl) & (1u << SEM_NO_HOME));
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
@@ -2653,19 +2653,26 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
         if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != edge) {
             continue;
         }
-        /* The family-closed emitted completion route consumes receiver and
-         * cursor. Logical absence survives child retirement even when its
-         * nonowning overlay bytes do not provide physical NULL. */
-        assert(event->src == 2 && edge == 1);
+        /* The actual completion consumes its full window before any result
+         * publication. Logical absence does not imply physical NULL. */
+        int has_result = event->flags & _PyIR_COMPLETION_HAS_RESULT;
+        assert((has_result ? event->src == 3 || event->src == 4
+                           : event->src == 2) && edge == 1);
         int base = (int)IR_B(word);
-        assert(base >= image->nl && base <= image->nl + image->scratch - 2);
+        assert(base >= image->nl &&
+               base <= image->nl + image->scratch - event->src);
         for (int home = base; home < base + event->src; home++) {
             unsigned int old = semantic_home_facts(work, state, home, image->nl);
             semantic_set_facts(work, state, home, image->nl,
                 (old & (1u << SEM_NULL)) | (1u << SEM_NO_HOME));
         }
         int dst = (int)IR_A(word);
-        if (dst >= image->nl && dst != IR_NO_DST &&
+        if (has_result && dst >= image->nl && dst != IR_NO_DST) {
+            uint64_t mask = UINT64_C(1) << ((dst - image->nl) % 64);
+            state[SEM_NO_HOME * work->nwords + (dst - image->nl) / 64] &= ~mask;
+            state[SEM_NULL * work->nwords + (dst - image->nl) / 64] &= ~mask;
+        }
+        else if (!has_result && dst >= image->nl && dst != IR_NO_DST &&
             (dst < base || dst >= base + event->src) &&
             work->completion_destination_empty)
         {

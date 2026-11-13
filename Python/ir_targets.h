@@ -8,6 +8,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exit_unwind(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exit_unwind_notrace(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_throw_error(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_start_frame(TAIL_CALL_PARAMS);
 
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD(TAIL_CALL_PARAMS);
@@ -346,7 +347,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
               _PyFrame_GetCode(frame)->co_filename,
               PyUnstable_InterpreterFrame_GetLine(frame),
               opcode);
-JUMP_TO_LABEL(error);
+PROCESS_ERROR_AT(RAISE, 0, next_instr);
 }
 
 static py_tail_call_funcptr instruction_funcptr_handler_table[365] = {

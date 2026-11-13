@@ -555,6 +555,7 @@ IR_HELPER_EFFECTS = {
     "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
     "IR_WRITE_OUTPUT": frozenset(),
     "IR_TAKE_INPUT": frozenset(),
+    "IR_CLOSE_INPUTS": frozenset(("escapes",)),
 }
 
 

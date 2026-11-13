@@ -490,8 +490,15 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
         assert(status != _PyIR_SHADOW_MISMATCH);
     }
     _PyIRHomeView view;
-    int selected = frame->phase_state == _PyIR_PHASE_CREATED &&
-        _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    int selected = 0;
+    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+        _PyIRHomeAuthority authority = _PyFrame_GetErrorHomeView(NULL, frame, &view);
+        selected = authority == _PyIR_HOME_MUST_READABLE ||
+                   authority == _PyIR_HOME_NULL_CONTROL_READABLE;
+    }
+    else if (frame->phase_state == _PyIR_PHASE_CREATED) {
+        selected = _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    }
     uint32_t cursor = 0;
     int begin = 0, limit = _PyFrame_NumSlots(frame);
     if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {

@@ -12,6 +12,68 @@ from test.test_ir_call_roles import routes
 
 
 class HomeWriterTests(unittest.TestCase):
+    @support.requires_specialization
+    def test_native_argument_drain_detaches_before_finalizer_collection(self):
+        def invoke(factory):
+            current = 17
+            result = max(factory(0), factory(1), factory(2))
+            return result, current
+
+        def suspend(factory):
+            current = 17
+            result = max(factory(0), factory(1), factory(2))
+            yield result, current
+
+        for original, suspended in ((invoke.__code__, False), (suspend.__code__, True)):
+            for code in routes(original):
+                function = types.FunctionType(code, globals())
+                generator = None
+
+                def run(factory):
+                    nonlocal generator
+                    if not suspended:
+                        return function(factory)
+                    generator = function(factory)
+                    value = next(generator)
+                    generator.close()
+                    return value
+
+                for _ in range(150):
+                    self.assertEqual(run(lambda index: index), (2, 17))
+                self.assertTrue(any("BUILTIN_FAST_WITH_KEYWORDS" in row[0]
+                                    for row in _testinternalcapi.get_ir(code, True)))
+                observations = []
+                references = []
+
+                class Payload:
+                    def __init__(self, index):
+                        self.index = index
+                        references.append(weakref.ref(self))
+
+                    def __gt__(self, other):
+                        return self.index > other.index
+
+                    def __del__(self):
+                        if self.index == 2:
+                            return
+                        frame = sys._getframe(1)
+                        frame.f_locals["current"] = 42
+                        remaining = True
+                        if suspended and self.index == 1:
+                            remaining = references[0]() in gc.get_referents(generator)
+                        gc.collect()
+                        # Runs the actual precise frame-root visitor when the
+                        # tracing verifier is available, including in B.
+                        _testinternalcapi.gc_verify()
+                        observations.append((self.index, frame.f_code is code, remaining))
+
+                result, current = run(Payload)
+                self.assertEqual(result.index, 2)
+                self.assertEqual(current, 42)
+                self.assertEqual(sorted(observations), [(0, True, True), (1, True, True)])
+                del result
+                self.assertTrue(all(reference() is None for reference in references))
+
     def test_container_success_vacates_before_displaced_local_callback(self):
         for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
                                            ("[", "]", "BUILD_LIST")):

@@ -1565,6 +1565,7 @@ class TestIRCases(unittest.TestCase):
             right = IR_VIEW(IR_C(ir_word));
             left = IR_VIEW(IR_B(ir_word));
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                frame->phase_state = 0;
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
                 if (ir_obj_left == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -1575,6 +1576,7 @@ class TestIRCases(unittest.TestCase):
                 ir_obj_left = PyValue_AsKnownObjectBorrow(left);
             }
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                frame->phase_state = 0;
                 ir_obj_right = _PyValueTemps_Box(value_temps, right);
                 if (ir_obj_right == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -1586,20 +1588,25 @@ class TestIRCases(unittest.TestCase):
             }
             PyObject *l = ir_obj_left;
             PyObject *r = ir_obj_right;
+            frame->phase_state = 0;
+            frame->phase_state = 0;
             PyObject *o = spam_call(l, r);
             ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), right);
             PyValue_XCLOSE(ir_own_C);
             ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), left);
             PyValue_XCLOSE(ir_own_B);
             if (o == NULL) {
+                frame->phase_state = 0;
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
             }
             DISPATCH();
         }
@@ -2519,10 +2526,12 @@ class TestIRCases(unittest.TestCase):
             IR_CLEAR_SLOTS(&window[1], oparg);
             IR_PUBLISH_TEMP(window[0], res);
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
             }
             DISPATCH();
         }
@@ -2774,6 +2783,7 @@ class TestIRCases(unittest.TestCase):
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    frame->phase_state = 0;
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
                     if (ir_obj_owner == NULL) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -2789,10 +2799,12 @@ class TestIRCases(unittest.TestCase):
                 PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
             }
             DISPATCH();
         }
@@ -2839,10 +2851,12 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
             }
             DISPATCH();
         }
@@ -2892,13 +2906,15 @@ class TestIRCases(unittest.TestCase):
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
-            IR_SLOT(IR_C(ir_word)) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
             IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
             }
             DISPATCH();
         }

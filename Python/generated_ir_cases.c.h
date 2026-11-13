@@ -21186,7 +21186,7 @@
             PyValueBorrow retval;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            retval = IR_VIEW(IR_A(ir_word));
+            retval = IR_VIEW_NATIVE_INPUT(IR_A(ir_word));
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;

@@ -2990,6 +2990,10 @@ class IREmitter(Emitter):
         self.error_local_dst = False
         self.send_source_parts = None
         self.error_redispatch_origin = None
+        self.observer_source = None
+        self.observer_errors = set()
+        self.observer_terminals = set()
+        self.observer_calls = set()
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -4274,6 +4278,10 @@ class IREmitter(Emitter):
             self.killed_inplace = None
         stack = storage.stack
         assert isinstance(stack, IRStack)
+        if self.observer_source is not None:
+            self.observer_call_receipt(stmt)
+            if _statement_text(stmt) == ["DISPATCH_GOTO", "(", ")", ";"]:
+                self.observer_terminals.add(id(stmt.contents[0]))
         for target in uop.local_stores:
             if target in stmt.contents:
                 var = find_local(target.text, storage)
@@ -4295,6 +4303,12 @@ class IREmitter(Emitter):
             # successful normal vacates and from readable phase recipes.
             self.abrupt_prefix = True
         return reachable, tkn, storage
+
+    def observer_call_receipt(self, stmt: SimpleStmt) -> None:
+        """Record the callback statement after its ordinary emission."""
+        for token in stmt.contents:
+            if token.text in OBSERVER_ENTRY_HELPERS:
+                self.observer_calls.add(id(token))
 
     def decref_inputs(
         self,
@@ -4365,6 +4379,7 @@ class IREmitter(Emitter):
             self.abrupt_operand_bridges.add(bridge)
         elif self.abrupt_operand_origin is not None:
             self.abrupt_operand_sources.add(self.abrupt_operand_origin)
+            self.observer_errors.add(self.abrupt_operand_origin)
         else:
             self.abrupt_operand_uncovered = True
 
@@ -4438,6 +4453,10 @@ class IREmitter(Emitter):
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
         super().goto_label(goto, label, storage)
+        if label.text == "error" and self.observer_source is not None:
+            # The transparent wrapper has no frame-home transport. This is
+            # its actual emitted failure route after the callback/PC refresh.
+            self.observer_errors.add(id(goto))
         if label.text == "exception_unwind":
             self.error_unwind_sources.add(id(goto))
         else:
@@ -4477,6 +4496,7 @@ class IREmitter(Emitter):
         if inst is not None and self.format_of(inst).store_dst:
             self.release_displaced()
         self.error_terminal_sources.add(id(tkn))
+        self.observer_terminals.add(id(tkn))
         self.error_finalized = True
         self.emit(tkn)
         return False
@@ -6155,6 +6175,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.error_finalized = False
     emitter.error_local_dst = False
     emitter.error_redispatch_origin = None
+    emitter.observer_source = observer_entry_source(inst, fmt)
+    emitter.observer_errors = set()
+    emitter.observer_terminals = set()
+    emitter.observer_calls = set()
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
@@ -6676,7 +6700,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
                     abrupt: dict[str, bool] | None = None,
                     operand_abrupt: dict[str, bool] | None = None,
-                    error_routes: dict[str, tuple[str, ...]] | None = None
+                    error_routes: dict[str, tuple[str, ...]] | None = None,
+                    observer_entries: dict[str, bool] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -6686,6 +6711,12 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
             kind = normal_transfer_kind(inst, formats[name])
             if programs is not None and kind != "_PyIR_TRANSFER_UNKNOWN":
                 programs[name] = (OwnershipEvent("_PyIR_OWNER_LEAF", src=kind),)
+            if observer_entries is not None:
+                out = CWriter.null()
+                emitter = IREmitter(out, analysis, formats)
+                emitter.handler_format = formats[name]
+                generate_handler(name, inst, formats[name], emitter, out, False)
+                observer_entries[name] = emitted_observer_entry(emitter, inst)
             continue
         buffer = io.StringIO()
         out = CWriter(buffer, 0, False)
@@ -6782,6 +6813,33 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
 ERROR_ROUTE_FLAGS = ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_DIRECT",
                      "_PyIR_ERROR_BRIDGE", "_PyIR_ERROR_LOCAL_DST")
 
+OBSERVER_ENTRY_HELPERS = {
+    "_Py_call_instrumentation_line", "_Py_call_instrumentation_instruction",
+}
+
+
+def observer_entry_source(inst: Instruction, fmt: IRFormat):
+    """A transparent pre-word observer, independent of the body error census."""
+    inputs, outputs = external_io(inst)
+    if not fmt.transparent or inputs or outputs:
+        return None
+    source = analyze_error_effects(inst, HANDLER_LOCALS, observer_wrapper=True)
+    if (source is None or source.homes != HomeEffect.PRESERVES_SCRATCH_ABSENCE
+            or not source.helpers.intersection(OBSERVER_ENTRY_HELPERS)
+            or source.unwind_sources):
+        return None
+    return source
+
+
+def emitted_observer_entry(emitter: IREmitter, inst: Instruction) -> bool:
+    source = emitter.observer_source
+    calls = {id(token) for part in inst.parts if isinstance(part, Uop)
+             for token in part.body.tokens() if token.text in OBSERVER_ENTRY_HELPERS}
+    return bool(source is not None and calls and not emitter.boxes and
+                source.error_sources == emitter.observer_errors and
+                source.terminal_sources == emitter.observer_terminals and
+                calls == emitter.observer_calls)
+
 
 def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tuple[str, ...]:
     """Match complete typed source to actual flush and terminal receipts."""
@@ -6824,6 +6882,7 @@ class HandlerContract:
     abrupt_prefix: bool
     abrupt_operands: bool
     error_routes: tuple[str, ...]
+    observer_entry: bool
 
 
 def statement_shape(node):
@@ -7696,7 +7755,9 @@ def handler_contracts(analysis: Analysis,
     abrupt = {}
     operand_abrupt = {}
     error_routes = {}
-    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt, error_routes)
+    observer_entries = {}
+    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt,
+                             error_routes, observer_entries)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
@@ -7739,6 +7800,7 @@ def handler_contracts(analysis: Analysis,
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),
+            observer_entry=observer_entries.get(name, False),
         )
     return result
 

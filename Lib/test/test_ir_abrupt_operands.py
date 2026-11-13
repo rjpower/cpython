@@ -56,7 +56,12 @@ class AbruptOperandTests(unittest.TestCase):
         lower = words.copy()
         lower[3] = ("GET_ANEXT", 1, 4)
         self.reject(code, co_code=encoded(lower))
-        self.reject(code, co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
+        # POP_TOP has no ordinary error route. Its PRE observer edge keeps
+        # the same prior absence; an inert extension does not poison it.
+        extended = code.replace(
+            co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
+        for admitted in routes(extended):
+            _testinternalcapi.get_ir(admitted, True)
 
     def test_nonwindow_peek_retains_its_input(self):
         for name in ("GET_LEN", "GET_ANEXT"):

@@ -73,8 +73,10 @@ class ExceptionAbsenceTests(unittest.TestCase):
         # Start with the same edge carrying no recovery handler, so the
         # serialized negative can change only fixed-size record fields.
         record = (3, 4, 0, 1, 1, 0, 1, -1, 0, 0)
-        source = b"IRSM" + struct.pack("<III", 1, 0, 1)
-        source += struct.pack("<10i", *record)
+        raw = code.co_linetable
+        version, locations_size, _ = struct.unpack_from("<III", raw, 4)
+        source = (b"IRSM" + struct.pack("<III", version, locations_size, 1) +
+                  raw[16:16 + locations_size] + struct.pack("<10i", *record))
         code = code.replace(co_linetable=source)
         for admitted in routes(code):
             _testinternalcapi.get_ir(admitted, True)

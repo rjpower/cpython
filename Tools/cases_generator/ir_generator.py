@@ -5211,10 +5211,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         emit_final_outputs(inst, fmt, mode, stack, out)
         if call_window:
             emitter.call_normal_drained = True
-        # The fact comes from the actual successful flush/vacate path. Rows
-        # with other normal exits or raw frame access need their own recipe.
+        # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
+        # this final flush. Stack alignment/merge has checked both branch arms
+        # at their common point, so consumed inputs are empty on either edge.
+        # Other normal exits, through/outcome protocols and raw frame access
+        # need their own transport recipe.
         emitter.normal_inputs_cleared = (
-            not inst.properties.switches_frame and not fmt.jumps and not fmt.forward
+            not inst.properties.switches_frame and not fmt.names_target
+            and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
             and not through_items(inst, *external_io(inst))
             and not any(t.text in {"frame", "slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}

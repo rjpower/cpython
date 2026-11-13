@@ -92,6 +92,21 @@ class CallRoleTests(unittest.TestCase):
         bad[3] = ("CALL_EX_NO_SELF_KW", 0, 0, 0)
         self.assert_admitted(bad, slots=5)
 
+    def test_fused_branches_retire_holes_on_both_successors(self):
+        def choose(fn, first, second):
+            if first is None:
+                return fn(second)
+            if second is None:
+                return fn(first)
+            return fn(first == second)
+        rows = _testinternalcapi.get_ir(choose.__code__)
+        self.assertTrue(any(row[0] == "IS_OP_JUMP" for row in rows))
+        for admitted in routes(choose.__code__):
+            function = types.FunctionType(admitted, globals())
+            for first, second, expected in ((None, 17, 17), (17, None, 17),
+                                            (17, 17, True), (17, 18, False)):
+                self.assertEqual(function(lambda value: value, first, second), expected)
+
     def test_feedback_encoded_normal_cleanup_uses_the_admitted_operand(self):
         def select(fn, values):
             return fn(values[0])

@@ -160,6 +160,9 @@ class Local:
     # for a uop that reads it as one: the value's object, or a box of an
     # inline value that value_temps owns (ir_generator, emit_object_inputs).
     ir_box: str | None = None
+    # The current C value passed a required-input check or came from checked
+    # non-NULL transport. A fresh home load must establish this again.
+    nonnull: bool = False
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -190,6 +193,7 @@ class Local:
     def kill(self) -> None:
         self.in_local = False
         self.memory_offset = None
+        self.nonnull = False
 
     def in_memory(self) -> bool:
         return self.memory_offset is not None or self.is_array()
@@ -206,6 +210,7 @@ class Local:
             self.ir_input,
             self.ir_inplace,
             self.ir_box,
+            self.nonnull,
         )
 
     @property
@@ -283,6 +288,7 @@ class Stack:
             else:
                 rename = ""
             if not popped.in_local:
+                popped.nonnull = False
                 if popped.memory_offset is None:
                     popped.memory_offset = self.logical_sp
                 assert popped.memory_offset == self.logical_sp, (popped, self.as_comment())
@@ -474,6 +480,7 @@ class Stack:
             self_var.in_local = self_var.in_local and other_var.in_local
             known = self_var.known_object and other_var.known_object
             self_var.known_object = other_var.known_object = known
+            self_var.nonnull = other_var.nonnull = self_var.nonnull and other_var.nonnull
             check_inplace_merge(self_var, other_var)
             if other_var.memory_offset is None:
                 self_var.memory_offset = None
@@ -722,6 +729,7 @@ class Storage:
                 raise StackError(f"'{var.name}' is cleared on some paths, but not all")
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
+            var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
             check_inplace_merge(var, other_var)
         if len(self.outputs) != len(other.outputs):
             self._push_defined_outputs()
@@ -736,6 +744,7 @@ class Storage:
                 var.memory_offset = None
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
+            var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
             check_inplace_merge(var, other_var)
         self.stack.merge(other.stack, out)
         self.sanity_check()

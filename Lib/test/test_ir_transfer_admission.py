@@ -82,7 +82,11 @@ class TransferAdmissionTests(unittest.TestCase):
                  ("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
         bad = words.copy()
         bad[1] = ("IR_JUMP", 0, 0, 2)
-        self.assert_rejected(words, bad, "unretired scratch owner")
+        # General frame exit owns remaining scratch. An explicit empty
+        # form must still prove that no owner is left behind.
+        self.assert_admitted(bad)
+        bad[-1] = ("RETURN_VALUE_EMPTY", 0)
+        self.assert_rejected(words, bad, "unproved empty return")
 
     def test_named_binding_move_store_and_checked_unbound_read(self):
         # LOAD_FAST_AND_CLEAR can produce canonical NULL from an unbound local.
@@ -136,7 +140,11 @@ class TransferAdmissionTests(unittest.TestCase):
                         bad = words.copy()
                         release = 6 if owner_on_taken else 3
                         bad[release] = ("IR_JUMP", 0, 0, release + 1)
-                        message = "overwrites scratch owner" if overwrite else "unretired scratch owner"
+                        if not overwrite:
+                            self.assert_admitted(bad)
+                            words[-1] = ("RETURN_VALUE_EMPTY", 0)
+                            bad[-1] = ("RETURN_VALUE_EMPTY", 0)
+                        message = "overwrites scratch owner" if overwrite else "unproved empty return"
                         self.assert_rejected(words, bad, message)
 
     def test_unknown_barrier_keeps_only_certified_untouched_null(self):

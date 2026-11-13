@@ -1346,7 +1346,10 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
         next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
             ? i + 1 + IR_DS(word) : (int)IR_CD(word);
     }
-    if (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[IR_HANDLER(word)]) ||
+    /* Project optimized forms through their frontend shadow before removing
+     * instrumentation. Encoded family identity alone is not a CFG opcode. */
+    int opcode = _PyIR_HandlerBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
+    if (IS_SCOPE_EXIT_OPCODE(opcode) ||
         (fmt->flags & _PyIR_JUMP_ALWAYS))
     {
         next[0] = -1;

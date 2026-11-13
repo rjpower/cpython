@@ -407,6 +407,14 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         }
         return opcode;
     }
+    if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {
+        if (opcode == RETURN_VALUE) {
+            return RETURN_VALUE_EMPTY;
+        }
+        if (opcode == INSTRUMENTED_RETURN_VALUE) {
+            return INSTRUMENTED_RETURN_VALUE_EMPTY;
+        }
+    }
     if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
         if (opcode == YIELD_VALUE) {
             return YIELD_DELEGATED;

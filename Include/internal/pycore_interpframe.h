@@ -177,6 +177,45 @@ _PyFrame_TakeHome(_PyInterpreterFrame *frame, PyValue *home)
     return value;
 }
 
+/* The owner of V, the view of a temporary whose slot the same expression
+ * clears: the count moves from the slot to the C local.  The one
+ * count-free conversion from a borrow to an owner, shared by known-home
+ * removal and the checked native interpreter exit. */
+static inline PyValue
+_PyIR_AdoptTemp(PyValueBorrow view)
+{
+    PyValue owner = {view.bits};
+    return owner;
+}
+
+/* These commits retain facts supplied by the actual physical transport.
+ * Logical stack absence alone does not establish a vacant recipient. */
+static inline void
+_PyFrame_PublishVacantHome(_PyInterpreterFrame *frame, PyValue *home,
+                          PyValue value)
+{
+    _PyFrame_WriteHome(frame, home, value);
+}
+
+static inline void
+_PyFrame_ReplaceKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                        PyValueBorrow old, PyValue value)
+{
+    assert(PyValue_Is(*home, old));
+    (void)old;
+    _PyFrame_WriteHome(frame, home, value);
+}
+
+static inline PyValue
+_PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                      PyValueBorrow value)
+{
+    assert(PyValue_Is(*home, value));
+    PyValue owner = _PyIR_AdoptTemp(value);
+    _PyFrame_WriteHome(frame, home, PyValue_NULL);
+    return owner;
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST
@@ -244,20 +283,6 @@ _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
             PyValue_CLOSE(ref);
         }
     }
-}
-
-/* Whether every temporary of f is NULL, as when it returns */
-static inline void
-_PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
-{
-#ifdef Py_DEBUG
-    int nslots = _PyFrame_NumSlots(f);
-    for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
-        assert(PyValue_IsNull(f->base[i]));
-    }
-#else
-    (void)f;
-#endif
 }
 
 /* Bindings stay dynamic. Scratch ranges are clipped before touching homes. */

@@ -1481,7 +1481,22 @@ dummy_func(
             PyValue temp = retval;
             DEAD(retval);
             SAVE_STACK();
-            _PyFrame_AssertTemporariesClear(frame);
+            DTRACE_FUNCTION_RETURN();
+            _Py_LeaveRecursiveCallPy(tstate);
+            // GH-99729: We need to unlink the frame *before* clearing it:
+            _PyInterpreterFrame *dying = frame;
+            int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+            frame = tstate->current_frame = dying->previous;
+            temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
+            RELOAD_STACK();
+            IR_RETURN_TO_CALLER(temp, generator_return);
+        }
+
+        ir_only returns op(_RETURN_VALUE_EMPTY, (retval --)) {
+            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+            PyValue temp = retval;
+            DEAD(retval);
+            SAVE_STACK();
             DTRACE_FUNCTION_RETURN();
             _Py_LeaveRecursiveCallPy(tstate);
             // GH-99729: We need to unlink the frame *before* clearing it:
@@ -1496,6 +1511,10 @@ dummy_func(
         macro(RETURN_VALUE) =
             _MAKE_HEAP_SAFE +
             _RETURN_VALUE;
+
+        macro(RETURN_VALUE_EMPTY) =
+            _MAKE_HEAP_SAFE +
+            _RETURN_VALUE_EMPTY;
 
         // The value is taken before the event, which can run code
         tier1 op(_RETURN_VALUE_EVENT, (val -- taken)) {
@@ -1513,6 +1532,10 @@ dummy_func(
         macro(INSTRUMENTED_RETURN_VALUE) =
             _RETURN_VALUE_EVENT +
             _RETURN_VALUE;
+
+        macro(INSTRUMENTED_RETURN_VALUE_EMPTY) =
+            _RETURN_VALUE_EVENT +
+            _RETURN_VALUE_EMPTY;
 
         inst(GET_AITER, (obj -- iter)) {
             unaryfunc getter = NULL;
@@ -2276,7 +2299,7 @@ dummy_func(
         }
 
         inst(BUILD_TUPLE, (values[oparg] -- tup)) {
-            PyObject *tup_o = _PyTuple_FromValueStealOnSuccess(values, oparg);
+            PyObject *tup_o = IR_BUILD_TUPLE(values);
             if (tup_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -2285,7 +2308,7 @@ dummy_func(
         }
 
         inst(BUILD_LIST, (values[oparg] -- list)) {
-            PyObject *list_o = _PyList_FromValueStealOnSuccess(values, oparg);
+            PyObject *list_o = IR_BUILD_LIST(values);
             if (list_o == NULL) {
                 ERROR_NO_POP();
             }

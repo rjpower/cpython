@@ -3308,7 +3308,8 @@ class TestIRCases(unittest.TestCase):
         old = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
         self.assertIn(old, text)
         with open(self.temp_input_filename, "w") as stream:
-            stream.write(text.replace(old, old.replace("oparg", "oparg + 1"), 1))
+            changed_route = "int changed_target = oparg + 1;\n" + old.replace("oparg", "changed_target")
+            stream.write(text.replace(old, changed_route, 1))
         changed = analyzer.analyze_files([self.temp_input_filename])
         changed_formats = ir_generator.compute_formats(changed)
         changed_contracts = ir_generator.handler_contracts(changed, changed_formats)

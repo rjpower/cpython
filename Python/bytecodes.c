@@ -5350,21 +5350,7 @@ dummy_func(
         }
 
         inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
-            PyValue held_left = TAKE(lhs);
-            PyValue held_right = TAKE(rhs);
-            INPUTS_DEAD();
-            SYNC_SP();
-            PyValue pending = oparg == NB_SUBSCR
-                ? value_subscript(held_left, held_right)
-                : _PyValue_BinaryOps[oparg](PyValue_Borrow(held_left),
-                                            PyValue_Borrow(held_right));
-            if (PyValue_IsNull(pending)) {
-                IR_RESTORE_VALUE_INPUTS(held_left, held_right);
-                value_operation_close3(held_right, held_left, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
-            }
-            IR_COMPLETE_VALUE_READER(pending, held_right, held_left);
-            res = pending;
+            IR_BINARY_READER(lhs, rhs, res);
         }
 
         macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;

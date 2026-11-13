@@ -4698,14 +4698,24 @@ assert_frame_arena_vacant(_PyInterpreterFrame *frame, int count)
 static PyObject *
 test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    PyObject *compiled = Py_CompileString("lambda value: value",
-                                        "<frame arena binding>", Py_eval_input);
+    PyObject *compiled = Py_CompileString(
+        "(lambda value: value, "
+        "lambda a,b,c,d,e,f,g,h: (a,b,c,d,e,f,g,h), "
+        "lambda first,second: (third := first))",
+        "<frame arena binding>", Py_eval_input);
     if (compiled == NULL) {
         return NULL;
     }
     PyCodeObject *bindings = (PyCodeObject *)_PyTuple_GET_OBJECT(
         ((PyCodeObject *)compiled)->co_consts, 0);
     assert(PyCode_Check(bindings) && bindings->co_nlocalsplus == 1);
+    PyCodeObject *parent_code = (PyCodeObject *)_PyTuple_GET_OBJECT(
+        ((PyCodeObject *)compiled)->co_consts, 1);
+    PyCodeObject *child_code = (PyCodeObject *)_PyTuple_GET_OBJECT(
+        ((PyCodeObject *)compiled)->co_consts, 2);
+    assert(PyCode_Check(parent_code) && parent_code->co_nlocalsplus == 8);
+    assert(PyCode_Check(child_code) && child_code->co_argcount == 2 &&
+           child_code->co_nlocalsplus == 3);
     PyThreadState state = {0};
     DirtyFrameArena arena = {0};
     PyObject_GetArenaAllocator(&arena.original);
@@ -4743,6 +4753,48 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
     _PyThreadState_PopFrame(&state, frame);
 
     _PyStackChunk *root = state.datastack_chunk;
+    int parent_slots = _PyFrame_NumSlotsForCodeObject(parent_code);
+    int child_slots = _PyFrame_NumSlotsForCodeObject(child_code);
+    assert(parent_slots >= 9 + child_slots);
+    assert(_PyThreadState_HasStackSpace(&state,
+        parent_slots + child_code->co_framesize + FRAME_SPECIALS_SIZE));
+    _PyInterpreterFrame *parent =
+        _PyThreadState_PushFrameUnchecked(&state, parent_slots);
+    parent->owner = FRAME_OWNED_BY_THREAD;
+    parent->f_executable = parent_code;  // borrowed from compiled; no callbacks
+    _PyFrame_InitializeBindings(parent, parent_code, 0);
+
+    /* Establish a real previously used header at the first call window.
+     * This private state owns the whole parent reservation throughout. */
+    PyObject **parent_top = state.datastack_top;
+    state.datastack_top = _PyDataStack_Address(parent->base + 8);
+    _PyInterpreterFrame *reused =
+        _PyThreadState_PushFrameUnchecked(&state, child_slots);
+    _PyThreadState_PopFrame(&state, reused);
+    state.datastack_top = parent_top;
+    for (int offset = 8; offset <= 9; offset++) {
+        PyValue *arguments = parent->base + offset;
+        PyValue first = PyValue_FromInlineInt(41);
+        PyValue second = PyValue_FromInlineInt(42);
+        _PyFrame_WriteHome(parent, arguments, first);
+        _PyFrame_WriteHome(parent, arguments + 1, second);
+        _PyInterpreterFrame *child = _PyFrame_ReserveForCall(
+            &state, child_code, arguments, 2, parent);
+        assert(child == reused && child->base == arguments);
+        /* On the second reuse old_base+2 aliases the new second argument.
+         * Binding initialization must use the newly bound base instead. */
+        assert(PyValue_Is(child->base[0], first));
+        assert(PyValue_Is(child->base[1], second));
+        assert(PyValue_Is(_PyFrame_ReadHome(child, child->base), first));
+        assert(PyValue_Is(_PyFrame_ReadHome(child, child->base + 1), second));
+        assert(PyValue_IsNull(child->base[2]));
+        assert(!_PyFrame_HomeIsPresent(child, child->base + 2));
+        _PyFrame_WriteHome(child, child->base, PyValue_NULL);
+        _PyFrame_WriteHome(child, child->base + 1, PyValue_NULL);
+        _PyThreadState_PopFrame(&state, child);
+    }
+    _PyThreadState_PopFrame(&state, parent);
+
     int large = (int)(state.datastack_limit - state.datastack_top) -
                 FRAME_SPECIALS_SIZE - 1;
     assert(_PyThreadState_HasStackSpace(&state, large + FRAME_SPECIALS_SIZE));

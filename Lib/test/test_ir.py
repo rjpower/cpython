@@ -1340,7 +1340,7 @@ class RelaxationTest(unittest.TestCase):
                         def construct():
                             return code.replace(
                                 co_code=data, co_stacksize=stacksize,
-                                co_linetable=memoryview(code.co_linetable).tobytes())
+                                co_exceptiontable=memoryview(code.co_exceptiontable).tobytes())
 
                         if dst == b + 3:
                             with self.assertRaisesRegex(ValueError,

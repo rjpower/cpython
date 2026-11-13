@@ -8,6 +8,7 @@ import unittest
 
 import _testinternalcapi
 import _opcode
+from test.support.ir_semantics import observation_tables, position_parts, semantic_parts
 from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
 from test.test_ir_completion import exception_entry
@@ -90,16 +91,14 @@ class ExceptionAbsenceTests(unittest.TestCase):
         # Start with the same edge carrying no recovery handler, so the
         # serialized negative can change only fixed-size record fields.
         record = (3, 4, 0, 1, 1, 0, 1, -1, 0, 0)
-        raw = code.co_linetable
-        version, locations_size, _ = struct.unpack_from("<III", raw, 4)
-        source = (b"IRSM" + struct.pack("<III", version, locations_size, 1) +
-                  raw[16:16 + locations_size] + struct.pack("<10i", *record))
-        code = code.replace(co_linetable=source)
+        locations, _ = position_parts(code.co_linetable)
+        exceptions, _ = semantic_parts(code.co_exceptiontable)
+        code = code.replace(**observation_tables(locations, [record], exceptions))
         for admitted in routes(code):
             _testinternalcapi.get_ir(admitted, True)
-        changed = bytearray(code.co_linetable)
+        changed = bytearray(code.co_exceptiontable)
         struct.pack_into("<iii", changed, len(changed) - 12, 8, 6, 0)
-        self.rejected(code, co_linetable=bytes(changed))
+        self.rejected(code, co_exceptiontable=bytes(changed))
 
     def test_real_keyword_call_held_across_await_and_throw_recovery(self):
         class Awaitable:

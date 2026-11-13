@@ -20,6 +20,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_Slots()
 #include "pycore_interpolation.h" // _PyInterpolation_Build()
 #include "pycore_intrinsics.h"
+#include "pycore_ir_exception.h" // _PyIRSemantic_Stored()
 #include "pycore_lazyimportobject.h"
 #include "pycore_list.h"          // _PyList_GetItemRef()
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -470,8 +471,9 @@ static Py_NO_INLINE _PyExceptionHandler
 get_exception_handler(PyCodeObject *code, int index)
 {
     _PyExceptionHandler none = {0, 0, 0, 0};
-    unsigned char *start = (unsigned char *)PyBytes_AS_STRING(code->co_exceptiontable);
-    unsigned char *end = start + PyBytes_GET_SIZE(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    unsigned char *start = (unsigned char *)semantic.exceptions;
+    unsigned char *end = start + semantic.exceptions_size;
     /* Invariants:
      * start_table == end_table OR
      * start_table points to a legal entry and end_table points

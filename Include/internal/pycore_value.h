@@ -1043,6 +1043,20 @@ VALUE_CHECK_FUNC(Code)
 VALUE_CHECK_FUNC(Function)
 #define PyValue_FunctionCheck(V0) (PyValue_FunctionCheck)(PyValue_Borrow(V0))
 
+/* Consume a canonical function owner into a typed strong pin. Unlike the
+ * generic object bridge this boundary accepts no borrowed/deferred mortal
+ * reference: its callers have already acquired or transferred the owner. */
+static inline PyFunctionObject *
+_PyValue_FunctionOwnerSteal(PyValue owner)
+{
+    assert(!PyValue_IsNull(owner));
+    assert(_PyValue_IsHome(owner));
+    assert(PyValue_FunctionCheck(owner));
+    PyFunctionObject *function = (PyFunctionObject *)BITS_TO_PTR_MASKED(owner);
+    assert((owner.bits & Py_TAG_BITS) == 0 || _Py_IsImmortal((PyObject *)function));
+    return function;
+}
+
 static inline bool
 PyValue_LongCheck(PyValueBorrow value)
 {

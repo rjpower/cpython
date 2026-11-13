@@ -332,6 +332,7 @@ PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyValueBorrow su
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
+/* Consumes v, including on error; initialized arena outputs survive cleanup. */
 PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
 /* The returned owner remains C-owned until ordinary result publication. */
 PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopWithResult(

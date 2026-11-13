@@ -295,7 +295,7 @@ _PyFrame_Initialize(
 {
     frame->previous = previous;
     frame->base = base;
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectSteal(func);
+    PyFunctionObject *func_obj = _PyValue_FunctionOwnerSteal(func);
     frame->f_funcobj = func_obj;
     frame->f_executable = (PyCodeObject *)Py_NewRef(code);
     frame->f_builtins = func_obj->func_builtins;

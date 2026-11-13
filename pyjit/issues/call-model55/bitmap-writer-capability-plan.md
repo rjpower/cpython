@@ -143,6 +143,11 @@ actual bytecode adapter passes the active frame. This must be priced in native
 dumps for the common static/bitmap contract; no claim that an outlined extra
 argument is optimized away. Native conservative C-owner policy is unchanged.
 
+LOAD_GLOBAL also changes from the direct out-pointer call to the existing
+NO_INLINE native-result wrapper, followed by home publication. Charge that
+wrapper hop in native inspection rather than assuming it disappears. The
+wrapper owns its addressable result outside the handler.
+
 ## Escaping helper classification
 
 The existing analyzer's `IR_MARKER_EFFECTS` also identifies protocols whose
@@ -166,3 +171,36 @@ resolution, then the actual bytecode callsites. The static helper signatures
 and their bitmap equivalents must land together before deleting their source
 bridge entries. IR and frames freeze those exact hunks after delegated source
 is committed; no B or integrated source changes are authorized by this note.
+
+## First source packet
+
+The pins implementation ports six actual uops: LOAD_GLOBAL's result,
+conditional NULL, INSERT_NULL, string/map builders and special lookup. The
+shared argument reader serves source validation and lowering. Checked array
+names resolve to Storage's generated physical array bindings. Output reads
+require a preceding write in a dominating lexical branch: equal condition
+text in separate `if` statements does not establish domination, and else
+arms remain distinct. Conditional extents also forbid changing or exposing
+`oparg`.
+
+`IR_HELPER_EFFECTS` records ordinary escaping adapters separately from manual
+protocol markers. Static WriteHome is an inline store with debug frame/range
+checks; bitmap WriteHome retains its physical bit commit. Builders carry the
+strict frame argument and remove the home before each close. The mixed
+special helper takes frame or explicit native NULL capability at all three
+callsites. No new root scope or per-home nullable-frame fallback is introduced.
+
+Two parser-only tests cover actual helper escape classification and source
+perturbations. Emitted-storage checks and four callback/language fixtures
+are provided for coordinator validation. Source review found and fixed
+branch-identity confusion and parenthesized address/member-lvalue escapes.
+Raw array reads now require complete by-value argument shapes of the actual
+typed readers; unary addresses, member lvalues, unknown pointer contexts and
+extent shadowing/mutation reject. Root's first host smoke found an invalid
+synthetic output-only scalar format; the positive test now declares actual
+window storage. Root's revised host check passes all three source tests and
+full cases/metadata generation. Final formatting uses the existing token
+spacing and CWriter machinery. C compilation and runtime remain pending.
+Tuple/list induction loops
+and SET drainage remain the immediate following packet. This increment does
+not complete bridge removal or switch bitmap authority.

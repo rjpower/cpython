@@ -4,14 +4,25 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-Latest qualified runtime port: vacant return recipients `91269fba2ce`, with
-both-role focused and hot-set evidence below. The newer explicit CALL-role
-composition remains under qualification. At `863b6d0cb08`, bootstrap freezing
-passes, but full release rejects shutil.copymode and broader compilation finds
-missing shared attribute-child and exceptional-prefix proofs. Both repairs
-have passed source review; combined generation and runtime checks follow.
-The bitmap rival reaches the same compile-only boundary. Neither candidate
-has switched away from NULL scratch authority or earned golden admission.
+Latest integrated runtime is `a2653e18206`: explicit CALL roles, shared
+attribute-child and exceptional-prefix proofs, async-exit completion, and an
+explicit delegated-yield receiver. Both release and debug build all 117
+modules (79 shared), with no failed imports. The five-module delegated-yield,
+send, frame, contract and remote-inspection focus passes 198 tests per role,
+with 11 skips. The prior three-module debug check passes 72 tests; these
+groups overlap. A two-pair hot screen versus selected54 completes with stable
+identities; direct upstream hot measurement also completes. Results below do not
+establish an isolated effect of delegated yield.
+
+The broader CALL composition remains under qualification. The last source
+census at `e75b7088b12` passes all 189 standard-library entry modules and
+485/489 top-level test images. The four failures expose two general proof
+gaps: ordinary exceptional operand confinement and edge-specific NULL
+results. General RETURN also needs a separate remaining-owner retirement
+contract. Their reviewed implementations are being composed, rather than
+weakening admission or adding test-specific exceptions. The bitmap rival
+has not had a complete native build. Neither representation has switched
+away from NULL scratch authority or earned golden admission.
 
 Latest broad performance remains `ed08ab64c7e`: direct all29 versus upstream
 is 1.165467, with six faster. The selected54 hot screen loses DeltaBlue 5.5%
@@ -19,6 +30,63 @@ and silent logging 15.2%; matched DeltaBlue PMU shows 36.8% more instructions
 than upstream. Newer port results below are separate campaigns. Do not apply
 those ratios to unqualified source or infer an isolated causal improvement.
 The full static/bitmap comparison and final selection remain open.
+
+## Current CALL/delegated checkpoint
+
+Source `a2653e18206` composes the CALL-role and normal/exceptional transport
+ports with explicit delegated YIELD. A, B and D independently name resume
+recipient, outgoing owner and retained SEND receiver. Local getters, throw,
+close, frame capture and remote inspection share the immutable operand
+contract. The ordinary handler does not load D. Both instrumentation forms
+retain the contract; discarded resume results remain supported.
+
+Release/debug module builds pass 117/79. The five targeted test modules pass
+198 tests per role (11 skips). Initial failures were stale test-helper
+contracts: old-opcode lookup, an incomplete CALL-family census, and a
+replacement image carrying mismatched source metadata. Their separate
+repairs preserve selected-copy poison checks, both instrumented CALL forms
+and real remote receiver identity. Earlier debug generator/send/delegated
+checks pass 72 overlapping tests. Broader admission and general-return gaps
+remain open; this is not full representation qualification.
+
+Two balanced pairs, candidate/selected54 elapsed, lower is better:
+
+| Workload | Geometric mean | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.013629 | 0.996728–1.030815 |
+| Generators | 1.026487 | 1.023959–1.029022 |
+| Coroutines | 1.041078 | 1.037781–1.044385 |
+| Richards | 0.998792 | 0.993183–1.004432 |
+| Comprehensions | 1.022872 | 1.016120–1.029668 |
+| Logging silent | 0.921104 | 0.917854–0.924364 |
+
+Campaign `E/delegated-call-hot-screen-golden` has stable clean source/native
+identities and no pre/postflight failure. Logging improves in both pairs;
+generators, coroutines and comprehensions regress in both. Do not pool this
+screen with earlier campaigns or attribute the movement to one source port.
+The complete static-map and bitmap comparison remains the selection gate.
+Exact ELF and four handler dumps: `E/delegated-call-native`.
+
+A separate direct-upstream two-pair screen also keeps stable identities:
+
+| Workload | Candidate/upstream | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.163485 | 1.150257–1.176865 |
+| Generators | 1.475615 | 1.457424–1.494033 |
+| Coroutines | 1.312553 | 1.308003–1.317120 |
+| Richards | 1.260601 | 1.253256–1.267990 |
+| Comprehensions | 1.382747 | 1.379227–1.386277 |
+| Logging silent | 0.696498 | 0.694665–0.698336 |
+
+Campaign `E/delegated-call-hot-screen-upstream` preserves logging parity but
+does not close the other gaps. This is a hot-set screen, not all29 or final
+confirmation. The preceding selected54 and upstream comparisons are direct,
+independent campaigns; neither is computed by multiplying older ratios.
+
+Evidence: `E/delegated-fixture-checkpoint-*`, `E/delegated-fixture-focus-*`,
+`E/delegated-three-debug-debug-focus.log` and the campaign above. Both module
+builds initially required resolving the IR debug-layout initializer without
+introducing a header include cycle; failed commands are retained separately.
 
 ## M1a: independent typed metadata owners
 

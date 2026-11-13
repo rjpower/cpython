@@ -156,11 +156,24 @@ IR/frames review. Lookup first checks the current thread's chain; foreign
 thread lookup requires the GIL or actual interpreter stop-the-world and
 searches that interpreter's thread chains by exact frame identity. Merely
 having PUBLISHED set, or using the collector's current TLS, is insufficient.
-An unstopped FT foreign-frame lookup reports NONE unless a real frame read
-claim also protects the node. Existing root walks that already know the
+An unstopped FT foreign-frame lookup reports NONE: a suspended-generator
+read claim does not protect another thread's active native ERROR scope.
+Existing root walks that already know the
 owning thread should supply that context to the same cold lookup, rather
 than repeat a thread search. No generic lookup runs on an ordinary inline
 instruction.
+
+Concrete lookup proposal: `_PyFrame_GetErrorHomeView(owner_hint, frame,
+out)` copies the selected view and clips it by the linked node's cursor.
+`owner_hint` is either the actual thread already known by a root walk or
+NULL; it is not a substitute for quiescence. A NULL hint first searches the
+current thread's chain, then `interp->threads` under the GIL or actual STW.
+Match exact kind and frame identity through the whole nested chain. No home
+read, callback, allocation or new pin is performed. The result retains only
+code-owned/static ranges, not a pointer to the helper's stack descriptor.
+Callers still need their existing frame-read capability before inspecting
+the phase marker. Missing/duplicate/unprotected context returns NONE rather
+than reconstructing geometry from PC or code size.
 
 At terminal drainage the helper passes a bindings-only view and current
 cursor into actual M2 retirement before unlinking the metadata node. Current
@@ -171,6 +184,13 @@ preserve its selected extent through association takeover and all remaining
 closes; code remains fixed-last. General RETURN needs the same explicit
 extent sharing, separately from the empty-return fast form. No proposed
 error selector authorizes a full-N load from stale scratch.
+Withdraw the ERROR marker and its borrowed frame/view authority before code
+close or reservation pop. If an exhausted node remains linked during a
+callback, it must be explicitly disarmed and unselectable; arbitrary STW
+timing cannot make a stale frame pointer discoverable again. Accepted
+mutation needs its actual replacement shape before any writes; NONE cannot
+stand in for a cleanup recipe. Initial NULL-control adapters must prove their
+actual owned initialized interval, particularly on parent waiting-call ingress.
 
 Cost to price: one error-only helper call and literal checkpoint, one
 40-byte linked metadata node plus a 16-byte helper-local view, and cold
@@ -178,6 +198,51 @@ owning-thread lookup where needed. Checkpoints/ranges add code-owned storage.
 There is no new hot frame field, ordinary handler record, count operation or
 tail-call argument. Native prologue/spill effects still require root's
 generated/native inspection; source placement alone does not prove no cost.
+
+### First producer and file boundaries
+
+Candidate literal names are `_Py_TRANSITION_KIND_ERROR = 3` and
+`_PyIR_PHASE_ERROR_SCOPE = (1u << 14)`. The frame marker is exact, not combined
+with CAPTURED, CREATED or delegated suspension. These consume spare existing
+bits; they are not implemented or reusable permissions yet.
+
+GC owns the transition-node assertions/visitor, the cold owning-thread lookup
+and common-selector port in `frame.c`, and the outlined processor in `ceval.c`.
+Keep that processor in the existing translation unit so it can use the real
+bridge and exception helpers without exporting a parallel implementation.
+IR owns the checkpoint event/selector, literal entry emission and all changes
+to `bytecodes.c` error/unwind labels. Frames peers mutable binding/copy and
+accepted-redirect ports. Root composes these as one used producer/consumer;
+do not land an unused kind or lookup independently.
+
+Before that source freeze, IR must supply the exact emitted origin/checkpoint
+entry and distinguish error, direct-unwind, recursion/throw and failed-handled
+ingress. `error` and `exception_unwind` cannot both run the same traceback or
+raise-monitor action. Preserve current monitor ordering, the source recovery
+triple and the original RERAISE origin separately. `monitor_handled` failure
+is a fresh selection before the next clear. The helper return must identify
+handled continuation versus complete evaluator exit; no descriptor pointer
+may escape the helper stack in either case.
+
+After scratch is drained, actual error retirement receives an explicit
+bindings-only capability before scope disarm and frame unlink. Do not merely
+choose the old no-result wrapper by its name: that wrapper currently assumes
+its scratch precondition. If a disarmed metadata node remains linked through
+the retiring call, set frame NULL and all authority/pointers empty before any
+callback; root inspection must report it as an empty node rather than hide
+it. Prefer callback-free pop/handoff when the used M2 entry can accept the
+saved descriptor directly. Reuse the general-return extent mechanics where
+they express the real bindings-only interval; do not add an extra hot return
+argument or a PC-based decoder.
+
+First validation uses the actual active-frame selector/collector during
+traceback creation and an error finalizer, a nested ERROR scope on another
+frame, and an actual cross-thread STW root walk where supported. A transition
+external-root-ID query cannot prove active selection: kind 3 owns no external
+edges. Add explicit code/view lifetime and metadata disarm assertions at M2
+handoff, plus the existing live named-binding mutation and capture controls.
+First producer scope and exact origin API still need IR/root freeze; the
+lookup/lifetime rules above have frames' bounded lifecycle GO.
 
 ## First cold admission increment: retained absence
 

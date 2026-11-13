@@ -460,3 +460,23 @@ readability, normal completion or pending SEND role is inherited.
 The disjoint child packet is committed 5f2d245b96d after root, GC and IR actual
 source GO. It contains exactly five source/test files and leaves P clean.
 Emitted family receipts and native validation remain coordinator work.
+
+The CALL role fixture-only repair is committed 2613dbe5f63 after IR/GC source
+GO: valid local tuple output, variable identity comparison, explicit pair
+retirement controls, exact counts below the frontend EX threshold, separate
+33-argument EX coverage and arena CALL_KW native-copy coverage above eight
+arguments. No production code changed.
+
+The shared writer first packet is implemented in P and under source review.
+It ports six fixed-output/helper uops with separate ordinary helper effects,
+Storage-bound arrays and strict frame helpers. Two parser-only tests pass;
+emission and runtime fixtures remain root work. Lexical branch-identity
+confusion is fixed; parenthesized address/member-lvalue contexts remain a
+source hold while root performs the frozen host emission check. See
+bitmap-writer-capability-plan.md for scope and costs.
+
+The writer address/member hold is resolved in source using complete typed
+rvalue argument shapes and unary-address rejection, including parenthesized
+forms. Root's first host smoke passed the two parser checks but exposed an
+invalid synthetic scalar output layout; its positive fixture now declares
+window storage. Revised source is frozen for host retry and final peers.

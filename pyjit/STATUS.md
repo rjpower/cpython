@@ -74,11 +74,22 @@ The five bootstrap plus 26/27 broader source images pass. Successive coroutine
 probes move past held-yield and async-exit gaps to a nested async comprehension;
 GET_ANEXT's exceptional operand confinement remains unproved. The next packet
 uses a general emitted error-footprint capability, not a per-test exception.
-Explicit delegated-yield source/lifecycle/remote packets are reviewed and
-committed separately, pending composition. Static authority and the complete
+Explicit delegated-yield source/lifecycle/remote packets are composed at
+`a2653e18206`. Both builds retain 117 modules/79 shared with no failed imports;
+the five-module send/suspension/frame/contract/remote focus passes 198 tests
+per role, 11 skips. The receiver is an explicit D operand, independent of the
+outgoing B value and resume A recipient. Frame capture and local/remote getters
+use that same contract. A separate earlier debug run passes 72 overlapping
+generator/send/delegated tests. The new hot-set screen completes with stable
+identities: versus selected54,
+DeltaBlue 1.013629, generators 1.026487, coroutines 1.041078, Richards 0.998792,
+comprehensions 1.022872 and silent logging 0.921104. A separate direct-upstream
+screen is respectively 1.163485, 1.475615, 1.312553, 1.260601, 1.382747 and
+0.696498. Both use two balanced pairs; they are not confirmation or all29.
+Logging is faster; the broader gaps remain. Static authority and the complete
 physical-bitmap comparison remain open. Bitmap `853bd363ce1` retains its older
 five bootstrap plus 25/26 compile-only pass, without full build/tests/timing.
-No new performance result or golden selection follows from this work. Shared storage
+No golden selection follows from this work. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and

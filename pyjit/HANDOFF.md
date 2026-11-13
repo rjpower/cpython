@@ -141,9 +141,15 @@ Never stage, reset or delete unrelated preexisting files:
 
 ## Latest normal-transport qualification boundary
 
-Integrated `e75b7088b12` has actual normal disjoint-child, exceptional-prefix
-and async-loop completion receipts, plus fixture repairs. Both release/debug
-builds complete 117/79 with no import failures; native build identity is e75.
+Integrated `a2653e18206` adds explicit delegated-yield source/lifecycle/remote
+ports to the normal disjoint-child, exceptional-prefix and async-loop receipts.
+Both release/debug builds complete 117/79 with no import failures; native
+build identity is a265. Five targeted modules pass 198 tests per role, 11 skips
+(`E/delegated-fixture-{checkpoint,focus}*`). The prior three-module debug run
+passes 72 overlapping cases. Exact ELF and four handler dumps are retained at
+`E/delegated-call-native`. Two-pair hot-set campaigns complete versus selected54
+and upstream with stable identities; see `E/delegated-call-hot-screen-{golden,upstream}`
+and the active report. No representation/golden selection follows. Older evidence follows.
 Evidence: `E/call-async-exit-checkpoint-{build-commands.json,*-build.log}`.
 The earlier 5cc composition also completes both builds. Its 11-module release
 focus runs 88 cases and fails 3 modules; separately 8 modules/41 cases pass debug.
@@ -166,13 +172,23 @@ the constructor's leftover-owner rejection would leak in release/assert debug.
 Port the actual full-N general route and root/capture extent. Preserve EMPTY's
 hot body and keep physical NULL distinct from logical absence.
 
-Delegated source is W 6063d7c6385 (contains isolated 30a3 and EH composition),
-frames P da0c629bfeb, consumers G 16f465dc0e5 plus remote follow-up 159ada57ad2.
-Merge matching packets together after current normal/abrupt fixes; preserve
-case1 result-bit1/disjoint-bit2 handling and exceptional UNKNOWN tuple wrappers.
-Review has closed SEND suffix/helper-source, instrumentation remap/twin shadow,
-unused C and discarded resume-recipient lookup mismatches. Root host smoke
-predates the final fixes; regenerate and test the actual composition.
+Delegated source W 6063d7c6385/797e311a8c6, frames P da0c629bfeb and consumers
+G 16f465dc0e5/159ada57ad2 are integrated, with five regenerated products.
+The debug-offset initializer must resolve the IR layout through
+`pycore_runtime_init.h`; including IR from the lightweight debug descriptor
+creates a long/runtime include cycle. Both failed attempts remain recorded.
+Fixture-only d3f16918251, 700a367ccea and 39999990476 update copy probes,
+remote discard source-map construction and the full ordinary/instrumented
+CALL family census. All five targeted modules pass after those ports.
+
+Next isolated source packets: W 118276357b3 (ordinary abrupt footprint and
+kept-input soundness, GC peer GO), P 99560a5115e (checked fixed-index writes and
+builder/special-pair adapters, both peers GO and three host source tests plus
+full generation PASS). Integrate only after the current quiet timing campaign.
+G a35d826f04e general-return runtime requires the matching IR RETURN/EMPTY
+normalization packet; do not integrate or relax admission independently.
+Per-edge NULL/value receipts are still in progress in W. The active error
+processor and complete map/bitmap authority remain later gates.
 
 Bitmap source/builds remain `BASE/worktrees/call55-bitmap` and
 `BASE/call55-bitmap-{release,debug}`. Source 853bd363ce1 regenerates unchanged,

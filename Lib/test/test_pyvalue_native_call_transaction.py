@@ -107,7 +107,7 @@ class NativeCallTransactionTests(unittest.TestCase):
             for arguments in (None, 17, object()):
                 with self.subTest(arguments=arguments):
                     with self.assertRaisesRegex(
-                            TypeError, r"argument after \* must be an iterable"):
+                            TypeError, r"after \* must be an iterable"):
                         invoke(target, arguments)
             with self.assertRaises(LookupError) as caught:
                 invoke(target, Arguments())

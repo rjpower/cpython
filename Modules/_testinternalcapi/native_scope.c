@@ -506,18 +506,14 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr);
     int handler = IR_HANDLER(word);
     int argc = (int)IR_C(word), count;
-    switch (handler) {
-        case CALL_FUNCTION_EX: case INSTRUMENTED_CALL_FUNCTION_EX:
-        case CALL_EX_PY: case CALL_EX_NON_PY_GENERAL:
+    switch (_PyIR_BaseOpcode(handler)) {
+        case CALL_FUNCTION_EX:
             count = 4;
             break;
-        case CALL_KW: case INSTRUMENTED_CALL_KW: case CALL_KW_PY:
-        case CALL_KW_BOUND_METHOD: case CALL_KW_NON_PY:
+        case CALL_KW:
             count = argc + 3;
             break;
-        case CALL: case INSTRUMENTED_CALL:
-        case CALL_PY_GENERAL: case CALL_BOUND_METHOD_GENERAL:
-        case CALL_NON_PY_GENERAL:
+        case CALL:
             count = argc + 2;
             break;
         default:

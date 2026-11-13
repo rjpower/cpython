@@ -678,6 +678,7 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->phase_state = 0;
 }
 
 /* Pushes a trampoline frame without checking for space.

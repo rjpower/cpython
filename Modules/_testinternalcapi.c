@@ -4836,6 +4836,35 @@ get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
     return states;
 }
 
+/* Observe all active frames head-to-outer. This never starts a comparison;
+ * the stored status must come from an actual reached collector frame walk. */
+static PyObject *
+get_ir_frame_phases(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *states = PyList_New(0);
+    if (states == NULL) {
+        return NULL;
+    }
+    for (_PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+         frame != NULL; frame = frame->previous)
+    {
+        PyObject *code = frame->f_executable != NULL
+            ? (PyObject *)frame->f_executable : Py_None;
+        PyObject *state = Py_BuildValue("(Oi)", code, frame->phase_state);
+        if (state == NULL) {
+            Py_DECREF(states);
+            return NULL;
+        }
+        int status = PyList_Append(states, state);
+        Py_DECREF(state);
+        if (status < 0) {
+            Py_DECREF(states);
+            return NULL;
+        }
+    }
+    return states;
+}
+
 /* Probe the cold query with initialized control homes, never executable
  * malformed code. The argument pins the borrowed code in this unpublished frame. */
 static PyObject *
@@ -4898,6 +4927,7 @@ static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
+    {"get_ir_frame_phases", get_ir_frame_phases, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},

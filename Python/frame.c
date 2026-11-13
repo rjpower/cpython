@@ -238,7 +238,8 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return Py_NewRef(_PyFrame_GetCode(frame));
+    return Py_NewRef(frame->f_executable != NULL
+                     ? (PyObject *)frame->f_executable : Py_None);
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

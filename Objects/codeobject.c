@@ -1960,10 +1960,22 @@ error:
 }
 
 typedef struct {
+    const _PyIRWord *words;
+    int n;
+    int nl;
+    int scratch;
+    const unsigned char *exceptions;
+    Py_ssize_t exception_size;
+    const char *source;
+    Py_ssize_t source_size;
+} semantic_image;
+
+typedef struct {
     int start;
     int end;
     unsigned char reached;
     unsigned char queued;
+    unsigned char complete;
 } semantic_block;
 
 typedef struct {
@@ -1984,11 +1996,15 @@ typedef struct {
 enum { SEM_NULL, SEM_INITIALIZED, SEM_MAY_OWNER, SEM_FACTS };
 
 static void
-semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state)
+semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
+                 int complete)
 {
     semantic_block *b = &work->blocks[block];
     uint64_t *stored = work->facts + (size_t)block * SEM_FACTS * work->nwords;
     int changed = !b->reached;
+    complete = !b->reached ? complete : b->complete && complete;
+    changed |= b->complete != complete;
+    b->complete = (unsigned char)complete;
     for (int w = 0; w < SEM_FACTS * work->nwords; w++) {
         uint64_t next = !b->reached ? state[w]
             : w >= SEM_MAY_OWNER * work->nwords ? stored[w] | state[w]
@@ -2040,16 +2056,16 @@ semantic_set_facts(const semantic_worklist *work, uint64_t *state,
  * Inspect reads only after the fixed point, so an as-yet-unseen predecessor
  * cannot cause a false rejection. */
 static int
-semantic_step(struct _PyCodeConstructor *con, semantic_worklist *work,
-              uint64_t *state, int pc, int inspect)
+semantic_step(const semantic_image *image, semantic_worklist *work,
+              uint64_t *state, int pc, int inspect, int *complete)
 {
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    _PyIRWord word = words[pc];
+    _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int nl = image->nl;
     if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
+        *complete = 0;
         int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS : _PyIR_FieldOparg(word);
-        int scratch = Py_MAX(con->stacksize, 1);
+        int scratch = image->scratch;
         for (int bit = 0; bit < scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
             if (!(state[bit / 64] & mask)) {
@@ -2096,6 +2112,12 @@ semantic_step(struct _PyCodeConstructor *con, semantic_worklist *work,
         int accepts_empty = IR_HANDLER(word) == POP_TOP ||
             (fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_STORE &&
              (old & (1u << SEM_INITIALIZED)));
+        if (_PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
+            !_PyIR_NullableHome(word, arg, home) &&
+            !(old & (1u << SEM_INITIALIZED)))
+        {
+            *complete = 0;
+        }
         if (inspect && (old & (1u << SEM_NULL)) &&
             _PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
             !_PyIR_NullableHome(word, arg, home))
@@ -2158,18 +2180,44 @@ semantic_step(struct _PyCodeConstructor *con, semantic_worklist *work,
  * obligation can appear once at a block join.
  * Unsupported families/exception entries have explicit unknown state and
  * cannot authorize the later ownership representation switch. */
+static const _PyIRRetirementPlan all_normal_returns = {0};
+
 static int
-validate_normal_transfers(struct _PyCodeConstructor *con)
+semantic_exact_return(const semantic_image *image, const semantic_worklist *work,
+                      const uint64_t *state, int site, int complete)
 {
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
+    if (!complete || _PyIR_FormatOf(IR_HANDLER(image->words[site]))->
+        transfer_kind != _PyIR_TRANSFER_EXIT)
+    {
+        return 0;
+    }
+    for (int bit = 0; bit < image->scratch; bit++) {
+        uint64_t mask = UINT64_C(1) << (bit % 64);
+        if (!(state[bit / 64] & mask) ||
+            (state[SEM_MAY_OWNER * work->nwords + bit / 64] & mask))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int
+normal_transfer_proof(const semantic_image *image,
+                      const _PyIRRetirementPlan **plan)
+{
+    if (plan != NULL) {
+        *plan = NULL;
+    }
+    const _PyIRWord *words = image->words;
+    int n = image->n;
     if (n == 0) {
         return 0;
     }
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    const unsigned char *exceptions = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
-    const unsigned char *exception_end = exceptions + PyBytes_GET_SIZE(con->exceptiontable);
-    int scratch = Py_MAX(con->stacksize, 1);
+    int nl = image->nl;
+    const unsigned char *exceptions = image->exceptions;
+    const unsigned char *exception_end = exceptions + image->exception_size;
+    int scratch = image->scratch;
     if (!_PyIR_ExceptionTableValid(exceptions, exception_end, n, nl, nl + scratch)) {
         PyErr_SetString(PyExc_ValueError, "code: invalid exception table");
         return -1;
@@ -2204,8 +2252,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         block_at[entry.target] = 1;
     }
     _PyIRSourceMap source;
-    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
-                          PyBytes_GET_SIZE(con->linetable), &source) < 0)
+    if (_PyIRSource_Decode(image->source, image->source_size, &source) < 0)
     {
         PyMem_Free(block_at);
         PyErr_SetString(PyExc_ValueError, "code: malformed source map");
@@ -2223,7 +2270,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         nblocks += block_at[i];
     }
     semantic_worklist work = {.nblocks = nblocks,
-                              .nwords = (scratch + 63) / 64};
+                              .nwords = Py_MAX(1, (scratch + 63) / 64)};
     work.blocks = PyMem_Calloc((size_t)nblocks, sizeof(*work.blocks));
     work.queue = PyMem_Malloc((size_t)nblocks * sizeof(*work.queue));
     size_t state_words = (size_t)SEM_FACTS * work.nwords;
@@ -2258,7 +2305,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
     for (int bit = 0; bit < scratch; bit++) {
         state[bit / 64] |= UINT64_C(1) << (bit % 64);
     }
-    semantic_enqueue(&work, 0, state);
+    semantic_enqueue(&work, 0, state, 1);
     memset(state, 0, state_words * sizeof(uint64_t));
     cursor = exceptions;
     while (cursor < exception_end) {
@@ -2266,13 +2313,13 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         int err = _PyIR_ExceptionNext(&cursor, exception_end, &entry);
         assert(err == 0);
         (void)err;
-        semantic_enqueue(&work, block_at[entry.target], state);
+        semantic_enqueue(&work, block_at[entry.target], state, 0);
     }
     for (uint32_t i = 0; i < source.nrecords; i++) {
         _PyIRSourceEvent event;
         _PyIRSource_Event(&source, i, &event);
         if (event.handler >= 0) {
-            semantic_enqueue(&work, block_at[event.handler], state);
+            semantic_enqueue(&work, block_at[event.handler], state, 0);
         }
     }
     while (work.count) {
@@ -2281,9 +2328,10 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         work.count--;
         work.blocks[b].queued = 0;
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
+        int complete = work.blocks[b].complete;
         int end = work.blocks[b].end;
         for (int i = work.blocks[b].start; i < end; i++) {
-            (void)semantic_step(con, &work, state, i, 0);
+            (void)semantic_step(image, &work, state, i, 0, &complete);
         }
         int last = end - 1;
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
@@ -2293,22 +2341,76 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         {
             int target = fmt->flags & _PyIR_FORWARD
                 ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
-            semantic_enqueue(&work, block_at[target], state);
+            semantic_enqueue(&work, block_at[target], state, complete);
         }
         if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
-            semantic_enqueue(&work, block_at[end], state);
+            semantic_enqueue(&work, block_at[end], state, complete);
         }
     }
+    /* Allocate persistent storage only for mixed coverage. First count exact
+     * sites without retaining a per-word map or another scratch-state array. */
     int result = 0;
+    uint32_t nreturns = 0, ncertified = 0;
+    if (plan != NULL) {
+        for (int i = 0; i < n; i++) {
+            nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
+                _PyIR_TRANSFER_EXIT;
+        }
+    }
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
             continue;
         }
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
+        int complete = work.blocks[b].complete;
         for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
-            if (semantic_step(con, &work, state, i, 1) < 0) {
+            if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
+            }
+            if (plan != NULL) {
+                ncertified += semantic_exact_return(image, &work, state, i, complete);
+            }
+        }
+    }
+    if (result == 0 && plan != NULL && ncertified) {
+        if (ncertified == nreturns) {
+            *plan = &all_normal_returns;
+        }
+        else if (ncertified > (SIZE_MAX - sizeof(_PyIRRetirementPlan)) /
+                              sizeof(uint32_t)) {
+            PyErr_NoMemory();
+            result = -1;
+        }
+        else {
+            _PyIRRetirementPlan *sparse = PyMem_Malloc(
+                sizeof(*sparse) + (size_t)ncertified * sizeof(uint32_t));
+            if (sparse == NULL) {
+                PyErr_NoMemory();
+                result = -1;
+            }
+            else {
+                sparse->nsites = ncertified;
+                uint32_t next = 0;
+                for (int b = 0; b < nblocks; b++) {
+                    if (!work.blocks[b].reached) {
+                        continue;
+                    }
+                    memcpy(state, work.facts + (size_t)b * state_words,
+                           state_words * sizeof(uint64_t));
+                    int complete = work.blocks[b].complete;
+                    for (int i = work.blocks[b].start;
+                         i < work.blocks[b].end; i++)
+                    {
+                        (void)semantic_step(image, &work, state, i, 0, &complete);
+                        if (semantic_exact_return(image, &work, state, i, complete)) {
+                            assert(next < ncertified);
+                            sparse->sites[next++] = (uint32_t)i;
+                        }
+                    }
+                }
+                assert(next == ncertified);
+                *plan = sparse;
             }
         }
     }
@@ -2317,6 +2419,50 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
     PyMem_Free(work.blocks);
     PyMem_Free(block_at);
     return result;
+}
+
+static int
+validate_normal_transfers(struct _PyCodeConstructor *con)
+{
+    semantic_image image = {
+        .words = (const _PyIRWord *)PyBytes_AS_STRING(con->code),
+        .n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)),
+        .nl = (int)PyTuple_GET_SIZE(con->localsplusnames),
+        .scratch = Py_MAX(con->stacksize, 1),
+        .exceptions = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable),
+        .exception_size = PyBytes_GET_SIZE(con->exceptiontable),
+        .source = PyBytes_AS_STRING(con->linetable),
+        .source_size = PyBytes_GET_SIZE(con->linetable),
+    };
+    return normal_transfer_proof(&image, NULL);
+}
+
+int
+_PyCode_BuildRetirementPlan(PyCodeObject *co, const _PyIRRetirementPlan **plan)
+{
+    *plan = NULL;
+    int nl = co->co_nlocalsplus;
+    int scratch = Py_MAX(co->co_stacksize, 1);
+    int limit = _PyFrame_NumSlotsForCodeObject(co);
+    /* Public zero-stack images reserve one physical scratch home. Keep that
+     * same domain in the builder; a differently shaped static image has no
+     * certificate rather than silently discarding its physical tail. */
+    if (nl < 0 || nl > IR_MAX_SLOTS || scratch > IR_MAX_SLOTS - nl ||
+        limit != nl + scratch)
+    {
+        return 0;
+    }
+    semantic_image image = {
+        .words = _PyCode_WORDS(co),
+        .n = (int)Py_SIZE(co),
+        .nl = nl,
+        .scratch = scratch,
+        .exceptions = (const unsigned char *)PyBytes_AS_STRING(co->co_exceptiontable),
+        .exception_size = PyBytes_GET_SIZE(co->co_exceptiontable),
+        .source = PyBytes_AS_STRING(co->co_linetable),
+        .source_size = PyBytes_GET_SIZE(co->co_linetable),
+    };
+    return normal_transfer_proof(&image, plan);
 }
 
 /* The normalized words and all semantic proofs refer to the same immutable

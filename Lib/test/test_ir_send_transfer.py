@@ -112,7 +112,8 @@ class SendTransferTests(unittest.TestCase):
         self.assertIn(marker, text)
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
-            changed.write_text(text.replace(marker, marker.replace("oparg", "oparg + 1"), 1))
+            changed_route = "int changed_target = oparg + 1;\n" + marker.replace("oparg", "changed_target")
+            changed.write_text(text.replace(marker, changed_route, 1))
             analysis = analyzer.analyze_files([str(changed)])
             formats = ir_generator.compute_formats(analysis)
             contracts = ir_generator.handler_contracts(analysis, formats)

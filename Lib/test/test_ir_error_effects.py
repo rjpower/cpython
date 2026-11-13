@@ -245,6 +245,98 @@ class ErrorEffectTests(unittest.TestCase):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["LOAD_CONST"].error_routes)
 
+    def test_send_routes_require_each_reached_adapter_receipt(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        if not source.is_file():
+            self.skipTest("requires bytecodes.c")
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        names = ("SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN")
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        for name in names:
+            with self.subTest(handler=name):
+                self.assertTrue(contracts[name].abrupt_operands)
+                self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
+                self.assertIn("_PyIR_ERROR_DIRECT", contracts[name].error_routes)
+                # Normal yielded/completion transport remains independent.
+                self.assertEqual(contracts[name].ownership_events[0].flags, 3)
+        original_jump = ir_generator.IREmitter.emit_jump_to_predicted
+
+        def wrong_target_geometry(emitter, instruction):
+            if instruction.name == "SEND_GEN":
+                target = ir_generator.replace(formats["SEND"], roles=["NONE"] * 4)
+                with mock.patch.dict(emitter.formats, {"SEND": target}):
+                    return original_jump(emitter, instruction)
+            return original_jump(emitter, instruction)
+
+        def lose_receipt(method, attribute):
+            original = getattr(ir_generator.IREmitter, method)
+
+            def incomplete(emitter, token, *args):
+                result = original(emitter, token, *args)
+                getattr(emitter, attribute).discard(id(token))
+                return result
+
+            return incomplete
+
+        def missing_guard_receipt(emitter, instruction):
+            original_jump(emitter, instruction)
+            if instruction.name == "SEND_ASYNC_GEN":
+                emitter.error_terminal_sources.discard(emitter.error_redispatch_origin)
+
+        original_flush = ir_generator.IREmitter.operand_error_flush
+
+        def missing_error_flush(emitter, *args):
+            original_flush(emitter, *args)
+            emitter.abrupt_operand_sources.discard(emitter.abrupt_operand_origin)
+
+        changes = (
+            ("operand_error_flush", missing_error_flush),
+            ("complete_step", lose_receipt("complete_step", "abrupt_operand_sources")),
+            ("enter_generator", lose_receipt("enter_generator", "abrupt_operand_sources")),
+            ("dispatch_same_oparg", lose_receipt("dispatch_same_oparg", "error_terminal_sources")),
+            ("emit_jump_to_predicted", missing_guard_receipt),
+            ("emit_jump_to_predicted", wrong_target_geometry),
+        )
+        for method, replacement in changes:
+            with self.subTest(route=method, replacement=replacement.__name__):
+                with mock.patch.object(ir_generator.IREmitter, method, replacement):
+                    incomplete = ir_generator.handler_contracts(analysis, formats)
+                for name in names:
+                    self.assertFalse(incomplete[name].error_routes, name)
+                    self.assertFalse(incomplete[name].abrupt_operands, name)
+
+    def test_send_source_changes_revoke_the_whole_family(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        if not source.is_file():
+            self.skipTest("requires bytecodes.c")
+        text = source.read_text()
+        names = ("SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN")
+        changes = (
+            ("EXIT_IF(!PyValue_IsNone(val));",
+             "window[0] = PyValue_NULL; EXIT_IF(!PyValue_IsNone(val));"),
+            ("_PyValue_Send(receiver_o, v)", "opaque_send(receiver_o, v)"),
+            ("IR_ENTER_GENERATOR(gen, _PY_IR_SEND);",
+             "next_instr = this_instr; IR_ENTER_GENERATOR(gen, _PY_IR_SEND);"),
+            ("IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);",
+             "int changed_target = oparg; "
+             "IR_COMPLETE_STEP(_PY_IR_SEND, completed, changed_target);"),
+            ("EXIT_IF(!PyValue_IsNone(val));",
+             "PyValue *alias = &val; EXIT_IF(!PyValue_IsNone(val));"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            changed = Path(directory) / "bytecodes.c"
+            for before, after in changes:
+                with self.subTest(change=after):
+                    self.assertIn(before, text)
+                    changed.write_text(text.replace(before, after, 1))
+                    altered = analyzer.analyze_files([str(changed)])
+                    formats = ir_generator.compute_formats(altered)
+                    contracts = ir_generator.handler_contracts(altered, formats)
+                    for name in names:
+                        self.assertFalse(contracts[name].error_routes, name)
+                        self.assertFalse(contracts[name].abrupt_operands, name)
+
 
 if __name__ == "__main__":
     unittest.main()

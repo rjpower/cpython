@@ -1782,7 +1782,7 @@ RAW_BITS_TEXT_TESTS = {
                      "#define X(v) ((v).bits | Py_TAG_REFCNT)\n", True, 0),
     "jit": ("Python/jit_spam.c", "int f(PyValue v) { return v.bits & 3; }\n",
             True, 0),
-    "encoding_function": ("Python/ceval_macros.h", """\
+    "encoding_function": ("Include/internal/pycore_interpframe.h", """\
 static inline PyValue
 _PyIR_AdoptTemp(PyValueBorrow view)
 {

@@ -5306,8 +5306,8 @@ check_home_bitmap(PyObject *self, PyObject *payload)
             base[i] = PyValue_NULL;
         }
         for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
-            _PyFrame_WriteHome(&frame, base + selected[i],
-                              PyValue_FromObjectSteal(Py_NewRef(payload)));
+            _PyFrame_PublishVacantHome(&frame, base + selected[i],
+                                      PyValue_FromObjectSteal(Py_NewRef(payload)));
         }
         for (size_t b = 0; b < Py_ARRAY_LENGTH(endpoints); b++) {
             for (size_t e = b; e < Py_ARRAY_LENGTH(endpoints); e++) {
@@ -5335,13 +5335,31 @@ check_home_bitmap(PyObject *self, PyObject *payload)
         _PyFrame_MoveHome(&frame, base + 63, &alias, base + 2);
         correct &= !_PyFrame_HomeOwnsCount(&frame, base + 63);
         correct &= _PyFrame_HomeOwnsCount(&alias, base + 2);
-        PyValue old = _PyFrame_TakeHome(&alias, base + 2);
-        _PyFrame_WriteHome(&alias, base + 2, PyValue_FromInlineInt(7));
+        PyValue old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromObjectSteal(Py_NewRef(payload)));
         PyValue_CLOSE(old);
+        correct &= _PyFrame_HomeOwnsCount(&alias, base + 2);
+        old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromInlineInt(7));
+        PyValue_CLOSE(old);
+        correct &= !_PyFrame_HomeOwnsCount(&alias, base + 2);
+        old = base[2];
+        _PyFrame_ReplaceKnownHome(&alias, base + 2, PyValue_Borrow(old),
+                                 PyValue_FromObjectSteal(Py_NewRef(payload)));
+        correct &= _PyFrame_HomeOwnsCount(&alias, base + 2);
+        old = _PyFrame_TakeKnownHome(&alias, base + 2, PyValue_Borrow(base[2]));
+        PyValue_CLOSE(old);
+        correct &= !_PyFrame_HomeOwnsCount(&alias, base + 2);
+        _PyFrame_PublishVacantHome(&alias, base + 2, PyValue_FromInlineInt(7));
+        old = _PyFrame_TakeKnownHome(&alias, base + 2, PyValue_Borrow(base[2]));
+        correct &= PyValue_Is(old, PyValue_FromInlineInt(7));
         correct &= !_PyFrame_HomeOwnsCount(&alias, base + 2);
         int home;
         while ((home = _PyFrame_NextCountedHome(&frame, 0, 130)) < 130) {
-            PyValue value = _PyFrame_TakeHome(&frame, base + home);
+            PyValue value = _PyFrame_TakeKnownHome(
+                &frame, base + home, PyValue_Borrow(base[home]));
             PyValue_CLOSE(value);
         }
         correct &= _PyFrame_PreviousCountedHome(&frame, 0, 130) == -1;

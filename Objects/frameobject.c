@@ -3950,7 +3950,7 @@ frame_dealloc_owned(PyFrameObject *f, _PyInterpreterFrame *frame,
     PyThreadState *tstate = _PyThreadState_GET();
     int nslots = _PyFrame_NumSlots(frame);
     _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, nslots, PyValue_NULL, &roots);
+    _PyFrame_InitClearRoots(frame, nslots, nslots, PyValue_NULL, &roots);
     roots.retire_reason = _PyIR_RETIRE_HEAP_CLEAR;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
 

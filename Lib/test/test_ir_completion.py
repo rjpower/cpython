@@ -701,6 +701,15 @@ class SemanticCompletionTests(unittest.TestCase):
                            ordinary=False):
             words = list(struct.unpack(f'<{len(code.co_code) // 8}Q',
                                        code.co_code))
+            # This fixture changes control/output geometry. Re-admit general
+            # returns rather than retaining the old image's empty certificate.
+            general_return = {
+                dis._all_opmap['RETURN_VALUE_EMPTY']: dis.opmap['RETURN_VALUE'],
+                dis._all_opmap['INSTRUMENTED_RETURN_VALUE_EMPTY']:
+                    dis.opmap['INSTRUMENTED_RETURN_VALUE'],
+            }
+            words = [(word & ~0xffff) | general_return.get(word & 0xffff, word & 0xffff)
+                     for word in words]
             instruction = next(i for i in dis.get_instructions(code)
                                if i.opname == site_name)
             site = instruction.offset

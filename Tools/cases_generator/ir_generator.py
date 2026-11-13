@@ -78,6 +78,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    IR_HELPER_CALLEES,
     IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
     CALL_INVOKE_MARKERS,
@@ -442,7 +443,8 @@ RELEASES = {
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "IR_BINARY_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
-    "_PyEval_FrameClearAndPopWithResult", "_PyErr_Clear",
+    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
+    "_PyErr_Clear",
 }
 NOT_RELEASES = {
     # A release whose destructor, that of an exact type, runs no Python
@@ -2391,6 +2393,37 @@ def object_source(tokens: list[Token], views: dict[str, int],
     return None
 
 
+def null_output_names(inst: Instruction, fmt: IRFormat) -> frozenset[str] | None:
+    """Names whose direct assignments may reach the actual scalar DST store.
+
+    Native address/member aliases and shadowed declarations are deliberately
+    outside this transport. They must not leave a remembered NULL assignment
+    live across a later indirect C write.
+    """
+    if fmt.window or fmt.field_of(ROLE_DST) != "A":
+        return None
+    outputs = frozenset(item.item.name for item in external_io(inst)[1]
+                        if not item.item.is_array())
+    tokens = uop_token_list(inst)
+    bindings = declared_locals(tokens)
+    if ((outputs | {"PyValue_NULL"}) & bindings.keys() or
+            any(kind in {"pointer", "array"} for kind in bindings.values()) or
+            any(cache.name in outputs | {"PyValue_NULL"}
+                for part in inst.parts if isinstance(part, Uop) for cache in part.caches)):
+        return None
+    for index, token in enumerate(tokens):
+        if (token.text in {"for", "while"} or token.kind.startswith("CMACRO") or
+                (token.kind == "AND" and is_unary_and(tokens, index))):
+            return None
+        if token.text in outputs:
+            before = tokens[index - 1].text if index else ""
+            after = tokens[index + 1].text if index + 1 < len(tokens) else ""
+            if before in {"&", "++", "--", ".", "->"} or after in {
+                    "[", ".", "->", "++", "--"}:
+                return None
+    return outputs
+
+
 class IRStack(Stack):
     """The frame's slots in place of the stack, the SlotStack of the design
     note.  Every slot holds a value that the frame owns or NULL: a handler
@@ -2454,6 +2487,11 @@ class IRStack(Stack):
         self.dst_stores: list[str] = []
         self.observer_deferred: str | None = None
         self.observer_inputs: list[str] = []
+        # Must-NULL output facts follow the actual structured storage paths.
+        # Distinct normal successors keep distinct facts until the final store.
+        self.null_paths: dict[int, set[str]] = {0: set()}
+        self.null_stores: dict[int, bool] = {}
+        self.null_uncovered = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2467,7 +2505,37 @@ class IRStack(Stack):
         other.roles = self.roles
         other.window_taken = self.window_taken
         other.observer_inputs = list(self.observer_inputs)
+        other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
+        other.null_stores = dict(self.null_stores)
+        other.null_uncovered = self.null_uncovered
         return other
+
+    def select_null_edge(self, edge: int) -> None:
+        facts = set.intersection(*(set(names) for names in self.null_paths.values()))
+        self.null_paths = {edge: facts}
+
+    def note_null_statement(self, stmt: SimpleStmt, outputs: frozenset[str]) -> None:
+        texts = _statement_text(stmt)
+        for name in outputs:
+            if name not in texts:
+                continue
+            # An unknown macro may retain an lvalue without spelling '&'.
+            # Only direct assignments participate in this source transport.
+            if texts[:2] != [name, "="]:
+                self.null_uncovered = True
+            for names in self.null_paths.values():
+                names.discard(name)
+                if texts == [name, "=", "PyValue_NULL", ";"]:
+                    names.add(name)
+        if texts[:1] == ["JUMPTO"]:
+            if texts == ["JUMPTO", "(", "oparg", ")", ";"]:
+                self.select_null_edge(1)
+            else:
+                self.null_uncovered = True
+        elif texts[:1] == ["JUMPBY"] and texts != ["JUMPBY", "(", "0", ")", ";"]:
+            self.null_uncovered = True
+        elif "next_instr" in texts and any(t in texts for t in ("=", "+=", "-=")):
+            self.null_uncovered = True
 
     def code_ran(self) -> None:
         "Code that can rebind a local may have run: each view may dangle"
@@ -2549,6 +2617,8 @@ class IRStack(Stack):
         return None
 
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        for names in self.null_paths.values():
+            names.discard(var.name)
         lay = self.layout
         if not var.is_array():
             role = self.call_input_role(memory_offset)
@@ -2675,6 +2745,9 @@ class IRStack(Stack):
             self.consume(out, p)
             self.owner[p] = "out"
             previous = None
+        if self.final and p == lay.dst_offset and not self.published_temporary_result:
+            self.null_stores = {edge: not self.null_uncovered and var.name in names
+                                for edge, names in self.null_paths.items()}
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
             if lay.dst in lay.temp_fields:
@@ -2837,6 +2910,17 @@ class IRStack(Stack):
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
         super().merge(other, out)
+        paths = {}
+        for edge in self.null_paths.keys() | other.null_paths.keys():
+            if edge in self.null_paths and edge in other.null_paths:
+                paths[edge] = self.null_paths[edge] & other.null_paths[edge]
+            else:
+                paths[edge] = set((self.null_paths if edge in self.null_paths
+                                   else other.null_paths)[edge])
+        self.null_uncovered |= other.null_uncovered
+        other.null_uncovered = self.null_uncovered
+        self.null_paths = {edge: set(names) for edge, names in paths.items()}
+        other.null_paths = paths
         # A variable views an input after the join if it does on both
         # paths, and may dangle if it may on either
         for p in set(self.views) | set(other.views):
@@ -2901,6 +2985,7 @@ class IREmitter(Emitter):
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
         self.formats = formats
+        self.null_outputs: frozenset[str] | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -2930,6 +3015,8 @@ class IREmitter(Emitter):
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
+        self._replacers["IR_BUILD_TUPLE"] = self.home_helper
+        self._replacers["IR_BUILD_LIST"] = self.home_helper
         self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
@@ -3032,7 +3119,13 @@ class IREmitter(Emitter):
     def home_helper(self, tkn, tkn_iter, uop, storage, inst):
         local, _ = self.checked_home_array(tkn, uop, storage)
         args, end = self.instruction_macro_args(tkn, tkn_iter)
-        if tkn.text == "IR_LOOKUP_SPECIAL":
+        if tkn.text in {"IR_BUILD_TUPLE", "IR_BUILD_LIST"}:
+            if (inst is None or inst.parts != [uop]
+                    or not steal_success_home_contract(uop)):
+                raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
+            helper = IR_HELPER_CALLEES[tkn.text]
+            expression = f"{helper}({local.name}, oparg)"
+        elif tkn.text == "IR_LOOKUP_SPECIAL":
             expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
                           f"&{local.name}[0], &{local.name}[1])")
         else:
@@ -3406,10 +3499,12 @@ class IREmitter(Emitter):
         storage.push_outputs()
         fmt = self.format_of(inst)
         mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+        edge, _ = contracts[tkn]
+        stack.select_null_edge(edge)
         self.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, self.out))
+        self.normal_null_receipts.append({edge: stack.null_stores.get(edge, False)})
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
-        edge, _ = contracts[tkn]
         # This checked terminal path has performed its final owner commit.
         # Only its successful intended normal edge gets the normal recipe;
         # callback errors/redirects retain their separate recovery protocols.
@@ -4064,6 +4159,12 @@ class IREmitter(Emitter):
     def emit_IfStmt(self, stmt, uop, storage, inst):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
+        # A condition may assign/address an output through C syntax. Such
+        # effects are not part of the checked NULL assignment transport.
+        if any(t.kind in ASSIGNMENTS or t.text in {"&", "++", "--"} or
+               (self.null_outputs is not None and t.text in self.null_outputs)
+               for t in stmt.condition):
+            storage.stack.null_uncovered = True
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
         return super().emit_IfStmt(stmt, uop, storage, inst)
 
@@ -4165,6 +4266,8 @@ class IREmitter(Emitter):
                 if var is not None and var.ir_inplace is None and not var.is_array():
                     stack.bind(var.name, None)
         self.note_view_object(stmt, storage, escape is not None)
+        if self.null_outputs is not None:
+            stack.note_null_statement(stmt, self.null_outputs)
         if not leaf_marker and (escape is not None or transaction_marker):
             stack.code_ran()
         if reachable:
@@ -4888,6 +4991,41 @@ NORMAL_FRAME_OBSERVERS = {
 }
 
 
+STEAL_SUCCESS_HOME_HELPERS = IR_HELPER_CALLEES.keys()
+
+
+def steal_success_home_contract(part: Uop) -> bool:
+    """A native container owns inputs only on the final flush's success path."""
+    inputs, outputs = part.stack.inputs, part.stack.outputs
+    statements = part.body.body
+    if (len(inputs) != 1 or inputs[0].peek or inputs[0].size != "oparg"
+            or len(outputs) != 1 or outputs[0].peek or outputs[0].is_array()
+            or len(statements) != 4 or not isinstance(statements[0], SimpleStmt)
+            or not isinstance(statements[1], IfStmt)
+            or not all(isinstance(stmt, SimpleStmt) for stmt in statements[2:])):
+        return False
+    call = _statement_text(statements[0])
+    if (len(call) != 9 or call[:2] != ["PyObject", "*"]
+            or call[3] != "=" or call[4] not in STEAL_SUCCESS_HOME_HELPERS
+            or call[5:] != ["(", inputs[0].name, ")", ";"]):
+        return False
+    result = call[2]
+    if result in {inputs[0].name, outputs[0].name, *HANDLER_LOCALS}:
+        return False
+    failure = statements[1]
+    if (failure.else_body is not None
+            or [t.text for t in failure.condition if t.kind != "COMMENT"] !=
+                ["(", result, "==", "NULL", ")"]
+            or not isinstance(failure.body, BlockStmt)
+            or len(failure.body.body) != 1
+            or not isinstance(failure.body.body[0], SimpleStmt)
+            or _statement_text(failure.body.body[0]) != ["ERROR_NO_POP", "(", ")", ";"]):
+        return False
+    return (_statement_text(statements[2]) == ["INPUTS_DEAD", "(", ")", ";"]
+            and _statement_text(statements[3]) ==
+                [outputs[0].name, "=", "PyValue_FromObjectSteal", "(", result, ")", ";"])
+
+
 def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
     """Check declared array capabilities without granting a raw pointer."""
     markers = [t for t in part.body.tokens() if t.text in IR_HELPER_EFFECTS]
@@ -4997,13 +5135,15 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("input take needs its unique index-matched owning array", token)
                 taken.add(array)
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP"}:
+            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
-                extent = "oparg" if token.text == "IR_BUILD_STRING" else "oparg*2"
+                extent = "oparg*2" if token.text == "IR_BUILD_MAP" else "oparg"
                 if (item is None or item.peek or not item.is_array() or
                         item.size != extent or len(inputs) != 1):
                     raise analysis_error("builder needs its sole declared owning array", token)
+                if token.text in STEAL_SUCCESS_HOME_HELPERS and not steal_success_home_contract(part):
+                    raise analysis_error("steal-success helper needs its checked success handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
             else:
@@ -5449,7 +5589,11 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     reserved = {"frame", *NORMAL_FRAME_OBSERVERS, *FRAME_HOME_HELPERS}
     macro_names = {*reserved, "_PyFrame_", "_PyHomeBitmap_"}
-    return (not inst.properties.switches_frame and not fmt.names_target
+    steals = [part for part in parts if any(
+        t.text in STEAL_SUCCESS_HOME_HELPERS for t in part.body.tokens())]
+    return (not steals or (len(steals) == 1 and inst.parts == steals
+                          and steal_success_home_contract(steals[0]))) and (
+            not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
             and not any(item.name in reserved for part in parts for item in
                         (*part.stack.inputs, *part.stack.outputs, *part.caches))
@@ -5944,9 +6088,11 @@ def native_entry_input_contract(inst: Instruction) -> bool:
         return result;
     }"""
     if (len(parts) != 1 or len(inst.parts) != 1 or
+            [(item.name, item.peek, item.size) for item in parts[0].stack.inputs] !=
+                [("retval", False, "")] or parts[0].stack.outputs or
             statement_shape(parts[0].body) != statement_shape(
                 Parser(expected, "<native entry ownership>").block())):
-        raise analysis_error("bitmap native entry needs its checked contract", inst.where)
+        raise analysis_error("native interpreter exit needs its checked contract", inst.where)
     return True
 
 
@@ -6009,10 +6155,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     and canonical_body_tokens(transfer)
                     == [token.text for token in tokenize(expected_yield)]):
                 return True
-    if [p.name for p in parts] not in (
-        ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
-        ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
-    ):
+    if (len(parts) != 2 or parts[0].name not in {
+            "_MAKE_HEAP_SAFE", "_RETURN_VALUE_EVENT"} or
+            parts[1].name not in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"}):
         return False
     prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
     body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
@@ -6021,7 +6166,6 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         PyValue temp = retval;
         DEAD(retval);
         SAVE_STACK();
-        _PyFrame_AssertTemporariesClear(frame);
         DTRACE_FUNCTION_RETURN();
         _Py_LeaveRecursiveCallPy(tstate);
         _PyInterpreterFrame *dying = frame;
@@ -6031,6 +6175,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
+    if parts[1].name == "_RETURN_VALUE":
+        expected_body = expected_body.replace("_PyEval_FrameClearAndPopWithResult",
+                                              "_PyEval_FrameClearAndPopGeneralWithResult")
     if body != [t.text for t in tokenize(expected_body)]:
         return False
     if parts[0].name == "_MAKE_HEAP_SAFE":
@@ -6065,6 +6212,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
+    emitter.normal_null_receipts = []
+    emitter.null_outputs = null_output_names(inst, fmt)
     emitter.send_yielded_published = False
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
@@ -6240,6 +6389,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if reachable:
         assert isinstance(stack, IRStack)
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
+        emitter.normal_null_receipts.append(
+            {edge: stack.null_stores.get(edge, False) for edge in stack.null_paths})
         if send_yielded_source_contract(inst, fmt):
             emitter.send_yielded_published = True
         if call_window:
@@ -6297,7 +6448,11 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS",
                 flags=(int(result_offset is not None) |
-                       (2 if emitter.disjoint_child_drained else 0)),
+                       (2 if emitter.disjoint_child_drained else 0) |
+                       sum(4 << edge for edge in normal_edges
+                           if emitter.null_outputs is not None and
+                           any(edge in receipt for receipt in emitter.normal_null_receipts) and
+                           all(receipt.get(edge, True) for receipt in emitter.normal_null_receipts))),
                 src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         completions = emitter.normal_completions
@@ -6624,6 +6779,15 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                         replace(event, flags=event.flags & ~2, extent=0)
                         if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION" else event
                         for event in programs.get(name, ()))
+            null_flags = 12
+            for name in members:
+                program = programs.get(name, ())
+                null_flags &= (program[0].flags if len(program) == 1 and
+                               program[0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS" else 0)
+            for name in members:
+                program = programs.get(name, ())
+                if len(program) == 1 and program[0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS":
+                    programs[name] = (replace(program[0], flags=(program[0].flags & ~12) | null_flags),)
             moved_results = [programs[name] for name in members
                              if len(programs.get(name, ())) == 1
                              and programs[name][0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"
@@ -7006,7 +7170,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
-    if inst.name == "RETURN_VALUE" and canonical_frame_transfer_input(inst):
+    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
+            canonical_frame_transfer_input(inst)):
         return "_PyIR_TRANSFER_EXIT"
     return unknown
 

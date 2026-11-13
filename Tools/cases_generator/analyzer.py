@@ -542,9 +542,15 @@ IR_MARKER_EFFECTS = {
 
 # These checked adapters use the ordinary escaping-call spill/reload path.
 # Unlike IR_MARKER_EFFECTS, their emitter does not own a manual protocol.
+IR_HELPER_CALLEES = {
+    "IR_BUILD_TUPLE": "_PyTuple_FromValueStealOnSuccess",
+    "IR_BUILD_LIST": "_PyList_FromValueStealOnSuccess",
+}
+
 IR_HELPER_EFFECTS = {
     "IR_BUILD_STRING": frozenset(("escapes",)),
     "IR_BUILD_MAP": frozenset(("escapes",)),
+    **{name: frozenset() for name in IR_HELPER_CALLEES},
     "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
     "IR_WRITE_OUTPUT": frozenset(),
     "IR_TAKE_INPUT": frozenset(),
@@ -823,23 +829,24 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
         if next_tkn.kind != lexer.LPAREN:
             continue
         effects = IR_MARKER_EFFECTS.get(tkn.text, IR_HELPER_EFFECTS.get(tkn.text))
-        if effects is not None:
+        callee = IR_HELPER_CALLEES.get(tkn.text, tkn.text)
+        if effects is not None and tkn.text not in IR_HELPER_CALLEES:
             if "escapes" in effects:
                 result[stmt] = EscapingCall(stmt, tkn, None)
             continue
         if tkn.kind == lexer.IDENTIFIER:
-            if tkn.text.upper() == tkn.text:
+            if callee.upper() == callee:
                 # simple macro
                 continue
             #if not tkn.text.startswith(("Py", "_Py", "monitor")):
             #    continue
-            if tkn.text.endswith("Check"):
+            if callee.endswith("Check"):
                 continue
-            if tkn.text.startswith("Py_Is"):
+            if callee.startswith("Py_Is"):
                 continue
-            if tkn.text.endswith("CheckExact"):
+            if callee.endswith("CheckExact"):
                 continue
-            if tkn.text in NON_ESCAPING_FUNCTIONS:
+            if callee in NON_ESCAPING_FUNCTIONS:
                 continue
         elif tkn.kind == "RPAREN":
             prev = tokens[idx-1]

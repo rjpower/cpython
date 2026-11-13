@@ -312,16 +312,13 @@ is_well_formed(PyValue ref, bool in_stack)
 }
 
 static void
-check_frame_home_range(_PyInterpreterFrame *frame, int n)
+check_frame_extent(_PyInterpreterFrame *frame, int extent)
 {
-    /* This writer oracle requires initialized NULL-control homes. A waiting
-     * thread frame's scratch can belong to an overlapping child. */
-    assert(n >= 0 && n <= _PyFrame_NumSlots(frame));
-    assert(frame->owner != FRAME_OWNED_BY_THREAD ||
-           n <= _PyFrame_GetCode(frame)->co_nlocalsplus ||
-           _PyThreadState_GET()->current_frame == frame);
+    /* The caller supplies an initialized NULL-control extent. A retiring
+     * general return can own all homes after the frame is unlinked. */
+    assert(extent >= 0 && extent <= _PyFrame_NumSlots(frame));
     PyValue *stack_base = _PyFrame_Stackbase(frame);
-    PyValue *end = frame->base + n;
+    PyValue *end = frame->base + extent;
     for (PyValue *sp = frame->base; sp < end; sp++) {
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
@@ -339,7 +336,10 @@ check_frame_home_range(_PyInterpreterFrame *frame, int n)
 void
 _PyValue_CheckFrame(_PyInterpreterFrame *frame)
 {
-    check_frame_home_range(frame, _PyFrame_NumSlots(frame));
+    /* A waiting thread frame can overlap its child's homes. */
+    assert(frame->owner != FRAME_OWNED_BY_THREAD ||
+           _PyThreadState_GET()->current_frame == frame);
+    check_frame_extent(frame, _PyFrame_NumSlots(frame));
 }
 #endif
 
@@ -350,7 +350,7 @@ clear_slots(_PyInterpreterFrame *frame, int n)
 {
     frame->phase_state = 0;
 #ifdef Py_DEBUG
-    check_frame_home_range(frame, n);
+    check_frame_extent(frame, n);
 #endif
     int end = n;
     while (end > 0) {
@@ -375,9 +375,10 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 
 /* Stop before the first close that can call Python. The interrupted owner
  * stays in its home until the outlined continuation has published its roots. */
-int
-_PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
+static inline int
+try_clear_except_code(_PyInterpreterFrame *frame, int remaining)
 {
+    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
     frame->phase_state = 0;
     assert(_PyThreadState_GET()->current_frame != frame);
     assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
@@ -386,13 +387,8 @@ _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
     if (FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj) != NULL) {
         return _Py_FRAME_CLEAR_ASSOCIATION;
     }
-    int remaining = _PyFrame_NumSlots(frame);
-    if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        _PyFrame_AssertTemporariesClear(frame);
-        remaining = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    }
 #ifdef Py_DEBUG
-    check_frame_home_range(frame, remaining);
+    check_frame_extent(frame, remaining);
 #endif
     while (remaining > 0) {
         int owner = _PyFrame_PreviousCountedHome(frame, 0, remaining);
@@ -420,20 +416,36 @@ _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
     return _Py_FRAME_CLEAR_DONE;
 }
 
-void
-_PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
-                        _PyTransitionRoots *roots)
+int
+_PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
 {
+    int extent = frame->owner == FRAME_OWNED_BY_THREAD
+        ? _PyFrame_GetCode(frame)->co_nlocalsplus : _PyFrame_NumSlots(frame);
+    return try_clear_except_code(frame, extent);
+}
+
+int
+_PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame)
+{
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    return try_clear_except_code(frame, _PyFrame_NumSlots(frame));
+}
+
+void
+_PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, int initial_extent,
+                        PyValue result, _PyTransitionRoots *roots)
+{
+    assert(initial_extent >= 0 && initial_extent <= _PyFrame_NumSlots(frame));
+    assert(stage <= initial_extent);
     frame->phase_state = 0;
     int remaining = stage > 0 ? stage : 0;
     if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
-        remaining = frame->owner == FRAME_OWNED_BY_THREAD
-            ? _PyFrame_GetCode(frame)->co_nlocalsplus : _PyFrame_NumSlots(frame);
+        remaining = initial_extent;
     }
 #ifdef Py_DEBUG
     /* Association release and private heap deallocation can bypass the
      * callback-free sweep. Only the remaining prefix is still ours. */
-    check_frame_home_range(frame, remaining);
+    check_frame_extent(frame, remaining);
 #endif
     *roots = (_PyTransitionRoots){
         .frame = frame,
@@ -500,7 +512,7 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason
     PyObject **limit = tstate->datastack_limit;
 #endif
     _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    _PyFrame_InitClearRoots(frame, stage, _PyFrame_NumSlots(frame), result, &roots);
     roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
     roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);

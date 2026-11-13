@@ -161,6 +161,68 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
+/* The owner of V, the view of a temporary whose slot the same expression
+ * clears: the count moves from the slot to the C local.  The one
+ * count-free conversion from a borrow to an owner, shared by known-home
+ * removal and the checked native interpreter exit. */
+static inline PyValue
+_PyIR_AdoptTemp(PyValueBorrow view)
+{
+    PyValue owner = {view.bits};
+    return owner;
+}
+
+/* These commits retain facts supplied by the actual physical transport.
+ * Logical stack absence alone does not establish a vacant recipient. */
+static inline void
+_PyFrame_PublishVacantHome(_PyInterpreterFrame *frame, PyValue *home,
+                          PyValue value)
+{
+    assert(!_PyFrame_HomeOwnsCount(frame, home));
+    *home = value;
+    if (PyValue_RefcountOnObject(value)) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        FT_ATOMIC_OR_UINT64(*word, _PyHomeBitmap_Mask(home));
+    }
+}
+
+static inline void
+_PyFrame_ReplaceKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                        PyValueBorrow old, PyValue value)
+{
+    assert(PyValue_Is(*home, old));
+    int old_counted = PyValue_RefcountOnObject(old);
+    int new_counted = PyValue_RefcountOnObject(value);
+    assert(old_counted == _PyFrame_HomeOwnsCount(frame, home));
+    *home = value;
+    if (old_counted != new_counted) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        uint64_t mask = _PyHomeBitmap_Mask(home);
+        if (new_counted) {
+            FT_ATOMIC_OR_UINT64(*word, mask);
+        }
+        else {
+            FT_ATOMIC_AND_UINT64(*word, ~mask);
+        }
+    }
+}
+
+static inline PyValue
+_PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                      PyValueBorrow value)
+{
+    assert(PyValue_Is(*home, value));
+    PyValue owner = _PyIR_AdoptTemp(value);
+    int counted = PyValue_RefcountOnObject(value);
+    assert(counted == _PyFrame_HomeOwnsCount(frame, home));
+    *home = PyValue_NULL;
+    if (counted) {
+        uint64_t *word = _PyFrame_BitmapWord(frame, home);
+        FT_ATOMIC_AND_UINT64(*word, ~_PyHomeBitmap_Mask(home));
+    }
+    return owner;
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST
@@ -237,20 +299,6 @@ _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
             PyValue_CLOSE(ref);
         }
     }
-}
-
-/* Whether every temporary of f is NULL, as when it returns */
-static inline void
-_PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
-{
-#ifdef Py_DEBUG
-    int nslots = _PyFrame_NumSlots(f);
-    for (int i = _PyFrame_GetCode(f)->co_nlocalsplus; i < nslots; i++) {
-        assert(PyValue_IsNull(f->base[i]));
-    }
-#else
-    (void)f;
-#endif
 }
 
 /* Bindings stay dynamic. Scratch ranges are clipped before touching homes. */
@@ -549,7 +597,9 @@ enum {
 
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
-void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
+                            int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);
 void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
                                   struct _PyTransitionRoots *roots);

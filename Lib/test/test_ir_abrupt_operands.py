@@ -20,7 +20,7 @@ from test.test_ir_transfer_admission import encoded, make_code
 class AbruptOperandTests(unittest.TestCase):
     def image(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 1), ("LOAD_CONST", 4),
-                 ("GET_ANEXT", 5, 4), ("POP_TOP", 5), ("POP_TOP", 1),
+                 ("GET_ANEXT", 5, 4), ("POP_TOP", 5), ("POP_TOP", 4),
                  ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
                  ("POP_TOP", 6), ("POP_TOP", 4), ("POP_TOP", 5),
                  ("IR_JUMP", 0, 0, 6)]

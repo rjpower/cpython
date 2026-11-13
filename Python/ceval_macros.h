@@ -513,25 +513,13 @@ gen_try_set_executing(PyGenObject *gen)
  * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
 #define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
 
-/* The owner of V, the view of a temporary whose slot the same expression
- * clears: the count moves from the slot to the C local.  The one
- * count-free conversion from a borrow to an owner; only IR_CONSUME_INPUT
- * uses it. */
-static inline PyValue
-_PyIR_AdoptTemp(PyValueBorrow view)
-{
-    PyValue owner = {view.bits};
-    return owner;
-}
-
 /* The handler takes the input V that it read through field F: the owner
  * of a temporary's value, whose slot becomes NULL, or PyValue_NULL for a
  * local, which keeps its value and owns it.  The generator assigns it to
  * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
 #define IR_CONSUME_INPUT(F, V) \
     (IR_IS_LOCAL(F) ? PyValue_NULL \
-                    : (_PyFrame_WriteHome(frame, &IR_SLOT(F), PyValue_NULL), \
-                       _PyIR_AdoptTemp(V)))
+                    : _PyFrame_TakeKnownHome(frame, &IR_SLOT(F), PyValue_Borrow(V)))
 
 /* Selected only by the checked interpreter-exit native-home contract. */
 #define IR_CONSUME_NATIVE_INPUT(F, V) \
@@ -556,7 +544,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_STORE_CANONICAL_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        _PyFrame_WriteHome(frame, &(SLOT), (V)); \
+        _PyFrame_PublishVacantHome(frame, &(SLOT), (V)); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -597,7 +585,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            _PyFrame_WriteHome(frame, &IR_SLOT(F), (VALUE)); \
+            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(F), PyValue_Borrow(ir_old), (VALUE)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
         } \

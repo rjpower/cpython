@@ -90,8 +90,8 @@ class AdmissionTests(unittest.TestCase):
                 imm = row.imm - _opcode.IR_LOC_A
                 self.assert_rejected(code, replace_word(code, index,
                     replace_field(word, imm, 4094)), "name index")
-            if name == "RETURN_VALUE":
-                reached.add(name)
+            if name in {"RETURN_VALUE", "RETURN_VALUE_EMPTY"}:
+                reached.add("RETURN_VALUE")
                 source = next(k for k, role in enumerate(row.roles)
                               if role >= _opcode.IR_ROLE_IN0)
                 self.assert_rejected(code, replace_word(code, index,

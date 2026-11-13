@@ -15,7 +15,8 @@ RETIRING = 1
 
 def return_sites(code):
     return [i for i, row in enumerate(_testinternalcapi.get_ir(code))
-            if row[0] == "RETURN_VALUE"]
+            if row[0] in {"RETURN_VALUE", "RETURN_VALUE_EMPTY",
+                          "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
 
 
 def retiring_states():
@@ -103,7 +104,7 @@ class RetirementPlanTests(unittest.TestCase):
             return value
 
         rows = _testinternalcapi.get_ir(f.__code__)
-        self.assertIn("CALL", [row[0] for row in rows])
+        self.assertIn("CALL_NO_SELF", [row[0] for row in rows])
         for code in self.routes(f.__code__):
             sites = return_sites(code)
             self.assertEqual(len(sites), 1)

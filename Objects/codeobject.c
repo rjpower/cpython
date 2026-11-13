@@ -2066,6 +2066,7 @@ typedef struct {
     semantic_phases *phases;
     int created_empty;
     int completion_destination_empty;
+    int normal_null_destination_empty;
     semantic_delegated delegated;
 } semantic_worklist;
 
@@ -2440,16 +2441,33 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
             semantic_set_facts(work, state, homes[h], nl, next[h]);
         }
     }
-    if (inspect && fmt->transfer_kind == _PyIR_TRANSFER_EXIT) {
-        for (int w = 0; w < work->nwords; w++) {
-            if (state[SEM_MAY_OWNER * work->nwords + w]) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %d leaves an unretired scratch owner", pc);
-                return -1;
-            }
+    return 0;
+}
+
+static int
+semantic_empty_return(int handler)
+{
+    return handler == RETURN_VALUE_EMPTY ||
+           handler == INSTRUMENTED_RETURN_VALUE_EMPTY;
+}
+
+/* This is logical vacancy, independent of physical NULL/readable maps.
+ * The fast return never examines scratch homes after transferring its result. */
+static int
+semantic_scratch_absent(const semantic_image *image,
+                        const semantic_worklist *work, const uint64_t *state)
+{
+    for (int w = 0; w < work->nwords; w++) {
+        int remaining = image->scratch - w * 64;
+        uint64_t mask = remaining >= 64 ? UINT64_MAX :
+            (UINT64_C(1) << remaining) - 1;
+        if ((state[SEM_NO_HOME * work->nwords + w] & mask) != mask ||
+            (state[SEM_MAY_OWNER * work->nwords + w] & mask))
+        {
+            return 0;
         }
     }
-    return 0;
+    return 1;
 }
 
 static int
@@ -2553,6 +2571,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
 {
     work->created_empty = 0;
     work->completion_destination_empty = 0;
+    work->normal_null_destination_empty = 0;
     if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
         return -1;
     }
@@ -2720,6 +2739,12 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+                int dst = (int)IR_A(word);
+                work->normal_null_destination_empty =
+                    (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH | _PyIR_NORMAL_NULL_TAKEN)) &&
+                    dst >= nl && dst != IR_NO_DST &&
+                    ((semantic_home_facts(work, state, dst, nl) & (1u << SEM_NO_HOME)) ||
+                     _PyIR_ConsumesNormalInput(word, arg, dst));
                 /* The actual same-frame successful flush/vacate, with all
                  * family members covered, proves only consumed inputs empty.
                  * It does not make an output readable or grant phase coverage. */
@@ -2817,6 +2842,20 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
     const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
     for (int at = 0; at < fmt->owner_events; at++) {
         const _PyIROwnershipEvent *event = program + at;
+        if (event->kind == _PyIR_OWNER_NORMAL_CLEAR_INPUTS &&
+            (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH << edge)))
+        {
+            int dst = (int)IR_A(word);
+            if (dst >= image->nl && dst != IR_NO_DST &&
+                work->normal_null_destination_empty)
+            {
+                /* A reached final store produced NULL on this edge. It may
+                 * replace a consumed input or an already absent home only. */
+                semantic_set_facts(work, state, dst, image->nl,
+                                   (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+            }
+            continue;
+        }
         if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION) {
             continue;
         }
@@ -3019,8 +3058,12 @@ semantic_exception_at(const _PyIRExceptionEntry *entries, int count, int pc)
 
 static int
 normal_transfer_proof(const semantic_image *image,
-                      const _PyIRCodePlan **plan)
+                      const _PyIRCodePlan **plan, PyObject **normalized)
 {
+    assert(plan == NULL || normalized == NULL);
+    if (normalized != NULL) {
+        *normalized = NULL;
+    }
     if (plan != NULL) {
         *plan = NULL;
     }
@@ -3094,7 +3137,7 @@ normal_transfer_proof(const semantic_image *image,
     work.queue = PyMem_Malloc((size_t)nblocks * sizeof(*work.queue));
     size_t state_words = (size_t)SEM_FACTS * work.nwords;
     int has_abrupt = nexceptions != 0 || source_recovery;
-    size_t vectors = (size_t)nblocks + 1 + (plan != NULL) + has_abrupt;
+    size_t vectors = (size_t)nblocks + 2 + has_abrupt;
     if (vectors > SIZE_MAX / sizeof(uint64_t) / state_words) {
         PyMem_Free(work.blocks);
         PyMem_Free(work.queue);
@@ -3123,9 +3166,10 @@ normal_transfer_proof(const semantic_image *image,
     }
     work.blocks[block].end = n;
     uint64_t *state = work.facts + (size_t)nblocks * state_words;
-    work.branch = plan != NULL ? state + state_words : NULL;
-    uint64_t *abrupt = has_abrupt
-        ? state + (1 + (plan != NULL)) * state_words : NULL;
+    /* Reuse this vector for exceptional phase inspection and independent
+     * normal successors; those operations occur in separate proof passes. */
+    work.branch = state + state_words;
+    uint64_t *abrupt = has_abrupt ? state + 2 * state_words : NULL;
     _PyIRExceptionEntry *handlers = NULL;
     int *source_links = NULL;
     int result = 0;
@@ -3245,6 +3289,8 @@ normal_transfer_proof(const semantic_image *image,
             int last = end - 1;
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
+            memcpy(work.branch, state, state_words * sizeof(uint64_t));
+            semantic_delegated outgoing = work.delegated;
             if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
                 semantic_normal_edge(image, &work, state, last, 0);
                 semantic_enqueue(&work, block_at[end], state, complete);
@@ -3254,6 +3300,11 @@ normal_transfer_proof(const semantic_image *image,
             {
                 int target = fmt->flags & _PyIR_FORWARD
                     ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+                /* Each edge starts at the common post-transfer state,
+                 * including the finite protocol tuple. Fallthrough facts
+                 * must never become facts of the taken successor. */
+                memcpy(state, work.branch, state_words * sizeof(uint64_t));
+                work.delegated = outgoing;
                 semantic_normal_edge(image, &work, state, last, 1);
                 semantic_enqueue(&work, block_at[target], state, complete);
             }
@@ -3273,6 +3324,12 @@ normal_transfer_proof(const semantic_image *image,
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
             for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+                if (semantic_empty_return(IR_HANDLER(words[i]))) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has an unproved empty return", i);
+                    result = -1;
+                    break;
+                }
                 if (IR_HANDLER(words[i]) == YIELD_DELEGATED ||
                     IR_HANDLER(words[i]) == INSTRUMENTED_YIELD_DELEGATED) {
                     PyErr_Format(PyExc_ValueError,
@@ -3296,6 +3353,37 @@ normal_transfer_proof(const semantic_image *image,
             if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
+            }
+            int handler = IR_HANDLER(words[i]);
+            if (semantic_empty_return(handler) || handler == RETURN_VALUE ||
+                handler == INSTRUMENTED_RETURN_VALUE)
+            {
+                int empty = semantic_scratch_absent(image, &work, state);
+                if (semantic_empty_return(handler) && !empty) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has an unproved empty return", i);
+                    result = -1;
+                    break;
+                }
+                if (normalized != NULL && !semantic_empty_return(handler) && empty) {
+                    /* Constructor bytes may be borrowed from the caller.
+                     * Copy only when a stable proof first selects a fast form;
+                     * all remaining proofs still inspect the original image. */
+                    if (*normalized == NULL) {
+                        *normalized = PyBytes_FromStringAndSize((const char *)words,
+                            (Py_ssize_t)n * sizeof(*words));
+                        if (*normalized == NULL) {
+                            result = -1;
+                            break;
+                        }
+                    }
+                    int selected = handler == RETURN_VALUE ? RETURN_VALUE_EMPTY :
+                        INSTRUMENTED_RETURN_VALUE_EMPTY;
+                    _PyIRWord selected_word = words[i];
+                    _PyIR_SetHandler(&selected_word, selected);
+                    memcpy(PyBytes_AS_STRING(*normalized) + (size_t)i * sizeof(*words),
+                           &selected_word, sizeof(selected_word));
+                }
             }
             if (plan != NULL) {
                 ncertified += semantic_exact_return(image, &work, state, i, complete);
@@ -3366,6 +3454,9 @@ normal_transfer_proof(const semantic_image *image,
         }
     }
 done:
+    if (result < 0 && normalized != NULL) {
+        Py_CLEAR(*normalized);
+    }
     PyMem_Free(source_links);
     PyMem_Free(handlers);
     if (phases.shapes != NULL) {
@@ -3382,7 +3473,7 @@ done:
 }
 
 static int
-validate_normal_transfers(struct _PyCodeConstructor *con)
+validate_normal_transfers(struct _PyCodeConstructor *con, PyObject **normalized)
 {
     semantic_image image = {
         .words = (const _PyIRWord *)PyBytes_AS_STRING(con->code),
@@ -3398,7 +3489,7 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         .source = PyBytes_AS_STRING(con->linetable),
         .source_size = PyBytes_GET_SIZE(con->linetable),
     };
-    int result = normal_transfer_proof(&image, NULL);
+    int result = normal_transfer_proof(&image, NULL, normalized);
     if (result < 0 && PyErr_ExceptionMatches(PyExc_ValueError)) {
         _PyErr_FormatNote("while admitting %U (%U)", con->qualname, con->filename);
     }
@@ -3432,7 +3523,7 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
         .source = PyBytes_AS_STRING(co->co_linetable),
         .source_size = PyBytes_GET_SIZE(co->co_linetable),
     };
-    return normal_transfer_proof(&image, plan);
+    return normal_transfer_proof(&image, plan, NULL);
 }
 
 /* The normalized words and all semantic proofs refer to the same immutable
@@ -3449,12 +3540,16 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     }
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
+    PyObject *normalized = NULL;
     if (validate_completion_words(&checked) < 0 ||
         validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
-        validate_normal_transfers(&checked) < 0)
+        validate_normal_transfers(&checked, &normalized) < 0)
     {
         Py_DECREF(words);
         return NULL;
+    }
+    if (normalized != NULL) {
+        Py_SETREF(words, normalized);
     }
     return words;
 }

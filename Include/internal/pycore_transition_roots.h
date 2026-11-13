@@ -14,6 +14,12 @@ extern "C" {
 #include "pycore_value.h"        // PyValue
 
 enum {
+    _Py_TRANSITION_KIND_EXTERNAL,
+    _Py_TRANSITION_KIND_RETIRING,
+    _Py_TRANSITION_KIND_STAGED,
+};
+
+enum {
     _Py_TRANSITION_CODE = 1,
     _Py_TRANSITION_FUNCTION = 2,
     _Py_TRANSITION_LOCALS = 4,
@@ -39,13 +45,16 @@ typedef struct {
  * Storage for the record, frame and homes must outlive nested callbacks.
  * Pop precedes release of the frame's arena reservation. Heap-frame takeover
  * transfers the prefix and header authority before any subsequent callback.
+ * A staged provider scope may outlive its consumed frame only after disarming
+ * all authority and setting frame=NULL; the empty node stays linked until pop.
  */
 typedef struct _PyTransitionRoots {
     struct _PyTransitionRoots *previous;
     _PyInterpreterFrame *frame;
     int remaining;
     unsigned char header_mask;
-    unsigned char result_present;
+    unsigned char result_present:1;
+    unsigned char kind:2;
     /* Producer outcome, retained after code detach; observers never recheck. */
     unsigned char retire_reason;
     unsigned char shadow_status;
@@ -68,6 +77,7 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
 {
     assert(roots->frame != NULL);
     assert(roots->remaining >= 0);
+    assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
     assert((roots->header_mask & ~31) == 0);
     assert(roots->retire_reason <= _PyIR_RETIRE_STAGED_FAILURE);
     assert(roots->shadow_status <= _PyIR_SHADOW_MISMATCH);
@@ -92,6 +102,8 @@ _PyThreadState_PopTransitionRoots(PyThreadState *tstate,
                                  _PyTransitionRoots *roots)
 {
     assert(((_PyThreadStateImpl *)tstate)->transition_roots == roots);
+    assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
+    assert(roots->frame != NULL || roots->kind == _Py_TRANSITION_KIND_STAGED);
     assert(roots->remaining == 0);
     assert(roots->header_mask == 0);
     assert(!roots->result_present);

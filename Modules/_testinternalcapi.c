@@ -4451,7 +4451,7 @@ get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ids;
 }
 
-/* Observe the reached producer's result, including prefix-only records.
+/* Observe every node, including prefix-only and disarmed provider records.
  * Code and frame geometry may already be gone; do not rerun a shadow check. */
 static PyObject *
 get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -4464,8 +4464,9 @@ get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
              ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
          roots != NULL; roots = roots->previous)
     {
-        PyObject *state = Py_BuildValue("(ii)", roots->retire_reason,
-                                       roots->shadow_status);
+        PyObject *state = Py_BuildValue("(iiiO)", roots->kind,
+                                       roots->retire_reason, roots->shadow_status,
+                                       roots->frame != NULL ? Py_True : Py_False);
         if (state == NULL) {
             Py_DECREF(states);
             return NULL;

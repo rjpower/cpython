@@ -165,6 +165,20 @@ class ScalarResultTests(unittest.TestCase):
                 """, name="UNARY_INVERT")
                 self.assertEqual(contract.normal_storage is not None, not extra)
 
+    def test_stack_only_format_has_no_emitted_family_certificate(self):
+        source = """
+            inst(SAMPLE, (value -- out)) {
+                out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);
+            }
+            pure inst(PUSH_NULL, (-- out)) { out = PyValue_NULL; }
+        """
+        helper = test_ir_scalar_storage.ScalarStorageTests()
+        self.assertIsNotNone(helper.program(source, scratch_result=True).normal_storage)
+        unexecuted = helper.program(source, name="PUSH_NULL")
+        self.assertIsNone(unexecuted.normal_storage)
+        self.assertFalse(unexecuted.error_checkpoints)
+        self.assertFalse(unexecuted.ownership_events)
+
 
 if __name__ == "__main__":
     unittest.main()

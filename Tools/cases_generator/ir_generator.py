@@ -8302,6 +8302,10 @@ def handler_contracts(analysis: Analysis,
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
+        # Stack-only formats have no independently emitted family members.
+        # They cannot acquire a storage certificate from an empty intersection.
+        if not members:
+            continue
         if not all(abrupt.get(name, False) for name in members):
             for name in members:
                 abrupt[name] = False

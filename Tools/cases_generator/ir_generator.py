@@ -1427,6 +1427,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         # may read in place unless it keeps or passes them on
         assert len(members) == 1, group
         m_inputs, m_outputs = io[head.name]
+        if n_inputs > len(m_inputs) or any(item.is_array()
+                                          for item in m_inputs[-n_inputs:]):
+            raise analysis_error("window input fields require trailing scalar inputs",
+                                 head.where)
         first = len(m_inputs) - n_inputs
         uses = classify_inputs(head, len(m_inputs))
         passthrough = {e.external for e in m_outputs if e.external >= 0}

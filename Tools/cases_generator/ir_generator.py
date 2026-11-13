@@ -5770,9 +5770,38 @@ def result_publication_contract(
 
 
 def writes_suspended_frame_state(inst: Instruction) -> bool:
-    """Recognize state writes, rather than guards mentioning a child state."""
+    """Recognize direct state writes and the owner-specific frame-copy commit."""
+    body = uop_token_list(inst)
+    copies_to_generator = False
+    for i, token in enumerate(body):
+        if token.text != "_PyFrame_Copy" or i + 1 >= len(body) \
+                or body[i + 1].text != "(":
+            continue
+        args: list[list[str]] = [[]]
+        depth = 0
+        for argument in body[i + 2:]:
+            if argument.text == ")" and depth == 0:
+                break
+            if argument.text in ("(", "["):
+                depth += 1
+            elif argument.text in (")", "]"):
+                depth -= 1
+            if argument.text == "," and depth == 0:
+                args.append([])
+            else:
+                args[-1].append(argument.text)
+        else:
+            raise analysis_error("Unterminated _PyFrame_Copy", token)
+        if len(args) != 3 or not args[0] or not args[1] or args[2] not in (
+                ["FRAME_OWNED_BY_THREAD"], ["FRAME_OWNED_BY_GENERATOR"],
+                ["FRAME_OWNED_BY_FRAME_OBJECT"], ["FRAME_OWNED_BY_INTERPRETER"]):
+            raise analysis_error(
+                "_PyFrame_Copy effect requires a literal destination owner", token)
+        # This helper publishes CREATED only for the generator owner, after
+        # installing complete destination homes and the frame association.
+        copies_to_generator |= args[2] == ["FRAME_OWNED_BY_GENERATOR"]
     tokens = " ".join(uop_tokens(inst))
-    return bool(re.search(
+    return copies_to_generator or bool(re.search(
         r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
         or re.search(
             r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"

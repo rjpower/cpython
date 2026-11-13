@@ -567,6 +567,8 @@ class ContractTests(unittest.TestCase):
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "RETURN_GENERATOR"})
+        self.assertFalse(BY_NAME["RETURN_GENERATOR"].effects &
+                         _opcode.IR_PUSHES_FRAME)
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,

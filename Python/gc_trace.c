@@ -58,10 +58,23 @@
 #include "pycore_gc_trace.h"
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
+#include "pycore_interpframe.h"   // _PyFrame_NextHomeRange()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value_api.h"      // _PyValue_AsObjectAt()
+
+static int
+visit_transition_value(PyValue value, visitproc visit, void *arg)
+{
+    if (!PyValue_IsTaggedIndex(value)) {
+        _PyValue_RecheckHome(value);
+    }
+    if (PyValue_IsObject(value)) {
+        Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+    }
+    return 0;
+}
 
 int
 _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *arg)
@@ -76,18 +89,42 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
             assert(roots->kind == _Py_TRANSITION_KIND_STAGED);
             assert(!roots->caller_staged);
             assert(roots->remaining == 0 && roots->header_mask == 0);
-            assert(!roots->result_present && roots->prefix == NULL);
+            assert(!roots->result_present && roots->homes == NULL);
+            assert(roots->home_authority == _PyIR_HOME_NONE);
             continue;
         }
         assert(roots->remaining >= 0);
-        for (int i = 0; i < roots->remaining; i++) {
-            PyValue value = frame->base[i];
-            if (!PyValue_IsTaggedIndex(value)) {
-                _PyValue_RecheckHome(value);
+        if (roots->kind == _Py_TRANSITION_KIND_EXTERNAL) {
+            assert(roots->remaining == 0);
+            assert(roots->home_authority == _PyIR_HOME_NONE);
+        }
+        else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+            assert(roots->homes == NULL);
+            for (int i = 0; i < roots->remaining; i++) {
+                int err = visit_transition_value(frame->base[i], visit, arg);
+                if (err) {
+                    return err;
+                }
             }
-            if (PyValue_IsObject(value)) {
-                Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+        }
+        else if (roots->home_authority == _PyIR_HOME_MUST_READABLE) {
+            assert(roots->header_mask & _Py_TRANSITION_CODE);
+            const _PyIRHomeView *view = roots->homes;
+            assert(view != NULL);
+            uint32_t cursor = 0;
+            int begin, end;
+            while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
+                for (int i = begin; i < Py_MIN(end, roots->remaining); i++) {
+                    int err = visit_transition_value(frame->base[i], visit, arg);
+                    if (err) {
+                        return err;
+                    }
+                }
             }
+        }
+        else {
+            assert(roots->home_authority == _PyIR_HOME_NONE);
+            assert(roots->remaining == 0 && roots->homes == NULL);
         }
         if (roots->header_mask & _Py_TRANSITION_CODE) {
             Py_VISIT(frame->f_executable);
@@ -107,17 +144,15 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         if (roots->result_present && PyValue_IsObject(roots->result)) {
             Py_VISIT(PyValue_AsKnownObjectBorrow(roots->result));
         }
-        _PyTransitionPrefix *prefix = roots->prefix;
+        _PyTransitionPrefix *prefix = roots->kind == _Py_TRANSITION_KIND_EXTERNAL
+            ? roots->prefix : NULL;
         if (prefix != NULL) {
             assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
             assert(prefix->end <= prefix->capacity);
             for (int i = prefix->begin; i < prefix->end; i++) {
-                PyValue value = prefix->base[i];
-                if (!PyValue_IsTaggedIndex(value)) {
-                    _PyValue_RecheckHome(value);
-                }
-                if (PyValue_IsObject(value)) {
-                    Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+                int err = visit_transition_value(prefix->base[i], visit, arg);
+                if (err) {
+                    return err;
                 }
             }
         }

@@ -4930,15 +4930,15 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     PyObject *code_object;
     int site, phase, dirty_home = -1, missing_home = -1;
-    int unaligned = 0, wrong_image = 0;
+    int unaligned = 0, wrong_image = 0, authority_only = 0;
     static char *keywords[] = {
         "code", "site", "phase", "dirty_home", "missing_home",
-        "unaligned", "wrong_image", NULL,
+        "unaligned", "wrong_image", "authority_only", NULL,
     };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iipp:check_ir_frame_phase",
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iippp:check_ir_frame_phase",
                                     keywords, &code_object, &site, &phase,
                                     &dirty_home, &missing_home, &unaligned,
-                                    &wrong_image))
+                                    &wrong_image, &authority_only))
     {
         return NULL;
     }
@@ -4978,7 +4978,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .phase_state = (uint16_t)phase,
     };
     _PyIRHomeView view;
-    int covered = _PyIR_GetFrameHomeView(&frame, &view);
+    _PyIRHomeAuthority covered = _PyIR_GetFrameHomeView(&frame, &view);
     int dirty_selected = 0, missing_required = 0;
     if (covered) {
         for (uint32_t r = 0; r < view.nranges; r++) {
@@ -5011,7 +5011,8 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         frame.ir_words = &other_image;
     }
     frame.instr_ptr = (_PyInstr *)(pc + unaligned);
-    uint8_t status = _PyIR_ShadowFramePhase(&frame);
+    int status = authority_only ? (int)_PyIR_GetFrameHomeView(&frame, &view)
+                               : _PyIR_ShadowFramePhase(&frame);
     PyMem_Free(homes);
     return PyLong_FromLong(status);
 }

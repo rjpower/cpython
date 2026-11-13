@@ -18140,17 +18140,17 @@
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
             frame->phase_state = 0;
             frame->phase_state = 0;
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
+            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
+                func, _PyFrame_GetCode(frame));
             if (gen == NULL) {
                 frame->phase_state = 0;
                 JUMP_TO_LABEL(error);
             }
             frame->phase_state = 0;
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            frame->instr_ptr++;
             frame->phase_state = 0;
             frame->phase_state = 0;
-            _PyFrame_Copy(frame, gen_frame);
+            _PyFrame_CopyCreatedGenerator(frame, gen_frame);
             gen_frame->return_slot = (uint16_t)IR_A(ir_word);
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;

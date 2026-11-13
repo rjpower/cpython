@@ -1117,7 +1117,8 @@ class TestIRCases(unittest.TestCase):
         for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
-                retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
+                retired = handler.index(
+                    "temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")
                 published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
                 self.assertLess(retired, completed)
@@ -2994,7 +2995,7 @@ class TestIRCases(unittest.TestCase):
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
                 def kind_for(body):
-                    analysis = self.analyze(f"inst({name}, ({effect})) {{ {body} }}")
+                    analysis = self.analyze(f"\ninst({name}, ({effect})) {{ {body} }}\n")
                     inst = analysis.instructions[name]
                     fmt = ir_generator.compute_formats(analysis)[name]
                     return ir_generator.normal_transfer_kind(inst, fmt)
@@ -3005,7 +3006,7 @@ class TestIRCases(unittest.TestCase):
 
     def test_normal_transfer_requires_matching_io(self):
         # The same body with a different window cannot acquire COPY geometry.
-        source = "inst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }"
+        source = "\ninst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }\n"
         analysis = self.analyze(source)
         inst = analysis.instructions["COPY"]
         fmt = ir_generator.compute_formats(analysis)["COPY"]

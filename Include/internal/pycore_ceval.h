@@ -113,6 +113,11 @@ extern void _PyEval_Fini(void);
 
 extern PyObject* _PyEval_GetBuiltins(PyThreadState *tstate);
 
+/* Success consumes the window and returns an unpublished child. On failure,
+ * preparation may leave it intact; ERROR_NO_POP unwinds its actual NULL homes. */
+extern _PyInterpreterFrame *_PyEval_CreateInitFrame(
+    PyThreadState *, _PyInterpreterFrame *, PyValue *, int, int, _PyInstr *);
+
 // Trampoline API
 
 typedef struct {

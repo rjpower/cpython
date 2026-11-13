@@ -721,3 +721,47 @@ the future receiver hole on both edges but lacks a positive replay recipe.
 Generated post-review separately finds a bound-method promotion guard that
 could lose its updated receiver/effect state on fallback. Both fixes remain
 in progress, followed by combined build and behavioral checks.
+
+### CALL qualification repair, through74d
+
+`63ec08b5545` integrates the checked post-method-promotion fallback and fused
+branch normal-cleanup events. Generated inspection covers66 initialized CALL
+handlers and218 canonical redispatch sites: each effectful miss retains the
+updated scalar state through its typed runner. All11 fused metadata rows
+select their actual common consume recipe. This is source evidence; the next
+release build still fails bootstrap admission.
+
+`74d91398881` adds actual consumed-tail and iterator-completion events. The
+body and exit successors receive distinct logical absence facts. A native
+freezer-only build succeeds; builtins passes, while getpath, bootstrap,
+bootstrap_external and zipimport still reject unproved holes. Retained full
+decoded images identify three remaining gaps: a single-exit instrumented
+cleanup incorrectly required two exits; a loop result folded into a local
+invalidated an untouched scratch home; and unpack-to-locals retained phantom
+scratch outputs in the proof after the helper moved them. Reviewed source
+fixes are in progress. No complete build, runtime pass or timing claim is
+attached to these partial images. Evidence is
+`E/call-through-for-{probe-commands.json,full-decoded-images.txt}`.
+
+The combined source packet `1c92392232a` and generated metadata
+`e03b4628941` pass the50 required emitted-recipe host assertions. A raw
+frame-footprint mutation in one unpack specialization removes the whole
+family's drain grant. Native freezer checks now pass builtins and zipimport;
+getpath, bootstrap and bootstrap_external still reject unrelated child-clobber
+homes. The common cause is another unpack-sentinel contract mismatch:
+structural admission permits the no-local-destination sentinel for UNPACKS,
+but physical transfer accepts it only for discarded results. That makes it
+forget untouched tail homes. A bounded correction is reviewed, not yet
+natively qualified. Evidence: `E/call-normal-transport-{host,freezer-commands.json,
+full-decoded-images.txt}`. An attempted GDB entry/return one-bit trace produces
+no transition records and is not used as proof.
+
+The bitmap source absorbs the same CALL proof packet in`ba04806fe5d`. Both
+native build directories are configured from the corresponding integrated
+configuration arguments; no bitmap native build or performance result exists
+yet. A formatted-destination audit identifies three remaining generated home
+stores for correction before generation. Explicit delegated-yield interfaces
+are frozen for implementation: C unused, real D receiver operand, compile-time
+cursor passthrough, all-sites admission and a literal suspension phase. This
+requires no extra frame field or duplicate protocol table. Full readable-home
+authority remains a separate unfinished contract.

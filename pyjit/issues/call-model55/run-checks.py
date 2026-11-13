@@ -10,7 +10,6 @@ import time
 
 
 BASE = Path('/home/power/code/cpython/.worktrees/python-boil-the-ocean/build')
-SOURCE = BASE / 'worktrees/call55-integrated'
 EVIDENCE = BASE / 'pyjit-link-wave1/call-model55'
 GDB_DISPLAY = 'test.test_gdb.test_pretty_print.PrettyPrintTests.*'
 
@@ -18,12 +17,15 @@ GDB_DISPLAY = 'test.test_gdb.test_pretty_print.PrettyPrintTests.*'
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('tag')
+    parser.add_argument('--variant', choices=['integrated', 'bitmap'],
+                        default='integrated')
     parser.add_argument('stage', choices=['build', 'regen', 'focus', 'full'])
     parser.add_argument('tests', nargs='*')
     parser.add_argument('--role', choices=['release', 'debug'])
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--match', action='append', default=[])
     args = parser.parse_args()
+    source = BASE / f'worktrees/call55-{args.variant}'
     manifest = EVIDENCE / f'{args.tag}-{args.stage}-commands.json'
     if manifest.exists():
         raise FileExistsError(manifest)
@@ -34,9 +36,9 @@ def main():
     roles = ['release'] if args.stage == 'regen' else (
         [args.role] if args.role else ['release', 'debug'])
     for role in roles:
-        build = BASE / f'call55-integrated-{role}'
+        build = BASE / f'call55-{args.variant}-{role}'
         if args.stage == 'build':
-            command = ['make', '-s', '-j10', '-W', str(SOURCE / 'Modules/getbuildinfo.c')]
+            command = ['make', '-s', '-j10', '-W', str(source / 'Modules/getbuildinfo.c')]
         elif args.stage == 'regen':
             command = ['make', '-s', 'PYTHON_FOR_REGEN=uv run --no-project python -B',
                        'regen-cases']
@@ -56,9 +58,9 @@ def main():
         log = EVIDENCE / f'{args.tag}-{role}-{args.stage}.log'
         row = dict(role=role, command=command, cwd=str(build), log=str(log),
                    source_head=subprocess.check_output(
-                       ['git', '-C', str(SOURCE), 'rev-parse', 'HEAD'], text=True).strip(),
+                       ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
                    source_diff=subprocess.check_output(
-                       ['git', '-C', str(SOURCE), 'diff', 'HEAD', '--stat'], text=True),
+                       ['git', '-C', str(source), 'diff', 'HEAD', '--stat'], text=True),
                    started=time.time())
         rows.append(row)
         manifest.write_text(json.dumps(rows, indent=2))
@@ -69,11 +71,11 @@ def main():
                  'magic=_imp.pyc_magic_number_token & 65535)))'],
                 cwd=build, env=env, text=True)
             row['native_preflight'] = json.loads(probe)
-            header = (SOURCE / 'Include/internal/pycore_magic_number.h').read_text()
+            header = (source / 'Include/internal/pycore_magic_number.h').read_text()
             magic = int(re.search(r'^#define PYC_MAGIC_NUMBER (\d+)$', header, re.M)[1])
             assert row['source_head'].startswith(row['native_preflight']['git'][2])
             assert row['native_preflight']['magic'] == magic
-            assert str(SOURCE / 'Lib') in row['native_preflight']['paths']
+            assert str(source / 'Lib') in row['native_preflight']['paths']
             manifest.write_text(json.dumps(rows, indent=2))
         with log.open('x') as output:
             result = subprocess.run(command, cwd=build, env=env, stdout=output,

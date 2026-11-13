@@ -58,9 +58,12 @@ The explicit created marker/getter/collector composition `44383f6baa7` passes
 594 lifecycle cases per role. Vacant return recipients `91269fba2ce` pass 288
 focused cases per role, but still lose the hot screen. Explicit CALL roles
 are merged/generated; initial freezing exposes admission, generator-geometry
-and FBARG decoder defects. The latter two are repaired through `f3477941eb0`;
-branch-consumption proofs and post-method-promotion fallback remain before
-full builds/runtime qualification. Complete
+and FBARG decoder defects. Geometry, replay, post-method-promotion fallback,
+fused-branch cleanup, consumed tails and iterator completion are repaired
+through `74d91398881`. The five-image freezer check passes builtins and rejects
+four later images with unproved holes. Reviewed fixes cover single-exit
+observer cleanup, local loop destinations and folded unpack-to-locals transport;
+combined generation and native qualification remain pending. Complete
 static authority and the full physical-bitmap rival remain open. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),

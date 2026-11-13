@@ -95,10 +95,15 @@ the hot screen. CALL merge `aad17cd9c1c` composes runtime/compiler f7b47 and IR
 03be plus generated products. Release compilation succeeds, but module freezing
 fails on unproved holes and a FBARG normal-clear decoder crash. Repair44424 and
 regenf3477941eb0 fix FBARG replay and unused-name aliasing that also corrupted
-emitted exact CALL argument geometry. The freezer-only build succeeds and both
-probes reject unproved holes without crashing. Full builds still await positive
-branch-consume proofs and a generated post-method-promotion fallback correction.
-IR owns fixes; do not time this partial build. GDB evidence is retained under
+emitted exact CALL argument geometry. The freezer-only build succeeds and the original
+probes reject unproved holes without crashing. Through74d91398881, generated
+post-promotion fallback, fused branch cleanup, consumed tails and loop exit
+proofs are integrated. The latest five-image freezer check passes builtins
+and rejects four other images normally. Full decoded-image evidence identifies
+single-exit observer, local loop-output and folded unpack proof gaps; IR and
+GC own the reviewed disjoint repair packet in call55-ir. Do not time this
+partial build. The root-owned check-freezer.py records all five probes before
+a full build, reducing failed full-build churn. GDB evidence is retained under
 E/call-roles-external-gdb*. The bitmap source worktree starts at9f28 and needs
 complete writers/readers before authority switching or rival measurement.
 Workers implement virtual CALL roles and copy/escape/created-frame ports.

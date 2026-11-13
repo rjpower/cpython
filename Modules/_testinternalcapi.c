@@ -145,6 +145,12 @@ _get_current_module(void)
 
 typedef struct {
     PyObject *record_list;
+    PyObject *staged_code;
+    PyObject *staged_observer;
+    PyObject *staged_result;
+    int staged_mode;
+    int staged_observing;
+    int staged_running;
 } module_state;
 
 static inline module_state *
@@ -160,6 +166,9 @@ static int
 traverse_module_state(module_state *state, visitproc visit, void *arg)
 {
     Py_VISIT(state->record_list);
+    Py_VISIT(state->staged_code);
+    Py_VISIT(state->staged_observer);
+    Py_VISIT(state->staged_result);
     return 0;
 }
 
@@ -167,6 +176,9 @@ static int
 clear_module_state(module_state *state)
 {
     Py_CLEAR(state->record_list);
+    Py_CLEAR(state->staged_code);
+    Py_CLEAR(state->staged_observer);
+    Py_CLEAR(state->staged_result);
     return 0;
 }
 
@@ -1145,6 +1157,209 @@ set_eval_frame_record(PyObject *self, PyObject *list)
     Py_XSETREF(state->record_list, Py_NewRef(list));
     _PyInterpreterState_SetEvalFrameFunc(_PyInterpreterState_GET(), record_eval);
     Py_RETURN_NONE;
+}
+
+enum {
+    STAGED_EVAL_DEFAULT,
+    STAGED_EVAL_RETURN,
+    STAGED_EVAL_ERROR,
+    STAGED_EVAL_RETIRE,
+    STAGED_EVAL_ACTIVATE,
+    STAGED_EVAL_ENTRY_ERROR,
+    STAGED_EVAL_HEADERS,
+};
+
+static int
+observe_staged_eval(module_state *state, const char *phase)
+{
+    PyObject *error = PyErr_GetRaisedException();
+    state->staged_observing = 1;
+    PyObject *observed = PyObject_CallFunction(state->staged_observer, "s", phase);
+    if (observed == NULL) {
+        state->staged_observing = 0;
+        Py_XDECREF(error);
+        return -1;
+    }
+    Py_DECREF(observed);
+    state->staged_observing = 0;
+    PyErr_SetRaisedException(error);
+    return 0;
+}
+
+/* A real hook may execute callbacks both before and after a consuming default
+ * evaluator, or return without delegating. Keep those paths distinct. */
+static PyObject *
+staged_eval(PyThreadState *tstate, _PyInterpreterFrame *frame, int exc)
+{
+    PyObject *module = _get_current_module();
+    if (module == NULL) {
+        return NULL;
+    }
+    module_state *state = get_module_state(module);
+    if (state->staged_observing ||
+        (PyObject *)frame->f_executable != state->staged_code)
+    {
+        Py_DECREF(module);
+        return _PyEval_EvalFrameDefault(tstate, frame, exc);
+    }
+    PyObject *result = NULL;
+    if (state->staged_mode == STAGED_EVAL_HEADERS) {
+        PyObject *mapping = PyDict_New();
+        if (mapping == NULL) {
+            goto done;
+        }
+        Py_XSETREF(frame->f_locals, mapping);
+        if (PyDict_SetItemString(state->staged_result, "mapping", mapping) < 0) {
+            goto done;
+        }
+    }
+    if (observe_staged_eval(state, "before") < 0) {
+        goto done;
+    }
+    switch (state->staged_mode) {
+        case STAGED_EVAL_DEFAULT:
+        case STAGED_EVAL_HEADERS:
+            result = _PyEval_EvalFrameDefault(tstate, frame, exc);
+            break;
+        case STAGED_EVAL_RETURN:
+            result = Py_NewRef(state->staged_result);
+            break;
+        case STAGED_EVAL_ERROR:
+            PyErr_SetString(PyExc_ValueError, "staged hook error");
+            break;
+        case STAGED_EVAL_RETIRE:
+            if (_PyEval_RetireStagedFrame(tstate, frame) < 0) {
+                goto done;
+            }
+            /* The strict API must reject a consumed token without reading the
+             * old arena storage. This is intentionally the same old address. */
+            if (_PyEval_RetireStagedFrame(tstate, frame) != -1 ||
+                !PyErr_ExceptionMatches(PyExc_SystemError))
+            {
+                PyErr_SetString(PyExc_AssertionError,
+                                "consumed staged token was accepted");
+                goto done;
+            }
+            PyErr_Clear();
+            if (_PyEval_RetireStagedFrame(tstate, NULL) != -1 ||
+                !PyErr_ExceptionMatches(PyExc_SystemError))
+            {
+                PyErr_SetString(PyExc_AssertionError,
+                                "empty staged node matched NULL");
+                goto done;
+            }
+            PyErr_Clear();
+            result = Py_NewRef(state->staged_result);
+            break;
+        case STAGED_EVAL_ACTIVATE: {
+            _PyInterpreterFrame *previous = tstate->current_frame;
+            frame->previous = previous;
+            tstate->current_frame = frame;
+            int activated = _PyEval_ActivateStagedFrame(tstate, frame);
+            int observed = activated == 0
+                ? observe_staged_eval(state, "active") : -1;
+            tstate->current_frame = previous;
+            if (activated < 0) {
+                goto done;
+            }
+            PyObject *error = PyErr_GetRaisedException();
+            _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_ERROR_UNWIND);
+            PyErr_SetRaisedException(error);
+            if (observed < 0) {
+                goto done;
+            }
+            result = Py_NewRef(state->staged_result);
+            break;
+        }
+        case STAGED_EVAL_ENTRY_ERROR: {
+            _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+            uintptr_t soft_limit = impl->c_stack_soft_limit;
+            /* Leave the hard limit intact. Only the recoverable entry check
+             * is forced; restore it before running any observer afterwards. */
+#if _Py_STACK_GROWS_DOWN
+            impl->c_stack_soft_limit = UINTPTR_MAX;
+#else
+            impl->c_stack_soft_limit = 1;
+#endif
+            result = _PyEval_EvalFrameDefault(tstate, frame, exc);
+            impl->c_stack_soft_limit = soft_limit;
+            break;
+        }
+    }
+    if (observe_staged_eval(state, "after") < 0) {
+        Py_CLEAR(result);
+    }
+done:
+    Py_DECREF(module);
+    return result;
+}
+
+static PyObject *
+run_staged_provider(PyObject *module, PyObject *args)
+{
+    PyObject *function, *payload, *observer;
+    const char *mode;
+    int object_provider;
+    if (!PyArg_ParseTuple(args, "OOOsp:run_staged_provider", &function,
+                          &payload, &observer, &mode, &object_provider))
+    {
+        return NULL;
+    }
+    if (!PyFunction_Check(function)) {
+        PyErr_SetString(PyExc_TypeError, "expected a Python function");
+        return NULL;
+    }
+    module_state *state = get_module_state(module);
+    if (state->staged_running) {
+        PyErr_SetString(PyExc_RuntimeError, "staged provider probe is active");
+        return NULL;
+    }
+    const char *modes[] = {"default", "return", "error", "retire", "activate",
+                           "entry_error", "headers"};
+    size_t selected;
+    for (selected = 0; selected < Py_ARRAY_LENGTH(modes); selected++) {
+        if (strcmp(mode, modes[selected]) == 0) {
+            break;
+        }
+    }
+    if (selected == Py_ARRAY_LENGTH(modes)) {
+        PyErr_SetString(PyExc_ValueError, "unknown staged hook mode");
+        return NULL;
+    }
+    if (selected == STAGED_EVAL_HEADERS && !PyDict_Check(payload)) {
+        PyErr_SetString(PyExc_TypeError, "headers probe requires a dict payload");
+        return NULL;
+    }
+    state->staged_running = 1;
+    state->staged_mode = (int)selected;
+    state->staged_code = Py_NewRef(PyFunction_GET_CODE(function));
+    state->staged_observer = Py_NewRef(observer);
+    state->staged_result = Py_NewRef(payload);
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyFrameEvalFunction previous = _PyInterpreterState_GetEvalFrameFunc(tstate->interp);
+    int previous_allow = tstate->interp->eval_frame_allow_specialization;
+    _PyInterpreterState_SetEvalFrameFunc(tstate->interp, staged_eval);
+    PyObject *result;
+    if (object_provider) {
+        PyObject *locals = ((PyCodeObject *)state->staged_code)->co_flags & CO_OPTIMIZED
+            ? NULL : PyFunction_GET_GLOBALS(function);
+        result = _PyEval_Vector(tstate, (PyFunctionObject *)function, locals,
+                               &payload, 1, NULL);
+    }
+    else {
+        PyValue argument = PyValue_FromObjectBorrow(payload);
+        PyValue value = _PyEval_VectorValue(tstate, (PyFunctionObject *)function,
+                                            &argument, 1, NULL);
+        result = PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
+        PyValue_XCLOSE(value);
+    }
+    _PyInterpreterState_SetEvalFrameFunc(tstate->interp, previous);
+    _PyInterpreterState_SetEvalFrameAllowSpecialization(tstate->interp, previous_allow);
+    Py_CLEAR(state->staged_code);
+    Py_CLEAR(state->staged_observer);
+    Py_CLEAR(state->staged_result);
+    state->staged_running = 0;
+    return result;
 }
 
 // Defined in interpreter.c
@@ -4623,6 +4838,7 @@ static PyMethodDef module_functions[] = {
     {"set_eval_frame_default", set_eval_frame_default, METH_NOARGS, NULL},
     {"set_eval_frame_interp", set_eval_frame_interp, METH_VARARGS, NULL},
     {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
+    {"run_staged_provider", run_staged_provider, METH_VARARGS, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF

@@ -2219,6 +2219,38 @@ _PyEval_GetObserverContext(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
+/* Only external evaluator entry and explicit custom-evaluator handoffs use
+ * this lookup. Empty provider nodes survive until their outer C scope exits. */
+static Py_NO_INLINE bool
+handoff_staged_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)tstate)->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        if (roots->kind == _Py_TRANSITION_KIND_STAGED &&
+            roots->frame != NULL && roots->frame == frame)
+        {
+            assert(!roots->result_present && roots->prefix == NULL);
+            roots->remaining = 0;
+            roots->header_mask = 0;
+            roots->frame = NULL;
+            return true;
+        }
+    }
+    return false;
+}
+
+int
+_PyEval_ActivateStagedFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (tstate->current_frame != frame || !handoff_staged_frame(tstate, frame)) {
+        PyErr_SetString(PyExc_SystemError, "no live staged frame to activate");
+        return -1;
+    }
+    return 0;
+}
+
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
    its borrow floor.  The loop sets up the activation and calls the first
    handler, and the handlers run the frames by tail calls until one of them
@@ -2239,8 +2271,15 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 #endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
+        uint8_t reason = _PyIR_RETIRE_ERROR_UNWIND;
+        if (((_PyThreadStateImpl *)tstate)->transition_roots != NULL &&
+            handoff_staged_frame(tstate, frame))
+        {
+            reason = _PyIR_RETIRE_STAGED_FAILURE;
+        }
+        /* Handoff to retirement has no callback or poll before its roots. */
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_ERROR_UNWIND);
+        _PyEval_FrameClearAndPop(tstate, frame, reason);
         return PyValue_NULL;
     }
 
@@ -2294,6 +2333,9 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.previous = tstate->current_frame;
     frame->previous = &entry->frame;
     tstate->current_frame = frame;
+    if (tstate_impl->transition_roots != NULL) {
+        (void)handoff_staged_frame(tstate, frame);
+    }
 
     PyValue result;
     if (throwflag) {
@@ -3190,6 +3232,38 @@ _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame,
     (void)frame_clear_and_pop(tstate, frame, PyValue_NULL, reason);
 }
 
+int
+_PyEval_RetireStagedFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    /* Match the token before reading storage which a prior consumer may have
+     * released. Missing-token errors must not inspect the supplied pointer. */
+    if (tstate->current_frame == frame || !handoff_staged_frame(tstate, frame)) {
+        PyErr_SetString(PyExc_SystemError, "no live staged frame to retire");
+        return -1;
+    }
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    PyObject *error = _PyErr_GetRaisedException(tstate);
+    _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_STAGED_FAILURE);
+    _PyErr_SetRaisedException(tstate, error);
+    return 0;
+}
+
+/* A custom evaluator can return a result or error without consuming its input.
+ * The outer provider still owns that reservation; the node decides, not the
+ * contents of frame storage which a delegating evaluator may already free. */
+static void
+finish_staged_provider(PyThreadState *tstate, _PyTransitionRoots *staged,
+                       _PyInterpreterFrame *previous)
+{
+    assert(tstate->current_frame == previous);
+    if (staged->frame != NULL) {
+        int status = _PyEval_RetireStagedFrame(tstate, staged->frame);
+        assert(status == 0);
+        (void)status;
+    }
+    _PyThreadState_PopTransitionRoots(tstate, staged);
+}
+
 /* Binding owns initialized arena homes before the child is current. The
  * outlined caller keeps this descriptor through all later provider cleanup. */
 static void
@@ -3199,8 +3273,10 @@ stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     *staged = (_PyTransitionRoots){
         .frame = frame,
         .remaining = _PyFrame_NumSlots(frame),
+        .kind = _Py_TRANSITION_KIND_STAGED,
+        /* A custom evaluator may install nullable headers before handoff. */
         .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
-            (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0),
+            _Py_TRANSITION_LOCALS | _Py_TRANSITION_FRAME_OBJECT,
     };
     _PyThreadState_PushTransitionRoots(tstate, staged);
 }
@@ -3210,6 +3286,7 @@ unstage_binding_frame(PyThreadState *tstate, _PyTransitionRoots *staged)
 {
     staged->remaining = 0;
     staged->header_mask = 0;
+    staged->frame = NULL;
     _PyThreadState_PopTransitionRoots(tstate, staged);
 }
 
@@ -3891,12 +3968,18 @@ call_transaction_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 CALL_TRANSACTION_EX, flags);
 }
 
-PyObject *
+Py_NO_INLINE PyObject *
 _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
                PyObject *locals,
                PyObject* const* args, size_t argcount,
                PyObject *kwnames)
 {
+    _PyInterpreterFrame *previous = tstate->current_frame;
+#ifndef NDEBUG
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    PyObject **top = tstate->datastack_top;
+    PyObject **limit = tstate->datastack_limit;
+#endif
     size_t total_args = argcount;
     if (kwnames) {
         total_args += PyTuple_GET_SIZE(kwnames);
@@ -3912,8 +3995,7 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
             return PyErr_NoMemory();
         }
     }
-    /* _PyEvalFramePushAndInit consumes the references
-     * to func, locals and all its arguments */
+    /* The constructor consumes func, locals and every argument owner. */
     Py_XINCREF(locals);
     for (size_t i = 0; i < argcount; i++) {
         arguments[i] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i]));
@@ -3924,17 +4006,85 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
             arguments[i+argcount] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i+argcount]));
         }
     }
-    _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
+    _PyTransitionRoots staged;
+    bool linked = false;
+    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
         tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        arguments, argcount, kwnames, NULL);
+        arguments, argcount, kwnames, NULL, code, &staged);
+    linked = frame != NULL;
+    Py_DECREF(code);
     if (total_args > 8) {
         PyMem_Free(arguments);
     }
-    if (frame == NULL) {
+    if (!linked) {
         return NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    return _PyEval_EvalFrame(tstate, frame, 0);
+    PyObject *result = _PyEval_EvalFrame(tstate, frame, 0);
+    finish_staged_provider(tstate, &staged, previous);
+#ifndef NDEBUG
+    /* The first root chunk is retained even after its initial frame exits. */
+    assert(chunk == NULL || tstate->datastack_chunk == chunk);
+    assert(chunk == NULL || tstate->datastack_top == top);
+    assert(chunk == NULL || tstate->datastack_limit == limit);
+#endif
+    return result;
+}
+
+Py_NO_INLINE PyValue
+_PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
+                     const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    _PyInterpreterFrame *previous = tstate->current_frame;
+#ifndef NDEBUG
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    PyObject **top = tstate->datastack_top;
+    PyObject **limit = tstate->datastack_limit;
+#endif
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    assert(nargs >= 0);
+    assert(nargs == 0 || args != NULL);
+    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    PyValue small[8];
+    PyValue *owners = small;
+    if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
+        if (owners == NULL) {
+            _PyErr_NoMemory(tstate);
+            return PyValue_NULL;
+        }
+    }
+    for (Py_ssize_t i = 0; i < total; i++) {
+        owners[i] = PyValue_DUP(args[i]);
+    }
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
+    PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
+        : Py_NewRef(func->func_globals);
+    _PyTransitionRoots staged;
+    bool linked = false;
+    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
+        owners, nargs, kwnames, NULL, code, &staged);
+    linked = frame != NULL;
+    Py_DECREF(code);
+    if (owners != small) {
+        PyMem_Free(owners);
+    }
+    if (!linked) {
+        return PyValue_NULL;
+    }
+    EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
+    PyValue result = _PyEval_EvalFrameValue(tstate, frame, 0);
+    finish_staged_provider(tstate, &staged, previous);
+#ifndef NDEBUG
+    /* The first root chunk is retained even after its initial frame exits. */
+    assert(chunk == NULL || tstate->datastack_chunk == chunk);
+    assert(chunk == NULL || tstate->datastack_top == top);
+    assert(chunk == NULL || tstate->datastack_limit == limit);
+#endif
+    return result;
 }
 
 /* Legacy API */

@@ -592,6 +592,233 @@ class BinderStagingTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
+class ProviderHandoffTests(unittest.TestCase):
+    STAGED = 2
+
+    def test_delegated_hook_lifetime_and_reentry(self):
+        namespace = {}
+        assignments = ''.join(f'    local_{i} = depth\n' for i in range(128))
+        exec('def grow(depth):\n' + assignments +
+             '    if depth:\n        grow(depth - 1)\n', namespace)
+        for object_provider in (False, True):
+            with self.subTest(object_provider=object_provider):
+                payload = Item()
+                observations = []
+
+                def observe(phase):
+                    states = _testinternalcapi.get_transition_shadow_status()
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append((phase, states, id(target) in ids,
+                                         id(payload) in ids,
+                                         id(selected_code) in ids))
+                    namespace['grow'](24)
+                    support.gc_collect()
+                    # Before default, an outer live stage protects the child.
+                    # Afterwards a fresh child may reuse its arena address.
+                    if phase in ('before', 'after'):
+                        self.assertIs(target(payload), payload)
+
+                def target(remaining):
+                    observe('body')
+                    return remaining
+
+                selected_code = target.__code__
+                result = _testinternalcapi.run_staged_provider(
+                    target, payload, observe, 'default', object_provider)
+                self.assertIs(result, payload)
+                self.assertEqual([entry[0] for entry in observations],
+                                 ['before', 'body', 'body', 'after', 'body'])
+                for entry, expected_live in zip(observations,
+                                               (True, True, False, False, False)):
+                    phase, states, function_root, payload_root, code_root = entry
+                    self.assertTrue(all(len(state) == 4 for state in states))
+                    stages = [state for state in states if state[0] == self.STAGED]
+                    self.assertTrue(stages, phase)
+                    self.assertEqual(sum(state[3] for state in stages),
+                                     int(expected_live), phase)
+                    self.assertEqual((function_root, payload_root, code_root),
+                                     (expected_live,) * 3, phase)
+                self.assertFalse(any(kind == self.STAGED and has_frame
+                                     for kind, reason, status, has_frame in
+                                     _testinternalcapi.get_transition_shadow_status()))
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_hook_abandonment_and_explicit_consumption(self):
+        for object_provider in (False, True):
+            for mode in ('return', 'error', 'retire', 'activate', 'entry_error'):
+                with self.subTest(object_provider=object_provider, mode=mode):
+                    payload = Item()
+                    observations = []
+
+                    def target(remaining):
+                        self.fail('this route must not execute the body')
+
+                    def observe(phase):
+                        states = _testinternalcapi.get_transition_shadow_status()
+                        ids = set(_testinternalcapi.get_transition_root_ids())
+                        observations.append((phase, states,
+                                             id(target) in ids,
+                                             id(payload) in ids))
+                        support.gc_collect()
+
+                    arguments = target, payload, observe, mode, object_provider
+                    if mode == 'error':
+                        with self.assertRaisesRegex(ValueError, 'staged hook error'):
+                            _testinternalcapi.run_staged_provider(*arguments)
+                    elif mode == 'entry_error':
+                        with self.assertRaises(RecursionError):
+                            _testinternalcapi.run_staged_provider(*arguments)
+                    else:
+                        self.assertIs(_testinternalcapi.run_staged_provider(*arguments),
+                                      payload)
+                    expected_phases = ['before', 'after']
+                    if mode == 'activate':
+                        expected_phases.insert(1, 'active')
+                    self.assertEqual([entry[0] for entry in observations],
+                                     expected_phases)
+                    for phase, states, function_root, payload_root in observations:
+                        expected_live = phase == 'before' or mode in ('return', 'error')
+                        stages = [state for state in states if state[0] == self.STAGED]
+                        self.assertTrue(stages, phase)
+                        self.assertEqual(sum(state[3] for state in stages),
+                                         int(expected_live), phase)
+                        self.assertEqual((function_root, payload_root),
+                                         (expected_live,) * 2, phase)
+                    self.assertFalse(any(kind == self.STAGED and has_frame
+                                         for kind, reason, status, has_frame in
+                                         _testinternalcapi.get_transition_shadow_status()))
+                    self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_selected_code_survives_hook_mutation(self):
+        for object_provider in (False, True):
+            with self.subTest(object_provider=object_provider):
+                payload = Item()
+                observations = []
+
+                def observe(phase):
+                    if phase == 'before':
+                        target.__code__ = replacement.__code__
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append((phase, id(selected_code) in ids))
+                    support.gc_collect()
+
+                def target(remaining):
+                    observe('body')
+                    return remaining
+
+                def replacement(remaining):
+                    observe('replacement')
+                    return remaining
+
+                selected_code = target.__code__
+                self.assertIs(_testinternalcapi.run_staged_provider(
+                    target, payload, observe, 'default', object_provider), payload)
+                self.assertEqual(observations,
+                                 [('before', True), ('body', False), ('after', False)])
+                self.assertIs(target(payload), payload)
+                self.assertEqual(observations[-1], ('replacement', False))
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_hook_installed_mapping_has_staged_header_authority(self):
+        for object_provider in (False, True):
+            with self.subTest(object_provider=object_provider):
+                payload = {}
+                observations = []
+
+                def observe(phase):
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append((phase, id(payload['mapping']) in ids))
+                    support.gc_collect()
+
+                def target(remaining):
+                    observe('body')
+                    return remaining
+
+                self.assertIs(_testinternalcapi.run_staged_provider(
+                    target, payload, observe, 'headers', object_provider), payload)
+                self.assertEqual(observations,
+                                 [('before', True), ('body', False), ('after', False)])
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_probe_cleanup_rejects_reentry_until_all_state_closes(self):
+        for object_provider in (False, True):
+            with self.subTest(object_provider=object_provider):
+                payload = Item()
+                observations = []
+
+                def nested_target(remaining):
+                    return remaining
+
+                def observe(phase):
+                    if phase == 'before':
+                        target.__code__ = replacement.__code__
+
+                class Constant:
+                    def __del__(self):
+                        try:
+                            _testinternalcapi.run_staged_provider(
+                                nested_target, payload, observations.append,
+                                'return', object_provider)
+                        except RuntimeError as error:
+                            observations.append(str(error))
+                        else:
+                            observations.append('accepted during cleanup')
+
+                def target(remaining):
+                    observe('body')
+                    return remaining
+
+                def replacement(remaining):
+                    observe('replacement')
+                    return remaining
+
+                # After code replacement and default retirement, only the
+                # helper's selected-code pin keeps this constant alive.
+                target.__code__ = target.__code__.replace(
+                    co_consts=target.__code__.co_consts + (Constant(),))
+                self.assertIs(_testinternalcapi.run_staged_provider(
+                    target, payload, observe, 'default', object_provider), payload)
+                self.assertEqual(observations, ['staged provider probe is active'])
+                self.assertIs(_testinternalcapi.run_staged_provider(
+                    nested_target, payload, lambda phase: None,
+                    'return', object_provider), payload)
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_object_hook_result_keeps_scalar_identity(self):
+        payload = float('2.5')
+        observations = []
+
+        def target(remaining):
+            self.fail('the hook replaces this call')
+
+        def observe(phase):
+            observations.append(phase)
+            support.gc_collect()
+
+        result = _testinternalcapi.run_staged_provider(
+            target, payload, observe, 'return', True)
+        self.assertIs(result, payload)
+        self.assertEqual(observations, ['before', 'after'])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_constructor_failure_has_no_linked_stage(self):
+        for object_provider in (False, True):
+            with self.subTest(object_provider=object_provider):
+                observations = []
+
+                def target(first, missing):
+                    self.fail('binding must fail before hook entry')
+
+                with self.assertRaisesRegex(TypeError, 'missing'):
+                    _testinternalcapi.run_staged_provider(
+                        target, Item(), observations.append, 'default', object_provider)
+                self.assertEqual(observations, [])
+                self.assertFalse(any(kind == self.STAGED and has_frame
+                                     for kind, reason, status, has_frame in
+                                     _testinternalcapi.get_transition_shadow_status()))
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+
 class UnpackPrefixTests(unittest.TestCase):
     def test_prefix_survives_iterator_and_sequence_cleanup(self):
         references = []

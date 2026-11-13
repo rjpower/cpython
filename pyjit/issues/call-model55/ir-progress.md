@@ -105,3 +105,20 @@ The integrated RESUME contract now compares parsed preprocessor structure rather
 than its flattened token stream; actual-source host analysis covers RESUME and
 rejects shifted macro branches and opaque scratch mutations. GC source GO;
 root owns generation and executable validation.
+
+The next concrete shared-emitter increment is specified in
+[semantic-phase-plan.md](semantic-phase-plan.md): one event graph from the
+actual value transport/publication/escape emission drives normal admission and
+reached collector phase shadowing during generic binary operations with live
+scratch survivors. It includes an explicit padding-field validity protocol,
+nullable joins, helper capabilities, call NULL forms, multi-exit examples,
+instrumentation/error/observer requirements and full M4 coverage gates. Frames
+and GC source-design peer review is pending; no emitter implementation is mixed
+with the independent remote fixture repair.
+
+The remote fixture repair is source-reviewed commit `08a5dc225b0`: prepare the
+valid executing image before deliberately corrupting the child source bytes.
+The cold normal proof currently reads only observer recovery handler targets
+from IRSM, not source positions; this semantic-container coupling is documented
+as debt. Shared phase metadata must separate recovery edges from optional debug
+positions. Ordinary dispatch and retirement shadow queries do not decode IRSM.

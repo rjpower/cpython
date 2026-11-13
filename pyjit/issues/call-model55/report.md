@@ -281,3 +281,144 @@ source review but no native integration evidence yet. The provider keeps the
 staged child visible through custom evaluator hooks and cleanup, including
 nullable headers installed by the hook. It disarms before reservation reuse.
 Constructor shim ownership and complete static/bitmap authority remain open.
+
+The two-pair `E/m3-shadow-hot-screen-golden` completes with stable identities.
+Candidate/selected54 ratios are DeltaBlue 1.018286, generators 0.913875,
+coroutines 1.055014, Richards 1.047250, comprehensions 1.049970 and logging
+silent 1.407701. Generator pairs span 0.869566–0.960441; this is a screen, not
+confirmation. The preparatory composition does not earn admission.
+
+### Classify-once retirement
+
+Integrated `d5c1411fa0c` replaces proof-then-XCLOSE in the first retirement sweep
+with `_PyValue_TryXCloseNoReentry`. True consumes the owner without callbacks;
+false leaves it untouched for rooted retirement. It retains existing refcount,
+debug and statistics behavior. Last owners remain on the slow path. Both-role
+builds and 815 focused tests per role pass (11 modules; 12 release skips,
+nine debug). Native inspection confirms one tag classification in the sweep,
+with no additional record or stack allocation. Homes remain at frame offset 112;
+the transition record and code execution header are each 40 bytes.
+
+The unchanged two-pair screen `E/m3-fast-close-hot-screen-golden` completes
+with stable clean identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.938676 | 0.930066–0.947367 |
+| Generators | 0.980067 | 0.949498–1.011621 |
+| Coroutines | 1.011305 | 0.999256–1.023499 |
+| Richards | 0.967029 | 0.965312–0.968748 |
+| Comprehensions | 1.021239 | 1.013067–1.029477 |
+| Logging silent | 1.047776 | 1.042410–1.053169 |
+
+This supports the retirement regression hypothesis but does not establish a
+confirmed general win. Keep the shadow and classify-once campaigns separate;
+do not divide their ratios into an isolated causal speedup. The retained ELF
+is `E/m3-fast-close-native-python`. Provider integration `362fb793a4d` follows;
+its native tests and timing remain pending.
+
+Remote-inspection fixture correction `6acbdf3e432` prepares the valid executing
+image before all three source-map corruptions; it keeps every malformed-map
+reader assertion. Cold proof currently uses IRSM semantic handler entries to
+seed observer-failure states, never positions. That is real coupling to a
+container also holding positions, though no dispatch or retirement-query
+decode is added. The shared phase work must move those recovery targets into
+semantic metadata rather than making optional source positions authoritative.
+
+### Provider composition and refreshed diagnosis
+
+`de95475accb` includes both native helper corrections: a balanced owned argument
+for the value provider and internal visibility for the actual object provider.
+The first compile failure and the later make-success/import-failure logs remain
+retained. The check runner now rejects an incomplete module roster even when
+make exits successfully. Final release/debug builds each have 117 modules,
+79 shared and zero import failures.
+
+Eight precise provider/remote-reader tests pass per role. Core coverage passes
+1,487 tests per role; release's command also included a mistyped module name,
+which is a recorded command failure rather than a runtime failure. The actual
+`test_capi.test_borrow_scope` and EvalCodeEx group runs separately: 28 tests per
+role pass. Debug's core command names only the 27 real modules and passes.
+These focused groups overlap. No full55 qualification has run yet.
+
+Independent [cold source/native review](m3-shadow-integrated-cold-review.md) is
+GO for this bounded composition. External object/value providers reserve
+200/168 stack bytes plus 48 saved-register bytes; each includes a 40-byte stage
+and 64-byte argument array. These are total costs, not an incremental delta.
+Exact CALL/RETURN still reserve 64/16 bytes and contain no token/map search.
+
+`E/m3-provider-hot-screen-golden` completes two balanced pairs with stable
+clean identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.940065 | 0.930389–0.949843 |
+| Generators | 0.994338 | 0.990035–0.998660 |
+| Coroutines | 1.014167 | 1.010954–1.017391 |
+| Richards | 0.970037 | 0.967672–0.972407 |
+| Comprehensions | 0.992827 | 0.991367–0.994289 |
+| Logging silent | 1.083916 | 1.036127–1.133909 |
+
+The direct unchanged all29 campaign `E/m3-provider-all29-upstream` completes
+with stable clean identities, geometric mean 1.162061 and 6/29 faster:
+
+| Workload | Candidate/upstream elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.122475 | 1.100471–1.144919 |
+| Generators | 1.436127 | 1.435602–1.436652 |
+| Coroutines | 1.281462 | 1.276078–1.286869 |
+| Richards | 1.216978 | 1.190603–1.243937 |
+| Comprehensions | 1.351905 | 1.342274–1.361605 |
+| Logging silent | 0.793543 | 0.787277–0.799858 |
+
+Matched sealed PMU intervals in `E/m3-provider-perf-cycles-instructions`
+complete 12/12 valid invocations, three balanced pairs, 100% counter running
+and stable identities. Per-loop candidate/upstream instruction/cycle ratios
+are 1.340815/1.125337 for DeltaBlue and 0.948870/0.799318 for silent logging.
+The normalized values and pair ranges are retained in `normalized-summary.json`.
+`E/m3-provider-perf-record` completes 4/4 valid five-second records with stable
+identities and no lost records. Flat reports show logging retirement at
+10.17% in TryClear plus 3.36% in clear_thread_frame, down from the earlier
+M3 preparation's 16.78%+6.40%. Distinct campaigns support the diagnosis without
+establishing an isolated speedup from dividing their ratios.
+
+DeltaBlue still spends 11.03% of flat samples in exact CALL, 8.90% in the local
+shape attribute path, 6.60% in RETURN, and 5.26% in TryClear. The remaining gap
+spans call/return, ownership and guarded object access. Generators/coroutines
+retain substantial gaps and need their full lifecycle representation, not
+another claim that external call setup explains everything. This is a passing
+bounded integration and useful diagnostic checkpoint, not a promoted golden.
+
+### Constructor entry and fallback ownership
+
+`9136c202e8e` integrates the reviewed constructor component and its generated
+handler. Exact positional init uses the existing typed initializer and positional
+mover with a separate child reservation. Generic binding moves evaluated
+scratch owners into native workspace and NULLs caller homes, with nested
+shim/child authority and an explicit staged-caller redirect barrier. Named
+locals remain mutable. No extra per-argument DUP/close pair preserves the old
+temporary window. A current function/code/count/capacity check selects entry;
+custom vectorcall providers deopt before instance allocation.
+
+Both builds retain 117/79 modules and zero import failures. Three precise
+constructor fixtures and 942 core tests pass in each role. Generated failure
+branches precede `IR_CLEAR_SLOTS`; preparation failure therefore leaves the
+original inputs for real unwind. Successful staged-pop to child publication
+contains no callback. Root retained the ELF and six native dumps under
+`E/m3-init-native-*`. Full qualification remains pending.
+
+`E/m3-init-hot-screen-golden` completes two balanced pairs, stable identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.955028 | 0.931411–0.979245 |
+| Generators | 1.023736 | 1.013518–1.034057 |
+| Coroutines | 1.017553 | 1.013565–1.021556 |
+| Richards | 0.975054 | 0.971210–0.978912 |
+| Comprehensions | 0.969607 | 0.969194–0.970019 |
+| Logging silent | 1.119406 | 1.046472–1.197423 |
+
+No promotion follows from this screen. Logging remains variable and the
+preparatory composition still loses generators/coroutines. This closes an
+ownership gap and gives exact constructors a coherent fast entry; it does
+not establish an isolated throughput improvement over the provider checkpoint.

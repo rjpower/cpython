@@ -92,3 +92,27 @@ native conservative roots for M4 and approved a narrow CValue cleanup instead:
 remove an unproduced FT head/impossible link loop and correct workspace comments,
 with no new heads/stores or producer ports. Four-file delta is source-reviewed
 GO by frames, diff check/reference census clean, pending root integration.
+
+The narrow cleanup is committed as `65f72baec98` (root integrated separately).
+Later components include stored retirement reason/status `f007a3aa68a`, cold
+certificate probe `92291157adc`, existing-API heap binding clear consolidation
+`6ef8868ac53`, and explicit record kinds `00b1b3b09f4`. Provider source/helper
+and nullable-header peer dispositions are in provider-handoff-peer.md.
+
+Constructor shim roots are implemented and frozen as `02bf14d56ec` after frames'
+full source GO in init-shim-peer.md. The eight-file component shares typed exact
+initialization/argument moves, outlines generic moved-owner binding with full
+shim/child stages, blocks unsupported parent redirects with a scoped flag, and
+keeps named bindings mutable. Failure branches precede generated DEAD clears;
+root must inspect regeneration and the callback-free publication gap. Three
+focused fixtures cover exact authority, failing heap-caller GC/local mutation/
+redirect callbacks and changed-code child geometry. Host AST and whitespace
+checks pass; merged generation/native execution remain root's gate.
+
+The separate shared-emitter consumer delta now adds stored phase comparison to
+the two existing frame-stack walks and `get_ir_frame_phases()` observation,
+with the frozen IR phase field/ABI and shared trampoline initialization. FT
+comparison requires an actual stopped world, since generic traversal is not a
+foreign-frame quiescence protocol. Existing tag/edge policies remain unchanged.
+This delta requires IR's real plan/query/publication implementation and tests;
+source peer is pending. No scanner or NULL authority has changed.

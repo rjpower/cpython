@@ -18,23 +18,26 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Latest measured candidate `01586ea4d0b` composes typed pins, common admission,
-partial register-transfer proof, nested retirement/observer roots and staged
-unpack outputs. It passes 961 focused frame/call/GC/unpack tests per GIL role;
-the preceding IR focus passes 425 per role. These groups overlap and are not a
-deduplicated total. Cold source/native review is GO for these bounded ports.
-Scratch NULLs and conservative arena scanning remain authoritative.
+Latest measured candidate `de95475accb` composes typed pins, common admission,
+partial transfer/retirement proof, nested roots, staged unpack/binding and
+provider handoff, plus classify-once callback-free retirement. It passes
+1,487 core tests, 28 C API cases and eight precise provider/reader cases per
+GIL role. The groups overlap; they are not a deduplicated total. Cold
+source/native review is GO for these bounded ports. Scratch NULLs and
+conservative arena scanning remain authoritative.
 
-Its two-pair selected54 screen is mixed and loses silent logging by 23.8% and
-coroutines by 5.1%. Direct all29 versus upstream is 1.171628, with 6/29 faster;
-logging remains 7.1% faster than upstream. Matched PMU evidence still shows
-36–40% more instructions in DeltaBlue/generators/coroutines. A new duplicate
-classification in retirement is the strongest incremental regression lead;
-a reviewed classify-once close and complete lifecycle maps remain in progress.
+Its two-pair selected54 screen improves DeltaBlue 6.0% and Richards 3.0%,
+but loses coroutines 1.4% and silent logging 8.4% (wide logging range).
+Direct all29 versus upstream is 1.162061, with 6/29 faster; DeltaBlue is
+12.2% slower and logging 20.6% faster. Matched PMU shows DeltaBlue still
+executes 34.1% more instructions. Classify-once retirement substantially
+reduces the preparatory cleanup regression, but no general win is confirmed.
 No candidate is promoted. The [active report](issues/call-model55/report.md)
-retains exact sample scopes, ranges, profiles and qualification limits. New
-retirement certificates and binder/provider adapters are being integrated;
-neither complete semantic maps nor a bitmap rival has been qualified.
+retains exact sample scopes, ranges, profiles and qualification limits.
+Constructor shim ownership is next in integration; heap deallocation and the
+shared-emitter phase work continue. Complete static authority and a physical
+bitmap rival remain unqualified. Shared storage with NULL named locals is
+the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [qualification](issues/frame-state54/qualification.md) retain closure evidence.

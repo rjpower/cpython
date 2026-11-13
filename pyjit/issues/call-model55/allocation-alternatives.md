@@ -167,3 +167,13 @@ for calls/maps/copies/retirement, and local validity remains dynamic separate
 state. Both peers checked the reservation equation and source traffic ledger;
 neither found a required correction or selected placement. Documentation
 whitespace checks pass. This work performed no native or timing jobs.
+# Placement ledger peer
+
+GC source/arithmetic peer GO for [placement-cost-model.md](placement-cost-model.md).
+Its extra reservation equation, 112-to-120-byte base/validity charge, concrete
+128-byte two-arena header, Q versus warm-U distinction, argument/copy traffic,
+and large-local bitmap allocation/pop extent are consistently charged. Clean
+argument production keeps its staged-owner and allocator obligations. Shared
+placement with NULL local authority is a control recommendation, not a measured
+winner or a rejection of a complete validity implementation. No runtime layout
+change follows from this peer disposition.

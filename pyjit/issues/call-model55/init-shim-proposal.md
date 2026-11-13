@@ -43,7 +43,9 @@ borrowed code size as lifetime or post-callback geometry authority.
 
 ## Guard facts and the shared call contract
 
-No ownership policy is selected yet. A duplicate-then-detach adapter is a
+Root approved the move/NULL direction after the source census, and frames
+gave design GO with the explicit scoped-metadata/provider exclusion below.
+A duplicate-then-detach adapter remains a
 correct reference if its refresh/commit is complete, but adds a DUP and close
 per evaluated argument solely to retain an implementation window. It should
 not become the default constructor cost without comparison.
@@ -75,13 +77,16 @@ CALL's zero-copy geometry is unchanged.
 
 ## Proposed slow interface and move lifetime
 
-Use a reached `Py_NO_INLINE _PyEval_CreateInitFrameSlow` beside the private
-binder, declared in pycore_ceval.h. Only a rechecked generic-binding case enters
-it; scoped 40-byte records and owner workspace stay out of the callback-free
-exact constructor entry and ordinary CALL/SEND. The helper receives the actual
-caller, canonical site/continuation, window geometry and destination. Its
-preparation failure and consumed-window result must be explicit, so allocation
-failure cannot accidentally make the handler forget still-owned inputs.
+`Py_NO_INLINE _PyEval_CreateInitFrame` rechecks and prepares exact entry with
+the existing initializer and `call_transfer_exact_args`; its private
+`create_init_frame_slow` continuation owns the generic-binding records and
+workspace. Both are beside the existing binder, with the entry declared in
+pycore_ceval.h. Records remain out of callback-free exact entry and ordinary
+CALL/SEND. The helper receives caller, continuation, window, argument count
+and destination. Success consumes the window. Preparation failure may leave it
+intact; a consumed failure leaves NULL homes. The handler's ERROR_NO_POP branch
+must precede DEAD/SYNC (which emits successful clears), so actual unwind owns
+either case. No unused consumed flag or owner out-parameter is added.
 
 1. Validate the current site/window and allocate any required native owner
    workspace while original caller homes still own their counts. Allocation
@@ -120,9 +125,9 @@ failure cannot accidentally make the handler forget still-owned inputs.
    staged observer state in that same handoff. No argument-buffer owner close
    is required after a consuming bind.
 
-The handler must distinguish preparation failure from a consumed window and
-mark DEAD/SYNC state accordingly. Generated code must not close those owners a
-second time. Its current `value_temps=NULL`, NULL displaced-owner initialization
+The handler branches on failure before successful DEAD/SYNC state. Generated
+code must neither wipe an intact failed preparation nor close consumed owners
+a second time. Its current `value_temps=NULL`, NULL displaced-owner initialization
 and direct `_PUSH_FRAME` publication make the successful pop-to-publication gap
 callback-free; preserve that as a generator contract. DTRACE/LLTRACE run after
 publication. Do not place a record in a wrapper that inlines into every handler.
@@ -142,17 +147,21 @@ the executing specialized opcode alone does not reject a constructor. Nor does
 an absent/OTHER observer context guarantee rejection. A moved window must not
 be authorized as an available argument bank by those recipes.
 
-Propose one explicit `caller_staged` bit in the existing transition-record
+The agreed interface adds one explicit `caller_staged` bit in the existing transition-record
 padding byte, set only on this reached shim stage. Its frame's stable `previous`
 identifies the blocked parent. A cold observer lookup rejects redirect of that
 parent before the setter's current-line identity shortcut or pending-call
 reconstruction. It does not reject f_locals mutation, collection or unrelated
 nested calls. This adds no frame field, record size, count or per-argument store;
 the constructor stage already needs a chain head/store. No generic handler
-decoder or ordinary exact-call branch is introduced. Root/frames must freeze
-this actual producer/consumer interface before edits; an explicit new record
-kind is an alternative if preferred, not a reason to infer state from shim
-geometry. M4 can later admit redirects only with an explicit staged owner recipe.
+decoder or ordinary exact-call branch is introduced. The shared provider
+matcher explicitly skips flagged nodes; only the owning constructor scope
+consumes them. NULL-node visits and record pops require the flag cleared.
+Error retirement first saves/empties the raised exception; all invoked
+deallocators preserve that empty state, asserted after M2. Restoring the saved
+exception after clearing/popping metadata therefore cannot close a replacement
+exception or call out after the shim reservation is released. M4 can later
+admit redirects only with an explicit staged owner recipe.
 
 ## Capacity, mutation and static-image obligations
 

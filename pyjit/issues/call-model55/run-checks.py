@@ -83,6 +83,16 @@ def main():
         print(json.dumps(dict(role=role, stage=args.stage,
                               returncode=result.returncode, log=str(log))), flush=True)
         result.check_returncode()
+        if args.stage == 'build':
+            # make can succeed after removing an extension that failed import.
+            summary = re.findall(
+                r'Checked (\d+) modules \((\d+) built-in, (\d+) shared, '
+                r'(\d+) n/a on linux-x86_64, (\d+) disabled, (\d+) missing, '
+                r'(\d+) failed on import\)', log.read_text())
+            row['module_counts'] = [int(value) for value in summary[-1]] if summary else None
+            manifest.write_text(json.dumps(rows, indent=2))
+            if row['module_counts'] != [117, 37, 79, 1, 0, 0, 0]:
+                raise RuntimeError(f'{role}: incomplete module build: {row["module_counts"]}')
 
 
 if __name__ == '__main__':

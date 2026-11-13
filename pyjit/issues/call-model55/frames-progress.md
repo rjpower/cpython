@@ -204,3 +204,40 @@ Root has the commit-ready manifest and focused provider/retirement/binder/unpack
 PEP523 test list. No runtime/generation job ran here; root owns validation and
 integration. Actual phase maps and initshim arena ownership remain independent
 M3/M4 gates, with bounded peer work continuing in the other lanes.
+
+The coordinator's full provider composition `de95475accb` passes the separate
+precise, core and borrow-scope groups in both roles. The bounded cold/native
+review is in `m3-shadow-integrated-cold-review.md`; exact CALL/RETURN retain
+their 64/16-byte reservations without token search, while outlined provider
+fixed frames and constructor stack arguments are explicitly charged. The
+placement cost model has GC arithmetic GO; root selects shared storage with
+initialized NULL named locals as the M4 reference. Dynamic validity remains an
+optional alternative, not a consequence of splitting bases.
+
+Revised init-shim design and implementation receive frames source GO in
+`init-shim-peer.md`, with generated error-before-DEAD and publication ordering
+left to root validation. Shared-emitter lifecycle design GO is recorded in
+`semantic-phase-peer.md`: a reached nonempty binary survivor and positive leaf
+transport events are the next evidence, not another empty-retirement claim.
+
+Pins merges the coherent provider base as `56a8a38fcf8`. Next bounded source
+work is the private heap-frame deallocation proposal: code fixed last, actual
+home/header transition cursor, and detached observer metadata in native typed
+workspace. It is separate from mutable live tp_clear. No schema/native head
+expansion is proposed; GC peer precedes implementation.
+
+The private heap deallocation proposal receives written GC design GO in
+`heap-dealloc-peer.md`. Its two-file implementation is ready for source
+postreview: a NO_INLINE owned-frame helper links remaining homes/typed headers
+before weakref callbacks, preserves function/mapping positions, reuses the
+existing cursor sweep, then closes native metadata and fixed-last code. The
+nonowning/trashcan address gate remains. A focused fixture runs both plain and
+nested deallocation, observing weakref/home/metadata order, remaining/code
+precise IDs, and final release. Host AST parsing and diff checks pass; no
+candidate execution occurred. IR's phase-field merge must add this helper's
+zero reset before its first callback; the current source base has no field.
+
+GC's full heap source/fixture postreview is GO. The two-file patch is frozen
+over `56a8a38fcf8` (129 insertions/17 deletions), with the phase reset retained
+as an explicit coherent-integration requirement. Root has its manifest and
+focused test group; native evidence remains pending.

@@ -99,3 +99,61 @@ excluding source positions/comments. A test moves a statement between macro
 arms without changing flattened tokens and requires UNKNOWN; pointer/opaque
 mutations remain rejected. This closes the source mismatch, with actual
 regeneration/PRESERVE metadata and candidate execution still root-owned.
+# Shared-emitter collector schema peer
+
+The bounded shared-emitter increment has GC design GO. Its first reached
+comparison uses the existing frame walk with nonempty arithmetic survivors;
+NULL authority remains in force. Must-readable facts intersect, possible owner
+obligations union, and exact nullable ranges require every incoming arm to hold
+a value or canonical NULL. Absence checks reject inline/index leftovers too.
+Native root discovery stays separate. Cyclic subtraction and external marking
+retain their respective edge/tag policies even when sharing a descriptor.
+
+The uint16 publication/status field preserves PRE=0 and the measured header
+extent; the code plan reuses its existing pointer. Source review must verify
+zero publication for unsupported reached boundaries, matched parent WAIT and
+heap-suspend states, and explicit initialization/reset on copy, redirect,
+takeover and retirement before callbacks. A stale published bit alone never
+grants an arbitrary asynchronous reader permission. The cold query validates
+code/image/site before range reads and stores reached status; observation must
+not recompute it. No map-only scan, arena uninitialization or native policy
+change is admitted by this increment. Source and merged native gates remain.
+
+## Frames lifecycle peer of the shared-emitter increment
+
+2026-11-12. Design GO for the bounded event-derived admission and reached
+generic-binary collector shadow in `semantic-phase-plan.md`, starting at its
+shared-emitter section. This is not approval to replace NULL authority.
+
+The first positive fixture must carry a nonempty scratch survivor through the
+actual provider or operand-finalizer collection. Argument/binding loads,
+constants and COPY/TAKE transport therefore need positive events in the same
+graph; leaving those predecessors opaque would make the first consumer
+permanently uncovered. Unknown helpers and unconverted families remain
+explicitly uncovered. The old exact-body checks may protect audited leaves,
+but must not become a second semantic decoder beside emitter events.
+
+The uint16 state at GIL offset 110 fits the measured 112-byte header. Keeping
+PRE=0 separate from the PUBLISHED bit preserves the PhaseId domain. Initialize
+all producers, including partial/public heap frames and fixed trampolines.
+Reset before generator resume installs a sent owner, before unsupported
+provider/binder publication, and before retirement or takeover changes the
+authority partition. A copied old PRE or SUSPENDED state is invalid after a PC
+advance or home mutation unless the new lifecycle explicitly matches it.
+
+The parent WAIT recipe must exclude the child-owned overlapping argument
+window exactly once while preserving surviving parent homes. Provider entry
+starts with an unpublished child; disarming its outer staged record does not
+itself certify an active phase. Redirect acceptance must reset or select the
+new site's state before callbacks; rejected redirects leave the current state
+alone. Dynamic local boundness and callback-local mutation remain independent
+of the static scratch shape.
+
+Only a reached collector walk supplies the stopped-state interval in which
+the saved site and published shape agree. An arbitrary remote sample cannot
+use a stale PUBLISHED bit as permission to read homes. Cold lookup validates
+code/image/site under the independent code pin. Stored status can outlive code
+closure, but its query must never decode the old frame or descriptor afterward.
+No ordinary inline lookup/reset or handler-local owner array is needed by this
+increment. Root owns generation, both-role execution and the emitted-store,
+stack/spill and persistent-plan cost review.

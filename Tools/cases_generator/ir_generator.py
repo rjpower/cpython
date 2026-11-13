@@ -2679,7 +2679,8 @@ class IREmitter(Emitter):
                 inst, self.format_of(inst)):
             raise analysis_error("IR_CREATED_COPY needs its checked copy contract", tkn)
         self.ownership_event("CREATED_COPY")
-        self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame)")
+        self.out.start_line()
+        self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame);\n")
         return True
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):

@@ -15321,7 +15321,7 @@
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 _PyValuePair got = _PyEval_GetIter(iterable, oparg);
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 if (PyValue_IsNull(got.first)) {
                     frame->phase_state = 0;
                     JUMP_TO_LABEL(error);
@@ -17807,7 +17807,7 @@
             {
                 retval = val;
                 PyValue outgoing = retval;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 frame->phase_state = 0;
                 assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
                 frame->instr_ptr = next_instr;
@@ -17941,7 +17941,7 @@
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
-            ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), retval);
+            ir_own_A = IR_CONSUME_NATIVE_INPUT(IR_A(ir_word), retval);
             PyValue result = IR_TAKE(retval, ir_own_A);
             assert(frame == &IR_ACTIVATION()->entry.frame);
             LLTRACE_RESUME_FRAME();
@@ -24051,7 +24051,7 @@
             v = IR_SLOT(IR_A(ir_word));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             PyValue owned = v;
-            IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
             frame->phase_state = 0;
             frame->phase_state = 0;
             _PyCell_SetValue(cell, owned);
@@ -24078,7 +24078,7 @@
                 PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
                 _PyValue_CheckHome(value);
-                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
                 trash = tmp;
             }
             // _POP_TOP
@@ -24540,7 +24540,7 @@
                 int err = _PyValue_IsTrue(value);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 PyValue_CLOSE(value);
                 if (err < 0) {
                     frame->phase_state = 0;
@@ -24589,7 +24589,7 @@
                 value = owner;
                 res = PyValue_True;
                 v = value;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }
             // _POP_TOP
             {
@@ -24657,7 +24657,7 @@
                 }
                 res = zero ? PyValue_False : PyValue_True;
                 v = value;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }
             // _POP_TOP_INT
             {
@@ -24706,7 +24706,7 @@
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
                 v = value;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }
             // _POP_TOP
             {
@@ -24737,7 +24737,7 @@
                 assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                 JUMP_TO_PREDICTED(TO_BOOL);
             }
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             STAT_INC(TO_BOOL, hit);
             res = PyValue_False;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
@@ -24778,7 +24778,7 @@
                 PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
-                IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }
             // _POP_TOP_UNICODE
             {
@@ -25376,7 +25376,7 @@
             PyValue retval;
             retval = IR_SLOT(IR_B(ir_word));
             PyValue outgoing = retval;
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             frame->phase_state = 0;
             assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
             frame->instr_ptr = next_instr;

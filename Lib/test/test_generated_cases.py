@@ -3349,6 +3349,41 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(ir_generator.releases_object(
             analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
 
+    def test_nullable_inputs_require_actual_null_safe_uses(self):
+        def check(body):
+            analysis = self.analyze(f"\ninst(OP, (value:nullable --)) {{ {body} }}\n")
+            ir_generator.validate_nullable_inputs(analysis.instructions["OP"].parts[0])
+
+        for body in (
+            "PyValue other = PyValue_XDUP(value); PyValue_XCLOSE(other);",
+            "if (!PyValue_IsNull(value)) { PyValue other = PyValue_DUP(value); PyValue_XCLOSE(other); }",
+            "int rc = with_exit_call(callable, value, !PyValue_IsNull(value), a, b, c);",
+        ):
+            with self.subTest(body=body):
+                check(body)
+        for body in (
+            "PyValue other = PyValue_DUP(value);",
+            "PyValue saved = value; value = PyValue_None; int rc = with_exit_call(callable, saved, !PyValue_IsNull(value), a, b, c);",
+            "if (!PyValue_IsNull(value)) { value = PyValue_NULL; PyValue other = PyValue_DUP(value); }",
+            "if (!PyValue_IsNull(value)) { opaque(&(value)); }",
+            "PyValue other = value; opaque(other);",
+            "void (*value_operation_close3)(PyValue, PyValue, PyValue) = opaque; value_operation_close3(value, PyValue_NULL, PyValue_NULL);",
+            "if (!PyValue_IsNull(value)) { value.bits &= 0; PyValue_TYPE(value); }",
+            "if (!PyValue_IsNull(value)) { value++; PyValue_TYPE(value); }",
+            "value = opaque_value(); PyValue_TYPE(value);",
+            "\n#define PyValue_IsNull(x) 0\nif (!PyValue_IsNull(value)) { PyValue copy = PyValue_DUP(value); }",
+        ):
+            with self.subTest(body=body), self.assertRaises(SyntaxError):
+                check(body)
+        for body in (
+            "required = opaque_value(); value = required; PyValue copy = PyValue_DUP(value);",
+            "value = out; PyValue copy = PyValue_DUP(value); out = PyValue_None;",
+        ):
+            analysis = self.analyze(
+                f"\ninst(OP, (required, value:nullable -- out)) {{ {body} }}\n")
+            with self.subTest(body=body), self.assertRaises(SyntaxError):
+                ir_generator.validate_nullable_inputs(analysis.instructions["OP"].parts[0])
+
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
             inst(OP, (required, value:nullable, items[oparg]:nullable --)) {
@@ -3372,6 +3407,38 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(SyntaxError):
                 self.analyze("\n" + source + "\n")
 
+    def test_execution_read_receipts_follow_actual_inputs(self):
+        source = """inst(OP, (items[oparg] -- items[oparg])) {
+            if (oparg) { PyValue index = items[0]; (void)index; }
+        }"""
+        inst = self.analyze("\n" + source + "\n").instructions["OP"]
+        part = inst.parts[0]
+        self.assertEqual(ir_generator.array_read_span(part, part.stack.inputs[0]),
+                         ("0", "Py_MIN((oparg), 1)"))
+        self.assertEqual(ir_generator.execution_read_routes(inst, False),
+                         {(0, "read", 0)})
+        source = "inst(OP, (items[oparg]:nullable --)) { IR_CLOSE_INPUTS(items); }"
+        inst = self.analyze("\n" + source + "\n").instructions["OP"]
+        ir_generator.validate_nullable_inputs(inst.parts[0])
+        self.assertEqual(ir_generator.execution_read_routes(inst, False), set())
+        self.assertEqual(ir_generator.execution_read_routes(inst, True),
+                         {(-1, "call-window", 0)})
+        source = "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }"
+        inst = self.analyze("\n" + source + "\n").instructions["OP"]
+        part = inst.parts[0]
+        self.assertEqual(ir_generator.array_read_span(part, part.stack.inputs[0]),
+                         ("1", "1"))
+
+    def test_execution_reads_lower_through_actual_storage(self):
+        output = self.ir_output("\ninst(OP, (value -- result)) { result = TAKE(value); }\n")
+        self.assertIn("PyValue_IsNull(value)", output)
+        self.assertIn("_PyEval_FormatExcUnbound", output)
+        self.assertIn("JUMP_TO_LABEL(error)", output)
+        nullable = self.ir_output("\ninst(OP, (value:nullable -- result)) { result = TAKE(value); }\n")
+        self.assertNotIn("absent required input", nullable)
+        pair = self.ir_output("\ninst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }\n")
+        self.assertIn("_PyFrame_RangeIsPresent(frame, pair + 1, 1)", pair)
+        self.assertNotIn("_PyFrame_RangeIsPresent(frame, pair, 1)", pair)
 
     def test_execution_read_proofs_follow_current_c_values(self):
         from ir_read_effects import error_nonnull_value, value_nonnull_changes
@@ -3415,6 +3482,119 @@ class TestIRCases(unittest.TestCase):
         left.merge(right, CWriter(io.StringIO(), 0, False))
         self.assertFalse(left.variables[0].nonnull)
 
+    def test_execution_read_guards_preserve_nullable_c_transitions(self):
+        for qualifier, body in (
+                (":nullable", "kept = TAKE(value);"),
+                ("", "kept = TAKE(value); kept = PyValue_NULL;"),
+                ("", "kept = TAKE(value); PyValue_CLEAR(kept);"),
+                ("", """kept = TAKE(value); kept = PyValue_NULL;
+                          for (int i = 0; i < 0; i++) { kept = PyValue_None; }""")):
+            source = """
+                op(_KEEP, (valueQUALIFIER -- kept)) { BODY }
+                op(_USE, (required --)) { PyValue_XCLOSE(required); }
+                macro(OP) = _KEEP + _USE;
+            """.replace("QUALIFIER", qualifier).replace("BODY", body)
+            with self.subTest(body=body):
+                # A nullable transient cannot acquire a cleanup home merely
+                # by being renamed. Reject that unsupported error route.
+                with self.assertRaisesRegex((SyntaxError, stack.StackError), "no slot"):
+                    self.ir_output(source)
+        # A through input still has its real source home. Its nullable C
+        # value must pass a check when the following uop requires it.
+        output = self.ir_output("""
+            op(_KEEP, (kept:nullable -- kept)) { (void)kept; }
+            op(_USE, (required --)) { PyValue_XCLOSE(required); }
+            macro(OP) = _KEEP + _USE;
+        """)
+        self.assertIn("PyValue_IsNull(required)", output)
+
+    def test_specialized_float_reads_reuse_checked_c_values(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        inst = analysis.instructions["BINARY_OP_ADD_FLOAT"]
+        for record in (False, True):
+            with self.subTest(record=record):
+                output = io.StringIO()
+                writer = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(writer, analysis, formats)
+                emitter.handler_format = formats[inst.name]
+                ir_generator.generate_handler(inst.name, inst, formats[inst.name],
+                                              emitter, writer, record)
+                self.assertEqual(emitter.execution_read_proven,
+                                 {(2, "read", 0), (3, "read", 0)})
+                self.assertEqual(emitter.execution_read_sources |
+                                 emitter.execution_read_proven,
+                                 emitter.execution_read_expected)
+                self.assertNotIn("PyValue_IsNull(value)", output.getvalue())
+
+    def test_native_c_read_proofs_respect_lexical_scope_and_guards(self):
+        for body in (
+                "PyValue held = PyValue_NULL; if (oparg) { ERROR_IF(PyValue_IsNull(held)); } res = held;",
+                "PyValue held = PyValue_NULL; ERROR_IF(oparg && PyValue_IsNull(held)); res = held;",
+                "PyValue held = PyValue_NULL; { PyValue held = PyValue_None; ERROR_IF(PyValue_IsNull(held)); } res = held;",
+                "PyValue held = PyValue_NULL; { PyValue held; held = PyValue_None; } res = held;"):
+            source = """
+                op(_MAKE, (value -- res)) { DEAD(value); BODY }
+                op(_USE, (required --)) { PyValue_XCLOSE(required); }
+                macro(OP) = _MAKE + _USE;
+            """.replace("BODY", body)
+            with self.subTest(body=body):
+                with self.assertRaisesRegex((SyntaxError, stack.StackError), "no slot"):
+                    self.ir_output(source)
+        with self.assertRaisesRegex(SyntaxError, "qualified current-value declaration"):
+            self.ir_output("""
+                op(_MAKE, (value -- res)) {
+                    DEAD(value);
+                    PyValue held = PyValue_NULL;
+                    { volatile PyValue held; held = PyValue_None; }
+                    res = held;
+                }
+                op(_USE, (required --)) { PyValue_XCLOSE(required); }
+                macro(OP) = _MAKE + _USE;
+            """)
+        with self.assertRaisesRegex(SyntaxError, "conditional native shadow"):
+            self.ir_output("""
+                op(_MAKE, (value -- res)) {
+                    DEAD(value);
+                    PyValue held = PyValue_None;
+                    {
+                    #if FLAG
+                        PyValue held = PyValue_None;
+                    #else
+                        held = PyValue_NULL;
+                    #endif
+                    }
+                    res = held;
+                }
+                op(_USE, (required --)) { PyValue_XCLOSE(required); }
+                macro(OP) = _MAKE + _USE;
+            """)
+
+    def test_bool_and_observer_transients_reuse_checked_c_values(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        names = [name for name in instructions if not formats[name].transparent
+                 and name.startswith(("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP",
+                                     "INSTRUMENTED_COMPARE_OP_JUMP", "INSTRUMENTED_CONTAINS_OP_JUMP",
+                                     "INSTRUMENTED_IS_OP_JUMP", "POP_JUMP_IF_TRUE", "POP_JUMP_IF_FALSE",
+                                     "INSTRUMENTED_POP_JUMP_IF_TRUE", "INSTRUMENTED_POP_JUMP_IF_FALSE",
+                                     "INSTRUMENTED_RETURN_VALUE"))]
+        self.assertEqual(len(names), 29)
+        for name in names:
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    writer = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(writer, analysis, formats)
+                    emitter.handler_format = formats[name]
+                    ir_generator.generate_handler(name, instructions[name], formats[name],
+                                                  emitter, writer, record)
+                    self.assertEqual(emitter.execution_read_sources |
+                                     emitter.execution_read_proven,
+                                     emitter.execution_read_expected)
 
     def test_input_drain_lowers_through_actual_storage(self):
         output = self.ir_output("""

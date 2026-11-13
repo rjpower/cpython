@@ -1955,7 +1955,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         /* These facts describe boundary states, never an active child's
          * aliased argument cells. Validate the actual source snapshot too. */
         for (int j = 0; j < nt; j++) {
-            if (null_home[j] && !PyValue_IsNull(frame->base[nl + j])) {
+            if (null_home[j] && _PyFrame_HomeIsPresent(frame, frame->base + nl + j)) {
                 null_home[j] = 0;
             }
         }
@@ -2768,19 +2768,23 @@ register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
                 fits &= nl + j == base || nl + j == base + 1;
             }
         }
-        if (!fits || !PyValue_IsObject(frame->base[base]) ||
-            !(PyValue_IsNull(frame->base[base + 1]) ||
-              PyValue_IsTaggedIndex(frame->base[base + 1])))
+        if (!fits) {
+            continue;
+        }
+        PyValue receiver_value = _PyFrame_ReadHome(frame, frame->base + base);
+        PyValue cursor_value = _PyFrame_ReadHome(frame, frame->base + base + 1);
+        if (!PyValue_IsObject(receiver_value) ||
+            !(PyValue_IsNull(cursor_value) || PyValue_IsTaggedIndex(cursor_value)))
         {
             continue;
         }
-        PyObject *receiver = PyValue_AsKnownObjectBorrow(frame->base[base]);
-        if (PyValue_IsNull(frame->base[base + 1])) {
+        PyObject *receiver = PyValue_AsKnownObjectBorrow(receiver_value);
+        if (PyValue_IsNull(cursor_value)) {
             if (!PyIter_Check(receiver)) {
                 continue;
             }
         }
-        else if (PyValue_UntagIndex(frame->base[base + 1]) < 0 ||
+        else if (PyValue_UntagIndex(cursor_value) < 0 ||
                  Py_TYPE(receiver)->_tp_iteritem == NULL)
         {
             continue;
@@ -3129,7 +3133,7 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
         if (selected < analysis->nl) {
             return 0;
         }
-        if (PyValue_IsNull(frame->base[selected])) {
+        if (!_PyFrame_HomeIsPresent(frame, frame->base + selected)) {
             int safe = register_unbound_target_safe(code, analysis, target, local);
             if (safe <= 0) {
                 return safe;
@@ -3203,7 +3207,7 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         for (int j = 0; j < analysis->nt && compatible; j++) {
             if ((analysis->null_required[(size_t)target * analysis->stride + j / 64] &
                  ((uint64_t)1 << (j % 64))) &&
-                !PyValue_IsNull(frame->base[analysis->nl + j]))
+                _PyFrame_HomeIsPresent(frame, frame->base + analysis->nl + j))
             {
                 compatible = false;
             }
@@ -3264,7 +3268,8 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
             if (before[j] != node || after[j] != node) {
                 continue;
             }
-            PyValueBorrow value = PyValue_Borrow(frame->base[analysis->nl + j]);
+            PyValueBorrow value = PyValue_Borrow(
+                _PyFrame_ReadHome(frame, frame->base + analysis->nl + j));
             if (!PyValue_IsNone(value) &&
                 !(PyValue_IsObject(value) &&
                   PyExceptionInstance_Check(PyValue_AsKnownObjectBorrow(value))))
@@ -3805,8 +3810,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     int nretired = 0;
     for (int i = 0; i < plan.nrestores; i++) {
         RegisterLocalRestore action = plan.restores[i];
-        restored_values[i] = frame->base[action.home];
-        _PyFrame_WriteHome(frame, frame->base + action.home, PyValue_NULL);
+        restored_values[i] = _PyFrame_TakeHome(frame, frame->base + action.home);
         retired[nretired++] = frame->base[action.local];
         _PyFrame_WriteHome(frame, frame->base + action.local, PyValue_NULL);
     }
@@ -3818,8 +3822,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                 constant |= constants[j * 2] == (uint32_t)slot;
             }
             if (!constant && !register_plan_has(&plan, slot - code->co_nlocalsplus)) {
-                retired[nretired++] = frame->base[slot];
-                _PyFrame_WriteHome(frame, frame->base + slot, PyValue_NULL);
+                retired[nretired++] = _PyFrame_TakeHome(frame, frame->base + slot);
             }
         }
     }
@@ -4159,7 +4162,11 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     /* This is the direct heap initializer. Escape/generator destinations
      * instead receive a complete move and need no preliminary fill. */
-    for (int i = 0; i < _PyFrame_NumSlotsForCodeObject(code); i++) {
+    int initialized = code->co_nlocalsplus;
+#ifdef Py_GIL_DISABLED
+    initialized = _PyFrame_NumSlotsForCodeObject(code);
+#endif
+    for (int i = 0; i < initialized; i++) {
         frame->owned_slots[i] = PyValue_NULL;
     }
     _PyFrame_Initialize(tstate, frame, PyValue_DUP(PyValue_FromObjectBorrow(func)),

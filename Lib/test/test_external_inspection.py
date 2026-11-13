@@ -4573,6 +4573,7 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             executing = layout['code_exec_section']
             for field in range(3):
                 reject(executing + field * 8, struct.pack('=Q', (1 << 64) - 1))
+            reject(layout['presence_descriptor'], struct.pack('=Q', (1 << 64) - 1))
             assert RemoteUnwinder(os.getpid()).get_stack_trace()
         """))
 

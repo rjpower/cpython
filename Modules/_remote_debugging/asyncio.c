@@ -454,7 +454,28 @@ get_awaited_coro_address(
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited receiver address");
         return -1;
     }
-    // The slot holds a PyValue word: only an object has a remote address.
+    uintptr_t presence = GET_MEMBER(uintptr_t, iframe,
+        unwinder->debug_offsets.interpreter_frame.presence_bits);
+    uintptr_t receiver_addr = slots_addr + receiver_delta;
+    size_t bitmap_word_delta = ((receiver_addr >> 9) - (slots_addr >> 9)) * sizeof(uint64_t);
+    if (presence == 0 || presence >= Py_PTR_LIMIT ||
+        presence > UINTPTR_MAX - sizeof(uint64_t) ||
+        bitmap_word_delta > UINTPTR_MAX - sizeof(uint64_t) - presence)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame presence address");
+        return -1;
+    }
+    uint64_t bits;
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+            presence + bitmap_word_delta, sizeof(bits), &bits) < 0)
+    {
+        return -1;
+    }
+    if (!(bits & (UINT64_C(1) << ((receiver_addr >> 3) & 63)))) {
+        PyErr_SetString(PyExc_RuntimeError, "Awaited receiver home is absent");
+        return -1;
+    }
+    // The matched finite receiver must be present before its word is read.
     PyValue slot;
     err = _Py_RemoteDebug_PagedReadRemoteMemory(
         &unwinder->handle,

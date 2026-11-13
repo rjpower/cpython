@@ -521,7 +521,7 @@ gen_try_set_executing(PyGenObject *gen)
 /* Whether field F names a local, a cell or a free variable rather than a
  * temporary: the executing copy keeps co_nlocalsplus in its header.  An
  * input read through a local is borrowed in place; one read through a
- * temporary is the handler's, which it takes, leaving NULL in the slot. */
+ * temporary is the handler's, which it takes, vacating the home. */
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
@@ -530,10 +530,10 @@ gen_try_set_executing(PyGenObject *gen)
  * name a local (the instruction's borrow_mask): the slot's bits, as a
  * PyValueBorrow, which only C locals hold and nothing releases.  The one
  * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
-#define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
+#define IR_VIEW(F) PyValue_Borrow(_PyFrame_ReadHome(frame, &IR_SLOT(F)))
 
 /* The handler takes the input V that it read through field F: the owner
- * of a temporary's value, whose slot becomes NULL, or PyValue_NULL for a
+ * of a temporary's value, whose presence bit is cleared, or PyValue_NULL for a
  * local, which keeps its value and owns it.  The generator assigns it to
  * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
 #define IR_CONSUME_INPUT(F, V) \
@@ -551,34 +551,34 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_TAKE(V, OWN) \
     (PyValue_IsNull(OWN) ? PyValue_XDUP(V) : (OWN))
 
-/* A handler writes a temporary into a slot that holds NULL. */
+/* A handler publishes a temporary into a logically vacant home. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
-        assert(PyValue_IsNull(SLOT)); \
-        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
-        _PyValue_CheckTemp(SLOT); \
+        assert(!_PyFrame_HomeIsPresent(frame, &(SLOT))); \
+        _PyFrame_WriteScratchHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
+        _PyValue_CheckTemp(V); \
     } while (0)
 
 /* The generator has proved that V already owns canonical bits. */
 #define IR_STORE_CANONICAL_TEMP(SLOT, V) \
     do { \
-        assert(PyValue_IsNull(SLOT)); \
+        assert(!_PyFrame_HomeIsPresent(frame, &(SLOT))); \
         _PyFrame_PublishVacantHome(frame, &(SLOT), (V)); \
-        _PyValue_CheckTemp(SLOT); \
+        _PyValue_CheckTemp(V); \
     } while (0)
 
 #define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
     do { \
-        _PyFrame_WriteHome(frame, &(SLOT), (V)); \
-        _PyValue_CheckTemp(SLOT); \
+        _PyFrame_WriteScratchHome(frame, &(SLOT), (V)); \
+        _PyValue_CheckTemp(V); \
     } while (0)
 
 /* A handler writes V into SLOT, a temporary of its window or one that it
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \
     do { \
-        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
-        _PyValue_CheckTemp(SLOT); \
+        _PyFrame_WriteScratchHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
+        _PyValue_CheckTemp(V); \
     } while (0)
 
 /* OLD, the value that a result displaced from a local.  Releasing a last
@@ -598,8 +598,8 @@ gen_try_set_executing(PyGenObject *gen)
 
 /* The result V goes to dst field F, which may name a local (a folded
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
- * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
- * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
+ * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's home is vacant,
+ * or already contains V published by the handler (IR_STORE_TEMP_DST). */
 #define IR_STORE_DST_IMPL(F, V, VALUE) \
     do { \
         if (IR_IS_LOCAL(F)) { \
@@ -612,10 +612,10 @@ gen_try_set_executing(PyGenObject *gen)
             PyValue_XCLOSE(V); \
         } \
         else { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
+            assert(!_PyFrame_HomeIsPresent(frame, &IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            _PyFrame_WriteHome(frame, &IR_SLOT(F), (VALUE)); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(F), (VALUE)); \
+            _PyValue_CheckTemp(V); \
         } \
     } while (0)
 
@@ -640,9 +640,9 @@ gen_try_set_executing(PyGenObject *gen)
             (RETIRED) = (V); \
         } \
         else { \
-            assert(PyValue_IsNull(IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
-            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            assert(!_PyFrame_HomeIsPresent(frame, &IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
+            _PyValue_CheckTemp(V); \
         } \
     } while (0)
 
@@ -667,10 +667,10 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_STORE_CANONICAL_TEMP_DST(F, V) \
     do { \
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
+            assert(!_PyFrame_HomeIsPresent(frame, &IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            _PyFrame_WriteHome(frame, &IR_SLOT(F), (V)); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(F), (V)); \
+            _PyValue_CheckTemp(V); \
         } \
     } while (0)
 
@@ -679,10 +679,10 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_STORE_TEMP_DST(F, V) \
     do { \
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
+            assert(!_PyFrame_HomeIsPresent(frame, &IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            _PyFrame_WriteScratchHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
+            _PyValue_CheckTemp(V); \
         } \
     } while (0)
 
@@ -693,7 +693,7 @@ gen_try_set_executing(PyGenObject *gen)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            assert(_PyValue_IsHome(SLOT)); \
+            assert(_PyValue_IsHome(_PyFrame_ReadHome(frame, &(SLOT)))); \
             _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
@@ -706,7 +706,7 @@ gen_try_set_executing(PyGenObject *gen)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            assert(_PyValue_IsHome(SLOT)); \
+            assert(_PyValue_IsHome(_PyFrame_ReadHome(frame, &(SLOT)))); \
             _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
@@ -739,7 +739,7 @@ _PyIR_UnpackToLocals(_PyInterpreterFrame *frame, PyValue *locals,
         _PyFrame_WriteHome(frame, locals + i,
                            canonical ? *element : _PyValue_Publish(element));
         _PyValue_CheckHome(locals[i]);
-        _PyFrame_WriteHome(frame, window + n - 1 - i, PyValue_NULL);
+        _PyFrame_WriteScratchHome(frame, window + n - 1 - i, PyValue_NULL);
         PyValue_XCLOSE(old);
     }
     return -1;
@@ -753,7 +753,7 @@ _PyIR_UnpackToLocals(_PyInterpreterFrame *frame, PyValue *locals,
     do { \
         PyValue *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            _PyFrame_WriteHome(frame, ir_p + ir_i, PyValue_NULL); \
+            _PyFrame_WriteScratchHome(frame, ir_p + ir_i, PyValue_NULL); \
         } \
     } while (0)
 

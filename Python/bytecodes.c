@@ -293,7 +293,7 @@ dummy_func(
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
 
-        op(_SWAP_FAST, (value -- trash)) {
+        op(_SWAP_FAST, (value:nullable -- trash)) {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             _PyFrame_WriteHome(frame, &GETLOCAL(oparg), value);
             _PyValue_CheckHome(value);
@@ -305,7 +305,7 @@ dummy_func(
             STORE_FAST,
         };
 
-        pure inst(POP_TOP, (value --)) {
+        pure inst(POP_TOP, (value:nullable --)) {
             PyValue_XCLOSE(value);
         }
 
@@ -330,7 +330,7 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
 
-        op(_POP_TOP_OPARG, (args[oparg] -- )) {
+        op(_POP_TOP_OPARG, (args[oparg]:nullable -- )) {
             IR_CLOSE_INPUTS(args);
         }
 
@@ -348,13 +348,13 @@ dummy_func(
         }
 
 
-        inst(POP_ITER, (iter, index_or_null -- )) {
+        inst(POP_ITER, (iter, index_or_null:nullable -- )) {
             (void)index_or_null;
             DEAD(index_or_null);
             PyValue_CLOSE(iter);
         }
 
-        no_save_ip tier1 inst(INSTRUMENTED_END_FOR, (receiver, index_or_null, value -- receiver, index_or_null)) {
+        no_save_ip tier1 inst(INSTRUMENTED_END_FOR, (receiver, index_or_null:nullable, value -- receiver, index_or_null)) {
             /* Need to create a fake StopIteration error here,
              * to conform to PEP 380 */
             if (PyValue_GenCheck(receiver)) {
@@ -366,7 +366,7 @@ dummy_func(
             PyValue_CLOSE(value);
         }
 
-        tier1 inst(INSTRUMENTED_POP_ITER, (iter, index_or_null -- )) {
+        tier1 inst(INSTRUMENTED_POP_ITER, (iter, index_or_null:nullable -- )) {
             PyValue held = TAKE(iter);
             (void)index_or_null;
             DEAD(index_or_null);
@@ -375,14 +375,14 @@ dummy_func(
                 PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        pure inst(END_SEND, (receiver, index_or_null, value -- val)) {
+        pure inst(END_SEND, (receiver, index_or_null:nullable, value -- val)) {
             val = TAKE(value);
             (void)index_or_null;
             DEAD(index_or_null);
             PyValue_CLOSE(receiver);
         }
 
-        tier1 inst(INSTRUMENTED_END_SEND, (receiver, index_or_null, value -- val)) {
+        tier1 inst(INSTRUMENTED_END_SEND, (receiver, index_or_null:nullable, value -- val)) {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
             // Taken before the monitoring call, which can run code
@@ -1606,7 +1606,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        tier1 window op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+        tier1 window op(_SEND, (receiver, null_or_index:nullable, v -- receiver, null_or_index, retval)) {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
@@ -1619,7 +1619,7 @@ dummy_func(
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
                 _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
-                null_or_index = window[1];
+                null_or_index = _PyFrame_ReadHome(frame, window + 1);
                 PyValue item = next.value;
                 int found = next.status;
                 if (found <= 0) {
@@ -1670,7 +1670,7 @@ dummy_func(
 
         macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
-        op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_NOT_NULL, (nos:nullable, unused -- nos, unused)) {
             EXIT_IF(PyValue_IsNull(nos));
         }
 
@@ -1702,7 +1702,7 @@ dummy_func(
             EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
         }
 
-        replaced op(_SEND_ASYNC_GEN, (iter, null_in, v -- asend, null_out, retval)) {
+        replaced op(_SEND_ASYNC_GEN, (iter, null_in:nullable, v -- asend, null_out, retval)) {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyAsyncGenASend_CheckExact(iter_o));
             _PyStatusValue sent = _PyValue_Send(iter_o, v);
@@ -1999,7 +1999,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_STORE_ATTR, (v, owner --)) {
+        inline_ok op(_STORE_ATTR, (v:nullable, owner --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyValue held_value = TAKE(v);
             PyValue receiver = TAKE(owner);
@@ -2013,7 +2013,7 @@ dummy_func(
 
         macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
-        inst(STORE_GLOBAL, (v --)) {
+        inst(STORE_GLOBAL, (v:nullable --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
@@ -3778,7 +3778,7 @@ dummy_func(
             FOR_ITER_VIRTUAL,
         };
 
-        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
+        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index:nullable -- iter, null_or_index)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -3791,9 +3791,9 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
+        replaced op(_FOR_ITER, (iter, null_or_index:nullable -- iter, null_or_index, next)) {
             _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
-            null_or_index = window[1];
+            null_or_index = _PyFrame_ReadHome(frame, window + 1);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -3808,7 +3808,7 @@ dummy_func(
 
         macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
-        op(_GUARD_TOS_NOT_NULL, (null_or_index -- null_or_index)) {
+        op(_GUARD_TOS_NOT_NULL, (null_or_index:nullable -- null_or_index)) {
             EXIT_IF(PyValue_IsNull(null_or_index));
         }
 
@@ -3834,9 +3834,9 @@ dummy_func(
             _GUARD_TOS_NOT_NULL +
             _FOR_ITER_VIRTUAL;
 
-        inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
+        inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index:nullable -- iter, null_or_index, next)) {
             _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
-            null_or_index = window[1];
+            null_or_index = _PyFrame_ReadHome(frame, window + 1);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4016,7 +4016,7 @@ dummy_func(
             _INSERT_NULL +
             _LOAD_SPECIAL;
 
-        inst(WITH_EXCEPT_START, (exit_func, exit_self, lasti, unused, val -- exit_func, exit_self, lasti, unused, val, res)) {
+        inst(WITH_EXCEPT_START, (exit_func, exit_self:nullable, lasti, unused, val -- exit_func, exit_self, lasti, unused, val, res)) {
             /* At the top of the stack are 4 values:
                - val: TOP = exc_info()
                - unused: SECOND = previous exception
@@ -5357,8 +5357,8 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
-            top = PyValue_DUP(bottom);
+        pure inst(COPY, (bottom:nullable, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
+            top = PyValue_XDUP(bottom);
         }
 
         specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
@@ -5382,7 +5382,7 @@ dummy_func(
 
         macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
 
-        pure inst(SWAP, (bottom, unused[oparg-2], top --
+        pure inst(SWAP, (bottom:nullable, unused[oparg-2], top:nullable --
                     bottom, unused[oparg-2], top)) {
             PyValue temp = bottom;
             bottom = top;

@@ -1371,7 +1371,9 @@ allocate_chunk(int size_in_bytes, _PyStackChunk* previous)
     res->previous = previous;
     res->size = size_in_bytes;
     res->top = 0;
+#ifdef Py_GIL_DISABLED
     res->initialized = &res->data[0];
+#endif
     unsigned int first_bit = ((uintptr_t)res->data >> 3) & 63;
     size_t words = _PyStackChunk_BitmapWords(size_in_bytes, first_bit);
     res->presence_bits = (uint64_t *)((char *)res + size_in_bytes) - words;
@@ -3115,6 +3117,7 @@ chunk_frames_end(_PyStackChunk *chunk)
     return (PyObject **)chunk->presence_bits - 1;
 }
 
+#ifdef Py_GIL_DISABLED
 /* The initialized hit stays inline; only newly exposed storage needs this
  * fill. Reservation has already truncated the frontier before the header. */
 Py_NO_INLINE void
@@ -3128,6 +3131,7 @@ _PyStackChunk_ExtendInitialized(_PyStackChunk *chunk, PyObject **value_end)
     }
     chunk->initialized = value_end;
 }
+#endif
 
 /* Push a frame header and nslots slots onto a new chunk */
 static _PyInterpreterFrame *
@@ -3175,8 +3179,10 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+#ifdef Py_GIL_DISABLED
     PyObject **value_end = &new->data[nslots];
     _PyStackChunk_EnsureFrameStorage(new, (PyObject **)frame, value_end);
+#endif
     frame->base = _PyDataStack_Slots(&new->data[0]);
     _PyFrame_BindChunkBitmap(frame, new, frame->base);
     frame->saved_top = saved_top;

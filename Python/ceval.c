@@ -849,7 +849,7 @@ value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
     for (int i = 0; i < 2; i++) {
         int slot = input_slots[i];
         if (slot < 0 || slot >= nslots ||
-            (slot >= nlocals && !PyValue_IsNull(slots[slot]))) {
+            (slot >= nlocals && _PyFrame_HomeIsPresent(frame, slots + slot))) {
             value_revalidation_error("dictionary store changed an input home");
             return rest;
         }
@@ -1427,19 +1427,30 @@ call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
      * locals, and owns its value. Callback-current LOCAL homes are never
      * consumed by this record. */
     PyValue *homes = _PyFrame_Slots(frame) + base;
+    int required = kind == CALL_TRANSACTION_EX ? 1 : count - 2;
+    if (!_PyFrame_HomeIsPresent(frame, homes) ||
+        !_PyFrame_RangeIsPresent(frame, homes + 2, required)) {
+        PyErr_SetString(PyExc_SystemError, "call reads an absent required input");
+        return -1;
+    }
+#ifndef NDEBUG
     for (int i = 0; i < count; i++) {
         if ((i == 1 && (virtual_holes & _PyIR_CALL_HOLE_SELF)) ||
             (i == 3 && (virtual_holes & _PyIR_CALL_HOLE_KWARGS))) {
             continue;
         }
-        _PyValue_RecheckHome(homes[i]);
+        PyValue input = _PyFrame_ReadHome(frame, homes + i);
+        _PyValue_RecheckHome(input);
     }
+#endif
     int roles = 0;
-    if (!(virtual_holes & _PyIR_CALL_HOLE_SELF) && !PyValue_IsNull(homes[1])) {
+    if (!(virtual_holes & _PyIR_CALL_HOLE_SELF) &&
+        _PyFrame_HomeIsPresent(frame, homes + 1)) {
         roles |= CALL_SELF_PRESENT;
     }
     if (kind == CALL_TRANSACTION_EX &&
-        !(virtual_holes & _PyIR_CALL_HOLE_KWARGS) && !PyValue_IsNull(homes[3])) {
+        !(virtual_holes & _PyIR_CALL_HOLE_KWARGS) &&
+        _PyFrame_HomeIsPresent(frame, homes + 3)) {
         roles |= CALL_KWARGS_PRESENT;
     }
     return roles;
@@ -1840,7 +1851,7 @@ done:
          * the traceback entry and the RAISE event, as upstream pops it. */
         if (failed < 0) {
             PyValue *window = _PyFrame_Slots(call->frame) + call->base;
-            assert(PyValue_IsNull(window[0]));
+            assert(!_PyFrame_HomeIsPresent(call->frame, window));
             _PyFrame_WriteHome(call->frame, window, local_result);
             return -1;
         }
@@ -1912,7 +1923,7 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     int local = discard || result_slot < _PyFrame_GetCode(frame)->co_nlocalsplus;
     if (!discard && (result_slot < 0 ||
         result_slot >= _PyFrame_NumSlots(frame) ||
-        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[result_slot])))) {
+        (!local && _PyFrame_HomeIsPresent(frame, _PyFrame_Slots(frame) + result_slot)))) {
         PyErr_SetString(PyExc_SystemError, "value reader changed its result home");
         PyValue_XCLOSE(result);
         value_operation_close3(first, second, PyValue_NULL);
@@ -1965,13 +1976,13 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (!value_frame_is_current(tstate, frame) ||
         slot < _PyFrame_GetCode(frame)->co_nlocalsplus ||
         slot + 1 >= _PyFrame_NumSlots(frame) ||
-        !PyValue_IsNull(_PyFrame_Slots(frame)[slot]) ||
-        !PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1])) {
+        _PyFrame_HomeIsPresent(frame, _PyFrame_Slots(frame) + slot) ||
+        _PyFrame_HomeIsPresent(frame, _PyFrame_Slots(frame) + slot + 1)) {
         int nlocals = _PyFrame_GetCode(frame)->co_nlocalsplus;
         int nslots = _PyFrame_NumSlots(frame);
         int occupied = slot >= nlocals && slot + 1 < nslots
-            ? ((!PyValue_IsNull(_PyFrame_Slots(frame)[slot])) |
-               (!PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1]) << 1)) : -1;
+            ? (_PyFrame_HomeIsPresent(frame, _PyFrame_Slots(frame) + slot) |
+               (_PyFrame_HomeIsPresent(frame, _PyFrame_Slots(frame) + slot + 1) << 1)) : -1;
         PyErr_Format(PyExc_SystemError,
                      "method lookup changed its output homes "
                      "(current=%d, dst=%d, locals=%d, slots=%d, "
@@ -3354,9 +3365,14 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
         value = _PyValue_Publish(&value);
     }
     PyValue *window = frame->base + base;
-    PyValue receiver = window[0];
+    PyValue receiver = _PyFrame_ReadHome(frame, window);
     PyCodeObject *code = _PyFrame_GetCode(frame);
     frame->instr_ptr = site;
+    if (PyValue_IsNull(receiver)) {
+        PyErr_SetString(PyExc_SystemError, "completion receiver home is absent");
+        PyValue_XCLOSE(value);
+        return (_PyIRStepResult){site + 1, _PY_IR_STEP_ERROR_PRE};
+    }
     if (code->_co_monitoring != NULL &&
         kind != _PY_IR_SEND_THROW && PyValue_IsObject(receiver)) {
         PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
@@ -3385,9 +3401,11 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
      *
      * Commit the outcome without callbacks. A SEND destination may overlap
      * any input; detach the whole window before publishing it. */
-    PyValue cursor = window[1];
-    PyValue sent = kind != _PY_IR_FOR_ITER ? window[2] : PyValue_NULL;
-    PyValue exception = kind == _PY_IR_SEND_THROW ? window[3] : PyValue_NULL;
+    PyValue cursor = _PyFrame_ReadHome(frame, window + 1);
+    PyValue sent = kind != _PY_IR_FOR_ITER ?
+        _PyFrame_ReadHome(frame, window + 2) : PyValue_NULL;
+    PyValue exception = kind == _PY_IR_SEND_THROW ?
+        _PyFrame_ReadHome(frame, window + 3) : PyValue_NULL;
     _PyFrame_WriteHome(frame, window, PyValue_NULL);
     _PyFrame_WriteHome(frame, window + 1, PyValue_NULL);
     if (kind != _PY_IR_FOR_ITER) {
@@ -3399,9 +3417,12 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue displaced = PyValue_NULL;
     if (kind != _PY_IR_FOR_ITER && destination != IR_NO_DST) {
         assert(destination < _PyFrame_NumSlots(frame));
-        displaced = frame->base[destination];
-        assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
-               PyValue_IsNull(displaced));
+        if (destination < _PyFrame_GetCode(frame)->co_nlocalsplus) {
+            displaced = frame->base[destination];
+        }
+        else {
+            assert(!_PyFrame_HomeIsPresent(frame, frame->base + destination));
+        }
         _PyFrame_WriteHome(frame, frame->base + destination, value);
         _PyValue_CheckHome(value);
         value = PyValue_NULL;
@@ -3604,6 +3625,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         PyErr_NoMemory();
         goto fail;
     }
+    _PyFrame_InitializeBindings(frame, code, 0);
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
     stage_binding_frame(tstate, frame, staged);
     if (initialize_locals(tstate, frame, func_obj, code, args, argcount, kwnames)) {
@@ -6343,7 +6365,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    PyValueBorrow index = PyValue_Borrow(*index_ptr);
+    PyValueBorrow index = PyValue_Borrow(_PyFrame_ReadHome(frame, index_ptr));
     if (PyValue_IsTaggedIndex(index)) {
         intptr_t i = PyValue_UntagIndex(index);
         assert(i >= 0);

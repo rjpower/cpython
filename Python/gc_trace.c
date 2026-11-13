@@ -1257,8 +1257,8 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
             continue;
         }
-        /* Writer validation still has initialized NULL scratch. This control
-         * must be replaced before the bitmap rival admits stale words. */
+        /* The shadow compares code ranges against the selected presence
+         * provider; it never loads a zero-bit scratch word. */
         if (f->phase_state & _PyIR_PHASE_PUBLISHED) {
             uint8_t status = _PyIR_ShadowFramePhase(f);
             f->phase_state = (uint16_t)(

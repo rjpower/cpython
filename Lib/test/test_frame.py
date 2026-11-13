@@ -149,7 +149,7 @@ class HomeBitmapTest(unittest.TestCase):
 
         class Target:
             def __setattr__(self, name, value):
-                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                internal.check_frame_presence(sys._getframe(1))
                 observations.append(name)
                 object.__setattr__(self, name, value)
 
@@ -169,7 +169,7 @@ class HomeBitmapTest(unittest.TestCase):
             def __hash__(self):
                 caller = sys._getframe(1)
                 if caller.f_code in (build.__code__, build_map.__code__):
-                    internal.check_frame_bitmap_null_control(caller)
+                    internal.check_frame_presence(caller)
                 observations.append('hash')
                 return id(self)
 
@@ -191,12 +191,12 @@ class HomeBitmapTest(unittest.TestCase):
 
         def build(a, b, c):
             value = f'{a}{b}{c}'
-            internal.check_frame_bitmap_null_control(sys._getframe())
+            internal.check_frame_presence(sys._getframe())
             return value
 
         def append(value, part):
             value += part
-            internal.check_frame_bitmap_null_control(sys._getframe())
+            internal.check_frame_presence(sys._getframe())
             return value
 
         for i in range(100):
@@ -214,7 +214,7 @@ class HomeBitmapTest(unittest.TestCase):
                 self.name = name
 
             def __get__(self, receiver, owner):
-                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                internal.check_frame_presence(sys._getframe(1))
                 observations.append(self.name)
                 if self.name == 'enter':
                     return lambda: receiver

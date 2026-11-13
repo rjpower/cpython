@@ -312,7 +312,7 @@ set_opcode(_PyInstr *instr, int opcode)
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
     int handler = IR_HANDLER(old);
-    if (handler >= MIN_INSTRUMENTED_OPCODE && handler < IR_FIRST_ONLY_HANDLER) {
+    if (_PyIR_HandlerFlags[handler] & _PyIR_H_INSTRUMENTED) {
         /* Lost race with instrumentation */
         return 0;
     }
@@ -627,6 +627,8 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
                                         : specialized_opcode;
+    int previous = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    handler = _PyIR_CallRoleHandler(previous, handler);
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;

@@ -84,6 +84,26 @@ _PyIR_BaseOpcode(int handler)
     return _PyOpcode_Deopt[handler];
 }
 
+int
+_PyIR_CallRoleHandler(int handler, int opcode)
+{
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    assert(opcode >= 0 && opcode < IR_NUM_HANDLERS);
+    unsigned int holes = _PyIR_FormatOf(handler)->call_input_holes;
+    if (holes == 0 || opcode >= IR_FIRST_ONLY_HANDLER ||
+        (_PyIR_FormatOf(opcode)->flags & _PyIR_TRANSPARENT))
+    {
+        return opcode;
+    }
+    assert(opcode >= 0 && opcode < 256);
+    assert(holes == _PyIR_CALL_HOLE_SELF ||
+           holes == (_PyIR_CALL_HOLE_SELF | _PyIR_CALL_HOLE_KWARGS));
+    int row = (holes & _PyIR_CALL_HOLE_KWARGS) != 0;
+    int selected = _PyIR_CallRoleHandlers[row][opcode];
+    assert(selected != 0);
+    return selected;
+}
+
 /* The value of the field at loc of word */
 static inline uint32_t
 read_field(_PyIRWord word, int loc)
@@ -390,7 +410,7 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    return opcode;
+    return _PyIR_CallRoleHandler(handler, opcode);
 }
 
 int

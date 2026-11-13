@@ -3180,6 +3180,7 @@ PyValue
 _PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
                                   _PyInterpreterFrame *frame, PyValue result)
 {
+    assert(!PyValue_IsNull(result));
     return frame_clear_and_pop(tstate, frame, result, _PyIR_RETIRE_NORMAL_RETURN);
 }
 

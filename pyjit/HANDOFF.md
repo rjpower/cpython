@@ -138,3 +138,40 @@ Never stage, reset or delete unrelated preexisting files:
 `pyjit/bench/results/checkpoint-6a0e4c12c17.md`,
 `pyjit/issues/checkpoint-closure/ctypes-rawpin-build.log`,
 `pyjit/issues/checkpoint-closure/w5-release.lock`.
+
+## Latest normal-transport qualification boundary
+
+Integrated `863b6d0cb08` includes window results, folded inputs, super observer
+footprints and the corrected WINDOW-only extent rule. Native freezer checks
+pass five bootstrap images plus 25/26 broader compile-only images. Full release
+build now passes site, then rejects shutil.copymode at virtual SELF home 7;
+debug is not attempted. CoroutineTest.test_await_11.foo rejects virtual SELF
+home 3 after CLEANUP_THROW. Frames owns actual disjoint-child transport;
+GC owns positive exceptional-prefix absence. Root owns native execution.
+No new timings are valid. Evidence: `E/call-window-scope-freezer-commands.json`,
+`E/call-normal-transfer-checkpoint-release-build.log`, and
+`E/call-last-admission/{commands.json,full-decoded.txt,source-commands.json}`.
+The coroutine has exactly one IRSM record, from 8/to 9/edge 0, with handler=-1;
+its executable EH entry at YIELD targets 15, cutoff 4. Source positions grant no
+proof.
+
+Bitmap source/builds are `BASE/worktrees/call55-bitmap` and
+`BASE/call55-bitmap-{release,debug}`. Both use the integrated configuration
+arguments. Root merge `853bd363ce1` preserves the rival's native-entry,
+write/take/vacate and writer-helper ports. Actual peer review caught and
+restored a dropped emitter hunk before generation. Regeneration is unchanged;
+native freezer and five bootstrap plus 25/26 broader checks pass. Evidence:
+`E/bitmap-call-window-merge-{regen,freezer}-commands.json`.
+No complete bitmap module/test pass, stale-scratch switch or performance
+comparison exists. The exact AST/IO writer bridge must be replaced by explicit
+emitter capabilities before M5/M7 selection.
+
+Delegated YIELD source is still split among P da0c629bfeb, G 16f465dc0e5 and
+dirty W. Compose only after actual matching IR generation/source peers. Do not
+build an isolated lifecycle component. S7 stale-view generation found missing
+borrow suppression in the new format; the corrected draft passes host
+generation of cases/targets/metadata and explicit SEND/delegated event checks.
+Evidence is `E/delegated-source-smoke/{check.py,check.log,contracts.json,identity.json}`.
+The first two root harness retries had setup errors and supply no pass evidence.
+Error scope and bitmap-writer cleanup designs are reviewed directions with
+explicit unresolved source ABI gates, not completed authority switches.

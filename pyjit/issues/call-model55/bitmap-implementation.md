@@ -236,3 +236,97 @@ earlier scheduling makes no FT bitmap-authority claim.
 No native job or authority switch has occurred. The full static comparator
 remains open. Merge the complete M4 interfaces into the rival before the final
 comparison; storage/writer progress is not performance or completion evidence.
+
+## Bounded source snapshot before CALL merge
+
+The isolated `call55-bitmap` diff on `9f28` implements storage and writer
+plumbing, not a runnable or final authority switch. GC has reviewed storage,
+forward/reverse iteration, the private counted tracing mode and its explicit
+native-prefix distinction. IR is reviewing the actual emitter writer changes.
+
+| Area | Actual source |
+| --- | --- |
+| Chunk/heap allocation and address capability | `pystate.h`, `pycore_home_bitmap.h`, frame structs, `pystate.c`, frame/gen constructors and sizes |
+| Canonical home writes/takes/moves | `ceval_macros.h`, generator consume/store emission, bytecode local stores, common bind/call/unpack helpers |
+| Observer/copy writes | local proxy and redirect stores, current local-only copy and selected scratch moves |
+| Native exception | exact checked interpreter-exit body selects native consume; native entry has no bitmap pointer |
+| Staged roots | unpack's physical prefix descriptor; native redirect array keeps a NULL descriptor |
+| Private GIL tracing | once-per-chunk counted owner walk, explicit header/result roots and heap-home bits; logical root inspection and FT retain their old tag policy |
+| Focused fixture | all 64 first-bit alignments, clipped endpoints, alias moves, count-to-inline replacement, balanced drain and size charges |
+
+The residual raw-write census is `bitmap-writer-census.txt`. Fresh heap/copy
+NULL fills are intentional zero-bit stores; the native interpreter return is
+not an arena home. Lower `frame.c` clears/checker are a separate GC-owned
+packet. Generated outputs are deliberately unchanged. The newer CALL roles,
+created selector and vacant-return semantics must merge before completing
+writer closure. Current NULL-shadow checking and arena conservative scans
+remain development controls; they must not survive an asserted stale-word
+bitmap authority switch. Generic `tp_traverse` still reports logical no-count
+referents, and no FT deferred-owner replacement is claimed.
+
+### Post-merge alias and helper closure
+
+The second writer pass follows array aliases and helper out-parameters, rather
+than treating the absence of `base[i] =` as closure. It ports:
+
+| Physical writer | Capability / sequencing |
+| --- | --- |
+| Unicode append's `target_local` | Clear home and bit before consuming the string in the native append wrapper |
+| Tuple/list fast-unpack `*values++` | Commit every output through `WriteHome` before input retirement |
+| BUILD_SET `values[i]` | Clear home and bit before hashing or closing the moved value |
+| Conditional NULL and `_INSERT_NULL` output arrays | Explicit home stores, with no callback between overlapping inserts |
+| LOAD_GLOBAL `res[1]` | Existing outlined native return wrapper, followed by the strict frame store |
+| Special lookup method/self out-parameters | Explicit frame capability for the arena caller, NULL for the two native callers; every method install and receiver detach precedes cleanup callbacks |
+| BUILD_STRING / BUILD_MAP argument cleanup | Both private helpers take a strict frame capability; their only callers are actual arena windows; common cleanup clears bits before each close |
+
+The prior classification of `clear_value_arguments` as native workspace was
+wrong: both its callers consume BUILD_STRING/MAP arena windows. The new caller
+census and signatures make that authority explicit. Container stores through
+`value_ptr`, object attribute slots, list item pointers and cell contents stay
+container edges; native temporary arrays retain the native conservative
+policy. Borrowing tuple/list construction helpers leave input storage intact
+until the generated input-consumption hook; they do not secretly clear it.
+
+Fake phase/retirement buffers reserve and initialize bitmap tails; copy probes
+reserve source/destination tails and retain the real embedded generator
+container for created traversal. Code/function-pin-only fake headers never
+read homes. Native interpreter entry has the checked no-bitmap capability.
+The test-only `check_frame_bitmap_null_control` compares current initialized
+home tags with bits during unpack assignment, set/map hashing, descriptor
+lookup and live string operations. Its full-range oracle is a temporary
+writer-validation aid and must change before stale zero-bit homes are admitted.
+Source checks pass; root still owns generation and actual execution.
+
+### Constructor audit before first native validation
+
+Source audit on `52683efefbd` finds no additional home-bearing fake constructor
+without storage. This is independent of generated/native correctness:
+
+| Constructor | Storage before first home operation |
+| --- | --- |
+| New/cached thread chunk and unchecked/overlap reservation | Chunk tail zeroed once on allocation; each reservation binds the actual physical word pointer. Cached reuse preserves the drained map. |
+| `_PyFrame_New_NoTrack`, direct `PyFrame_New` initialization | Allocate N + HeapWords(N), initialize the tail before locals/constants are stored. |
+| `make_gen`, public `gen_new_with_qualname` | Same heap tail, initialized before copy/origin work; copied headers preserve destination bitmap allocation. |
+| CAPI phase and retirement probes | N + HeapWords(N) native test buffer, zero tail, explicit `owner_bits`; deliberate scalar/NULL corruptions own no count. |
+| CAPI selected/created copy probe | Both tails initialized before payload publication; created destination includes the real embedded generator container; cleanup takes the selected bit before close. |
+| CAPI bitmap mechanics probe | Four words cover 130 homes at all first-bit alignments, with explicit alias-frame word pointers. |
+| CAPI code/function-pin-only stack headers | Never publish, visit or mutate homes; their absent bitmap is not an arena capability. |
+| CAPI dirty-arena allocator fixture | Calls the real chunk/reservation constructors; it does not forge a chunk or home bitmap. |
+| Evaluator native `_PyEntryFrame` | Explicit NULL owner_bits and exact checked native consume/store contract. |
+| Thread-state embedded base sentinel | Reset from the static initial thread state (or zero allocation); owner INTERPRETER, NULL bitmap, one initialized native sentinel home; never uses ordinary bitmap writers. |
+
+`_testinternalcapi/native_scope.c` snapshots into native arrays and does not
+forge or write frame homes. Other `_testcapi` frame uses obtain existing real
+frames or save/restore current-frame pointers. The external debug readers
+read layout offsets; they do not construct executable frames. Header/heap
+sizes and generated offsets still need coordinator validation. No candidate
+program or build was executed for this audit.
+
+
+### Temporary generation bridge cleanup gate
+
+The bounded normal-vacate source footprints are preparatory writer-validation
+adapters. Their nine copied C bodies must be replaced by actual emitter home
+transport and narrow consuming-helper capabilities before final M5/M7 review;
+see [bitmap-writer-capability-plan.md](bitmap-writer-capability-plan.md).
+The bridge neither supplies readable-home authority nor changes runtime ABI.

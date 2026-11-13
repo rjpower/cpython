@@ -765,3 +765,76 @@ are frozen for implementation: C unused, real D receiver operand, compile-time
 cursor passthrough, all-sites admission and a literal suspension phase. This
 requires no extra frame field or duplicate protocol table. Full readable-home
 authority remains a separate unfinished contract.
+
+### Bootstrap closure and broader compile-only admission
+
+The normal SEND/THROW completion packet`8123ea4a05a` and generated
+`f3c04969f08` make all five bootstrap freezer images pass. It describes
+actual helper drains of three SEND or four throw inputs, followed by actual
+result publication. FOR's two-input/no-result completion stays distinct.
+`4ec43aa4fc8` additionally revokes a handler's certificate when any reached
+completion route disagrees, before canonical-family intersection. Actual
+12-row host checks and valid one-route target mutations pass; the initial
+mutation used a macro argument expression outside the parser's grammar and
+is retained as a failed setup, not a negative pass.
+
+The complete release build atf3c reaches site initialization, which rejects
+`setcopyright`'s moved empty-list output. Debug is not attempted. A26-module
+compile-only sweep returns10 passes and16 admission rejections. Retained
+decoded images group them into actual local-result moves, super optional-self
+transport and comprehension inputs folded away from their logical window
+positions. These are compiler/admission probes, not behavioral test counts.
+Evidence is`E/call-role-first-native-*-build*`,
+`E/call-bootstrap-site-*` and`E/call-admission-matrix/{commands.json,
+gdb-commands.json,full-decoded.txt}`. The GDB attempt using`_bootstrap_python -c`
+failed because that utility requires a filename; the corrected script-form
+probe captures the failure.
+
+Actual final window-result receipts integrate at`3d4df716c50`/`70a3d61dd2c`.
+They distinguish local/discard moves from retained scratch outputs, and reject
+a scratch recipient the adapter does not actually write. Root's host checks
+confirm the capability for list/tuple/map/set/string builders. Scalar-input
+physical footprint correction integrates at`1ddb3d301b2`, preserving only
+prior absence at former logical window positions. Neither adds hot stores,
+physical NULL facts or complete initialized-home authority. The super adapter
+proof and merged native checks are pending. No new timing follows.
+
+The bitmap's formatted-writer corrections and temporary exact AST/IO footprint
+bridge regenerate successfully. At`531df5404af` its native freezer builds
+and all five bootstrap images pass. No full bitmap build/tests or authority
+comparison is claimed. The bridge's duplicated body contracts are explicitly
+a temporary validation device; emitter-derived home-write/helper capabilities
+must replace them before final M5/M7 selection. Both configurations retain
+the selected GCC/configuration arguments.
+
+
+### Matched static/bitmap admission boundary
+
+The super observer footprint integrates at `188819154b0`, with generated
+metadata `6376a80d48a`. A combined compile-only sweep initially falls to 4/31:
+the folded-input extent rule was applied to nonwindow peek operations, making
+them destroy unrelated absence facts. `863b6d0cb08` limits that rule to WINDOW
+formats. The corrected sweep passes all five bootstrap images and 25/26 broader
+images. Full release then reaches build-details generation after site imports,
+and rejects shutil.copymode at CALL word 50, virtual SELF7; debug is not
+attempted. These are admission failures, not behavioral test failures.
+
+Retained GDB images isolate two remaining mechanisms: LOAD_ATTR specializations
+which create disjoint implicit children lose the family's normal-drain proof;
+and independent unknown EH seeds lose a retained empty hole below coroutine
+cleanup. The coroutine's only source-event record has handler=-1, so its
+failure is executable EH transfer, not a source-position condition. Bounded
+actual-emitter certificates and real exceptional predecessors are under peer
+review. They may transport positive absence, never readable-value or NULL
+facts. No bitmap/static authority switch or new speedup is claimed.
+
+Bitmap merge `853bd363ce1` passes regeneration with no generated diff. Native
+freezer compilation, all five bootstrap images and 25/26 broader compile-only
+checks match the static candidate. Its failure is the same coroutine case.
+Source review caught and restored unrelated rival emitter ports dropped while
+resolving the merge before generation/native execution. Evidence:
+`E/call-window-scope-freezer-commands.json`,
+`E/call-normal-transfer-checkpoint-release-build.log`,
+`E/call-last-admission/{commands.json,full-decoded.txt,source-commands.json}`,
+and `E/bitmap-call-window-merge-{regen,freezer}-commands.json`.
+The broader probe list now includes shutil before another complete build.

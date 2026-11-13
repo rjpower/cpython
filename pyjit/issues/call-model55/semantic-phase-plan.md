@@ -1,522 +1,213 @@
-# Semantic ownership and phase plan
+# Semantic ownership and phase plans
 
-Status: the normal-retirement certificate, explicit retirement reasons,
-provider kinds and first shared-emitter phase graph are integrated through
-`ed08ab64c7e`. Both roles pass 675 core, nine phase and nine selected generated
-contract cases; groups overlap. Continuing cross-lane source/native review is
-GO for this partial M2 coverage. Selected copy/capture, empty-created copying
-and the explicit CREATED collector selector subsequently pass focused checks
-through44383f6baa7. Canonical virtual CALL roles and a separate positive NO_HOME
-fact are merged at aad17cd9c1c, but freezing exposes missing consume proofs and
-a feedback-argument replay defect; that packet has no runtime pass. The
-[report](report.md) records exact evidence and preparatory costs. NULL homes
-remain general execution authority. Complete family/lifecycle coverage and
-the atomic M4 switch remain open.
+Status: active model55 source, with NULL homes and conservative arena scanning
+still authoritative. The first phase composition through `ed08ab64c7e` has
+both-role focused, native and performance evidence. Later copy/created/return
+ports have focused evidence. CALL normal-transport source through
+`863b6d0cb08` is not runtime-qualified: five bootstrap images and 25/26 broader
+compile-only checks pass, while the full release build rejects shutil.copymode.
+Disjoint implicit-child and coroutine EH-prefix proofs remain incomplete. The
+[report](report.md) owns exact results; the [ledger](implementation.md) owns
+stage completion. This document describes implemented contracts and separates
+remaining M4 requirements. The [target model](../../design/proposals/register-call-model55.md)
+and [reader census](lifecycle-readers.md) cover the complete migration.
 
-## One semantic representation
+## One source of transport facts
 
-Use the same canonical code word SiteId and family-assigned uint8 PhaseId for
-admission, callback publication, teardown, collector roots and observers. SiteId
-is an immutable word offset, never an executing handler address or a function's
-mutable code. PRE, POST, ERROR, RETIRING and SUSPENDED have common role names;
-additional staged roles describe finite family states, not frontend stack
-depths. Dynamic output progress is one validated prefix/suffix recipe plus a
-cursor, rather than a phase per item.
+The shared `IRStack`/`IREmitter` produces executable C and ownership events
+from the same loads, detaches, publications, helper invocations and terminal
+commits. Declared logical stack IO supplies frontend conversion; it is not the
+physical register footprint after folding or allocation. Explicit field roles,
+actual output moves and selected outgoing edges supply that footprint.
 
-Each shape separates:
+```mermaid
+flowchart TD
+    F[Frontend operations and virtual value identities] --> A[Register allocation and explicit field roles]
+    D[Shared instruction DSL] --> E[IRStack / IREmitter]
+    A --> E
+    E --> H[Native register handlers]
+    E --> M[Generated transport events and family contracts]
+    M --> V[Common immutable-image admission worklist]
+    V --> P[Code-owned sparse site / phase plans]
+    H --> L[Literal publication at reached boundary]
+    L --> Q[Cold matched-frame selector]
+    P --> Q
+    Q --> R[Copy / retirement / collector consumers]
+    O[Source positions and observer recovery container] -. current cold recovery-edge dependency .-> V
+```
 
-- named binding storage, which may contain unbound canonical NULL and can be
-  changed by a local proxy;
-- initialized/readable scratch values, including permitted canonical NULL;
-- scratch owner obligations, including inline/immortal logical values whose
-  runtime tags require no decref;
-- detached counted native owners and results under the selected native policy;
-- staged arena owners and moved heap edges, with their actual unique authority.
+Ordinary dispatch does not decode the phase plan. SiteId is an immutable word
+offset under the independently owned executing-code pin; it is neither a
+handler address nor the function's mutable code. Phase publication is a literal
+store at an actual reached boundary. Phase zero cannot reacquire authority.
 
-The persistent plan interns initialized/owner shapes and indexes reached
-site/phase rows. Ranges use the full admitted physical home domain through 4094;
-no 64-home cutoff. A compact empty/default shape is shared. A row has explicit
-coverage and exactness; unknown or merely possible ownership never creates a
-readable range. Potential nullable owners use runtime canonical tags when
-enumerated; an owner range does not assert every home contains a mortal object.
-The same release iterator will supply teardown and remaining-root enumeration.
+Opaque frame/window accesses and unconverted helper effects lose coverage.
+Audited leaf bodies remain narrow source guards while their transport is
+ported. Exact body matching is not general C verification. The bitmap branch's
+[temporary writer footprint bridge](bitmap-writer-capability-plan.md) must be
+replaced by emitter-owned home-write/helper adapters before final selection.
 
-Generate these facts at the existing `IRStack`/`IREmitter` events that actually
-load, consume, take, duplicate, retire, flush and publish. Reuse `external_io`,
-`through_items`, field roles, Outcomes, result publication and helper marker
-effects. A general scalar/window IO recipe supplies normal-edge transport;
-explicit helper contracts describe opaque frame/window transactions. Exact body
-templates remain useful regression guards for a narrow contract but cannot
-certify arbitrary C semantics. A helper's input/output ownership, early exits
-and callback phase must be declared and checked against its caller. No parallel
-manually maintained opcode decoder is the long-term source of truth.
+## Facts and authority
 
-Admission meets readable/initialized facts across all predecessors and unions
-possible release obligations. Exact shape coverage needs a second agreement
-check: alternate paths must have compatible unique-owner/readable shapes, or
-must canonicalize inactive homes to NULL, split a finite family phase, or reject
-the image. A union of possible owner bits alone is never that certificate.
-Exceptions and observer entries need their actual incoming transfer, not an
-unknown seed once authority switches. Compare virtual regcfg transfers with
-physical allocation, aliases and the whole child clobber extent.
+Keep these properties distinct:
 
-## Family and boundary coverage
-
-| Family or boundary | Required normal and staged facts |
+| Property | Meaning |
 | --- | --- |
-| Constants, local/cell/free loads, binding store/clear | Explicit fresh/duplicate/move/NULL; local boundness remains a runtime exception where required. Stores publish replacement before displaced-owner close. Hidden constant homes stay readonly. |
-| COPY/SWAP and pass-through windows | Parallel source snapshots; COPY adds one logical owner, SWAP transports existing owners; holes are not reads. |
-| Arithmetic, comparisons, indexing, attribute readers/stores | PRE borrowed bindings versus consumed scratch; helper/provider owners; early result publication; error before/after retirement; folded local destination and post-callback refresh. Method loads define both callable and self-or-NULL. |
-| Container building/mutation, imports, intrinsics and miscellaneous helpers | Fixed/dynamic consumed inputs, new output owner, transferred container edges and failure cleanup; an actual helper contract when IO alone cannot prove the transfer. |
-| Conditional/fused branches | Separate taken/fallthrough transport and nullable rules; deopt restores original PRE before any consume. Specializations and instrumented forms must preserve the certified family role. |
-| CALL, CALL_KW, EX and specialization/binder forms | Explicit supplied-self-or-NULL protocol, borrowed versus counted argument ownership, child reservation/clobber, precommit fallback, committed parent/child partition, staged binding/provider cleanup, discarded/folded-local result and errors. Parent survivors remain below the child clobber extent. |
-| FOR/SEND and generator entry/completion | Body/yield, exhaustion, exception and redirection outcomes; receiver/cursor/tagged-index roles; returned/yielded result detached until recipient publication. |
-| Generic unpack | Validated source/window/capacity plus initialized suffix; keep its outer descriptor through iterator/surplus/sequence cleanup; final output POST before descriptor disarm. Exact tuple/list paths use checked fixed output recipes. |
-| Exception construction/matching/unwind, source errors | Explicit partial consume/output failure, exception-slot/lasti transfer, handler incoming shape and saved native exception owner. A PC alone does not identify the error shape. |
-| RESUME, polls, monitoring, observer terminal/redirection | Shared emitter event records the state before the callback and committed state afterwards; reload mutable bindings/destinations. Redirect recipes preserve actual owner/protocol prerequisites. |
-| RETURN, unwind, direct heap clear, staged initialization failure | Producer-supplied reason selects the actual retirement entry; result is separate; code pin fixed-last; reservation survives callbacks; escaped takeover changes edge authority before later closes. |
-| Yield/suspend/resume/throw/close and heap construction | Every exposed initialized prefix and suspended state, including allocation failure and unstarted generator; code independent of function mutation. |
-| Entry trampoline and InitCleanup | Fixed explicit bounded images need their own contracts; ordinary code admission does not certify a NULL-code sentinel or different static executable words. |
+| Named binding state | Initialized nullable binding, mutable through supported local proxies; cell contents have their own boundness. Hidden constants remain readonly. |
+| Initialized/readable scratch | A canonical language value, permitted NULL protocol or explicit tagged control exists at this home on every incoming path. |
+| Logical owner obligation | A value must be transferred or released; inline and immortal values may require no decref. |
+| Counted edge | The canonical runtime tag carries a physical count; cyclic subtraction visits each such edge once. |
+| `NO_HOME` | No logical owner occupies this scratch home. It grants neither a readable value nor a physical NULL fact. |
+| Physical NULL | A positively proved canonical NULL representation; distinct from stale nonowning child-header bytes. |
 
-Implicit ordinary CALL NULL needs a producer/site census before changing the
-encoding. Compare a certified ordinary-call form that supplies NULL without
-reading an inactive home against an explicit canonical-NULL producer. Prefer
-the family form when it expresses actual producers cleanly and saves a store.
-Method calls retain a real self value. Elided PUSH_NULL/empty physical scratch
-is development evidence only and cannot become the stale-scratch definition.
-Update compiler, allocation verifier, assembly, all public/marshal/frozen
-admission, handler metadata and disassembly together; no hidden constant pool
-or borrowed mortal scratch workaround.
+Must facts intersect at joins; possible owner obligations union. A MAY owner
+without must initialization cannot authorize a stale read. Unknown transfers
+never manufacture absence, initialization or completeness. A returning child
+can leave nonowning overlay bytes: its drained homes may be logically empty
+without containing NULL.
 
-## Integrated normal-retirement certificates
+`_PyIRHomeAuthority` distinguishes NONE, shadow CANDIDATE, MUST_READABLE and an
+explicit development NULL-control adapter. The 16-byte view contains the
+binding count, scratch limit and borrowed selected ranges. Copy/collection must
+require the authority needed for the actual action; an uncovered view is not
+an empty scratch shape.
 
-The first persistent consumer deliberately certifies only normal RETURN paths
-whose complete predecessor transfer coverage yields the exact empty scratch
-retirement shape. It is infrastructure evidence; a locals-only/empty scratch
-plan does not by itself remove useful work or establish general authority.
+## Generated normal transport
 
-1. Extend the existing worklist with monotone complete-coverage tracking;
-   entry scratch is physically NULL but unavailable as a language value.
-   Unsupported rows and error/observer entry seeds poison completeness.
-   Certified transfers do not recover completeness after an unknown barrier.
-   Add a checked RESUME normal-preserve recipe so ordinary compiled scalar
-   functions can reach the first consumer. This describes its normal edge,
-   not its callbacks/errors. Stable exit inspection requires no remaining
-   scratch obligation and a certified physical NULL for every scratch home.
-2. Build a code-owned sparse certificate indexed by the immutable return site.
-   Initially there is one used shape: nullable bindings plus empty scratch and
-   separately detached result. Unsupported code uses NULL; code whose every
-   normal-return site is certified can use a shared static default with no
-   side allocation; mixed sites use a sorted uint32 site vector. A shared
-   default still requires an aligned, in-bounds canonical SiteId naming an
-   actual source-certified normal RETURN; a reason constant alone cannot
-   certify an arbitrary PC. Do not add
-   unused generic range/phase arrays before the next consumer needs them.
-   Place one plan pointer in `_PyCodeExec` (eight bytes on the measured ABI),
-   not the interpreter frame. Fixed static images remain explicitly uncovered.
-   Root must review executable-header addressing and regenerate/rebuild.
-3. Construct the certificate from the same immutable normalized image/proof,
-   with checked allocation arithmetic and balanced failure cleanup. The
-   executing image owns any sparse allocation until code destruction and
-   reports its bytes in size accounting. Prefer attaching results while
-   preparing the existing executing image; no per-call plan allocation,
-   image refcount or debug-info dependency. If cold worklist reuse needs an
-   input view, refactor its input access rather than copying a second validator.
-   The implemented builder uses the same canonical physical scratch extent as
-   admission (`max(co_stacksize, 1)`) and requires it to agree with frame geometry.
-   Noncanonical static geometry is uncovered. Bitvector storage independently
-   has at least one word, so a zero logical extent cannot divide by zero.
-4. Frames supplies NORMAL_RETURN, ERROR_UNWIND, HEAP_CLEAR or STAGED_FAILURE
-   to private retirement paths. No-result is not itself a proof of error;
-   staged binding failure precedes RESUME. Thread/heap slow continuations link
-   their record, then call a cold shadow query before the cursor changes.
-   Capture and validate the selected site once before cleanup callbacks; no
-   later observer recomputes the comparison. The query checks only certified NORMAL_RETURN here; other reasons and
-   unproved sites return UNCOVERED. EXACT compares all scratch homes with
-   retained canonical NULL control, catching inline/immortal leftovers as well
-   as counted objects. It never rereads geometry after code detach.
-5. Declare reason and shadow-status bytes in the current record's padding
-   (offsets 22/23 on the measured ABI) if root/GC approve; validate enum domains
-   on push, with zero meaning uncovered/no retirement reason for existing
-   prefix-only producers. Hidden constant homes remain in the named binding
-   region and retain their owner authority. A precise test query observes the linked reached status, so a test
-   cannot pass solely because a separate inspection helper rebuilt a plan.
-   EXACT, UNCOVERED and MISMATCH have distinct query results; MISMATCH fails a
-   development assertion/diagnostic, never silently becomes EXACT. Root freezes
-   diagnostic behavior before implementation. No scanner or NULL store changes.
+Normal-edge facts do not certify callback, error, suspended or observer phases.
+The current event interface includes:
 
-Complexity remains O(words + blocks * ceil(scratch/64)) admission memory plus
-the queue/transfer work. Persistent unsupported/default code adds only its
-executing-header pointer; mixed normal-return coverage adds a small header
-and four bytes per certified site, with overflow-checked O(return sites)
-storage. Lookup is constant for shared defaults or logarithmic in sparse sites;
-scratch shadow comparison is O(scratch) only in reached slow retirement.
-Price extra reason argument traffic, cold query/link/status stores, executable
-header growth, actual native stack/spills and plan bytes. No elapsed benefit
-is assumed, and no large hot automatic record or per-inline-consume decode
-is introduced.
-
-Focused tests use real compiled scalar functions plus synthetic constructor,
-replace and patched marshal images. Require actual EXACT slow retirement,
-UNKNOWN after unsupported rows, branch/loop predecessor coverage, full scratch
-extent through 4094, nullable/unbound bindings, inline/immortal/NULL values,
-independent result presence and chain exhaustion. Corrupt a development control
-home only through a bounded test-only helper to require MISMATCH if such helper
-is justified; do not execute malformed public code as a substitute. Root owns
-generation, both-role runs and native evidence.
-
-GC source postreview closed two required corrections: canonical zero-stack
-geometry plus nonzero bitvector storage, and positive full-body RESUME contracts
-that reject direct cached-pointer writes. Perturbations include `*slots`, pointer
-arithmetic and indexed frame writes. Source AST/diff checks pass. This one RESUME
-normal contract remains deliberately narrow; it does not replace the shared
-emitter callback/ownership event work below.
-
-## Immediate following increment and M4 gates
-
-After this consumer, record per-instruction callback phases from shared emitter
-IO/consume/retire/publication events. Start the actual generic unpack suffix
-and staged binding consumers in parallel with the finite scalar callback
-ledger. Their outer-lifetime proofs matter more than adding more exact-body
-normal templates. Add persistent initialized/owner range shapes only as those
-reached consumers need them, reusing the same code pin/site/phase lookup.
-
-Before M4, every admitted executable family, edge and static image must have
-complete source-checked normal and callback/error/suspend contracts. UNKNOWN
-cannot remain a selectable runtime fallback. Close the callback/arena/heap-edge
-census and migrate collector, escaped-frame, debugger, remote reader, exception,
-constructor and suspension consumers. Shadow comparisons check logical values,
-initialized readable homes and unique counted edges separately; they do not
-equate nonNULL with mortal ownership. Only then can static authority replace
-NULL interpretation and arena scans together. Native C/PyMem discovery remains
-the separate selected policy. Root owns full composition/performance admission.
-
-## Shared-emitter increment: one event graph, two immediate consumers
-
-The next source increment replaces the normal-only table interface with an
-ownership event graph emitted while `IRStack` and `IREmitter` emit the actual
-handler. Its immediate consumers are the existing admission worklist and a
-reached collector shadow check during generic binary operations. A live scratch
-survivor must be present in the integration test; empty retirement alone does
-not establish useful phase coverage. NULL stores/scans remain authoritative.
-
-The current hooks already supply most transport facts:
-
-| Existing source hook | Event it must emit |
+| Actual emitted transport | Cold contract |
 | --- | --- |
-| `IRStack.pop/load`, `external_io`, `through_items` | Read a value or nullable protocol role; bind a view without granting a count. |
-| `consume`, `ensure_consumed`, `TAKE`, `OWNER` | Move a scratch owner out; TAKE of a binding acquires a separate evaluated owner, OWNER of a binding yields NULL. Kill all aliases of the consumed owner. |
-| `store`, `vacate`, `flush`, `emit_final_outputs` | Publish/move an output, replace a dynamic binding, or leave canonical NULL control; record actual folded/discarded recipient. |
-| DUP/steal/release replacers and `DECREF_INPUTS` | Create one independent logical owner, move one owner, or end its obligation. An ordinary C assignment aliases; it never creates a count. |
-| `IREmitter.emit_SimpleStmt` and escaping-call analysis | Snapshot after emitted flush/kill and before the actual call; record normal/error continuations separately. |
-| Explicit call/reader/retirement/completion markers | Generate the helper invocation and its declared transaction events together; ordinary spill/reload must not replay stale inputs around them. |
-| Stack copy/alignment and emitted branch joins | Fork/join event states; guards/deopt may return to PRE only before consuming its owners. |
+| Audited LEAF / read, take, publish and release events | Transport verified values and owners; an uncovered body loses completeness. |
+| `NORMAL_CLEAR_INPUTS` | Successful final commit consumed actual inputs outside the retained prefix. Explicit relocated scalar fields retain their actual footprint. |
+| Window-result receipt on normal clear | The emitted result adapter moved its physical output to a named binding or supported discard. Only that source becomes absent. A retained scratch result stays live; the adapter's scratch recipient must equal its actual source. |
+| `CALL_DRAIN` | Actual successful CALL cleanup consumed its owning input roles; virtual NULL holes retain prior absence. The actual recipient becomes live. |
+| `NORMAL_COMPLETION` | Selected edge only: FOR consumes two protocol inputs without a result; SEND consumes three and publishes A; throw completion consumes four and publishes A. The body edge is separate. |
+| `UNPACK_LOCAL_DRAIN` | The reached successful helper moved all reverse-window outputs to a validated local run. A no-local-destination sentinel retains real scratch outputs. Zero outputs still consume the sequence. |
+| `CREATED_COPY` | The actual terminal generator-construction transport snapshots created homes; a later activation installs its own resume recipient. |
 
-This is positive effect accounting, not inference from an opcode name, return
-type, `escapes` flag or arbitrary C text. Covered statements may use only known
-value constructors/transports and checked helper capabilities. An opaque call,
-untracked `.bits` reconstruction, cached-pointer store or raw frame/window
-access loses coverage. A helper that can touch homes must receive a declared
-window/cursor capability and emit its commits through that API. Typed borrowed
-arguments alone do not prove the helper has no other frame effects. Existing
-marker effects, canonical-output/result-publication validation, ownership
-checks and analyzer call classification become inputs to this graph; exact-body
-guards remain regression checks for audited leaves, not general semantics.
+A normal result receipt originates at `emit_final_outputs`, not an opcode-name
+case. Completion events originate at the actual complete/enter helper route.
+Every reached route within a handler must agree; one incompatible target
+revokes that handler before intersecting canonical specializations and
+instrumented twins. A matching sibling cannot hide an uncovered route.
+Checked terminal observer wrappers count their actual normal successors: one
+for a single-exit operation, two for a conditional branch.
 
-First convert generic `_BINARY_OP` to a structured value-provider marker using
-its existing TAKE/restore/complete protocol. The emitter owns the direct
-provider call and completion/error emission, so a separate handwritten summary
-cannot drift from the generated transaction. Recognized scalar/local/copy leaf
-contracts lower into the same event interface. Unconverted families emit an
-explicit uncovered recipe; the old manual transfer enum is not a second runtime
-decoder. Port the remaining families through the same interface before M4.
+Logical window extents can overstate physical reads. A scalar input folded
+into an explicit IN field no longer occupies its old window tail. Under the
+positive final-commit contract, the physical window read count excludes those
+validated trailing scalar fields; their independent IN operands and the full
+output extent still count. This preserves only prior absence at untouched
+homes. The format builder checks the trailing-scalar mapping rather than
+assuming every window has this shape.
 
-### Recipe and publication ABI
+Public constructor, replacement, marshal/frozen and executing-image routes
+use the same admitted immutable operands and feedback-argument decoder. No
+normal proof guesses argument counts from maximum slots or reads mutable
+feedback state. Virtual CALL self/kwargs forms require positive all-path
+absence and child-clobber permission. Method promotion publishes real self and
+updated scalar transaction roles before releasing the old wrapper; later
+fallback retains the committed state. No inactive self word is loaded to
+rediscover that role.
 
-The generator builds a finite event CFG per handler. The binary form has
-eight-byte events (`uint8 kind, flags; uint16 dst, src, extent`) and generated
-operand selectors. Selectors name a word field plus signed offset, a named
-binding, a local owner identity, a typed header edge, or a declared provider
-window. They do not embed a physical stack depth or a borrowed scratch bank.
-`extent` indexes an existing checked `_PyIR_Extent` expression or a declared
-bounded dynamic cursor, never an unchecked C string. Full physical home indices
-remain 0..4094; event/ref counts and offsets are checked before narrowing.
-Program/block offsets use uint32. Dynamic loops use one cursor recipe rather
-than unrolling a phase/event for each element.
+## Reached phases and storage
 
-The finite event vocabulary is read/view, duplicate, move/take, bind/publish,
-release/transfer-out, canonical-NULL control, helper-capability call, phase
-snapshot, and normal/error/branch/suspend/retire exit. Events refer to logical
-owner identities: two aliases of one evaluated input cannot be retired twice;
-two DUPs remain two owners even when their object identity is equal. Inline and
-immortal values remain logical values while runtime tags decide counted edges.
-An uncovered event never grants initialized/readable or owner facts.
+The current `_PyIRCodePlan` uses the executing image's single plan pointer.
+There is one checked allocation: a 16-byte header, four bytes per sparse return
+site, 16 bytes per phase site and six bytes per interned half-open range.
+Shared empty/default plans avoid per-code allocations where applicable. Size
+accounting and destruction own the complete allocation. Ranges span the full
+admitted domain through4094; no64-home production cutoff exists.
 
-Use the primary proposal's family PhaseIds: PRE=0, POST=1, ERROR=2,
-RETIRING=3, SUSPENDED=4, staged/outcome roles from 5 through 255. A specialization
-and instrumentation wrapper must use a checked phase in that same family
-namespace; matching external IO does not itself prove equivalent phases.
-Normalize/split or reject a family that cannot fit. Unknown coverage is separate
-from the PhaseId, so PRE=0 is not confused with unpublished state.
+Cold construction uses per-block bitvectors and queued monotone transfer work.
+Workspace is O(words + blocks × ceil(scratch/64)); persistent space is
+O(phase sites + distinct shape ranges), with exact hash collision comparison
+for interning. Sparse lookup is cold. It does not add an owner array or generic
+decoder to each handler.
 
-The frozen frame ABI is a uint16 `phase_state` in the GIL header's existing
-padding at offset 110: bits 0..7 PhaseId, bit 8 PUBLISHED, bits 9..10 stored shadow
-status (UNCOVERED/EXACT/MISMATCH), other bits zero. This preserves the measured
-112-byte header and 32-byte function offset. All frame producers initialize zero;
-this includes interpreter/base sentinels, trampolines, generic/partial binding,
-heap generators and public frame construction. Copy/escape/RETURN_GENERATOR
-must preserve an explicitly matched state or publish their new lifecycle state;
-advancing the PC and blindly copying an old PRE is invalid. Root froze this
-field with frames and GC; source ports are in progress.
+The first generic binary phases publish provider5, successful operand
+retirement6 and restored-error7 together with their actual consuming C.
+A prior phase survives only through its declared validity interval. Accepted
+redirects, unsupported escaping statements, resume, copy and cleanup invalidate
+before relevant mutation. A debugger reset cannot regain a provider certificate
+merely by returning from its callback.
 
-Publish one literal state after its required owner stores and existing
-`instr_ptr` save, immediately before a reached callback, allocation that can
-collect, poll, child transfer or
-heap suspension. Unsupported boundaries publish zero. No phase lookup, decode
-or reset runs per ordinary inline instruction. A stale phase after a callback
-returns is not an active scan permission: the next reentry/quiescence point
-must publish again. Child-waiting and heap-suspended frames retain their matched
-site/phase until resumed. Async/remote readers need the same established stopped
-state protocol; sampling an arbitrary running PC does not grant value access.
-The PUBLISHED bit records a publication, not proof that an arbitrary external
-reader has stopped the thread inside its validity interval. The collector's
-reached walk supplies that quiescence context; future remote value inspection
-needs an explicit handshake. Source/location-only remote inspection grants no
-home access and keeps its current malformed-location degradation behavior.
+Current normal-retirement certificates cover only completely proved empty
+scratch at actual normal RETURN sites. NORMAL_RETURN, ERROR_UNWIND, HEAP_CLEAR
+and STAGED_FAILURE are explicit reasons; the latter three remain uncovered
+where their event coverage is incomplete. Result presence is independent of
+reason. A reached shadow comparison stores CHECKED/UNCOVERED/MISMATCH in the
+linked record; an inspection query cannot fabricate a comparison.
 
-Every lifecycle/cursor change must select its own phase. Retirement unlinks and
-publishes a retirement/provider record before closing; invalidate the active
-phase unless an explicit retirement recipe covers it. For a close cursor, move
-the owner into the declared detached authority before a callback, remove it from
-the frame shape, and publish the remaining suffix/prefix before closing it.
-After that close returns, advance only the declared cursor and republish before
-the next possible close callback. A synchronous non-reentrant decrement needs
-neither publication nor a per-owner map lookup. The record and code pin outlive
-all cursor reads; code detaches last. Escaped takeover partitions heap/local
-edges before any further callbacks rather than retaining the old frame map.
+CAPTURED bit11 belongs to the frame lifecycle adapter and its immutable view.
+CREATED bit12 certifies the reached created-copy state; ready code, generator
+ownership and actual created state must still match. The created fast copy
+moves initialized bindings and never reads inactive source scratch. Explicit
+[YIELD_DELEGATED](yield-delegated-proposal.md) bit13/operand/claim interfaces are
+frozen for implementation, not a qualified current runtime contract.
 
-Reuse the executing image's existing plan pointer for a unified code plan; do
-not add another pointer or allocation per code. Extend the current return plan
-with sparse `(uint32 site, uint8 phase)` keys, uint32 shape offsets and interned
-sorted half-open uint16 scratch ranges with explicit nullable/scalar roles.
-Bindings/constants stay in their dynamic initialized binding domain. Unsupported
-and shared-default plans remain allocation-free. Allocate once with checked
-size arithmetic, include all bytes in code size accounting and free once.
-No position/debug bytes enter this code-owned ownership representation.
+## Handoff and root consumers
 
-Cold construction retains per-basic-block full-home bitvectors and queued
-monotone work. Persistent space is O(phase sites + distinct shape ranges),
-worst-case O(phase sites * scratch); cold state memory remains
-O(words + blocks * ceil(scratch/64)). Intern shapes with a hash and exact
-collision comparison; do not quadratic-search every earlier shape. Sparse
-lookup is logarithmic in phase sites plus the visited ranges. These are cold
-collector/retirement costs. The first patch adds initialization stores and one
-literal publication store per reached covered boundary, not a handler-local
-owner array; GC status updates occur only on reached comparisons. Root must
-price emitted stores, code/data bytes, allocations, lookup work and actual
-register/spill changes, not just unchanged frame size.
+Exact calls retain overlapping argument transfer and inline return. Parent
+survivors, child/clobber aliases, staged bindings, provider prefixes and detached
+results must have one owning authority each. Typed function and code pins stay
+independent. The reservation survives callbacks and the code pin closes last.
 
-### Worked paths and required joins
+Unpack/binding/native adapters publish actual initialized prefixes or suffixes
+before callbacks. Publishing a home precedes advancing its progress cursor;
+detaching an owner precedes its close. Their outer descriptor survives iterator,
+sequence, provider and surplus cleanup. Native arrays and arena windows are
+distinct capabilities. Do not infer a staged child from the parent's PRE map.
 
-- Arithmetic: all guards/deopt leave PRE unchanged. Generic TAKE moves scratch
-  inputs to native owners (binding inputs acquire evaluated snapshots), then
-  provider phase records their absent frame homes and surviving scratch. Native
-  C owners retain the selected conservative C-root policy. Success publishes a
-  temporary result before input retirement; a folded-local/discarded result
-  stays in the declared detached owner until its actual commit/close. Provider
-  failure restores scratch owners where the current protocol does, closes only
-  the remaining native snapshots, and enters the actual ERROR recipe. A fast
-  specialization and its generic fallback share a normal result interface only
-  after both event paths prove it; a partial generic phase does not certify an
-  unreviewed specialized callback.
-- Method load: success has callable plus a self-or-NULL value, never an
-  uninitialized second output. The nullable self home is readable and may own a
-  counted edge; NULL is not evidence that the callable owns the receiver.
-  Publish both before retiring the receiver. Non-method lookup publishes just
-  its actual output. Failure carries no fictitious fresh output obligation.
-- CALL: evaluated inputs remain caller owners during guards/preparation;
-  precommit fallback restores that state. Commit partitions callable/header,
-  zero-copy argument window, surviving parent homes and child clobber extent.
-  Publish parent WAIT before entering the child; staged binder/provider state
-  covers initialized subsets and cleanup. Return keeps its independent result
-  through child retirement, then publishes the callback-current recipient.
-  Folded binding/discard commits and error unwind are distinct recipes, not
-  inferred from result NULLness. No parent map also counts the child's aliases.
-- SEND/FOR: NEXT/YIELD, exhaustion/RETURN and ERROR are separate outcome events.
-  Receiver, nullable/tagged-index cursor and sent value have explicit roles;
-  the index is initialized control, not an object owner or absent home. Generator
-  entry publishes parent WAIT; YIELD/RETURN detach the transferred result before
-  publishing recipient state. Completed-edge observers see POST's actual
-  retired protocol owners, not the original PRE inputs.
-- Unpack: the consuming helper owns the sequence independently; its output
-  capability has fixed capacity and an initialized suffix `[begin,end)`.
-  Publish/write each canonical output before advancing `begin`; retain the
-  outer prefix through iterator/surplus/sequence cleanup. Failure cleanup removes
-  each output from that prefix before its close can call Python. Full outputs
-  become POST before disarming the provider. Folded-local publication moves one
-  output and displaces one current binding at a time, using the same cursor.
+Retirement links its remaining-root descriptor before the first reentrant
+close, advances the cursor before the close and reloads mutable binding state
+after callbacks. Live heap `tp_clear` retains its descending one-pass behavior:
+a callback can install a surviving binding above the passed cursor. Private
+thread/gen deallocation has a different mutation boundary. Escaped takeover
+moves edge authority before later closes; associated frame objects do not
+also own active/generator home edges.
 
-Provider capabilities validate `0 <= begin <= end <= capacity` and the complete
-frame/arena span, including checked one-past addresses that are never homes.
-Their initialized ranges are assigned to one authority: a static frame iterator
-must not also count a provider-owned suffix, child argument alias or detached
-heap edge. Root marking may encounter an object through several independent
-roots, but cyclic subtraction, transfer and teardown cannot duplicate the same
-owning edge. Keep native C/PyMem conservative discovery separate; the event graph
-does not insert borrowed mortal values into scratch to make them discoverable.
+The shared frame selector serves copy and collector consumers. GIL subtraction,
+FT deferred-count adjustment, external root marking and generic logical
+`tp_traverse` retain distinct tag policies. Native stack/register/PyMem discovery
+remains separately selected; removing arena enumeration does not imply a fully
+precise native collector. The bitmap rival's set count bit supplies positive
+counted-edge authority, while a zero bit grants no inline/control/object read.
 
-Must-readable language facts intersect at joins; possible remaining obligations
-union. To form an exact readable owner range, each candidate home must hold an
-owner/value or canonical NULL on every predecessor, with no competing authority.
-A consumed arm's physical NULL can normalize a nullable joined owner; a merely
-uninitialized/stale arm cannot. Insert edge normalization, choose a finite phase,
-or reject before M4. Do not turn the union into a read permission. Branch order,
-loops and duplicate logical owners require explicit tests. Mutable named locals
-and cells retain their independent boundness and displacement protocol.
+## Source attribution and observer recovery
 
-Ordinary calls currently elide PUSH_NULL in `regcfg_passes.c` and many handlers
-and helpers read `window[1]`. Before stale scratch, introduce a certified
-no-self call form chosen from virtual NULL provenance, not observed bits or
-source locations. A distinct canonical handler/variant supplies NULL without
-reading that inactive home; keep the reserved window geometry for zero-copy
-arguments. Generate its specialized forms from the same contract. A real method
-form reads initialized self. Bound-method expansion may explicitly publish a
-new self owner and switch the transaction's role; later helpers use the role
-rather than rediscovering it from inactive bytes. Dynamic public CALL forms
-must prove a readable nullable self home. Compiler, allocator, assembler,
-constructor/replace/marshal/frozen admission, disassembly and every helper read
-of self-or-NULL change together. No per-call NULL store is selected by default.
+Ordinary executable EH entries come from `co_exceptiontable`. The current cold
+worklist also decodes the IRSM source container to seed observer recovery
+triples `(handler, exc_slot, lasti)`. It does not use line or column values, but
+this remains a semantic-container dependency. Optional source positions cannot
+become execution authority.
 
-Fixed InitCleanup has slot0=self and slot1=init result, then EXIT_INIT_CHECK and
-RETURN_VALUE; its successful, error and staged-failure phases need an explicit
-fixed code-owned recipe. The NULL-code interpreter exit sentinel uses its
-separate bounded entry contract, never ordinary code geometry or a fake code
-pin. Neither is silently certified by the ordinary plan builder.
+Before M4, emit and admit those recovery entries separately from source-only
+positions and supply worklist/runtime recovery from the code-owned semantic
+representation. Position stripping must not change ownership or exception
+coverage. A malformed source container cannot silently grant coverage. Remote
+value readers additionally need stopped-target/read-claim authority; a running
+PC sample is not permission to read homes.
 
-### First reached shadow and completion gates
+## Remaining M4 gates
 
-The bounded first consumer is `_PyGC_VisitFrameStack`: at its existing frame
-walk, a cold read-only query validates code/image/site/published phase and
-compares that certified scratch shape against current NULL control, then stores
-the reached status. Keep subtraction and external marking's existing distinct
-tag/edge policies; sharing a descriptor must not conflate their visitors. Absent
-homes must be canonical NULL, including rejection of leftover inline or index
-bits. Owned nullable homes permit NULL; nonnullable language homes must contain
-a canonical value; scalar/index roles are checked explicitly. The query neither
-infers mortal ownership from non-NULL nor certifies native C discovery. It does
-not authorize a map-only scan. Unknown/error/poll/observer phases remain visibly
-uncovered until their own events are implemented.
+- Complete every admitted family's normal, callback, error, poll, suspend and
+  observer recovery events, including static entry/InitCleanup images.
+- Replace unknown exception/observer seeds with their actual partial-consume
+  and handler-entry transfers. Publish exception/lasti roles at the real edge.
+- Close all [lifecycle readers](lifecycle-readers.md), including diagnostics,
+  uniqueness, debugger transfer, remote values, copy and every collector loop.
+- Resolve MAY-owner/uninitialized joins through explicit normalization,
+  independent validity, finite phases or admission rejection. UNKNOWN cannot
+  survive as a runtime authority fallback.
+- Compare initialized values, logical obligations and unique counted edges
+  under callbacks, failure injection, overlap, mutation, suspension and escape.
+- Switch scratch authority and remove scratch clearing/arena enumeration as
+  one coherent integration. Price phase stores, plan construction/bytes,
+  header/cache traffic, native spills and the complete lifecycle.
 
-Tests force actual collection inside generic arithmetic, success operand
-finalizers and provider-error cleanup, with a surviving scratch object and
-folded bindings. Observe stored reached state only; a test query cannot perform
-the comparison. Include NULL/inline/immortal survivors, branch/loop nullable
-joins, folded-local mutation, recursion, changed `function.__code__`, and a
-test-only bounded shadow mismatch probe. Source perturbations must reject
-duplicate moves, opaque writes, unreported escapes, missing output publication,
-incorrect close progress and specialized deopt after consumption. All public
-image routes use the same event-derived admission consumer.
-
-Observer writes to bindings invalidate saved views and retain current dynamic
-binding authority. Accepted `f_lineno` redirects must apply a certified transfer
-and publish its target shape before any further callback; an unsupported
-observer/redirect publishes uncovered now and blocks M4. A normal edge never
-certifies a callback, exception entry, partial close or suspension by itself.
-Exception recipes take the actual failing phase after its partial consume and
-cleanup, preserve only its declared surviving prefix, and install exception and
-optional lasti owners at the validated handler homes. Every handler entry joins
-those real incoming shapes; it must stop using the current unknown seed before
-authority changes. Transparent INSTRUMENTED_LINE/INSTRUCTION wrappers publish
-their own pre-delegate snapshot, not an inferred result POST. Instrumented call,
-resume, yield and terminal observers must account for their extra callbacks,
-errors and redirects while retaining the family's operand geometry. A wrapper
-cannot borrow a positive callback row merely because its base normal transfer
-was covered. Generation compares both structural branches of preprocessor
-conditionals, including their delimiters.
-Before M4, generation must positively cover every admitted handler, specialized
-member, instrumented wrapper, exception/observer recovery and fixed executable
-image. The coverage census includes every escaping statement and helper
-capability; UNKNOWN cannot survive the authority switch. All lifecycle readers
-must consume this same contract, followed by poison/control checks, native
-inspection, complete root-census and performance admission.
-
-### Current IRSM dependency and its removal
-
-The current cold normal worklist decodes `co_linetable`'s IRSM container only
-to split and seed `event.handler` observer-failure landing blocks as unknown.
-It does not use line/column fields, and ordinary dispatch and retirement shadow
-lookup do not decode it. Ordinary executable EH entries come separately from
-`co_exceptiontable`. The observer recovery triple `(handler,exc_slot,lasti)` is
-semantic metadata currently serialized beside source-only positions; it is not
-optional position data. Existing observation resolves that recovery before
-unwind, which then consumes pending semantic recovery without a source lookup.
-
-This is still a container dependency, so the earlier blanket claim of no debug
-dependency needs this qualification. The shared recipe input must carry observer
-recovery edges separately from optional positions. The compiler/assembler emits
-those semantic entries from actual observer/completion events; universal image
-admission validates them; the code-owned descriptor supplies the worklist and
-runtime observer failure. Position stripping cannot alter owner/exception
-coverage. Public construction and marshal must validate the same semantic data;
-do not silently ignore a malformed source container as a way to grant coverage.
-
-The remote corruption fixture is repaired independently by preparing its valid
-executing image before tampering with source bytes. This preserves remote-memory
-decoder coverage; it does not change this semantic-source separation obligation.
-
-## Current shared-emitter source and limits
-
-The isolated implementation now replaces `_PyIRRetirementPlan` with the unified
-`_PyIRCodePlan` and the executing field with `semantic_plan`; there is no alias
-or second pointer. One allocation stores a 16-byte header, four bytes per sparse
-normal-return site, 16 bytes per reached phase site, and six bytes per distinct
-interned range. The all-return/no-phase default remains shared. Unsupported code
-still allocates no side plan. `_PyIRFormat` gains program offset/count fields;
-the first generated ownership table has 23 eight-byte events shared by handlers.
-Root must measure actual struct alignment, readonly table growth and native
-handler costs; these are source counts, not a performance result.
-
-The generic binary marker emits its normal/error event program together with
-the actual consuming C. It publishes provider5, successful operand retirement6
-and restored-error7 only at those reached boundaries. The close/restore phase
-is selected only if the provider PC and prior publication survived; a debugger
-invalidation cannot regain coverage merely by returning from the provider.
-Helpers clear publication before invalid cleanup and after covered closes.
-Unconverted family refinements make subsequent normal completeness false;
-covered generic callback phases do not certify specialized family completion.
-Existing audited leaf templates remain LEAF regression guards while transport
-is ported; the first increment does not claim a general C effect inference.
-
-The common `_PyIR_GetFrameHomeView` validates code/image/site/phase and borrows
-immutable selected ranges under the independent code pin. The current shadow
-uses this same view immediately, then compares all scratch against canonical
-NULL control. Absent homes must be NULL even for inline/index leftovers;
-nullable candidate ranges may contain NULL or a canonical language value.
-MAY_OWNER joins do not establish readable stale cells: before M4, normalize
-those joins, carry independent validity, or reject incomplete shapes. Current
-roles do not certify index/control families. Bindings remain dynamically
-initialized/nullable, including hidden constants.
-
-The producer census covers ordinary initialization, the C-entry sentinel,
-shared trampoline initialization, both sides of copy, resume/return recipient
-installation, clear/retirement entry, accepted redirects and the private heap
-deallocator. Unsupported escaping statements/markers, SAVE_STACK and error
-edges invalidate publication; cold boxing and unpack continuations do likewise.
-The actual emitted zero stores, including conservatively guarded callouts, must
-be priced. There is no instruction-entry phase decode or blanket dispatch reset.
-GC's collector component and cold probe are merged with the matching IR
-producer/reset ports. Both-role focused execution, generation and native
-inspection pass with the fixture corrections recorded in the report. Complete
-callback/poll/error/suspended/observer coverage, fixed static images and lifecycle
-selected-home consumers remain gates before any static authority switch.
-
-The copy-facing follow-on distinguishes NONE, NULL-shadow candidate and
-must-readable authority without growing the 16-byte phase row. A possible owner
-without must initialization remains candidate; an initialized nonowner NULL is
-also candidate until its explicit control range role is ported. The latter
-guard is currently unexercised: positive NULL producers only modify dynamic
-named bindings, and stack PUSH_NULL has no executable scratch producer. Current
-regressions exercise reachable candidate/must/none shapes across public routes
-and the full home extent. Development NULL-control readability is an explicit
-adapter value, never a code-plan certificate. CAPTURED bit11 belongs to the
-common frame lifecycle adapter and remains rejected by active code lookup.
+Both-role qualification, native review and direct hot6/all29 comparisons are
+required before selection. Partial normal absence or successful bootstrap
+compilation does not complete M4 or establish a speedup.

@@ -38,6 +38,28 @@ review ran no candidate Python, generation, build or native tests. Final emitted
 residuals, runtime behavior and cost remain root's integration checks; NULL
 control remains and no M4 admission is implied.
 
+Integrated generation exposed two further issues. GC traced the changed exact
+CALL stack effect to `apply_stack_effect` keying a named but unused scalar by
+its old cached name `unused`, overwriting a variable-array transport entry.
+IR's declared-name fix and multi-effect regression have source GO. The same
+repair uses the existing admitted immutable-feedback decoder for every semantic
+operand query, removing an invalid FBARG query and guessed footprint.
+
+GC then read the corrected exact CALL residual and found post-promotion bound
+method guards still redispatched without forwarding prepared roles. IR's
+separate repair now gives every CALL window the existing EFFECTS fallback
+bridge and emits its typed-runner label, while resetting the per-handler
+classification. Source GO includes post-wrapper generated guard checks and
+warmed exact/bound 0/2/33-argument identity tests. Root still owns regenerated
+residual and native validation of these repairs.
+
+The branch cleanup follow-on also needs its actual terminal observer paths:
+fused observed branches flush per arm and dispatch, so no reachable outer flush
+exists. Source GO requires both checked terminal edges plus the same strict
+vacate capability and family closure. Root must see the resulting event in
+actual metadata before treating this admission gap as closed; a successful
+generator invocation alone does not establish coverage.
+
 ## Generated/native integration findings
 
 The first merged build aad17cd9c1c fails while freezing modules. Review finds

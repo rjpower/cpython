@@ -60,11 +60,17 @@ focused cases per role, but still lose the hot screen. Explicit CALL roles
 are merged/generated; initial freezing exposes admission, generator-geometry
 and FBARG decoder defects. Geometry, replay, post-method-promotion fallback,
 fused-branch cleanup, consumed tails and iterator completion are repaired
-through `74d91398881`. The five-image freezer check passes builtins and rejects
-four later images with unproved holes. Reviewed fixes cover single-exit
-observer cleanup, local loop destinations and folded unpack-to-locals transport;
-combined generation and native qualification remain pending. Complete
-static authority and the full physical-bitmap rival remain open. Shared storage
+through `863b6d0cb08`. The super instrumentation proof is integrated. A missing
+WINDOW guard briefly regressed admission; the guarded correction restores all
+five bootstrap passes and 25/26 broader compile-only passes. Full release now
+gets past site initialization, then rejects `shutil.copymode`; debug is not
+attempted. Remaining shared proof gaps are a disjoint implicit child in
+LOAD_ATTR and retained-prefix absence across coroutine exception entry.
+Complete release/debug builds and runtime qualification remain pending. Complete
+static authority and the physical-bitmap rival remain open. Bitmap source
+`853bd363ce1` regenerates without changes, builds its native freezer and matches
+the five bootstrap plus 25/26 compile-only results. This is not a complete
+module build, authority switch or performance result. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and

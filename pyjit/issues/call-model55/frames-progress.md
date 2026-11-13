@@ -341,3 +341,104 @@ remain gates before builds/authority. Root approves an earlier GIL counted
 bitmap switch after those gates, independently of complete general static
 callback maps; zero bits confer no read and generic introspection/FT deferred
 semantics remain separate. The amended bitmap design records this schedule.
+
+The bounded bitmap snapshot now includes chunk/heap storage, ordinary writer
+ports, checked native-entry emission, raw forward/reverse owner iteration and
+the private GIL trace-root adapter. GC's storage peer and my collector peer
+are GO. A new cold probe covers all 64 first-bit alignments, clipped word
+endpoints, alias-frame moves, count-to-inline replacement and balanced drain;
+size tests charge the larger header and conservative heap tail. Host AST and
+whitespace checks pass; none of these fixtures has run on the candidate.
+
+Freeze gates are the IR writer-source peer and GC's probe/reverse peer. Root
+then merges the stable CALL ABI, created selector and vacant-return changes
+before further rival ports. The lower frame checker/clear routines remain a
+separate GC-owned slice. Full writer closure, coherent generation and native
+checks are still required; this snapshot is not a working authority claim.
+
+Root independently peers the emitter/writer slice and authorizes the bounded
+commit without waiting for IR's urgent CALL proof work. The exact 19-file
+snapshot is `dd633ad69b8` (682+/176-), with a clean bitmap worktree. All bitmap
+mutations pause for root's coherent ABI merge. GC confirms its lower frame
+clear/checker regions are still untouched; those remain the next writer and
+validation gate. There is no candidate execution or completeness claim.
+
+After the CALL merge, alias/helper census finds and ports raw array writers
+and actual BUILD_STRING/MAP argument cleanup. GC's mixed-storage helper and
+fixture peer is GO. Eight frames-owned files remain frozen for root review;
+GC independently commits reverse retirement/checker as `cc362d4a23c` after
+my actual source peer. The checker now respects the live/remaining prefix;
+waiting THREAD full-range probes reject, while callback fixtures use separate
+generator storage. Generated output review and native writer checks remain
+root gates. A delegated-suspension role proposal records the receiver/resume
+obligations without reusing the old slot subtraction as proof.
+
+GC architecture peer approves the explicit YIELD_DELEGATED proposal. It now
+fixes A/B/unused-C/D operand meanings, actual through-operand lowering and transient
+costs, independent finite-role versus full-map authority, saved successful
+close/throw claims, the missing FT getter read claim and remote validation.
+The proposed single pending SEND tuple is an IR feasibility gate. Source-file
+ownership is explicit; no shared IR runtime edits occurred. The completed
+constructor audit found no additional home-bearing fake without bitmap
+storage. All candidate execution remains coordinator work.
+
+
+Bitmap generation exposes a proof-capability gap before native validation:
+the existing normal-vacate gate rejects every `frame` token, including strict
+home writers and checked helper frame arguments. A bounded generator patch
+adds nine complete body plus stack-IO footprint certificates, independent of
+instruction names. Other frame access and raw slots/window/dispatch remain
+rejected; recognized helper calls also require the certificate even if their
+frame argument changes. Both new host-only parser checks pass, covering the
+eleven affected families and altered bounds, storage, helper arguments, IO,
+and mutable AST bodies. GC/IR source peers and root regeneration remain
+required. Root's generated files were left untouched; no native job ran.
+
+IR's required AST branch preservation and GC's renamed capability-family gate
+are applied. All three host parser checks pass; both peers give bounded source
+GO. The two source files are frozen for root regeneration. Whole-body source
+matches remain a temporary bridge, with emitter-derived writer/helper ports
+recorded as an explicit M5/M7 gate in bitmap-writer-capability-plan.md.
+
+
+The delegated frames packet is implemented on pins e03: literal terminal
+publisher, pre-disarm D selection with copy-view inclusion, exact captured
+combo, incomplete-PC invalidation, and six focused fixture methods. The
+existing private copy probe now covers selected/clipped D and the captured
+selector without executing fake storage. Suspended frame.clear retains its
+existing RuntimeError; rejected clear preserves the marker, actual close and
+subsequent clear invalidate it. PY_YIELD observes before publication and its
+recipe-less redirect still rejects. GC/IR source peers are requested; enum,
+finite lookup, bytecode terminal invocation and consumers are separate lane
+packets. No native execution occurred.
+
+
+Root's urgent CALL pattern2 is a separate three-file generator/test packet:
+exact observer helper frame-use footprints enable the already-emitted normal
+flush to prove consumed class input absence when optional self is not defined.
+No runtime fill, SUPER name grant, new semantic event or row is added. The
+source parser check passes; IR source GO received and GC final peer is pending.
+See super-call-transport.md. The four delegated files stay unstaged separately.
+
+
+Both source peers give GO for the urgent super footprint. The isolated commit
+is de1e3de49ef (three files); the delegated four-file packet remains unstaged.
+The earlier bitmap footprint bridge was separately committed c0646e06f1a,
+excluding root's generated files. Root owns both composition validations.
+
+
+The delegated frames packet is committed da0c629bfeb (four files), after both
+source peers give GO and the private source owner matches the finite selector
+contract. The pins tree is clean. GC's consumer/remote packet also has frames
+source GO, including the stronger phase-zero/invalid-slot control. Combined
+IR/GC/frames generation and native validation remain root work.
+
+
+The bitmap/CALL merge review found dropped nonconflicting bitmap generator
+ports before regeneration: local writer classification, native-entry storage
+contract, consume/store/vacate, SEND detach and source proof guards. Root
+authorized exact restoration from prior B HEAD while retaining incoming
+window/folded/result-offset/observer semantics. Corrected combined source has
+both IR and GC GO; all five host parser checks pass, including mixed helper
+and preprocessing fallthrough negatives. Root retains merge/regeneration
+ownership. No new runtime result follows from these source checks.

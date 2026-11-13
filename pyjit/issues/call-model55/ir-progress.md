@@ -167,3 +167,54 @@ normal-edge packet does not certify complete callback/error/suspended maps or
 switch GC authority. The next packet must extend the shared emitted event graph
 to remaining finite family outcomes and reached publication phases, rather than
 adding another independent decoder.
+
+The first merged CALL build exposed missing positive consumption facts after
+fused branches. The checked instrumented branch wrappers perform their own
+final owner commit and dispatch, so the outer common-flush path is unreachable.
+The generator now records both checked terminal normal edges and retains the
+normal-clear recipe only when both exist and satisfy the same source capability.
+Independent GC source review approved this boundary. Root's host contract check
+then confirmed the recipe for all eleven fused heads, specializations and
+instrumented twins. That resolves the source-coverage hold; merged native
+admission and runtime validation remain pending. A separate admitted-feedback
+decoder repair removed the earlier freezer crash, but freezer admission had
+still rejected unproved virtual inputs before this branch repair.
+
+Read-only postreview of integrated `63ec08b5545` confirms all eleven generated
+fused metadata rows select the single NORMAL_CLEAR_INPUTS event. A host scan of
+66 generated CALL handlers with initialized scalar roles found 218 canonical
+redispatch sites, each with an EFFECTS bridge to its full-state fallback label.
+The no-self exact and exact-bound handlers use `args = &window[2]`; after bound
+wrapper release, version, argument, capacity and recursion misses retain the
+promoted SELF state in the typed runner. This is generated-source evidence,
+not runtime qualification. Repeated adjacent phase-zero stores remain visible
+in generated text; native optimization and the final cost remain root gates.
+
+The next freezer attempt progressed beyond those fused branches and found two
+further proof gaps: DICT_MERGE's consumed trailing input and FOR_ITER's taken
+completion edge. Source repair `566bec78552` excludes the unchanged through
+prefix when consuming normal inputs. A separate emitted completion event,
+intersected across the canonical loop family, applies only to the taken edge.
+It proves logical absence of the retired receiver/cursor and preserves prior
+absence of the unused body destination. It does not invent physical NULL or
+readability. The body state is enqueued before that completion mutation.
+
+Independent GC source review approved the final proof and its public-image
+negative for a live body cursor. Root's host generation and actual recipe
+assertions passed for through operations and the complete FOR family. The
+combined native freezer probes and runtime fixtures remain pending; the
+earlier full build did not pass freezer admission.
+
+Later bounded source repairs cover actual unpack/local-result moves and
+folded collection inputs. Root's bootstrap probes reached5/5 after SEND
+completion transport. The folded-input footprint repair91f52d60cab initially
+missed its WINDOW guard and regressed scalar peek preservation;25f090c08a4
+adds that guard and an all-route GET_LEN prior-empty/prior-live regression.
+GC independently source-reviewed both changes. Root owns the repeat native
+census; no full CALL qualification is claimed here.
+
+The delegated-yield source draft now uses explicit D plus a finite all-path
+SEND body-role tuple. Frames and GC consumer source reviews are complete;
+IR emitter/admission reviews, host residuals and combined native checks are
+still pending. The current whole-frame phase map remains partial and NULL
+control remains authoritative.

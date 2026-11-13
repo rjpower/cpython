@@ -18,9 +18,24 @@ IMAGES = (
 )
 
 
+# Compile diverse normal source before paying for another complete build.
+# This does not execute the modules or replace their behavioral tests.
+ADMISSION_PATHS = (
+    'site.py', 'shutil.py', 'os.py', '_collections_abc.py', 'contextlib.py', 'functools.py',
+    'threading.py', 'weakref.py', 'warnings.py', 'types.py', 'inspect.py',
+    'enum.py', 'dataclasses.py', 'argparse.py', 'typing.py',
+    'collections/__init__.py', 'logging/__init__.py', 'asyncio/tasks.py',
+    'asyncio/base_events.py', 'unittest/case.py', 'pathlib/__init__.py',
+    'test/test_ir_call_roles.py', 'test/test_ir_unpack_transfer.py',
+    'test/test_ir_send_transfer.py', 'test/test_frame.py',
+    'test/test_generators.py', 'test/test_coroutines.py',
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('tag')
+    parser.add_argument('--admission-matrix', action='store_true')
     parser.add_argument('--variant', choices=['integrated', 'bitmap'],
                         default='integrated')
     args = parser.parse_args()
@@ -51,14 +66,19 @@ def main():
                                     stdout=output, stderr=subprocess.STDOUT)
         row.update(returncode=result.returncode, finished=time.time())
         manifest.write_text(json.dumps(rows, indent=2))
-        print(json.dumps(row), flush=True)
+        print(json.dumps(dict(name=name, returncode=result.returncode,
+                              log=str(log))), flush=True)
         return result.returncode
 
     code = run('build', ['make', '-s', '-j10', 'Programs/_freeze_module'])
     if code:
         raise SystemExit(1)
     failed = False
-    for name, path in IMAGES:
+    images = list(IMAGES)
+    if args.admission_matrix:
+        images += [(f'admission-{index}', f'Lib/{path}')
+                   for index, path in enumerate(ADMISSION_PATHS)]
+    for name, path in images:
         output = EVIDENCE / f'{args.tag}-{name}-probe.h'
         if output.exists():
             raise FileExistsError(output)

@@ -49,3 +49,30 @@ record-size change, GIL behavior or sixteen-scope registration port is introduce
 Frames source peer GO; diff check and source-reference census pass. Root owns
 integration/compile and any FT qualification; this source correction alone does
 not establish FT support.
+
+## Bitmap writer-validation snapshot
+
+2026-11-13. Root froze a separate GIL counted-root mode in the bitmap rival.
+`gc_trace.c` scans each physical chunk bitmap once, including staged and
+unlinked reservations, then visits typed current/transition headers and C
+results explicitly. THREAD transition homes and bitmap-described arena prefixes
+do not repeat that physical scan. Active heap roots use their own bit interval.
+Only a set bit authorizes an object read; zero never establishes an inline,
+control or language value. All writer ports remain an admission gate.
+
+The private counted transition entry is separate from the existing logical
+entry used for root IDs and FT. Generic container traversal/referents keep their
+no-count object semantics. Counted verifier roots rely on its existing global
+immortal-root pass. FT deferred-reference and tag scans remain unchanged.
+Native prefix storage has no bitmap descriptor and keeps its declared readable
+prefix policy; frame-backed unpack prefixes carry their actual bitmap word.
+Cold address membership checks distinguish arena prefixes without reading a
+possibly redirected EXTERNAL record's frame geometry. The prefix grows from
+24 to 32 bytes; the 40-byte transition record does not grow.
+
+This source snapshot retains conservative arena scans and the explicit old
+NULL-shadow phase check/store while scratch is still initialized. Before stale
+scratch is admitted, that diagnostic must use a bitmap-compatible comparison
+with readable phase authority or truthfully return uncovered. It must not read
+inactive zero-bit values or fabricate a checked result. No phase tests are
+disabled, and this intermediate root mode is not a full bitmap comparison.

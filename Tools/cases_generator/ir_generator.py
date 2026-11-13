@@ -74,7 +74,7 @@ Invariants:
 import argparse
 import ir_numbers
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
@@ -396,6 +396,10 @@ NOT_RELEASES = {
     "_PyFrame_AssertTemporariesClear",      # a debug check
     "_PyGC_CLEAR_ARRAY",                    # expands to nothing
     "LOAD_FAST_AND_CLEAR",                  # an opcode
+    # Semantic reason constants passed to the actual release boundary.
+    "_PyIR_RETIRE_NONE", "_PyIR_RETIRE_NORMAL_RETURN",
+    "_PyIR_RETIRE_ERROR_UNWIND", "_PyIR_RETIRE_HEAP_CLEAR",
+    "_PyIR_RETIRE_STAGED_FAILURE",
 }
 
 
@@ -5342,8 +5346,24 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                 ERROR_IF(err != 0);
             }
         }"""
+        def body_shape(node):
+            # Stmt.tokens() flattens preprocessor branches without their
+            # #else/#endif delimiters. Keep that structure in this contract.
+            if isinstance(node, Token):
+                return node.kind, node.text
+            if isinstance(node, list):
+                return tuple(body_shape(item) for item in node
+                             if not isinstance(item, Token) or item.kind != "COMMENT")
+            if isinstance(node, Stmt):
+                return type(node), tuple(body_shape(getattr(node, field.name))
+                                         for field in fields(node))
+            assert node is None
+            return None
+
         if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or not bodies_match(instrument, periodic)):
+                or any(body_shape(part.body)
+                       != body_shape(Parser(body, "<RESUME contract>").block())
+                       for part, body in zip(parts, (instrument, periodic)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
 

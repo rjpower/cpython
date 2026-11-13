@@ -1696,27 +1696,34 @@ class ConstSlotsTest(unittest.TestCase):
                 matching_map = memoryview(code.co_linetable).tobytes()
                 self.assertEqual(matching_map, code.co_linetable)
                 self.assertIsNot(matching_map, code.co_linetable)
-                changed = code.replace(co_code=b"".join(
-                    word.to_bytes(8, sys.byteorder) for word in words),
-                    co_linetable=matching_map)
-                f = types.FunctionType(changed, original.__globals__)
+                # The changed arm reads a home already consumed by STORE_FAST
+                # (or a NULL COPY input). Admission now rejects this witness
+                # before an observer can consider its joined requirements.
+                with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
+                    code.replace(co_code=b"".join(
+                        word.to_bytes(8, sys.byteorder) for word in words),
+                        co_linetable=matching_map)
+                # Keep a runtime counterpart with valid transfers: the NULL
+                # call input is reconstructed by reexecuting the original arm.
+                f = types.FunctionType(code, original.__globals__)
                 attempts = []
                 def tracer(frame, event, arg):
-                    if (frame.f_code is changed and event == "line" and
+                    if (frame.f_code is code and event == "line" and
                             frame.f_lineno == first + stop and not attempts):
                         before = frame.f_lasti
                         attempts.append(before)
-                        with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                        unbound = 2 if mode == "lost-null" else 3
+                        with self.assertWarnsRegex(
+                                RuntimeWarning,
+                                f"assigning None to {unbound} unbound locals"):
                             frame.f_lineno = first + 2
-                        self.assertEqual(frame.f_lasti, before)
+                        self.assertNotEqual(frame.f_lasti, before)
                         self.assertIs(frame.f_locals["flag"], False)
                     return tracer
 
                 previous = sys.gettrace()
                 sys.settrace(tracer)
                 try:
-                    # Only the original, unmodified arm executes. The encoded
-                    # other arm is a proof witness, not an executable recipe.
                     self.assertEqual(f(False), 42)
                 finally:
                     sys.settrace(previous)
@@ -2254,22 +2261,21 @@ class ConstSlotsTest(unittest.TestCase):
         words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         words[instruction.offset] = ((words[instruction.offset] & ~(4095 << 16)) |
                                       (4095 << 16))
-        f.__code__ = code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                                 co_linetable=memoryview(code.co_linetable).tobytes())
-        class Finished(Exception):
-            pass
+        with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
+            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                         co_linetable=memoryview(code.co_linetable).tobytes())
         attempted = []
         def tracer(frame, event, arg):
             if frame.f_code is f.__code__ and event == "line":
                 word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
                 if word[0] == "INSTRUMENTED_JUMP_BACKWARD" and not attempted:
                     attempted.append(frame.f_lasti)
-                    with self.assertRaisesRegex(
-                            ValueError, "incoming temporary register owner"):
+                    # The valid image still needs the actual saved-origin
+                    # recipe to restore the outer binding at this backedge.
+                    with self.assertWarnsRegex(
+                            RuntimeWarning, "assigning None to 1 unbound local"):
                         frame.f_lineno = code.co_firstlineno + 3
-                    # Abort the deliberately lost-binding program; the missing
-                    # token must not be replaced by a coincidentally NULL home.
-                    raise Finished
+                    self.assertEqual(frame.f_locals["marker"], "outer")
             return tracer
 
         previous = sys.gettrace()
@@ -2277,8 +2283,7 @@ class ConstSlotsTest(unittest.TestCase):
             warnings.simplefilter("error", RuntimeWarning)
             sys.settrace(tracer)
             try:
-                with self.assertRaises(Finished):
-                    f([1, 2])
+                self.assertEqual(f([1, 2]), "outer")
             finally:
                 sys.settrace(previous)
         self.assertEqual(len(attempted), 1)
@@ -2687,8 +2692,13 @@ class ConstSlotsTest(unittest.TestCase):
         first_word = words[first_restore.offset]
         # Another write to the first local cannot replace restoration of
         # the distinct second local. That obligation remains active.
-        words[second_restore.offset] = (dis.opmap["STORE_FAST"] |
-                                      (first_word & (((1 << 24) - 1) << 16)))
+        self.assertNotEqual((words[second_restore.offset] >> 16) & 4095,
+                            (first_word >> 16) & 4095)
+        # Preserve the second saved value's input home; consuming the first
+        # home again would fail image admission before restoration is tested.
+        words[second_restore.offset] = (
+            (words[second_restore.offset] & ~(4095 << 28)) |
+            (first_word & (4095 << 28)))
         bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words))
         first = original.co_firstlineno
         for invalid in (False, True):

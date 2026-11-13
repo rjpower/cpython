@@ -1065,6 +1065,20 @@ VALUE_CHECK_FUNC(Code)
 VALUE_CHECK_FUNC(Function)
 #define PyValue_FunctionCheck(V0) (PyValue_FunctionCheck)(PyValue_Borrow(V0))
 
+/* Consume a canonical function owner into a typed strong pin. Unlike the
+ * generic object bridge this boundary accepts no borrowed/deferred mortal
+ * reference: its callers have already acquired or transferred the owner. */
+static inline PyFunctionObject *
+_PyValue_FunctionOwnerSteal(PyValue owner)
+{
+    assert(!PyValue_IsNull(owner));
+    assert(_PyValue_IsHome(owner));
+    assert(PyValue_FunctionCheck(owner));
+    PyFunctionObject *function = (PyFunctionObject *)BITS_TO_PTR_MASKED(owner);
+    assert((owner.bits & Py_TAG_BITS) == 0 || _Py_IsImmortal((PyObject *)function));
+    return function;
+}
+
 static inline bool
 PyValue_LongCheck(PyValueBorrow value)
 {
@@ -1317,6 +1331,8 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
     return 0;
 }
 
+/* These helpers delimit ownership of a counted C-local workspace. They do
+ * not link a GC root; explicit transition roots have a separate interface. */
 static inline void
 _PyThreadState_PushCValue(PyThreadState *tstate, _PyCValue *ref)
 {
@@ -1342,7 +1358,7 @@ _PyThreadState_PopCValue(PyThreadState *tstate, _PyCValue *ref)
 static inline PyValue
 _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
 {
-    PyValue res = ref->ref;  // a move: the record is popped
+    PyValue res = ref->ref;  // transfer the local workspace's owner
     _PyCValue_CLEAR(ref);
     return res;
 }

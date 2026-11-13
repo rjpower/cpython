@@ -432,12 +432,7 @@ static void
 gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *state)
 {
     _Py_FOR_EACH_TSTATE_BEGIN(interp, p) {
-        _PyCValue *c_ref = ((_PyThreadStateImpl *)p)->c_stack_refs;
-        while (c_ref != NULL) {
-            gc_visit_value(c_ref->ref);
-            c_ref = c_ref->next;
-        }
-
+        // CValue workspaces hold counted owners, not deferred references.
         for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
             if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
                 continue;

@@ -77,6 +77,62 @@ class ClearTest(unittest.TestCase):
             support.gc_collect()
             self.assertIsNone(wr())
 
+    def test_clear_preserves_callback_local_writes(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                frames = []
+                references = {}
+                closed = []
+                observed = []
+
+                class Payload:
+                    def __init__(self, name):
+                        self.name = name
+
+                    def __del__(self):
+                        closed.append(self.name)
+
+                def install(frame, name):
+                    value = Payload(name)
+                    references[name] = weakref.ref(value)
+                    frame.f_locals[name] = value
+
+                class Trigger:
+                    def __del__(self):
+                        frame = frames[0]
+                        observed.append(frame.f_code is code)
+                        if nested:
+                            frame.clear()
+                        install(frame, 'first')
+                        install(frame, 'later')
+                        support.gc_collect()
+
+                def capture():
+                    first = None
+                    trigger = Trigger()
+                    later = None
+                    return sys._getframe()
+
+                code = capture.__code__
+                frame = capture()
+                frames.append(frame)
+                self.assertLess(code.co_varnames.index('first'),
+                                code.co_varnames.index('trigger'))
+                self.assertGreater(code.co_varnames.index('later'),
+                                   code.co_varnames.index('trigger'))
+                frame.clear()
+                # Clearing visits each home once. A callback's write below
+                # the cursor is retired; one above it remains a heap binding.
+                self.assertEqual(observed, [True])
+                self.assertEqual(closed, ['first'])
+                self.assertIsNone(references['first']())
+                self.assertIs(frame.f_locals['later'], references['later']())
+                self.assertIs(frame.f_code, code)
+                frame.clear()
+                self.assertEqual(closed, ['first', 'later'])
+                self.assertIsNone(references['later']())
+                frames.clear()
+
     def test_clear_does_not_clear_specials(self):
         class C:
             pass

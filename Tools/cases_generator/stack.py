@@ -505,7 +505,9 @@ def apply_stack_effect(stack: Stack, effect: StackEffect) -> None:
     for var in reversed(effect.inputs):
         local = stack.pop(var, null)
         if var.name != "unused":
-            locals[local.name] = local
+            # An unused input can retain its previous cached name. Bind the
+            # declared DSL name so it cannot alias a different unused array.
+            locals[var.name] = local
     for var in effect.outputs:
         if var.name in locals:
             local = locals[var.name]

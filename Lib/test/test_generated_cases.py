@@ -37,6 +37,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_generator
+    import stack
     import ir_metadata_generator
     import ir_numbers
     import lexer
@@ -3138,6 +3139,24 @@ class TestIRCases(unittest.TestCase):
                                      "_PyIR_TRANSFER_UNKNOWN")
                 finally:
                     local.parts[0].body.body.pop()
+
+    def test_unused_scalar_passthrough_keeps_distinct_array_geometry(self):
+        source = """
+        op(FIRST, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+            assert(callable);
+        }
+        op(SECOND, (callable, self, unused[oparg] -- callable, self, unused[oparg])) {
+            assert(callable);
+        }
+        op(THIRD, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+            assert(callable);
+        }
+        macro(OP) = FIRST + SECOND + THIRD;
+        """
+        analysis = self.analyze(source)
+        effect = stack.get_stack_effect(analysis.instructions["OP"])
+        self.assertEqual((-effect.base_offset).to_c(), "2 + oparg")
+        self.assertEqual((effect.logical_sp - effect.base_offset).to_c(), "2 + oparg")
 
     def test_actual_call_role_families_have_normal_drain_recipes(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

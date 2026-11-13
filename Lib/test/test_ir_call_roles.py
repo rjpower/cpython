@@ -91,6 +91,21 @@ class CallRoleTests(unittest.TestCase):
         bad[3] = ("CALL_EX_NO_SELF_KW", 0, 0, 0)
         self.assert_admitted(bad, slots=5)
 
+    def test_feedback_encoded_normal_cleanup_uses_the_admitted_operand(self):
+        def select(fn, values):
+            return fn(values[0])
+        def comprehension(values):
+            return [value[0] for value in values]
+        self.assertTrue(any(CONTRACT[HANDLERS[row[0]]].imm == _opcode.IR_LOC_FBARG
+                            for row in _testinternalcapi.get_ir(select.__code__)))
+        payload = object()
+        for admitted in routes(select.__code__):
+            function = types.FunctionType(admitted, globals())
+            self.assertIs(function(lambda value: value, (payload,)), payload)
+        for admitted in routes(comprehension.__code__):
+            function = types.FunctionType(admitted, globals())
+            self.assertEqual(function(((payload,),)), [payload])
+
     def test_absence_is_required_after_unknown_and_at_joins(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 1),
                  ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]

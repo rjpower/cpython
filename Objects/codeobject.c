@@ -1760,6 +1760,28 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
            (end - unit) * 8 >= fmt->fb_size;
 }
 
+/* Only after structural/feedback-domain admission. Pinned binary handlers
+ * encode the operation in their handler number; other FBARG forms use the
+ * immutable feedback initializer, never an execution-cache payload. */
+static int
+admitted_word_arg(_PyIRWord word, const uint32_t *table, int nfb)
+{
+    int handler = IR_HANDLER(word);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->imm != _PyIR_LOC_FBARG) {
+        return _PyIR_FieldOparg(word);
+    }
+    if (handler >= _PyIR_BINARY_OP_FIRST &&
+        handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST)
+    {
+        return handler - _PyIR_BINARY_OP_FIRST;
+    }
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int ordinal = _PyIR_FbFind(table, nfb, fields[fmt->fb - _PyIR_LOC_A]);
+    assert(ordinal > 0);
+    return (int)_PyIR_FBINIT_ARG(table[ordinal]);
+}
+
 /* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -1847,24 +1869,7 @@ check_words(struct _PyCodeConstructor *con)
                 goto error;
             }
         }
-        int arg;
-        if (fmt->imm == _PyIR_LOC_FBARG) {
-            if (handler >= _PyIR_BINARY_OP_FIRST &&
-                handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST)
-            {
-                arg = handler - _PyIR_BINARY_OP_FIRST;
-            }
-            else {
-                uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-                int ordinal = _PyIR_FbFind(table, nfb,
-                    fields[fmt->fb - _PyIR_LOC_A]);
-                assert(ordinal > 0);
-                arg = (int)_PyIR_FBINIT_ARG(table[ordinal]);
-            }
-        }
-        else {
-            arg = _PyIR_FieldOparg(word);
-        }
+        int arg = admitted_word_arg(word, table, nfb);
         int reads = _PyIR_Extent(fmt->reads, arg);
         int writes = _PyIR_Extent(fmt->writes, arg);
         int through = _PyIR_Extent(fmt->through, arg);
@@ -1972,6 +1977,8 @@ typedef struct {
     int n;
     int nl;
     int scratch;
+    const uint32_t *fbinit;
+    int nfb;
     const unsigned char *exceptions;
     Py_ssize_t exception_size;
     const char *source;
@@ -2244,7 +2251,7 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
     int nl = image->nl;
     if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
         *complete = 0;
-        int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS : _PyIR_FieldOparg(word);
+        int arg = admitted_word_arg(word, image->fbinit, image->nfb);
         for (int bit = 0; bit < image->scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
             _PyIRPhysicalTransfer physical = _PyIR_NormalPhysicalTransfer(
@@ -2269,7 +2276,7 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
                (size_t)(SEM_NO_HOME - 1) * work->nwords * sizeof(uint64_t));
         return 0;
     }
-    int arg = _PyIR_FieldOparg(word);
+    int arg = admitted_word_arg(word, image->fbinit, image->nfb);
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int homes[8], nhomes = 0;
     for (int f = 0; f < 4; f++) {
@@ -2418,7 +2425,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (inspect && fmt->call_input_holes) {
         int base = (int)IR_B(word);
-        int arg = _PyIR_FieldOparg(word);
+        int arg = admitted_word_arg(word, image->fbinit, image->nfb);
         for (int k = 0; k < _PyIR_Extent(fmt->reads, arg); k++) {
             if (_PyIR_CallInputRole(fmt, k) == _PyIR_CALL_INPUT_VIRTUAL_NULL &&
                 !(semantic_home_facts(work, state, base + k, image->nl) &
@@ -2554,7 +2561,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
-                int arg = _PyIR_FieldOparg(word);
+                int arg = admitted_word_arg(word, image->fbinit, image->nfb);
                 /* The actual same-frame successful flush/vacate, with all
                  * family members covered, proves only consumed inputs empty.
                  * It does not make an output readable or grant phase coverage. */
@@ -2931,12 +2938,20 @@ validate_normal_transfers(struct _PyCodeConstructor *con)
         .n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)),
         .nl = (int)PyTuple_GET_SIZE(con->localsplusnames),
         .scratch = Py_MAX(con->stacksize, 1),
+        .fbinit = con->fbinit == NULL ? NULL :
+            (const uint32_t *)PyBytes_AS_STRING(con->fbinit),
+        .nfb = con->fbinit == NULL ? 0 :
+            (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t)),
         .exceptions = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable),
         .exception_size = PyBytes_GET_SIZE(con->exceptiontable),
         .source = PyBytes_AS_STRING(con->linetable),
         .source_size = PyBytes_GET_SIZE(con->linetable),
     };
-    return normal_transfer_proof(&image, NULL);
+    int result = normal_transfer_proof(&image, NULL);
+    if (result < 0 && PyErr_ExceptionMatches(PyExc_ValueError)) {
+        _PyErr_FormatNote("while admitting %U (%U)", con->qualname, con->filename);
+    }
+    return result;
 }
 
 int
@@ -2959,6 +2974,8 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
         .n = (int)Py_SIZE(co),
         .nl = nl,
         .scratch = scratch,
+        .fbinit = _PyCode_FBINIT(co),
+        .nfb = co->co_nfeedback,
         .exceptions = (const unsigned char *)PyBytes_AS_STRING(co->co_exceptiontable),
         .exception_size = PyBytes_GET_SIZE(co->co_exceptiontable),
         .source = PyBytes_AS_STRING(co->co_linetable),

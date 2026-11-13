@@ -772,6 +772,14 @@ typedef enum {
 #define CALL_MONITORED 4
 #define CALL_INSTRUMENTED 8
 #define CALL_PERIODIC 16
+#define CALL_SELF_PRESENT 32
+#define CALL_KWARGS_PRESENT 64
+#define CALL_FAILED 128
+
+typedef enum {
+    CALL_SELF_ABSENT,
+    CALL_SELF_SUPPLIED,
+} _PyCallSelfRole;
 
 /* The state of one call, which lives only in the frame of the out-of-line
  * call_transaction_run_*(), across the helpers it calls (R-c).  Numeric
@@ -790,7 +798,7 @@ typedef struct {
     int instrumented;
     int monitored;
     int periodic;
-    int prepared;
+    int state;
 } _PyCallTransaction;
 
 /* Raise the SystemError of a failed revalidation. An operation error can be
@@ -1403,9 +1411,10 @@ value_operation_finish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The checks of a call's window, before the call has any effect; the
  * handler keeps base and destination in registers. */
-static inline void
+static inline int
 call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
-                       int destination)
+                       int destination, _PyCallTransactionKind kind,
+                       unsigned int virtual_holes)
 {
     assert(base >= _PyFrame_GetCode(frame)->co_nlocalsplus);
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
@@ -1415,7 +1424,39 @@ call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
     /* Every call input is an evaluated temporary, including snapshots of
      * locals, and owns its value. Callback-current LOCAL homes are never
      * consumed by this record. */
-    _PyValue_RecheckWindow(_PyFrame_Slots(frame) + base, count);
+    PyValue *homes = _PyFrame_Slots(frame) + base;
+    for (int i = 0; i < count; i++) {
+        if ((i == 1 && (virtual_holes & _PyIR_CALL_HOLE_SELF)) ||
+            (i == 3 && (virtual_holes & _PyIR_CALL_HOLE_KWARGS))) {
+            continue;
+        }
+        _PyValue_RecheckHome(homes[i]);
+    }
+    int roles = 0;
+    if (!(virtual_holes & _PyIR_CALL_HOLE_SELF) && !PyValue_IsNull(homes[1])) {
+        roles |= CALL_SELF_PRESENT;
+    }
+    if (kind == CALL_TRANSACTION_EX &&
+        !(virtual_holes & _PyIR_CALL_HOLE_KWARGS) && !PyValue_IsNull(homes[3])) {
+        roles |= CALL_KWARGS_PRESENT;
+    }
+    return roles;
+}
+
+/* Window-relative geometry includes reserved virtual cells. Only actual
+ * input owners are vacated; virtual cells supply no readable value. */
+static inline void
+call_clear_owned_slots(PyValue *window, int first, int count,
+                       _PyCallTransactionKind kind, int state)
+{
+    for (int i = first; i < first + count; i++) {
+        if ((i == 1 && !(state & CALL_SELF_PRESENT)) ||
+            (i == 3 && kind == CALL_TRANSACTION_EX &&
+             !(state & CALL_KWARGS_PRESENT))) {
+            continue;
+        }
+        window[i] = PyValue_NULL;
+    }
 }
 
 static int
@@ -1434,16 +1475,16 @@ call_transaction_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return status;
 }
 
-/* Expand a bound method in the window: 1 if it did (an effect), 0 if the
- * callable is not one, -1 on error. */
+/* Return the prepared state even on failure after effects. Promotion supplies
+ * a real self before any obsolete-wrapper callback; no absent home is read. */
 static int
 call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               _PyInstr *current, int base)
+                               _PyInstr *current, int base, int state)
 {
     PyValue *homes = _PyFrame_Slots(frame) + base;
     if (PyValue_TYPE(homes[0]) != &PyMethod_Type ||
-        !PyValue_IsNull(homes[1])) {
-        return 0;
+        (state & CALL_SELF_PRESENT)) {
+        return state | CALL_PREPARED;
     }
     PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(homes[0]);
     PyValue self = PyValue_DUP(method->im_self);
@@ -1453,10 +1494,12 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
      * a destructor. No pointer into the old window crosses that release. */
     homes[0] = function;
     homes[1] = self;
+    state |= CALL_SELF_PRESENT | CALL_PREPARED | CALL_EFFECTS;
     _PyValue_CheckHome(homes[0]);
     _PyValue_CheckHome(homes[1]);
     PyValue_CLOSE(obsolete);
-    return call_transaction_refresh(tstate, frame, current) < 0 ? -1 : 1;
+    int status = call_transaction_refresh(tstate, frame, current);
+    return state | (status < 0 ? CALL_FAILED : 0);
 }
 
 /* Replace CALL_FUNCTION_EX's positional arguments by a tuple.  It is an
@@ -1525,7 +1568,7 @@ borrowed_word(PyObject *obj)
 static int
 call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyInstr *current, int base, int argument_count,
-                         _PyCallTransactionKind kind)
+                         _PyCallTransactionKind kind, int roles)
 {
     PyValue *homes = _PyFrame_Slots(frame) + base;
     PyValue function = PyValue_DUP(homes[0]);
@@ -1536,7 +1579,7 @@ call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
             first = PyValue_DUP(PyTuple_GET_VALUE(tuple, 0));
         }
     }
-    else if (!PyValue_IsNull(homes[1])) {
+    else if (roles & CALL_SELF_PRESENT) {
         first = PyValue_DUP(homes[1]);
     }
     else if (argument_count) {
@@ -1568,17 +1611,17 @@ call_record_refresh(_PyCallTransaction *call)
 static int
 call_record_expand_method(_PyCallTransaction *call)
 {
-    call->prepared = 1;
-    int status = call_transaction_expand_method(call->tstate, call->frame,
-                                                call->current, call->base);
-    return status < 0 ? -1 : 0;
+    call->state |= CALL_PREPARED;
+    call->state = call_transaction_expand_method(
+        call->tstate, call->frame, call->current, call->base, call->state);
+    return call->state & CALL_FAILED ? -1 : 0;
 }
 
 static int
 call_record_prepare_tuple(_PyCallTransaction *call)
 {
     assert(call->kind == CALL_TRANSACTION_EX);
-    call->prepared = 1;
+    call->state |= CALL_PREPARED;
     return call_transaction_prepare_tuple(call->tstate, call->frame,
                                           call->current, call->base);
 }
@@ -1590,7 +1633,7 @@ call_record_monitor(_PyCallTransaction *call)
     call->monitored = 1;
     return call_transaction_monitor(call->tstate, call->frame, call->current,
                                     call->base, call->argument_count,
-                                    call->kind);
+                                    call->kind, call->state);
 }
 
 static void
@@ -1613,6 +1656,12 @@ call_transaction_detach(_PyCallTransaction *call, PyValue *retired)
 {
     PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
     for (int i = 0; i < call->count; i++) {
+        if ((i == 1 && !(call->state & CALL_SELF_PRESENT)) ||
+            (i == 3 && call->kind == CALL_TRANSACTION_EX &&
+             !(call->state & CALL_KWARGS_PRESENT))) {
+            retired[i] = PyValue_NULL;
+            continue;
+        }
         retired[i] = homes[i];
         homes[i] = PyValue_NULL;
     }
@@ -1677,7 +1726,7 @@ call_transaction_native(_PyCallTransaction *call)
             }
         }
         else {
-            int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+            int offset = call->state & CALL_SELF_PRESENT ? 1 : 2;
             int total = call->argument_count + 2 - offset;
             if (total) {
                 first = PyValue_DUP(homes[offset]);
@@ -1693,19 +1742,19 @@ call_transaction_native(_PyCallTransaction *call)
     homes = _PyFrame_Slots(call->frame) + call->base;
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
-        PyObject *kwargs = PyValue_AsKnownObjectBorrow(homes[3]);
+        PyObject *kwargs = call->state & CALL_KWARGS_PRESENT
+            ? PyValue_AsKnownObjectBorrow(homes[3]) : NULL;
         result = _PyValue_Call(call->tstate, callable, tuple, kwargs);
     }
     else {
-        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int offset = call->state & CALL_SELF_PRESENT ? 1 : 2;
         int total = call->argument_count + 2 - offset;
         PyObject *names = call->kind == CALL_TRANSACTION_KEYWORDS
             ? PyValue_AsKnownObjectBorrow(homes[call->count - 1]) : NULL;
         Py_ssize_t positional = total - (names == NULL ? 0 : PyTuple_GET_SIZE(names));
-        /* With an empty self slot (offset 2) the callee may use it as
-         * the slot before the arguments. */
-        size_t nargsf = (size_t)positional
-            | (offset == 2 ? PY_VECTORCALL_ARGUMENTS_OFFSET : 0);
+        /* An arena window grants argument reads, not a writable owner in
+         * args[-1]. Native adapters supply their own prepend workspace. */
+        size_t nargsf = (size_t)positional;
         result = _PyValue_VectorcallTstate(call->tstate, callable,
                                            homes + offset, nargsf, names);
     }
@@ -1812,16 +1861,17 @@ done:
  * Move their arguments after initialization, preserving any constant homes
  * beyond the actual arguments. No owner is retired and no callback can run. */
 static Py_NO_INLINE void
-call_transfer_exact_args(PyValue *base, PyValue *window, int nargs)
+call_transfer_exact_args(PyValue *base, PyValue *window, int nargs,
+                         _PyCallSelfRole self_role)
 {
-    int has_self = !PyValue_IsNull(window[1]);
+    int has_self = self_role == CALL_SELF_SUPPLIED;
     if (has_self) {
         base[0] = window[1];
     }
     for (int i = 0; i < nargs; i++) {
         base[has_self + i] = window[2 + i];
     }
-    for (int i = 1; i < 2 + nargs; i++) {
+    for (int i = has_self ? 1 : 2; i < 2 + nargs; i++) {
         window[i] = PyValue_NULL;
     }
 }
@@ -1832,7 +1882,7 @@ static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static inline _PyCallResult call_bind_known_python(
     PyThreadState *, _PyInterpreterFrame *, int, int, int,
-    _PyCallTransactionKind, const _PyFbCall *);
+    _PyCallTransactionKind, const _PyFbCall *, int);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
@@ -2020,19 +2070,21 @@ typedef struct {
     Py_ssize_t next_word;
     int base;
     int inputs;
+    int roles;
     PyValue *result;
 } _PyNativeCallPublication;
 
 static _PyNativeCallPublication
 native_call_publication(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *next, int base, int inputs, PyValue *result)
+                        _PyInstr *next, int base, int inputs, int roles,
+                        PyValue *result)
 {
     _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
     assert(exec != NULL && frame->ir_words == exec->words);
     return (_PyNativeCallPublication){
         tstate, frame, _PyFrame_GetCode(frame),
         frame->instr_ptr - exec->words, next - exec->words,
-        base, inputs, result,
+        base, inputs, roles, result,
     };
 }
 
@@ -2059,9 +2111,8 @@ native_call_publish_result(void *opaque)
     _PyNativeCallPublication *state = opaque;
     native_call_publish_pc(state);
     PyValue *window = _PyFrame_Slots(state->frame) + state->base;
-    for (int i = 0; i < state->inputs; i++) {
-        window[i] = PyValue_NULL;
-    }
+    call_clear_owned_slots(window, 0, state->inputs,
+                           CALL_TRANSACTION_VECTOR, state->roles);
     window[0] = *state->result;
 }
 
@@ -2108,13 +2159,13 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
 static Py_NO_INLINE PyValue
 native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       _PyInstr *next, int base, int inputs,
-                      PyValue callable, PyValue *args)
+                      PyValue callable, PyValue *args, int roles)
 {
     PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
     _PyNativeScope scope;
     PyValue pending = PyValue_NULL;
     _PyNativeCallPublication publication = native_call_publication(
-        tstate, frame, next, base, inputs, &pending);
+        tstate, frame, next, base, inputs, roles, &pending);
     int status = _PyNativeScope_Begin(
         &scope, tstate, args, 1, 1, PyValue_NULL, NULL);
     if (status == 0) {
@@ -3565,7 +3616,7 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     PyValue function = window[0];
     window[0] = PyValue_NULL;
     _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, shim);
-    call_transfer_exact_args(child->base, window, nargs);
+    call_transfer_exact_args(child->base, window, nargs, CALL_SELF_SUPPLIED);
     caller->return_slot = (uint16_t)destination;
     caller->return_pc = next;
     tstate->py_recursion_remaining--;
@@ -3587,7 +3638,7 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
     PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(homes[0]);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+    int offset = call->state & CALL_SELF_PRESENT ? 1 : 2;
     int nargs = call->argument_count + 2 - offset;
     int flags = code->co_flags;
     PyObject *defaults = func->func_defaults;
@@ -3623,8 +3674,7 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     }
     defaults = func->func_defaults;
     ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-    if (nargs < code->co_argcount - ndefaults ||
-        offset != (PyValue_IsNull(homes[1]) ? 2 : 1)) {
+    if (nargs < code->co_argcount - ndefaults) {
         goto cleanup;
     }
     Py_DECREF(code);  /* The function still owns it. */
@@ -3707,7 +3757,8 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     locals = NULL;
     if (call->kind == CALL_TRANSACTION_EX) {
         tuple = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[2]));
-        kwargs = Py_XNewRef(PyValue_AsKnownObjectBorrow(homes[3]));
+        kwargs = call->state & CALL_KWARGS_PRESENT
+            ? Py_NewRef(PyValue_AsKnownObjectBorrow(homes[3])) : NULL;
         PyObject *consumed_tuple = tuple, *consumed_kwargs = kwargs;
         tuple = kwargs = NULL;
         child = eval_frame_push_and_init_ex_code(
@@ -3716,7 +3767,7 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
             call->frame, code, &staged);
     }
     else {
-        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int offset = call->state & CALL_SELF_PRESENT ? 1 : 2;
         int total = call->argument_count + 2 - offset;
         if (call->kind == CALL_TRANSACTION_KEYWORDS) {
             names = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[call->count - 1]));
@@ -3825,7 +3876,7 @@ static int
 call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
 {
     *child = NULL;
-    if (!call->prepared) {
+    if (!(call->state & CALL_PREPARED)) {
         int prepared = call->kind == CALL_TRANSACTION_EX
             ? call_record_prepare_tuple(call)
             : call_record_expand_method(call);
@@ -3866,7 +3917,7 @@ call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .instrumented = (flags & CALL_INSTRUMENTED) != 0,
         .monitored = (flags & CALL_MONITORED) != 0,
         .periodic = (flags & CALL_PERIODIC) != 0,
-        .prepared = (flags & CALL_PREPARED) != 0,
+        .state = flags & (CALL_PREPARED | CALL_SELF_PRESENT | CALL_KWARGS_PRESENT),
     };
 }
 
@@ -3907,7 +3958,8 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline _PyCallResult
 call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        int base, int destination, int argument_count,
-                       _PyCallTransactionKind kind, const _PyFbCall *binding)
+                       _PyCallTransactionKind kind, const _PyFbCall *binding,
+                       int roles)
 {
 #ifdef Py_GIL_DISABLED
     return (_PyCallResult){1, NULL};
@@ -3922,7 +3974,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyFunctionObject *func = (PyFunctionObject *)
             PyValue_AsKnownObjectBorrow(homes[0]);
         PyCodeObject *code = (PyCodeObject *)func->func_code;
-        int has_self = !PyValue_IsNull(homes[1]);
+        int has_self = (roles & CALL_SELF_PRESENT) != 0;
         int offset = has_self ? 1 : 2;
         int positional = argument_count + has_self - kwcount;
         PyValueBorrow names_value = PyValue_Borrow(homes[argument_count + 2]);
@@ -4020,7 +4072,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyFunctionObject *func = (PyFunctionObject *)
             PyValue_AsKnownObjectBorrow(homes[0]);
         PyCodeObject *code = (PyCodeObject *)func->func_code;
-        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int offset = roles & CALL_SELF_PRESENT ? 1 : 2;
         int supplied = argument_count + 2 - offset;
         if (supplied == binding->binding.positional.bound_count && code->_co_exec != NULL &&
             _PyThreadState_HasStackSpace(tstate, code->co_framesize))

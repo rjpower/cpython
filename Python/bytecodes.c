@@ -4186,7 +4186,7 @@ dummy_func(
                      * on this word: DISPATCH_SAME_OPARG() goes to its
                      * fallback, and next_instr stays the next word. */
                     IR_BEGIN_CALL_EFFECTS();
-                    _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                    _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                     IR_REFRESH_CALL();
                     DISPATCH_SAME_OPARG();
                 }
@@ -4199,7 +4199,7 @@ dummy_func(
         inline_ok op(_MAYBE_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             IR_PREPARE_CALL_METHOD();
             callable = window[0];
-            self_or_null = window[1];
+            self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
         }
 
         // When calling Python, inline the call using DISPATCH_INLINED().
@@ -4210,7 +4210,7 @@ dummy_func(
         inline_ok op(_MONITOR_CALL, (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg])) {
             IR_MONITOR_CALL();
             func = window[0];
-            maybe_self = window[1];
+            maybe_self = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             args = window + 2;
         }
 
@@ -4248,13 +4248,13 @@ dummy_func(
             PyObject *func = ((PyMethodObject *)callable_o)->im_func;
             EXIT_IF(!PyFunction_Check(func));
             EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
-            EXIT_IF(!PyValue_IsNull(null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
         inline_ok op(_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             IR_PREPARE_CALL_METHOD();
             callable = window[0];
-            self_or_null = window[1];
+            self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
         }
 
         macro(CALL_BOUND_METHOD_GENERAL) =
@@ -4288,15 +4288,16 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS, (callable, null, unused[oparg] -- callable, null, unused[oparg])) {
-            EXIT_IF(!PyValue_IsNull(null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
             EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(callable)) != &PyMethod_Type);
         }
 
         op(_INIT_CALL_BOUND_METHOD_EXACT_ARGS, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
-            assert(PyValue_IsNull(self_or_null));
+            assert(!(call_state & CALL_SELF_PRESENT));
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             STAT_INC(CALL, hit);
             self_or_null = PyValue_DUP(((PyMethodObject *)callable_o)->im_self);
+            call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
             PyValue temp = callable;
             callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
             PyValue_CLOSE(temp);
@@ -4311,7 +4312,7 @@ dummy_func(
             assert(PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
             PyCodeObject *code = (PyCodeObject *)func->func_code;
-            EXIT_IF(code->co_argcount != oparg + (!PyValue_IsNull(self_or_null)));
+            EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0));
         }
 
         op(_CHECK_STACK_SPACE, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
@@ -4326,7 +4327,7 @@ dummy_func(
         }
 
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
-            int has_self = !PyValue_IsNull(self_or_null);
+            int has_self = (call_state & CALL_SELF_PRESENT) != 0;
             STAT_INC(CALL, hit);
             // The window: callable, self_or_null, then the arguments
             PyValue *window_base = args - 2;
@@ -4341,7 +4342,8 @@ dummy_func(
             _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
             if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                call_transfer_exact_args(base, window_base, oparg);
+                call_transfer_exact_args(base, window_base, oparg,
+                                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
             }
             // The callee holds callable as its f_funcobj
             window_base[0] = PyValue_NULL;
@@ -4392,11 +4394,11 @@ dummy_func(
             _PUSH_FRAME;
 
         op(_GUARD_NOS_NULL, (null, unused -- null, unused)) {
-            EXIT_IF(!PyValue_IsNull(null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
         op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused)) {
-            EXIT_IF(!PyValue_IsNull(null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
         op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused)) {
@@ -4474,7 +4476,7 @@ dummy_func(
 
         op(_CHECK_OBJECT, (type_version/2, callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(!PyValue_IsNull(self_or_null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
             EXIT_IF(!PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
             EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version);
@@ -4482,7 +4484,7 @@ dummy_func(
 
         op(_ALLOCATE_OBJECT, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            assert(PyValue_IsNull(self_or_null));
+            assert(!(call_state & CALL_SELF_PRESENT));
             assert(PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
             assert(tp->tp_new == PyBaseObject_Type.tp_new);
@@ -4502,6 +4504,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             self_or_null = PyValue_FromObjectSteal(self_o);
+            call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
             PyValue temp = callable;
             callable = init_owner;
             PyValue_CLOSE(temp);
@@ -4551,7 +4554,7 @@ dummy_func(
         op(_CALL_BUILTIN_CLASS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -4581,7 +4584,7 @@ dummy_func(
             EXIT_IF((PyCFunction_GET_FLAGS(callable_o) &
                      _Py_METH_CALL_FLAGS) != METH_O);
             int total_args = oparg;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
             EXIT_IF(total_args != 1);
@@ -4589,12 +4592,13 @@ dummy_func(
 
         op(_CALL_BUILTIN_O, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_O functions */
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 args--;
             }
             STAT_INC(CALL, hit);
             PyValue result = native_call_builtin_o(
-                tstate, frame, next_instr, IR_BASE, oparg + 2, callable, args);
+                tstate, frame, next_instr, IR_BASE, oparg + 2, callable, args,
+                call_state);
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4630,7 +4634,7 @@ dummy_func(
             /* Builtin METH_FASTCALL functions, without keywords */
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -4666,7 +4670,7 @@ dummy_func(
             /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -4809,11 +4813,11 @@ dummy_func(
             EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_O);
             int total_args = oparg;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
             EXIT_IF(total_args != 2);
-            PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+            PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
             EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
@@ -4822,7 +4826,7 @@ dummy_func(
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
 
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
             }
             STAT_INC(CALL, hit);
@@ -4874,7 +4878,7 @@ dummy_func(
                     && flags != (METH_VALUE | METH_KEYWORDS));
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -4885,7 +4889,7 @@ dummy_func(
         op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -4916,11 +4920,11 @@ dummy_func(
             EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
                     METH_NOARGS);
             int total_args = oparg;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
             EXIT_IF(total_args != 1);
-            PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+            PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
             EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
@@ -4928,8 +4932,8 @@ dummy_func(
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
 
-            assert(oparg == 1 || !PyValue_IsNull(self_or_null));
-            if (!PyValue_IsNull(self_or_null)) {
+            assert(oparg == 1 || (call_state & CALL_SELF_PRESENT));
+            if (call_state & CALL_SELF_PRESENT) {
                 args--;
             }
             PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
@@ -4971,18 +4975,18 @@ dummy_func(
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
             int total_args = oparg;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
             EXIT_IF(total_args == 0);
-            PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
+            PyValue self = !(call_state & CALL_SELF_PRESENT) ? args[0] : self_or_null;
             EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
         op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
             int total_args = oparg;
             PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
+            if (call_state & CALL_SELF_PRESENT) {
                 arguments--;
                 total_args++;
             }
@@ -5016,14 +5020,14 @@ dummy_func(
         inline_ok op(_MONITOR_CALL_KW, (callable, self_or_null, args[oparg], unused -- callable, self_or_null, args[oparg], unused)) {
             IR_MONITOR_CALL();
             callable = window[0];
-            self_or_null = window[1];
+            self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
             args = window + 2;
         }
 
         inline_ok op(_MAYBE_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
             IR_PREPARE_CALL_METHOD();
             callable = window[0];
-            self_or_null = window[1];
+            self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
         }
 
         inline_ok op(_DO_CALL_KW, (callable, self_or_null, args[oparg], kwnames -- res)) {
@@ -5061,13 +5065,13 @@ dummy_func(
             PyObject *func = ((PyMethodObject *)callable_o)->im_func;
             EXIT_IF(!PyFunction_Check(func));
             EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
-            EXIT_IF(!PyValue_IsNull(null));
+            EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
         inline_ok op(_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
             IR_PREPARE_CALL_METHOD();
             callable = window[0];
-            self_or_null = window[1];
+            self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
         }
 
         macro(CALL_KW_BOUND_METHOD) =
@@ -5136,7 +5140,7 @@ dummy_func(
             IR_PREPARE_CALL_TUPLE();
             func = window[0];
             callargs = window[2];
-            kwargs = window[3];
+            kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
         }
 
         inline_ok op(_DO_CALL_FUNCTION_EX, (func_st, null, callargs_st, kwargs_st -- result)) {

@@ -2264,7 +2264,7 @@ dummy_func(
         }
 
         inst(BUILD_TUPLE, (values[oparg] -- tup)) {
-            PyObject *tup_o = _PyTuple_FromValueStealOnSuccess(values, oparg);
+            PyObject *tup_o = IR_BUILD_TUPLE(values);
             if (tup_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -2273,7 +2273,7 @@ dummy_func(
         }
 
         inst(BUILD_LIST, (values[oparg] -- list)) {
-            PyObject *list_o = _PyList_FromValueStealOnSuccess(values, oparg);
+            PyObject *list_o = IR_BUILD_LIST(values);
             if (list_o == NULL) {
                 ERROR_NO_POP();
             }

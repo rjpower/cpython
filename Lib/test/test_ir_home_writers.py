@@ -7,10 +7,117 @@ import unittest
 import weakref
 
 import _testinternalcapi
+from test import support
 from test.test_ir_call_roles import routes
 
 
 class HomeWriterTests(unittest.TestCase):
+    def test_container_success_vacates_before_displaced_local_callback(self):
+        for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
+                                           ("[", "]", "BUILD_LIST")):
+            namespace = {}
+            exec("def build(factory):\n"
+                 "    current = 17\n"
+                 "    result = factory(-1)\n"
+                 f"    result = {opening}factory(0), factory(1), factory(2){closing}\n"
+                 "    return result, current\n", namespace)
+            code = namespace["build"].__code__
+            self.assertTrue(any(row[0] == handler and row[1] < code.co_nlocals
+                                for row in _testinternalcapi.get_ir(code)))
+            for admitted in routes(code):
+                references = []
+                observed = []
+
+                class Previous:
+                    def __del__(self):
+                        frame = sys._getframe(1)
+                        result = frame.f_locals["result"]
+                        observed.append(tuple(item.index for item in result))
+                        frame.f_locals["current"] = 42
+                        gc.collect()
+
+                class Payload:
+                    def __init__(self, index):
+                        self.index = index
+                        references.append(weakref.ref(self))
+
+                def factory(index):
+                    return Previous() if index < 0 else Payload(index)
+
+                result, current = types.FunctionType(admitted, globals())(factory)
+                self.assertEqual(current, 42)
+                self.assertEqual(observed, [(0, 1, 2)])
+                self.assertEqual(tuple(item.index for item in result), (0, 1, 2))
+                del result
+                gc.collect()
+                self.assertTrue(all(reference() is None for reference in references))
+
+    @support.nomemtest
+    def test_container_allocation_failure_retains_inputs_until_unwind(self):
+        from test.support.script_helper import assert_python_ok
+        assert_python_ok("-c", """if 1:
+            import gc
+            import types
+            import weakref
+            import _testcapi
+            import _testinternalcapi
+            from test.test_ir_call_roles import routes
+
+            for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
+                                               ("[", "]", "BUILD_LIST")):
+                # Twenty-four avoids the tuple freelist. Arm after every
+                # element exists; exactly one allocation fails, so traceback
+                # creation can identify the actual failing builder.
+                elements = ", ".join(f"factory({i})" for i in range(24))
+                namespace = {}
+                exec(f"def build(factory):\\n    return {opening}{elements}{closing}\\n", namespace)
+                original = namespace["build"].__code__
+                assert any(row[0] == handler and row[3] == 24
+                           for row in _testinternalcapi.get_ir(original))
+                for code in routes(original):
+                    references = []
+                    armed = False
+                    class Payload:
+                        def __init__(self, index):
+                            self.index = index
+                            references.append(weakref.ref(self))
+                    def factory(index):
+                        value = Payload(index)
+                        if armed and index == 23:
+                            _testcapi.set_nomemory(0, 1)
+                        return value
+                    function = types.FunctionType(code, globals())
+                    result = function(factory)
+                    assert tuple(item.index for item in result) == tuple(range(24))
+                    del result
+                    references.clear()
+                    gc.collect()
+                    gc.disable()
+                    armed = True
+                    failure = None
+                    try:
+                        function(factory)
+                    except MemoryError as error:
+                        failure = error
+                    finally:
+                        _testcapi.remove_mem_hooks()
+                        gc.enable()
+                    assert failure is not None
+                    trace = failure.__traceback__
+                    while trace.tb_next is not None:
+                        trace = trace.tb_next
+                    assert trace.tb_frame.f_code is code
+                    assert _testinternalcapi.get_ir(code)[trace.tb_lasti][0] == handler
+                    failure = trace = None
+                    gc.collect()
+                    assert len(references) == 24
+                    assert all(reference() is None for reference in references)
+                    armed = False
+                    result = function(factory)
+                    assert tuple(item.index for item in result) == tuple(range(24))
+                    del result
+            """)
+
     def test_tuple_and_list_fill_preserve_physical_order(self):
         for count in (0, 3):
             names = [f"a{i}" for i in range(count)]

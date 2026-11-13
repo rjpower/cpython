@@ -210,7 +210,7 @@ void _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
 /* The format of the stack instruction of an op: the generic handler's,
  * which its family shares. */
 struct _PyIRFormat;
-const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode);
+const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
 
 /* Internal to Python/regcfg.c and Python/regcfg_passes.c */
 

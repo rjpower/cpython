@@ -171,11 +171,24 @@ class ContractTests(unittest.TestCase):
             "CALL_ALLOC_AND_ENTER_INIT", "CALL_PY_GENERAL",
             "CALL_BOUND_METHOD_GENERAL", "CALL_NON_PY_GENERAL",
         }
-        self.assertEqual(calls, {name for name, row in BY_NAME.items()
-                                 if row.base == opcode.opmap["CALL"]}
-                         | {"INSTRUMENTED_CALL"})
+        legacy = calls - {"INSTRUMENTED_CALL"}
+        self.assertEqual(legacy, {name for name, row in BY_NAME.items()
+                                 if row.base == opcode.opmap["CALL"]
+                                 and row.call_input_holes == 0})
+        virtual = {"CALL_NO_SELF" + name[len("CALL"):] for name in legacy}
+        self.assertEqual(virtual, {name for name, row in BY_NAME.items()
+                                  if row.base == opcode.opmap["CALL"]
+                                  and row.call_input_holes == 2})
+        instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL_NO_SELF"}
+        self.assertEqual({BY_NAME[name].call_input_holes for name in instrumented},
+                         {0, 2})
+        self.assertEqual(legacy | virtual | instrumented,
+                         {name for name, row in BY_NAME.items()
+                          if row.base in (opcode.opmap["CALL"],
+                                          opcode.opmap["INSTRUMENTED_CALL"])})
         unknown = (2, -1)
         set_null = (1, -1)
+        preserve = (0, -1)
 
         def transfer(name, dst, home, *, argc=1, encoded_arg=None,
                      edge=0, base=4):
@@ -185,19 +198,19 @@ class ContractTests(unittest.TestCase):
                 named[name], dst, base, encoded_arg, 0,
                 argc, edge, home, 2, 10)
 
-        for name in sorted(calls):
-            argc = 2 if name == "CALL_ISINSTANCE" else 1
+        for name in sorted(legacy | virtual):
+            argc = 2 if name.endswith("_ISINSTANCE") else 1
             with self.subTest(handler=name):
                 # A new result at BASE is a value, not a known NULL.
                 self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)
                 for home in range(5, 6 + argc):
                     self.assertEqual(transfer(name, 4, home, argc=argc),
-                                     set_null)
+                                     preserve if name in virtual and home == 5 else set_null)
                 # Folded local and sink destinations drain the whole window.
                 for dst in (0, 4095):
                     for home in range(4, 6 + argc):
                         self.assertEqual(transfer(name, dst, home, argc=argc),
-                                         set_null)
+                                         preserve if name in virtual and home == 5 else set_null)
                 for home in (3, 9):
                     self.assertEqual(transfer(name, 4, home, argc=argc),
                                      unknown)
@@ -210,6 +223,13 @@ class ContractTests(unittest.TestCase):
                                           encoded_arg=argc + 1), unknown)
                 self.assertEqual(transfer(name, 9, 9, argc=argc, base=9),
                                  unknown)
+        # The observer/typed-runner path has no shared physical-NULL
+        # contract. Its logical drain/virtual-hole proof is separate.
+        for name in sorted(instrumented):
+            for dst in (0, 4, 4095):
+                for home in range(3, 10):
+                    with self.subTest(handler=name, dst=dst, home=home):
+                        self.assertEqual(transfer(name, dst, home), unknown)
         for name in ("CALL_KW", "INSTRUMENTED_CALL_KW"):
             self.assertEqual(transfer(name, 4, 5), unknown)
 
@@ -327,7 +347,13 @@ class ContractTests(unittest.TestCase):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                self.assertEqual(sorted(inputs), list(range(row.ninputs)))
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                    self.assertEqual(row.ninputs, 3)
+                    self.assertEqual(sorted(inputs), [0, 2])
+                    self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
+                    self.assertEqual(row.borrow_mask, 0)
+                else:
+                    self.assertEqual(sorted(inputs), list(range(row.ninputs)))
                 if row.flags & _opcode.IR_WINDOW:
                     self.assertIn(_opcode.IR_ROLE_BASE, roles)
                     # at most the sources read through fields of their own
@@ -470,6 +496,7 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
             "INSTRUMENTED_RETURN_VALUE": {"PY_RETURN"},
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
+            "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
             "INSTRUMENTED_JUMP_BACKWARD": {"JUMP"},
             "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
@@ -566,6 +593,7 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
+                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "RETURN_GENERATOR"})
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
@@ -928,6 +956,13 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                    # Frontend YIELD_VALUE1 is normalized to three logical
+                    # inputs/outputs before allocation. Its cursor dependency
+                    # remains in SSA without a physical input field.
+                    self.assertEqual(expected, (1, 1))
+                    self.assertEqual(extent(row.through, oparg), 2)
+                    expected = (3, 3)
                 if min(expected) < 0:
                     continue
                 if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT")):

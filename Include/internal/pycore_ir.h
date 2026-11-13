@@ -183,6 +183,8 @@ enum {
                                     // elements stay in the window
 #define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
                                     // exceptional absence only, not readability
+#define _PyIR_ABRUPT_OPERANDS 0x4000 // actual ordinary error stores confined
+                                     // to encoded operands; absence only
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -295,11 +297,15 @@ enum {
     _PyIR_OWNER_CALL_DRAIN,
     _PyIR_OWNER_NORMAL_COMPLETION,
     _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
+    _PyIR_OWNER_YIELD_DELEGATED,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
+#define _PyIR_COMPLETION_SEND_YIELDED 2u
 #define _PyIR_NORMAL_WINDOW_RESULT 1u
 #define _PyIR_NORMAL_DISJOINT_CHILD 2u
+#define _PyIR_NORMAL_NULL_FALLTHROUGH 4u
+#define _PyIR_NORMAL_NULL_TAKEN 8u
 
 typedef struct {
     uint8_t kind, flags;

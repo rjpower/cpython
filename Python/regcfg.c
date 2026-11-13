@@ -199,7 +199,7 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     op->oparg = oparg;
     op->loc = loc;
     // The oparg names a word: the target, or for END_ASYNC_FOR the SEND
-    op->target = (_PyRegCfg_FormatOf(opcode)->flags
+    op->target = (_PyRegCfg_FormatOf(opcode, oparg)->flags
                   & (_PyIR_JUMPS | _PyIR_FORWARD)) ? target : -1;
     op->except = except;
     op->dst = -1;
@@ -214,8 +214,11 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 /* Formats */
 
 const _PyIRFormat *
-_PyRegCfg_FormatOf(int opcode)
+_PyRegCfg_FormatOf(int opcode, int oparg)
 {
+    if (opcode == YIELD_VALUE && oparg == 1) {
+        return _PyIR_FormatOf(YIELD_DELEGATED);
+    }
     // The handlers of BINARY_OP's operations share its format
     if (opcode == BINARY_OP) {
         return _PyIR_FormatOf(_PyIR_BINARY_OP_FIRST);
@@ -229,7 +232,7 @@ static inline int
 op_jumps(const _PyRegOp *op)
 {
     return op->target >= 0
-           && !(_PyRegCfg_FormatOf(op->opcode)->flags & _PyIR_NAMES_TARGET);
+           && !(_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags & _PyIR_NAMES_TARGET);
 }
 
 static inline int
@@ -495,13 +498,20 @@ static int
 convert_instr(converter *c, const _PyRegOp *instr)
 {
     _PyRegCfg *cfg = c->cfg;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
     // A scope exit leaves nothing behind for this frame: RETURN_VALUE
     // pushes its result to the caller's, and RERAISE does not go on
     int pushed = IS_SCOPE_EXIT_OPCODE(instr->opcode)
         ? 0 : _PyOpcode_num_pushed(instr->opcode, instr->oparg);
+    if (instr->opcode == YIELD_VALUE && instr->oparg == 1) {
+        /* The frontend leaves receiver/cursor below its one-value yield.
+         * Canonical delegated IR retains both as explicit logical uses;
+         * allocation must see their identities before assigning homes. */
+        popped = 3;
+        pushed = 3;
+    }
     int depth = c->sp;
     assert(popped >= 0 && pushed >= 0 && popped <= depth);
     if (instr->except >= 0) {
@@ -802,7 +812,7 @@ void
 _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
                   _PyRegSlots *slots)
 {
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     const int *in = _PyReg_IN(cfg, op);
     const int *out = _PyReg_OUT(cfg, op);
     int nl = cfg->nlocalsplus;
@@ -952,7 +962,7 @@ static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
 {
     int nl = cfg->nlocalsplus;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     int *in = _PyReg_IN(cfg, op);
     int *out = _PyReg_OUT(cfg, op);
     int nin = op->nread + op->nimplicit;
@@ -1190,7 +1200,7 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         if (op->opcode == _PyReg_DEAD) {
             continue;
         }
-        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
         int high = -1;
@@ -1271,7 +1281,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         if (op->opcode == _PyReg_DEAD) {
             continue;
         }
-        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
         int role = _PyIR_OpargRole(fmt);
         if (_PyRegOp_WritesLocal(op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
@@ -1331,7 +1341,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             if (op->opcode == _PyReg_DEAD) {
                 continue;
             }
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
             int *in = _PyReg_IN(cfg, op);
             int *out = _PyReg_OUT(cfg, op);
             // A value that nothing reads is not an error: a loop without an

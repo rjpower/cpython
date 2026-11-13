@@ -53,6 +53,10 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
+    if name == "YIELD_DELEGATED":
+        return "YIELD_VALUE"
+    if name == "INSTRUMENTED_YIELD_DELEGATED":
+        return "INSTRUMENTED_YIELD_VALUE"
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
     # The fused handlers, their specialisations and twins stand for the
@@ -146,7 +150,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.fused, "_PyIR_FUSED"),
             (fmt.discards, "_PyIR_DISCARDS"),
             (fmt.unpacks, "_PyIR_UNPACKS"),
-            (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX")):
+            (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX"),
+            (contract.abrupt_operands, "_PyIR_ABRUPT_OPERANDS")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)

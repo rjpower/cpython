@@ -100,7 +100,7 @@ class SendTransferTests(unittest.TestCase):
         contracts = ir_generator.handler_contracts(analysis, formats)
         names = [name for name, fmt in formats.items() if fmt.group == "SEND"]
         expected = ir_generator.OwnershipEvent(
-            "_PyIR_OWNER_NORMAL_COMPLETION", flags=1, src=3, dst=1)
+            "_PyIR_OWNER_NORMAL_COMPLETION", flags=3, src=3, dst=1, extent=2)
         self.assertGreaterEqual(len(names), 4)
         for name in names:
             self.assertEqual(contracts[name].ownership_events, (expected,))

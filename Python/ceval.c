@@ -724,12 +724,12 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 }
 
 static void
-clear_value_arguments(PyValue *arguments, int count)
+clear_value_arguments(_PyInterpreterFrame *frame, PyValue *arguments, int count)
 {
     for (int i = count - 1; i >= 0; i--) {
         // a move: cleared below
         PyValue value = arguments[i];
-        arguments[i] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, arguments + i, PyValue_NULL);
         PyValue_CLOSE(value);
     }
 }
@@ -995,6 +995,7 @@ value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
 
 PyObject *
 _Py_BuildString_ValueSteal(
+    _PyInterpreterFrame *frame,
     PyValue *arguments,
     int total_args)
 {
@@ -1011,12 +1012,13 @@ _Py_BuildString_ValueSteal(
     }
     _PyBorrowScope_Exit(tstate, mark);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    clear_value_arguments(arguments, total_args);
+    clear_value_arguments(frame, arguments, total_args);
     return res;
 }
 
 PyObject *
 _Py_BuildMap_ValueSteal(
+    _PyInterpreterFrame *frame,
     PyValue *arguments,
     int half_args)
 {
@@ -1026,7 +1028,7 @@ _Py_BuildMap_ValueSteal(
     _PyValue_RecheckWindow(arguments, half_args * 2);
     PyObject *res = _PyDict_FromValueItems(arguments, 2, arguments + 1, 2,
                                           half_args);
-    clear_value_arguments(arguments, half_args * 2);
+    clear_value_arguments(frame, arguments, half_args * 2);
     return res;
 }
 

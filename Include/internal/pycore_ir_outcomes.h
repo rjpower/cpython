@@ -349,6 +349,7 @@ _PyIR_Outcome(_PyIRWord word, int taken)
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
         case YIELD_VALUE:
+        case YIELD_DELEGATED:
             /* The outgoing value is taken; the next activation supplies A. */
             return (_PyIRSlotOutcome){1, base, 1, dst};
         case RETURN_GENERATOR:
@@ -456,6 +457,12 @@ _PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int through = _PyIR_Extent(fmt->through, arg);
     for (int f = 0; f < 4; f++) {
+        if (!(fmt->flags & _PyIR_WINDOW) && fmt->roles[f] >= _PyIR_ROLE_IN0 &&
+            fmt->roles[f] - _PyIR_ROLE_IN0 < through &&
+            (int)fields[f] == home)
+        {
+            return 0;
+        }
         if (fmt->roles[f] == _PyIR_ROLE_BASE &&
             home >= (int)fields[f] && home - (int)fields[f] < through)
         {

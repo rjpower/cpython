@@ -76,6 +76,9 @@ import ir_numbers
 from ir_error_effects import (
     HomeEffect, analyze_error_effects, checked_native_step_effects,
 )
+from ir_read_effects import (ASSIGNMENTS, validate_nullable_inputs,
+                             error_nonnull_value,
+                             value_declaration, value_nonnull_changes)
 import re
 from dataclasses import dataclass, fields, replace
 
@@ -1383,7 +1386,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
                 _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
-                null_or_index = window[1];
+                null_or_index = _PyFrame_ReadHome(frame, window + 1);
                 PyValue item = next.value;
                 int found = next.status;
                 if (found <= 0) {
@@ -1975,10 +1978,6 @@ def names_target_only(inst: Instruction) -> bool:
     return bool(jumps) and all(arg == ["0"] for arg in jumps)
 
 
-# Tokens that assign to what stands before them
-ASSIGNMENTS = {"EQUALS", "TIMESEQUAL", "DIVEQUAL", "MODEQUAL", "PLUSEQUAL",
-               "MINUSEQUAL", "LSHIFTEQUAL", "RSHIFTEQUAL", "ANDEQUAL",
-               "OREQUAL", "XOREQUAL", "PLUSPLUS", "MINUSMINUS"}
 # What may stand before an & that is a binary operator, not address-of
 OPERANDS = {"IDENTIFIER", "NUMBER", "RPAREN", "RBRACKET"}
 
@@ -2431,9 +2430,8 @@ def null_output_names(inst: Instruction, fmt: IRFormat) -> frozenset[str] | None
 
 class IRStack(Stack):
     """The frame's slots in place of the stack, the SlotStack of the design
-    note.  Every slot holds a value that the frame owns or NULL: a handler
-    that consumes a temporary takes its reference and stores NULL in its
-    slot, and a slot that a handler writes for a temporary holds NULL.  An
+    note. A home owns a value or is vacant; strict commits implement that
+    authority. Bitmap scratch words may be stale when their bit is zero. An
     input field that names a local, a cell or a free variable (a slot below
     co_nlocalsplus) is borrowed: its slot is never cleared or written.
 
@@ -2497,6 +2495,9 @@ class IRStack(Stack):
         self.null_paths: dict[int, set[str]] = {0: set()}
         self.null_stores: dict[int, bool] = {}
         self.null_uncovered = False
+        # Typed C temporaries carry current-value facts without a frame
+        # home or an additional runtime root record.
+        self.native_values: dict[str, Local] = {}
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2513,6 +2514,7 @@ class IRStack(Stack):
         other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
         other.null_stores = dict(self.null_stores)
         other.null_uncovered = self.null_uncovered
+        other.native_values = {name: var.copy() for name, var in self.native_values.items()}
         return other
 
     def select_null_edge(self, edge: int) -> None:
@@ -2628,13 +2630,18 @@ class IRStack(Stack):
         if not var.is_array():
             role = self.call_input_role(memory_offset)
             if role is not None:
-                return f"((call_state & {role}) ? {self.window_slot(memory_offset)} : PyValue_NULL)"
+                return (f"((call_state & {role}) ? "
+                        f"_PyFrame_ReadHome(frame, &{self.window_slot(memory_offset)}) : PyValue_NULL)")
         if not var.is_array():
             p = memory_offset.as_int()
             if (p is not None and self.owner.get(p) == "in"
                     and p in lay.borrowable):
+                if lay.in_fields[p] in lay.local_fields:
+                    return f"PyValue_Borrow(IR_SLOT({self.input_field(p)}))"
                 return f"IR_VIEW({self.input_field(p)})"
-        return super().load(var, memory_offset)
+        if var.is_array() or lay.native_entry:
+            return super().load(var, memory_offset)
+        return f"_PyFrame_ReadHome(frame, &{self.address(memory_offset)})"
 
     def array_output(self, var: StackItem, memory_offset: PointerOffset) -> str:
         address = super().array_output(var, memory_offset)
@@ -2650,6 +2657,8 @@ class IRStack(Stack):
         old_name = before.name if before is not None else None
         fresh = before is None or not before.in_local
         local = super().pop(var, out)
+        if fresh:
+            local.nonnull = False
         lay = self.layout
         if (local.memory_offset is not None and var.used
                 and local.ir_input is None and not var.is_array()):
@@ -2684,7 +2693,7 @@ class IRStack(Stack):
             if self.layout.native_entry:
                 out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
             else:
-                out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
+                out.emit(f"_PyFrame_WriteScratchHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
             if role is not None:
                 out.emit("}\n")
             return
@@ -2864,7 +2873,7 @@ class IRStack(Stack):
                         del self.owner[p]
                         self.consume(out, p)
                     continue
-                out.emit(f"_PyFrame_WriteHome(frame, &{self.window_slot(position)}, PyValue_NULL);\n")
+                out.emit(f"_PyFrame_WriteScratchHome(frame, &{self.window_slot(position)}, PyValue_NULL);\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -2873,7 +2882,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"_PyFrame_WriteHome(frame, &{self.out_slot(PointerOffset(p, (), ()))}, PyValue_NULL);\n")
+                    out.emit(f"_PyFrame_WriteScratchHome(frame, &{self.out_slot(PointerOffset(p, (), ()))}, PyValue_NULL);\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -2915,6 +2924,13 @@ class IRStack(Stack):
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
         super().merge(other, out)
+        for name in self.native_values.keys() | other.native_values.keys():
+            if name not in self.native_values or name not in other.native_values:
+                self.native_values.pop(name, None)
+                other.native_values.pop(name, None)
+                continue
+            mine, theirs = self.native_values[name], other.native_values[name]
+            mine.nonnull = theirs.nonnull = mine.nonnull and theirs.nonnull
         paths = {}
         for edge in self.null_paths.keys() | other.null_paths.keys():
             if edge in self.null_paths and edge in other.null_paths:
@@ -3078,6 +3094,8 @@ class IREmitter(Emitter):
         self.handler_format: IRFormat | None = None
         self.execution_variant: ExecutionVariant | None = None
         self.result_publication: "ResultPublicationContract | None" = None
+        self.native_scopes: list[dict[str, Local | None]] = []
+        self.native_condition_depth = 0
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
         self.has_record = True
@@ -3122,6 +3140,59 @@ class IREmitter(Emitter):
         # Storage.for_uop alone binds this pointer from the physical layout.
         # The source contract rejects every rebinding or pointer escape.
         return local, index
+
+    def check_execution_reads(self, uop, storage, inst):
+        """Check the actual inputs before projecting any required value."""
+        validate_nullable_inputs(uop)
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.layout.native_entry:
+            return
+        for index, (item, local) in enumerate(zip(uop.stack.inputs, storage.inputs)):
+            if not item.used or item.name == "unused" or item.nullable:
+                continue
+            route = (self.read_occurrence, "read", index)
+            if not item.is_array() and local.in_local and local.nonnull:
+                # This exact C value already passed a read check. Keep a
+                # distinct proof receipt rather than inventing an error
+                # flush for transient owners with no physical home.
+                self.execution_read_proven.add(route)
+                continue
+            if item.is_array():
+                first, extent = array_read_span(uop, item)
+                if extent == "0":
+                    continue
+                address = local.name if first == "0" else f"{local.name} + {first}"
+                condition = f"!_PyFrame_RangeIsPresent(frame, {address}, {extent})"
+            else:
+                condition = f"PyValue_IsNull({local.name})"
+                if local.memory_offset is not None:
+                    role = stack.call_input_role(local.memory_offset)
+                    if role is not None:
+                        condition = f"(call_state & {role}) && {condition}"
+            self.out.start_line()
+            self.emit(f"if ({condition}) {{\n")
+            if not item.is_array() and local.ir_input in stack.layout.borrowable:
+                field = stack.input_field(local.ir_input)
+                self.emit(f"if (IR_IS_LOCAL({field})) {{\n")
+                self.emit(f"_PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), {field});\n")
+                self.emit("}\nelse {\n")
+                self.emit('PyErr_SetString(PyExc_SystemError, "code reads an absent required input");\n')
+                self.emit("}\n")
+            else:
+                self.emit('PyErr_SetString(PyExc_SystemError, "code reads an absent required input");\n')
+            previous = self.abrupt_operand_origin
+            self.abrupt_operand_origin = route
+            try:
+                self.emit(self.goto_error(0, storage) + "\n")
+                self.execution_read_sources.add(route)
+            finally:
+                self.abrupt_operand_origin = previous
+            self.emit("}\n")
+            if not item.is_array():
+                role = (stack.call_input_role(local.memory_offset)
+                        if local.memory_offset is not None else None)
+                local.nonnull = role is None
 
     def write_output_home(self, tkn, tkn_iter, uop, storage, inst):
         local, index = self.checked_home_array(tkn, uop, storage)
@@ -4184,6 +4255,7 @@ class IREmitter(Emitter):
     def emit_IfStmt(self, stmt, uop, storage, inst):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
+        self.note_nonnull_changes(stmt.condition, storage)
         # A condition may assign/address an output through C syntax. Such
         # effects are not part of the checked NULL assignment transport.
         if any(t.kind in ASSIGNMENTS or t.text in {"&", "++", "--"} or
@@ -4196,8 +4268,43 @@ class IREmitter(Emitter):
     def emit_WhileStmt(self, stmt, uop, storage, inst):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
+        # A loop body can run repeatedly; a one-pass assignment proof is
+        # insufficient for the next condition or the loop's exit.
+        self.note_nonnull_changes(list(stmt.tokens()), storage, positive=False)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
-        return super().emit_WhileStmt(stmt, uop, storage, inst)
+        reachable, end, storage = super().emit_WhileStmt(stmt, uop, storage, inst)
+        self.note_nonnull_changes(list(stmt.tokens()), storage, positive=False)
+        return reachable, end, storage
+
+    def emit_ForStmt(self, stmt, uop, storage, inst):
+        self.note_nonnull_changes(list(stmt.tokens()), storage, positive=False)
+        reachable, end, storage = super().emit_ForStmt(stmt, uop, storage, inst)
+        self.note_nonnull_changes(list(stmt.tokens()), storage, positive=False)
+        return reachable, end, storage
+
+    def emit_BlockStmt(self, stmt, uop, storage, inst, emit_braces=True):
+        # A nested declaration has a new C identity. Its proof cannot leak
+        # to the outer variable when this lexical scope ends.
+        scope = {}
+        self.native_scopes.append(scope)
+        try:
+            reachable, end, storage = super().emit_BlockStmt(
+                stmt, uop, storage, inst, emit_braces)
+            for name, previous in scope.items():
+                if previous is None:
+                    storage.stack.native_values.pop(name, None)
+                else:
+                    storage.stack.native_values[name] = previous
+            return reachable, end, storage
+        finally:
+            self.native_scopes.pop()
+
+    def emit_MacroIfStmt(self, stmt, uop, storage, inst):
+        self.native_condition_depth += 1
+        try:
+            return super().emit_MacroIfStmt(stmt, uop, storage, inst)
+        finally:
+            self.native_condition_depth -= 1
 
     def before_statement(self, stmt: SimpleStmt, storage: Storage,
                          inst: Instruction | None) -> None:
@@ -4230,6 +4337,21 @@ class IREmitter(Emitter):
                         "`PyValue receiver = OWNER(owner);`", tkn)
                 self.pending_owner = tokens[1]
 
+    def current_value_locals(self, storage):
+        native = storage.stack.native_values
+        return [var for var in storage.stack.variables + storage.inputs + storage.outputs
+                if var.name not in native] + list(native.values())
+
+    def note_nonnull_changes(self, tokens, storage, *, positive=True):
+        locals = self.current_value_locals(storage)
+        names = {var.name for var in locals if not var.is_array()}
+        current = {var.name for var in locals
+                   if var.in_local and var.nonnull and not var.is_array()}
+        changes = value_nonnull_changes(tokens, current if positive else set(), names)
+        for var in locals:
+            if var.name in changes:
+                var.nonnull = positive and changes[var.name] and var.in_local
+
     def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
                         storage: Storage, inst: Instruction | None
                         ) -> tuple[bool, Token | None, Storage]:
@@ -4244,6 +4366,26 @@ class IREmitter(Emitter):
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
         previous = self.cannot_escape
         self.statement = stmt
+        # Capture RHS facts before TAKE/DEAD or an escaping release kills
+        # its source. Apply them to the surviving identities after emission.
+        locals = self.current_value_locals(storage)
+        current = {var.name for var in locals
+                   if var.in_local and var.nonnull and not var.is_array()}
+        declaration = value_declaration(stmt.contents)
+        fresh = set()
+        if declaration is not None:
+            name = declaration
+            if self.native_condition_depth and any(var.name == name for var in locals):
+                raise analysis_error("conditional native shadow needs a binding proof", stmt.contents[0])
+            scope = self.native_scopes[-1]
+            previous_native = storage.stack.native_values.get(name)
+            scope.setdefault(name, previous_native.copy() if previous_native is not None else None)
+            storage.stack.native_values[name] = Local.register(name)
+            locals = self.current_value_locals(storage)
+            current.discard(name)
+            fresh.add(name)
+        nonnull_changes = value_nonnull_changes(
+            stmt.contents, current, {var.name for var in locals if not var.is_array()}, fresh)
         uops = [part for part in inst.parts if isinstance(part, Uop)] if inst else []
         self.stores_outputs = bool(uops) and uops[-1] is uop
         escape = uop.properties.escaping_calls.get(stmt)
@@ -4285,6 +4427,13 @@ class IREmitter(Emitter):
             self.killed_inplace = None
         stack = storage.stack
         assert isinstance(stack, IRStack)
+        for var in self.current_value_locals(storage):
+            if var.name in nonnull_changes:
+                var.nonnull = nonnull_changes[var.name] and var.in_local
+        guarded = error_nonnull_value(stmt.contents)
+        for var in self.current_value_locals(storage):
+            if var.name == guarded:
+                var.nonnull = var.in_local
         for target in uop.local_stores:
             if target in stmt.contents:
                 var = find_local(target.text, storage)
@@ -4722,7 +4871,7 @@ class IREmitter(Emitter):
         self.emit(f"_PyInterpreterFrame *ir_resumed_frame = &{gen}->gi_iframe;\n")
         self.emit("PyValue ir_resume_input = PyValue_None;\n")
         self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
-        self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
+        self.emit(f"ir_resume_input = _PyFrame_ReadHome(frame, &IR_SLOT({base} + 2));\n")
         self.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({base} + 2), PyValue_NULL);\n")
         self.emit("}\n")
         self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
@@ -4769,6 +4918,7 @@ class IREmitter(Emitter):
         object local, ir_obj_<name>: the input's object, or a box of an
         inline value that value_temps owns, made out of line.  The input
         keeps its canonical value (register-ir-v2-a5b.md, 4.5)."""
+        required = {item.name for item in uop.stack.inputs if not item.nullable}
         for var in storage.inputs:
             if var.name in uop.asserted_objects:
                 var.known_object = True
@@ -4786,7 +4936,8 @@ class IREmitter(Emitter):
             # value, which is cheaper (see _PyValue_TopBitsAt())
             ref = var.name
             at = ""
-            if var.memory_offset is not None and var.ir_inplace is None:
+            if (var.name in required and var.memory_offset is not None
+                    and var.ir_inplace is None):
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
@@ -4845,6 +4996,7 @@ def write_uop(
         emitter.out.emit(f"// {uop.name}\n")
         emitter.emit("{\n")
     storage = Storage.for_uop(stack, uop, emitter.out)
+    emitter.check_execution_reads(uop, storage, inst)
     for cache in uop.caches:
         if cache.name != "unused":
             if cache.name == "class_value":
@@ -5095,6 +5247,45 @@ def steal_success_home_contract(part: Uop) -> bool:
     return (_statement_text(statements[2]) == ["INPUTS_DEAD", "(", ")", ";"]
             and _statement_text(statements[3]) ==
                 [outputs[0].name, "=", "PyValue_FromObjectSteal", "(", result, ")", ";"])
+
+
+def array_read_span(part: Uop, item: StackItem) -> tuple[str, str]:
+    """The cells read, independently of a declared passthrough window."""
+    tokens = [token for token in part.body.tokens() if token.kind != "COMMENT"]
+    operations = home_operation_contract(part)
+    if any(token.text == "IR_LOOKUP_SPECIAL" and
+           operations.get(id(token), (None,))[0] == item.name for token in tokens):
+        # The checked pair adapter writes method[0] and reads receiver[1].
+        return "1", "1"
+    prefix = 0
+    for at, token in enumerate(tokens):
+        if token.text != item.name:
+            continue
+        if at + 1 < len(tokens) and tokens[at + 1].text == "=":
+            continue
+        if at >= 2 and tokens[at - 2].text == "DEAD" and tokens[at - 1].text == "(":
+            continue
+        if (at + 3 < len(tokens) and tokens[at + 1].text == "[" and
+                tokens[at + 2].text.isdigit() and tokens[at + 3].text == "]"):
+            prefix = max(prefix, int(tokens[at + 2].text) + 1)
+        else:
+            return "0", item.size
+    if prefix:
+        return "0", f"Py_MIN(({item.size}), {prefix})"
+    return "0", item.size if any(token.text == "DECREF_INPUTS" for token in tokens) else "0"
+
+
+def execution_read_routes(inst: Instruction, call_window: bool) -> frozenset[tuple[int, str, int]]:
+    if native_entry_input_contract(inst):
+        return frozenset()
+    routes = frozenset((occurrence, "read", index)
+        for occurrence, part in enumerate(inst.parts) if isinstance(part, Uop)
+        for index, item in enumerate(part.stack.inputs)
+        if item.used and item.name != "unused" and not item.nullable
+        and (not item.is_array() or array_read_span(part, item)[1] != "0"))
+    if call_window:
+        routes |= {(-1, "call-window", 0)}
+    return routes
 
 
 def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
@@ -6163,6 +6354,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  emitter: IREmitter, out: CWriter, record: bool,
                  roles: dict[str, set[str]]) -> None:
     "One pass of generate_handler, which records the roles it finds"
+    call_family = inst.family.name if inst.family is not None else inst.name
+    if call_family == "INSTRUMENTED_CALL":
+        call_family = "CALL"
+    elif call_family == "INSTRUMENTED_CALL_KW":
+        call_family = "CALL_KW"
+    call_window = fmt.window and call_family in (
+        "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX")
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
@@ -6171,6 +6369,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
     if emitter.error_source is None and emitter.send_source_parts is not None:
         emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
+    emitter.execution_read_expected = execution_read_routes(inst, call_window)
+    emitter.execution_read_sources = set()
+    emitter.execution_read_proven = set()
+    if emitter.error_source is not None and emitter.execution_read_expected:
+        emitter.error_source = replace(emitter.error_source,
+            error_sources=emitter.error_source.error_sources | emitter.execution_read_expected,
+            may_fail=True)
     emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
     emitter.abrupt_operand_sources = set()
     emitter.abrupt_operand_origin = None
@@ -6271,13 +6476,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
-    call_family = inst.family.name if inst.family is not None else inst.name
-    if call_family == "INSTRUMENTED_CALL":
-        call_family = "CALL"
-    elif call_family == "INSTRUMENTED_CALL_KW":
-        call_family = "CALL_KW"
-    call_window = fmt.window and call_family in (
-        "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX")
     if call_window:
         assert fmt.window
         inputs, _ = external_io(inst)
@@ -6349,9 +6547,21 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)
     stack: Stack = IRStack(layout, roles)
+    if call_window:
+        # No call owner has detached yet. Failure uses the same reached error
+        # flush as a scalar read, leaving the initialized frame owners live.
+        route = (-1, "call-window", 0)
+        emitter.emit("if (call_state < 0) {\n")
+        emitter.abrupt_operand_origin = route
+        try:
+            emitter.emit(emitter.goto_error(0, Storage(stack, [], [], 0, False)) + "\n")
+            emitter.execution_read_sources.add(route)
+        finally:
+            emitter.abrupt_operand_origin = None
+        emitter.emit("}\n")
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
-    for part in inst.parts:
+    for emitter.read_occurrence, part in enumerate(inst.parts):
         try:
             reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
         except SyntaxError as ex:
@@ -6359,6 +6569,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             raise
         if not reachable or emitter.call_finished:
             break
+    if (emitter.execution_read_sources | emitter.execution_read_proven !=
+            emitter.execution_read_expected):
+        emitter.error_uncovered = True
+    if emitter.error_source is not None:
+        emitter.error_source = replace(emitter.error_source,
+            error_sources=emitter.error_source.error_sources - emitter.execution_read_proven)
+        if emitter.abrupt_operand_expected is not None:
+            emitter.abrupt_operand_expected -= emitter.execution_read_proven
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
@@ -7162,7 +7380,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         return "_PyIR_TRANSFER_COPY" if (fmt.window
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
             and extent([entry.item for entry in outputs], inst) == (1, "_PyIR_EXT_OPARG")
-            and bodies_match("{ top = PyValue_DUP(bottom); }")) else unknown
+            and bodies_match("{ top = PyValue_XDUP(bottom); }")) else unknown
     if inst.name == "SWAP":
         return "_PyIR_TRANSFER_SWAP" if (fmt.window
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")

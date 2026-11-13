@@ -129,16 +129,18 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
         return;
     }
     int nl = code->co_nlocalsplus;
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
     src->instr_ptr++;
     _PyFrame_CopyHeader(src, dest);
     for (int i = 0; i < nl; i++) {
         _PyFrame_MoveHome(src, src->base + i, dest, dest->base + i);
     }
-    /* The current NULL control still requires initialized destination gaps. */
+#ifdef Py_GIL_DISABLED
+    /* Unstopped FT traversal retains initialized scratch. */
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
     for (int i = nl; i < nslots; i++) {
         dest->base[i] = PyValue_NULL;
     }
+#endif
     dest->phase_state = _PyIR_PHASE_CREATED;
 }
 
@@ -332,12 +334,15 @@ is_well_formed(PyValue ref, bool in_stack)
 static void
 check_frame_extent(_PyInterpreterFrame *frame, int extent)
 {
-    /* The caller supplies an initialized NULL-control extent. A retiring
-     * general return can own all homes after the frame is unlinked. */
+    /* Bindings stay initialized. Scratch words are readable only when the
+     * caller's protected extent and a positive presence bit select them. */
     assert(extent >= 0 && extent <= _PyFrame_NumSlots(frame));
     PyValue *stack_base = _PyFrame_Stackbase(frame);
     PyValue *end = frame->base + extent;
     for (PyValue *sp = frame->base; sp < end; sp++) {
+        if (sp >= stack_base && !_PyFrame_HomeIsPresent(frame, sp)) {
+            continue;
+        }
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
                 "malformed value 0x%" PRIx64 " in slot %d",

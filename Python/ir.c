@@ -643,7 +643,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     for (int home = co->co_nlocalsplus;
          home < _PyFrame_NumSlotsForCodeObject(co); home++)
     {
-        if (!PyValue_IsNull(frame->base[home])) {
+        if (_PyFrame_HomeIsPresent(frame, frame->base + home)) {
             return _PyIR_SHADOW_MISMATCH;
         }
     }
@@ -784,7 +784,7 @@ _PyIR_ShadowFramePhase(_PyInterpreterFrame *frame)
         while (range < view.nranges && ranges[range].end <= bit) {
             range++;
         }
-        PyValue value = frame->base[view.nbindings + bit];
+        PyValue value = _PyFrame_ReadHome(frame, frame->base + view.nbindings + bit);
         if (range == view.nranges || ranges[range].begin > bit) {
             if (!PyValue_IsNull(value)) {
                 return _PyIR_SHADOW_MISMATCH;

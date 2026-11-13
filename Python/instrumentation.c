@@ -1658,7 +1658,12 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         {
             return result;
         }
-        PyValueBorrow receiver = PyValue_Borrow(frame->base[IR_B(*site)]);
+        PyValueBorrow receiver = PyValue_Borrow(
+            _PyFrame_ReadHome(frame, frame->base + IR_B(*site)));
+        if (PyValue_IsNull(receiver)) {
+            PyErr_SetString(PyExc_SystemError, "completion receiver home is absent");
+            goto error;
+        }
         if (!PyValue_GenCheck(receiver) &&
             !(PyValue_IsObject(receiver) &&
               PyCoro_CheckExact(PyValue_AsKnownObjectBorrow(receiver))))

@@ -272,8 +272,11 @@ gen_yieldfrom_ref(PyGenObject *gen, int8_t prior_state)
         PyErr_SetString(PyExc_SystemError, "invalid delegated generator suspension");
         return NULL;
     }
-    PyValueBorrow receiver = PyValue_Borrow(frame->base[home]);
-    assert(!PyValue_IsNull(receiver));
+    PyValueBorrow receiver = PyValue_Borrow(_PyFrame_ReadHome(frame, frame->base + home));
+    if (PyValue_IsNull(receiver)) {
+        PyErr_SetString(PyExc_SystemError, "delegated receiver home is absent");
+        return NULL;
+    }
     return PyValue_AsPyObjectNew(receiver);
 }
 

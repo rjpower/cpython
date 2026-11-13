@@ -179,11 +179,16 @@ _PyFrame_PublishVacantHome(_PyInterpreterFrame *frame, PyValue *home,
                           PyValue value)
 {
     assert(!_PyFrame_HomeIsPresent(frame, home));
-    *home = value;
     if (!PyValue_IsNull(value)) {
+        *home = value;
         uint64_t *word = _PyFrame_BitmapWord(frame, home);
         FT_ATOMIC_OR_UINT64(*word, _PyHomeBitmap_Mask(home));
     }
+#ifdef Py_GIL_DISABLED
+    else {
+        *home = PyValue_NULL;
+    }
+#endif
 }
 
 static inline void
@@ -211,11 +216,15 @@ static inline PyValue
 _PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
                       PyValueBorrow value)
 {
-    assert(PyValue_Is(*home, value));
+    /* IR_CONSUME_INPUT has excluded initialized named bindings. The current
+     * C value and its scratch identity survive callback-free to this commit. */
     PyValue owner = _PyIR_AdoptTemp(value);
     int present = !PyValue_IsNull(value);
     assert(present == _PyFrame_HomeIsPresent(frame, home));
+    assert(!present || PyValue_Is(*home, value));
+#ifdef Py_GIL_DISABLED
     *home = PyValue_NULL;
+#endif
     if (present) {
         uint64_t *word = _PyFrame_BitmapWord(frame, home);
         FT_ATOMIC_AND_UINT64(*word, ~_PyHomeBitmap_Mask(home));
@@ -233,7 +242,7 @@ _PyFrame_CloseHomeRange(_PyInterpreterFrame *frame, PyValue *homes, int count)
     assert(homes + count <= frame->base + _PyFrame_NumSlots(frame));
     while (count > 0) {
         PyValue owner = _PyFrame_TakeHome(frame, homes + --count);
-        PyValue_CLOSE(owner);
+        PyValue_XCLOSE(owner);
     }
 }
 
@@ -443,20 +452,26 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
     int filled = 0, begin, end;
     while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
         assert(begin >= filled && end <= nslots);
+#ifdef Py_GIL_DISABLED
         while (filled < begin) {
             dest->base[filled++] = PyValue_NULL;
         }
+#else
+        filled = begin;
+#endif
         while (filled < end) {
             // A move: the slots src leaves behind may be the caller's.
             _PyFrame_MoveHome(src, src->base + filled, dest, dest->base + filled);
             filled++;
         }
     }
-    /* NULL shadow still initializes inactive destinations without loading the
-     * corresponding source words. M4 removes this fill with full authority. */
+    /* Unstopped FT traversal retains the physical-NULL execution policy.
+     * The GIL rival reads only selected cells or synthesizes declared NULL. */
+#ifdef Py_GIL_DISABLED
     while (filled < nslots) {
         dest->base[filled++] = PyValue_NULL;
     }
+#endif
     dest->phase_state = delegated;
 }
 
@@ -475,7 +490,22 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
     }
 }
 
-/* Consumes func and locals. The caller supplies initialized value storage. */
+/* Only named bindings need physical NULL words. Reserved scratch instead
+ * becomes readable through an actual positive publication or nullable read. */
+static inline void
+_PyFrame_InitializeBindings(_PyInterpreterFrame *frame, PyCodeObject *code,
+                            int first)
+{
+    assert(first >= 0 && first <= code->co_nlocalsplus);
+#ifndef Py_GIL_DISABLED
+    for (int i = first; i < code->co_nlocalsplus; i++) {
+        assert(!_PyFrame_HomeIsPresent(frame, frame->base + i));
+        frame->base[i] = PyValue_NULL;
+    }
+#endif
+}
+
+/* Consumes func and locals. The caller supplies initialized named bindings. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
@@ -679,6 +709,7 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         size < tstate->datastack_limit - tstate->datastack_top;
 }
 
+#ifdef Py_GIL_DISABLED
 PyAPI_FUNC(void) _PyStackChunk_ExtendInitialized(
     _PyStackChunk *chunk, PyObject **value_end);
 
@@ -698,6 +729,7 @@ _PyStackChunk_EnsureFrameStorage(_PyStackChunk *chunk, PyObject **header,
         _PyStackChunk_ExtendInitialized(chunk, value_end);
     }
 }
+#endif
 
 /* Push a frame header and nslots slots, the header onto the frame stack and
  * the slots onto the value stack.  Must be guarded by
@@ -707,7 +739,9 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
     PyObject **header = tstate->datastack_limit - FRAME_SPECIALS_SIZE;
     PyObject **end = tstate->datastack_top + nslots;
+#ifdef Py_GIL_DISABLED
     _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk, header, end);
+#endif
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)header;
     frame->base = _PyDataStack_Slots(tstate->datastack_top);
@@ -741,11 +775,6 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
      * suffix, including an overlapping caller's previously NULL tail. */
     int departing = (int)(_PyDataStack_Slots(tstate->datastack_top) - frame->base);
     assert(_PyFrame_NextPresentHome(frame, 0, departing) == departing);
-    for (PyValue *p = frame->base;
-         p < _PyDataStack_Slots(tstate->datastack_top); p++)
-    {
-        assert(PyValue_IsNull(*p));
-    }
 #endif
     // Only the frame that a chunk was allocated for has its first slot.  The
     // root chunk stays, for the next frame.
@@ -771,6 +800,7 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame 
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));
+    _PyFrame_InitializeBindings(new_frame, code, 0);
     _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
                         new_frame->base, previous);
     return new_frame;
@@ -799,7 +829,7 @@ _PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
         int shared = known < nslots ? (int)known : nslots;
         assert(shared >= nargs);
         for (int i = nargs; i < shared; i++) {
-            assert(PyValue_IsNull(base[i]));
+            assert(!_PyFrame_HomeIsPresent(previous, base + i));
         }
     }
     else {
@@ -808,11 +838,15 @@ _PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
 #endif
     PyValue *saved_top = _PyDataStack_Slots(tstate->datastack_top);
     PyValue *end = base + nslots;
+#ifdef Py_GIL_DISABLED
     PyValue *physical_end = end > saved_top ? end : saved_top;
+#endif
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+#ifdef Py_GIL_DISABLED
     _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk,
         (PyObject **)frame, _PyDataStack_Address(physical_end));
+#endif
     frame->saved_top = saved_top;
     _PyFrame_BindChunkBitmap(frame, tstate->datastack_chunk, base);
     tstate->datastack_limit = (PyObject **)frame;
@@ -820,6 +854,7 @@ _PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
         tstate->datastack_top = _PyDataStack_Address(end);
     }
     assert(tstate->datastack_top < tstate->datastack_limit);
+    _PyFrame_InitializeBindings(frame, code, nargs);
     return frame;
 }
 
@@ -848,6 +883,7 @@ static inline void
 _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
                              int return_slot, _PyInterpreterFrame *previous)
 {
+    _PyFrame_InitializeBindings(frame, code, 0);
     frame->previous = previous;
     frame->f_funcobj = NULL;
     frame->f_executable = (PyCodeObject *)Py_NewRef(code);

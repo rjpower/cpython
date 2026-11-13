@@ -4769,7 +4769,7 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i,s:n,s:n,s:i}",
+    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i,s:n,s:n,s:i,s:n}",
         "descriptor", (unsigned long long)(uintptr_t)&_PyRuntime.debug_offsets,
         "chunk_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, stack_chunk),
         "generator_frame", (Py_ssize_t)offsetof(PyGenObject, gi_iframe),
@@ -4777,7 +4777,9 @@ remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
         "no_dst", IR_NO_DST,
         "phase_state", (Py_ssize_t)offsetof(_PyInterpreterFrame, phase_state),
         "code_exec_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, code_exec),
-        "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED);
+        "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED,
+        "presence_descriptor", (Py_ssize_t)offsetof(
+            _Py_DebugOffsets, interpreter_frame.presence_bits));
 }
 
 static int
@@ -4924,9 +4926,6 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     for (int i = 0; i < nslots; i++) {
         homes[i] = PyValue_NULL;
     }
-    if (dirty_home >= 0) {
-        homes[dirty_home] = PyValue_FromInlineInt(17);
-    }
     uintptr_t pc = (uintptr_t)exec->words + (size_t)site * sizeof(*exec->words)
                    + unaligned;
     _PyInterpreterFrame frame = {
@@ -4937,6 +4936,9 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         .owner = FRAME_OWNED_BY_THREAD,
         .presence_bits = _PyHomeBitmap_InitStorage(homes, nslots),
     };
+    if (dirty_home >= 0) {
+        _PyFrame_WriteHome(&frame, homes + dirty_home, PyValue_FromInlineInt(17));
+    }
     uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason);
     PyMem_Free(homes);
     return PyLong_FromLong(status);
@@ -5005,7 +5007,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
             const _PyIRPhaseRange *range = view.ranges + r;
             for (int bit = range->begin; bit < range->end; bit++) {
                 int home = view.nbindings + bit;
-                homes[home] = PyValue_FromInlineInt(17);
+                _PyFrame_WriteHome(&frame, homes + home, PyValue_FromInlineInt(17));
                 dirty_selected |= home == dirty_home;
                 missing_required |= home == missing_home &&
                     !(range->flags & _PyIR_PHASE_RANGE_NULLABLE);
@@ -5021,10 +5023,10 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         return NULL;
     }
     if (dirty_home >= 0) {
-        homes[dirty_home] = PyValue_FromInlineInt(17);
+        _PyFrame_WriteHome(&frame, homes + dirty_home, PyValue_FromInlineInt(17));
     }
     if (missing_home >= 0) {
-        homes[missing_home] = PyValue_NULL;
+        _PyFrame_WriteHome(&frame, homes + missing_home, PyValue_NULL);
     }
     _PyIRWord other_image = 0;
     if (wrong_image) {
@@ -5040,7 +5042,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
 /* Snapshot identities before any Python allocation can reenter or move an
  * associated generator frame. No value or frame pointer is used afterward. */
 static PyObject *
-get_frame_present_object_ids(PyObject *self, PyObject *arg)
+get_frame_selected_object_ids(PyObject *self, PyObject *arg)
 {
     if (!PyFrame_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "expected a frame");
@@ -5218,6 +5220,9 @@ check_frame_copy(PyObject *args, int mode)
     const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
     for (int i = nl; i < n; i++) {
         src->base[i].bits = poison;
+#ifndef Py_GIL_DISABLED
+        dst->owned_slots[i].bits = poison;
+#endif
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
     int selected_home = delegated ? IR_D(protocol) : created ? 0 : nl + 1;
@@ -5253,10 +5258,10 @@ check_frame_copy(PyObject *args, int mode)
         _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
     }
     int correct = clipped
-        ? PyValue_IsNull(dst->base[selected_home]) &&
+        ? !_PyFrame_HomeIsPresent(dst, dst->base + selected_home) &&
           src->base[selected_home].bits == value.bits
         : dst->base[selected_home].bits == value.bits &&
-          PyValue_IsNull(src->base[selected_home]);
+          !_PyFrame_HomeIsPresent(src, src->base + selected_home);
     if (delegated) {
         correct &= src->phase_state == 0 &&
             dst->phase_state == (clipped ? 0 : _PyIR_PHASE_YIELD_DELEGATED);
@@ -5275,7 +5280,11 @@ check_frame_copy(PyObject *args, int mode)
     }
     for (int i = nl; i < n; i++) {
         if (i != selected_home) {
-            correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
+            correct &= src->base[i].bits == poison &&
+                !_PyFrame_HomeIsPresent(dst, dst->base + i);
+#ifndef Py_GIL_DISABLED
+            correct &= dst->base[i].bits == poison;
+#endif
         }
     }
 #ifndef Py_GIL_DISABLED
@@ -5294,6 +5303,10 @@ check_frame_copy(PyObject *args, int mode)
     if (clipped) {
         PyValue_XCLOSE(_PyFrame_TakeHome(src, src->base + selected_home));
     }
+    /* The nullable owning-array drain must tolerate an entirely absent
+     * scratch range, including its poisoned inactive words. */
+    _PyFrame_CloseHomeRange(src, src->base + nl, n - nl);
+    correct &= _PyFrame_NextPresentHome(src, nl, n) == n;
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
     PyMem_Free(dst_storage);
@@ -5358,15 +5371,24 @@ check_home_bitmap(PyObject *self, PyObject *payload)
         uint64_t words[4] = {0};
         _PyInterpreterFrame frame = {.base = base, .presence_bits = words};
         for (int i = 0; i < 130; i++) {
-            base[i] = PyValue_NULL;
+            /* A zero presence bit must never expose these inactive words. */
+            base[i].bits = UINT64_C(0xdeadbeefdeadbeef);
+            correct &= PyValue_IsNull(_PyFrame_ReadHome(&frame, base + i));
         }
+        correct &= _PyFrame_RangeIsPresent(&frame, NULL, 0);
+        correct &= !_PyFrame_RangeIsPresent(&frame, base, 130);
         PyValue values[] = {
             PyValue_FromObjectSteal(Py_NewRef(payload)), PyValue_FromInlineInt(19),
             PyValue_TagIndex(3), PyValue_None, PyValue_True, PyValue_FromInlineInt(-7),
         };
         for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
             _PyFrame_PublishVacantHome(&frame, base + selected[i], values[i]);
+            correct &= PyValue_Is(_PyFrame_ReadHome(&frame, base + selected[i]), values[i]);
+            correct &= _PyFrame_RangeIsPresent(&frame, base + selected[i], 1);
         }
+        correct &= _PyFrame_RangeIsPresent(&frame, base, 2);
+        correct &= _PyFrame_RangeIsPresent(&frame, base + 63, 3);
+        correct &= !_PyFrame_RangeIsPresent(&frame, base, 3);
         _PyIRHomeView view = {
             .nbindings = 1, .scratch_limit = 129,
             .kind = _PyIR_HOME_VIEW_PRESENCE,
@@ -5443,10 +5465,10 @@ check_home_bitmap(PyObject *self, PyObject *payload)
     Py_RETURN_NONE;
 }
 
-/* Development-only writer oracle while all reserved homes are initialized.
- * Replace its full range before the rival admits stale zero-bit homes. */
+/* Check initialized bindings and selected positive scratch. Missing bit
+ * publications are covered by the preceding NULL-control writer checkpoint. */
 static PyObject *
-check_frame_bitmap_null_control(PyObject *self, PyObject *arg)
+check_frame_presence(PyObject *self, PyObject *arg)
 {
     if (!PyFrame_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "expected a frame");
@@ -5461,6 +5483,10 @@ check_frame_bitmap_null_control(PyObject *self, PyObject *arg)
         return NULL;
     }
     for (int i = 0; i < _PyFrame_NumSlots(frame); i++) {
+        if (i >= _PyFrame_GetCode(frame)->co_nlocalsplus &&
+            !_PyFrame_HomeIsPresent(frame, frame->base + i)) {
+            continue;
+        }
         if (!PyValue_IsNull(frame->base[i]) !=
             _PyFrame_HomeIsPresent(frame, frame->base + i))
         {
@@ -5473,13 +5499,13 @@ check_frame_bitmap_null_control(PyObject *self, PyObject *arg)
 }
 
 static PyMethodDef module_functions[] = {
-    {"check_frame_bitmap_null_control", check_frame_bitmap_null_control, METH_O},
+    {"check_frame_presence", check_frame_presence, METH_O},
     {"check_home_bitmap", check_home_bitmap, METH_O},
     {"check_created_home_view_invalidation", check_created_home_view_invalidation, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},
-    {"get_frame_present_object_ids", get_frame_present_object_ids, METH_O},
+    {"get_frame_selected_object_ids", get_frame_selected_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},

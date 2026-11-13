@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1080,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1088,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -292,6 +292,7 @@ validate_fixed_field(
     APPLY(interpreter_frame, owner, sizeof(char), _Alignof(char), buffer_size); \
     APPLY(interpreter_frame, return_slot, sizeof(uint16_t), _Alignof(uint16_t), buffer_size); \
     APPLY(interpreter_frame, phase_state, sizeof(uint16_t), _Alignof(uint16_t), buffer_size); \
+    APPLY(interpreter_frame, presence_bits, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(interpreter_frame, tlbc_index, sizeof(int32_t), _Alignof(int32_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_CODE_OBJECT_FIELDS(APPLY, buffer_size) \

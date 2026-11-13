@@ -77,6 +77,14 @@ _PyFrame_HomeIsPresent(_PyInterpreterFrame *frame, const PyValue *home)
     return (FT_ATOMIC_LOAD_UINT64_RELAXED(*word) & _PyHomeBitmap_Mask(home)) != 0;
 }
 
+/* Only absence-aware consumers may interpret a vacant home as NULL. The
+ * caller separately supplies its actual ownership extent and read role. */
+static inline PyValue
+_PyFrame_ReadHome(_PyInterpreterFrame *frame, const PyValue *home)
+{
+    return _PyFrame_HomeIsPresent(frame, home) ? *home : PyValue_NULL;
+}
+
 static inline void
 _PyFrame_SetHomeBit(_PyInterpreterFrame *frame, const PyValue *home, int present)
 {
@@ -103,10 +111,26 @@ _PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
     _PyFrame_SetHomeBit(frame, home, !PyValue_IsNull(value));
 }
 
+/* Storage has established a scratch destination. Absence has no value word;
+ * initialized named bindings instead use WriteHome, including for NULL. */
+static inline void
+_PyFrame_WriteScratchHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
+{
+    if (!PyValue_IsNull(value)) {
+        *home = value;
+    }
+#ifdef Py_GIL_DISABLED
+    else {
+        *home = PyValue_NULL;
+    }
+#endif
+    _PyFrame_SetHomeBit(frame, home, !PyValue_IsNull(value));
+}
+
 static inline PyValue
 _PyFrame_TakeHome(_PyInterpreterFrame *frame, PyValue *home)
 {
-    PyValue value = *home;
+    PyValue value = _PyFrame_ReadHome(frame, home);
     _PyFrame_WriteHome(frame, home, PyValue_NULL);
     return value;
 }
@@ -156,6 +180,20 @@ _PyHomeBitmap_NextBit(const uint64_t *bits, unsigned int first,
         begin += width;
     }
     return end;
+}
+
+static inline int
+_PyFrame_RangeIsPresent(_PyInterpreterFrame *frame, const PyValue *homes, int count)
+{
+    assert(count >= 0);
+    if (count == 0) {
+        return 1;
+    }
+    int begin = (int)(homes - frame->base);
+    assert(begin >= 0);
+    unsigned int first = ((uintptr_t)frame->base >> 3) & 63;
+    return _PyHomeBitmap_NextBit(frame->presence_bits, first,
+                                begin, begin + count, 0) == begin + count;
 }
 
 static inline int

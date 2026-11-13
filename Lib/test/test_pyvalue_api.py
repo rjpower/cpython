@@ -97,6 +97,13 @@ class FrameCodePinTests(unittest.TestCase):
         self.assertFalse(sys._is_immortal(code))
         _testinternalcapi.check_frame_code_pin(code)
 
+    def test_function_owner_transfer_count(self):
+        def function():
+            pass
+
+        self.assertFalse(sys._is_immortal(function))
+        _testinternalcapi.check_frame_function_owner(function)
+
     def test_active_code_survives_replacement(self):
         def original(function, replacement, reference):
             function.__code__ = replacement
@@ -413,6 +420,233 @@ class TransitionRootTests(unittest.TestCase):
             retire()
         support.gc_collect()
         self.assertEqual(observations, ['finalized'])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+
+class UnpackPrefixTests(unittest.TestCase):
+    def test_prefix_survives_iterator_and_sequence_cleanup(self):
+        references = []
+        observations = []
+
+        def observe(name):
+            ids = set(_testinternalcapi.get_transition_root_ids())
+            observations.append((name, all(id(ref()) in ids for ref in references)))
+            support.gc_collect()
+
+        class Iterator:
+            position = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.position:
+                    observe('next')
+                if self.position == 2:
+                    raise StopIteration
+                self.position += 1
+                item = Item()
+                references.append(weakref.ref(item))
+                return item
+
+            def __del__(self):
+                observe('iterator')
+
+        class Sequence:
+            def __iter__(self):
+                return Iterator()
+
+            def __del__(self):
+                observe('sequence')
+
+        first, second = Sequence()
+        self.assertIs(first, references[0]())
+        self.assertIs(second, references[1]())
+        self.assertEqual(observations, [('next', True), ('next', True),
+                                        ('iterator', True), ('sequence', True)])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_partial_prefix_errors(self):
+        cases = ((False, 0, False), (False, 1, False), (False, 3, False),
+                 (False, 1, True), (True, 0, False), (True, 1, False),
+                 (True, 1, True))
+        for starred, limit, fail in cases:
+            with self.subTest(starred=starred, limit=limit, fail=fail):
+                references = []
+                observations = []
+
+                class Iterator:
+                    position = 0
+
+                    def __iter__(self):
+                        return self
+
+                    def __next__(self):
+                        if self.position:
+                            ids = set(_testinternalcapi.get_transition_root_ids())
+                            observations.append(all(id(ref()) in ids
+                                                    for ref in references[:2]))
+                            support.gc_collect()
+                        if self.position == limit:
+                            if fail:
+                                raise RuntimeError('iteration')
+                            raise StopIteration
+                        self.position += 1
+                        item = Item()
+                        references.append(weakref.ref(item))
+                        return item
+
+                class Sequence:
+                    def __iter__(self):
+                        return Iterator()
+
+                with self.assertRaises(RuntimeError if fail else ValueError):
+                    if starred:
+                        first, *middle, second = Sequence()
+                    else:
+                        first, second = Sequence()
+                support.gc_collect()
+                self.assertTrue(all(observations))
+                self.assertTrue(all(ref() is None for ref in references))
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_starred_prefix_cleanup(self):
+        references = []
+        observations = []
+
+        class Iterator:
+            position = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.position:
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append(id(references[0]()) in ids)
+                    support.gc_collect()
+                if self.position == 4:
+                    raise StopIteration
+                self.position += 1
+                item = Item()
+                references.append(weakref.ref(item))
+                return item
+
+        class Sequence:
+            def __iter__(self):
+                return Iterator()
+
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append(id(references[0]()) in ids and
+                                    id(references[-1]()) in ids)
+                support.gc_collect()
+
+        first, *middle, last = Sequence()
+        self.assertEqual([first, *middle, last], [ref() for ref in references])
+        self.assertTrue(all(observations))
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_nested_unpack_prefixes(self):
+        references = {'outer': [], 'inner': []}
+        observations = []
+
+        class Iterator:
+            def __init__(self, name):
+                self.name = name
+                self.position = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.name == 'outer' and self.position == 1:
+                    first, second = Sequence('inner')
+                if self.position == 2:
+                    raise StopIteration
+                self.position += 1
+                item = Item()
+                references[self.name].append(weakref.ref(item))
+                return item
+
+        class Sequence:
+            def __init__(self, name):
+                self.name = name
+
+            def __iter__(self):
+                return Iterator(self.name)
+
+            def __del__(self):
+                if self.name == 'inner':
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append(id(references['outer'][0]()) in ids and
+                                        all(id(ref()) in ids
+                                            for ref in references['inner']))
+                    support.gc_collect()
+
+        first, second = Sequence('outer')
+        self.assertEqual(observations, [True])
+        self.assertIs(first, references['outer'][0]())
+        self.assertIs(second, references['outer'][1]())
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_unpack_callback_cannot_redirect_ancestor(self):
+        rejections = []
+        observations = []
+        references = []
+
+        class Iterator:
+            position = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.position:
+                    ids = set(_testinternalcapi.get_transition_root_ids())
+                    observations.append(id(references[0]()) in ids)
+                    support.gc_collect()
+                if self.position == 2:
+                    raise StopIteration
+                self.position += 1
+                item = Item()
+                references.append(weakref.ref(item))
+                return item
+
+        class Sequence:
+            def __iter__(self):
+                return Iterator()
+
+        def unpack():
+            changed = False
+            first, second = Sequence()
+            return first, second, changed
+
+        def trace(frame, event, arg):
+            if frame.f_code is Iterator.__next__.__code__ and event == 'line':
+                ancestor = frame.f_back
+                if ancestor is not None and ancestor.f_code is unpack.__code__:
+                    try:
+                        ancestor.f_lineno = unpack.__code__.co_firstlineno + 3
+                    except ValueError:
+                        rejections.append(True)
+                    else:
+                        rejections.append(False)
+                    ancestor.f_locals['changed'] = True
+            return trace
+
+        previous = sys.gettrace()
+        sys.settrace(trace)
+        try:
+            first, second, changed = unpack()
+        finally:
+            sys.settrace(previous)
+        self.assertIs(first, references[0]())
+        self.assertIs(second, references[1]())
+        self.assertTrue(changed)
+        self.assertTrue(rejections)
+        self.assertTrue(all(rejections))
+        self.assertTrue(all(observations))
         self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 

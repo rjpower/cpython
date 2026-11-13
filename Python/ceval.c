@@ -4058,23 +4058,40 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
     return 0;
 }
 
-/* Iterate v argcnt times and store the results on the stack (via decreasing
-   sp).  Return 1 for success, 0 if error.
+/* Consume v, iterate argcnt times and store the results via decreasing sp.
+   Return 1 for success, 0 if error.
 
    If argcntafter == -1, do a simple unpack. If it is >= 0, do an unpack
    with a variable target.
 */
 
-int
+Py_NO_INLINE int
 _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
                        int argcnt, int argcntafter, PyValue *sp)
 {
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
-    PyObject *it;  /* iter(v) */
+    PyObject *it = NULL;  /* iter(v) */
     _PyStatusValue step;
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
+    assert(argcnt >= 0 && argcntafter >= -1);
+    int capacity = argcnt + (argcntafter < 0 ? 0 : argcntafter + 1);
+    _PyInterpreterFrame *frame = tstate->current_frame;
+    assert(sp - frame->base >= capacity);
+    assert(sp <= frame->base + _PyFrame_NumSlots(frame));
+    _PyTransitionPrefix prefix = {
+        .base = sp - capacity,
+        .capacity = capacity,
+        .begin = capacity,
+        .end = capacity,
+    };
+    _PyTransitionRoots roots = {
+        .frame = frame,
+        .prefix = &prefix,
+    };
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    int result = 0;
 
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
     if (it == NULL) {
@@ -4085,7 +4102,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
                           "cannot unpack non-iterable %.200s object",
                           Py_TYPE(v)->tp_name);
         }
-        return 0;
+        goto Done;
     }
 
     for (; i < argcnt; i++) {
@@ -4109,6 +4126,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             goto Error;
         }
         *--sp = step.value;
+        prefix.begin--;
         _PyValue_CheckTemp(*sp);
     }
 
@@ -4118,8 +4136,8 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
         if (step.status == PYGEN_ERROR)
             goto Error;
         if (step.status == PYGEN_RETURN) {
-            Py_DECREF(it);
-            return 1;
+            result = 1;
+            goto Done;
         }
         PyValue_CLOSE(step.value);
 
@@ -4143,6 +4161,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     if (l == NULL)
         goto Error;
     *--sp = PyValue_FromObjectSteal(l);
+    prefix.begin--;
     i++;
 
     ll = PyList_GET_SIZE(l);
@@ -4157,11 +4176,12 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     for (j = argcntafter; j > 0; j--, i++) {
         *--sp = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
+        prefix.begin--;
     }
     /* Resize the list. */
     Py_SET_SIZE(l, ll - argcntafter);
-    Py_DECREF(it);
-    return 1;
+    result = 1;
+    goto Done;
 
 Error:
     /* The slots that the values went to are temporaries, which hold NULL
@@ -4169,11 +4189,18 @@ Error:
     for (; i > 0; i--, sp++) {
         // a move: cleared below
         PyValue ref = *sp;
+        prefix.begin++;
         *sp = PyValue_NULL;
         PyValue_CLOSE(ref);
     }
+Done:
     Py_XDECREF(it);
-    return 0;
+    Py_DECREF(v);
+    /* Cleanup may reenter while outputs still belong to this prefix. Hand
+     * them back to the initialized/NULL frame without an intervening call. */
+    prefix.begin = prefix.end;
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    return result;
 }
 
 

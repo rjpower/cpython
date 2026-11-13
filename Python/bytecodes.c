@@ -1881,7 +1881,6 @@ dummy_func(
         window op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-            Py_DECREF(seq_o);
             ERROR_IF(res == 0);
         }
 
@@ -1939,7 +1938,6 @@ dummy_func(
         window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            Py_DECREF(seq_o);
             ERROR_IF(res == 0);
         }
 

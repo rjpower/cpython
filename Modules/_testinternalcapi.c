@@ -3388,6 +3388,28 @@ check_frame_code_pin(PyObject *self, PyObject *arg)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+check_frame_function_owner(PyObject *self, PyObject *arg)
+{
+    if (!PyFunction_Check(arg) || _Py_IsImmortal(arg)) {
+        PyErr_SetString(PyExc_ValueError, "expected a mortal function");
+        return NULL;
+    }
+    Py_ssize_t before = Py_REFCNT(arg);
+    PyValue owner = PyValue_DUP(PyValue_FromObjectBorrow(arg));
+    _PyInterpreterFrame frame = {
+        .f_funcobj = _PyValue_FunctionOwnerSteal(owner),
+    };
+    int ok = (PyObject *)_PyFrame_GetFunction(&frame) == arg
+             && Py_REFCNT(arg) == before + 1;
+    Py_CLEAR(frame.f_funcobj);
+    if (!ok || Py_REFCNT(arg) != before) {
+        PyErr_SetString(PyExc_AssertionError, "incorrect frame function ownership");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 /* PyUnicode_FromFormat(format, value) for the canonical value of obj, or
  * PyUnicode_FromFormat(format, value, other) when other is given. */
 static PyObject *
@@ -4473,6 +4495,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
     {"check_frame_code_pin", check_frame_code_pin, METH_O, NULL},
+    {"check_frame_function_owner", check_frame_function_owner, METH_O, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
     {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},

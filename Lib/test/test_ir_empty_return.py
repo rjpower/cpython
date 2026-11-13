@@ -100,6 +100,18 @@ class EmptyReturnTests(unittest.TestCase):
             monitor.register_callback(tool, event, None)
             monitor.free_tool_id(tool)
 
+    def test_explicit_empty_return_and_twin_have_no_cfg_successor(self):
+        for handler in ("RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
+            with self.subTest(handler=handler):
+                words = [("RESUME", 0), ("LOAD_CONST", 0), (handler, 0),
+                         ("LOAD_CONST", 1), ("RETURN_VALUE", 1)]
+                # The second return is unreachable, so no stable proof may
+                # certify it merely by falling through the first return.
+                for code in routes(make_code(words)):
+                    rows = _testinternalcapi.get_ir(code)
+                    self.assertEqual(rows[2][0], handler)
+                    self.assertEqual(rows[4][0], "RETURN_VALUE")
+
     def test_checked_source_contract_covers_general_empty_and_instrumented_forms(self):
         from test import test_tools
         test_tools.skip_if_missing("cases_generator")

@@ -5325,8 +5325,8 @@
             }
             // _CHECK_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                callable = window[-1 + oparg];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5344,7 +5344,7 @@
             }
             // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                self_or_null = window[oparg];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 assert(!(call_state & CALL_SELF_PRESENT));
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 STAT_INC(CALL, hit);
@@ -5354,15 +5354,17 @@
                 callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_PUBLISH_TEMP(window[-1 + oparg], callable);
-                IR_PUBLISH_TEMP(window[oparg], self_or_null);
+                IR_PUBLISH_TEMP(window[0], callable);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
                 PyValue_CLOSE(temp);
             }
             // flush
             // _CHECK_FUNCTION_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5413,7 +5415,7 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[1 + oparg];
+                args = &window[2];
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
@@ -9266,8 +9268,8 @@
             }
             // _CHECK_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                callable = window[-1 + oparg];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                callable = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9285,7 +9287,7 @@
             }
             // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
             {
-                self_or_null = window[oparg];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
                 assert(!(call_state & CALL_SELF_PRESENT));
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 STAT_INC(CALL, hit);
@@ -9295,15 +9297,17 @@
                 callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_PUBLISH_TEMP(window[-1 + oparg], callable);
-                IR_PUBLISH_TEMP(window[oparg], self_or_null);
+                IR_PUBLISH_TEMP(window[0], callable);
+                if (call_state & CALL_SELF_PRESENT) {
+                    IR_PUBLISH_TEMP(window[1], self_or_null);
+                }
                 PyValue_CLOSE(temp);
             }
             // flush
             // _CHECK_FUNCTION_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -9354,7 +9358,7 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[1 + oparg];
+                args = &window[2];
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
@@ -10962,9 +10966,9 @@
             }
             // _CHECK_FUNCTION_VERSION
             {
-                callable = window[-1 + oparg];
+                callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11015,7 +11019,7 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[1 + oparg];
+                args = &window[2];
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
@@ -11464,9 +11468,9 @@
             }
             // _CHECK_FUNCTION_VERSION
             {
-                callable = window[-1 + oparg];
+                callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[-1 + oparg]))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -11517,7 +11521,7 @@
             }
             // _INIT_CALL_PY_EXACT_ARGS
             {
-                args = &window[1 + oparg];
+                args = &window[2];
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;

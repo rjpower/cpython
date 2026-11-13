@@ -113,7 +113,7 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
         case CALL_ALLOC_AND_ENTER_INIT:
             return 2 + oparg;
         case CALL_BOUND_METHOD_EXACT_ARGS:
-            return 1 + oparg + oparg;
+            return 2 + oparg;
         case CALL_BOUND_METHOD_GENERAL:
             return 2 + oparg;
         case CALL_BUILTIN_CLASS:
@@ -159,7 +159,7 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
         case CALL_NON_PY_GENERAL:
             return 2 + oparg;
         case CALL_PY_EXACT_ARGS:
-            return 1 + oparg + oparg;
+            return 2 + oparg;
         case CALL_PY_GENERAL:
             return 2 + oparg;
         case CALL_STR_1:

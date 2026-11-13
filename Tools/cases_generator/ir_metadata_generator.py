@@ -145,7 +145,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.names_target, "_PyIR_NAMES_TARGET"),
             (fmt.fused, "_PyIR_FUSED"),
             (fmt.discards, "_PyIR_DISCARDS"),
-            (fmt.unpacks, "_PyIR_UNPACKS")):
+            (fmt.unpacks, "_PyIR_UNPACKS"),
+            (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)

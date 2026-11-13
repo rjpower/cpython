@@ -1675,7 +1675,7 @@ class ConstSlotsTest(unittest.TestCase):
                 code = original.__code__
                 first = code.co_firstlineno
                 rows = _testinternalcapi.get_ir(code)
-                calls = [row for row in rows if row[0] == "CALL"]
+                calls = [row for row in rows if row[0] == "CALL_NO_SELF"]
                 self.assertEqual(len(calls), 1)
                 optional_self = calls[0][2] + 1
                 self.assertGreaterEqual(optional_self, code.co_nlocals)
@@ -2762,6 +2762,15 @@ class ConstSlotsTest(unittest.TestCase):
         # token must not be accepted as a restoration of the younger binding.
         words[inner.offset] = ((words[inner.offset] & ~(4095 << 16)) |
                                 (outer_home << 16))
+        # This changed restoration can retain scratch owners until return.
+        # Reprove the general form instead of inheriting an EMPTY certificate.
+        return_forms = {
+            dis._all_opmap["RETURN_VALUE_EMPTY"]: dis._all_opmap["RETURN_VALUE"],
+            dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
+                dis._all_opmap["INSTRUMENTED_RETURN_VALUE"],
+        }
+        words = [(word & ~65535) | return_forms.get(word & 65535, word & 65535)
+                 for word in words]
         matching_recovery = memoryview(original.co_exceptiontable).tobytes()
         self.assertEqual(matching_recovery, original.co_exceptiontable)
         self.assertIsNot(matching_recovery, original.co_exceptiontable)

@@ -4669,12 +4669,12 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             site = next(i for i, row in enumerate(rows) if row[0] == 'YIELD_DELEGATED')
             name, a, b, c, d = rows[site]
             rows[site] = name, _testinternalcapi.remote_debug_layout()['no_dst'], b, c, d
-            # Rebuild source metadata for the changed recipient; the old
-            # observer recovery proof describes the original A role.
+            # Revalidate semantic recovery for the changed recipient; its
+            # proof describes the A role independently of optional positions.
             blocked.__code__ = blocked.__code__.replace(
                 co_code=encode_words(
                     *((handlers[name], *fields) for name, *fields in rows)),
-                co_linetable=b'')
+                co_linetable=b'', co_exceptiontable=blocked.__code__.co_exceptiontable)
 
             async def main():
                 task = asyncio.create_task(blocked(), name='discard-target')

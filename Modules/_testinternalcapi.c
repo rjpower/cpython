@@ -4836,6 +4836,21 @@ get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
     return states;
 }
 
+/* Read only the published marker. This probe does not infer a receiver or
+ * bypass the generator state/read claim required to acquire its value. */
+static PyObject *
+has_delegated_frame_phase(PyObject *self, PyObject *frame_object)
+{
+    if (!PyFrame_Check(frame_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)frame_object)->f_frame;
+    uint16_t phase = frame->phase_state;
+    return PyBool_FromLong(phase == _PyIR_PHASE_YIELD_DELEGATED ||
+                          phase == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED));
+}
+
 /* Observe all active frames head-to-outer. This never starts a comparison;
  * the stored status must come from an actual reached collector frame walk. */
 static PyObject *
@@ -5069,8 +5084,11 @@ count_frame_probe_owners(PyObject *object, void *arg)
 #endif
 
 static PyObject *
-check_frame_copy(PyObject *args, int created)
+check_frame_copy(PyObject *args, int mode)
 {
+    int created = mode == 1;
+    int delegated = mode >= 2;
+    int clipped = mode == 3;
     PyObject *code_object, *payload;
     if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
                           &code_object, &payload))
@@ -5086,33 +5104,38 @@ check_frame_copy(PyObject *args, int created)
     }
     _PyCodeExec *exec = NULL;
     int site = 0;
-    if (created) {
+    if (created || delegated) {
         exec = _PyCode_GetExec(code);
         if (exec == NULL) {
             return NULL;
         }
-        if (exec->semantic_plan == NULL ||
-            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+        if (created && (exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY)))
         {
             PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
             return NULL;
         }
+        int opcode = created ? RETURN_GENERATOR : YIELD_DELEGATED;
         while (site < exec->nwords &&
-               _PyIR_BaseOpcode(IR_HANDLER(exec->words[site])) != RETURN_GENERATOR)
+               _PyIR_BaseOpcode(IR_HANDLER(exec->words[site])) != opcode)
         {
             site++;
         }
-        assert(site < exec->nwords);
+        if (site == exec->nwords) {
+            PyErr_SetString(PyExc_ValueError, "probe needs the actual copy/yield site");
+            return NULL;
+        }
     }
     size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
         (size_t)n * sizeof(PyValue);
     _PyInterpreterFrame *src = PyMem_Calloc(1, size);
-    /* Created traversal derives its container from the embedded frame. This
-     * private, untracked storage never executes or invokes a gen destructor. */
-    void *dst_storage = PyMem_Calloc(1, created
-        ? offsetof(PyGenObject, gi_iframe) + size : size);
-    _PyInterpreterFrame *dst = dst_storage == NULL ? NULL : created
-        ? &((PyGenObject *)dst_storage)->gi_iframe : dst_storage;
+    /* The selectors derive their owner container from the embedded frame.
+     * Private untracked storage never executes or invokes an object destructor. */
+    size_t offset = created ? offsetof(PyGenObject, gi_iframe) : delegated
+        ? offsetof(PyFrameObject, _f_frame_data) : 0;
+    void *dst_storage = PyMem_Calloc(1, offset + size);
+    _PyInterpreterFrame *dst = dst_storage == NULL ? NULL
+        : (_PyInterpreterFrame *)((char *)dst_storage + offset);
     if (src == NULL || dst == NULL) {
         PyMem_Free(src);
         PyMem_Free(dst_storage);
@@ -5125,13 +5148,28 @@ check_frame_copy(PyObject *args, int created)
         src->base[i].bits = poison;
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-    int selected_home = created ? 0 : nl + 1;
+    int selected_home = delegated ? IR_D(exec->words[site]) : created ? 0 : nl + 1;
+    assert(selected_home >= 0 && selected_home < n);
+    assert(!delegated || selected_home >= nl);
     src->base[selected_home] = _PyValue_Publish(&value);
-    const _PyIRPhaseRange selected = {.begin = 1, .end = 2};
-    const _PyIRHomeView view = {
-        .nbindings = (uint16_t)nl, .scratch_limit = 2,
-        .nranges = 1, .ranges = &selected,
+    int scratch_home = delegated ? selected_home - nl : 1;
+    const _PyIRPhaseRange selected = {
+        .begin = (uint16_t)scratch_home,
+        .end = (uint16_t)(scratch_home + 1),
     };
+    const _PyIRHomeView view = {
+        .nbindings = (uint16_t)nl,
+        .scratch_limit = (uint16_t)(clipped ? 0 : selected.end),
+        .nranges = !clipped, .ranges = &selected,
+    };
+    if (delegated) {
+        src->owner = FRAME_OWNED_BY_GENERATOR;
+        src->ir_words = exec->words;
+        src->instr_ptr = exec->words + site + 1;
+        src->return_slot = IR_A(exec->words[site]);
+        _PyFrame_PublishDelegatedSuspension(src);
+        assert(_PyIR_DelegatedReceiverHome(src) == selected_home);
+    }
     if (created) {
         src->ir_words = exec->words;
         src->instr_ptr = exec->words + site;
@@ -5140,8 +5178,25 @@ check_frame_copy(PyObject *args, int created)
     else {
         _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
     }
-    int correct = dst->base[selected_home].bits == value.bits &&
-        PyValue_IsNull(src->base[selected_home]);
+    int correct = clipped
+        ? PyValue_IsNull(dst->base[selected_home]) &&
+          src->base[selected_home].bits == value.bits
+        : dst->base[selected_home].bits == value.bits &&
+          PyValue_IsNull(src->base[selected_home]);
+    if (delegated) {
+        correct &= src->phase_state == 0 &&
+            dst->phase_state == (clipped ? 0 : _PyIR_PHASE_YIELD_DELEGATED);
+        PyFrameObject *capture = dst_storage;
+        dst->owner = FRAME_OWNED_BY_FRAME_OBJECT;
+        capture->f_frame = dst;
+        capture->f_capture = view;
+        capture->f_capture_authority = _PyIR_HOME_MUST_READABLE;
+        dst->phase_state |= _PyIR_PHASE_CAPTURED;
+        _PyIRHomeView selected_view;
+        correct &= _PyFrame_GetHomeView(dst, &selected_view) == _PyIR_HOME_MUST_READABLE;
+        correct &= selected_view.scratch_limit == view.scratch_limit;
+        correct &= _PyIR_DelegatedReceiverHome(dst) == (clipped ? -1 : selected_home);
+    }
     for (int i = nl; i < n; i++) {
         if (i != selected_home) {
             correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
@@ -5160,6 +5215,9 @@ check_frame_copy(PyObject *args, int created)
     }
 #endif
     PyValue_XCLOSE(dst->base[selected_home]);
+    if (clipped) {
+        PyValue_XCLOSE(src->base[selected_home]);
+    }
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
     PyMem_Free(dst_storage);
@@ -5180,6 +5238,18 @@ static PyObject *
 check_created_frame_copy(PyObject *self, PyObject *args)
 {
     return check_frame_copy(args, 1);
+}
+
+static PyObject *
+check_delegated_frame_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 2);
+}
+
+static PyObject *
+check_clipped_delegated_frame_copy(PyObject *self, PyObject *args)
+{
+    return check_frame_copy(args, 3);
 }
 
 static PyObject *
@@ -5206,6 +5276,9 @@ static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
+    {"check_delegated_frame_copy", check_delegated_frame_copy, METH_VARARGS},
+    {"check_clipped_delegated_frame_copy", check_clipped_delegated_frame_copy, METH_VARARGS},
+    {"has_delegated_frame_phase", has_delegated_frame_phase, METH_O},
     {"get_ir_frame_phases", get_ir_frame_phases, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},

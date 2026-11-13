@@ -13,7 +13,9 @@ _PyIRHomeAuthority
 _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
 {
     if (frame->phase_state & _PyIR_PHASE_CAPTURED) {
-        if (frame->phase_state != _PyIR_PHASE_CAPTURED) {
+        if (frame->phase_state != _PyIR_PHASE_CAPTURED &&
+            frame->phase_state != (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
+        {
             return _PyIR_HOME_NONE;
         }
         PyFrameObject *f;
@@ -133,6 +135,7 @@ _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
     assert(frame->pending_redirect);
     assert(frame->return_slot == IR_NO_DST);
+    assert(frame->phase_state == 0);
     /* The child has retired its overlap. Publish the new state before
      * closing remaining scratch owners, whose finalizers can inspect it. */
     frame->pending_redirect = 0;
@@ -250,8 +253,11 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     f->f_capture = view;
     f->f_capture_authority = (uint8_t)authority;
-    new_frame->phase_state = _PyIR_PHASE_CAPTURED;
+    assert(new_frame->phase_state == 0 ||
+           new_frame->phase_state == _PyIR_PHASE_YIELD_DELEGATED);
+    new_frame->phase_state |= _PyIR_PHASE_CAPTURED;
     if (_PyFrame_IsIncomplete(new_frame)) {
+        new_frame->phase_state = _PyIR_PHASE_CAPTURED;
         // This may be a newly-created generator or coroutine frame. Since it's
         // dead anyways, just pretend that the first RESUME ran:
         new_frame->instr_ptr = new_frame->ir_words

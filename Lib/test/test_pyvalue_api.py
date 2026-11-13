@@ -641,6 +641,47 @@ class BinderStagingTests(unittest.TestCase):
 class ProviderHandoffTests(unittest.TestCase):
     STAGED = 2
 
+    def test_created_generator_uses_executing_code_after_hook_mutation(self):
+        for object_provider in (False, True):
+            for replacement_generator in (False, True):
+                with self.subTest(object_provider=object_provider,
+                                  replacement_generator=replacement_generator):
+                    namespace = {}
+                    assignments = ''.join(
+                        f'    local_{i} = remaining\n' for i in range(128))
+                    exec('def target(remaining):\n' + assignments +
+                         '    yield remaining, local_127\n', namespace)
+                    target = namespace['target']
+                    selected_code = target.__code__
+                    if replacement_generator:
+                        def replacement(remaining):
+                            yield remaining
+                    else:
+                        def replacement(remaining):
+                            return remaining
+                    replacement_code = replacement.__code__
+                    self.assertGreater(selected_code.co_nlocals,
+                                       replacement_code.co_nlocals)
+                    observations = []
+
+                    def observe(phase):
+                        observations.append(phase)
+                        if phase == 'before':
+                            target.__code__ = replacement_code
+                        support.gc_collect()
+
+                    payload = Item()
+                    gen = _testinternalcapi.run_staged_provider(
+                        target, payload, observe, 'default', object_provider)
+                    self.assertIsInstance(gen, types.GeneratorType)
+                    self.assertIs(gen.gi_code, selected_code)
+                    self.assertIs(target.__code__, replacement_code)
+                    self.assertEqual(next(gen), (payload, payload))
+                    with self.assertRaises(StopIteration):
+                        next(gen)
+                    self.assertEqual(observations, ['before', 'after'])
+                    self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
     def test_delegated_hook_lifetime_and_reentry(self):
         namespace = {}
         assignments = ''.join(f'    local_{i} = depth\n' for i in range(128))

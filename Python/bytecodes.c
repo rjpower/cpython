@@ -5241,7 +5241,8 @@ dummy_func(
 
         window inst(RETURN_GENERATOR, (-- res)) {
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
+            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
+                func, _PyFrame_GetCode(frame));
             ERROR_IF(gen == NULL);
             SAVE_STACK();
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;

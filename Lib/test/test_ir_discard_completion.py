@@ -394,7 +394,8 @@ class DiscardCompletionGeneratorTests(unittest.TestCase):
         self.assertNotIn("CALL_POSTCALL_DISCARD", generated)
         self.assertNotIn("TARGET(CALL_PY_EXACT_ARGS_DISCARD)", generated)
         self.assertNotIn("TARGET(CALL_PY_GENERAL_DISCARD)", generated)
-        self.assertIn("_PyFrame_SetReturnSlot(frame, IR_A(ir_word))", generated)
+        self.assertRegex(generated,
+                         r"_PyFrame_SetReturnSlot\(frame,\s*IR_A\(ir_word\)\)")
 
 
 if __name__ == "__main__":

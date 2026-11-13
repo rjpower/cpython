@@ -527,6 +527,7 @@ IR_MARKER_EFFECTS = {
     "IR_BINARY_READER": frozenset(("escapes", "error", "sync", "pc")),
     "IR_OBSERVE_COMMITTED_BRANCH": frozenset(("escapes", "error", "sync", "pc")),
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
+    "IR_PROCESS_ERROR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_SUSPEND_DELEGATED": frozenset(("escapes", "sync", "pc", "terminal", "frame")),

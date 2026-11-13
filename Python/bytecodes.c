@@ -5569,104 +5569,23 @@ dummy_func(
         }
 
         label(error) {
-            /* Double-check exception status. */
-#ifdef NDEBUG
-            if (!_PyErr_Occurred(tstate)) {
-            _PyErr_SetString(tstate, PyExc_SystemError,
-                             "error return without exception set");
-        }
-#else
-            assert(_PyErr_Occurred(tstate));
-#endif
-
-            /* Log traceback info. */
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            if (!_PyFrame_IsIncomplete(frame)) {
-                PyFrameObject *f = _PyFrame_GetFrameObject(frame);
-                if (f != NULL) {
-                    PyTraceBack_Here(f);
-                }
-            }
-            _PyEval_MonitorRaise(tstate, frame, next_instr-1);
-            goto exception_unwind;
+            IR_PROCESS_ERROR(RAISE, 0);
         }
 
         spilled label(exception_unwind) {
-            /* We can't use frame->instr_ptr here, as RERAISE may have set it */
-            int offset = CURRENT_OFFSET();
-            _PyExceptionHandler found = get_frame_exception_handler(frame, offset);
-            int exc_slot = found.exc_slot, handler = found.handler, lasti = found.lasti;
-            if (found.handled == 0) {
-                // No handlers, so exit.
-                assert(_PyErr_Occurred(tstate));
-                _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
-                monitor_unwind(tstate, frame, next_instr-1);
-                goto exit_unwind;
-            }
-            /* The handler's slots, for lasti and the exception, come after
-             * the temporaries that are live at the handler; the rest are
-             * dead there. */
-            int first = exc_slot - lasti;
-            assert(first >= _PyFrame_GetCode(frame)->co_nlocalsplus);
-            _PyFrame_ClearTemporaries(frame, first);
-            slots = _PyFrame_Slots(frame);
-            if (lasti) {
-                int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                slots[first] = PyValue_TagIndex(frame_lasti);
-            }
-
-            /* Make the raw exception data
-                available to the handler,
-                so a program can emulate the
-                Python main loop. */
-            PyObject *exc = _PyErr_GetRaisedException(tstate);
-            slots[exc_slot] = PyValue_FromObjectSteal(exc);
-            next_instr = INSTR_AT_OFFSET(handler);
-
-            int err = monitor_handled(tstate, frame, next_instr, exc);
-            if (err < 0) {
-                goto exception_unwind;
-            }
-            /* Resume normal execution */
-#ifdef Py_DEBUG
-            if (frame->lltrace >= 5) {
-                lltrace_resume_frame(frame);
-            }
-#endif
-            RELOAD_STACK();
-            int opcode;
-            DISPATCH();
+            IR_PROCESS_ERROR(UNWIND, 0);
         }
 
         spilled label(exit_unwind) {
-            assert(_PyErr_Occurred(tstate));
-            DTRACE_FUNCTION_RETURN();
-            goto exit_unwind_notrace;
+            IR_PROCESS_ERROR(EXIT, 0);
         }
 
         spilled label(exit_unwind_notrace) {
-            assert(_PyErr_Occurred(tstate));
-            _Py_LeaveRecursiveCallPy(tstate);
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            // GH-99729: We need to unlink the frame *before* clearing it:
-            _PyInterpreterFrame *dying = frame;
-            frame = tstate->current_frame = dying->previous;
-            frame->pending_redirect = 0;
-            _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
-            frame->pending_redirect = 0;
-            if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-                /* Restore previous frame and exit */
-                tstate->current_frame = frame->previous;
-                assert(frame == &IR_ACTIVATION()->entry.frame);
-                return PyValue_NULL;
-            }
-            // The caller's instr_ptr is the word that pushed the frame, and
-            // error takes the word that raised as the one before next_instr.
-            // That word may start a try block, now that the loads before it
-            // have no words.
-            next_instr = frame->instr_ptr + 1;
-            RELOAD_STACK();
-            goto error;
+            IR_PROCESS_ERROR(EXIT_NOTRACE, 0);
+        }
+
+        label(throw_error) {
+            IR_PROCESS_ERROR(THROW, 0);
         }
 
         spilled label(start_frame) {
@@ -5680,7 +5599,7 @@ dummy_func(
         #ifdef Py_DEBUG
             int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
             if (lltrace < 0) {
-                JUMP_TO_LABEL(exit_unwind);
+                IR_PROCESS_ERROR(EXIT, 0);
             }
             frame->lltrace = lltrace;
             /* _PyEval_EvalFrameDefault() must not be called with an exception set,

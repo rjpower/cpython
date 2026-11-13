@@ -127,13 +127,21 @@ from typing import TextIO
 DEFAULT_OUTPUT = ROOT / "Python/generated_ir_cases.c.h"
 DEFAULT_TARGETS_OUTPUT = ROOT / "Python/ir_targets.h"
 
+ERROR_INGRESSES = {
+    "error": "RAISE",
+    "exception_unwind": "UNWIND",
+    "exit_unwind": "EXIT",
+    "exit_unwind_notrace": "EXIT_NOTRACE",
+    "throw_error": "THROW",
+}
+
 UNKNOWN_OPCODE_HANDLER = """\
 _PyErr_Format(tstate, PyExc_SystemError,
               "%U:%d: unknown opcode %d",
               _PyFrame_GetCode(frame)->co_filename,
               PyUnstable_InterpreterFrame_GetLine(frame),
               opcode);
-JUMP_TO_LABEL(error);
+PROCESS_ERROR_AT(RAISE, 0, next_instr);
 """
 
 INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
@@ -3000,6 +3008,7 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_COMPLETE_STEP"] = self.complete_step
+        self._replacers["IR_PROCESS_ERROR"] = self.process_error
         self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
@@ -3247,7 +3256,7 @@ class IREmitter(Emitter):
         self.emit("value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);\n")
         self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
         self.emit("frame->phase_state = 0;\n")
-        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
         self.emit("frame->phase_state = 0;\n")
         self.emit(f"ir_binary_result = value_reader_complete(tstate, frame, this_instr, "
@@ -3257,7 +3266,7 @@ class IREmitter(Emitter):
                   "_PyIR_PHASE_BINARY_RETIRE : 0);\n")
         self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
         self.emit("frame->phase_state = 0;\n")
-        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
         self.reader_reload()
         self.emit(f"{result} = ir_binary_result;\n")
@@ -3365,7 +3374,7 @@ class IREmitter(Emitter):
         # The values pass by value and are dead after the call (R-a)
         second_value = "PyValue_NULL" if second is None else second
         self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {temps}, {first}, {second_value}, {failure_result});\n")
-        self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
@@ -3450,7 +3459,7 @@ class IREmitter(Emitter):
         return True
 
     def reader_error(self):
-        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
 
     def release_displaced(self):
         """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
@@ -3716,7 +3725,7 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit(f"int operation_failed = value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
         self.emit("if (operation_failed < 0) {\n")
-        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
@@ -4357,7 +4366,7 @@ class IREmitter(Emitter):
         stack.error_exit = True
         stack.flush(self.out)
         self.operand_error_flush(stack)
-        return f"{self.jump_prefix}JUMP_TO_LABEL(error);"
+        return "PROCESS_ERROR_AT(RAISE, 0, this_instr);"
 
     def operand_error_flush(self, stack, bridge=None):
         # These are actual error stores from the same IRStack used to emit C.
@@ -4442,7 +4451,17 @@ class IREmitter(Emitter):
 
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
-        super().goto_label(goto, label, storage)
+        if label.text in ERROR_INGRESSES:
+            label_node = self.labels[label.text]
+            if label_node.spilled and not storage.spilled:
+                self.emit_save(storage)
+            ingress = ERROR_INGRESSES[label.text]
+            origin = ("frame->instr_ptr" if ingress in {"EXIT", "EXIT_NOTRACE"}
+                      else "next_instr - 1")
+            self.out.start_line()
+            self.emit(f"PROCESS_ERROR_AT({ingress}, 0, {origin})")
+        else:
+            super().goto_label(goto, label, storage)
         if label.text == "error" and self.observer_source is not None:
             # The transparent wrapper has no frame-home transport. This is
             # its actual emitted failure route after the callback/PC refresh.
@@ -4631,6 +4650,23 @@ class IREmitter(Emitter):
             self.call_normal_drained = True
         return True
 
+    def process_error(self, tkn, tkn_iter, uop, storage, inst):
+        args, _ = self.instruction_macro_args(tkn, tkn_iter)
+        if (inst is not None or len(args) != 2 or
+                any(len(arg) != 1 for arg in args) or
+                args[0][0].text not in ERROR_INGRESSES.values() or
+                args[1][0].text != "0"):
+            raise analysis_error("unsupported error label ingress or checkpoint", tkn)
+        ingress, checkpoint = (arg[0].text for arg in args)
+        end = next(tkn_iter)
+        if end.kind != "SEMI":
+            raise analysis_error("error ingress must be a complete statement", end)
+        origin = ("frame->instr_ptr" if ingress in {"EXIT", "EXIT_NOTRACE"}
+                  else "next_instr - 1")
+        self.out.start_line()
+        self.emit(f"PROCESS_ERROR_AT({ingress}, {checkpoint}, {origin});\n")
+        return False
+
     def complete_step(self, tkn, tkn_iter, uop, storage, inst):
         """A completed loop/send consumes its window, not its body outputs.
 
@@ -4651,7 +4687,7 @@ class IREmitter(Emitter):
                   else f"next_instr + {distance}")
         self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, {base}, {dst}, {target}, {value}, {kind});\n")
         self.emit("next_instr = ir_step_result.next;\n")
-        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         # The reached helper owns its result and whole encoded window on
@@ -4689,7 +4725,7 @@ class IREmitter(Emitter):
         self.emit(f"if ({generator_return}) {{\n")
         self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
-        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
         self.emit("}\n")
         self.emit("else {\n")
         self.emit("next_instr = frame->return_pc;\n")
@@ -4733,7 +4769,7 @@ class IREmitter(Emitter):
         self.emit("slots = _PyFrame_Slots(frame);\n")
         self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
         self.emit("PyValue_XCLOSE(ir_resume_input);\n")
-        self.emit("JUMP_TO_LABEL(exit_unwind_notrace);\n")
+        self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
         self.emit("}\n")
         self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
         self.emit("LOAD_IP(0);\n")
@@ -4814,7 +4850,7 @@ class IREmitter(Emitter):
             # Every input is still in its slot: exception_unwind has them
             storage.stack.copy().flush(self.out)
             self.operand_error_flush(storage.stack, bridge)
-            self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+            self.emit("PROCESS_ERROR_AT(RAISE, 0, this_instr);\n")
             self.emit("}\n")
             if inst is not None:
                 self.emit(f"BOX_STAT_INC({inst.name});\n")

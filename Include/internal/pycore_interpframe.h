@@ -243,10 +243,46 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 #endif
 }
 
-static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+/* Bindings stay dynamic. Scratch ranges are clipped before touching homes. */
+static inline bool
+_PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
+                       int *begin, int *end)
 {
-    // Read the layout before transferring the executable owner.
-    int nslots = _PyFrame_NumSlots(src);
+    if (*cursor == 0) {
+        *cursor = 1;
+        if (view->nbindings != 0) {
+            *begin = 0;
+            *end = view->nbindings;
+            return true;
+        }
+    }
+    while (*cursor - 1 < view->nranges) {
+        const _PyIRPhaseRange *range = &view->ranges[(*cursor)++ - 1];
+        if (range->begin >= view->scratch_limit) {
+            return false;
+        }
+        *begin = view->nbindings + range->begin;
+        *end = view->nbindings + Py_MIN(range->end, view->scratch_limit);
+        if (*begin < *end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The caller pins code for the entire view/copy commit. */
+PyAPI_FUNC(_PyIRHomeAuthority) _PyFrame_GetHomeView(
+    _PyInterpreterFrame *frame, _PyIRHomeView *view);
+_PyIRHomeAuthority _PyFrame_GetCopyViewUnderNullControl(
+    _PyInterpreterFrame *frame, _PyIRHomeView *view);
+void _PyFrame_GetNullControlHomeView(
+    _PyInterpreterFrame *frame, int remaining, _PyIRHomeView *view);
+PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
+    _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
+
+static inline void
+_PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+{
     dest->f_executable = src->f_executable;
     dest->base = dest->owned_slots;
     // Don't leave a dangling pointer to the old frame when creating generators
@@ -276,10 +312,35 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #ifdef Py_DEBUG
     dest->lltrace = src->lltrace;
 #endif
-    // A move: the slots that src leaves behind may be the caller's
-    for (int i = 0; i < nslots; i++) {
-        dest->base[i] = src->base[i];
-        src->base[i] = PyValue_NULL;
+}
+
+static inline void
+_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
+              const _PyIRHomeView *view, _PyIRHomeAuthority authority)
+{
+    int nslots = _PyFrame_NumSlots(src);
+    assert(authority == _PyIR_HOME_MUST_READABLE ||
+           authority == _PyIR_HOME_NULL_CONTROL_READABLE);
+    assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
+    assert(view->nbindings + view->scratch_limit <= nslots);
+    _PyFrame_CopyHeader(src, dest);
+    uint32_t cursor = 0;
+    int filled = 0, begin, end;
+    while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
+        assert(begin >= filled && end <= nslots);
+        while (filled < begin) {
+            dest->base[filled++] = PyValue_NULL;
+        }
+        while (filled < end) {
+            // A move: the slots src leaves behind may be the caller's.
+            dest->base[filled] = src->base[filled];
+            src->base[filled++] = PyValue_NULL;
+        }
+    }
+    /* NULL shadow still initializes inactive destinations without loading the
+     * corresponding source words. M4 removes this fill with full authority. */
+    while (filled < nslots) {
+        dest->base[filled++] = PyValue_NULL;
     }
 }
 

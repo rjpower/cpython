@@ -5245,12 +5245,12 @@ dummy_func(
 
         window inst(RETURN_GENERATOR, (-- res)) {
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
+            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
+                func, _PyFrame_GetCode(frame));
             ERROR_IF(gen == NULL);
             SAVE_STACK();
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            frame->instr_ptr++;
-            _PyFrame_Copy(frame, gen_frame);
+            IR_CREATED_COPY(frame, gen_frame);
             // The value of the first send takes the slot of res
             gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
             assert(frame->frame_obj == NULL);

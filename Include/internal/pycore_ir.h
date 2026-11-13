@@ -288,6 +288,11 @@ enum {
     _PyIR_OWNER_ERROR_BRANCH,
     _PyIR_OWNER_NORMAL_EXIT,
     _PyIR_OWNER_ERROR_EXIT,
+    _PyIR_OWNER_CREATED_COPY,
+    _PyIR_OWNER_NORMAL_CLEAR_INPUTS,
+    _PyIR_OWNER_CALL_DRAIN,
+    _PyIR_OWNER_NORMAL_COMPLETION,
+    _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
 };
 
 typedef struct {
@@ -331,6 +336,7 @@ typedef struct _PyIRFormat {
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     uint32_t owner_program;
     uint16_t owner_events;
+    uint8_t call_input_holes; // canonical virtual-NULL window inputs
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -347,6 +353,22 @@ typedef struct _PyIRFormat {
                             // word (itself for a twin), or 0
     uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
+
+#define _PyIR_CALL_HOLE_SELF (1u << 1)
+#define _PyIR_CALL_HOLE_KWARGS (1u << 3)
+
+typedef enum {
+    _PyIR_CALL_INPUT_VALUE,
+    _PyIR_CALL_INPUT_VIRTUAL_NULL,
+} _PyIRCallInputRole;
+
+static inline _PyIRCallInputRole
+_PyIR_CallInputRole(const _PyIRFormat *fmt, int offset)
+{
+    return (offset == 1 || offset == 3) &&
+        (fmt->call_input_holes & (1u << offset))
+        ? _PyIR_CALL_INPUT_VIRTUAL_NULL : _PyIR_CALL_INPUT_VALUE;
+}
 
 #include "pycore_ir_metadata.h"
 
@@ -412,12 +434,21 @@ typedef struct {
 } _PyIRCodePlan;
 
 #define _PyIR_PLAN_ALL_RETURNS 1u
+#define _PyIR_PLAN_ALL_CREATED_EMPTY 2u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
+
+typedef enum _PyIRHomeAuthority {
+    _PyIR_HOME_NONE,
+    _PyIR_HOME_SHADOW_CANDIDATE,
+    _PyIR_HOME_MUST_READABLE,
+    /* Explicit development adapter, never emitted by a code-plan builder. */
+    _PyIR_HOME_NULL_CONTROL_READABLE,
+} _PyIRHomeAuthority;
 
 typedef struct {
     uint32_t site, first, count;
-    uint8_t phase;
-    uint8_t reserved[3];
+    uint8_t phase, authority;
+    uint8_t reserved[2];
 } _PyIRPhaseSite;
 
 typedef struct {
@@ -473,6 +504,8 @@ enum {
 #define _PyIR_PHASE_PUBLISHED (1u << 8)
 #define _PyIR_PHASE_STATUS_SHIFT 9
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
+#define _PyIR_PHASE_CAPTURED (1u << 11)
+#define _PyIR_PHASE_CREATED (1u << 12)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -534,10 +567,13 @@ typedef struct {
     const _PyIRPhaseRange *ranges;
 } _PyIRHomeView;
 
-/* Returns zero before reading homes if the active publication is not covered.
+/* Returns NONE before reading homes if the active publication is not covered.
+ * Candidate authority permits the NULL-shadow comparison only. MUST_READABLE
+ * proves every selected canonical home is initialized on every predecessor;
+ * unconverted control/index roles cannot acquire that authority from owner bits.
  * A successful lookup selects a shape; it does not compare runtime values. */
-PyAPI_FUNC(int) _PyIR_GetFrameHomeView(struct _PyInterpreterFrame *frame,
-                                    _PyIRHomeView *out);
+PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
+    struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);
@@ -572,6 +608,9 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
+
+/* Cold specialization/instrumentation preserves the image's virtual inputs. */
+PyAPI_FUNC(int) _PyIR_CallRoleHandler(int handler, int opcode);
 
 /* The opcode that sys.monitoring sees the word as: the base opcode, except
  * for a fused compare-and-jump, which is a conditional jump

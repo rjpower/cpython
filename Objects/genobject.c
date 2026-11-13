@@ -1140,9 +1140,8 @@ PyTypeObject PyGen_Type = {
 };
 
 static PyObject *
-make_gen(PyTypeObject *type, PyFunctionObject *func)
+make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
 {
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
     int slots = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
     if (gen == NULL) {
@@ -1164,17 +1163,18 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
 }
 
 PyObject *
-_Py_MakeCoro(PyFunctionObject *func)
+_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
 {
-    int coro_flags = ((PyCodeObject *)func->func_code)->co_flags &
+    /* The executing frame pins code independently of mutable func_code. */
+    int coro_flags = code->co_flags &
         (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
     assert(coro_flags);
     if (coro_flags == CO_GENERATOR) {
-        return make_gen(&PyGen_Type, func);
+        return make_gen(&PyGen_Type, func, code);
     }
     if (coro_flags == CO_ASYNC_GENERATOR) {
         PyAsyncGenObject *ag;
-        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func);
+        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func, code);
         if (ag == NULL) {
             return NULL;
         }
@@ -1186,7 +1186,7 @@ _Py_MakeCoro(PyFunctionObject *func)
     }
 
     assert (coro_flags == CO_COROUTINE);
-    PyObject *coro = make_gen(&PyCoro_Type, func);
+    PyObject *coro = make_gen(&PyCoro_Type, func, code);
     if (!coro) {
         return NULL;
     }
@@ -1241,10 +1241,17 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     /* Like RETURN_GENERATOR, discard the first None input instead of using
      * the ordinary frame initializer's default slot zero. */
     f->f_frame->return_slot = IR_NO_DST;
-    _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame);
+    _PyIRHomeView copy_view;
+    _PyIRHomeAuthority copy_authority =
+        _PyFrame_GetCopyViewUnderNullControl(f->f_frame, &copy_view);
+    _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame,
+                  &copy_view, copy_authority);
     gen->gi_frame_state = FRAME_CREATED;
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
+    f->f_capture = copy_view;
+    f->f_capture_authority = (uint8_t)copy_authority;
+    frame->phase_state = _PyIR_PHASE_CAPTURED;
     assert(PyObject_GC_IsTracked((PyObject *)f));
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;

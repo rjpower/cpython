@@ -84,6 +84,26 @@ _PyIR_BaseOpcode(int handler)
     return _PyOpcode_Deopt[handler];
 }
 
+int
+_PyIR_CallRoleHandler(int handler, int opcode)
+{
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    assert(opcode >= 0 && opcode < IR_NUM_HANDLERS);
+    unsigned int holes = _PyIR_FormatOf(handler)->call_input_holes;
+    if (holes == 0 || opcode >= IR_FIRST_ONLY_HANDLER ||
+        (_PyIR_FormatOf(opcode)->flags & _PyIR_TRANSPARENT))
+    {
+        return opcode;
+    }
+    assert(opcode >= 0 && opcode < 256);
+    assert(holes == _PyIR_CALL_HOLE_SELF ||
+           holes == (_PyIR_CALL_HOLE_SELF | _PyIR_CALL_HOLE_KWARGS));
+    int row = (holes & _PyIR_CALL_HOLE_KWARGS) != 0;
+    int selected = _PyIR_CallRoleHandlers[row][opcode];
+    assert(selected != 0);
+    return selected;
+}
+
 /* The value of the field at loc of word */
 static inline uint32_t
 read_field(_PyIRWord word, int loc)
@@ -390,7 +410,7 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    return opcode;
+    return _PyIR_CallRoleHandler(handler, opcode);
 }
 
 int
@@ -614,7 +634,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     return _PyIR_SHADOW_EXACT;
 }
 
-int
+_PyIRHomeAuthority
 _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
 {
     unsigned int published = frame->phase_state;
@@ -622,7 +642,7 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
         (published >> _PyIR_PHASE_STATUS_SHIFT) == 3 || frame->f_executable == NULL)
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     PyCodeObject *co = frame->f_executable;
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
@@ -633,14 +653,14 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
         scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     uintptr_t pc = (uintptr_t)frame->instr_ptr;
     uintptr_t start = (uintptr_t)exec->words;
     if (pc < start || pc - start >= (size_t)exec->nwords * sizeof(_PyIRWord) ||
         (pc - start) % sizeof(_PyIRWord))
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
     uint8_t phase = (uint8_t)published;
@@ -658,9 +678,14 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         }
     }
     if (low == plan->nphases || sites[low].site != site || sites[low].phase != phase) {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     const _PyIRPhaseSite *row = sites + low;
+    if (row->authority != _PyIR_HOME_SHADOW_CANDIDATE &&
+        row->authority != _PyIR_HOME_MUST_READABLE)
+    {
+        return _PyIR_HOME_NONE;
+    }
     /* The immutable builder validates and orders ranges once. Readers borrow
      * this geometry; they do not construct a second decoder or revalidate it. */
     assert(row->first <= plan->nranges && row->count <= plan->nranges - row->first);
@@ -671,14 +696,15 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         .nranges = row->count,
         .ranges = ranges,
     };
-    return 1;
+    return (_PyIRHomeAuthority)row->authority;
 }
 
 uint8_t
 _PyIR_ShadowFramePhase(_PyInterpreterFrame *frame)
 {
     _PyIRHomeView view;
-    if (!_PyIR_GetFrameHomeView(frame, &view)) {
+    _PyIRHomeAuthority authority = _PyIR_GetFrameHomeView(frame, &view);
+    if (authority == _PyIR_HOME_NONE) {
         return _PyIR_SHADOW_UNCOVERED;
     }
     const _PyIRPhaseRange *ranges = view.ranges;

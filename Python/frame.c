@@ -9,6 +9,125 @@
 #include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
+_PyIRHomeAuthority
+_PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
+{
+    if (frame->phase_state & _PyIR_PHASE_CAPTURED) {
+        if (frame->phase_state != _PyIR_PHASE_CAPTURED) {
+            return _PyIR_HOME_NONE;
+        }
+        PyFrameObject *f;
+        if (frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
+            f = (PyFrameObject *)((char *)frame -
+                offsetof(PyFrameObject, _f_frame_data));
+        }
+        else if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
+            f = frame->frame_obj;
+        }
+        else {
+            return _PyIR_HOME_NONE;
+        }
+        if (f == NULL || f->f_frame != frame ||
+            (f->f_capture_authority != _PyIR_HOME_MUST_READABLE &&
+             f->f_capture_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
+        {
+            return _PyIR_HOME_NONE;
+        }
+        *view = f->f_capture;
+        return (_PyIRHomeAuthority)f->f_capture_authority;
+    }
+    if (frame->phase_state == _PyIR_PHASE_CREATED) {
+        if (frame->owner != FRAME_OWNED_BY_GENERATOR ||
+            FT_ATOMIC_LOAD_INT8_RELAXED(
+                _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) != FRAME_CREATED ||
+            frame->f_executable == NULL)
+        {
+            return _PyIR_HOME_NONE;
+        }
+        PyCodeObject *code = frame->f_executable;
+        _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+        if (exec == NULL || frame->ir_words != exec->words ||
+            exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+        {
+            return _PyIR_HOME_NONE;
+        }
+        *view = (_PyIRHomeView){.nbindings = (uint16_t)code->co_nlocalsplus};
+        return _PyIR_HOME_MUST_READABLE;
+    }
+    return _PyIR_GetFrameHomeView(frame, view);
+}
+
+void
+_PyFrame_GetNullControlHomeView(_PyInterpreterFrame *frame, int remaining,
+                               _PyIRHomeView *view)
+{
+    static const _PyIRPhaseRange all_scratch = {
+        .begin = 0, .end = IR_MAX_SLOTS, .flags = _PyIR_PHASE_RANGE_NULLABLE};
+    int nl = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
+    *view = (_PyIRHomeView){
+        .nbindings = (uint16_t)nl,
+        .scratch_limit = (uint16_t)Py_MAX(remaining - nl, 0),
+        .nranges = remaining > nl,
+        .ranges = &all_scratch,
+    };
+}
+
+/* This development adapter is explicit: candidate/unsupported phases still
+ * rely on the initialized NULL control, not on a must-readable static proof. */
+_PyIRHomeAuthority
+_PyFrame_GetCopyViewUnderNullControl(_PyInterpreterFrame *frame,
+                                    _PyIRHomeView *view)
+{
+    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(frame, view);
+    if (authority == _PyIR_HOME_MUST_READABLE ||
+        authority == _PyIR_HOME_NULL_CONTROL_READABLE)
+    {
+        return authority;
+    }
+    _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), view);
+    return _PyIR_HOME_NULL_CONTROL_READABLE;
+}
+
+static Py_NO_INLINE void
+copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+{
+    _PyIRHomeView view;
+    _PyIRHomeAuthority authority =
+        _PyFrame_GetCopyViewUnderNullControl(src, &view);
+    src->instr_ptr++;
+    _PyFrame_Copy(src, dest, &view, authority);
+}
+
+/* Only the actual RETURN_GENERATOR marker calls this entry. The whole-image
+ * flag covers every such site, including public/synthetic image sites. */
+Py_NO_INLINE void
+_PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+{
+    PyCodeObject *code = _PyFrame_GetCode(src);
+    _PyCodeExec *exec = _PyFrame_Exec(src);
+    if (exec->semantic_plan == NULL ||
+        !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+    {
+        copy_created_generator_control(src, dest);
+        return;
+    }
+    int nl = code->co_nlocalsplus;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    src->instr_ptr++;
+    _PyFrame_CopyHeader(src, dest);
+    for (int i = 0; i < nl; i++) {
+        dest->base[i] = src->base[i];
+        src->base[i] = PyValue_NULL;
+    }
+    /* The current NULL control still requires initialized destination gaps. */
+    for (int i = nl; i < nslots; i++) {
+        dest->base[i] = PyValue_NULL;
+    }
+    dest->phase_state = _PyIR_PHASE_CREATED;
+}
+
 void
 _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
@@ -99,15 +218,39 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
     assert(frame->owner < FRAME_OWNED_BY_INTERPRETER);
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
-    _PyFrame_Copy(frame, new_frame);
+    _PyIRHomeView view;
+    _PyIRHomeAuthority authority = (_PyIRHomeAuthority)roots->home_authority;
+    if (authority == _PyIR_HOME_NONE) {
+        assert(roots->remaining == 0 && roots->homes == NULL);
+        assert(_PyFrame_GetCode(frame)->co_nlocalsplus == 0);
+        _PyFrame_GetNullControlHomeView(frame, 0, &view);
+        authority = _PyIR_HOME_NULL_CONTROL_READABLE;
+    }
+    else if (authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
+        assert(roots->homes == NULL);
+        _PyFrame_GetNullControlHomeView(frame, roots->remaining, &view);
+    }
+    else {
+        assert(authority == _PyIR_HOME_MUST_READABLE);
+        assert(roots->homes != NULL);
+        view = *roots->homes;
+        view.scratch_limit = (uint16_t)Py_MIN(view.scratch_limit,
+            Py_MAX(roots->remaining - view.nbindings, 0));
+    }
+    _PyFrame_Copy(frame, new_frame, &view, authority);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
     frame->f_executable = (PyCodeObject *)Py_NewRef(new_frame->f_executable);
     roots->remaining = 0;
+    roots->home_authority = _PyIR_HOME_NONE;
+    roots->homes = NULL;
     roots->header_mask = _Py_TRANSITION_CODE |
         (roots->header_mask & _Py_TRANSITION_EXCEPTION);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
+    f->f_capture = view;
+    f->f_capture_authority = (uint8_t)authority;
+    new_frame->phase_state = _PyIR_PHASE_CAPTURED;
     if (_PyFrame_IsIncomplete(new_frame)) {
         // This may be a newly-created generator or coroutine frame. Since it's
         // dead anyways, just pretend that the first RESUME ran:
@@ -258,6 +401,8 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
     *roots = (_PyTransitionRoots){
         .frame = frame,
         .remaining = remaining,
+        .home_authority = remaining ? _PyIR_HOME_NULL_CONTROL_READABLE
+                                    : _PyIR_HOME_NONE,
         .header_mask = _Py_TRANSITION_CODE |
             (frame->owner == FRAME_OWNED_BY_GENERATOR
                 ? _Py_TRANSITION_EXCEPTION : 0) |
@@ -294,6 +439,8 @@ _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
         frame->base[slot] = PyValue_NULL;
         PyValue_XCLOSE(ref);
     }
+    roots->home_authority = _PyIR_HOME_NONE;
+    roots->homes = NULL;
     roots->header_mask &= ~_Py_TRANSITION_LOCALS;
     Py_CLEAR(frame->f_locals);
     roots->header_mask &= ~_Py_TRANSITION_FUNCTION;

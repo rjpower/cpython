@@ -2363,15 +2363,18 @@ class IRStack(Stack):
             if lay.dst in lay.temp_fields:
                 if lay.overwrite_input is not None:
                     slot = f"IR_SLOT({FIELD_VARS[lay.overwrite_input]})"
+                    if (var.name != canonical_result
+                            and var.name != lay.canonical_result
+                            and var.name not in lay.canonical_outputs):
+                        raise StackError("same-home overwrite lost its canonical result")
+                    out.emit(f"IR_OVERWRITE_INLINE_INT_TEMP({slot}, {var.name});\n")
+                    return False
                 if self.final and self.published_temporary_result:
                     return True
                 if (var.name == canonical_result
                         or var.name in lay.canonical_outputs):
-                    if lay.overwrite_input is not None:
-                        out.emit(f"assert(PyValue_IsInlineInt({slot}));\n")
-                    else:
-                        out.emit(f"assert(PyValue_IsNull({slot}) || "
-                                 f"PyValue_Is({slot}, {var.name}));\n")
+                    out.emit(f"assert(PyValue_IsNull({slot}) || "
+                             f"PyValue_Is({slot}, {var.name}));\n")
                     out.emit(f"{slot} = {var.name};\n")
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:

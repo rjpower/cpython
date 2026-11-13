@@ -307,7 +307,7 @@
                 assert(PyValue_LongCheckExact(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_B(ir_word)), res);
+            IR_OVERWRITE_INLINE_INT_TEMP(IR_SLOT(IR_B(ir_word)), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

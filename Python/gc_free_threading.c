@@ -9,6 +9,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY()
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
+#include "pycore_transition_roots.h" // _PyGC_TraceVisitTransitionRoots()
 #include "pycore_list.h"          // _PyList_GetItemRef()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_INT_RELAXED()
@@ -852,6 +853,12 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
                     goto exit;
                 }
             }
+        }
+        if (_PyGC_TraceVisitTransitionRoots(p,
+                gc_mark_enqueue_no_buffer_visitproc, args) < 0)
+        {
+            err = -1;
+            goto exit;
         }
     }
 exit:

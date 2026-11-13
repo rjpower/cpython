@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include <stddef.h>                // offsetof
+#include "pycore_ir.h"             // _PyCodeExec
 
 #define _Py_Debug_Cookie "pyjitdbg"
 #define _Py_Debug_OffsetsSchema 1

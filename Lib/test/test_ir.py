@@ -1503,7 +1503,7 @@ class FoldTest(unittest.TestCase):
             ("LOAD_ATTR", t, (0,)),
             ("LOAD_ATTR", t + 1, (0,)),
             ("BINARY_OP_ADD", t, (t, t + 1)),
-            ("RETURN_VALUE", None, (t,)),
+            ("RETURN_VALUE_EMPTY", None, (t,)),
         ])
         o = types.SimpleNamespace(x=2, y=3)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
@@ -1511,15 +1511,15 @@ class FoldTest(unittest.TestCase):
 
     @support.requires_refcounting
     def test_return_local(self):
-        # RETURN_VALUE takes a new reference to the local before the frame
+        # RETURN_VALUE_EMPTY takes a new reference to the local before the frame
         # releases its locals
         def f(x):
             return x
         def g():
             y = [1, 2]
             return y
-        self.assertEqual(words(f), [("RETURN_VALUE", None, (0,))])
-        self.assertEqual(words(g)[-1], ("RETURN_VALUE", None, (0,)))
+        self.assertEqual(words(f), [("RETURN_VALUE_EMPTY", None, (0,))])
+        self.assertEqual(words(g)[-1], ("RETURN_VALUE_EMPTY", None, (0,)))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             o = object()
             before = sys.getrefcount(o)
@@ -1968,7 +1968,7 @@ class StoreFoldTest(unittest.TestCase):
         t = nlocalsplus(f)
         self.assertEqual(words(f), [
             ("BINARY_OP_ADD", 2, (0, 1)),
-            ("RETURN_VALUE", None, (2,)),
+            ("RETURN_VALUE_EMPTY", None, (2,)),
         ])
         self.assertEqual(t, 3)
         self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
@@ -2284,7 +2284,7 @@ class RegCfgTest(unittest.TestCase):
             return x
         self.assertEqual(words(f), [
             ("BINARY_OP_ADD", 2, (0, 1)),
-            ("RETURN_VALUE", None, (2,)),
+            ("RETURN_VALUE_EMPTY", None, (2,)),
         ])
         self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
 
@@ -2465,7 +2465,7 @@ class RegCfgTest(unittest.TestCase):
             ("BINARY_OP_ADD", t, (0, 1)),
             ("BINARY_OP_ADD", t + 1, (2, 3)),
             ("BINARY_OP_MULTIPLY", t, (t, t + 1)),
-            ("RETURN_VALUE", None, (t,)),
+            ("RETURN_VALUE_EMPTY", None, (t,)),
         ])
         self.run_specialized(lambda: self.assertEqual(f(1, 2, 3, 4), 21))
 

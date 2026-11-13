@@ -78,7 +78,11 @@ class EmptyReturnTests(unittest.TestCase):
                                   lambda code, offset, value: seen.append((code, value)))
         try:
             for general in (False, True):
-                words = ([("LOAD_CONST", 1)] if general else [])
+                # A real entry prologue makes this a complete instrumentable
+                # image; the raw fixture otherwise has no RESUME entry.
+                words = [("RESUME", 0)]
+                if general:
+                    words.append(("LOAD_CONST", 1))
                 words += [("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
                 for code in routes(make_code(words)):
                     function = types.FunctionType(code, {})

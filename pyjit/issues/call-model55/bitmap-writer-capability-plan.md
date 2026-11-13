@@ -142,3 +142,27 @@ Static native lookup callers pass the explicit native capability, while its
 actual bytecode adapter passes the active frame. This must be priced in native
 dumps for the common static/bitmap contract; no claim that an outlined extra
 argument is optimized away. Native conservative C-owner policy is unchanged.
+
+## Escaping helper classification
+
+The existing analyzer's `IR_MARKER_EFFECTS` also identifies protocols whose
+emitter owns publication. `IREmitter.emit_SimpleStmt` suppresses ordinary
+escape spilling/reloading for those markers. The builder and lookup adapters
+are ordinary escaping helper calls: adding their names to that table without
+separating this distinction would silently remove the existing callback
+publication contract.
+
+Before source freeze, give checked helper effects their own classification
+for `find_escaping_api_calls`, while keeping the manual-protocol suppression
+explicit. Equivalently, a DSL helper spelling recognized as an ordinary call
+can preserve the same analysis, provided its checked replacer still supplies
+the real frame/range capability. Do not implement a second spill path inside
+the adapters. Fixed output writes have no callback of their own; their source
+statement retains any independently detected escaping value expression.
+
+The first shared hunks are therefore analyzer helper-effect classification,
+the existing emitter's write/helper replacers and declared-array address
+resolution, then the actual bytecode callsites. The static helper signatures
+and their bitmap equivalents must land together before deleting their source
+bridge entries. IR and frames freeze those exact hunks after delegated source
+is committed; no B or integrated source changes are authorized by this note.

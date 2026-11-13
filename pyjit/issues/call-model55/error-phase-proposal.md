@@ -126,6 +126,59 @@ cleanup, explicit origin, one selected cursor and separate lasti/exception
 roles. Frames' metadata-only active selection and explicit M2 transfer
 conditions are incorporated above. Detailed ABI remains pending source freeze.
 
+## Bounded scope ABI for the next freeze
+
+Reserve transition kind 3 for active ERROR selection. Reuse the existing
+40-byte node and its `homes`/`remaining` fields, with a reached helper's
+16-byte view. Here `home_authority` describes the active frame's readable
+selection, not an external owner. Header mask, result and prefix authority
+are zero. The external transition visitor must explicitly skip this kind;
+active frame traversal and heap-container subtraction use the common selected
+view. Push validation must distinguish this metadata node from an owning
+retirement node: its code lifetime is backed by the active frame's real pin,
+not a fictitious CODE owner bit.
+
+Proposed reached entry: `_PyEval_ProcessError(tstate, frame, origin,
+checkpoint, value_temps)`, returning the existing two-word `_PyIRStepResult`.
+The checkpoint packs only an emitted finite phase/variant. `origin` is the
+explicit immutable word identity captured before bridges; `value_temps` is
+the existing native workspace, not a new arena owner bank. Enter before
+`JUMP_TO_LABEL` finishes bridges. The helper loops through propagation and
+owns the view/node until handled continuation or final exit. On return the
+handler reloads current frame, homes and continuation; no pointer into helper
+storage survives. A failed handled callback selects a new checkpoint before
+its next reentrant action. This preserves ordinary tail-call parameters and
+adds no addressed record to successful handlers.
+
+A dedicated cold ERROR-scope phase marker can dispatch common selection to
+the owning node. Its bit and exact entry signature remain unallocated until
+IR/frames review. Lookup first checks the current thread's chain; foreign
+thread lookup requires the GIL or actual interpreter stop-the-world and
+searches that interpreter's thread chains by exact frame identity. Merely
+having PUBLISHED set, or using the collector's current TLS, is insufficient.
+An unstopped FT foreign-frame lookup reports NONE unless a real frame read
+claim also protects the node. Existing root walks that already know the
+owning thread should supply that context to the same cold lookup, rather
+than repeat a thread search. No generic lookup runs on an ordinary inline
+instruction.
+
+At terminal drainage the helper passes a bindings-only view and current
+cursor into actual M2 retirement before unlinking the metadata node. Current
+THREAD `TryClearExceptCode` and association initialization assume scratch
+already empty and select only L; heap/generator paths select N. This is not
+a general scratch-retirement contract. The error handoff must explicitly
+preserve its selected extent through association takeover and all remaining
+closes; code remains fixed-last. General RETURN needs the same explicit
+extent sharing, separately from the empty-return fast form. No proposed
+error selector authorizes a full-N load from stale scratch.
+
+Cost to price: one error-only helper call and literal checkpoint, one
+40-byte linked metadata node plus a 16-byte helper-local view, and cold
+owning-thread lookup where needed. Checkpoints/ranges add code-owned storage.
+There is no new hot frame field, ordinary handler record, count operation or
+tail-call argument. Native prologue/spill effects still require root's
+generated/native inspection; source placement alone does not prove no cost.
+
 ## First cold admission increment: retained absence
 
 The captured `CoroutineTest.test_await_11.<locals>.foo` image has an exception

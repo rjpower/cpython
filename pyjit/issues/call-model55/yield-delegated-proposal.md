@@ -260,10 +260,10 @@ literal `_PyIR_PHASE_YIELD_DELEGATED` bit13, not the general active-phase
 PUBLISHED encoding. Both frames and GC consumer packets have source reviews;
 combined generation and native validation still depend on the IR packet.
 
-The IR draft lowers frontend YIELD_VALUE1 to IR-only handlers361/362 before
+The IR draft lowers frontend YIELD_VALUE1 to IR-only handlers 361/362 before
 physical allocation. Its logical3-in/3-out transport retains receiver and
 cursor, but a checked metadata-only input1 has no encoded home read. The word
-is A=resume recipient, B=outgoing, C=unused0, D=retained receiver. B/D stay
+is A=resume recipient, B=outgoing, C=unused, D=retained receiver. B/D stay
 scratch inputs; no contiguous receiver/cursor/outgoing layout is required.
 
 SEND.A belongs to its completion route. The actual yielded route publishes
@@ -273,7 +273,7 @@ the complete family must agree. The current four parsed source contracts are
 a bounded bridge to the shared emitter events, not whole-family ownership
 coverage. Changed helper/window/body transport revokes the receipt.
 
-The common admission worklist carries one16-byte pending pair per block and
+The common admission worklist carries one 16-byte pending pair per block and
 one working pair. All predecessors must establish the same D/B roles; distinct
 SEND origins may agree on roles without claiming object equality. Missing or
 opaque paths lose the certificate. SWAP remaps the role homes; COPY does not

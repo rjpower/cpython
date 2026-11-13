@@ -442,3 +442,21 @@ window/folded/result-offset/observer semantics. Corrected combined source has
 both IR and GC GO; all five host parser checks pass, including mixed helper
 and preprocessing fallthrough negatives. Root retains merge/regeneration
 ownership. No new runtime result follows from these source checks.
+
+The next urgent CALL repair checks actual independent child transport for
+LOAD_ATTR property/getattribute variants. A distinct normal-event bit permits
+only their certified outside-parent footprint; the reached SAVE_STACK checks
+the actual consumed-input drain, and family closure still applies. The five
+source/test files are ready for final peers, GC gives source GO, and the host
+parser-only test, AST checks and diff check pass. Native and emitted-receipt
+checks remain root work. See implicit-child-transport-proposal.md.
+
+The six-file GC abrupt-prefix packet also has frames lifecycle/source GO:
+actual suspension release supplies a separate A/B cutoff certificate, EH
+imports only incoming NO_HOME below its own floor, and unknown source or
+unreached protected ingress remains an independent poison predecessor. No
+readability, normal completion or pending SEND role is inherited.
+
+The disjoint child packet is committed 5f2d245b96d after root, GC and IR actual
+source GO. It contains exactly five source/test files and leaves P clean.
+Emitted family receipts and native validation remain coordinator work.

@@ -60,17 +60,25 @@ focused cases per role, but still lose the hot screen. Explicit CALL roles
 are merged/generated; initial freezing exposes admission, generator-geometry
 and FBARG decoder defects. Geometry, replay, post-method-promotion fallback,
 fused-branch cleanup, consumed tails and iterator completion are repaired
-through `863b6d0cb08`. The super instrumentation proof is integrated. A missing
-WINDOW guard briefly regressed admission; the guarded correction restores all
-five bootstrap passes and 25/26 broader compile-only passes. Full release now
-gets past site initialization, then rejects `shutil.copymode`; debug is not
-attempted. Remaining shared proof gaps are a disjoint implicit child in
-LOAD_ATTR and retained-prefix absence across coroutine exception entry.
-Complete release/debug builds and runtime qualification remain pending. Complete
-static authority and the physical-bitmap rival remain open. Bitmap source
-`853bd363ce1` regenerates without changes, builds its native freezer and matches
-the five bootstrap plus 25/26 compile-only results. This is not a complete
-module build, authority switch or performance result. Shared storage
+through `e75b7088b12`. Independent implicit-child and exceptional-prefix
+proofs now pass source perturbation checks. Both release and debug complete
+117 modules/79 shared with no import failure. The first 11-module release
+focus runs 88 tests: 8 modules pass and 3 expose fixture/return-contract gaps.
+A separate debug run passes those 8 modules (41 cases). Corrected CALL fixtures
+and the async-loop completion receipt then run 51 release cases: CALL roles and
+EH-prefix modules pass; one malformed source-negative fixture and the existing
+empty-only return contract remain failures. Their fixes/design are active.
+These are failed integration runs, not green qualification.
+
+The five bootstrap plus 26/27 broader source images pass. Successive coroutine
+probes move past held-yield and async-exit gaps to a nested async comprehension;
+GET_ANEXT's exceptional operand confinement remains unproved. The next packet
+uses a general emitted error-footprint capability, not a per-test exception.
+Explicit delegated-yield source/lifecycle/remote packets are reviewed and
+committed separately, pending composition. Static authority and the complete
+physical-bitmap comparison remain open. Bitmap `853bd363ce1` retains its older
+five bootstrap plus 25/26 compile-only pass, without full build/tests/timing.
+No new performance result or golden selection follows from this work. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and

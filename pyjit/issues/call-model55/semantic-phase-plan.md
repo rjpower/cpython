@@ -3,10 +3,11 @@
 Status: active model55 source, with NULL homes and conservative arena scanning
 still authoritative. The first phase composition through `ed08ab64c7e` has
 both-role focused, native and performance evidence. Later copy/created/return
-ports have focused evidence. CALL normal-transport source through
-`863b6d0cb08` is not runtime-qualified: five bootstrap images and 25/26 broader
-compile-only checks pass, while the full release build rejects shutil.copymode.
-Disjoint implicit-child and coroutine EH-prefix proofs remain incomplete. The
+ports have focused evidence. The integrated disjoint-child/EH-prefix source
+`5cc8b675e3d` builds both roles; complete qualification remains open. The next
+async-exit admission bridge is `0ac9e26413c`. Explicit delegated suspension is
+source-reviewed in `30a3dd63963`, composed with that integrated base in
+`6063d7c6385`, and still awaits merged generation and native qualification. The
 [report](report.md) owns exact results; the [ledger](implementation.md) owns
 stage completion. This document describes implemented contracts and separates
 remaining M4 requirements. The [target model](../../design/proposals/register-call-model55.md)
@@ -190,6 +191,127 @@ representation. Position stripping must not change ownership or exception
 coverage. A malformed source container cannot silently grant coverage. Remote
 value readers additionally need stopped-target/read-claim authority; a running
 PC sample is not permission to read homes.
+
+## Next source packet: ordinary abrupt confinement
+
+The root's generated census at `863b6d0cb08`, retained as
+`call-normal-coverage.json`, contains 324 named contracts and 64 without an
+ownership program. That count is a normal-transport inventory, not a count of
+complete maps: a normal drain receipt says nothing about an intervening
+callback, error, poll or suspension. Regenerate the census from source for each
+composition rather than maintaining a second instruction list here.
+
+The immediate consumer is the existing exceptional-prefix worklist. A held
+call hole below GET_ANEXT's receiver is lost because the current abrupt
+capability covers suspension only. The next packet must establish general
+operand confinement from shared emission, without copying GET_ANEXT's C body.
+It proposes the following division; names and the metadata encoding require
+root freeze before implementation.
+
+- `IRStack` records the actual homes used by load, TAKE, consume, store,
+  vacate and output movement. Explicit folded fields and window positions are
+  distinct. `IREmitter` records the error stack flush at `error_if`,
+  `goto_error` and `error_no_pop`, including bridge cleanup and any restore.
+- Helper capabilities describe their ownership interface, independently of
+  callback effects: no arena writes, a declared input/output range, an
+  independent child reservation, an overlapping child reservation, or a
+  terminal transfer. Ordinary escaping helpers still spill, publish PC and
+  reload through the existing callback machinery. They do not enter the
+  manual-protocol marker set merely to obtain a capability.
+- The first ordinary helper is `_PyEval_GetANext`: it receives a native object
+  derived from a declared value and returns a native owned object. It receives
+  no frame or home pointer. Check argument provenance and reject raw home
+  pointers, aliases, address escapes, unsupported home helpers and manual
+  terminals. A renamed instruction with the same checked transport qualifies;
+  an opaque helper or extra alias write does not.
+- Only complete actual error-exit receipts can produce the cold confinement
+  capability. Its conservative floor includes every scratch operand the
+  emitted input/output/error transport can write, including the window base
+  and explicit recipient. The EH merge retains only incoming NO_HOME below
+  that floor and the handler's clear floor. It grants no NULL, initialization,
+  readable range, owner, normal drain or pending SEND tuple fact.
+
+This adds no runtime lookup, publication store, frame field or per-code
+allocation. It reuses the existing per-block full-extent vectors and abrupt
+work vector. Cold metadata and helper-contract maintenance are real costs;
+the source gate must report unsupported routes instead of silently treating
+them as ordinary helpers. Tests must mutate a helper argument to a home
+pointer, add a hidden write, remove an error receipt and add an unsupported
+exceptional predecessor. Held-hole positives and live-prefix negatives must
+use constructor, replace, marshal and execution-image admission.
+
+## Closing general maps with the same transport graph
+
+The whole-body bridges for suspension, async exit and independent child entry
+are temporary admission guards. Replace them through shared primitives, not
+another instruction verifier. The writer packet's checked fixed-index output
+publications and builder adapters are the first such primitives; subsequent
+array TAKE/write loops need one bounded index proof shared by every caller.
+All generated home reads and writes must flow through that interface before
+the bitmap and static-map implementations can claim equivalent coverage.
+
+The same transport graph must then supply these consumers:
+
+1. Normal successors and reached callback snapshots use actual input owners,
+   native detached owners, output publication and close progress. Publish a
+   literal family-local phase only at the callback/poll/escape boundary.
+   Repeated loops use an explicit prefix/cursor record, not a new phase store
+   for every element. Unsupported boundaries publish zero.
+2. Child entry records whether reservation overlaps the parent's arena.
+   Overlapping CALL argument homes transfer authority to the child; independent
+   attribute children preserve the parent outside their declared input/result
+   homes. Parent WAIT, staged bindings and native provider ranges cannot all
+   claim the same edge. Post-effect misses forward the already prepared state.
+3. Abrupt checkpoints retain an explicit failing site and the actual partial
+   transport before bridge cleanup, traceback callbacks and error monitors.
+   An outlined error processor owns that selected view and its changing clear
+   cursor through handler installation. A normal final flush is not an abrupt
+   checkpoint; RERAISE's changed public PC is not the failing site.
+4. General RETURN retires remaining frame-owned homes through the reached
+   M2 root/result/code-pin protocol. A separately proved EMPTY form keeps the
+   current small path. Logical absence, physical NULL and complete readable
+   shape remain different predicates.
+
+Every canonical family, specialization, monitoring twin, redispatch and static
+entry image needs positive coverage for its actual routes. An event's presence
+does not close the family. Coverage reports must include each callback/error
+exit and poison a permission when one route is unsupported. Instrumentation
+must preserve canonical operand/protocol families through LINE and INSTRUCTION
+wrappers as well as their event twins.
+
+At a join, MAY_OWNER remains a union of obligations and readable initialization
+remains a must-fact. Their union cannot authorize a home read. Before authority
+switch, prove a common readable shape, normalize it through checked compiler
+transport, or reject that image. If ordinary compiler output needs a nullable
+shape, provide actual NULL/validity semantics for it and price the extra writes;
+do not project candidate ranges into MUST_READABLE or retain NULL-control as a
+permanent fallback.
+
+## Separating semantic recovery from optional positions
+
+A bounded representation to review next is a versioned semantic container in
+the existing `co_exceptiontable` bytes: the actual EH ranges plus recovery
+records `(from, to, edge, handler, exc_slot, lasti)`. This avoids adding a second
+code-object pointer or a second plan. The compiler emits those records from
+its semantic edges. The common constructor admits them, marshal/frozen paths
+carry them, and the existing code pin retains them. One shared cold decoder
+serves admission, the semantic plan, observer recovery and error processing.
+
+`co_linetable` then contains optional locations only. Source-event positions
+can refer to semantic records by their stable order; line/column removal cannot
+remove or invent a recovery edge. Observer line selection may lose locations
+when positions are stripped, but exception/ownership behavior cannot change.
+Update all producers/readers and the format version together; do not read old
+recovery triples from IRSM as a fallback. The header/section bytes and cold
+decode work must be measured. This is a proposal, not an implemented format.
+
+The resulting runtime work to remove is concrete: inactive-scratch copying and
+scanning, per-home owner classification at retirement, and scratch clearing
+done solely to make unselected homes readable. The recurring replacement costs
+are reached phase stores, range/cursor iteration, binding validity checks,
+code-plan bytes and preparation work. Native roots remain governed by their
+selected policy. None of these removals is authorized merely by a successful
+normal admission census.
 
 ## Remaining M4 gates
 

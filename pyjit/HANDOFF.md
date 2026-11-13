@@ -141,37 +141,45 @@ Never stage, reset or delete unrelated preexisting files:
 
 ## Latest normal-transport qualification boundary
 
-Integrated `863b6d0cb08` includes window results, folded inputs, super observer
-footprints and the corrected WINDOW-only extent rule. Native freezer checks
-pass five bootstrap images plus 25/26 broader compile-only images. Full release
-build now passes site, then rejects shutil.copymode at virtual SELF home 7;
-debug is not attempted. CoroutineTest.test_await_11.foo rejects virtual SELF
-home 3 after CLEANUP_THROW. Frames owns actual disjoint-child transport;
-GC owns positive exceptional-prefix absence. Root owns native execution.
-No new timings are valid. Evidence: `E/call-window-scope-freezer-commands.json`,
-`E/call-normal-transfer-checkpoint-release-build.log`, and
-`E/call-last-admission/{commands.json,full-decoded.txt,source-commands.json}`.
-The coroutine has exactly one IRSM record, from 8/to 9/edge 0, with handler=-1;
-its executable EH entry at YIELD targets 15, cutoff 4. Source positions grant no
-proof.
+Integrated `e75b7088b12` has actual normal disjoint-child, exceptional-prefix
+and async-loop completion receipts, plus fixture repairs. Both release/debug
+builds complete 117/79 with no import failures; native build identity is e75.
+Evidence: `E/call-async-exit-checkpoint-{build-commands.json,*-build.log}`.
+The earlier 5cc composition also completes both builds. Its 11-module release
+focus runs 88 cases and fails 3 modules; separately 8 modules/41 cases pass debug.
+Post-repair four-module release runs 51 cases and fails only the general-return
+contract and a malformed generator-negative fixture. No full CALL qualification
+or new timing is established. See `E/call-disjoint-eh-{focused,failure-detail,
+eight-debug}*` and `E/call-async-exit-repaired-release*`.
 
-Bitmap source/builds are `BASE/worktrees/call55-bitmap` and
-`BASE/call55-bitmap-{release,debug}`. Both use the integrated configuration
-arguments. Root merge `853bd363ce1` preserves the rival's native-entry,
-write/take/vacate and writer-helper ports. Actual peer review caught and
-restored a dropped emitter hunk before generation. Regeneration is unchanged;
-native freezer and five bootstrap plus 25/26 broader checks pass. Evidence:
-`E/bitmap-call-window-merge-{regen,freezer}-commands.json`.
-No complete bitmap module/test pass, stale-scratch switch or performance
-comparison exists. The exact AST/IO writer bridge must be replaced by explicit
-emitter capabilities before M5/M7 selection.
+The current freezer passes 5 bootstrap and 26/27 broader sources. The coroutine
+module first rejects a nested async comprehension CALL 44 with held SELF 7:
+GET_ANEXT 22 at B10 can raise to END_ASYNC_FOR 35 but has no general abrupt-prefix
+receipt. Earlier held-yield/CLEANUP_THROW and matched async-exit cases now pass.
+Evidence: `E/call-async-exit-next/{commands.json,gdb.log,decoded.txt}`.
+Normal-only output/drain receipts cannot prove that exceptional ingress.
 
-Delegated YIELD source is still split among P da0c629bfeb, G 16f465dc0e5 and
-dirty W. Compose only after actual matching IR generation/source peers. Do not
-build an isolated lifecycle component. S7 stale-view generation found missing
-borrow suppression in the new format; the corrected draft passes host
-generation of cases/targets/metadata and explicit SEND/delegated event checks.
-Evidence is `E/delegated-source-smoke/{check.py,check.log,contracts.json,identity.json}`.
-The first two root harness retries had setup errors and supply no pass evidence.
-Error scope and bitmap-writer cleanup designs are reviewed directions with
-explicit unresolved source ABI gates, not completed authority switches.
+GC/IR/frames are freezing general RETURN plus positively selected EMPTY under
+[general-return-proposal.md](issues/call-model55/general-return-proposal.md).
+Actual THREAD Try/association retirement currently clips to L, so removing only
+the constructor's leftover-owner rejection would leak in release/assert debug.
+Port the actual full-N general route and root/capture extent. Preserve EMPTY's
+hot body and keep physical NULL distinct from logical absence.
+
+Delegated source is W 6063d7c6385 (contains isolated 30a3 and EH composition),
+frames P da0c629bfeb, consumers G 16f465dc0e5 plus remote follow-up 159ada57ad2.
+Merge matching packets together after current normal/abrupt fixes; preserve
+case1 result-bit1/disjoint-bit2 handling and exceptional UNKNOWN tuple wrappers.
+Review has closed SEND suffix/helper-source, instrumentation remap/twin shadow,
+unused C and discarded resume-recipient lookup mismatches. Root host smoke
+predates the final fixes; regenerate and test the actual composition.
+
+Bitmap source/builds remain `BASE/worktrees/call55-bitmap` and
+`BASE/call55-bitmap-{release,debug}`. Source 853bd363ce1 regenerates unchanged,
+native freezer passes 5+25/26 broader images. No complete module/test pass,
+stale-scratch switch or performance comparison exists. Root's earlier merge
+restored emitter ports caught by peers before generation. The exact AST/IO
+bridge must be replaced by actual emitter capabilities; P now implements the
+fixed-index/helper packet with ordinary callback effects retained. No new
+bitmap source/native result is claimed. Absorb current static ABI before
+comparison. Do not copy old runtime-worktree documentation over canonical docs.

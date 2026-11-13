@@ -4,18 +4,21 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-Latest broad measurement: shared-emitter phase composition `ed08ab64c7e`.
-Both roles pass 675 core, nine phase and nine selected generated-contract cases
-(overlapping groups). All29 versus upstream is 1.165467, six faster; the
-selected54 hot screen loses DeltaBlue 5.5% and silent logging 15.2%. PMU shows
-36.8% more DeltaBlue instructions than upstream. This is a preparatory
-integration under NULL authority, not a performance winner. Selected-home
-copy/escape and explicit CALL roles are next; complete static and bitmap
-representations remain unimplemented. Newer copy/escape197fd and pinned-code
-allocation8f656 have focused passes and mixed/worse selected54 hot screens;
-their exact results follow below. Certified empty-created copying passes its
-lifecycle and generated-contract checks but remains slower than54. Its explicit
-created-state collector composition is building. No new golden has been selected.
+Latest qualified runtime port: vacant return recipients `91269fba2ce`, with
+both-role focused and hot-set evidence below. The newer explicit CALL-role
+composition remains under qualification. At `863b6d0cb08`, bootstrap freezing
+passes, but full release rejects shutil.copymode and broader compilation finds
+missing shared attribute-child and exceptional-prefix proofs. Both repairs
+have passed source review; combined generation and runtime checks follow.
+The bitmap rival reaches the same compile-only boundary. Neither candidate
+has switched away from NULL scratch authority or earned golden admission.
+
+Latest broad performance remains `ed08ab64c7e`: direct all29 versus upstream
+is 1.165467, with six faster. The selected54 hot screen loses DeltaBlue 5.5%
+and silent logging 15.2%; matched DeltaBlue PMU shows 36.8% more instructions
+than upstream. Newer port results below are separate campaigns. Do not apply
+those ratios to unqualified source or infer an isolated causal improvement.
+The full static/bitmap comparison and final selection remain open.
 
 ## M1a: independent typed metadata owners
 
@@ -816,7 +819,7 @@ the folded-input extent rule was applied to nonwindow peek operations, making
 them destroy unrelated absence facts. `863b6d0cb08` limits that rule to WINDOW
 formats. The corrected sweep passes all five bootstrap images and 25/26 broader
 images. Full release then reaches build-details generation after site imports,
-and rejects shutil.copymode at CALL word 50, virtual SELF7; debug is not
+and rejects shutil.copymode at CALL word 50, virtual SELF 7; debug is not
 attempted. These are admission failures, not behavioral test failures.
 
 Retained GDB images isolate two remaining mechanisms: LOAD_ATTR specializations
@@ -838,3 +841,88 @@ resolving the merge before generation/native execution. Evidence:
 `E/call-last-admission/{commands.json,full-decoded.txt,source-commands.json}`,
 and `E/bitmap-call-window-merge-{regen,freezer}-commands.json`.
 The broader probe list now includes shutil before another complete build.
+
+
+### Broader source checks before the combined repair
+
+At unchanged `863b6d0cb08`, compilation passes 183/189 standard-library entry
+modules. The six rejected images share the missing attribute-child contract,
+including local-result consumption and untouched sibling homes. A separate
+486-file top-level test-source sweep passes 452 under the freezer. Nineteen
+Unicode-name errors and three SystemErrors are repeated using the same
+candidate's fresh native Python with unicodedata available: 21 pass and one
+reveals another attribute-transport rejection. Thus 473/486 sources compile
+across those appropriate compiler contexts; 13 still reject ownership proof.
+These are compile-only checks, not executed behavioral test counts or a full
+module-build qualification. They broaden the general proof cases before
+another expensive integration build.
+
+Commands, errors, source/native identity, output hashes and decoded rejected
+images are retained in `E/call-stdlib-admission` and
+`E/call-test-source-admission`. Generated probe headers are hashed then removed.
+The latter's `native-service-commands.json` records the corrected service
+context. The first freezer SystemErrors remain recorded, not called runtime
+regressions or hidden passes. Normal/EH owner-map authority remains incomplete.
+
+
+### Native builds and focused CALL integration
+
+Actual disjoint-child transport integrates at `db130c070d2`, exceptional-prefix
+at `9cf9348293e`, and regenerated metadata at `5cc8b675e3d`. Three host source
+checks pass, including both actual property/getattribute and suspension twins,
+invalid constructor/publication mutations and family revocation. Native
+freezer passes five bootstrap plus 26/27 broader images, now including shutil.
+Both full builds check 117 modules, 79 shared, no failed imports. The original
+held-yield coroutine case passes; a later async-loop case remains unproved.
+
+The 11-module release focus runs 88 cases, fails three modules: four stale
+opcode-form assertions, an invalid scratch window destination, invalid IRSM
+location setup, a cleared synthetic SWAP endpoint, and a remaining-owner
+RETURN. The eight passing modules also pass debug (41 cases). Test repairs
+preserve the intended positive/negative contracts: true identity fusion,
+explicit POP_ITER admission, valid window output placement, exact 0/2/16 and
+separate 33 EX forms, real arena native prepending, proper location data and an
+initialized SWAP endpoint. No production contract is weakened to pass them.
+
+Actual async-exit normal retirement integrates at `6515a4256ba`, products
+`e75b7088b12`. Host checks confirm both actual members and sibling revocation;
+the metadata diff changes only those two owner-program rows. Both builds again
+check 117/79. Four focused modules run 51 release cases: CALL roles and EH-prefix
+pass; the completion module still rejects terminal RETURN with live scratch,
+and a source-negative fixture removes required consumption and is rejected
+by the generic generator before metadata is produced. The latter fixture is
+being corrected; it is not a runtime bug. No green suite is claimed.
+
+The RETURN finding requires a real model adjustment. THREAD Try and association
+retirement select only named locals, and the old handler requires empty
+scratch. Merely deleting the constructor rejection would assert in debug and
+leak in release. The reviewed direction is general canonical RETURN with a
+real full-extent M2 retirement route and positively selected EMPTY for ordinary
+fast returns. Keep result/code roots, observer takeover and the reservation
+through cleanup; see [proposal](general-return-proposal.md). No artificial POPs
+are added to make the terminal observer fixture pass.
+
+The current coroutine probe gets further, then rejects a held SELF 7 across
+GET_ANEXT's exceptional path in a nested async comprehension. That calls for
+a shared emitted abrupt operand-confinement capability, independent of
+successful normal cleanup and complete readable maps. Broader source-only
+checks and the final static/bitmap switch remain open. No new elapsed or PMU
+result follows from these unqualified integrations.
+
+Evidence: `E/call-disjoint-eh-host.{py,log}`,
+`E/call-disjoint-eh-combined-*`, `E/call-disjoint-eh-checkpoint-*`,
+`E/call-disjoint-eh-{focused,failure-detail,eight-debug}*`,
+`E/call-async-exit-host.{py,log,json}`, `E/call-async-exit-checkpoint-*`,
+`E/call-async-exit-repaired-release*` and
+`E/call-async-exit-next/{commands.json,gdb.log,decoded.txt}`.
+
+
+At unchanged e75, the normal native compiler with unicodedata available passes
+674/678 entry/test sources: all 189 standard-library entries and 485/489 top-level
+test files. Four rejections remain: coroutines, curses, long and random. The
+latter three share conditional-expression result transport: fallthrough
+publishes NULL, taken publishes the retained value, while the current normal
+absence replay treats both as live. The coroutine gap is GET_ANEXT's abrupt
+confinement. These require shared per-edge output and error-footprint receipts,
+not per-module exceptions. Evidence: `E/call-e75-source-admission/{compile.py,
+commands.json,results.json,log}`. This compilation executes no test bodies.

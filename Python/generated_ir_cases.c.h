@@ -12030,7 +12030,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                _PyEval_FrameClearAndPop(tstate, dying);
+                temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
@@ -16662,7 +16662,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                _PyEval_FrameClearAndPop(tstate, dying);
+                temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {

@@ -223,7 +223,7 @@ class SemanticCompletionTests(unittest.TestCase):
         base = (words[site] >> 28) & 4095
         count = len(_testinternalcapi.get_co_localskinds(code)) + code.co_stacksize
         words[site] = (words[site] & ~(4095 << 28)) | ((count - 1) << 28)
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
+        with self.assertRaisesRegex(ValueError, 'invalid register window'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words), co_linetable=b'')
         table = exception_entry(site, 1, len(words) - 1, (base + 1) << 1)
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
@@ -296,7 +296,7 @@ class SemanticCompletionTests(unittest.TestCase):
         words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         base = (words[site] >> 28) & 4095
         words[entry.target] = dis.opmap['LOAD_FAST'] | (base << 28)
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
+        with self.assertRaisesRegex(ValueError, 'names local slot'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words), co_linetable=b'')
         table = code.co_exceptiontable
         malformed = (bytes([table[0] & 127]) + table[1:], table + table,
@@ -545,7 +545,8 @@ class SemanticCompletionTests(unittest.TestCase):
                                    dis.opmap['RERAISE'] | (exception << 16)]
                 def replace():
                     return code.replace(co_code=struct.pack(f'<{len(handler)}Q', *handler),
-                                        co_exceptiontable=table, co_linetable=b'')
+                                        co_exceptiontable=table, co_linetable=b'',
+                                        co_names=('attribute',))
                 if name == 'STORE_ATTR_INSTANCE_VALUE':
                     with self.assertRaisesRegex(ValueError, 'semantic completion'):
                         replace()
@@ -569,7 +570,8 @@ class SemanticCompletionTests(unittest.TestCase):
                       dis.opmap['RERAISE'] | (exception << 16)))
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_exceptiontable=table, co_linetable=b'')
+                         co_exceptiontable=table, co_linetable=b'',
+                         co_names=('attribute',))
 
     def test_handler_reuses_unwind_cleared_null_call_self(self):
         def delegate(factory):

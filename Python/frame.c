@@ -268,6 +268,7 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
             (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0) |
             (frame->frame_obj != NULL ? _Py_TRANSITION_FRAME_OBJECT : 0),
         .result_present = !PyValue_IsNull(result),
+        .kind = _Py_TRANSITION_KIND_RETIRING,
         .result = result,
     };
 }

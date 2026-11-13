@@ -6,6 +6,8 @@ import struct
 import sys
 import unittest
 from test.support import import_helper
+from test.support.ir_semantics import (observation_records, observation_tables,
+                                       semantic_parts, position_parts)
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -61,25 +63,31 @@ class CompactBoundaryTests(unittest.TestCase):
         raw = code.co_linetable
         self.assertEqual(raw[:4], b'IRSM')
         version, locations, records = struct.unpack_from('<III', raw, 4)
-        self.assertEqual(version, 1)
+        self.assertEqual(version, 2)
         self.assertGreater(records, 0)
         invalid = [b'IRSM', raw[:-1], raw + b'\0',
                    b'\x80\x80', b'\xd0\x80\x00', b'\xd0\x00\x80',
-                   raw[:4] + struct.pack('<I', 2) + raw[8:],
+                   raw[:4] + struct.pack('<I', 1) + raw[8:],
                    raw[:8] + struct.pack('<I', locations + 1) + raw[12:]]
         for data in invalid:
             with self.subTest(data=data[:16]):
                 with self.assertRaisesRegex(ValueError, 'source map'):
                     code.replace(co_linetable=data)
-        record = 16 + locations
+        semantic = code.co_exceptiontable
+        _, _, exception_size, _ = struct.unpack_from('<4sIII', semantic)
+        record = 16 + exception_size
         for field, value in ((0, -2), (1, len(code.co_code) // 8),
-                             (2, 2), (3, 0), (7, len(code.co_code) // 8)):
-            corrupt = bytearray(raw)
+                             (2, 2), (3, len(code.co_code) // 8)):
+            corrupt = bytearray(semantic)
             struct.pack_into('<i', corrupt, record + field * 4, value)
             with self.subTest(field=field):
-                with self.assertRaisesRegex(ValueError, 'source map'):
-                    code.replace(co_linetable=bytes(corrupt))
-        with self.assertRaisesRegex(ValueError, 'matching source map'):
+                with self.assertRaisesRegex(ValueError, 'semantic recovery'):
+                    code.replace(co_exceptiontable=bytes(corrupt))
+        corrupt = bytearray(raw)
+        struct.pack_into('<i', corrupt, 16 + locations, 0)
+        with self.assertRaisesRegex(ValueError, 'optional source position'):
+            code.replace(co_linetable=bytes(corrupt))
+        with self.assertRaisesRegex(ValueError, 'matching semantic recovery'):
             code.replace(co_code=code.co_code[8:] + code.co_code[:8])
         self.assertEqual(code.replace().co_linetable, raw)
         ranges = list(code.co_lines())
@@ -193,10 +201,7 @@ class CompactBoundaryTests(unittest.TestCase):
                 return 'outer'
             return 'normal'
         last_pass = func.__code__.co_firstlineno + 4
-        raw = func.__code__.co_linetable
-        _, _, locations, count = struct.unpack_from('<4sIII', raw)
-        records = [struct.unpack_from('<10i', raw, 16 + locations + i * 40)
-                   for i in range(count)]
+        records = observation_records(func.__code__)
         passes = [record for record in records if record[3] in (last_pass - 1, last_pass)]
         self.assertEqual(len(passes), 2, passes)
         self.assertEqual({record[3] for record in passes}, {last_pass - 1, last_pass})
@@ -328,10 +333,7 @@ class CompactBoundaryTests(unittest.TestCase):
                     warm(lambda: list(gen()))
                 code = gen.__code__
                 words = {i.offset: i for i in instructions(gen)}
-                raw = code.co_linetable
-                version, size, count = struct.unpack_from('<III', raw, 4)
-                records = [struct.unpack_from('<10i', raw, 16 + size + index * 40)
-                           for index in range(count)]
+                records = observation_records(code)
                 self.assertTrue(all(words[record[1]].opname != 'RESUME' for record in records))
                 seen = []
 
@@ -376,20 +378,19 @@ class CompactBoundaryTests(unittest.TestCase):
         code = gen.__code__
         words = instructions(gen)
         entry = next(i for i in words if i.opname == 'RESUME')
-        raw = code.co_linetable
-        version, size, _ = struct.unpack_from('<III', raw, 4)
-        record = struct.pack('<10i', entry.offset - 1, entry.offset, 0,
-                             code.co_firstlineno, code.co_firstlineno,
-                             -1, -1, -1, 0, 0)
+        locations, _ = position_parts(code.co_linetable)
+        record = (entry.offset - 1, entry.offset, 0,
+                  code.co_firstlineno, code.co_firstlineno, -1, -1, -1, 0, 0)
+        exceptions, _ = semantic_parts(code.co_exceptiontable)
+        maps = observation_tables(locations, [record], exceptions)
         for handler in ('RESUME', 'INSTRUMENTED_RESUME'):
             with self.subTest(handler=handler):
                 encoded = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
                 encoded[entry.offset] = ((encoded[entry.offset] & ~65535) |
                                          dis._all_opmap[handler])
-                with self.assertRaisesRegex(ValueError, 'source map.*entry RESUME'):
+                with self.assertRaisesRegex(ValueError, 'semantic recovery.*entry RESUME'):
                     code.replace(co_code=struct.pack(f'<{len(encoded)}Q', *encoded),
-                                 co_linetable=(b'IRSM' + struct.pack('<III', version, size, 1) +
-                                               raw[16:16 + size] + record))
+                                 **maps)
 
     def test_observed_delegation_dispatches_real_handlers(self):
         def leaf():

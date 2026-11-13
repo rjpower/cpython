@@ -754,4 +754,64 @@ _opcode_get_ir_contract(PyValueBorrow module, const PyValue *args, Py_ssize_t na
 
     return return_value;
 }
-/*[clinic end generated code: output=e8326d8f6574f3af input=a9049054013a1b77]*/
+
+PyDoc_STRVAR(_opcode_get_exception_entries__doc__,
+"get_exception_entries($module, code, /)\n"
+"--\n"
+"\n"
+"Return admitted (start, end, target, slot, lasti) exception entries.");
+
+#define _OPCODE_GET_EXCEPTION_ENTRIES_METHODDEF    \
+    {"get_exception_entries", _PyCFunction_CAST(_opcode_get_exception_entries), METH_VALUE|METH_O, _opcode_get_exception_entries__doc__},
+
+static PyValue
+_opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code);
+
+static PyValue
+_opcode_get_exception_entries(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyCodeObject *code;
+
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyCode_Type)) {
+        _PyArg_BadArgumentValue("get_exception_entries", "argument", (&PyCode_Type)->tp_name, PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _opcode_get_exception_entries_impl(PyValue_AsKnownObjectBorrow(module), code);
+
+exit:
+    return return_value;
+}
+
+PyDoc_STRVAR(_opcode_get_recovery_entries__doc__,
+"get_recovery_entries($module, code, /)\n"
+"--\n"
+"\n"
+"Return semantic recovery rows.\n"
+"\n"
+"Each row contains (from, to, edge, handler, exception slot, lasti).");
+
+#define _OPCODE_GET_RECOVERY_ENTRIES_METHODDEF    \
+    {"get_recovery_entries", _PyCFunction_CAST(_opcode_get_recovery_entries), METH_VALUE|METH_O, _opcode_get_recovery_entries__doc__},
+
+static PyValue
+_opcode_get_recovery_entries_impl(PyObject *module, PyCodeObject *code);
+
+static PyValue
+_opcode_get_recovery_entries(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyCodeObject *code;
+
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyCode_Type)) {
+        _PyArg_BadArgumentValue("get_recovery_entries", "argument", (&PyCode_Type)->tp_name, PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _opcode_get_recovery_entries_impl(PyValue_AsKnownObjectBorrow(module), code);
+
+exit:
+    return return_value;
+}
+/*[clinic end generated code: output=6e605283b48d51c8 input=a9049054013a1b77]*/

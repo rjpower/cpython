@@ -280,7 +280,7 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyObject *co_name = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_name;
     PyObject *co_qualname = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_qualname;
     PyObject *co_linetable = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_linetable;
-    PyObject *co_exceptiontable = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_exceptiontable;
+    PyObject *co_exceptiontable = NULL;
     PyObject *co_fbinit = NULL;
     PyObject *co_constslots = NULL;
 
@@ -501,4 +501,4 @@ code__varname_from_oparg(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=858b0ce91348a348 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7e922f7f68c138e3 input=a9049054013a1b77]*/

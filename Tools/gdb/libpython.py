@@ -716,7 +716,7 @@ def parse_location_table(firstlineno, linetable):
         version = int.from_bytes(locations[4:8].encode("latin-1"), "little")
         size = int.from_bytes(locations[8:12].encode("latin-1"), "little")
         records = int.from_bytes(locations[12:16].encode("latin-1"), "little")
-        if version != 1 or 16 + size + records * 40 != len(locations):
+        if version != 2 or 16 + size + records * 16 != len(locations):
             raise ValueError("malformed source map")
         locations = locations[16:16 + size]
     it = iter(locations)

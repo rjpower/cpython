@@ -11,6 +11,7 @@
 #include "pycore_compile.h"
 #include "pycore_intrinsics.h"
 #include "pycore_ir.h"              // _PyIR_Formats
+#include "pycore_ir_exception.h"    // shared semantic container decoder
 #include "pycore_list.h"            // PyList_GET_VALUE()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
@@ -513,6 +514,80 @@ _opcode_get_ir_contract_impl(PyObject *module)
     return _PyValue_FromObjectResult(contract);
 }
 
+/*[clinic input]
+
+_opcode.get_exception_entries
+
+    code: object(type="PyCodeObject *", subclass_of="&PyCode_Type")
+    /
+
+Return admitted (start, end, target, slot, lasti) exception entries.
+[clinic start generated code]*/
+
+static PyValue
+_opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code)
+/*[clinic end generated code: output=05d34b778bd6dfb2 input=2edb896bcdc0d4be]*/
+{
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    const unsigned char *p = semantic.exceptions;
+    const unsigned char *end = p + semantic.exceptions_size;
+    PyObject *result = PyList_New(0);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    while (p < end) {
+        _PyIRExceptionEntry entry;
+        int valid = _PyIR_ExceptionNext(&p, end, &entry);
+        assert(valid == 0);
+        (void)valid;
+        PyObject *row = Py_BuildValue("(iiiiO)", entry.start, entry.end,
+                                      entry.target, entry.slot,
+                                      entry.lasti ? Py_True : Py_False);
+        if (row == NULL || PyList_AppendValue(result, PyValue_FromObjectBorrow(row)) < 0) {
+            Py_XDECREF(row);
+            Py_DECREF(result);
+            return PyValue_NULL;
+        }
+        Py_DECREF(row);
+    }
+    return _PyValue_FromObjectResult(result);
+}
+
+/*[clinic input]
+
+_opcode.get_recovery_entries
+
+    code: object(type="PyCodeObject *", subclass_of="&PyCode_Type")
+    /
+
+Return semantic recovery rows.
+
+Each row contains (from, to, edge, handler, exception slot, lasti).
+[clinic start generated code]*/
+
+static PyValue
+_opcode_get_recovery_entries_impl(PyObject *module, PyCodeObject *code)
+/*[clinic end generated code: output=b4d0ef6562b1c562 input=d1c948c4bb399c17]*/
+{
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    PyObject *result = PyTuple_New(semantic.nrecords);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    for (uint32_t i = 0; i < semantic.nrecords; i++) {
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(&semantic, i, &event);
+        PyObject *row = Py_BuildValue("(iiiiii)", event.from, event.to, event.edge,
+                                      event.handler, event.exc_slot, event.lasti);
+        if (row == NULL) {
+            Py_DECREF(result);
+            return PyValue_NULL;
+        }
+        PyTuple_SET_VALUE(result, i, PyValue_PrepareOwned(row));
+    }
+    return _PyValue_FromObjectResult(result);
+}
+
 static PyMethodDef
 opcode_functions[] =  {
     _OPCODE_STACK_EFFECT_METHODDEF
@@ -530,6 +605,8 @@ opcode_functions[] =  {
     _OPCODE_GET_INTRINSIC2_DESCS_METHODDEF
     _OPCODE_GET_SPECIAL_METHOD_NAMES_METHODDEF
     _OPCODE_GET_IR_CONTRACT_METHODDEF
+    _OPCODE_GET_EXCEPTION_ENTRIES_METHODDEF
+    _OPCODE_GET_RECOVERY_ENTRIES_METHODDEF
     {NULL, NULL, 0, NULL}
 };
 

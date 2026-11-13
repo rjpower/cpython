@@ -3646,10 +3646,21 @@ _Py_GatherStats_GetIter(PyValue iterable)
 
 #define NO_LOC_2 (128 | (PY_CODE_LOCATION_INFO_NONE << 3) | 1)
 
-static const PyBytesObject no_location = {
-    PyVarObject_HEAD_INIT(&PyBytes_Type, 1)
-    .ob_sval = { NO_LOC_2 }
+/* Static code uses the same normalized positions envelope as allocated code.
+ * Its semantic container remains the shared empty bytes object. */
+static const struct _PyStaticPositionsBytes {
+    PyObject_VAR_HEAD
+    Py_hash_t ob_shash;
+    char ob_sval[18];
+} no_location = {
+    PyVarObject_HEAD_INIT(&PyBytes_Type, 17)
+    .ob_shash = -1,
+    .ob_sval = {'I', 'R', 'S', 'M', 2, 0, 0, 0,
+                1, 0, 0, 0, 0, 0, 0, 0, NO_LOC_2, 0}
 };
+static_assert(offsetof(PyBytesObject, ob_sval) ==
+              offsetof(struct _PyStaticPositionsBytes, ob_sval),
+              "static positions bytes must have the PyBytesObject layout");
 
 
 const struct _PyCode2 _Py_InitCleanup = {

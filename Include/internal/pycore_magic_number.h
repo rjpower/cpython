@@ -349,8 +349,9 @@ Known values:
    64418: class-receiver classmethod forwarding reuses retired opcode 111
    64419: canonical CALL families certify virtual self and kwargs holes
    64420: delegated yield names its retained receiver explicitly
-   64421: general return and certified empty-scratch return forms */
-#define PYC_MAGIC_NUMBER 64421
+   64421: general return and certified empty-scratch return forms
+   64422: position-independent IRSC semantic recovery and IRSM2 positions */
+#define PYC_MAGIC_NUMBER 64422
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

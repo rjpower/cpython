@@ -2942,6 +2942,24 @@ semantic_abrupt_floor(const semantic_image *image, int pc)
     int base = (int)IR_B(word), dst = (int)IR_A(word);
     int limit = image->nl + image->scratch;
     int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+    if (fmt->flags & _PyIR_ABRUPT_OPERANDS) {
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        int floor = limit;
+        for (int field = 0; field < 4; field++) {
+            int role = fmt->roles[field];
+            if (role != _PyIR_ROLE_BASE && role != _PyIR_ROLE_DST &&
+                role < _PyIR_ROLE_IN0)
+            {
+                continue;
+            }
+            int home = (int)fields[field];
+            if (home >= image->nl && home != IR_NO_DST) {
+                assert(home < limit);
+                floor = Py_MIN(floor, home);
+            }
+        }
+        return floor;
+    }
     int ordinary = (fmt->flags & _PyIR_WINDOW) &&
         fmt->roles[1] == _PyIR_ROLE_BASE && fmt->roles[2] == _PyIR_ROLE_IMM &&
         fmt->roles[3] == _PyIR_ROLE_NONE && arg >= 0 && arg <= 1 &&

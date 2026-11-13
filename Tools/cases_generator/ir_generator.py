@@ -101,6 +101,7 @@ from generators_common import (
     Emitter,
     TokenIterator,
     enclosing_callee,
+    instruction_macro_args,
     find_local,
     type_and_null,
     write_header,
@@ -4168,7 +4169,21 @@ class IREmitter(Emitter):
         assert isinstance(stack, IRStack)
         stack.error_exit = True
         stack.flush(self.out)
+        self.operand_error_flush(stack)
         return f"{self.jump_prefix}JUMP_TO_LABEL(error);"
+
+    def operand_error_flush(self, stack, bridge=None):
+        # These are actual error stores from the same IRStack used to emit C.
+        # Scalar layouts address only encoded inputs and the recipient; the
+        # source gate has excluded independent aliases and manual protocols.
+        if not isinstance(stack, IRStack):
+            self.abrupt_operand_uncovered = True
+        if bridge is not None:
+            self.abrupt_operand_bridges.add(bridge)
+        elif self.abrupt_operand_origin is not None:
+            self.abrupt_operand_sources.add(self.abrupt_operand_origin)
+        else:
+            self.abrupt_operand_uncovered = True
 
     def check_exit_inputs(self, tkn: Token, storage: Storage,
                           what: str | None = None) -> None:
@@ -4220,7 +4235,12 @@ class IREmitter(Emitter):
     def error_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_owner_exit(tkn)
         self.check_error_outputs(tkn, storage)
-        return super().error_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.abrupt_operand_origin
+        self.abrupt_operand_origin = id(tkn)
+        try:
+            return super().error_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.abrupt_operand_origin = previous
 
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
@@ -4239,7 +4259,12 @@ class IREmitter(Emitter):
         self.check_error_outputs(tkn, storage)
         self.emit("frame->phase_state = 0;\n")
         self.out.start_line()
-        return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
+        previous = self.abrupt_operand_origin
+        self.abrupt_operand_origin = id(tkn)
+        try:
+            return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.abrupt_operand_origin = previous
 
     def dispatch(
         self,
@@ -4545,8 +4570,11 @@ class IREmitter(Emitter):
             self.emit("frame->phase_state = 0;\n")
             self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
             self.emit(f"if ({box} == NULL) {{\n")
+            bridge = (id(uop), var.name)
+            self.abrupt_operand_bridge_expected.add(bridge)
             # Every input is still in its slot: exception_unwind has them
             storage.stack.copy().flush(self.out)
+            self.operand_error_flush(storage.stack, bridge)
             self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
             self.emit("}\n")
             if inst is not None:
@@ -4948,6 +4976,141 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     if len(tail) == 3 and tail[1][len(begin)] != "name":
         return None
     return publish
+
+
+# These are helper interfaces, not instruction-body permissions. They receive
+# native values/objects, never an arena address, and cannot write frame homes.
+# Callback effects remain the ordinary analyzer's separate responsibility.
+OPERAND_HELPERS = {
+    "_PyEval_GetANext": (("object",), "object"),
+    "PyValue_AsKnownObjectBorrow": (("value",), "object"),
+    "PyValue_FromObjectSteal": (("object",), "value"),
+    "PyValue_IsNull": (("value",), "scalar"),
+    "PyValue_IsNone": (("value",), "scalar"),
+    "PyValue_CLOSE": (("value",), "void"),
+    "PyValue_XCLOSE": (("value",), "void"),
+    "TAKE": (("value",), "value"),
+    "DEAD": (("value",), "void"),
+    "DECREF_INPUTS": ((), "void"),
+    "INPUTS_DEAD": ((), "void"),
+}
+
+
+def operand_error_sources(inst: Instruction) -> frozenset[int] | None:
+    """Prove ordinary scalar source cannot access an undeclared home.
+
+    The emitter still has to supply every actual error-flush receipt. This
+    grammar accepts native scalar/object expressions with checked helper
+    interfaces, not arbitrary C pointers, casts, stores or manual protocols.
+    """
+    errors: set[int] = set()
+
+    def expression(tokens, variables):
+        tokens = [token for token in tokens if token.kind != "COMMENT"]
+        if not tokens:
+            return None
+        depth = 0
+        for at, token in enumerate(tokens):
+            text = token.text
+            if text == "(":
+                depth += 1
+            elif text == ")":
+                depth -= 1
+            elif depth == 0 and text in {"==", "!=", "<", ">", "<=", ">=", "&&", "||"}:
+                left = expression(tokens[:at], variables)
+                right = expression(tokens[at + 1:], variables)
+                return "scalar" if left in {"scalar", "object", "null"} and right in {"scalar", "object", "null"} else None
+        if tokens[0].text == "!":
+            return "scalar" if expression(tokens[1:], variables) == "scalar" else None
+        if len(tokens) == 1:
+            token = tokens[0]
+            if token.text == "NULL":
+                return "null"
+            if token.text == "PyValue_NULL":
+                return "value"
+            if token.text in {"true", "false"} or token.text.isdigit():
+                return "scalar"
+            return variables.get(token.text)
+        if tokens[0].text == "(" and tokens[-1].text == ")":
+            return expression(tokens[1:-1], variables)
+        helper = tokens[0]
+        contract = OPERAND_HELPERS.get(helper.text)
+        if contract is None or helper.text in variables:
+            return None
+        iterator = TokenIterator(tokens[1:])
+        try:
+            arguments, _ = instruction_macro_args(helper, iterator)
+        except (SyntaxError, StopIteration):
+            return None
+        if iterator.peek() is not None:
+            return None
+        inputs, result = contract
+        if (len(arguments) != len(inputs) or
+                any(expression(argument, variables) != kind
+                    for argument, kind in zip(arguments, inputs))):
+            return None
+        return result
+
+    def statement(stmt, variables):
+        if isinstance(stmt, BlockStmt):
+            return all(statement(child, variables) for child in stmt.body)
+        if isinstance(stmt, IfStmt):
+            return (expression(stmt.condition, variables) == "scalar"
+                    and statement(stmt.body, variables.copy())
+                    and (stmt.else_body is None or statement(stmt.else_body, variables.copy())))
+        if not isinstance(stmt, SimpleStmt):
+            return False
+        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+        if not tokens or tokens[-1].text != ";":
+            return False
+        tokens = tokens[:-1]
+        if tokens and tokens[0].text in {"ERROR_IF", "ERROR_NO_POP"}:
+            iterator = TokenIterator(tokens[1:])
+            try:
+                arguments, _ = instruction_macro_args(tokens[0], iterator)
+            except (SyntaxError, StopIteration):
+                return False
+            valid = (not arguments if tokens[0].text == "ERROR_NO_POP" else
+                     len(arguments) == 1 and expression(arguments[0], variables) == "scalar")
+            if valid and iterator.peek() is None:
+                errors.add(id(tokens[0]))
+                return True
+            return False
+        declaration = 0
+        kind = None
+        if len(tokens) >= 4 and [token.text for token in tokens[:2]] == ["PyObject", "*"]:
+            declaration, kind = 2, "object"
+        elif tokens and tokens[0].text in {"PyValue", "int"}:
+            declaration, kind = 1, "value" if tokens[0].text == "PyValue" else "scalar"
+        if declaration:
+            name = tokens[declaration]
+            if (name.kind != "IDENTIFIER" or name.text in variables or
+                    name.text in OPERAND_HELPERS or name.text in HANDLER_LOCALS or len(tokens) <= declaration + 2 or
+                    tokens[declaration + 1].text != "="):
+                return False
+            if expression(tokens[declaration + 2:], variables) != kind:
+                return False
+            variables[name.text] = kind
+            return True
+        if len(tokens) >= 3 and tokens[0].text in variables and tokens[1].text == "=":
+            return tokens[0].text != "oparg" and expression(tokens[2:], variables) == variables[tokens[0].text]
+        return expression(tokens, variables) == "void"
+
+    for part in inst.parts:
+        if isinstance(part, Skip):
+            continue
+        if (not isinstance(part, Uop) or part.caches or
+                any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs))
+                or not canonical_body_tokens(part)):
+            return None
+        if any(item.name in HANDLER_LOCALS or item.name in OPERAND_HELPERS
+               for item in (*part.stack.inputs, *part.stack.outputs)):
+            return None
+        variables = {item.name: "value" for item in (*part.stack.inputs, *part.stack.outputs)}
+        variables["oparg"] = "scalar"
+        if not statement(part.body, variables):
+            return None
+    return frozenset(errors) if errors else None
 
 
 def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
@@ -5588,6 +5751,12 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
+    emitter.abrupt_operand_expected = operand_error_sources(inst)
+    emitter.abrupt_operand_sources = set()
+    emitter.abrupt_operand_origin = None
+    emitter.abrupt_operand_bridge_expected = set()
+    emitter.abrupt_operand_bridges = set()
+    emitter.abrupt_operand_uncovered = False
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
@@ -6097,7 +6266,8 @@ def boxes_into_record(code: str) -> bool:
 
 def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
-                    abrupt: dict[str, bool] | None = None
+                    abrupt: dict[str, bool] | None = None,
+                    operand_abrupt: dict[str, bool] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -6116,6 +6286,12 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         generate_handler(name, inst, formats[name], emitter, out, True)
         if abrupt is not None:
             abrupt[name] = emitter.abrupt_prefix
+        if operand_abrupt is not None:
+            operand_abrupt[name] = (
+                emitter.abrupt_operand_expected is not None and
+                emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
+                emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
+                not emitter.abrupt_operand_uncovered)
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
         if boxes_into_record(buffer.getvalue()):
@@ -6191,6 +6367,7 @@ class HandlerContract:
     ownership_events: tuple[OwnershipEvent, ...]
     call_input_holes: int
     abrupt_prefix: bool
+    abrupt_operands: bool
 
 
 def statement_shape(node):
@@ -7059,13 +7236,17 @@ def handler_contracts(analysis: Analysis,
     ids = handler_ids(analysis)
     programs = {}
     abrupt = {}
-    boxing = boxing_handlers(analysis, formats, programs, abrupt)
+    operand_abrupt = {}
+    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt)
     for group in {fmt.group for fmt in formats.values()}:
         members = [name for name in handler_instructions(analysis)
                    if formats[name].group == group]
         if not all(abrupt.get(name, False) for name in members):
             for name in members:
                 abrupt[name] = False
+        if not all(operand_abrupt.get(name, False) for name in members):
+            for name in members:
+                operand_abrupt[name] = False
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -7088,6 +7269,7 @@ def handler_contracts(analysis: Analysis,
             ownership_events=programs.get(name, ()),
             call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
             abrupt_prefix=abrupt.get(name, False),
+            abrupt_operands=operand_abrupt.get(name, False),
         )
     return result
 

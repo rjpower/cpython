@@ -3182,7 +3182,7 @@ class TestIRCases(unittest.TestCase):
         contracts = ir_generator.handler_contracts(real, formats)
         for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
                      "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
-                     "CONTAINS_OP_JUMP"):
+                     "CONTAINS_OP_JUMP", "DICT_MERGE", "LIST_APPEND"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
@@ -3212,6 +3212,32 @@ class TestIRCases(unittest.TestCase):
             self.assertEqual(changed_contract.ownership_events, ())
         finally:
             body.body.pop(0)
+
+    def test_loop_completion_recipes_follow_actual_emitted_routes(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        names = [name for name, fmt in formats.items() if fmt.group == "FOR_ITER"]
+        self.assertGreaterEqual(len(names), 7)
+        expected = ir_generator.OwnershipEvent(
+            "_PyIR_OWNER_NORMAL_COMPLETION", src=2, dst=1)
+        for name in names:
+            with self.subTest(handler=name):
+                self.assertIn(expected, contracts[name].ownership_events)
+        # A completion at another continuation does not describe the declared
+        # taken edge. One uncovered sibling removes the family-wide grant.
+        text = source.read_text()
+        old = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
+        self.assertIn(old, text)
+        with open(self.temp_input_filename, "w") as stream:
+            stream.write(text.replace(old, old.replace("oparg", "oparg + 1"), 1))
+        changed = analyzer.analyze_files([self.temp_input_filename])
+        changed_formats = ir_generator.compute_formats(changed)
+        changed_contracts = ir_generator.handler_contracts(changed, changed_formats)
+        for name in names:
+            with self.subTest(uncovered_handler=name):
+                self.assertNotIn(expected, changed_contracts[name].ownership_events)
 
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

@@ -283,7 +283,8 @@ class TransitionRootTests(unittest.TestCase):
         constant = Constant()
         code = body.__code__.replace(co_consts=body.__code__.co_consts +
                                      (constant,))
-        function = types.FunctionType(code, {'Result': Result})
+        function = types.FunctionType(code, {'Result': Result},
+                                      closure=body.__closure__)
         functions = [function]
         del code, constant, function
         result = functions.pop()()
@@ -381,6 +382,10 @@ class TransitionRootTests(unittest.TestCase):
                 yield
             except GeneratorExit as error:
                 exception_ids.append(id(error))
+                # Keep this on direct generator retirement: a traceback
+                # would let the escaped frame own Trigger until the exception
+                # itself is already being destroyed.
+                error.__traceback__ = None
                 yield
 
         generator = retire(Trigger())

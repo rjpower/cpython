@@ -41,6 +41,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_regcfg.h"        // _PyRegPass_SetKeepAcrossCode()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
+#include "pycore_transition_roots.h" // _PyGC_TraceVisitTransitionRoots()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // _PyValue_RecheckHome()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
@@ -4417,8 +4418,38 @@ remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
         "no_dst", IR_NO_DST);
 }
 
+static int
+append_transition_root_id(PyObject *object, void *arg)
+{
+    PyObject *address = PyLong_FromVoidPtr(object);
+    if (address == NULL) {
+        return -1;
+    }
+    int status = PyList_Append((PyObject *)arg, address);
+    Py_DECREF(address);
+    return status;
+}
+
+/* Bypass conservative arena/C-stack roots so tests exercise the precise bridge. */
+static PyObject *
+get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *ids = PyList_New(0);
+    if (ids == NULL) {
+        return NULL;
+    }
+    if (_PyGC_TraceVisitTransitionRoots(_PyThreadState_GET(),
+                                       append_transition_root_id, ids) < 0)
+    {
+        Py_DECREF(ids);
+        return NULL;
+    }
+    return ids;
+}
+
 static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
+    {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,

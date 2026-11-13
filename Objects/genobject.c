@@ -176,10 +176,7 @@ gen_clear_frame(PyGenObject *gen)
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     _PyThreadState_UpdateLastProfiledFrame(_PyThreadState_GET(), frame, frame->previous);
     frame->previous = NULL;
-    Py_BEGIN_CRITICAL_SECTION(gen);
-    _PyFrame_ClearExceptCode(frame);
-    Py_END_CRITICAL_SECTION();
-    _PyErr_ClearExcState(&gen->gi_exc_state);
+    (void)_PyFrame_ClearGenerator(gen, PyValue_NULL);
 }
 
 int

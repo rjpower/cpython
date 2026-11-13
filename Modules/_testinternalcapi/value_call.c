@@ -408,6 +408,116 @@ static PyType_Spec vcall_base_spec = {
     .slots = vcall_slots,
 };
 
+typedef struct {
+    VCallObject call;
+    PyObject *method;
+} VCallPrependObject;
+
+static uint64_t
+argument_fingerprint(const PyValue *args, Py_ssize_t count)
+{
+    uint64_t value = 0;
+    for (Py_ssize_t i = 0; i < count; i++) {
+        value = (value << 7 | value >> 57) ^ args[i].bits;
+    }
+    return value;
+}
+
+/* Delegate the original arena pointer and flags to a real bound method.
+ * Its value provider reaches VectorcallPrepend's native-copy branch. */
+static PyValue
+vcall_prepend_vectorcall(PyThreadState *tstate, PyObject *callable,
+                         const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    if (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET) {
+        PyErr_SetString(PyExc_AssertionError, "arena call granted prepend offset");
+        return PyValue_NULL;
+    }
+    Py_ssize_t count = PyVectorcall_NARGS(nargsf) +
+        (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    uint64_t before = argument_fingerprint(args, count);
+    VCallPrependObject *self = (VCallPrependObject *)callable;
+    if (self->method == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "cleared prepend provider");
+        return PyValue_NULL;
+    }
+    PyValue result = _PyValue_VectorcallTstate(
+        tstate, PyValue_FromObjectBorrow(self->method), args, nargsf, kwnames);
+    if (before != argument_fingerprint(args, count)) {
+        PyValue_XCLOSE(result);
+        PyErr_SetString(PyExc_AssertionError, "prepend changed source argument words");
+        return PyValue_NULL;
+    }
+    return result;
+}
+
+static PyObject *
+vcall_prepend_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    PyObject *target, *receiver;
+    static char *keywords[] = {"target", "receiver", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO:VCallPrepend", keywords,
+                                    &target, &receiver)) {
+        return NULL;
+    }
+    PyObject *method = PyMethod_New(target, receiver);
+    if (method == NULL) {
+        return NULL;
+    }
+    VCallPrependObject *self = (VCallPrependObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        Py_DECREF(method);
+        return NULL;
+    }
+    self->call.value_vectorcall = vcall_prepend_vectorcall;
+    self->call.vectorcall = _PyValue_VectorcallThunk;
+    self->method = method;
+    return (PyObject *)self;
+}
+
+static int
+vcall_prepend_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    Py_VISIT(((VCallPrependObject *)self)->method);
+    return 0;
+}
+
+static int
+vcall_prepend_clear(PyObject *self)
+{
+    Py_CLEAR(((VCallPrependObject *)self)->method);
+    return 0;
+}
+
+static void
+vcall_prepend_dealloc(PyObject *self)
+{
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject_GC_UnTrack(self);
+    vcall_prepend_clear(self);
+    type->tp_free(self);
+    Py_DECREF(type);
+}
+
+static PyType_Slot vcall_prepend_slots[] = {
+    {Py_tp_new, vcall_prepend_new},
+    {Py_tp_dealloc, vcall_prepend_dealloc},
+    {Py_tp_traverse, vcall_prepend_traverse},
+    {Py_tp_clear, vcall_prepend_clear},
+    {Py_tp_call, PyVectorcall_Call},
+    {Py_tp_members, vcall_members},
+    {0, NULL},
+};
+
+static PyType_Spec vcall_prepend_spec = {
+    .name = "_testinternalcapi.VCallPrepend",
+    .basicsize = sizeof(VCallPrependObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_VECTORCALL |
+             Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_HAVE_GC,
+    .slots = vcall_prepend_slots,
+};
+
 
 static PyMethodDef methods[] = {
     {"vc_args", VALUE_CAST(vc_args), METH_VALUE | METH_KEYWORDS, NULL},
@@ -439,6 +549,10 @@ _PyTestInternalCapi_Init_ValueCall(PyObject *module)
         return -1;
     }
     if (PyModule_Add(module, "VCall", vcall) < 0) {
+        return -1;
+    }
+    PyObject *prepend = PyType_FromSpec(&vcall_prepend_spec);
+    if (prepend == NULL || PyModule_Add(module, "VCallPrepend", prepend) < 0) {
         return -1;
     }
     PyObject *base = PyType_FromSpec(&vcall_base_spec);

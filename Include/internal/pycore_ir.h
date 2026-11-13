@@ -289,6 +289,8 @@ enum {
     _PyIR_OWNER_NORMAL_EXIT,
     _PyIR_OWNER_ERROR_EXIT,
     _PyIR_OWNER_CREATED_COPY,
+    _PyIR_OWNER_NORMAL_CLEAR_INPUTS,
+    _PyIR_OWNER_CALL_DRAIN,
 };
 
 typedef struct {
@@ -332,6 +334,7 @@ typedef struct _PyIRFormat {
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     uint32_t owner_program;
     uint16_t owner_events;
+    uint8_t call_input_holes; // canonical virtual-NULL window inputs
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -348,6 +351,22 @@ typedef struct _PyIRFormat {
                             // word (itself for a twin), or 0
     uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
+
+#define _PyIR_CALL_HOLE_SELF (1u << 1)
+#define _PyIR_CALL_HOLE_KWARGS (1u << 3)
+
+typedef enum {
+    _PyIR_CALL_INPUT_VALUE,
+    _PyIR_CALL_INPUT_VIRTUAL_NULL,
+} _PyIRCallInputRole;
+
+static inline _PyIRCallInputRole
+_PyIR_CallInputRole(const _PyIRFormat *fmt, int offset)
+{
+    return (offset == 1 || offset == 3) &&
+        (fmt->call_input_holes & (1u << offset))
+        ? _PyIR_CALL_INPUT_VIRTUAL_NULL : _PyIR_CALL_INPUT_VALUE;
+}
 
 #include "pycore_ir_metadata.h"
 
@@ -484,6 +503,7 @@ enum {
 #define _PyIR_PHASE_STATUS_SHIFT 9
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
 #define _PyIR_PHASE_CAPTURED (1u << 11)
+#define _PyIR_PHASE_CREATED (1u << 12)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -586,6 +606,9 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
+
+/* Cold specialization/instrumentation preserves the image's virtual inputs. */
+PyAPI_FUNC(int) _PyIR_CallRoleHandler(int handler, int opcode);
 
 /* The opcode that sys.monitoring sees the word as: the base opcode, except
  * for a fused compare-and-jump, which is a conditional jump

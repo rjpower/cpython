@@ -326,6 +326,27 @@ class DeallocTest(unittest.TestCase):
 
 
 class CopyHomeViewTest(unittest.TestCase):
+    def test_created_home_view_requires_marker_and_tracks_current_locals(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def body(value):
+            yield value
+
+        payload = object()
+        gen = body(None)
+        frame = gen.gi_frame
+        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
+        self.assertEqual((authority, limit, nranges), (2, 0, 0))
+        self.assertGreaterEqual(bindings, 1)
+        internal.check_created_home_view_invalidation(frame)
+        frame.f_locals['value'] = payload
+        support.gc_collect()
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
+        self.assertIs(next(gen), payload)
+        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
+        gen.close()
+        frame.clear()
+
     def test_empty_created_copy_uses_certified_kind_and_skips_scratch(self):
         internal = import_helper.import_module('_testinternalcapi')
 

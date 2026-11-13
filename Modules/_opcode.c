@@ -411,6 +411,7 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
+    {"call_input_holes", "bit k: CALL window input k is virtual NULL and is not read"},
     {NULL}
 };
 
@@ -458,6 +459,7 @@ ir_contract_row(PyTypeObject *type, int h)
         PyLong_FromLong(_PyIR_BaseOpcode(h)),
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
+        PyLong_FromLong(fmt->call_input_holes),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,

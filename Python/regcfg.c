@@ -1518,6 +1518,9 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
 done:
     PyMem_Free(work);
     _PyRegCfg_FreeLiveness(&lv);
+    if (err == SUCCESS) {
+        err = _PyRegCfg_VerifyCallRoles(cfg);
+    }
     return err;
 }
 
@@ -1647,6 +1650,7 @@ static const struct {
     {"discard after truth folding", _PyRegPass_Discard},
     {"jump fusion", _PyRegPass_FuseJump},
     {"null elision", _PyRegPass_ElideNull},
+    {"call input roles", _PyRegPass_CallRoles},
 };
 
 static int

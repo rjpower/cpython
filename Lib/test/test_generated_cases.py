@@ -37,6 +37,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_generator
+    import stack
     import ir_metadata_generator
     import ir_numbers
     import lexer
@@ -2945,7 +2946,7 @@ class TestIRCases(unittest.TestCase):
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-                ".owner_program = 0, .owner_events = 0, "
+                ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -2967,7 +2968,7 @@ class TestIRCases(unittest.TestCase):
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-            ".owner_program = 0, .owner_events = 0, "
+            ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -3138,6 +3139,50 @@ class TestIRCases(unittest.TestCase):
                                      "_PyIR_TRANSFER_UNKNOWN")
                 finally:
                     local.parts[0].body.body.pop()
+
+    def test_unused_scalar_passthrough_keeps_distinct_array_geometry(self):
+        source = """
+        op(FIRST, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+            assert(callable);
+        }
+        op(SECOND, (callable, self, unused[oparg] -- callable, self, unused[oparg])) {
+            assert(callable);
+        }
+        op(THIRD, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+            assert(callable);
+        }
+        macro(OP) = FIRST + SECOND + THIRD;
+        """
+        analysis = self.analyze(source)
+        effect = stack.get_stack_effect(analysis.instructions["OP"])
+        self.assertEqual((-effect.base_offset).to_c(), "2 + oparg")
+        self.assertEqual((effect.logical_sp - effect.base_offset).to_c(), "2 + oparg")
+
+    def test_actual_call_role_families_have_normal_drain_recipes(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        variants = ir_generator.call_role_variants(analysis)
+        self.assertEqual(len(variants), 35)
+        self.assertEqual({head for _, head, _ in variants.values()},
+                         set(ir_generator.CALL_ROLE_FAMILIES))
+        for name, (original, _, holes) in variants.items():
+            with self.subTest(handler=name):
+                self.assertEqual(formats[name], formats[original])
+                self.assertEqual(contracts[name].call_input_holes, holes)
+                self.assertEqual(contracts[name].ownership_events, (
+                    ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
+        self.assertEqual(contracts["BUILD_TUPLE"].ownership_events, (
+            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
+        body = analysis.instructions["BUILD_TUPLE"].parts[0].body
+        changed = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
+        try:
+            changed_contract = ir_generator.handler_contracts(analysis, formats)["BUILD_TUPLE"]
+            self.assertEqual(changed_contract.ownership_events, ())
+        finally:
+            body.body.pop(0)
 
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -3440,6 +3485,22 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertNotIn("&call", body)
         labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
         self.assertEqual(len(labels), len(set(labels)))
+
+    def test_exact_method_post_effect_guards_forward_prepared_roles(self):
+        for name in ("CALL_BOUND_METHOD_EXACT_ARGS",
+                     "CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS"):
+            with self.subTest(handler=name):
+                body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
+                promoted = body.index("call_state |= CALL_SELF_PRESENT | CALL_EFFECTS")
+                wrapper_close = body.index("PyValue_CLOSE", promoted)
+                suffix = body[wrapper_close:]
+                guards = suffix.split("JUMP_TO_PREDICTED(")[:-1]
+                self.assertGreaterEqual(len(guards), 4)
+                for guard in guards:
+                    self.assertIn(f"if (call_state & CALL_EFFECTS) {{ goto call_transaction_fallback_{name}; }}", guard)
+                fallback = body.index(f"call_transaction_fallback_{name}:")
+                self.assertIn("call_transaction_run_vector(", body[fallback:])
+                self.assertIn("| call_state", body[fallback:])
 
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of

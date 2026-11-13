@@ -846,6 +846,19 @@ choose_handler(_PyRegOp *op, PyObject *consts)
 {
     int opcode = op->opcode;
     int oparg = op->oparg;
+    if (op->flags & _PyReg_CALL_NO_SELF) {
+        switch (opcode) {
+            case CALL:
+                return CALL_NO_SELF;
+            case CALL_KW:
+                return CALL_KW_NO_SELF;
+            case CALL_FUNCTION_EX:
+                return op->flags & _PyReg_CALL_NO_KWARGS
+                    ? CALL_EX_NO_SELF_NO_KW : CALL_EX_NO_SELF_KW;
+            default:
+                Py_UNREACHABLE();
+        }
+    }
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {
             PyErr_Format(PyExc_SystemError,

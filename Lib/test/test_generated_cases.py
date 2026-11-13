@@ -3196,6 +3196,247 @@ class TestIRCases(unittest.TestCase):
         finally:
             part.body.body = original
 
+    def test_home_helpers_keep_ordinary_escape_publication(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
+                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+        for name, helper in expected.items():
+            part = analysis.uops[name]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            self.assertNotIn(helper, analyzer.IR_MARKER_EFFECTS)
+            self.assertIn(helper, {escape.call.text
+                                  for escape in part.properties.escaping_calls.values()})
+        for name in ("_LOAD_GLOBAL", "_PUSH_NULL_CONDITIONAL", "_INSERT_NULL"):
+            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+        for name, marker in (("BUILD_TUPLE", "IR_BUILD_TUPLE"),
+                             ("BUILD_LIST", "IR_BUILD_LIST")):
+            part = analysis.uops[name]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
+            escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
+            self.assertEqual(marker in escapes,
+                             analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
+
+    def test_home_arrays_reject_unproved_bounds_and_pointer_escapes(self):
+        def check(source):
+            analysis = self.analyze("\n" + source + "\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+        self.assertTrue(check("""inst(OP, (-- out[2])) {
+            IR_WRITE_OUTPUT(out, 1, PyValue_NULL);
+            int vacant = PyValue_IsNull(out[1]);
+        }"""))
+        self.assertTrue(check("""inst(OP, (-- out[oparg & 1])) {
+            if (oparg & 1) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }
+        }"""))
+        for source in (
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 2, PyValue_NULL); }",
+                "inst(OP, (out[2] --)) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[oparg & 1])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[oparg & 1])) { if (!(oparg & 1)) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } }",
+                "inst(OP, (-- out[oparg & 1])) { oparg = 1; if (oparg & 1) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(out); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = out; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&out[0]); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = &(out[0]); }",
+                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); PyValue *alias = &((pair[0])); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&(oparg)); }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (oparg) = 1; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); int oparg; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); out[0] = PyValue_NULL; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (out[0]) = PyValue_NULL; }",
+                "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); out[0].bits = 0; }",
+                "inst(OP, (-- out[2])) { opaque(out[0]); IR_WRITE_OUTPUT(out, 0, PyValue_NULL); }",
+                "inst(OP, (-- out[2])) { if (oparg) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } opaque(out[0]); }",
+                "inst(OP, (-- out[2])) { if (flag) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } flag = 1; if (flag) { int vacant = PyValue_IsNull(out[0]); } }",
+                "inst(OP, (-- out[2])) { if (flag) {} else { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } int vacant = PyValue_IsNull(out[0]); }",
+                "inst(OP, (values[2] -- result)) { result = IR_BUILD_MAP(values); }",
+                "inst(OP, (pair[3] -- pair[3])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }",
+                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(frame, name, pair); }",
+                "inst(OP, (-- out[2])) {\n#if FEATURE\nIR_WRITE_OUTPUT(out, 0, PyValue_NULL);\n#endif\n}"):
+            with self.subTest(source=source), self.assertRaises(SyntaxError):
+                check(source)
+
+    def test_home_loops_require_unique_all_path_induction(self):
+        def check(body, inputs="", outputs="out[oparg]"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {{ {body} }}\n")
+            return ir_generator.home_operation_contract(analysis.instructions["OP"].parts[0])
+        loop = "for (int i = 0; i < oparg; i++) { IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"
+        self.assertTrue(check(loop))
+        self.assertTrue(check(loop.replace("i++", "++i")))
+        self.assertTrue(check("""for (Py_ssize_t i = 0; i < oparg; i++) {
+            PyValue value = IR_TAKE_INPUT(values, i);
+            PyValue_CLOSE(value);
+        } DEAD(values);""", inputs="values[oparg]", outputs=""))
+        for changed in (
+                loop.replace("i = 0", "i = 1"),
+                loop.replace("i < oparg", "i <= oparg"),
+                loop.replace("i < oparg", "i < oparg + 1"),
+                loop.replace("i++", "i += 2"),
+                loop.replace(" i", " frame"),
+                loop.replace("out, i", "out, 0"),
+                loop.replace("IR_WRITE_OUTPUT", "continue; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "SKIP(); IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "if (flag) IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "int i = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "(i) = 0; IR_WRITE_OUTPUT"),
+                loop.replace("IR_WRITE_OUTPUT", "opaque(&(i)); IR_WRITE_OUTPUT"),
+                loop.replace(" }", " break; }"),
+                loop.replace(" }", " IR_WRITE_OUTPUT(out, i, PyValue_NULL); }"),
+                loop + loop):
+            with self.subTest(changed=changed), self.assertRaises(SyntaxError):
+                check(changed)
+        with self.assertRaisesRegex(SyntaxError, "published twice"):
+            check("IR_WRITE_OUTPUT(out, 0, PyValue_NULL); IR_WRITE_OUTPUT(out, 0, PyValue_NULL);",
+                  outputs="out[2]")
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
+            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+
+    def test_native_entry_requires_actual_body_and_owning_scalar_io(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        inst = analysis.instructions["INTERPRETER_EXIT"]
+        self.assertTrue(ir_generator.native_entry_input_contract(inst))
+        part = inst.parts[0]
+        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
+        part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
+        try:
+            with self.assertRaises(SyntaxError):
+                ir_generator.native_entry_input_contract(inst)
+        finally:
+            part.body.body.pop()
+        item = part.stack.inputs[0]
+        for attribute, changed in (("name", "other"), ("peek", True), ("size", "1")):
+            old = getattr(item, attribute)
+            setattr(item, attribute, changed)
+            try:
+                with self.assertRaises(SyntaxError):
+                    ir_generator.native_entry_input_contract(inst)
+            finally:
+                setattr(item, attribute, old)
+        old = inst.name
+        inst.name = "OTHER_NATIVE_SHAPE"
+        try:
+            self.assertFalse(ir_generator.native_entry_input_contract(inst))
+        finally:
+            inst.name = old
+
+    def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
+        body = """{
+            PyObject *object = IR_BUILD_TUPLE(values);
+            if (object == NULL) { ERROR_NO_POP(); }
+            INPUTS_DEAD();
+            result = PyValue_FromObjectSteal(object);
+        }"""
+        def check(changed, inputs="values[oparg]", outputs="result"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {changed}\n")
+            inst = analysis.instructions["OP"]
+            part = inst.parts[0]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            return inst
+
+        self.assertIsNotNone(check(body))
+        self.assertIsNotNone(check(body.replace("IR_BUILD_TUPLE", "IR_BUILD_LIST")))
+        for changed in (
+                body.replace("object == NULL", "object != NULL"),
+                body.replace("ERROR_NO_POP();", "ERROR_IF(true);"),
+                body.replace("INPUTS_DEAD();", ""),
+                body.replace("INPUTS_DEAD();", "opaque(); INPUTS_DEAD();"),
+                body.replace("INPUTS_DEAD();", "if (flag) { INPUTS_DEAD(); }"),
+                body.replace("INPUTS_DEAD();", "INPUTS_DEAD(); opaque();"),
+                body.replace("object);", "other);"),
+                body.replace("(values)", "(other)"),
+                body.replace("*object", "*values"),
+                body.replace("if (object", "if (other"),
+                body.replace("result =", "if (flag) result =")):
+            with self.subTest(changed=changed), self.assertRaises(SyntaxError):
+                check(changed)
+        for inputs, outputs in (("values[oparg*2]", "result"),
+                                ("extra, values[oparg]", "result"),
+                                ("values[oparg]", "result[1]")):
+            with self.subTest(inputs=inputs, outputs=outputs), self.assertRaises(SyntaxError):
+                check(body, inputs, outputs)
+        inst = check(body)
+        fmt = ir_generator.compute_formats(self.analyze(
+            "\ninst(OP, (values[oparg] -- result)) " + body + "\n"))["OP"]
+        self.assertTrue(ir_generator.normal_vacate_capability(inst, fmt))
+        extra = self.analyze("\ninst(EXTRA, (--)) { opaque(); }\n")
+        inst.parts.append(extra.instructions["EXTRA"].parts[0])
+        self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+
+    def test_steal_success_handoff_uses_existing_call_and_final_flush(self):
+        for marker, helper in (("IR_BUILD_TUPLE", "_PyTuple_FromValueStealOnSuccess"),
+                               ("IR_BUILD_LIST", "_PyList_FromValueStealOnSuccess")):
+            source = f"""
+                inst(OP, (values[oparg] -- result)) {{
+                    PyObject *object = {marker}(values);
+                    if (object == NULL) {{ ERROR_NO_POP(); }}
+                    INPUTS_DEAD();
+                    result = PyValue_FromObjectSteal(object);
+                }}
+            """
+            analysis = self.analyze(source)
+            formats = ir_generator.compute_formats(analysis)
+            programs = {}
+            self.assertNotIn("OP", ir_generator.boxing_handlers(analysis, formats, programs))
+            self.assertEqual(programs["OP"][0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
+            output = self.ir_output(source)
+            self.assertIn(f"{helper}(values, oparg)", output)
+            self.assertNotIn(marker, output)
+            self.assertNotIn(f"{helper}(frame", output)
+            self.assertNotIn("_PyValueTemps value_owners", output)
+            call = output.index(f"{helper}(values, oparg)")
+            vacate = output.index("IR_CLEAR_SLOTS", call)
+            publish = output.index("IR_PUBLISH_TEMP", vacate)
+            self.assertLess(call, vacate)
+            self.assertLess(vacate, publish)
+            self.assertNotIn("finish_", output[call:publish])
+
+    def test_home_operations_lower_through_actual_storage(self):
+        output = self.ir_output("""
+            window inst(OP, (-- out[2])) {
+                IR_WRITE_OUTPUT(out, 0, PyValue_NULL);
+                IR_WRITE_OUTPUT(out, 1, PyValue_NULL);
+            }
+        """)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[0], PyValue_NULL)", output)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[1], PyValue_NULL)", output)
+        self.assertNotIn("IR_WRITE_OUTPUT", output)
+        output = self.ir_output("""
+            inst(OP, (values[oparg*2] -- map)) {
+                PyObject *object = IR_BUILD_MAP(values);
+                DEAD(values);
+                map = PyValue_FromObjectSteal(object);
+            }
+        """)
+        self.assertIn("_Py_BuildMap_ValueSteal(frame, values, oparg)", output)
+        self.assertNotIn("IR_BUILD_MAP", output)
+        self.assertIn("frame->phase_state = 0;", output)
+
+    def test_home_loop_operations_lower_through_actual_storage(self):
+        output = self.ir_output("""
+            window inst(OP, (-- out[oparg])) {
+                for (int i = 0; i < oparg; i++) {
+                    IR_WRITE_OUTPUT(out, i, PyValue_NULL);
+                }
+            }
+        """)
+        self.assertIn("_PyFrame_WriteHome(frame, &out[i], PyValue_NULL)", output)
+        output = self.ir_output("""
+            inst(OP, (values[oparg] -- result)) {
+                for (int i = 0; i < oparg; i++) {
+                    PyValue value = IR_TAKE_INPUT(values, i);
+                    PyValue_CLOSE(value);
+                }
+                DEAD(values);
+                result = PyValue_None;
+            }
+        """)
+        self.assertIn("_PyFrame_TakeHome(frame, &values[i])", output)
+        self.assertNotIn("IR_TAKE_INPUT", output)
+
     def test_disjoint_child_requires_actual_constructor_and_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

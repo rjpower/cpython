@@ -3771,7 +3771,7 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
     _PyCValue cref;
     _PyThreadState_PushCValue(tstate, &cref);
     PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(cls));
-    int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
+    int found = _PyObject_LookupSpecialMethod(NULL, name, &cref.ref, &self);
     if (found <= 0) {
         goto done;
     }

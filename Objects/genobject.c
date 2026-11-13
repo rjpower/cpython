@@ -256,19 +256,25 @@ gen_raise_already_executing_error(PyGenObject *gen)
     PyErr_SetString(PyExc_ValueError, msg);
 }
 
-/* The receiver of the SEND whose YIELD_VALUE suspended frame: two slots
-   below that of the yielded value, which the value sent in takes */
-static inline PyValueBorrow
-_PyGen_YieldFromRef(_PyInterpreterFrame *frame)
+/* The caller holds either a suspended read claim or the successful execution
+ * claim whose saved state was delegated suspension. The selector reads only
+ * the admitted instruction; keep the claim through reference acquisition. */
+static PyObject *
+gen_yieldfrom_ref(PyGenObject *gen, int8_t prior_state)
 {
-    /* Delegating yields always retain a real receiver window. Ordinary
-     * ignored resume inputs use IR_NO_DST and never reach this lookup. */
-    assert(frame->return_slot != IR_NO_DST);
-    assert(frame->return_slot >= 2 &&
-           frame->return_slot < _PyFrame_NumSlots(frame));
-    PyValueBorrow ref = PyValue_Borrow(frame->base[frame->return_slot - 2]);
-    assert(!PyValue_IsNull(ref));
-    return ref;
+    assert(prior_state == FRAME_SUSPENDED_YIELD_FROM);
+    assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING ||
+           FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_SUSPENDED_YIELD_FROM ||
+           FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_SUSPENDED_YIELD_FROM_LOCKED);
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    int home = _PyIR_DelegatedReceiverHome(frame);
+    if (home < 0) {
+        PyErr_SetString(PyExc_SystemError, "invalid delegated generator suspension");
+        return NULL;
+    }
+    PyValueBorrow receiver = PyValue_Borrow(frame->base[home]);
+    assert(!PyValue_IsNull(receiver));
+    return PyValue_AsPyObjectNew(receiver);
 }
 
 // Send 'arg' into 'gen', or with 'exc' throw the pending exception into it.
@@ -538,7 +544,11 @@ gen_close(PyObject *self, PyObject *args)
     int err = 0;
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
-        PyObject *yf = PyValue_AsPyObjectNew(_PyGen_YieldFromRef(frame));
+        PyObject *yf = gen_yieldfrom_ref(gen, frame_state);
+        if (yf == NULL) {
+            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, frame_state);
+            return NULL;
+        }
         err = gen_close_iter(yf);
         Py_DECREF(yf);
     }
@@ -694,7 +704,11 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
 
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
         _PyInterpreterFrame *frame = &gen->gi_iframe;
-        PyObject *yf = PyValue_AsPyObjectNew(_PyGen_YieldFromRef(frame));
+        PyObject *yf = gen_yieldfrom_ref(gen, frame_state);
+        if (yf == NULL) {
+            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, frame_state);
+            return NULL;
+        }
         PyObject *ret;
         int err;
         if (PyErr_GivenExceptionMatches(typ, PyExc_GeneratorExit) &&
@@ -940,11 +954,32 @@ static PyObject *
 gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    int8_t frame_state = gen->gi_frame_state;
+    int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
+#ifdef Py_GIL_DISABLED
+    for (;;) {
+        if (frame_state == FRAME_SUSPENDED_YIELD_FROM_LOCKED) {
+            _Py_yield();
+            frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
+            continue;
+        }
+        if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
+            Py_RETURN_NONE;
+        }
+        if (_Py_GEN_TRY_SET_FRAME_STATE(gen, frame_state,
+                                        FRAME_SUSPENDED_YIELD_FROM_LOCKED))
+        {
+            break;
+        }
+    }
+    PyObject *result = gen_yieldfrom_ref(gen, FRAME_SUSPENDED_YIELD_FROM);
+    FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
+    return result;
+#else
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
         Py_RETURN_NONE;
     }
-    return PyValue_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
+    return gen_yieldfrom_ref(gen, frame_state);
+#endif
 }
 
 
@@ -1251,7 +1286,10 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     f->f_capture = copy_view;
     f->f_capture_authority = (uint8_t)copy_authority;
-    frame->phase_state = _PyIR_PHASE_CAPTURED;
+    assert(frame->phase_state == 0 ||
+           frame->phase_state == _PyIR_PHASE_YIELD_DELEGATED);
+    frame->phase_state = _PyIR_PHASE_CAPTURED |
+        (frame->phase_state & _PyIR_PHASE_YIELD_DELEGATED);
     assert(PyObject_GC_IsTracked((PyObject *)f));
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;

@@ -511,6 +511,12 @@ class SemanticCompletionTests(unittest.TestCase):
             with self.subTest(opcode=name):
                 def replace(fields):
                     words = original.copy()
+                    if name == 'SWAP':
+                        # Unwind clears the other endpoint beyond the retired
+                        # window. Give SWAP a real value there first; the
+                        # required-source negative below still reads base.
+                        words.append(dis.opmap['LOAD_CONST'] |
+                                     ((base + 3) << 16))
                     handler = dis._all_opmap[name] | sum(
                         value << shift for value, shift in zip(fields, (16, 28, 40, 52)))
                     words.extend((handler, dis.opmap['RERAISE'] | (exception << 16)))

@@ -160,6 +160,62 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
+/* A checked physical home capability, shared with the bitmap placement. */
+static inline void
+_PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
+{
+    assert(frame != NULL && home >= frame->base);
+    assert(home < frame->base + _PyFrame_NumSlots(frame));
+    *home = value;
+}
+
+static inline PyValue
+_PyFrame_TakeHome(_PyInterpreterFrame *frame, PyValue *home)
+{
+    PyValue value = *home;
+    _PyFrame_WriteHome(frame, home, PyValue_NULL);
+    return value;
+}
+
+/* The owner of V, the view of a temporary whose slot the same expression
+ * clears: the count moves from the slot to the C local.  The one
+ * count-free conversion from a borrow to an owner, shared by known-home
+ * removal and the checked native interpreter exit. */
+static inline PyValue
+_PyIR_AdoptTemp(PyValueBorrow view)
+{
+    PyValue owner = {view.bits};
+    return owner;
+}
+
+/* These commits retain facts supplied by the actual physical transport.
+ * Logical stack absence alone does not establish a vacant recipient. */
+static inline void
+_PyFrame_PublishVacantHome(_PyInterpreterFrame *frame, PyValue *home,
+                          PyValue value)
+{
+    _PyFrame_WriteHome(frame, home, value);
+}
+
+static inline void
+_PyFrame_ReplaceKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                        PyValueBorrow old, PyValue value)
+{
+    assert(PyValue_Is(*home, old));
+    (void)old;
+    _PyFrame_WriteHome(frame, home, value);
+}
+
+static inline PyValue
+_PyFrame_TakeKnownHome(_PyInterpreterFrame *frame, PyValue *home,
+                      PyValueBorrow value)
+{
+    assert(PyValue_Is(*home, value));
+    PyValue owner = _PyIR_AdoptTemp(value);
+    _PyFrame_WriteHome(frame, home, PyValue_NULL);
+    return owner;
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST
@@ -266,6 +322,14 @@ void _PyFrame_GetNullControlHomeView(
 PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
     _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
 
+/* The terminal yield emitter calls this after its last home/header commit
+ * and immediately before releasing the suspended generator state. */
+static inline void
+_PyFrame_PublishDelegatedSuspension(_PyInterpreterFrame *frame)
+{
+    frame->phase_state = _PyIR_PHASE_YIELD_DELEGATED;
+}
+
 static inline void
 _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
@@ -309,6 +373,24 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
            authority == _PyIR_HOME_NULL_CONTROL_READABLE);
     assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
     assert(view->nbindings + view->scratch_limit <= nslots);
+    uint16_t delegated = 0;
+    if (src->phase_state == _PyIR_PHASE_YIELD_DELEGATED ||
+        src->phase_state == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
+    {
+        /* Select the finite role before CopyHeader invalidates its source.
+         * A clipped retirement view must not publish an uncopied receiver. */
+        int receiver = _PyIR_DelegatedReceiverHome(src);
+        uint32_t cursor = 0;
+        int begin, end;
+        while (receiver >= 0 &&
+               _PyFrame_NextHomeRange(view, &cursor, &begin, &end))
+        {
+            if (begin <= receiver && receiver < end) {
+                delegated = _PyIR_PHASE_YIELD_DELEGATED;
+                break;
+            }
+        }
+    }
     _PyFrame_CopyHeader(src, dest);
     uint32_t cursor = 0;
     int filled = 0, begin, end;
@@ -328,6 +410,7 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
     while (filled < nslots) {
         dest->base[filled++] = PyValue_NULL;
     }
+    dest->phase_state = delegated;
 }
 
 
@@ -498,7 +581,9 @@ enum {
 
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
-void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
+                            int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);
 void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
                                   struct _PyTransitionRoots *roots);

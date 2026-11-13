@@ -339,61 +339,134 @@ get_awaited_coro_address(
         return -1;
     }
 
-    /* The receiver of the SEND whose yield suspended the frame is two
-     * slots below the slot of the yielded value, return_slot.  A generator
-     * keeps its slots in its frame, in owned_slots. */
+    uint16_t phase = GET_MEMBER(uint16_t, iframe,
+        unwinder->debug_offsets.interpreter_frame.phase_state);
+    if (phase != _PyIR_PHASE_YIELD_DELEGATED &&
+        phase != (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
+    {
+        return 0;
+    }
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
-    if (return_slot >= 2 && return_slot != IR_NO_DST) {
-        uintptr_t code_addr = GET_MEMBER(uintptr_t, iframe,
-            unwinder->debug_offsets.interpreter_frame.executable);
-        char code[SIZEOF_CODE_OBJ];
-        if (code_addr == 0 || code_addr >= Py_PTR_LIMIT ||
-            code_addr > UINTPTR_MAX - sizeof(code))
-        {
-            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame code address");
-            return -1;
-        }
-        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
-                                                code_addr, sizeof(code), code) < 0)
-        {
-            return -1;
-        }
-        int locals = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.nlocalsplus);
-        int stack = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.stacksize);
-        if (locals < 0 || stack < 0 || locals > IR_NO_DST ||
-            stack > IR_NO_DST - locals || return_slot >= locals + stack)
-        {
-            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
-            return -1;
-        }
-        size_t owned_offset = (size_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
-        if (gi_iframe_addr > UINTPTR_MAX - owned_offset) {
-            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame slots address");
-            return -1;
-        }
-        uintptr_t slots_addr = gi_iframe_addr
-            + owned_offset;
-        size_t receiver_delta = sizeof(PyValue) * (size_t)(return_slot - 2);
-        if (slots_addr > UINTPTR_MAX - sizeof(PyValue) ||
-            receiver_delta > UINTPTR_MAX - sizeof(PyValue) - slots_addr) {
-            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited receiver address");
-            return -1;
-        }
-        // The slot holds a PyValue word: only an object has a remote address.
-        PyValue slot;
-        err = _Py_RemoteDebug_PagedReadRemoteMemory(
-            &unwinder->handle,
-            slots_addr + sizeof(PyValue) * (return_slot - 2),
-            sizeof(slot),
-            &slot);
-        if (err < 0) {
-            set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read gi_await address");
-            return -1;
-        }
-        if (PyValue_IsObject(slot)) {
-            *next_coro = CLEAR_PTR_TAG(slot.bits);
-        }
+    uintptr_t code_addr = GET_MEMBER(uintptr_t, iframe,
+        unwinder->debug_offsets.interpreter_frame.executable);
+    char code[SIZEOF_CODE_OBJ];
+    if (code_addr == 0 || code_addr >= Py_PTR_LIMIT ||
+        code_addr > UINTPTR_MAX - sizeof(code))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame code address");
+        return -1;
+    }
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                                            code_addr, sizeof(code), code) < 0)
+    {
+        return -1;
+    }
+    int locals = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.nlocalsplus);
+    int stack = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.stacksize);
+    if (locals < 0 || stack < 0 || locals >= IR_NO_DST ||
+        Py_MAX(stack, 1) > IR_NO_DST - locals ||
+        (return_slot != IR_NO_DST && return_slot >= locals + Py_MAX(stack, 1)))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
+        return -1;
+    }
+    uintptr_t exec_addr = GET_MEMBER(uintptr_t, code,
+        unwinder->debug_offsets.code_object.exec);
+    Py_ssize_t nwords = GET_MEMBER(Py_ssize_t, code,
+        unwinder->debug_offsets.code_object.nwords);
+    char exec[SIZEOF_CODE_EXEC];
+    if (exec_addr == 0 || exec_addr >= Py_PTR_LIMIT ||
+        exec_addr > UINTPTR_MAX - sizeof(exec) ||
+        nwords <= 0 || (uint64_t)nwords > UINT32_MAX ||
+        (uint64_t)nwords > UINTPTR_MAX / sizeof(_PyIRWord))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited executing image");
+        return -1;
+    }
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                                            exec_addr, sizeof(exec), exec) < 0)
+    {
+        return -1;
+    }
+    uintptr_t words = GET_MEMBER(uintptr_t, exec,
+        unwinder->debug_offsets.code_exec.words);
+    uintptr_t frame_words = GET_MEMBER(uintptr_t, iframe,
+        unwinder->debug_offsets.interpreter_frame.ir_words);
+    uintptr_t pc = GET_MEMBER(uintptr_t, iframe,
+        unwinder->debug_offsets.interpreter_frame.instr_ptr);
+    uint32_t exec_nwords = GET_MEMBER(uint32_t, exec,
+        unwinder->debug_offsets.code_exec.nwords);
+    if (words == 0 || words >= Py_PTR_LIMIT || words != frame_words ||
+        exec_nwords != (uint32_t)nwords || pc < words ||
+        pc - words < sizeof(_PyIRWord) ||
+        (pc - words) % sizeof(_PyIRWord) != 0 ||
+        (pc - words) / sizeof(_PyIRWord) >= (uintptr_t)nwords)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited continuation");
+        return -1;
+    }
+    /* Every canonical delegated site passed positive role admission.
+     * The reached marker and matched immutable word retain that finite
+     * certificate; the words' contents are never inferred from homes. */
+    uintptr_t word_delta = pc - words - sizeof(_PyIRWord);
+    size_t words_offset = (size_t)unwinder->debug_offsets.code_object.co_words;
+    if (code_addr > UINTPTR_MAX - words_offset - sizeof(_PyIRWord) ||
+        word_delta > UINTPTR_MAX - code_addr - words_offset - sizeof(_PyIRWord))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");
+        return -1;
+    }
+    uintptr_t word_addr = code_addr + words_offset + word_delta;
+    if (word_addr >= Py_PTR_LIMIT) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");
+        return -1;
+    }
+    _PyIRWord word;
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                                            word_addr, sizeof(word), &word) < 0)
+    {
+        return -1;
+    }
+    int handler = IR_HANDLER(word);
+    int receiver = (int)IR_D(word);
+    if ((handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) ||
+        IR_A(word) != return_slot ||
+        IR_B(word) < (uint32_t)locals ||
+        IR_B(word) >= (uint32_t)(locals + Py_MAX(stack, 1)) ||
+        receiver < locals || receiver >= locals + Py_MAX(stack, 1) ||
+        receiver == return_slot ||
+        receiver == (int)IR_B(word))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Awaited return slot or receiver does not match delegated yield");
+        return -1;
+    }
+    size_t owned_offset = (size_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
+    if (gi_iframe_addr > UINTPTR_MAX - owned_offset) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame slots address");
+        return -1;
+    }
+    uintptr_t slots_addr = gi_iframe_addr
+        + owned_offset;
+    size_t receiver_delta = sizeof(PyValue) * (size_t)receiver;
+    if (slots_addr > UINTPTR_MAX - sizeof(PyValue) ||
+        receiver_delta > UINTPTR_MAX - sizeof(PyValue) - slots_addr) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited receiver address");
+        return -1;
+    }
+    // The slot holds a PyValue word: only an object has a remote address.
+    PyValue slot;
+    err = _Py_RemoteDebug_PagedReadRemoteMemory(
+        &unwinder->handle,
+        slots_addr + receiver_delta,
+        sizeof(slot),
+        &slot);
+    if (err < 0) {
+        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read gi_await address");
+        return -1;
+    }
+    if (PyValue_IsObject(slot)) {
+        *next_coro = CLEAR_PTR_TAG(slot.bits);
     }
 
     return 0;

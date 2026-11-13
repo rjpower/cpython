@@ -2297,6 +2297,7 @@ class SlotLayout:
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
     canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
+    native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
 
     @staticmethod
@@ -2664,18 +2665,21 @@ class IRStack(Stack):
             role = self.call_input_role(PointerOffset(p, (), ()))
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
+            if self.layout.native_entry:
                 out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+            else:
+                out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
+            if role is not None:
                 out.emit("}\n")
-                return
-            out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
             return
         names = self.views.get(p)
         if not names:
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
+        macro = "IR_CONSUME_NATIVE_INPUT" if self.layout.native_entry else "IR_CONSUME_INPUT"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"IR_CONSUME_INPUT({f}, {names[-1]})")
+                   f"{macro}({f}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
@@ -6040,6 +6044,30 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
     return CanonicalResult(producer, result)
 
 
+def native_entry_input_contract(inst: Instruction) -> bool:
+    if inst.name != "INTERPRETER_EXIT":
+        return False
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    expected = """{
+        assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
+        assert(_PyFrame_IsIncomplete(frame));
+        tstate->current_frame = frame->previous;
+        assert(!_PyErr_Occurred(tstate));
+        PyValue result = TAKE(retval);
+        INPUTS_DEAD();
+        assert(frame == &IR_ACTIVATION()->entry.frame);
+        LLTRACE_RESUME_FRAME();
+        return result;
+    }"""
+    if (len(parts) != 1 or len(inst.parts) != 1 or
+            [(item.name, item.peek, item.size) for item in parts[0].stack.inputs] !=
+                [("retval", False, "")] or parts[0].stack.outputs or
+            statement_shape(parts[0].body) != statement_shape(
+                Parser(expected, "<native entry ownership>").block())):
+        raise analysis_error("native interpreter exit needs its checked contract", inst.where)
+    return True
+
+
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
     """A return or yield transfers a canonical home owner unchanged.
 
@@ -6311,6 +6339,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     layout = slot_layout(inst, fmt, mode)
     canonical = canonical_result_source(inst, fmt)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
+                     native_entry=native_entry_input_contract(inst),
                      canonical_result=canonical.result if canonical else None,
                      canonical_outputs=canonical_output_sources(inst, fmt),
                      call_kind=emitter.call_kind if call_window else None)

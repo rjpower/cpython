@@ -56,9 +56,10 @@ The latest static two-pair screen atdc6 versus54 gives DeltaBlue **0.980768**,
 generators **1.029420**, coroutines **1.017063**, Richards **0.983703**,
 comprehensions **0.986702** and silent logging **1.037997**. Logging spans
 0.982866–1.096220; the result is mixed and no new golden is selected.
-The latest direct upstream screen is the preceding73ea: **1.155724**,
-**1.431449**, **1.285008**, **1.237290**, **1.382734**, **0.866682** in the same
-order. Lower is better. Do not combine these distinct campaigns. The report
+The separate direct upstream screen at the samedc6 identity gives **1.167857**,
+**1.456962**, **1.278716**, **1.244322**, **1.365744**, **0.760757** in the same
+order. Lower is better. Both campaigns complete with stable identities and no
+failures; do not combine their ratios. The report
 retains their pair ranges, stable identities and earlier measurements.
 A native inventory finds identical logging hot-frame geometry and warm
 attribute/call families in candidate979 and54; hidden constant-local

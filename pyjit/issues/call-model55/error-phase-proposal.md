@@ -492,3 +492,74 @@ coroutine ingress plus all public image routes. This is removal of false
 predecessors under cold admission, not runtime ERROR readability or a full
 M4 switch. IR and root give direction GO on the metadata/receipt model;
 actual source changes still need bounded helper/producer freeze.
+
+## Removing the EH allocation floor
+
+This is a source proposal, not an implemented format change. The runtime and
+allocator still derive retained owners from `exc_slot-lasti`. Arbitrary
+allocation must replace that rule with explicit exceptional transfers. The
+[lifetime policy](../../design/lifetimes-and-language-semantics.md) permits a
+bounded RC retirement order different from CPython's stack-pop order. No
+logical-stack destruction-order program is needed. Required evaluation,
+exception-context, `with` and `finally` effects remain explicit CFG effects.
+
+One per-code transfer descriptor should name the retained scratch homes,
+handler target, exception home and optional tagged-lasti home. Ordinary EH
+intervals and semantic recovery IDs select this same descriptor. They must
+not acquire separate retained-owner maps. The descriptor is canonical
+semantic data in the existing semantic container; its validated ranges are
+interned in the existing execution plan, with no new code-object pointer or
+frame field. This requires a format/version change when implemented.
+
+Initially keep a retained value in the same physical home across its
+exceptional edge. The allocator may choose that home freely; it no longer
+needs a canonical stack-position slot or a home below the exception slot.
+This avoids a runtime parallel-move protocol. A later allocator can introduce
+explicit checked edge moves if coalescing limits allocation quality.
+
+The reached post-error selection supplies the actual readable/owned homes;
+the transfer descriptor supplies the retained subset. Cleanup releases the
+selected scratch outside that subset, using sparse physical reverse
+iteration. Each owner leaves the active selection before Take/close can
+reenter. A retained home above the current release cursor remains visible:
+clipping the entire view by `scope.remaining` would hide it. The selected
+view therefore represents retained homes union the unretired portion of the
+release selection. A code-owned partition descriptor plus a copied cursor
+can express that union without a per-home retirement program. The exact
+tagged-view encoding needs a shared iterator freeze; no borrowed native
+descriptor pointer may escape the processor.
+
+After cleanup, exception and lasti are separate explicit publications into
+proven vacant homes. Publish retained plus protocol roles before
+`monitor_handled`. A failed callback enters a fresh error selection; it must
+not reuse the predecessor checkpoint or reconstruct retained homes from its
+new PC. No-handler cleanup releases all selected scratch and retains the
+existing bindings-only M2 handoff and last code/container pin. Named locals
+stay dynamic. Bitmap presence can select actual values but cannot determine
+which values the handler is entitled to retain.
+
+| Current boundary | Change required before arbitrary allocation |
+| --- | --- |
+| `regcfg.c:canonicalise_below`, liveness and `handler_base` | Carry the explicit retained virtual-register set across each exceptional edge, including implicit unwind obligations; future-read liveness alone cannot release a frame-owned value. |
+| `_PyRegCfg_Compact` and physical verification | Replace canonical-prefix/suffix tests with retained identity, ownership interference and protocol-home vacancy checks. Keep actual CALL overlap and window constraints separately. |
+| `assemble.c` EH emission and recovery rows | Lower the same retained identities to physical ranges and one transfer ID for both ordinary and source recovery. Stop deriving the exception home from handler stack depth. |
+| Universal construction/admission and ERROR replay | Check every exceptional predecessor, exact transfer identity, partial consumption, distinct protocol roles and handler reads. Missing readability coverage remains explicit control; it cannot enable arbitrary allocation. |
+| `ProcessError`, common home selection and transition readers | Drain selected-minus-retained, preserve retained homes across the cursor, then publish the actual handler-entry shape. GC, copy, escape and diagnostics consume that same live selection. |
+| Debugger transfer and observation recovery | Use the semantic transfer ID and explicit protocol homes. Source positions remain optional and confer no ownership authority. |
+| Redirect/shim `ClearTemporaries` callers | Retain their actual producer-owned selection; they must not inherit an EH transfer or an arbitrary numeric floor. |
+
+Cold cost is one retained-range descriptor per distinct exceptional transfer,
+references from existing semantic entries, and partition lookup/iteration on
+reached exceptional paths. Retained sets shared by many protected words are
+interned; there is no per-PC full bitmap or successful-path query/record.
+Price the descriptor/reference encoding and common-view changes before
+implementation. Existing plan construction remains bounded by admitted code
+and home extents.
+
+Qualification needs interleaved retained/released physical homes, an owner
+retained above the cursor, callback GC and frame escape, dynamic local
+mutation, explicit lasti versus exception roles, handled-callback failure,
+ordinary/source recovery selecting the same transfer, and invalid retained
+or protocol aliases through every public image route. Tests should assert
+ownership, cleanup/context effects and valid observations, without requiring
+CPython's former destructor order.

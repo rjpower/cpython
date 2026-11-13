@@ -496,6 +496,15 @@ of whether the call escapes. Unknown helpers revoke the relevant route.
 The first ERROR suffix uses the spare `format.flags` bit `0x8000` and a counted
 header in that same interned program. The existing normal-event projection
 remains unchanged. It adds no format-row field or second event allocation.
+The first source-frozen slice records actual scalar input-field loads and
+post-error-flush snapshots with no intervening physical home operation. Its
+generated GET_ANEXT projection and native-failure routes use distinct literal
+checkpoints. Integrated dc6 passed both 117/79 builds, all 5 bootstrap and 27
+broader freezer probes, 18 focused cases and 233 IR/code cases per role. The
+actual RAISE and retirement witnesses use selected authority 2 with clean
+collection; handler-entry publication explicitly uses control authority 3.
+Other transports still select initialized control until their actual operations
+are replayed. This qualifies the first slice, not complete map coverage.
 
 Readability is a must-fact distinct from MAY_OWNER. An actual read must have its
 required initialized role on every predecessor; a nullable owner range permits
@@ -520,6 +529,14 @@ finalizer collection, and exercise local mutation, failure, escape and both
 join orders. Unsupported routes remain explicit control while the group is
 being developed; they cannot supply the final M4 switch.
 
+The stronger audited callback effect preserves only previously initialized
+canonical homes, widening known non-NULL values to canonical-or-NULL. It is
+separate from scratch-absence preservation and cannot initialize an absent or
+unknown home. Named-binding mutation, canonical scratch clearing during an
+accepted debugger redirect, executing-frame restrictions and nested activation
+storage boundaries are part of that effect's contract. A nullable source
+annotation alone does not grant a read or a positive checkpoint.
+
 For the error selector, reuse the existing 16-byte PhaseSite row. One reserved
 byte becomes selector class ACTIVE=0 or ERROR=1, with the common ordered key
 `(immutable site, class, uint8 id)`. Checkpoint 0 is uncovered; IDs 1..255 are
@@ -533,6 +550,10 @@ emitter must enter the five-argument error processor before generic
 bridge disposal, callbacks, suffix drain and handler-role publication; no
 post-pop code/geometry lookup is permitted. Source recovery remains its own
 IRSC ingress. Parent propagation requires an actual WAIT/entry transfer.
+Installing exception/lasti homes changes the selected shape. Until that
+handler-entry transform is certified, the processor explicitly replaces the
+post-error descriptor with initialized control before the handled callback;
+increasing an old sparse view's cursor is insufficient.
 
 Follow with grouped window builders/unpack cursors, overlapping/disjoint child
 handoffs, then suspension and observer recovery. Each group closes actual read,
@@ -570,6 +591,14 @@ retirement together. Named binding initialization and native-buffer policies
 remain explicit. Static and dynamic-presence candidates keep the same frame
 ABI and Python semantics; their different proof, publication, bit-read and
 materialization costs must be measured after all reader gates are closed.
+
+Arbitrary register allocation also requires replacing the current EH
+scratch-floor assumption: `_PyFrame_ClearTemporaries(first)` and exception-slot
+retention still rely on definition order matching stack order. Selected error
+cleanup must use actual retained and consumed home sets before that layout
+constraint can be removed. A source-checked abrupt write floor alone does not
+solve it. Repeated phase-zero stores are a later bounded emitter cleanup once
+these publication and invalidation boundaries are complete.
 
 ## Remaining M4 gates
 

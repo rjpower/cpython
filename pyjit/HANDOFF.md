@@ -67,9 +67,10 @@ Retain exact identities; these are not full/current-dc6 runtime qualifications.
 
 Current two-pair54 screen in hot order DeltaBlue/generators/coroutines/Richards/
 comprehensions/logging:0.980768/1.029420/1.017063/0.983703/0.986702/1.037997.
-Logging range0.982866–1.096220; mixed, no promotion. The latest direct upstream
-screen remains73ea:1.155724/1.431449/1.285008/1.237290/1.382734/0.866682.
-Do not combine campaigns. No new PMU/all29 fordc6.
+Logging range0.982866–1.096220; mixed, no promotion. The separate direct upstream
+screen atdc6 gives1.167857/1.456962/1.278716/1.244322/1.365744/0.760757.
+Both complete with stable identities and no failures. Do not combine campaigns.
+No new PMU/all29 fordc6.
 
 Evidence E/positive-error-snapshots-*; exact release ELF SHA256
 95e69c53868255c6883d03a4298887ae7e1d2bfbaec3d67f808fa96c9fc053fd.

@@ -34,10 +34,22 @@ The two-pair selected54 screen completes with stable identities and no failures:
 
 DeltaBlue, Richards and comprehensions improve in both pairs; generators and
 coroutines lose. Logging spans a small gain to a9.6% loss. This does not select
-a new golden or isolate a speedup from the cold ERROR feature. No new direct
-upstream or PMU campaign is claimed; do not multiply the previous73ea/upstream
-ratios by this screen. The broader qualification and complete ownership
-alternatives remain unfinished.
+a new golden or isolate a speedup from the cold ERROR feature. A separate
+direct upstream screen at the same source/native identity also completes with
+stable identities and no failures:
+
+| Workload | Candidate/upstream | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.167857 | 1.163837–1.171890 |
+| Generators | 1.456962 | 1.430968–1.483429 |
+| Coroutines | 1.278716 | 1.276703–1.280731 |
+| Richards | 1.244322 | 1.239561–1.249102 |
+| Comprehensions | 1.365744 | 1.357308–1.374231 |
+| Logging silent | 0.760757 | 0.757315–0.764214 |
+
+These are measured direct comparisons, not products of independent ratios.
+No new PMU campaign is claimed. The broader qualification and complete
+ownership alternatives remain unfinished.
 Evidence: `E/positive-error-snapshots-*`; retained release ELF SHA256
 `95e69c53868255c6883d03a4298887ae7e1d2bfbaec3d67f808fa96c9fc053fd`.
 

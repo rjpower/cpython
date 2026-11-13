@@ -91,6 +91,50 @@ class KnownEntryTests(unittest.TestCase):
                               err)
 
 
+class NoReentryCloseTests(unittest.TestCase):
+    def test_nonlast_owner(self):
+        for obj in ([], {}, Item(), Number(7), 2**100, float("nan")):
+            with self.subTest(type=type(obj)):
+                closed, before, after = _testinternalcapi.pyvalue_try_xclose(obj)
+                self.assertEqual(closed, not support.Py_GIL_DISABLED)
+                self.assertEqual(before - after, closed)
+
+    def test_inline_and_no_count(self):
+        for obj in (5, -7, 2.5, -0.0, math.inf, None, True, int):
+            with self.subTest(obj=obj):
+                closed, before, after = _testinternalcapi.pyvalue_try_xclose(obj)
+                self.assertTrue(closed)
+                self.assertEqual(before, after)
+
+    def test_last_owner_is_retained(self):
+        finalized = []
+
+        class Payload:
+            def __del__(self):
+                finalized.append("closed")
+
+        _testinternalcapi.pyvalue_try_xclose_last(Payload)
+        self.assertEqual(finalized, ["closed"])
+
+    def test_success_does_not_finalize(self):
+        finalized = []
+
+        class Payload:
+            def __del__(self):
+                finalized.append("closed")
+
+        obj = Payload()
+        closed, before, after = _testinternalcapi.pyvalue_try_xclose(obj)
+        self.assertEqual(closed, not support.Py_GIL_DISABLED)
+        self.assertEqual(before - after, closed)
+        self.assertEqual(finalized, [])
+        del obj
+        self.assertEqual(finalized, ["closed"])
+
+    def test_internal_encodings_and_dynamic_immortal(self):
+        _testinternalcapi.pyvalue_try_xclose_internal()
+
+
 class FrameCodePinTests(unittest.TestCase):
     def test_code_pin_count(self):
         code = self.test_code_pin_count.__code__.replace()

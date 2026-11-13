@@ -875,6 +875,28 @@ PyValue_XCLOSE(PyValue ref)
     }
 }
 
+/* Consume ref only if closing it cannot reenter Python. On false the caller
+ * retains the owner. A successful caller may clear its home afterward: no
+ * callback or interpreter poll can observe the intervening stale bits. */
+static inline bool
+_PyValue_TryXCloseNoReentry(PyValue ref)
+{
+    if (!PyValue_RefcountOnObject(ref)) {
+        return true;
+    }
+#ifdef Py_GIL_DISABLED
+    /* Another thread could drop the other count before our decrement. */
+    return false;
+#else
+    PyObject *object = BITS_TO_PTR(ref);
+    if (Py_REFCNT(object) <= 1) {
+        return false;
+    }
+    Py_DECREF_MORTAL(object);
+    return true;
+#endif
+}
+
 static inline void
 PyValue_XCLOSE_SPECIALIZED(PyValue ref, destructor destruct)
 {

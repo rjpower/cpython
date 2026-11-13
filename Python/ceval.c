@@ -2237,7 +2237,8 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
     unsigned int ingress = (entry >> 8) & 15;
     unsigned int checkpoint = entry & 255;
     if ((entry & ~UINT32_C(4095)) || ingress > _PyIR_ERROR_INGRESS_SOURCE ||
-        checkpoint != 0)
+        (checkpoint != 0 && ingress != _PyIR_ERROR_INGRESS_RAISE &&
+         ingress != _PyIR_ERROR_INGRESS_UNWIND))
     {
         Py_FatalError("invalid or unsupported emitted error checkpoint");
     }
@@ -2246,14 +2247,22 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
         PyCodeObject *code = _PyFrame_GetCode(frame);
         _PyIRHomeView view;
-        /* Checkpoint zero is explicitly the initialized NULL control. It
-         * grants no static plan certificate or successful CHECKED status. */
-        _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), &view);
+        _PyIRHomeAuthority authority = _PyIR_HOME_NONE;
+        if (checkpoint != 0) {
+            authority = _PyIR_GetErrorHomeView(frame, origin,
+                                              (uint8_t)checkpoint, &view);
+        }
+        if (authority != _PyIR_HOME_MUST_READABLE) {
+            /* An uncovered site retains the explicit initialized control;
+             * a checkpoint number alone grants no readable shape. */
+            _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), &view);
+            authority = _PyIR_HOME_NULL_CONTROL_READABLE;
+        }
         _PyTransitionRoots scope = {
             .frame = frame,
             .remaining = _PyFrame_NumSlots(frame),
             .kind = _Py_TRANSITION_KIND_ERROR,
-            .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
+            .home_authority = authority,
             .homes = &view,
         };
         _PyThreadState_PushTransitionRoots(tstate, &scope);
@@ -2273,6 +2282,9 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             if (finish_value_bridges(tstate, frame, origin + 1, value_temps) < 0 && !had_error) {
                 origin = frame->instr_ptr;
                 ingress = _PyIR_ERROR_INGRESS_RAISE;
+                checkpoint = 0;
+                _PyFrame_GetNullControlHomeView(frame, scope.remaining, &view);
+                scope.home_authority = _PyIR_HOME_NULL_CONTROL_READABLE;
                 has_source = 0;
             }
         }
@@ -2321,9 +2333,12 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyFrame_WriteHome(frame, &frame->base[found.exc_slot],
                               PyValue_FromObjectSteal(exc));
             _PyInstr *next = _PyFrame_InstrAt(frame, found.handler);
-            /* The installed exception and tagged lasti are different roles.
-             * Publish the actual handler-entry prefix before its callback. */
+            /* The new exception/lasti roles are not in the post-error row.
+             * Handler-entry transformation remains initialized control until
+             * its own selected transport is certified. */
             scope.remaining = found.exc_slot + 1;
+            _PyFrame_GetNullControlHomeView(frame, scope.remaining, &view);
+            scope.home_authority = _PyIR_HOME_NULL_CONTROL_READABLE;
             frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
             int err = monitor_handled(tstate, frame, next, exc);
             error_scope_disarm(tstate, &scope);
@@ -2332,6 +2347,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  * a fresh initialized snapshot for the next cleanup. */
                 origin = next - 1;
                 ingress = _PyIR_ERROR_INGRESS_HANDLED_FAILURE;
+                checkpoint = 0;
                 value_temps = NULL;
                 continue;
             }
@@ -2365,6 +2381,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         }
         origin = frame->instr_ptr;
         ingress = _PyIR_ERROR_INGRESS_CALLER;
+        checkpoint = 0;
         value_temps = NULL;
     }
 }

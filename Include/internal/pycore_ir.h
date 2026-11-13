@@ -185,6 +185,7 @@ enum {
                                     // exceptional absence only, not readability
 #define _PyIR_ABRUPT_OPERANDS 0x4000 // only encoded transport can destroy prior
                                      // scratch absence; no readability grant
+#define _PyIR_ERROR_PROGRAM 0x8000  // actual error suffix follows normal events
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -305,6 +306,9 @@ enum {
     _PyIR_OWNER_NORMAL_COMPLETION,
     _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
     _PyIR_OWNER_YIELD_DELEGATED,
+    _PyIR_OWNER_ERROR_PROGRAM,
+    _PyIR_OWNER_ERROR_CHECKPOINT,
+    _PyIR_OWNER_ERROR_READ,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u
@@ -313,7 +317,13 @@ enum {
 #define _PyIR_NORMAL_DISJOINT_CHILD 2u
 #define _PyIR_NORMAL_NULL_FALLTHROUGH 4u
 #define _PyIR_NORMAL_NULL_TAKEN 8u
+#define _PyIR_ERROR_CANONICAL_OR_NULL 1u
+#define _PyIR_ERROR_READ_NULLABLE 1u
 
+/* owner_events counts only the normal prefix. ERROR_PROGRAM, when flagged,
+ * follows that prefix and counts its suffix records in extent. Each
+ * ERROR_CHECKPOINT names a reached literal ID and counts its following
+ * ERROR_READ records. Those reads name encoded fields, not logical IO slots. */
 typedef struct {
     uint8_t kind, flags;
     uint16_t dst, src, extent;
@@ -443,7 +453,7 @@ _PyFb_HasEntry(int opcode)
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
 /* One immutable semantic plan owns normal-return certificates and reached
- * callback shapes. Sparse sites precede sorted (site, phase) rows and interned
+ * callback shapes. Sparse sites precede sorted (site, class, phase) rows and interned
  * scratch ranges. Bindings retain dynamic NULL authority in every shape. */
 typedef struct {
     uint32_t nsites;
@@ -456,6 +466,12 @@ typedef struct {
 #define _PyIR_PLAN_ALL_RETURNS 1u
 #define _PyIR_PLAN_ALL_CREATED_EMPTY 2u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
+#define _PyIR_PHASE_RANGE_CONTROL 2u
+
+enum {
+    _PyIR_SELECTOR_ACTIVE,
+    _PyIR_SELECTOR_ERROR,
+};
 
 typedef enum _PyIRHomeAuthority {
     _PyIR_HOME_NONE,
@@ -468,8 +484,9 @@ typedef enum _PyIRHomeAuthority {
 typedef struct {
     uint32_t site, first, count;
     uint8_t phase, authority;
-    uint8_t reserved[2];
+    uint8_t selector_class, reserved;
 } _PyIRPhaseSite;
+static_assert(sizeof(_PyIRPhaseSite) == 16, "phase site encoding must remain fixed");
 
 typedef struct {
     uint16_t begin, end;
@@ -596,6 +613,14 @@ typedef struct {
  * A successful lookup selects a shape; it does not compare runtime values. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
     struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
+/* The caller owns the actual reached post-flush origin/checkpoint and pins
+ * this frame, code and storage lifetime. A matching lookup alone does not
+ * establish that another or suspended frame reached the checkpoint. No
+ * active-PC publication, allocation or home read is involved; zero and
+ * uncovered checkpoints return NONE. */
+PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetErrorHomeView(
+    struct _PyInterpreterFrame *frame, const _PyInstr *origin,
+    uint8_t checkpoint, _PyIRHomeView *out);
 
 /* A finite admitted protocol role, independent of whole-home map authority.
  * The caller holds a suspended-frame read claim or its actual successful

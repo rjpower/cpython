@@ -653,7 +653,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
 /* Validate a pinned frame image before either an active shape or finite
  * suspension-role reader inspects its immutable instruction. */
 static _PyCodeExec *
-frame_image_site(_PyInterpreterFrame *frame, uint32_t *site)
+frame_image_site(_PyInterpreterFrame *frame, const _PyInstr *origin, uint32_t *site)
 {
     if (frame->f_executable == NULL) {
         return NULL;
@@ -669,7 +669,7 @@ frame_image_site(_PyInterpreterFrame *frame, uint32_t *site)
     {
         return NULL;
     }
-    uintptr_t pc = (uintptr_t)frame->instr_ptr;
+    uintptr_t pc = (uintptr_t)origin;
     uintptr_t start = (uintptr_t)exec->words;
     size_t size = (size_t)exec->nwords * sizeof(_PyIRWord);
     if (pc < start || pc - start >= size ||
@@ -694,7 +694,7 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
         return -1;
     }
     uint32_t continuation;
-    _PyCodeExec *exec = frame_image_site(frame, &continuation);
+    _PyCodeExec *exec = frame_image_site(frame, frame->instr_ptr, &continuation);
     if (exec == NULL || continuation == 0) {
         return -1;
     }
@@ -716,39 +716,33 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
     return receiver;
 }
 
-_PyIRHomeAuthority
-_PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
+static _PyIRHomeAuthority
+plan_home_view(_PyInterpreterFrame *frame, _PyCodeExec *exec, uint32_t site,
+               uint8_t selector_class, uint8_t phase, _PyIRHomeView *out)
 {
-    unsigned int published = frame->phase_state;
-    if (!(published & _PyIR_PHASE_PUBLISHED) ||
-        (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
-        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3)
-    {
-        return _PyIR_HOME_NONE;
-    }
-    uint32_t site;
-    _PyCodeExec *exec = frame_image_site(frame, &site);
     if (exec == NULL || exec->semantic_plan == NULL) {
         return _PyIR_HOME_NONE;
     }
     PyCodeObject *co = frame->f_executable;
     int nl = co->co_nlocalsplus;
     int scratch = Py_MAX(co->co_stacksize, 1);
-    uint8_t phase = (uint8_t)published;
     const _PyIRCodePlan *plan = exec->semantic_plan;
     const _PyIRPhaseSite *sites = _PyIR_PlanPhases(plan);
     uint32_t low = 0, high = plan->nphases;
     while (low < high) {
         uint32_t mid = low + (high - low) / 2;
         if (sites[mid].site < site ||
-            (sites[mid].site == site && sites[mid].phase < phase)) {
+            (sites[mid].site == site &&
+             (sites[mid].selector_class < selector_class ||
+              (sites[mid].selector_class == selector_class && sites[mid].phase < phase)))) {
             low = mid + 1;
         }
         else {
             high = mid;
         }
     }
-    if (low == plan->nphases || sites[low].site != site || sites[low].phase != phase) {
+    if (low == plan->nphases || sites[low].site != site ||
+        sites[low].selector_class != selector_class || sites[low].phase != phase) {
         return _PyIR_HOME_NONE;
     }
     const _PyIRPhaseSite *row = sites + low;
@@ -768,6 +762,35 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         .ranges = ranges,
     };
     return (_PyIRHomeAuthority)row->authority;
+}
+
+_PyIRHomeAuthority
+_PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
+{
+    unsigned int published = frame->phase_state;
+    if (!(published & _PyIR_PHASE_PUBLISHED) ||
+        (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
+        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3)
+    {
+        return _PyIR_HOME_NONE;
+    }
+    uint32_t site;
+    _PyCodeExec *exec = frame_image_site(frame, frame->instr_ptr, &site);
+    return exec == NULL ? _PyIR_HOME_NONE : plan_home_view(
+        frame, exec, site, _PyIR_SELECTOR_ACTIVE, (uint8_t)published, out);
+}
+
+_PyIRHomeAuthority
+_PyIR_GetErrorHomeView(_PyInterpreterFrame *frame, const _PyInstr *origin,
+                       uint8_t checkpoint, _PyIRHomeView *out)
+{
+    if (checkpoint == 0) {
+        return _PyIR_HOME_NONE;
+    }
+    uint32_t site;
+    _PyCodeExec *exec = frame_image_site(frame, origin, &site);
+    return exec == NULL ? _PyIR_HOME_NONE : plan_home_view(
+        frame, exec, site, _PyIR_SELECTOR_ERROR, checkpoint, out);
 }
 
 uint8_t

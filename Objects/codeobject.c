@@ -2227,14 +2227,16 @@ semantic_reserve(void *array, uint32_t *capacity, uint32_t count, size_t size)
 
 static int
 semantic_phase(const semantic_image *image, const semantic_worklist *work,
-               const uint64_t *state, int site, uint8_t phase, int complete)
+               const uint64_t *state, int site, uint8_t selector_class,
+               uint8_t phase, int complete)
 {
     semantic_phases *build = work->phases;
     if (build == NULL || !complete) {
         return 0;
     }
     if (build->scratch == NULL) {
-        build->scratch = PyMem_Malloc((size_t)image->scratch * sizeof(*build->scratch));
+        build->scratch = PyMem_Malloc((size_t)Py_MAX(image->scratch, 1) *
+                                      sizeof(*build->scratch));
         build->shapes = _Py_hashtable_new_full(
             semantic_shape_hash, semantic_shape_equal, PyMem_Free, NULL, NULL);
         if (build->scratch == NULL || build->shapes == NULL) {
@@ -2246,24 +2248,35 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
     _PyIRHomeAuthority authority = _PyIR_HOME_MUST_READABLE;
     for (int bit = 0; bit < image->scratch; bit++) {
         unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
+        uint8_t flags = facts & (1u << SEM_NONNULL) ? 0 : _PyIR_PHASE_RANGE_NULLABLE;
         if (!(facts & (1u << SEM_MAY_OWNER))) {
-            if (!(facts & (1u << SEM_NULL))) {
-                return 0;
+            if (selector_class == _PyIR_SELECTOR_ERROR) {
+                if (!(facts & (1u << SEM_INITIALIZED))) {
+                    if (!(facts & (1u << SEM_NO_HOME))) {
+                        return 0;
+                    }
+                    continue;
+                }
+                /* A readable NULL/index control participates in a snapshot
+                 * even though it carries no counted-owner obligation. */
+                flags |= _PyIR_PHASE_RANGE_CONTROL;
             }
-            if (facts & (1u << SEM_INITIALIZED)) {
-                /* An initialized nonowner NULL is a control value, not an
-                 * absent home. Port its explicit range role before copying. */
-                authority = _PyIR_HOME_SHADOW_CANDIDATE;
+            else {
+                if (!(facts & (1u << SEM_NULL))) {
+                    return 0;
+                }
+                if (facts & (1u << SEM_INITIALIZED)) {
+                    authority = _PyIR_HOME_SHADOW_CANDIDATE;
+                }
+                continue;
             }
-            continue;
         }
         if (!(facts & (1u << SEM_INITIALIZED))) {
+            if (selector_class == _PyIR_SELECTOR_ERROR) {
+                return 0;
+            }
             authority = _PyIR_HOME_SHADOW_CANDIDATE;
         }
-        /* Complete NULL-control paths contain a canonical value or NULL in
-         * each candidate home. Language readability is a separate must-fact;
-         * a joined nullable owner range does not grant a language read. */
-        uint8_t flags = facts & (1u << SEM_NONNULL) ? 0 : _PyIR_PHASE_RANGE_NULLABLE;
         if (nranges && build->scratch[nranges - 1].end == bit &&
             build->scratch[nranges - 1].flags == flags)
         {
@@ -2284,7 +2297,7 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
         assert(build->scratch[i].begin < build->scratch[i].end);
         assert(build->scratch[i].end <= image->scratch);
         assert(i == 0 || build->scratch[i - 1].end <= build->scratch[i].begin);
-        assert(!(build->scratch[i].flags & ~_PyIR_PHASE_RANGE_NULLABLE));
+        assert(!(build->scratch[i].flags & ~(_PyIR_PHASE_RANGE_NULLABLE | _PyIR_PHASE_RANGE_CONTROL)));
     }
 #endif
     _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(build->shapes, &probe);
@@ -2337,8 +2350,76 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
     build->sites = sites;
     sites[build->nsites++] = (_PyIRPhaseSite){
         .site = (uint32_t)site, .phase = phase, .authority = (uint8_t)authority,
+        .selector_class = selector_class,
         .first = first, .count = nranges};
     return 0;
+}
+
+/* The suffix describes reached, post-flush snapshots emitted by the same
+ * Storage instance as the C error transfer. This first group has no physical
+ * home writes; callbacks may only replace a previously canonical home by
+ * canonical NULL. Other transports remain uncovered until their actual
+ * operations are represented here. */
+static int
+semantic_error_snapshots(const semantic_image *image, semantic_worklist *work,
+                         const uint64_t *state, int pc, int complete)
+{
+    _PyIRWord word = image->words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (!complete || work->phases == NULL || !(fmt->flags & _PyIR_ERROR_PROGRAM)) {
+        return 0;
+    }
+    const _PyIROwnershipEvent *header =
+        _PyIR_OwnerPrograms + fmt->owner_program + fmt->owner_events;
+    assert(header->kind == _PyIR_OWNER_ERROR_PROGRAM);
+    const _PyIROwnershipEvent *end = header + 1 + header->extent;
+    for (const _PyIROwnershipEvent *event = header + 1; event < end;) {
+        assert(event->kind == _PyIR_OWNER_ERROR_CHECKPOINT);
+        assert(event->src > 0 && event->src <= UINT8_MAX);
+        assert(event->extent < end - event);
+        int readable = 1;
+        for (int i = 1; i <= event->extent; i++) {
+            const _PyIROwnershipEvent *read = event + i;
+            assert(read->kind == _PyIR_OWNER_ERROR_READ && read->src < 4);
+            assert(fmt->roles[read->src] >= _PyIR_ROLE_IN0);
+            int home = (int)((word >> (16 + 12 * read->src)) & IR_FIELD_MAX);
+            unsigned int facts = semantic_home_facts(work, state, home, image->nl);
+            /* Required reads must have a positive value. Nullable source
+             * uses need their independent typed-use certificate as well. */
+            readable &= !!(facts & (1u << SEM_INITIALIZED));
+            readable &= !!(read->flags & _PyIR_ERROR_READ_NULLABLE) ||
+                        !!(facts & (1u << SEM_NONNULL));
+        }
+        if (readable) {
+            const uint64_t *snapshot = state;
+            if (event->flags & _PyIR_ERROR_CANONICAL_OR_NULL) {
+                size_t bytes = (size_t)SEM_FACTS * work->nwords * sizeof(uint64_t);
+                memcpy(work->branch, state, bytes);
+                memset(work->branch + SEM_NONNULL * work->nwords, 0,
+                       (size_t)work->nwords * sizeof(uint64_t));
+                snapshot = work->branch;
+            }
+            if (semantic_phase(image, work, snapshot, pc, _PyIR_SELECTOR_ERROR,
+                               (uint8_t)event->src, complete) < 0) {
+                return -1;
+            }
+        }
+        event += 1 + event->extent;
+    }
+    return 0;
+}
+
+static int
+semantic_phase_compare(const void *left, const void *right)
+{
+    const _PyIRPhaseSite *a = left, *b = right;
+    if (a->site != b->site) {
+        return a->site < b->site ? -1 : 1;
+    }
+    if (a->selector_class != b->selector_class) {
+        return (int)a->selector_class - (int)b->selector_class;
+    }
+    return (int)a->phase - (int)b->phase;
 }
 
 static void
@@ -2722,7 +2803,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 break;
             case _PyIR_OWNER_PHASE:
                 if (inspect && semantic_phase(image, work, state, pc,
-                                              (uint8_t)event->src, exact) < 0) {
+                                              _PyIR_SELECTOR_ACTIVE, (uint8_t)event->src, exact) < 0) {
                     return -1;
                 }
                 break;
@@ -3432,7 +3513,8 @@ normal_transfer_proof(const semantic_image *image,
         int complete = work.blocks[b].complete;
         work.delegated = work.blocks[b].delegated;
         for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
-            if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
+            if (semantic_error_snapshots(image, &work, state, i, complete) < 0 ||
+                semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
             }
@@ -3524,6 +3606,8 @@ normal_transfer_proof(const semantic_image *image,
                 }
                 assert(next == nsites);
                 if (phases.nsites) {
+                    qsort(phases.sites, phases.nsites, sizeof(*phases.sites),
+                          semantic_phase_compare);
                     memcpy((void *)_PyIR_PlanPhases(sparse), phases.sites,
                            (size_t)phases.nsites * sizeof(*phases.sites));
                 }

@@ -2162,10 +2162,6 @@ r_value(RFILE *p)
                 .exceptiontable = exceptiontable,
             };
 
-            if (_PyCode_Validate(&con) < 0) {
-                goto code_error;
-            }
-
             v = (PyObject *)_PyCode_New(&con);
             if (v == NULL) {
                 goto code_error;

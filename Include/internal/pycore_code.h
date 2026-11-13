@@ -161,7 +161,6 @@ struct _PyCodeConstructor {
 // back to a regular function signature.  Regardless, this approach
 // wouldn't be appropriate if this weren't a strictly internal API.
 // (See the comments in https://github.com/python/cpython/pull/26258.)
-extern int _PyCode_Validate(struct _PyCodeConstructor *);
 extern PyCodeObject* _PyCode_New(struct _PyCodeConstructor *);
 
 

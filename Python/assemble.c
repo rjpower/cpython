@@ -799,10 +799,6 @@ makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_
         .exceptiontable = a->a_except_table,
     };
 
-   if (_PyCode_Validate(&con) < 0) {
-        goto error;
-    }
-
     if (_PyCompile_ConstCacheMergeOne(const_cache, &localsplusnames) < 0) {
         goto error;
     }

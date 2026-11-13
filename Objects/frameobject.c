@@ -1376,7 +1376,7 @@ typedef struct {
     int *edge_heads, *reverse_heads, nedges;
     RegisterResumeEdge *edges;
     int *source_heads, *source_next;
-    _PyIRSourceEvent *source_events;
+    _PyIRRecoveryEvent *source_events;
     uint32_t nsource;
     int *stopped_row;
 } RegisterResumeAnalysis;
@@ -1462,14 +1462,14 @@ static bool
 register_neutral_jump_word(_PyIRWord word, int arg)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (_PyIR_ObserverOutcome(word, _PyIR_SOURCE_TAKEN) != _PyIR_OBSERVER_FORMAT_VALUE ||
+    if (_PyIR_ObserverOutcome(word, _PyIR_EDGE_TAKEN) != _PyIR_OBSERVER_FORMAT_VALUE ||
         !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) ||
         !(fmt->flags & _PyIR_JUMP_ALWAYS) ||
         (fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
         _PyIR_Extent(fmt->reads, arg) != 0 ||
         _PyIR_Extent(fmt->writes, arg) != 0 ||
         _PyIR_Extent(fmt->through, arg) != 0 ||
-        _PyIR_Outcome(word, _PyIR_SOURCE_TAKEN).semantic)
+        _PyIR_Outcome(word, _PyIR_EDGE_TAKEN).semantic)
     {
         return false;
     }
@@ -1498,7 +1498,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     bool committed = register_committed_scope(frame, &context);
     bool neutral_jump = false;
     if (committed && context.event == PY_MONITORING_EVENT_JUMP &&
-        context.edge == _PyIR_SOURCE_TAKEN)
+        context.edge == _PyIR_EDGE_TAKEN)
     {
         int pc = _PyFrame_InstrOffset(frame, context.site);
         PyCodeObject *code = _PyFrame_GetCode(frame);
@@ -1579,8 +1579,9 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
 static int
 register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 {
-    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(code->co_exceptiontable);
-    const unsigned char *end = cursor + PyBytes_GET_SIZE(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    const unsigned char *cursor = semantic.exceptions;
+    const unsigned char *end = cursor + semantic.exceptions_size;
     if (!_PyIR_ExceptionTableValid(cursor, end, analysis->n, analysis->nl,
                                    analysis->nl + analysis->nt))
     {
@@ -1618,17 +1619,17 @@ register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to,
     analysis->edge_heads[from] = analysis->reverse_heads[to] = index;
 }
 
-/* Decode and index immutable source records once per request. Both forward
+/* Decode and index immutable recovery records once per request. Both forward
  * ownership and reverse survival walks use the same sparse physical graph. */
 static int
 register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 {
-    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    _PyIRSemanticMap source = _PyIRSemantic_Stored(code->co_exceptiontable);
     size_t n = (size_t)Py_MAX(analysis->n, 1);
     size_t r = (size_t)source.nrecords;
     size_t budget = 16 * 1024 * 1024;
     if (n > budget / (3 * sizeof(RegisterResumeEdge) + 3 * sizeof(int)) ||
-        r > budget / (sizeof(RegisterResumeEdge) + sizeof(_PyIRSourceEvent) + sizeof(int)) ||
+        r > budget / (sizeof(RegisterResumeEdge) + sizeof(_PyIRRecoveryEvent) + sizeof(int)) ||
         source.nrecords > INT_MAX)
     {
         PyErr_SetString(PyExc_ValueError, "debugger context graph is too large");
@@ -1639,7 +1640,7 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
     analysis->source_heads = PyMem_New(int, n);
     analysis->edges = PyMem_New(RegisterResumeEdge, 3 * n + r);
     analysis->source_next = PyMem_New(int, Py_MAX(r, 1));
-    analysis->source_events = PyMem_New(_PyIRSourceEvent, Py_MAX(r, 1));
+    analysis->source_events = PyMem_New(_PyIRRecoveryEvent, Py_MAX(r, 1));
     if (analysis->edge_heads == NULL || analysis->reverse_heads == NULL ||
         analysis->source_heads == NULL || analysis->edges == NULL ||
         analysis->source_next == NULL || analysis->source_events == NULL)
@@ -1666,8 +1667,8 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         }
     }
     for (uint32_t j = 0; j < source.nrecords; j++) {
-        _PyIRSourceEvent *event = &analysis->source_events[j];
-        _PyIRSource_Event(&source, j, event);
+        _PyIRRecoveryEvent *event = &analysis->source_events[j];
+        _PyIRSemantic_Event(&source, j, event);
         analysis->source_next[j] = analysis->source_heads[event->from];
         analysis->source_heads[event->from] = (int)j;
         if (event->handler >= 0) {
@@ -1940,7 +1941,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
             }
         }
         for (uint32_t r = 0; r < analysis->nsource; r++) {
-            _PyIRSourceEvent event = analysis->source_events[r];
+            _PyIRRecoveryEvent event = analysis->source_events[r];
             if (event.handler >= 0) {
                 null_home[event.exc_slot - nl] = 0;
                 if (event.lasti) {
@@ -1982,7 +1983,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                         for (int r = analysis->source_heads[i]; r >= 0;
                              r = analysis->source_next[r])
                         {
-                            _PyIRSourceEvent event = analysis->source_events[r];
+                            _PyIRRecoveryEvent event = analysis->source_events[r];
                             if (event.edge == k) {
                                 register_resume_error_needs(analysis, lane_live, edge, event.handler,
                                                             event.exc_slot, event.lasti);
@@ -2519,7 +2520,7 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
                 for (int r = analysis->source_heads[i]; r >= 0;
                      r = analysis->source_next[r])
                 {
-                    _PyIRSourceEvent event = analysis->source_events[r];
+                    _PyIRRecoveryEvent event = analysis->source_events[r];
                     if (event.edge == k && event.handler >= 0) {
                         memcpy(error, work, (size_t)nt * sizeof(int));
                         register_context_unwind(analysis, error, event.exc_slot, event.lasti);
@@ -3224,8 +3225,8 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         /* The existing FOR dynamic-phase proof has ordinary edges only.
          * Keep that adapter bounded until its own exceptional survival proof
          * is extended; empty inherited recipes already include EH liveness. */
-        bool ordinary_anchor = allow_anchor &&
-            PyBytes_GET_SIZE(_PyFrame_GetCode(frame)->co_exceptiontable) == 0;
+        bool ordinary_anchor = allow_anchor && _PyIRSemantic_Stored(
+            _PyFrame_GetCode(frame)->co_exceptiontable).exceptions_size == 0;
         int result = register_resume_recipe(frame, current, target, analysis->safe,
                                              analysis->required, ordinary_anchor, &pair);
         if (result > 0 && pair >= 0) {
@@ -3485,11 +3486,11 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
 
     int requested_line = new_lineno;
     new_lineno = first_line_not_before(lines, len, requested_line);
-    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    _PyIRObservationMap source = _PyIRObservation_Stored(code);
     for (uint32_t j = 0; j < source.nrecords; j++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, j, &event);
-        if (event.line >= requested_line &&
+        _PyIRObservationEvent event;
+        _PyIRObservation_Event(&source, j, &event);
+        if (event.line >= 0 && event.line >= requested_line &&
             (new_lineno < 0 || event.line < new_lineno))
         {
             new_lineno = event.line;
@@ -3559,7 +3560,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     if (child != NULL) {
         int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
-        if (child->external || PyBytes_GET_SIZE(code->co_exceptiontable) ||
+        if (child->external || _PyIRSemantic_Stored(code->co_exceptiontable).exceptions_size ||
             self->f_frame->return_slot != IR_NO_DST ||
             (opcode != CALL && opcode != CALL_KW))
         {
@@ -3574,8 +3575,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         pending_call = true;
     }
     if (!pending_call && self->f_source_event >= 0) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
+        _PyIRObservationEvent event;
+        _PyIRObservation_Event(&source, (uint32_t)self->f_source_event, &event);
         current = event.to;
     }
     RegisterStoppedState phase = register_stopped_state(self, current, what_event,
@@ -3610,8 +3611,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
      * context to agree with the selected landing's derived context; merging
      * at event.to alone cannot establish the stopped phase. */
     if (!pending_call && self->f_source_event >= 0) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
+        _PyIRObservationEvent event;
+        _PyIRObservation_Event(&source, (uint32_t)self->f_source_event, &event);
         int *origins = PyMem_New(int, Py_MAX(analysis.nt, 1));
         if (origins == NULL) {
             register_resume_analysis_clear(&analysis);
@@ -3668,8 +3669,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         for (uint32_t j = 0;
              phase.kind != REGISTER_RESUME_COMMITTED && best_addr < 0 &&
              recipe >= 0 && j < source.nrecords; j++) {
-            _PyIRSourceEvent event;
-            _PyIRSource_Event(&source, j, &event);
+            _PyIRObservationEvent event;
+            _PyIRObservation_Event(&source, j, &event);
             if (event.line == new_lineno && event.handler < 0) {
                 recipe = register_resume_plan(self->f_frame, current, event.to,
                                               &analysis, !pending_call,

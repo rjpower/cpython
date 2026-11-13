@@ -1042,13 +1042,42 @@ class TestIRCases(unittest.TestCase):
         source = source.replace(
             "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
             "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
-        source = source.replace("gen->gi_frame_state = FRAME_CREATED;",
-                                "assert(gen->gi_frame_state == FRAME_CREATED);")
+        copy_call = "_PyFrame_Copy(frame, gen_frame, FRAME_OWNED_BY_GENERATOR);"
+        self.assertIn(copy_call, source)
+        source = source.replace(copy_call,
+            "assert(gen_frame->owner == FRAME_OWNED_BY_GENERATOR);")
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
             self.assertFalse(ir_generator.writes_suspended_frame_state(
                 mutated.instructions[name]))
+
+    def test_suspension_effect_frame_copy_owner(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        copy_call = "_PyFrame_Copy(frame, gen_frame, FRAME_OWNED_BY_GENERATOR);"
+        self.assertIn(copy_call, source)
+        for owner in ("FRAME_OWNED_BY_GENERATOR", "FRAME_OWNED_BY_FRAME_OBJECT",
+                      "FRAME_OWNED_BY_THREAD", "FRAME_OWNED_BY_INTERPRETER"):
+            with self.subTest(owner=owner):
+                changed = source.replace(copy_call,
+                    f"_PyFrame_Copy(frame, gen_frame, {owner});")
+                Path(self.temp_input_filename).write_text(changed)
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+                self.assertEqual(ir_generator.writes_suspended_frame_state(
+                    analysis.instructions["RETURN_GENERATOR"]),
+                    owner == "FRAME_OWNED_BY_GENERATOR")
+        for owner in ("owner", "FRAME_OWNED_BY_GENERATOR | other",
+                      "flag ? FRAME_OWNED_BY_GENERATOR : FRAME_OWNED_BY_THREAD"):
+            with self.subTest(owner=owner):
+                changed = source.replace(copy_call,
+                    f"_PyFrame_Copy(frame, gen_frame, {owner});")
+                Path(self.temp_input_filename).write_text(changed)
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+                with self.assertRaisesRegex(SyntaxError,
+                        "effect requires a literal destination owner"):
+                    ir_generator.writes_suspended_frame_state(
+                        analysis.instructions["RETURN_GENERATOR"])
 
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /

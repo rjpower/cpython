@@ -1241,6 +1241,9 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     assert(f->f_frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     Py_BEGIN_CRITICAL_SECTION(f);
+    /* Like RETURN_GENERATOR, a newly constructed generator discards its first
+     * None input. The ordinary frame initializer's slot zero is not a recipient. */
+    f->f_frame->return_slot = IR_NO_DST;
     _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame,
                   FRAME_OWNED_BY_GENERATOR);
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);

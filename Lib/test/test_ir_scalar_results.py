@@ -139,6 +139,20 @@ class ScalarResultTests(unittest.TestCase):
                 self.assertFalse(contract.error_checkpoints)
                 self.assertIsNone(contract.normal_storage)
 
+    def test_normal_endpoint_cannot_replace_a_frame_exit_transfer(self):
+        emit = ir_generator.emit_handler
+        for effect in ("switches_frame", "returns"):
+            def frame_exit(name, instruction, *args, **kw):
+                instruction = replace(instruction, _properties=replace(
+                    instruction.properties, **{effect: True}))
+                return emit(name, instruction, *args, **kw)
+
+            with self.subTest(effect=effect), mock.patch.object(
+                    ir_generator, "emit_handler", frame_exit):
+                self.assertIsNone(self.program(
+                    "out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);",
+                    scratch_result=True).normal_storage)
+
     def test_inline_result_has_explicit_canonical_nonnull_contract(self):
         contract = self.program("out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);",
                                 scratch_result=True)

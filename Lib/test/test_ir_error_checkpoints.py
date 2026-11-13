@@ -258,6 +258,14 @@ class ErrorCheckpointTests(unittest.TestCase):
             ("UNARY_NOT", 3, 3), ("LOAD_FAST", 4, 1),
             ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
         ], slots=5, locals=("payload", "iterator", "mutable"))
+        # A later valid scalar graph can publish its own result, but cannot
+        # recover the unrelated incoming shape lost at an uncovered read.
+        unknown_then_published = make_code([
+            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
+            ("UNARY_NOT", 3, 3), ("LOAD_FAST", 4, 1),
+            ("UNARY_INVERT", 5, 4), ("GET_ANEXT", 6, 5),
+            ("RETURN_VALUE", 6),
+        ], slots=5, locals=("payload", "iterator", "mutable"))
         # One predecessor has a scratch owner; the other has never
         # initialized that home. MAY is insufficient even with a real read.
         joined = make_code([
@@ -267,7 +275,7 @@ class ErrorCheckpointTests(unittest.TestCase):
             ("IR_JUMP", 0, 0, 6), ("LOAD_FAST", 4, 1),
             ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
         ], slots=5, locals=("payload", "iterator", "mutable"))
-        for image, site in ((unknown, 4), (joined, 7)):
+        for image, site in ((unknown, 4), (unknown_then_published, 5), (joined, 7)):
             for code in routes(image):
                 self.assertEqual(self.authority(code, site), 0)
 

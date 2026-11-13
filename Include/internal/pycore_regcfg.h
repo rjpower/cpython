@@ -53,6 +53,8 @@ extern "C" {
 /* _PyRegOp.flags */
 #define _PyReg_SOURCE_ORIGIN   256 // explicit source span, not propagated location
 #define _PyReg_COMPLETED       512 // frontend completion performed by its producer
+#define _PyReg_CALL_NO_SELF   1024 // the reserved self input is virtual NULL
+#define _PyReg_CALL_NO_KWARGS 2048 // EX's reserved kwargs input is virtual NULL
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
@@ -235,6 +237,8 @@ int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_Discard(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
+int _PyRegPass_CallRoles(_PyRegCfg *cfg);
+int _PyRegCfg_VerifyCallRoles(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);

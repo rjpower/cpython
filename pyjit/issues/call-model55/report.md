@@ -657,7 +657,6 @@ Native `E/m3-created-empty-native` retains the exact9f28 executable. The fast
 helper has no stack adjustment, addressable view, query call or canary; it
 moves only [0,L), then tail-calls memset for destination scratch. The uncovered
 query/view path stays separately outlined. CALL/RETURN retain 64/16 local bytes.
-Native x86 alignment instructions are unrelated to executable register-IR words.
 
 `E/m3-created-empty-hot-screen-golden` has two balanced pairs, stable identities
 and no measurement/postflight failure:
@@ -673,5 +672,52 @@ and no measurement/postflight failure:
 
 The composition still loses and retains NULL clearing/arena scans. This is no
 promotion, and cross-campaign changes are not an isolated causal comparison.
-The explicit CREATED marker/getter and actual collector consumers now compose
-at21311f241fb; their combined builds/checks are pending.
+The explicit CREATED marker/getter and actual collector consumers compose
+through44383f6baa7. Both builds retain117/79 modules. Four raw certificate
+methods pass per role after correcting the invalid A/observer fields and
+balancing the retained branch-local owner before its join. The selected visitor
+poison probe and actual local-write/collection/resume case pass. Lifecycle
+coverage is594 cases per role: release586 plus the separately rerun eight-case
+retirement module (the first command had the wrong module name); debug runs
+all ten modules together. Skips are14 release,13 debug. Groups overlap earlier
+frame/phase checks and are not an added deduplicated total.
+
+Its native GC visitor reserves72 local plus48 saved-register bytes and a
+canary, including on uncovered traversal paths. The fast copy remains stackless.
+The two-pair selected54 screen yields DeltaBlue1.044330, generators1.033444,
+coroutines0.974828, Richards0.996005, comprehensions1.001460 and logging1.241757.
+Logging spans1.167382–1.320871; this is a noisy losing composition, not a win.
+
+### Vacant return recipients
+
+`91269fba2ce` stops loading an old scratch/interpreter-entry recipient during
+return/send publication. Only a named local may contain a displaced owner;
+that path retains actual reload/publication/close behavior. No generic phase
+query or new transition is added. Both builds retain117/79 modules; completion,
+frame-call, generator, coroutine and frame modules pass288 tests per role
+(eight skips each). Exact native executable and return/send dumps are retained
+in`E/m3-vacant-recipient-native`.
+
+The two-pair selected54 screen is DeltaBlue1.046231[1.029183,1.063561],
+generators1.037883[1.036586,1.039182], coroutines1.036750[1.035068,1.038434],
+Richards1.009545[1.008556,1.010534], comprehensions1.005368[1.005026,1.005709],
+logging1.155015[1.153206,1.156826]. No promotion or isolated causal attribution
+follows. The next coherent CALL-role source is merged/generated at aad17cd9c1c;
+its release C compilation reaches module freezing, which fails on unproved
+virtual inputs and a feedback-argument decoder crash. GDB identifies the latter
+in the new NORMAL_CLEAR_INPUTS cold replay; fixes and runtime validation remain.
+
+Repair44424f66d8c and regenerated f3477941eb0 extract the already validated
+immutable feedback-argument decoder for all semantic replay, preserving raw
+constructor/code table lifetimes. The stack simulator now keys a declared
+named input by its declaration rather than a reused anonymous temporary.
+This repairs both stack-effect metadata and real generated exact-CALL argument
+offsets: callable0/args2 replace erroneous offsets dependent on argument count.
+The freezer-only build succeeds. Two retained native probes now return normal
+ValueError for unproved holes; the external module no longer raises SIGBUS.
+This is partial diagnostic evidence, not a complete117/79 build or runtime pass.
+The first rejected image is builtins.aiter, where a fused IS_OP_JUMP consumes
+the future receiver hole on both edges but lacks a positive replay recipe.
+Generated post-review separately finds a bound-method promotion guard that
+could lose its updated receiver/effect state on fallback. Both fixes remain
+in progress, followed by combined build and behavioral checks.

@@ -85,10 +85,22 @@ products. Initial compile failed on the marker's missing semicolon; the fixed
 version builds both roles and passes 580 lifecycle plus five generator-contract
 tests per role. Its raw admission fixtures used invalid RETURN_GENERATOR A
 fields and a one-past observer target; test-only correction `76630a14599`
-retains the coverage. Current `21311f241fb` also composes bit literal37d,
-producer/getter4a8 and GC542; both-role rebuilds are running. Native copy helper
-has no stack allocation/query; hot6 still loses versus54. The bitmap source
-worktree starts at9f28 and must absorb complete M4 before rival measurement.
+retains the coverage. Created selector composition `44383f6baa7` passes all four
+raw methods per role and 594 lifecycle cases per role; the negative multisite
+fixture explicitly retires its branch-local owner before joining. Native copy
+helper has no stack allocation/query; the GC visitor has 72 local plus 48
+saved bytes and a canary. Hot6 still loses versus54. `91269fba2ce` adds vacant
+return-recipient handling and passes 288 focused cases per role, still losing
+the hot screen. CALL merge `aad17cd9c1c` composes runtime/compiler f7b47 and IR
+03be plus generated products. Release compilation succeeds, but module freezing
+fails on unproved holes and a FBARG normal-clear decoder crash. Repair44424 and
+regenf3477941eb0 fix FBARG replay and unused-name aliasing that also corrupted
+emitted exact CALL argument geometry. The freezer-only build succeeds and both
+probes reject unproved holes without crashing. Full builds still await positive
+branch-consume proofs and a generated post-method-promotion fallback correction.
+IR owns fixes; do not time this partial build. GDB evidence is retained under
+E/call-roles-external-gdb*. The bitmap source worktree starts at9f28 and needs
+complete writers/readers before authority switching or rival measurement.
 Workers implement virtual CALL roles and copy/escape/created-frame ports.
 The [reader census](issues/call-model55/lifecycle-readers.md)
 queues copy/escape, unwind, results/resume, GC and observation ports.

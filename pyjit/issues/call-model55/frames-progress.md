@@ -326,3 +326,18 @@ adds live local-write/collect/resume and marker-invalidation coverage plus an
 actual GIL visitor poison probe on private untracked embedded storage. GC
 producer and collector source peers are GO; IR final producer peer and root
 coherent generation/native checks remain pending. No native job ran here.
+
+IR final selector peer is GO; root explicitly requested the three-file commit,
+which is `4a8b591a78d`. The literal remains separate (`37d3947eec8`). Root's
+current created-empty composition passes its both-role groups; selector
+integration/native costs remain coordinator work.
+
+Full M5 implementation is authorized in isolated `call55-bitmap` on `9f28`.
+Storage/address source receives GC GO, and actual writer ports now cover the
+emitter commits, core copies, bind/default/unpack/call paths and observer local
+writes. The ordinary-home API is strict; native entry has its own checked
+capability. Complete writer census, helper/failure ports and collector policy
+remain gates before builds/authority. Root approves an earlier GIL counted
+bitmap switch after those gates, independently of complete general static
+callback maps; zero bits confer no read and generic introspection/FT deferred
+semantics remain separate. The amended bitmap design records this schedule.

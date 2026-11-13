@@ -54,8 +54,13 @@ generators/coroutines/logging versus selected54; they have no direct all29
 upstream campaign. Certified empty-created copy `9f28c0fa16d` passes 580
 lifecycle and five generated-contract tests per role; its hot screen still
 loses DeltaBlue 6.1%, generators 3.7% and silent logging 14.6% versus54.
-The explicit created marker/getter/collector composition `21311f241fb` is
-building. Explicit CALL roles are in progress. Complete
+The explicit created marker/getter/collector composition `44383f6baa7` passes
+594 lifecycle cases per role. Vacant return recipients `91269fba2ce` pass 288
+focused cases per role, but still lose the hot screen. Explicit CALL roles
+are merged/generated; initial freezing exposes admission, generator-geometry
+and FBARG decoder defects. The latter two are repaired through `f3477941eb0`;
+branch-consumption proofs and post-method-promotion fallback remain before
+full builds/runtime qualification. Complete
 static authority and the full physical-bitmap rival remain open. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),

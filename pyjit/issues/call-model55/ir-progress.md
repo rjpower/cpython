@@ -143,3 +143,27 @@ mismatches, image/site/phase rejection, full extent and all public admission
 routes, duplicate scratch TAKE, actual provider/finalizer frame-root walks with
 a scratch survivor, and dynamic binding changes before error restore. Runtime
 results, native layout/costs and performance are not yet claimed.
+
+CALL-role source packet is frozen for root integration after independent GC
+source GO. Thirty-five generated canonical heads/twins/specializations retain
+explicit self/kwargs virtual-input masks through cold specialization and
+instrumentation. Public admission requires a separate must-NO_HOME fact at each
+virtual hole; UNKNOWN never supplies absence. The fact covers inline/index
+values as well as counted owners, and differs from physical NULL because a
+returned child may leave nonowning metadata bytes. Actual successful call drains
+and same-frame final flush/vacate produce finite normal-edge events; all family
+members must have a positive recipe. Exception/observer recovery seeds only the
+actual cleared tail, with unknown retained prefix. One additional scratch
+bitvector extends transient proof storage; no frame field or hot plan lookup is
+added. The finite cold role-dispatch table costs 1024 bytes plus 35 handlers and
+format rows; root owns final compiled-size/native pricing.
+
+Root's composite host cases/metadata generation passed. New source fixtures
+cover serialized/public malformed holes, joins/UNKNOWN, reused tuple/child-call
+homes, full extent, real loops/except/generator code, specialization/hooks,
+post-expansion weakref callbacks, and actual fixed-arity arena CALL_KW native
+prepend with local mutation/GC/errors. They have not yet run natively. This
+normal-edge packet does not certify complete callback/error/suspended maps or
+switch GC authority. The next packet must extend the shared emitted event graph
+to remaining finite family outcomes and reached publication phases, rather than
+adding another independent decoder.

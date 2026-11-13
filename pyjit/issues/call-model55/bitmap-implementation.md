@@ -2,9 +2,9 @@
 
 2026-11-12. Design against the accepted M4 reference: shared arena, overlapping
 argument transfer, initialized NULL named locals, and the same admitted images,
-emitter events and initialized-value phases. This is a usable alternative to
-implement after those interfaces freeze, not an authority switch now. No source
-implementation or native job is authorized by this document alone.
+emitter events and initialized-value phases. Implementation is now active in
+the isolated rival described below. The earlier GIL counted-owner schedule
+does not authorize zero-bit reads or establish a complete comparison.
 
 ## Storage and hot addressing
 
@@ -194,3 +194,45 @@ and event authority, with the positive vacant-bit proof and physical-home
 capability requirements above explicit. Both peers approve the design direction,
 not implementation or static authority. Freeze against the completed M4
 interfaces before source changes.
+
+## Authorized implementation and earlier GIL authority
+
+2026-11-13. Root authorizes the full rival in isolated `call55-bitmap`, initially
+at `9f28c0fa16d`. The actual storage/header slice has GC source GO: coallocated
+chunk/heap tails, reduced capacity and exact cache admission, explicit 120-byte
+GIL header, native-entry NULL pointer, frame/heap binding and address/update/
+endpoint iterator helpers. The fixed API is in `pycore_home_bitmap.h`.
+
+Generated consume/store/move/commit/clear hooks and the real C writers are
+being ported. Native interpreter-exit homes have a checked emitter capability,
+avoiding a nullable-bitmap branch on every ordinary home write. Return
+publication handles its actual native boundary explicitly. Bit operations
+update only when occupancy changes; physical distinct-cell moves currently
+perform separate clear/set operations rather than same-word batching. These
+costs remain in the eventual native ledger.
+
+Root approves an earlier GIL-only authority schedule after **complete writer
+ports** and a GC policy peer. A set bit is positive initialized counted-object
+edge authority because actual canonical publication established it. Thus
+counted roots and private retirement can read set-bit homes without completing
+every general static callback map. Zero bits continue to grant no inline,
+control, boundness or object read. Keep the same admitted images, finite
+protocols, NULL named locals and physical transfer/call ABI.
+
+The proposed arena root walk visits each chunk bitmap once, including live
+unlinked reservations; typed active/staged/retiring headers and detached
+results remain explicit. Shared parent/child argument cells must not become
+two physical counted edges. Heap subtraction uses its own owner interval,
+and every moved/detached source bit clears before callbacks. GC must peer
+these shared-root/header/reservation rules before switching consumers.
+
+Generic tp_traverse and gc.get_referents still need observable no-count and
+immortal referents. Existing verifier-wide immortal roots justify reachability
+for its explicit root mode, not replacing arbitrary visitproc semantics.
+Collector/root-specific bit consumers must preserve that distinction. FT
+deferred/no-count adjustment and marking keep their selected/tag policy; this
+earlier scheduling makes no FT bitmap-authority claim.
+
+No native job or authority switch has occurred. The full static comparator
+remains open. Merge the complete M4 interfaces into the rival before the final
+comparison; storage/writer progress is not performance or completion evidence.

@@ -4,10 +4,14 @@ Status: the normal-retirement certificate, explicit retirement reasons,
 provider kinds and first shared-emitter phase graph are integrated through
 `ed08ab64c7e`. Both roles pass 675 core, nine phase and nine selected generated
 contract cases; groups overlap. Continuing cross-lane source/native review is
-GO for this partial M2 coverage. The [report](report.md) records measured
-preparatory costs. Typed home authority and copy/escape ports are next in
-validation. NULL homes remain execution authority. Complete family/lifecycle
-coverage and the atomic M4 switch remain open.
+GO for this partial M2 coverage. Selected copy/capture, empty-created copying
+and the explicit CREATED collector selector subsequently pass focused checks
+through44383f6baa7. Canonical virtual CALL roles and a separate positive NO_HOME
+fact are merged at aad17cd9c1c, but freezing exposes missing consume proofs and
+a feedback-argument replay defect; that packet has no runtime pass. The
+[report](report.md) records exact evidence and preparatory costs. NULL homes
+remain general execution authority. Complete family/lifecycle coverage and
+the atomic M4 switch remain open.
 
 ## One semantic representation
 

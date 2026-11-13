@@ -1067,22 +1067,60 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("PyValue completed =", source)
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
-        output = io.StringIO()
-        ir_generator.generate_ir(
-            [self.temp_input_filename], analysis, output, False)
-        for name in ("FOR_ITER", "FOR_ITER_LIST", "SEND", "CLEANUP_THROW"):
-            with self.subTest(name=name):
-                handler = self.handler(output.getvalue(), name)
-                self.assertIn("PyValue completed =", handler)
-                self.assertIn("_PyIRStepResult ir_step_result =", handler)
-                self.assertNotIn("&completed", handler)
-                self.assertIn(", completed, _PY_IR_", handler)
-                self.assertNotIn("_PyIRStepResult completed =", handler)
-                if name == "CLEANUP_THROW":
-                    self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
-        for name in ("FOR_ITER_GEN", "SEND_GEN"):
-            self.assertNotIn("PyValue new_frame;",
-                             self.handler(output.getvalue(), name))
+        formats = ir_generator.compute_formats(analysis)
+
+        def emitted(name, record):
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            emitter = ir_generator.IREmitter(out, analysis, formats)
+            instruction = ir_generator.all_instructions(analysis)[name]
+            ir_generator.generate_handler(name, instruction,
+                                          formats[name], emitter, out, record)
+            return output.getvalue()
+
+        entries = {
+            "FOR_ITER": "ForIter", "INSTRUMENTED_FOR_ITER": "ForIter",
+            "FOR_ITER_LIST": "ForIter", "FOR_ITER_TUPLE": "ForIter",
+            "FOR_ITER_RANGE": "ForIter", "FOR_ITER_VIRTUAL": "ForIter",
+            "SEND": "Send", "SEND_VIRTUAL": "Send",
+            "SEND_ASYNC_GEN": "Send", "CLEANUP_THROW": "SendThrow",
+        }
+        for record in (False, True):
+            for name, entry in entries.items():
+                with self.subTest(name=name, record=record):
+                    handler = emitted(name, record)
+                    self.assertIn("PyValue completed =", handler)
+                    self.assertIn("_PyIRStepResult ir_step_result =", handler)
+                    self.assertNotIn("&completed", handler)
+                    self.assertNotIn("_PyEval_CompleteStep(", handler)
+                    self.assertNotIn("_PyIRStepResult completed =", handler)
+                    target = ("_PyFrame_InstrAt(frame, oparg)"
+                              if name == "CLEANUP_THROW" else "next_instr + oparg")
+                    recipient = "" if entry == "ForIter" else "IR_A(ir_word), "
+                    self.assertIn(
+                        f"_PyEval_Complete{entry}(tstate, frame, this_instr, "
+                        f"IR_B(ir_word), {recipient}{target}, completed);", handler)
+                    if name == "CLEANUP_THROW":
+                        self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
+            for name in ("FOR_ITER_GEN", "SEND_GEN"):
+                handler = emitted(name, record)
+                self.assertNotIn("PyValue new_frame;", handler)
+                self.assertNotIn("_PyEval_CompleteForIter(", handler)
+                self.assertNotIn("_PyEval_CompleteSend(", handler)
+            for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                         "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
+                handler = emitted(name, record)
+                self.assertIn("_PyEval_CompleteGeneratorReturn(", handler)
+                self.assertNotIn("_PyEval_CompleteForIter(", handler)
+                self.assertNotIn("_PyEval_CompleteSend(", handler)
+
+        marker = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
+        Path(self.temp_input_filename).write_text(source.replace(
+            marker, "IR_COMPLETE_STEP(unknown_kind, completed, oparg);", 1))
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
+            emitted("FOR_ITER", False)
 
     def test_suspension_effect_requires_a_state_write(self):
         source = (Path(__file__).resolve().parents[2] /

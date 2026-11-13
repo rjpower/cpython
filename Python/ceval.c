@@ -3461,14 +3461,31 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 _PyIRStepResult
-_PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *site, int base, int destination,
-                     _PyInstr *exit, PyValue value, enum _PyIRStepKind kind)
+_PyEval_CompleteForIter(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *site, int base, _PyInstr *exit, PyValue value)
 {
     /* Native completions still need publication; generator returns arrive
      * from the emitter's checked canonical input or its Publish fallback. */
+    return complete_step_impl(tstate, frame, site, base, IR_NO_DST, exit,
+                              value, _PY_IR_FOR_ITER, false);
+}
+
+_PyIRStepResult
+_PyEval_CompleteSend(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *site, int base, int destination,
+                     _PyInstr *exit, PyValue value)
+{
     return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, kind, false);
+                              value, _PY_IR_SEND, false);
+}
+
+_PyIRStepResult
+_PyEval_CompleteSendThrow(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                          _PyInstr *site, int base, int destination,
+                          _PyInstr *exit, PyValue value)
+{
+    return complete_step_impl(tstate, frame, site, base, destination, exit,
+                              value, _PY_IR_SEND_THROW, false);
 }
 
 _PyIRStepResult

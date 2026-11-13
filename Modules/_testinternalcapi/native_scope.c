@@ -506,7 +506,8 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr);
     int handler = IR_HANDLER(word);
     int argc = (int)IR_C(word), count;
-    switch (_PyIR_BaseOpcode(handler)) {
+    int semantic_handler = _PyCode_InstrHandler(code, (int)word_index);
+    switch (_PyIR_BaseOpcode(semantic_handler)) {
         case CALL_FUNCTION_EX:
             count = 4;
             break;

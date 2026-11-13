@@ -127,7 +127,7 @@ typedef struct {
         uint32_t hint;
         uint32_t dictoffset;
     };
-    uint32_t _pad;
+    uint32_t read_kind;             // checked indexed-read nomination, or zero
     union {                         // non-owning; valid while the versions match
         PyObject *descr;
         PyObject *fget;
@@ -142,6 +142,8 @@ typedef struct {
 
 static_assert(sizeof(_PyFbAttr) == 48,
               "attribute feedback size changed");
+
+#define _Py_FB_READ_SHAPE 1u
 
 // LOAD_GLOBAL
 typedef struct {
@@ -193,6 +195,7 @@ typedef struct {
     union {
         const void *descr;
         uint32_t shape_to;
+        uint32_t read_kind;         // scalar SHAPE-read capability, never a pointer
     };
     _PyValueGuarded class_value;
 } _PyFbPayload;

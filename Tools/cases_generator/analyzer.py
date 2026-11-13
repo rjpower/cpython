@@ -1041,7 +1041,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")
-    exits_if = variable_used(op, "EXIT_IF")
+    exits_if = (variable_used(op, "EXIT_IF") or
+                variable_used(op, "IR_GUARD_SHAPE_READ"))
     if deopts_if and exits_if:
         tkn = op.tokens[0]
         raise lexer.make_syntax_error(

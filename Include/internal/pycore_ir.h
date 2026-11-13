@@ -295,6 +295,8 @@ enum {
     _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
 };
 
+#define _PyIR_COMPLETION_HAS_RESULT 1u
+
 typedef struct {
     uint8_t kind, flags;
     uint16_t dst, src, extent;

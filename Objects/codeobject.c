@@ -862,7 +862,7 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
             goto invalid_allocated;
         }
         const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-        int base = _PyIR_HandlerBase[handler];
+        int base = _PyIR_HandlerBase[_PyIR_BaseOpcode(handler)];
         int next[2] = {i + 1, -1};
         if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) {
             if (!(fmt->flags & _PyIR_NAMES_TARGET)) {
@@ -1066,7 +1066,7 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         bool jumps = (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                      !(fmt->flags & _PyIR_NAMES_TARGET);
         for (int taken = 0; taken <= (int)jumps; taken++) {
-            if (!taken && (IS_SCOPE_EXIT_OPCODE(opcode) ||
+            if (!taken && (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[opcode]) ||
                            (fmt->flags & _PyIR_JUMP_ALWAYS)))
             {
                 continue;
@@ -3131,7 +3131,9 @@ normal_transfer_proof(const semantic_image *image,
                 block_at[i + 1] = 1;
             }
         }
-        if (IS_SCOPE_EXIT_OPCODE(_PyIR_BaseOpcode(IR_HANDLER(words[i]))) && i + 1 < n) {
+        if (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[
+                _PyIR_BaseOpcode(IR_HANDLER(words[i]))]) && i + 1 < n)
+        {
             block_at[i + 1] = 1;
         }
     }
@@ -3329,7 +3331,9 @@ normal_transfer_proof(const semantic_image *image,
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
             memcpy(work.branch, state, state_words * sizeof(uint64_t));
             semantic_delegated outgoing = work.delegated;
-            if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
+            if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) &&
+                !IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[opcode]))
+            {
                 semantic_normal_edge(image, &work, state, last, 0);
                 semantic_enqueue(&work, block_at[end], state, complete);
             }

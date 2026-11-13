@@ -1,9 +1,10 @@
 # Lifecycle reader census and first consolidation
 
-2026-11-12 source census refreshed against integrated `9136c202e8e` (constructor
-`05701020b6a` plus regeneration). The phase consumer `b27a1a21330` is committed
-separately and awaits the IR definition/publication ports. The heap-deallocator
-candidate has source GO but is not in this checkpoint. NULL remains authority.
+2026-11-12 source census refreshed against integrated `6ff13875cfe`: constructor,
+heap deallocation, shared-emitter phase plan/consumer, cold probe and accepted
+redirect reset are merged. Root reports 675 core tests passed per role; phase
+fixtures are being corrected against actual admitted geometry and callback
+lifetime. NULL remains authority. The queues below track remaining reader ports.
 This is the port list for the atomic map switch; it does not authorize removing
 the arena scanner or treating an empty-return certificate as complete.
 
@@ -173,12 +174,13 @@ and diff checks pass; root owns execution. No `frame_dealloc` change is included
 
 ## Separate private heap-deallocation component
 
-The actual two-file candidate and its source GO are recorded in
+The integrated two-file component and its source GO are recorded in
 [heap-dealloc-proposal.md](heap-dealloc-proposal.md) and
 [heap-dealloc-peer.md](heap-dealloc-peer.md). It uses the existing full home/header
 record before weakref callbacks, function/mapping-before-home order, five moved
 raw native metadata owners in their prior order, and fixed-last code. It does
 not repurpose thread/gen reservation logic or alter live `tp_clear` mutation.
 The fixture checks precise lower-home/code roots, weakref order, nested records
-and native metadata lifetime. Root owns integration and native validation;
-mapped selection and phase reset remain explicit later ports.
+and native metadata lifetime. It is integrated at this checkpoint; the phase
+reset runs through `_PyFrame_InitClearRoots` before weakref callbacks. Mapped
+selection remains a later port, with explicit candidate/readable authority.

@@ -1,19 +1,13 @@
 # Semantic ownership and phase plan
 
-Status: root integrated the bounded certificate, literal retirement reasons and
-provider kinds; targeted plan/provider cases pass both roles. This is partial
-M2 NULL-shadow coverage. The shared-emitter increment below has frames/GC
-design GO and root source authorization; implementation is in progress. Its
-separate collector component awaits the IR definition and complete producer/
-reset ports before merged linkage and validation.
-Root approved the first exact normal-retirement
-descriptor and actual cold shadow consumer; frames hook review and independent
-GC design review are GO. The SiteId validation requirement below incorporates
-GC's required clarification. This
-extends the bounded normal-transfer worklist committed as `26b1e8d4900` and
-merged with current runtime contracts in `0bed5688eae`. NULL homes remain the
-execution authority. No static-map or complete M2/M3 claim follows from this
-first empty-scratch retirement certificate.
+Status: the normal-retirement certificate, explicit retirement reasons,
+provider kinds and first shared-emitter phase graph are integrated through
+`ed08ab64c7e`. Both roles pass 675 core, nine phase and nine selected generated
+contract cases; groups overlap. Continuing cross-lane source/native review is
+GO for this partial M2 coverage. The [report](report.md) records measured
+preparatory costs. Typed home authority and copy/escape ports are next in
+validation. NULL homes remain execution authority. Complete family/lifecycle
+coverage and the atomic M4 switch remain open.
 
 ## One semantic representation
 
@@ -90,7 +84,7 @@ Update compiler, allocation verifier, assembly, all public/marshal/frozen
 admission, handler metadata and disassembly together; no hidden constant pool
 or borrowed mortal scratch workaround.
 
-## Next bounded increment: exact normal-retirement certificates
+## Integrated normal-retirement certificates
 
 The first persistent consumer deliberately certifies only normal RETURN paths
 whose complete predecessor transfer coverage yields the exact empty scratch
@@ -506,12 +500,19 @@ deallocator. Unsupported escaping statements/markers, SAVE_STACK and error
 edges invalidate publication; cold boxing and unpack continuations do likewise.
 The actual emitted zero stores, including conservatively guarded callouts, must
 be priced. There is no instruction-entry phase decode or blanket dispatch reset.
-GC's collector component and cold probe are separate source components; root
-must merge their exact ABI with the producer ports before execution.
-
-Design/source peers are GO for this bounded NULL-shadow increment. Root's first
-host generation smoke passed; Python source syntax and diff checks pass. The
-new cold probes and reached tracing-collector fixtures still require root's
-release/debug execution, merged regeneration and native inspection. Complete
+GC's collector component and cold probe are merged with the matching IR
+producer/reset ports. Both-role focused execution, generation and native
+inspection pass with the fixture corrections recorded in the report. Complete
 callback/poll/error/suspended/observer coverage, fixed static images and lifecycle
 selected-home consumers remain gates before any static authority switch.
+
+The copy-facing follow-on distinguishes NONE, NULL-shadow candidate and
+must-readable authority without growing the 16-byte phase row. A possible owner
+without must initialization remains candidate; an initialized nonowner NULL is
+also candidate until its explicit control range role is ported. The latter
+guard is currently unexercised: positive NULL producers only modify dynamic
+named bindings, and stack PUSH_NULL has no executable scratch producer. Current
+regressions exercise reachable candidate/must/none shapes across public routes
+and the full home extent. Development NULL-control readability is an explicit
+adapter value, never a code-plan certificate. CAPTURED bit11 belongs to the
+common frame lifecycle adapter and remains rejected by active code lookup.

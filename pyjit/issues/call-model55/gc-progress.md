@@ -128,5 +128,14 @@ The remaining CALL-hole prerequisite is specified in `call-role-proposal.md`:
 canonical no-self and EX-kwargs roles preserve virtual NULL provenance without
 reading reserved inactive cells. Runtime helpers use explicit roles; arena
 windows initially withhold vectorcall OFFSET and retain native-copy prepend.
-IR design peer is GO, frames peer and root encoding/source freeze are pending.
+IR/frames design peer and root encoding/source split are GO. GC has started the
+CFG/assembler and runtime call ports on a tree matching integrated `6ff13875cfe`;
+IR owns generated families, IDs and common admission/proof/role tests. This
+packet remains separate from the merged phase probe/reset component `0655bb2851d`.
 Selected-home capture/record lifetime conditions are in `copy-home-view-peer.md`.
+
+Root integrated the heap-deallocator and first shared-emitter plan/consumer at
+`6ff13875cfe`, with 675 core tests per role passing. Fixture-only repairs at
+`ed08` then passed nine phase tests per role; the nonempty-survivor provider and
+operand-retirement comparison passed in the first run too. The shadow plan and
+stored query remain partial coverage under NULL control, with no M4 admission.

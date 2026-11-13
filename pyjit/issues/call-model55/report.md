@@ -4,6 +4,15 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
+Latest measured checkpoint: shared-emitter phase composition `ed08ab64c7e`.
+Both roles pass 675 core, nine phase and nine selected generated-contract cases
+(overlapping groups). All29 versus upstream is 1.165467, six faster; the
+selected54 hot screen loses DeltaBlue 5.5% and silent logging 15.2%. PMU shows
+36.8% more DeltaBlue instructions than upstream. This is a preparatory
+integration under NULL authority, not a performance winner. Selected-home
+copy/escape and explicit CALL roles are next; complete static and bitmap
+representations remain unimplemented. Detailed campaigns follow below.
+
 ## M1a: independent typed metadata owners
 
 Candidate `dd3c9fc8d9e` replaces code/function PyValues in frame headers with
@@ -503,5 +512,50 @@ actual owner TAKE, provider, result-retirement and error-restoration events;
 admission and plan construction consume that same graph. Nullable shadow
 candidate ranges are not stale-word readability certificates. Unsupported
 families remain uncovered; NULL homes and arena scanning are still authority.
-Merged builds/runtime/native checks are pending. This is partial coverage,
+Both builds retain 117/79 modules and zero failed imports. Existing core checks
+pass 675 tests per role (10 release skips, eight debug). Initial phase fixtures
+fail two admission/geometry setups and one incorrect finalizer expectation;
+the generated focus also expects the wrong specific rejection for an unsafe
+opaque prefix. Those logs remain retained. Fixture-only `ed08ab64c7e` uses an
+actual admitted UNKNOWN operation, clears source-map geometry when replacing
+instructions, and separates locals-proxy retention from last-owner cleanup.
+No production behavior or test admission gate is relaxed. Nine phase and nine
+selected generated-contract tests then pass per role. Actual phase7 collection
+is not claimed: cold probes check that descriptor, while real restored scratch
+last-owner callbacks occur in phase0 unwind. [Post-review](semantic-phase-peer.md)
+is bounded continuing cross-lane GO, not fresh-context review. Native evidence
+`E/m2-phase-native` keeps exact CALL/RETURN at 64/16 local bytes, with no phase
+query in either. Reset/publication stores add work. This is partial coverage,
 not the M4 representation switch.
+
+The stable two-pair screen `E/m2-phase-hot-screen-golden` is candidate/selected54
+elapsed. Separate direct `E/m2-phase-all29-upstream` has 116 valid timing rows,
+geometric mean 1.165467 and six of 29 faster. Keep comparison scopes separate:
+
+| Workload | /selected54 hot screen | Pair range | /upstream all29 | Pair range |
+| --- | ---: | ---: | ---: | ---: |
+| DeltaBlue | 1.054859 | 1.045043–1.064767 | 1.227415 | 1.189238–1.266819 |
+| Generators | 1.006683 | 1.003626–1.009750 | 1.465240 | 1.464976–1.465504 |
+| Coroutines | 0.993696 | 0.989093–0.998321 | 1.238049 | 1.237682–1.238415 |
+| Richards | 0.993310 | 0.990164–0.996466 | 1.202592 | 1.202206–1.202978 |
+| Comprehensions | 0.979269 | 0.979192–0.979345 | 1.344474 | 1.332174–1.356889 |
+| Logging silent | 1.152060 | 1.085331–1.222892 | 0.824628 | 0.816299–0.833042 |
+
+Matched interval PMU `E/m2-phase-perf-cycles-instructions` completes 12/12
+valid invocations, three balanced pairs, 100% running and stable identities.
+DeltaBlue candidate/upstream instructions are 1.368099 (1.368042–1.368128),
+cycles 1.220915 (1.173476–1.268340). That is about 53.273 million instructions
+per unchanged candidate loop versus 38.940 million upstream. Silent logging
+instructions are 0.971963, cycles 0.828610 (0.802661–0.842178). The normalized
+summary retains individual pairs and per-loop counts. No isolated causal
+speedup is inferred by dividing these and the earlier provider campaign.
+
+`E/m2-phase-perf-record` completes 4/4 valid five-second records with stable
+identities and no lost records. DeltaBlue flat samples place exact CALL at
+11.25%, local shape load 9.89%, TryClear 6.45%, RETURN 5.80%, other shape load
+5.19% and method load 5.11%. Logging has general CALL 14.43%, method load
+11.37%, TryClear 11.35%, local shape load 10.67%, RETURN 7.86% and exact CALL
+7.74%. These are sampling locations, not exclusive removable budgets.
+The preparation is not a winner: it publishes phase state while retaining the
+clearing and scans the final representation must replace. Source review and
+focused correctness justify continuing the migration, not promoting this head.

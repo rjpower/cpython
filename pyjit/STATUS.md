@@ -18,35 +18,38 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Latest broadly measured candidate `de95475accb` composes typed pins, common admission,
-partial transfer/retirement proof, nested roots, staged unpack/binding and
-provider handoff, plus classify-once callback-free retirement. It passes
-1,487 core tests, 28 C API cases and eight precise provider/reader cases per
-GIL role. The groups overlap; they are not a deduplicated total. Cold
-source/native review is GO for these bounded ports. Scratch NULLs and
-conservative arena scanning remain authoritative.
+Latest measured candidate `ed08ab64c7e` composes typed pins, common admission,
+nested transition roots, staged binding/provider/unpack/constructor ownership,
+fixed-last heap teardown, classify-once retirement and the first shared-emitter
+phase plans. NULL scratch homes and conservative arena scanning remain authority.
+The GIL header remains 112 bytes; exact CALL/RETURN reserve 64/16 native stack
+bytes with no phase-table lookup. New phase stores are real preparatory costs.
 
-Its two-pair selected54 screen improves DeltaBlue 6.0% and Richards 3.0%,
-but loses coroutines 1.4% and silent logging 8.4% (wide logging range).
-Direct all29 versus upstream is 1.162061, with 6/29 faster; DeltaBlue is
-12.2% slower and logging 20.6% faster. Matched PMU shows DeltaBlue still
-executes 34.1% more instructions. Classify-once retirement substantially
-reduces the preparatory cleanup regression, but no general win is confirmed.
-No candidate is promoted. The [active report](issues/call-model55/report.md)
-retains exact sample scopes, ranges, profiles and qualification limits.
-Constructor and heap-deallocation ownership ports are integrated through
-`0851fd51801`. Their focused checks pass, but full diagnostics found a new
-allocation-failure crash in both roles. Specialization conflated its zero
-success and failure sentinels; `7c42db43224` separates signature classification
-from positive execution readiness. The unchanged failing test now passes in
-both roles and on selected54 controls; 837 focused core cases pass per role.
-Its two-pair screen versus selected54 has DeltaBlue 6.7% faster, coroutines
-2.5% slower and silent logging 13.2% slower (wide range). The source-reviewed
-shared-emitter phase work is integrated at `6ff13875cfe`, with merged builds
-and validation running.
-Complete static authority and a physical
-bitmap rival remain unqualified. Shared storage with NULL named locals is
-the reviewed M4 reference, not a measured layout winner.
+Both roles pass 675 core tests, nine phase tests and nine selected generator
+contract tests. Groups overlap and are not a deduplicated total. The phase
+fixtures cover nonempty provider/operand-retirement collection, mutable locals,
+actual error cleanup, full 4095-home geometry and public admission routes.
+The bounded continuing cross-lane post-review is GO, not a fresh-context audit.
+
+Two-pair elapsed screens remain mixed: versus selected54, DeltaBlue is 5.5%
+slower and silent logging 15.2% slower, with a wide logging range. Direct all29
+versus upstream has geometric mean **1.165467**, six faster; DeltaBlue is
+22.7% slower, generators 46.5% slower, coroutines 23.8% slower, and logging
+17.5% faster. Matched PMU finds DeltaBlue still executes **36.8% more
+instructions**. No candidate is promoted. The [active report](issues/call-model55/report.md)
+retains campaign scopes, pair ranges, profiles and qualification limits.
+
+Full foundation diagnostics at `0851fd51801` run 54,763 tests per role and
+find a new allocation-injection crash beside recorded diagnostic limits.
+Specialization conflated zero success/failure sentinels. `7c42db43224` requires
+positive execution readiness before cache nomination; the unchanged OOM case
+and 837 focused cases pass both roles afterward. This does not turn the failed
+full diagnostics into a green suite.
+
+Selected-home authority and copy/escape ports are next in integration; virtual
+CALL roles and immutable-code generator construction are in progress. Complete
+static authority and the full physical-bitmap rival remain open. Shared storage
+with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [qualification](issues/frame-state54/qualification.md) retain closure evidence.

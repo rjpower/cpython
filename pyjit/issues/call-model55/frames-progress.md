@@ -262,3 +262,26 @@ stats-only StoreSubscr classification no longer prepares code. GENERAL/KW,
 property/getattribute, init and getitem all require positive readiness before
 publication. The original dict OOM fixture is unchanged. Root owns the fault,
 retry, control and both-role checks; no native job ran in this lane.
+
+Root's unchanged OOM fixture now passes both roles with the readiness fix.
+Pins merges the integrated phase foundation at `9dedff18010`. The first
+selected-copy packet is concrete in nine files: shared range iteration,
+kind-discriminated home authority, all producer/disarm ports, actual retirement
+cursor capture and all three copy callers. It adds 16 cold frame-object bytes,
+no interpreter-header or transition-record growth. Candidate shapes never
+authorize a read; unsupported/created states use an explicitly named temporary
+NULL-control adapter. Destination gaps stay NULL-filled while that control
+remains. GC/IR source peers are requested; their small shared authority/union
+components must be combined before generation. Five focused fixtures and the
+selected-copy poison probe pass host AST/whitespace checks only. Actual normal
+generator created/suspended certification is the next bounded useful packet;
+this schema port does not claim it or M4 scanner removal.
+
+IR found two bounded copy issues before freeze: the valid zero-binding
+takeover starts with NONE/remaining zero, and an addressable view cannot live
+in RETURN_GENERATOR's tail-called handler. Both are corrected: explicit empty
+control capture plus a fifth fixture, and an outlined created-copy helper
+owning the query/view/PC advance/copy. GC and IR final source peers are GO;
+the nine-file patch is frozen over `9dedff18010` (352+/10-). Root owns coherent
+schema integration, generation and runtime verification. No native job ran in
+this lane.

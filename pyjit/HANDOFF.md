@@ -61,19 +61,24 @@ cache nomination. The original OOM fixture now passes both roles and selected54;
 `m3-oom-*-commands.json` and logs for exact evidence. No green full suite is claimed.
 NULL homes and conservative arena scans still authorize execution/collection.
 
-The latest broad measured provider head is `de95475accb`: all29 versus upstream
-1.162061, six faster, with matched interval profiles. Constructor `9136c202e8e`
-and heap foundation have hot screens only. Keep campaign scopes separate;
+The latest measured phase head is `ed08ab64c7e`: all29 versus upstream
+1.165467, six faster, with matched interval profiles. Evidence prefixes are
+`m2-phase-{hot-screen-golden,all29-upstream,perf-cycles-instructions,perf-record}`.
+675 core, nine phase and nine selected generated-contract cases pass per role;
+groups overlap. Keep campaign scopes separate;
 [report](issues/call-model55/report.md) records ratios/ranges and failed commands.
 Retained ELFs and native dumps live under E. No candidate is promoted.
 
 M0 selects shared storage with initialized NULL named locals as the M4 reference;
 [placement costs](issues/call-model55/placement-cost-model.md) document the choice.
 M2 shared-emitter phase events and meaningful nonempty shadows are integrated
-at `6ff13875cfe`, including GC collector/probe/redirect ports and generated
-products. Builds and merged validation are running. Source GO alone is not a
-runtime pass. Heap teardown resets through InitClearRoots before callbacks.
-Workers are syncing to this base for virtual CALL roles and copy/escape ports.
+at `6ff13875cfe`, with fixture-only corrections `ed08ab64c7e`. Source/native
+bounded post-review is GO under NULL control. Heap teardown resets through
+InitClearRoots before callbacks. IR home authority, GC probe/record union and
+frames copy producers are merged and regenerated through `197fd05cb27`;
+both-role builds are running. Five copy fixtures, stricter authority assertions
+and native cost checks remain.
+Workers implement virtual CALL roles and copy/escape/created-frame ports.
 The [reader census](issues/call-model55/lifecycle-readers.md)
 queues copy/escape, unwind, results/resume, GC and observation ports.
 Complete static authority, the full bitmap rival, optional lowering and final

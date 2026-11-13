@@ -39,9 +39,13 @@ Retirement supplies a separate explicit adapter from the saved entry view plus
 shape from RETURN. Save the view before reset/progress. Reuse the record's last
 pointer as an explicit kind-discriminated union: EXTERNAL prefix versus
 RETIRING/STAGED home-view pointer, with NULL-only empty provider state. This
-keeps 40 record bytes, but adds a priced 16-byte const view in reached outlined
-producer storage and ports every union consumer. Root/GC must approve this
-schema before editing. A retiring range is clipped to remaining scratch;
+keeps 40 record bytes and ports every union consumer. The agreed two-bit
+authority field uses NONE/SHADOW_CANDIDATE/MUST_READABLE/NULL_CONTROL_READABLE.
+Current initialized-prefix control uses authority NULL_CONTROL_READABLE plus a
+NULL view pointer, avoiding an extra producer-local descriptor. A later static
+MUST_READABLE producer needs a priced 16-byte const view in reached outlined
+storage. Empty/metadata-only nodes use NONE plus NULL. A retiring range is
+clipped to remaining scratch;
 external marking of remaining locals clips to its actual cursor. Takeover
 copies all initialized current local homes, including NULLs, rather than
 inventing boundness from the cursor. Mutable live tp_clear remains separate.
@@ -73,8 +77,10 @@ changes this captured state, clear/replace CAPTURED in the callback-free commit
 and publish the actual created/resume/error shape before any reentry. An
 unsupported phase must never fall back to an obsolete capture.
 
-Range progress in heap clear/deallocation updates the captured scratch limit
-before callbacks. Already passed mutable local bindings remain in [0,L), so a
+The bounded NULL-control packet invalidates CAPTURED at clear/resume entry;
+it does not claim static heap-clear authority after that invalidation. A future
+selected clear must update its captured scratch limit before callbacks.
+Already passed mutable local bindings remain in [0,L), so a
 later observer write is still a heap edge. Code closes only after the final
 view read; clear the saved record view before final code detach. After its bit
 disarms, roots/query/free paths read no borrowed ranges. Empty provider and
@@ -123,4 +129,16 @@ generation, both-role tests and native copy/header/record costs.
 IR and GC bounded design peers are GO, with the shadow-versus-readable
 qualification above. Both require explicit lifecycle dispatch, correct union
 discriminants/cursor protocol and clearing borrowed views before final code
-close. Root/IR still freeze actual source interfaces before implementation.
+close. Root has frozen the authority and union interfaces. The first source
+packet is concrete on the integrated phase base: all three copy callers use
+the explicit view API, copy uses one shared range iterator, retiring takeover
+uses its actual cursor, and cold frame capture adds 16 bytes. Current created
+and unsupported suspended states deliberately use the named NULL-control
+adapter; they are uncovered static authority, not M4 fallback. Five focused
+fixtures cover selected-home poison avoidance, escaped locals/code mutation,
+ordinary generator suspension/escape and public frame-to-generator capture.
+The zero-binding escaped-frame case has explicit empty control authority.
+RETURN_GENERATOR passes two frame pointers to an outlined helper owning the
+16-byte addressable view, query, PC advance and copy; it adds no addressable
+interpreter-handler local. Coordinator generation/native validation remains
+pending.

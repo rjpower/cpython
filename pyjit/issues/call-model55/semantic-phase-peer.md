@@ -192,3 +192,28 @@ Future stale-cell copy/GC readers require normalization or explicit validity;
 the shadow comparison and this review do not admit M4. Root still must verify
 actual regenerated events/stores, complete lifecycle initialization/reset,
 reached nonempty-survivor collection, FT stopped-state gating and native costs.
+
+## Integrated checkpoint post-review
+
+Root's merged source is `6ff13875cfe`; `ed08` changes phase fixtures only. This
+is the same continuing bounded cross-lane review, not a fresh-context audit.
+The GC-authored collector/probe/reset component is excluded from independent
+source credit here. Root reports nine repaired phase tests passing per role,
+675 core tests per role passing, and the generated focus passing release (debug
+was still running at this checkpoint). The initial real nonempty survivor,
+provider and operand-retirement phase checks passed both roles before repairs.
+
+The failing folded-binding fixture had expected last-owner callbacks too early:
+the locals proxy deliberately retains replaced mortal bindings in
+f_overwritten_fast_locals until frame destruction. Its repair checks actual
+None replacements and provider exactness, then expects finalizers outside the
+active target chain. Separate scratch-error coverage checks the real unwind
+phase0, while cold probes cover the phase7 descriptor. No production lifetime
+or admission rule was weakened to satisfy those fixtures.
+
+Root's retained native inspection (`m2-phase-native`) reports exact CALL at
+64 bytes and RETURN at 16 bytes, with no phase query in either handler; actual
+reset/publication stores are new costs. These are root-run evidence, not jobs
+run by this reviewer. The bounded partial-coverage/NULL-control increment has
+GO. Complete family/entry/observer/suspend recipes, nullable-join readability,
+FT qualification and atomic reader/scanner replacement remain M4 gates.

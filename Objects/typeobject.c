@@ -3255,11 +3255,12 @@ _PyObject_LookupSpecial(PyObject *self, PyObject *attr)
 
 // Lookup the method name `attr` on `*self`. On entry, `*method` is null.
 // On exit, `*method` is the method and `*self` is cleared if the method is
-// bound. Both are the caller's slots: `*self` keeps the receiver, which may
-// be inline, alive through a descriptor call.
+// bound. A non-NULL frame supplies the physical home capability; NULL selects
+// native initialized C storage. `*self` keeps the receiver, which may be
+// inline, alive through a descriptor call.
 // Return 1 on success, -1 on error, and 0 if the method is missing.
 int
-_PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
+_PyObject_LookupSpecialMethod(_PyInterpreterFrame *frame, PyObject *attr, PyValue *method,
                               PyValue *self)
 {
     assert(PyValue_IsNull(*method));
@@ -3280,7 +3281,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         && _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR))
     {
         // Unbound: *self stays the first argument.
-        *method = found;
+        if (frame != NULL) {
+            _PyFrame_WriteHome(frame, method, found);
+        }
+        else {
+            *method = found;
+        }
         found = PyValue_NULL;
         rc = 1;
         goto done;
@@ -3290,13 +3296,30 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         if (PyValue_IsNull(bound)) {
             goto done;
         }
-        *method = bound;
+        if (frame != NULL) {
+            _PyFrame_WriteHome(frame, method, bound);
+        }
+        else {
+            *method = bound;
+        }
     }
     else {
-        *method = found;
+        if (frame != NULL) {
+            _PyFrame_WriteHome(frame, method, found);
+        }
+        else {
+            *method = found;
+        }
         found = PyValue_NULL;
     }
-    PyValue_CLEAR(*self);
+    PyValue receiver = *self;
+    if (frame != NULL) {
+        _PyFrame_WriteHome(frame, self, PyValue_NULL);
+    }
+    else {
+        *self = PyValue_NULL;
+    }
+    PyValue_XCLOSE(receiver);
     rc = 1;
 done:
     PyValue_XCLOSE(found);
@@ -13593,7 +13616,7 @@ _Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
     PyValue receiver = PyValue_DUP(self);
     PyValue meth = PyValue_NULL;
     PyValue result = PyValue_NULL;
-    int found = _PyObject_LookupSpecialMethod(&_Py_ID(__init__), &meth, &receiver);
+    int found = _PyObject_LookupSpecialMethod(NULL, &_Py_ID(__init__), &meth, &receiver);
     if (found <= 0) {
         if (found == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__init__));

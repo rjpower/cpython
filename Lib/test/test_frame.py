@@ -27,6 +27,97 @@ class HomeBitmapTest(unittest.TestCase):
         internal.check_home_bitmap(payload)
         self.assertEqual(sys.getrefcount(payload), before)
 
+    def test_array_writers_during_callbacks(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        class Target:
+            def __setattr__(self, name, value):
+                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                observations.append(name)
+                object.__setattr__(self, name, value)
+
+        def unpack(source, target):
+            target.a, target.b, target.c = source
+            yield target
+
+        target = Target()
+        payloads = [[], {}, set()]
+        for source in (tuple(payloads), payloads):
+            for _ in range(100):
+                self.assertIs(next(unpack(source, target)), target)
+        self.assertEqual(observations, ['a', 'b', 'c'] * 200)
+        self.assertIs(target.c, payloads[2])
+
+        class Key:
+            def __hash__(self):
+                caller = sys._getframe(1)
+                if caller.f_code in (build.__code__, build_map.__code__):
+                    internal.check_frame_bitmap_null_control(caller)
+                observations.append('hash')
+                return id(self)
+
+        def build(a, b, c):
+            yield {a, b, c}
+
+        def build_map(a, b, c):
+            yield {a: [], b: {}, c: set()}
+
+        keys = Key(), Key(), Key()
+        self.assertEqual(next(build(*keys)), set(keys))
+        self.assertEqual(observations[-6:], ['hash'] * 6)
+
+        self.assertEqual(set(next(build_map(*keys))), set(keys))
+        self.assertEqual(observations[-6:], ['hash'] * 6)
+
+    def test_string_builder_and_inplace_local_writers(self):
+        internal = import_helper.import_module('_testinternalcapi')
+
+        def build(a, b, c):
+            value = f'{a}{b}{c}'
+            internal.check_frame_bitmap_null_control(sys._getframe())
+            return value
+
+        def append(value, part):
+            value += part
+            internal.check_frame_bitmap_null_control(sys._getframe())
+            return value
+
+        for i in range(100):
+            pieces = tuple(str(i + j) * 30 for j in range(3))
+            self.assertEqual(build(*pieces), ''.join(pieces))
+            self.assertEqual(append(pieces[0], pieces[1]),
+                             pieces[0] + pieces[1])
+
+    def test_special_lookup_writers_during_descriptor_calls(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        observations = []
+
+        class Method:
+            def __init__(self, name):
+                self.name = name
+
+            def __get__(self, receiver, owner):
+                internal.check_frame_bitmap_null_control(sys._getframe(1))
+                observations.append(self.name)
+                if self.name == 'enter':
+                    return lambda: receiver
+                return lambda *args: False
+
+        class Manager:
+            __enter__ = Method('enter')
+            __exit__ = Method('exit')
+
+        def use(manager):
+            with manager as value:
+                yield value
+
+        manager = Manager()
+        generator = use(manager)
+        self.assertIs(next(generator), manager)
+        generator.close()
+        self.assertEqual(sorted(observations), ['enter', 'exit'])
+
 
 class ClearTest(unittest.TestCase):
     """

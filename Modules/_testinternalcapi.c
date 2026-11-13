@@ -5266,7 +5266,37 @@ check_home_bitmap(PyObject *self, PyObject *payload)
     Py_RETURN_NONE;
 }
 
+/* Development-only writer oracle while all reserved homes are initialized.
+ * Replace its full range before the rival admits stale zero-bit homes. */
+static PyObject *
+check_frame_bitmap_null_control(PyObject *self, PyObject *arg)
+{
+    if (!PyFrame_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
+    if (frame->owner == FRAME_OWNED_BY_THREAD &&
+        frame != _PyThreadState_GET()->current_frame)
+    {
+        PyErr_SetString(PyExc_ValueError,
+                        "waiting thread frame has no full-home authority");
+        return NULL;
+    }
+    for (int i = 0; i < _PyFrame_NumSlots(frame); i++) {
+        if (PyValue_RefcountOnObject(frame->base[i]) !=
+            _PyFrame_HomeOwnsCount(frame, frame->base + i))
+        {
+            PyErr_Format(PyExc_AssertionError,
+                         "counted-home bitmap mismatch in slot %d", i);
+            return NULL;
+        }
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"check_frame_bitmap_null_control", check_frame_bitmap_null_control, METH_O},
     {"check_home_bitmap", check_home_bitmap, METH_O},
     {"check_created_home_view_invalidation", check_created_home_view_invalidation, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},

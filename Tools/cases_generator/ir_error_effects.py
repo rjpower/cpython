@@ -52,16 +52,18 @@ class HelperEffect:
     steals: tuple[int, ...] = ()
     result_canonical: bool = False
     result_nonnull: bool = False
+    opens_current_observer: bool = True
 
 
 def native_helper(inputs, result, may_fail=False, callback=False, *,
                   canonical_clear=False, result_owned=None, steals=(),
-                  result_canonical=False, result_nonnull=False):
+                  result_canonical=False, result_nonnull=False,
+                  opens_current_observer=True):
     homes = (HomeEffect.PRESERVES_CANONICAL_OR_NULL if callback and canonical_clear
              else HomeEffect.PRESERVES_SCRATCH_ABSENCE if callback
              else HomeEffect.NO_ARENA_WRITE)
     return HelperEffect(inputs, result, homes, may_fail, callback, result_owned, steals,
-                        result_canonical, result_nonnull)
+                        result_canonical, result_nonnull, opens_current_observer)
 
 
 # These interfaces receive native values, never an arena-home address. A
@@ -83,7 +85,7 @@ HELPERS = {
     "PyValue_IsInlineInt": native_helper((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsInlineFloat": native_helper((Kind.VALUE,), Kind.SCALAR),
     "_PyValue_IsTrue": native_helper((Kind.VALUE,), Kind.SCALAR, True, True,
-                                     canonical_clear=True),
+                                     canonical_clear=True, opens_current_observer=False),
     "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE,
         result_owned=True, result_canonical=True, result_nonnull=True),
     "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT,
@@ -91,10 +93,12 @@ HELPERS = {
     "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),
         result_owned=True, result_canonical=True, result_nonnull=True),
     **{name: native_helper((Kind.VALUE,), Kind.VALUE, True, True,
-            canonical_clear=True, result_owned=True)
+            canonical_clear=True, result_owned=True, opens_current_observer=False)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
-    "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
-    "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True, canonical_clear=True),
+    "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True,
+        canonical_clear=True, opens_current_observer=False),
+    "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True,
+        canonical_clear=True, opens_current_observer=False),
     "DEAD": native_helper((Kind.VALUE,), Kind.VOID),
     # Their emitted writes are confined by IRStack, independently of this
     # source summary. They grant no permission to pass a home to a C helper.
@@ -232,6 +236,9 @@ class SourceErrorEffects:
     # Actual assignment-statement identity, not a helper/name inference in
     # the emitter. VALUE ownership is accounted by the Storage ledger.
     value_results: tuple[tuple[int, HelperEffect], ...] = ()
+    # The callback itself opens no observer context for its current frame.
+    # A caller/adapter context must still independently exclude redirection.
+    callbacks_without_current_observer: bool = False
 
 
 def checked_native_step_effects(parts: tuple[Uop, ...]) -> SourceErrorEffects | None:
@@ -677,4 +684,5 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                               any(h.callback for h in used), changes_origin,
                               frozenset(native_closed_errors), frozenset(native_closed_entries),
                               origin.reachable and origin.native_closed(),
-                              tuple(value_results.items()))
+                              tuple(value_results.items()),
+                              all(not h.opens_current_observer for h in used if h.callback))

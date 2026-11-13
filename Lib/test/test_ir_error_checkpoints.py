@@ -174,6 +174,8 @@ class ErrorCheckpointTests(unittest.TestCase):
         tool = monitor.DEBUGGER_ID
         current = None
         observations = []
+        redirects = []
+        retired = []
         payload_id = 0
 
         class Iterator:
@@ -184,13 +186,29 @@ class ErrorCheckpointTests(unittest.TestCase):
             def __invert__(self):
                 return Iterator()
 
+            def __del__(self):
+                retired.append(True)
+
+        def at_line(code, line):
+            if code is Value.__del__.__code__:
+                parent = sys._getframe(1).f_back
+                if parent is not None and parent.f_code is current:
+                    parent.f_locals["mutable"] = 42
+                    try:
+                        parent.f_lineno = parent.f_lineno
+                    except ValueError as error:
+                        redirects.append(str(error))
+                    else:
+                        self.fail("a native value operation is not an active CALL recipe")
+                    self.assertEqual(_testinternalcapi.gc_verify(), [])
+
         def raised(code, offset, exception):
             if code is current:
                 frame = sys._getframe(1)
                 observations.append((
                     _testinternalcapi.get_frame_home_view(frame)[0],
                     payload_id in _testinternalcapi.get_frame_selected_object_ids(frame),
-                    _testinternalcapi.gc_verify()))
+                    _testinternalcapi.gc_verify(), frame.f_locals["mutable"]))
 
         image = make_code([
             ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
@@ -201,6 +219,8 @@ class ErrorCheckpointTests(unittest.TestCase):
         monitor.use_tool_id(tool, "published-result-error")
         try:
             monitor.register_callback(tool, monitor.events.RAISE, raised)
+            monitor.register_callback(tool, monitor.events.LINE, at_line)
+            monitor.set_local_events(tool, Value.__del__.__code__, monitor.events.LINE)
             for current in routes(image):
                 self.assertEqual(self.authority(current, 4), 2)
                 # This read needs the previous native result's actual
@@ -219,8 +239,14 @@ class ErrorCheckpointTests(unittest.TestCase):
                         self.fail("the published iterator must fail")
                 finally:
                     monitor.set_local_events(tool, current, 0)
-                self.assertEqual(observations[-1], (2, True, []))
+                self.assertEqual(observations[-1], (2, True, [], 42))
+                self.assertTrue(retired)
+                self.assertTrue(redirects)
+                self.assertTrue(all("unsupported active call recipe" in error
+                                    for error in redirects))
         finally:
+            monitor.set_local_events(tool, Value.__del__.__code__, 0)
+            monitor.register_callback(tool, monitor.events.LINE, None)
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
 

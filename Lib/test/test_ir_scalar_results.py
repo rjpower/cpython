@@ -58,6 +58,74 @@ class ScalarResultTests(unittest.TestCase):
                 """, scratch_result=True)
                 self.assertFalse(unknown.error_checkpoints)
 
+    def test_repeat_publication_uses_current_operation_callback_receipt(self):
+        source = """
+            op(_MAKE, (value -- out, old)) {
+                out = _PyValue_Invert(value);
+                if (PyValue_IsNull(out)) { ERROR_NO_POP(); }
+                old = value; INPUTS_DEAD();
+            }
+            op(_CLOSE, (value --)) { PyValue_CLOSE(value); }
+            macro(SAMPLE) = _MAKE + _CLOSE;
+        """
+        helper = test_ir_scalar_storage.ScalarStorageTests()
+        native = ir_error_effects.HELPERS["_PyValue_Invert"]
+        for observes in (False, True):
+            with self.subTest(observes=observes), mock.patch.dict(
+                    ir_error_effects.HELPERS, {"_PyValue_Invert": replace(
+                        native, opens_current_observer=observes)}):
+                normal = helper.program(source).normal_storage
+                self.assertIsNotNone(normal)
+                publications = [event for event in normal.actions
+                                if event.kind == "_PyIR_OWNER_STORAGE_PUBLISH"]
+                self.assertEqual(len(publications), 2)
+                self.assertTrue(publications[0].flags & 1)
+                self.assertTrue(publications[1].flags & 2)
+                callbacks = [event for event in normal.actions
+                             if event.kind == "_PyIR_OWNER_STORAGE_CALLBACK"
+                             and not event.flags & 1]
+                self.assertTrue(callbacks)
+                self.assertEqual(all(event.flags & 2 for event in callbacks), not observes)
+
+    def test_temporary_publication_does_not_keep_a_native_owner(self):
+        for use in ("PyValue duplicate = PyValue_XDUP(pending); PyValue_CLOSE(duplicate);",
+                    "PyValue_CLOSE(pending);"):
+            with self.subTest(use=use):
+                contract = test_ir_scalar_storage.ScalarStorageTests().program(f"""
+                    op(_MAKE, (value -- out, old)) {{
+                        out = _PyValue_Invert(value);
+                        if (PyValue_IsNull(out)) {{ ERROR_NO_POP(); }}
+                        old = value; INPUTS_DEAD();
+                    }}
+                    op(_CLOSE, (value --)) {{ PyValue_CLOSE(value); }}
+                    op(_USE, (pending -- pending)) {{ {use} ERROR_IF(oparg); }}
+                    macro(SAMPLE) = _MAKE + _CLOSE + _USE;
+                """)
+                # The first NULL error is still covered. A C alias backed by
+                # the published scratch count cannot create another owner.
+                self.assertEqual(len(contract.error_checkpoints), 1)
+                self.assertIsNone(contract.normal_storage)
+
+    def test_current_identity_requires_the_actual_operation_context(self):
+        capability = ir_generator.current_operation_preserves_scratch
+        with mock.patch.object(ir_generator, "current_operation_preserves_scratch",
+                               wraps=capability) as emitted:
+            self.program("""
+                out = _PyValue_Invert(value);
+                if (PyValue_IsNull(out)) { ERROR_NO_POP(); }
+                PyValue_CLOSE(value);
+            """)
+        instruction, fmt, source = emitted.call_args.args
+        self.assertTrue(capability(instruction, fmt, source))
+        self.assertFalse(capability(instruction, fmt, None))
+        self.assertFalse(capability(instruction, fmt, replace(source, changes_origin=True)))
+        self.assertFalse(capability(instruction, fmt, replace(
+            source, callbacks_without_current_observer=False)))
+        self.assertFalse(capability(instruction, replace(fmt, window=True), source))
+        switched = replace(instruction, _properties=replace(
+            instruction.properties, switches_frame=True))
+        self.assertFalse(capability(switched, fmt, source))
+
     def test_value_type_alone_has_no_result_ownership_or_canonicality(self):
         helper = ir_error_effects.HELPERS["_PyValue_Invert"]
         for unknown in (replace(helper, result_owned=None), replace(helper, result_owned=False)):

@@ -2097,6 +2097,7 @@ typedef struct {
 typedef struct {
     unsigned int facts[4];
     uint32_t stamps[4];
+    uint32_t published[4];
     unsigned int value;
     uint32_t value_stamp;
     uint8_t value_home, valid, widens_nonnull, value_ready;
@@ -2435,6 +2436,9 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                 if (node->stamps[h] != right->stamps[h]) {
                     node->stamps[h] = UINT32_MAX;
                 }
+                if (node->published[h] != right->published[h]) {
+                    node->published[h] = 0;
+                }
             }
             continue;
         }
@@ -2446,10 +2450,15 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                     continue;
                 }
             }
-            node->widens_nonnull = 1;
+            int current_identity = !!(event->flags & _PyIR_STORAGE_CALLBACK_CURRENT_IDENTITY);
+            node->widens_nonnull |= !current_identity;
             for (int h = 0; h < *nhomes; h++) {
+                if (current_identity && homes[h] >= image->nl) {
+                    continue;
+                }
                 node->facts[h] &= ~(1u << SEM_NONNULL);
                 node->stamps[h] = at;
+                node->published[h] = 0;
             }
             continue;
         }
@@ -2528,6 +2537,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                                    !(node->facts[h] & (1u << SEM_NO_HOME));
                     node->facts[h] = 1u << SEM_NO_HOME;
                     node->stamps[h] = at;
+                    node->published[h] = 0;
                 }
                 break;
             case _PyIR_OWNER_STORAGE_PUBLISH: {
@@ -2537,11 +2547,13 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
                     break;
                 }
                 if (!(node->facts[h] & (1u << SEM_NO_HOME))) {
-                    node->valid &= !!(event->flags & _PyIR_STORAGE_PUBLISH_SAME_VALUE) && value->value_home == h &&
-                                   value->value_stamp == node->stamps[h];
+                    node->valid &= !!(event->flags & _PyIR_STORAGE_PUBLISH_SAME_VALUE) &&
+                        (node->published[h] == event->extent ||
+                         (value->value_home == h && value->value_stamp == node->stamps[h]));
                 }
                 node->facts[h] = value->value | (1u << SEM_INITIALIZED);
                 node->stamps[h] = at;
+                node->published[h] = event->extent;
                 break;
             }
             default:

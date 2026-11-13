@@ -2572,6 +2572,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                     home < nl + image->scratch &&
                     (semantic_home_facts(work, state, home, nl) & (1u << SEM_NO_HOME));
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
                 /* The actual same-frame successful flush/vacate, with all
@@ -2586,6 +2587,32 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                     {
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
                         state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                    }
+                }
+                if (event->kind == _PyIR_OWNER_UNPACK_LOCAL_DRAIN) {
+                    assert(fmt->flags & _PyIR_UNPACKS);
+                    int dst = -1, base = -1;
+                    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                    for (int f = 0; f < 4; f++) {
+                        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                            dst = (int)fields[f];
+                        }
+                        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                            base = (int)fields[f];
+                        }
+                    }
+                    /* The actual successful helper moves every output to
+                     * the validated local run. Sentinel destinations retain
+                     * their scratch outputs. Neither route proves values
+                     * readable or supplies a physical NULL fact. */
+                    if (dst >= 0 && dst < nl) {
+                        int count = _PyIR_Extent(fmt->writes, arg);
+                        assert(_PyIR_Extent(fmt->through, arg) == 0);
+                        assert(base >= nl && base <= nl + image->scratch - count);
+                        for (int home = base; home < base + count; home++) {
+                            uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
+                            state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;
+                        }
                     }
                 }
                 return 0;

@@ -3105,11 +3105,16 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n}\n")
         return False
 
-    def unpack_to_locals(self, fmt, count, canonical=False):
+    def unpack_to_locals(self, inst, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
         release that may run Python is out of line."""
+        if (not fmt.unpacks or not fmt.window or fmt.n_inputs != 0 or
+                through_items(inst, *external_io(inst)) or
+                fmt.field_of(ROLE_BASE) is None or
+                fmt.field_of(ROLE_DST) is None):
+            raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
         self.emit(f"int ir_n = {count};\n")
@@ -3122,6 +3127,7 @@ class IREmitter(Emitter):
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
+        self.unpack_local_drained = True
         self.emit("}\n")
 
     def reader_reload(self):
@@ -5071,6 +5077,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
     emitter.call_normal_drained = False
@@ -5254,14 +5261,17 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.release_displaced()
         if fmt.unpacks:
             emitter.unpack_to_locals(
-                fmt, UNPACKS[fmt.group], canonical=inst.name in (
+                inst, fmt, UNPACKS[fmt.group], canonical=inst.name in (
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
-    if (not reachable and emitter.normal_observer_edges == {0, 1}
+    normal_edges = ({1} if fmt.jump_always else {0, 1}
+                    if fmt.jumps or fmt.forward else {0})
+    if (not reachable and emitter.normal_observer_edges == normal_edges
             and normal_vacate_capability(inst, fmt)):
-        # Each exclusive checked branch wrapper flushes before its callback
-        # and dispatches itself, so there is no outer common flush to visit.
+        # Checked terminal wrappers flush before their callbacks and dispatch
+        # themselves. Every ordinary successor must have such a commit; a
+        # nonbranching handler has only its fallthrough successor to cover.
         emitter.normal_inputs_cleared = True
     if call_window and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -5284,6 +5294,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 "_PyIR_OWNER_LEAF", src=kind))
         elif emitter.call_normal_drained:
             emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"))
+        elif emitter.normal_inputs_cleared and emitter.unpack_local_drained:
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_UNPACK_LOCAL_DRAIN"))
         elif emitter.normal_inputs_cleared:
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
@@ -5587,6 +5600,11 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
+            if not all(programs.get(name) == unpack_drain for name in members):
+                for name in members:
+                    if programs.get(name) == unpack_drain:
+                        del programs[name]
             common_completions = set.intersection(*(
                 {event for event in programs.get(name, ())
                  if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION"}

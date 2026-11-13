@@ -13,6 +13,8 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#define _PyIR_OBSERVER_ENTRY_ABSENCE 1
+
 PyAPI_DATA(const _PyIROwnershipEvent) _PyIR_OwnerPrograms[35];
 #ifdef NEED_IR_METADATA
 const _PyIROwnershipEvent _PyIR_OwnerPrograms[35] = {

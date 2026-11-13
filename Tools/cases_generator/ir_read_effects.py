@@ -88,6 +88,36 @@ def positive_value_expression(tokens, positive):
     return False
 
 
+def value_transport_expression(tokens):
+    """A complete scalar transport, without inventing a native owner.
+
+    The caller resolves the source to its current Local identity. A plain
+    copy and a borrow preserve that identity; only the actual TAKE/DUP
+    lowering can establish ownership of the resulting C value.
+    """
+    tokens = strip_value_expression(tokens)
+    if len(tokens) == 1:
+        name = tokens[0].text
+        if name in {"PyValue_NULL", "PyValue_None", "PyValue_True", "PyValue_False"}:
+            return "literal", name
+        if tokens[0].kind == "IDENTIFIER":
+            return "copy", name
+    if len(tokens) < 4 or tokens[1].text != "(":
+        return None
+    modes = {"TAKE": "take", "PyValue_DUP": "dup", "PyValue_XDUP": "dup",
+             "PyValue_Borrow": "borrow"}
+    mode = modes.get(tokens[0].text)
+    if mode is None:
+        return None
+    args, end = instruction_macro_args(tokens[0], TokenIterator(tokens[1:]))
+    if end is not tokens[-1] or len(args) != 1:
+        return None
+    source = strip_value_expression(args[0])
+    if len(source) != 1 or source[0].kind != "IDENTIFIER":
+        return None
+    return mode, source[0].text
+
+
 def value_declaration(tokens):
     tokens = [token for token in tokens if token.kind != "COMMENT"]
     if tokens and tokens[-1].text == ";":

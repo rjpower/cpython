@@ -73,6 +73,10 @@ Invariants:
 
 import argparse
 import ir_numbers
+from ir_read_effects import (
+    error_nonnull_value, value_assignment, value_declaration,
+    value_nonnull_changes, value_transport_expression,
+)
 from ir_error_effects import (
     HomeEffect, analyze_error_effects, checked_native_step_effects,
 )
@@ -2331,7 +2335,44 @@ class OwnershipEvent:
 class ErrorCheckpoint:
     id: int
     flags: int
-    reads: tuple[tuple[int, bool], ...]
+    node: int = 0
+    actions: tuple[OwnershipEvent, ...] = ()
+
+
+class ScalarStorageGraph:
+    """Persistent source actions shared by the actual IRStack branches.
+
+    Node zero is the incoming scalar state. A node is also a possible native
+    value identity, so SAVE can retain a value across a later VACATE without
+    consulting the changed home. References are topological, bounded by the
+    existing uint16 ownership-event encoding.
+    """
+
+    def __init__(self):
+        self.nodes: list[OwnershipEvent] = []
+        self.interned: dict[OwnershipEvent, int] = {}
+
+    def action(self, kind: str, parent: int, field: int = 0,
+               value: int = 0, flags: int = 0) -> int:
+        if not 0 <= parent <= len(self.nodes) or not 0 <= value <= len(self.nodes):
+            raise StackError("scalar storage action has a forward reference")
+        event = OwnershipEvent(kind, flags=flags, dst=parent, src=field, extent=value)
+        known = self.interned.get(event)
+        if known is not None:
+            return known
+        if len(self.nodes) == 65535:
+            raise StackError("scalar storage action graph is too large")
+        self.nodes.append(event)
+        node = len(self.nodes)
+        self.interned[event] = node
+        return node
+
+    def join(self, left: int | None, right: int | None) -> int | None:
+        if left is None or right is None:
+            return None
+        if left == right:
+            return left
+        return self.action("_PyIR_OWNER_STORAGE_JOIN", left, value=right)
 
 
 def may_be_positive(diff: PointerOffset) -> bool:
@@ -2501,12 +2542,20 @@ class IRStack(Stack):
         self.null_paths: dict[int, set[str]] = {0: set()}
         self.null_stores: dict[int, bool] = {}
         self.null_uncovered = False
-        # Count actual storage operations conservatively. An error snapshot
-        # with zero writes preserves the complete incoming home shape; a
-        # logical IO declaration alone cannot establish that property.
+        # Each emitted storage operation needs its matching action receipt.
+        # A logical IO declaration alone cannot establish its physical effect.
         self.home_writes = 0
+        self.home_write_receipts = 0
         self.read_fields: dict[int, bool] = {}
         self.unknown_read = False
+        self.native_values: dict[str, Local] = {}
+        self.home_graph = ScalarStorageGraph()
+        self.home_node: int | None = 0
+        self.home_values: dict[int, int] = {}
+        self.native_owners: set[int] = set()
+        self.possible_native_owners: set[int] = set()
+        self.expired_values: set[int] = set()
+        self.loaded_value: int | None = None
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2524,9 +2573,68 @@ class IRStack(Stack):
         other.null_stores = dict(self.null_stores)
         other.null_uncovered = self.null_uncovered
         other.home_writes = self.home_writes
+        other.home_write_receipts = self.home_write_receipts
         other.read_fields = dict(self.read_fields)
         other.unknown_read = self.unknown_read
+        other.native_values = {name: var.copy() for name, var in self.native_values.items()}
+        other.home_values = dict(self.home_values)
+        other.native_owners = set(self.native_owners)
+        other.possible_native_owners = set(self.possible_native_owners)
+        other.expired_values = set(self.expired_values)
+        other.loaded_value = None
         return other
+
+    def home_action(self, kind: str, field: int = 0,
+                    value: int = 0, flags: int = 0) -> int | None:
+        if self.home_node is None:
+            return None
+        self.home_node = self.home_graph.action(kind, self.home_node, field, value, flags)
+        return self.home_node
+
+    def take_field(self, field: str) -> None:
+        self.home_write_receipts += 1
+        index = FIELDS.index(field)
+        self.home_action("_PyIR_OWNER_STORAGE_VACATE", index, flags=1)
+        token = self.home_values.pop(index, None)
+        if token is None:
+            self.home_node = None
+        else:
+            self.native_owners.add(token)
+            self.possible_native_owners.add(token)
+
+    def vacate_field(self, field: str) -> None:
+        self.home_write_receipts += 1
+        index = FIELDS.index(field)
+        self.home_action("_PyIR_OWNER_STORAGE_VACATE", index)
+        self.home_values.pop(index, None)
+
+    def publish_field(self, field: str, var: Local, *, temporary=False) -> None:
+        self.home_write_receipts += 1
+        index = FIELDS.index(field)
+        if var.ir_value is None or var.ir_value in self.expired_values:
+            self.home_node = None
+            return
+        same_value = self.home_values.get(index) == var.ir_value
+        if var.ir_value not in self.native_owners and not same_value:
+            # A borrowed C copy does not carry a count into a new home.
+            self.home_node = None
+            return
+        flags = int(temporary) | (int(same_value) << 1)
+        self.home_action("_PyIR_OWNER_STORAGE_PUBLISH", index, var.ir_value, flags)
+        self.home_values[index] = var.ir_value
+        if not temporary:
+            if var.ir_value in self.possible_native_owners:
+                self.expired_values.add(var.ir_value)
+            self.native_owners.discard(var.ir_value)
+            self.possible_native_owners.discard(var.ir_value)
+
+    def retire_value(self, value: int | None) -> None:
+        if value is not None:
+            if value not in self.native_owners:
+                self.home_node = None
+            self.native_owners.discard(value)
+            self.possible_native_owners.discard(value)
+            self.expired_values.add(value)
 
     def select_null_edge(self, edge: int) -> None:
         facts = set.intersection(*(set(names) for names in self.null_paths.values()))
@@ -2557,6 +2665,7 @@ class IRStack(Stack):
 
     def code_ran(self) -> None:
         "Code that can rebind a local may have run: each view may dangle"
+        self.home_action("_PyIR_OWNER_STORAGE_CALLBACK")
         for names in self.views.values():
             self.stale.update(names)
         self.stale.update(self.view_objects)
@@ -2643,6 +2752,10 @@ class IRStack(Stack):
             if not var.is_array() and p in lay.in_fields:
                 field = FIELDS.index(lay.in_fields[p])
                 self.read_fields[field] = self.read_fields.get(field, True) and var.nullable
+                self.loaded_value = self.home_action("_PyIR_OWNER_STORAGE_SAVE", field,
+                                                     flags=int(var.nullable))
+                if self.loaded_value is not None:
+                    self.home_values[field] = self.loaded_value
             else:
                 self.unknown_read = True
         if not var.is_array():
@@ -2669,7 +2782,10 @@ class IRStack(Stack):
         before = self.variables[-1] if self.variables else None
         old_name = before.name if before is not None else None
         fresh = before is None or not before.in_local
+        self.loaded_value = None
         local = super().pop(var, out)
+        if self.loaded_value is not None:
+            local.ir_value = self.loaded_value
         lay = self.layout
         if (local.memory_offset is not None and var.used
                 and local.ir_input is None and not var.is_array()):
@@ -2708,6 +2824,7 @@ class IRStack(Stack):
                 out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
             if role is not None:
                 out.emit("}\n")
+            self.take_field(self.layout.in_fields[p])
             return
         names = self.views.get(p)
         if not names:
@@ -2718,6 +2835,7 @@ class IRStack(Stack):
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
                    f"{macro}({f}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
+        self.take_field(field)
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
               canonical_result: str | None = None) -> bool:
@@ -2727,6 +2845,7 @@ class IRStack(Stack):
         out.start_line()
         p = memory_offset.as_int()
         if self.reloaded:
+            self.home_node = None
             # A value that the instruction hands to the frame it switched
             # to: the slot that frame named when it called or resumed
             self.refuse_inplace(var, memory_offset)
@@ -2738,6 +2857,7 @@ class IRStack(Stack):
             return True
         lay = self.layout
         if lay.window:
+            self.home_node = None
             role = self.call_input_role(memory_offset)
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
@@ -2755,12 +2875,14 @@ class IRStack(Stack):
                 raise StackError(f"'{var.name}' would be stored back to its "
                                  f"input's slot, which may name a local")
             out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({f}), {var.name});\n")
+            self.publish_field(lay.in_fields[p], var)
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
                 # An input that the instruction passes through, changed
                 self.own_inplace(out, var)
                 out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({self.input_field(p)}), {var.name});\n")
+                self.publish_field(lay.in_fields[p], var)
                 return True
             return self.keep(var, p)
         if lay.store_dst and p != lay.dst_offset:
@@ -2788,6 +2910,7 @@ class IRStack(Stack):
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:
                     out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
+                self.publish_field(lay.dst, var)
                 return False
             if self.final:
                 if self.published_temporary_result:
@@ -2805,6 +2928,7 @@ class IRStack(Stack):
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
+                self.publish_field(lay.dst, var)
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end, releasing its value.
@@ -2812,6 +2936,7 @@ class IRStack(Stack):
                      or var.name in lay.canonical_outputs)
                      else "IR_STORE_TEMP_DST")
             out.emit(f"{macro}({FIELD_VARS[lay.dst]}, {var.name});\n")
+            self.publish_field(lay.dst, var, temporary=True)
             return False
         if previous == "out":
             macro = ("IR_PUBLISH_CANONICAL_TEMP"
@@ -2820,6 +2945,10 @@ class IRStack(Stack):
             macro = ("IR_STORE_CANONICAL_TEMP"
                      if var.name in lay.canonical_outputs else "IR_STORE_TEMP")
         out.emit(f"{macro}({slot}, {var.name});\n")
+        if p == lay.dst_offset and lay.dst is not None:
+            self.publish_field(lay.dst, var)
+        else:
+            self.home_node = None
         if p is not None:
             self.owner[p] = "out"
         return True
@@ -2867,6 +2996,12 @@ class IRStack(Stack):
         n = count.as_int()
         if n != 0:
             self.home_writes += 1
+            if not lay.window and low.as_int() is not None and n is not None:
+                # The bounded sweep is itself a checked transport. Each
+                # actual consume/store below also supplies its own receipt.
+                self.home_write_receipts += 1
+            else:
+                self.home_node = None
         if lay.window:
             if self.window_taken:
                 return
@@ -2897,7 +3032,12 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
+                    self.home_writes += 1
                     out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
+                    if p == lay.dst_offset and lay.dst is not None:
+                        self.vacate_field(lay.dst)
+                    else:
+                        self.home_node = None
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -2906,6 +3046,7 @@ class IRStack(Stack):
         for p in [p for p in self.owner if lo is not None and p >= lo]:
             del self.owner[p]
         out.emit(f"IR_CLEAR_SLOTS(&{self.out_slot(low)}, {count.to_c()});\n")
+        self.home_node = None
 
     def flush(self, out: CWriter,
               canonical_result: str | None = None) -> None:
@@ -2938,8 +3079,34 @@ class IRStack(Stack):
 
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
+        if (self.home_writes != self.home_write_receipts or
+                other.home_writes != other.home_write_receipts):
+            self.home_node = other.home_node = None
         super().merge(other, out)
+        for name in self.native_values.keys() | other.native_values.keys():
+            if name not in self.native_values or name not in other.native_values:
+                self.native_values.pop(name, None)
+                other.native_values.pop(name, None)
+                continue
+            mine, theirs = self.native_values[name], other.native_values[name]
+            mine.nonnull = theirs.nonnull = mine.nonnull and theirs.nonnull
+            if mine.ir_value != theirs.ir_value:
+                mine.ir_value = theirs.ir_value = None
+        if self.home_graph is not other.home_graph:
+            raise StackError("scalar storage branches have different graphs")
+        self.home_node = other.home_node = self.home_graph.join(self.home_node, other.home_node)
+        self.native_owners &= other.native_owners
+        other.native_owners = set(self.native_owners)
+        self.possible_native_owners |= other.possible_native_owners
+        other.possible_native_owners = set(self.possible_native_owners)
+        self.expired_values |= other.expired_values
+        other.expired_values = set(self.expired_values)
+        self.home_values = {field: value for field, value in self.home_values.items()
+                            if other.home_values.get(field) == value}
+        other.home_values = dict(self.home_values)
         self.home_writes = other.home_writes = max(self.home_writes, other.home_writes)
+        self.home_write_receipts = other.home_write_receipts = max(
+            self.home_write_receipts, other.home_write_receipts)
         reads = {field: self.read_fields.get(field, True) and other.read_fields.get(field, True)
                  for field in self.read_fields.keys() | other.read_fields.keys()}
         self.read_fields = dict(reads)
@@ -3084,6 +3251,8 @@ class IREmitter(Emitter):
         self._replacers["PyValue_AsKnownObjectBorrow"] = self.object_of
         self._replacers["PyValue_AsPyObjectNew"] = self.object_of
         # Set while a statement is emitted
+        self.native_scopes: list[dict[str, Local | None]] = []
+        self.native_condition_depth = 0
         self.statement: SimpleStmt | None = None
         # The input, and its field, that the statement's escaping release
         # killed, if it is a view
@@ -4235,7 +4404,36 @@ class IREmitter(Emitter):
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
+        storage.stack.home_node = None
         return super().emit_WhileStmt(stmt, uop, storage, inst)
+
+    def emit_ForStmt(self, stmt, uop, storage, inst):
+        storage.stack.home_node = None
+        return super().emit_ForStmt(stmt, uop, storage, inst)
+
+    def emit_BlockStmt(self, stmt, uop, storage, inst, emit_braces=True):
+        # A nested declaration has a new C identity. Its proof cannot leak
+        # to the outer variable when this lexical scope ends.
+        scope = {}
+        self.native_scopes.append(scope)
+        try:
+            reachable, end, storage = super().emit_BlockStmt(
+                stmt, uop, storage, inst, emit_braces)
+            for name, previous in scope.items():
+                if previous is None:
+                    storage.stack.native_values.pop(name, None)
+                else:
+                    storage.stack.native_values[name] = previous
+            return reachable, end, storage
+        finally:
+            self.native_scopes.pop()
+
+    def emit_MacroIfStmt(self, stmt, uop, storage, inst):
+        self.native_condition_depth += 1
+        try:
+            return super().emit_MacroIfStmt(stmt, uop, storage, inst)
+        finally:
+            self.native_condition_depth -= 1
 
     def before_statement(self, stmt: SimpleStmt, storage: Storage,
                          inst: Instruction | None) -> None:
@@ -4268,6 +4466,85 @@ class IREmitter(Emitter):
                         "`PyValue receiver = OWNER(owner);`", tkn)
                 self.pending_owner = tokens[1]
 
+    def current_value_locals(self, storage):
+        native = storage.stack.native_values
+        return [var for var in storage.stack.variables + storage.inputs + storage.outputs
+                if var.name not in native] + list(native.values())
+
+    def note_nonnull_changes(self, tokens, storage, *, positive=True):
+        locals = self.current_value_locals(storage)
+        names = {var.name for var in locals if not var.is_array()}
+        current = {var.name for var in locals
+                   if var.in_local and var.nonnull and not var.is_array()}
+        changes = value_nonnull_changes(tokens, current if positive else set(), names)
+        for var in locals:
+            if var.name in changes:
+                var.nonnull = positive and changes[var.name] and var.in_local
+
+    def statement_retired_values(self, stmt, sources, storage):
+        """Actual typed releases consume a native value, not its C name."""
+        retired = set()
+        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+        if [token.text for token in tokens] == ["DECREF_INPUTS", "(", ")", ";"]:
+            return {sources[var.name][0] for var in storage.inputs
+                    if var.name in sources and sources[var.name][0] is not None}
+        releases = {"PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLOSE_SPECIALIZED",
+                    "PyValue_AsPyObjectSteal", "PyValue_AsKnownObjectSteal"}
+        for at, token in enumerate(tokens):
+            if token.text not in releases or at + 1 == len(tokens) or tokens[at + 1].text != "(":
+                continue
+            args, _ = instruction_macro_args(token, TokenIterator(tokens[at + 1:]))
+            if args:
+                source = value_transport_expression(args[0])
+                if source is not None and source[0] == "copy":
+                    value, _ = sources.get(source[1], (None, None))
+                    if value is not None:
+                        retired.add(value)
+        return retired
+
+    def apply_value_transport(self, storage, assignment, transport, sources, changes):
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        targets = self.current_value_locals(storage)
+        # Unknown assignments/aliases lose value identity even when the
+        # non-NULL lattice independently retains a useful weaker fact.
+        identities_changed = set(changes) if assignment is None else {assignment[0]}
+        if transport is not None and transport[0] == "take":
+            identities_changed.add(transport[1])
+        for var in targets:
+            if var.name in identities_changed:
+                var.ir_value = None
+        if assignment is None:
+            return
+        name = assignment[0]
+        value = None
+        if transport is not None:
+            mode, source = transport
+            if mode == "literal":
+                flags = int(source != "PyValue_NULL")
+                value = stack.home_action("_PyIR_OWNER_STORAGE_LITERAL", flags=flags)
+                if value is not None:
+                    stack.native_owners.add(value)
+                    stack.possible_native_owners.add(value)
+            else:
+                value, _ = sources.get(source, (None, None))
+                if value in stack.expired_values:
+                    stack.home_node = None
+                    value = None
+                if mode == "dup" and value is not None:
+                    owned = value in stack.native_owners
+                    saved = stack.home_graph.nodes[value - 1].kind == "_PyIR_OWNER_STORAGE_SAVE"
+                    if not owned and not (saved and value in stack.home_values.values()):
+                        stack.home_node = None
+                    value = stack.home_action("_PyIR_OWNER_STORAGE_COPY", value=value,
+                                              flags=int(owned))
+                    if value is not None:
+                        stack.native_owners.add(value)
+                        stack.possible_native_owners.add(value)
+        for var in targets:
+            if var.name == name:
+                var.ir_value = value
+
     def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
                         storage: Storage, inst: Instruction | None
                         ) -> tuple[bool, Token | None, Storage]:
@@ -4282,6 +4559,30 @@ class IREmitter(Emitter):
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
         previous = self.cannot_escape
         self.statement = stmt
+        # Capture RHS facts before TAKE/DEAD or an escaping release kills
+        # its source. Apply them to the surviving identities after emission.
+        locals = self.current_value_locals(storage)
+        current = {var.name for var in locals
+                   if var.in_local and var.nonnull and not var.is_array()}
+        declaration = value_declaration(stmt.contents)
+        fresh = set()
+        if declaration is not None:
+            name = declaration
+            if self.native_condition_depth and any(var.name == name for var in locals):
+                raise analysis_error("conditional native shadow needs a binding proof", stmt.contents[0])
+            scope = self.native_scopes[-1]
+            previous_native = storage.stack.native_values.get(name)
+            scope.setdefault(name, previous_native.copy() if previous_native is not None else None)
+            storage.stack.native_values[name] = Local.register(name)
+            locals = self.current_value_locals(storage)
+            current.discard(name)
+            fresh.add(name)
+        nonnull_changes = value_nonnull_changes(
+            stmt.contents, current, {var.name for var in locals if not var.is_array()}, fresh)
+        assignment = value_assignment(stmt.contents)
+        transport = value_transport_expression(assignment[2]) if assignment else None
+        sources = {var.name: (var.ir_value, var.ir_inplace) for var in locals}
+        retired = self.statement_retired_values(stmt, sources, storage)
         uops = [part for part in inst.parts if isinstance(part, Uop)] if inst else []
         self.stores_outputs = bool(uops) and uops[-1] is uop
         escape = uop.properties.escaping_calls.get(stmt)
@@ -4323,6 +4624,14 @@ class IREmitter(Emitter):
             self.killed_inplace = None
         stack = storage.stack
         assert isinstance(stack, IRStack)
+        for var in self.current_value_locals(storage):
+            if var.name in nonnull_changes:
+                var.nonnull = nonnull_changes[var.name] and var.in_local
+        guarded = error_nonnull_value(stmt.contents)
+        for var in self.current_value_locals(storage):
+            if var.name == guarded:
+                var.nonnull = var.in_local
+        self.apply_value_transport(storage, assignment, transport, sources, nonnull_changes)
         if self.observer_source is not None:
             self.observer_call_receipt(stmt)
             if _statement_text(stmt) == ["DISPATCH_GOTO", "(", ")", ";"]:
@@ -4339,6 +4648,8 @@ class IREmitter(Emitter):
             stack.code_ran()
         if reachable:
             self.consume_killed(storage)
+            for value in retired:
+                stack.retire_value(value)
         if (inst is not None and _statement_text(stmt) == [
                 "FT_ATOMIC_STORE_INT8_RELEASE", "(", "gen", "->",
                 "gi_frame_state", ",", "FRAME_SUSPENDED", "+", "oparg",
@@ -4418,28 +4729,38 @@ class IREmitter(Emitter):
     def record_error_checkpoint(self, stack: IRStack, bridge=None) -> int:
         """Capture the actual flushed stack, independently of normal IO.
 
-        The first transport group preserves its complete incoming shape.
-        Any emitted home operation loses that case; later groups describe
-        those operations explicitly in the same ownership graph.
+        Every supported scalar action is replayed from its actual incoming
+        shape. An uncovered action or a native owner without a home keeps
+        the checkpoint on the explicit control path.
         """
         source = self.error_source
         fmt = self.handler_format
         if (source is None or source.homes not in {
                 HomeEffect.NO_ARENA_WRITE, HomeEffect.PRESERVES_CANONICAL_OR_NULL} or
                 source.changes_origin or fmt is None or fmt.window or
-                stack.reloaded or stack.home_writes or stack.unknown_read or
+                stack.reloaded or stack.home_node is None or
+                stack.home_writes != stack.home_write_receipts or
+                stack.possible_native_owners or stack.unknown_read or
                 any(stack.read_fields.values())):
             return 0
         route = bridge if bridge is not None else self.abrupt_operand_origin
         if route is None:
+            return 0
+        if bridge is not None:
+            # Boxing precedes the uop body. It may own only its explicit
+            # value_temps workspace, never a result left by an earlier uop.
+            if bridge[0] not in source.native_closed_entries:
+                return 0
+        elif route not in source.native_closed_errors:
             return 0
         self.error_checkpoint_count += 1
         if self.error_checkpoint_count > 255:
             raise StackError("more than 255 emitted error checkpoints")
         checkpoint = self.error_checkpoint_count
         self.error_checkpoint_sites[checkpoint] = ErrorCheckpoint(
-            checkpoint, int(source.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL),
-            tuple(sorted(stack.read_fields.items())))
+            checkpoint, int(source.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL or bridge is not None),
+            stack.home_node,
+            tuple(stack.home_graph.nodes[:stack.home_node]))
         if (self.allowed_error_checkpoints is not None and
                 checkpoint not in self.allowed_error_checkpoints):
             return 0

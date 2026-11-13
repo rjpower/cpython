@@ -1240,3 +1240,235 @@ _PyRegPass_ElideNull(_PyRegCfg *cfg)
     }
     return SUCCESS;
 }
+
+/* This is logical producer provenance, not a test of the compacted slot.
+ * Canonical registers can have several definitions. Intersect predecessor
+ * facts before selecting a role, including the retained exception prefix. */
+typedef struct {
+    int nwords, nblocks, count, head, tail;
+    uint64_t *entries;
+    int *queue;
+    uint8_t *reached, *queued;
+} call_null_proof;
+
+static int
+call_null_get(const _PyRegCfg *cfg, const uint64_t *state, int v)
+{
+    int bit = v - cfg->nlocalsplus;
+    return bit >= 0 && v < cfg->nvregs &&
+        ((state[bit / 64] >> (bit % 64)) & 1);
+}
+
+static void
+call_null_set(const _PyRegCfg *cfg, uint64_t *state, int v, int value)
+{
+    int bit = v - cfg->nlocalsplus;
+    if (bit >= 0 && v < cfg->nvregs) {
+        uint64_t mask = UINT64_C(1) << (bit % 64);
+        state[bit / 64] = (state[bit / 64] & ~mask) | (value ? mask : 0);
+    }
+}
+
+static void
+call_null_merge(call_null_proof *proof, int block, const uint64_t *state,
+                int limit)
+{
+    uint64_t *entry = proof->entries + (size_t)block * proof->nwords;
+    int changed = !proof->reached[block];
+    for (int w = 0; w < proof->nwords; w++) {
+        int bits = Py_MIN(Py_MAX(limit - w * 64, 0), 64);
+        uint64_t mask = bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
+        uint64_t incoming = state[w] & mask;
+        uint64_t next = proof->reached[block] ? entry[w] & incoming : incoming;
+        changed |= entry[w] != next;
+        entry[w] = next;
+    }
+    proof->reached[block] = 1;
+    if (changed && !proof->queued[block]) {
+        proof->queued[block] = 1;
+        proof->queue[proof->tail] = block;
+        proof->tail = (proof->tail + 1) % proof->nblocks;
+        proof->count++;
+    }
+}
+
+static void
+call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
+{
+    int *in = _PyReg_IN(cfg, op), *out = _PyReg_OUT(cfg, op);
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    int through = _PyIR_Extent(fmt->through, op->oparg);
+    for (int j = 0; j < op->nout; j++) {
+        int value = 0;
+        if (op->opcode == PUSH_NULL ||
+            (op->opcode == LOAD_GLOBAL && (op->oparg & 1) && j == op->nout - 1))
+        {
+            value = 1;
+        }
+        else if (op->opcode == COPY) {
+            int k = j < op->nread ? j : 0;
+            value = call_null_get(cfg, state, in[k]);
+        }
+        else if (op->opcode == SWAP) {
+            int k = j == 0 ? op->nread - 1 : j == op->nout - 1 ? 0 : j;
+            value = call_null_get(cfg, state, in[k]);
+        }
+        else if (j < through && j < op->nread) {
+            value = call_null_get(cfg, state, in[j]);
+        }
+        outputs[j] = (uint8_t)value;
+    }
+    for (int k = op->nread - op->npop; k < op->nread; k++) {
+        call_null_set(cfg, state, in[k], 0);
+    }
+    for (int j = 0; j < op->nout; j++) {
+        call_null_set(cfg, state, out[j], outputs[j]);
+    }
+}
+
+static int
+call_roles(_PyRegCfg *cfg, int verify)
+{
+    int n = cfg->nblocks;
+    if (n == 0) {
+        return SUCCESS;
+    }
+    int needed = 0;
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        needed |= verify
+            ? (op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)) != 0
+            : op->opcode == CALL || op->opcode == CALL_KW ||
+              op->opcode == CALL_FUNCTION_EX;
+    }
+    if (!needed) {
+        return SUCCESS;
+    }
+    int canonical = Py_MIN(cfg->maxdepth, IR_MAX_SLOTS);
+    int nwords = Py_MAX(1, (canonical + 63) / 64);
+    int nbits = cfg->nvregs - cfg->nlocalsplus;
+    int work_words = Py_MAX(1, nbits / 64 + (nbits % 64 != 0));
+    if ((size_t)n > SIZE_MAX / sizeof(uint64_t) / nwords) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    call_null_proof proof = {.nwords = nwords, .nblocks = n};
+    proof.entries = PyMem_Calloc((size_t)n * nwords, sizeof(uint64_t));
+    uint64_t *state = PyMem_Calloc(work_words, sizeof(uint64_t));
+    proof.queue = PyMem_New(int, n);
+    proof.reached = PyMem_Calloc((size_t)n * 2, 1);
+    int max_outputs = 1;
+    for (int i = 0; i < cfg->nops; i++) {
+        max_outputs = Py_MAX(max_outputs, cfg->ops[i].nout);
+    }
+    uint8_t *outputs = PyMem_New(uint8_t, max_outputs);
+    int result = ERROR;
+    if (proof.entries == NULL || state == NULL || proof.queue == NULL ||
+        proof.reached == NULL || outputs == NULL)
+    {
+        PyErr_NoMemory();
+        goto done;
+    }
+    proof.queued = proof.reached + n;
+    call_null_merge(&proof, 0, state, canonical);
+    while (proof.count) {
+        int b = proof.queue[proof.head];
+        proof.head = (proof.head + 1) % n;
+        proof.count--;
+        proof.queued[b] = 0;
+        assert(!cfg->blocks[b].continued);
+        int next = b + 1;
+        while (next < n && cfg->blocks[next].continued) {
+            next++;
+        }
+        /* Fresh registers are defined before use within this region. Each
+         * definition replaces its fact, so only canonical entry bits join. */
+        memcpy(state, proof.entries + (size_t)b * nwords,
+               (size_t)nwords * sizeof(*state));
+        for (int i = cfg->blocks[b].start; i < cfg->blocks[next - 1].end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD) {
+                continue;
+            }
+            if (op->except >= 0) {
+                _PyRegBlock *handler = &cfg->blocks[op->except];
+                int depth = handler->startdepth - 1 - handler->preserve_lasti;
+                call_null_merge(&proof, op->except, state, depth);
+            }
+            call_null_step(cfg, op, state, outputs);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+            if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+                !(fmt->flags & _PyIR_NAMES_TARGET))
+            {
+                call_null_merge(&proof, op->target, state, canonical);
+            }
+        }
+        if (cfg->blocks[next - 1].falls_through) {
+            call_null_merge(&proof, next, state, canonical);
+        }
+    }
+    /* Only the stable meet can select a canonical input role. */
+    for (int b = 0; b < n; b++) {
+        if (cfg->blocks[b].continued) {
+            continue;
+        }
+        int next = b + 1;
+        while (next < n && cfg->blocks[next].continued) {
+            next++;
+        }
+        memcpy(state, proof.entries + (size_t)b * nwords,
+               (size_t)nwords * sizeof(*state));
+        for (int i = cfg->blocks[b].start; i < cfg->blocks[next - 1].end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD) {
+                continue;
+            }
+            int roles = 0;
+            if (proof.reached[b] && (op->opcode == CALL || op->opcode == CALL_KW ||
+                                    op->opcode == CALL_FUNCTION_EX))
+            {
+                int *in = _PyReg_IN(cfg, op);
+                if (call_null_get(cfg, state, in[1])) {
+                    roles |= _PyReg_CALL_NO_SELF;
+                    if (op->opcode == CALL_FUNCTION_EX &&
+                        call_null_get(cfg, state, in[3]))
+                    {
+                        roles |= _PyReg_CALL_NO_KWARGS;
+                    }
+                }
+            }
+            int mask = _PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS;
+            if (verify) {
+                if ((op->flags & mask) & ~roles) {
+                    PyErr_SetString(PyExc_SystemError,
+                                    "call role lacks virtual NULL provenance");
+                    goto done;
+                }
+            }
+            else {
+                op->flags = (op->flags & ~mask) | roles;
+            }
+            call_null_step(cfg, op, state, outputs);
+        }
+    }
+    result = SUCCESS;
+done:
+    PyMem_Free(proof.entries);
+    PyMem_Free(state);
+    PyMem_Free(proof.queue);
+    PyMem_Free(proof.reached);
+    PyMem_Free(outputs);
+    return result;
+}
+
+int
+_PyRegPass_CallRoles(_PyRegCfg *cfg)
+{
+    return call_roles(cfg, 0);
+}
+
+int
+_PyRegCfg_VerifyCallRoles(_PyRegCfg *cfg)
+{
+    return call_roles(cfg, 1);
+}

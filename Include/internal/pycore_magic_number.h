@@ -346,8 +346,9 @@ Known values:
    64415: source boundaries respect generator resume barriers
    64416: fused branch source coverage follows the encoded control edge
    64417: attribute feedback separates guarded values in 48-byte entries
-   64418: class-receiver classmethod forwarding reuses retired opcode 111 */
-#define PYC_MAGIC_NUMBER 64418
+   64418: class-receiver classmethod forwarding reuses retired opcode 111
+   64419: canonical CALL families certify virtual self and kwargs holes */
+#define PYC_MAGIC_NUMBER 64419
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

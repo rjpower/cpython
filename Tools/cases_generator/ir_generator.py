@@ -159,6 +159,54 @@ EXECUTION_VARIANTS = {
 }
 
 
+@dataclass(frozen=True)
+class CallRoleFamily:
+    base: str
+    member_prefix: str
+    holes: int
+
+
+# Canonical image families, unlike execution-only operand refinements. Their
+# bodies and geometry remain the existing CALL definitions; their input roles
+# survive construction, specialization misses and instrumentation.
+CALL_ROLE_FAMILIES = {
+    "CALL_NO_SELF": CallRoleFamily("CALL", "CALL", 1 << 1),
+    "CALL_KW_NO_SELF": CallRoleFamily("CALL_KW", "CALL_KW", 1 << 1),
+    "CALL_EX_NO_SELF_NO_KW": CallRoleFamily("CALL_FUNCTION_EX", "CALL_EX", (1 << 1) | (1 << 3)),
+    "CALL_EX_NO_SELF_KW": CallRoleFamily("CALL_FUNCTION_EX", "CALL_EX", 1 << 1),
+}
+
+
+def call_role_variant(name: str) -> tuple[str, str, int] | None:
+    for head, role in CALL_ROLE_FAMILIES.items():
+        if name == head:
+            return role.base, head, role.holes
+        if name == "INSTRUMENTED_" + head:
+            return "INSTRUMENTED_" + role.base, head, role.holes
+        if name.startswith(head + "_"):
+            return role.member_prefix + name[len(head):], head, role.holes
+    return None
+
+
+def call_role_variants(analysis: Analysis) -> dict[str, tuple[str, str, int]]:
+    result = {}
+    for head, role in CALL_ROLE_FAMILIES.items():
+        if role.base not in analysis.instructions:
+            continue
+        for name, inst in analysis.instructions.items():
+            if name == role.base:
+                target = head
+            elif name == "INSTRUMENTED_" + role.base:
+                target = "INSTRUMENTED_" + head
+            elif inst.family is not None and inst.family.name == role.base:
+                assert name.startswith(role.member_prefix + "_"), name
+                target = head + name[len(role.member_prefix):]
+            else:
+                continue
+            result[target] = (name, head, role.holes)
+    return result
+
+
 def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
     # Synthetic inputs may reuse a specialization name without its family.
     return {name: variant for name, variant in EXECUTION_VARIANTS.items()
@@ -167,6 +215,9 @@ def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
 
 
 def canonical_handler(name: str) -> str:
+    role = call_role_variant(name)
+    if role is not None:
+        return role[0]
     variant = EXECUTION_VARIANTS.get(name)
     return variant.base if variant is not None else name
 
@@ -1112,7 +1163,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + list(execution_variants(analysis)))
+             + list(execution_variants(analysis)) + sorted(call_role_variants(analysis)))
     table = analysis.numbers
     for name in names:
         ids[name] = table.number(
@@ -1130,6 +1181,8 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     for name, variant in execution_variants(analysis).items():
         if variant.base in result:
             result[name] = result[variant.base]
+    for name, (base, _, _) in call_role_variants(analysis).items():
+        result[name] = result[base]
     return result
 
 
@@ -1989,6 +2042,8 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
                 or set(variant.local_fields) & set(variant.temp_fields)):
             raise ValueError(f"invalid operand modes for {name}")
         formats[name] = fmt
+    for name, (base, _, _) in call_role_variants(analysis).items():
+        formats[name] = formats[base]
     return formats
 
 
@@ -2027,6 +2082,7 @@ class SlotLayout:
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
     canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
+    call_kind: str | None = None
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2238,6 +2294,16 @@ class IRStack(Stack):
     def window_slot(self, p: PointerOffset) -> str:
         return f"window[{(p - self.layout.base).to_c()}]"
 
+    def call_input_role(self, p: PointerOffset) -> str | None:
+        if self.layout.call_kind is None:
+            return None
+        relative = (p - self.layout.base).as_int()
+        if relative == 1:
+            return "CALL_SELF_PRESENT"
+        if relative == 3 and self.layout.call_kind == "CALL_TRANSACTION_EX":
+            return "CALL_KWARGS_PRESENT"
+        return None
+
     def address(self, memory_offset: PointerOffset) -> str:
         lay = self.layout
         p = memory_offset.as_int()
@@ -2259,6 +2325,10 @@ class IRStack(Stack):
 
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
         lay = self.layout
+        if not var.is_array():
+            role = self.call_input_role(memory_offset)
+            if role is not None:
+                return f"((call_state & {role}) ? {self.window_slot(memory_offset)} : PyValue_NULL)"
         if not var.is_array():
             p = memory_offset.as_int()
             if (p is not None and self.owner.get(p) == "in"
@@ -2308,6 +2378,12 @@ class IRStack(Stack):
         view."""
         f = self.input_field(p)
         if p not in self.layout.borrowable:
+            role = self.call_input_role(PointerOffset(p, (), ()))
+            if role is not None:
+                out.emit(f"if (call_state & {role}) {{\n")
+                out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+                out.emit("}\n")
+                return
             out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
             return
         names = self.views.get(p)
@@ -2337,8 +2413,13 @@ class IRStack(Stack):
             return True
         lay = self.layout
         if lay.window:
+            role = self.call_input_role(memory_offset)
+            if role is not None:
+                out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
             out.emit(f"IR_PUBLISH_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            if role is not None:
+                out.emit("}\n")
             return True
         if p is not None and var.ir_input == p and self.owner.get(p) == "in":
             # The input itself, back in its slot, changed: a NULL before the
@@ -2458,6 +2539,12 @@ class IRStack(Stack):
         n = count.as_int()
         if lay.window:
             if self.window_taken:
+                return
+            if lay.call_kind is not None:
+                assert not lay.in_fields
+                first = (low - lay.base).to_c()
+                out.emit(f"call_clear_owned_slots(window, {first}, {count.to_c()}, "
+                         f"{lay.call_kind}, call_state);\n")
                 return
             if n is None:
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
@@ -2608,6 +2695,7 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
+        self._replacers["IR_CREATED_COPY"] = self.created_copy
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
@@ -2670,6 +2758,17 @@ class IREmitter(Emitter):
         self.out.start_line()
         self.emit("frame->phase_state = 0;\n")
         super().emit_save(storage)
+
+    def created_copy(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        args = self.macro_args(tkn, tkn_iter, 2)
+        if args != ["frame", "gen_frame"] or not created_copy_contract(
+                inst, self.format_of(inst)):
+            raise analysis_error("IR_CREATED_COPY needs its checked copy contract", tkn)
+        self.ownership_event("CREATED_COPY")
+        self.out.start_line()
+        self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame);\n")
+        return True
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
@@ -2982,6 +3081,11 @@ class IREmitter(Emitter):
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         edge, _ = contracts[tkn]
+        # This checked terminal path has performed its final owner commit.
+        # Only its successful intended normal edge gets the normal recipe;
+        # callback errors/redirects retain their separate recovery protocols.
+        if normal_vacate_capability(inst, fmt):
+            self.normal_observer_edges.add(edge)
         self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
         self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
         self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
@@ -3001,11 +3105,16 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n}\n")
         return False
 
-    def unpack_to_locals(self, fmt, count, canonical=False):
+    def unpack_to_locals(self, inst, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
         release that may run Python is out of line."""
+        if (not fmt.unpacks or not fmt.window or fmt.n_inputs != 0 or
+                through_items(inst, *external_io(inst)) or
+                fmt.field_of(ROLE_BASE) is None or
+                fmt.field_of(ROLE_DST) is None):
+            raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
         self.emit(f"int ir_n = {count};\n")
@@ -3018,6 +3127,7 @@ class IREmitter(Emitter):
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
+        self.unpack_local_drained = True
         self.emit("}\n")
 
     def reader_reload(self):
@@ -3064,11 +3174,10 @@ class IREmitter(Emitter):
         self.out.start_line()
         if tkn.text == "IR_PREPARE_CALL_METHOD":
             self.emit("{\n")
-            self.emit("int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);\n")
-            self.emit("if (ir_expanded < 0) {\n")
+            self.emit("call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);\n")
+            self.emit("if (call_state & CALL_FAILED) {\n")
             self.reader_error()
             self.emit("}\n")
-            self.emit("call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);\n")
             self.emit("}\n")
         else:
             if tkn.text == "IR_PREPARE_CALL_TUPLE":
@@ -3078,7 +3187,7 @@ class IREmitter(Emitter):
                 assert tkn.text == "IR_MONITOR_CALL"
                 self.emit("call_state |= CALL_MONITORED | CALL_EFFECTS;\n")
                 call = (f"call_transaction_monitor(tstate, frame, this_instr, call_base, "
-                        f"{self.call_argc}, {self.call_kind})")
+                        f"{self.call_argc}, {self.call_kind}, call_state)")
             self.emit(f"if ({call} < 0) {{\n")
             self.reader_error()
             self.emit("}\n")
@@ -3101,6 +3210,7 @@ class IREmitter(Emitter):
         return True
 
     def call_completion(self, run_override=None):
+        self.call_normal_drained = True
         if self.has_record:
             self.emit("assert(value_temps->count == 0);\n")
         # One out-of-line call, which keeps the transaction record in its own
@@ -3112,7 +3222,7 @@ class IREmitter(Emitter):
         argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
         if run_override:
             self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
-                      f"call_base, call_destination, {argc}{self.call_kind}, fb);\n")
+                      f"call_base, call_destination, {argc}{self.call_kind}, fb, call_state);\n")
             self.emit("if (call_result.status > 0) {\n")
             self.emit(f"call_result = {self.call_run}(tstate, frame, "
                       f"call_base, call_destination, {argc}"
@@ -3950,7 +4060,7 @@ class IREmitter(Emitter):
         again; the path ends here"""
         assert inst is not None
         self.check_exit_inputs(tkn, storage)
-        if uses_call_transaction(inst):
+        if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         self.emit(tkn)
@@ -3958,7 +4068,7 @@ class IREmitter(Emitter):
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
-        if uses_call_transaction(inst):
+        if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         fmt = self.format_of(inst)
@@ -3998,6 +4108,8 @@ class IREmitter(Emitter):
         if not isinstance(stack, IRStack) or not stack.layout.window:
             raise analysis_error("IR_WINDOW_TAKEN() needs a window-style handler", tkn)
         stack.window_taken = True
+        if stack.layout.call_kind is not None:
+            self.call_normal_drained = True
         return True
 
     def complete_step(self, tkn, tkn_iter, uop, storage, inst):
@@ -4009,6 +4121,8 @@ class IREmitter(Emitter):
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER" and distance == "oparg":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4020,6 +4134,19 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         return False
+
+    def normal_completion(self, inst, fmt):
+        inputs, _ = external_io(inst)
+        if (not fmt.window or len(inputs) != 2 or
+                any(item.is_array() for item in inputs) or
+                fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A" or
+                fmt.dst_offset != 2):
+            raise analysis_error("unsupported normal completion window", inst.where)
+        # This actual helper route drains receiver/cursor only on its taken
+        # completion edge. A resumed generator reaches the same helper on
+        # return; a yielded body result does not take this edge.
+        self.normal_completions.add(OwnershipEvent(
+            "_PyIR_OWNER_NORMAL_COMPLETION", src=2, dst=1))
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
@@ -4052,6 +4179,8 @@ class IREmitter(Emitter):
         gen, kind = self.macro_args(tkn, tkn_iter, 2)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4236,7 +4365,7 @@ def polls_at_end(name: str, inst: Instruction) -> bool:
     """Whether the call transaction of handler name polls the eval breaker
     when the call returns, as _CHECK_PERIODIC_AT_END does"""
     return any(isinstance(p, Uop) and p.name == "_CHECK_PERIODIC_AT_END"
-               for p in inst.parts) or name == "CALL_KW_NON_PY"
+               for p in inst.parts) or canonical_handler(name) == "CALL_KW_NON_PY"
 
 
 def uses_call_transaction(inst: Instruction) -> bool:
@@ -4368,6 +4497,15 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
             or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 ) ;"):
 
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
+
+
+def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
+    """Conditions shared by actual final commits, never a source-name grant."""
+    return (not inst.properties.switches_frame and not fmt.names_target
+            and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
+            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+                                  "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
+                        for t in uop_token_list(inst)))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
@@ -4938,10 +5076,16 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     "One pass of generate_handler, which records the roles it finds"
     emitter.pending_owner = None
     emitter.ownership_events = []
+    emitter.normal_inputs_cleared = False
+    emitter.unpack_local_drained = False
+    emitter.normal_observer_edges = set()
+    emitter.normal_completions = set()
+    emitter.call_normal_drained = False
+    emitter.call_kind = ""
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
-    if name != inst.name and name not in EXECUTION_VARIANTS:
+    if name != inst.name and name not in EXECUTION_VARIANTS and call_role_variant(name) is None:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
@@ -5019,7 +5163,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         call_family = "CALL"
     elif call_family == "INSTRUMENTED_CALL_KW":
         call_family = "CALL_KW"
-    if transaction:
+    call_window = fmt.window and call_family in (
+        "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX")
+    if call_window:
         assert fmt.window
         inputs, _ = external_io(inst)
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
@@ -5033,7 +5179,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         expected = {"CALL_TRANSACTION_VECTOR": (2, ["oparg"]),
                     "CALL_TRANSACTION_KEYWORDS": (3, ["oparg"]),
                     "CALL_TRANSACTION_EX": (4, [])}[kind]
-        if (fixed, arrays) != expected:
+        if transaction and (fixed, arrays) != expected:
             raise analysis_error(
                 f"{name}: a {kind} call with inputs {count}", inst.where)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
@@ -5053,14 +5199,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)
         out.emit(f"int call_base = {base};\n")
         out.emit(f"int call_destination = {dst};\n")
-        out.emit("int call_state = 0;\n")
-        out.emit(f"call_transaction_begin(frame, call_base, {count}, call_destination);\n")
+        role = call_role_variant(name)
+        holes = role[2] if role is not None else 0
+        out.emit(f"int call_state = call_transaction_begin(frame, call_base, {count}, "
+                 f"call_destination, {kind}, {holes});\n")
+        out.emit("(void)call_state;\n")
         if emitter.call_has_feedback:
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
-    elif fmt.window and call_family in ("CALL", "CALL_KW"):
-        inputs, _ = external_io(inst)
-        count = " + ".join(f"({item.size or '1'})" for item in inputs)
-        out.emit(f"_PyValue_RecheckWindow(window, {count});\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {canonical_handler(name)};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -5084,7 +5229,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     canonical = canonical_result_source(inst, fmt)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      canonical_result=canonical.result if canonical else None,
-                     canonical_outputs=canonical_output_sources(inst, fmt))
+                     canonical_outputs=canonical_output_sources(inst, fmt),
+                     call_kind=emitter.call_kind if call_window else None)
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)
@@ -5103,15 +5249,31 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if reachable:
         assert isinstance(stack, IRStack)
         emit_final_outputs(inst, fmt, mode, stack, out)
+        if call_window:
+            emitter.call_normal_drained = True
+        # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
+        # this final flush. Stack alignment/merge has checked both branch arms
+        # at their common point, so consumed inputs are empty on either edge.
+        # The unchanged through prefix retains its inputs. Other normal
+        # exits, outcome protocols and raw frame access need their own recipe.
+        emitter.normal_inputs_cleared = normal_vacate_capability(inst, fmt)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
             emitter.unpack_to_locals(
-                fmt, UNPACKS[fmt.group], canonical=inst.name in (
+                inst, fmt, UNPACKS[fmt.group], canonical=inst.name in (
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
-    if transaction and emitter.call_fallback_used:
+    normal_edges = ({1} if fmt.jump_always else {0, 1}
+                    if fmt.jumps or fmt.forward else {0})
+    if (not reachable and emitter.normal_observer_edges == normal_edges
+            and normal_vacate_capability(inst, fmt)):
+        # Checked terminal wrappers flush before their callbacks and dispatch
+        # themselves. Every ordinary successor must have such a commit; a
+        # nonbranching handler has only its fallthrough successor to cover.
+        emitter.normal_inputs_cleared = True
+    if call_window and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
         emitter.call_completion()
     out.start_line()
@@ -5130,6 +5292,16 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             # an uncovered body cannot acquire a recipe from its name.
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_LEAF", src=kind))
+        elif emitter.call_normal_drained:
+            emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"))
+        elif emitter.normal_inputs_cleared and emitter.unpack_local_drained:
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_UNPACK_LOCAL_DRAIN"))
+        elif emitter.normal_inputs_cleared:
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
+    emitter.ownership_events.extend(sorted(emitter.normal_completions,
+                                          key=lambda event: (event.dst, event.src)))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
@@ -5337,6 +5509,10 @@ def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
     twin of its family; a twin is its own"""
     if name.startswith("INSTRUMENTED_"):
         return name
+    role = call_role_variant(name)
+    if role is not None:
+        twin = "INSTRUMENTED_" + role[1]
+        return twin if twin in ids else None
     twin = "INSTRUMENTED_" + fmt.group
     return twin if twin in ids else None
 
@@ -5417,6 +5593,34 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 raise analysis_error("IR_TRY_DICT_FIRST_PROBE cannot use "
                                      "a value record", inst.where)
             result.add(name)
+    if programs is not None:
+        # A pristine word can redispatch to any member. A successful final
+        # vacate in one member does not certify an uncovered sibling.
+        grouped: dict[str, list[str]] = {}
+        for name in handler_instructions(analysis):
+            grouped.setdefault(formats[name].group, []).append(name)
+        for members in grouped.values():
+            unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
+            if not all(programs.get(name) == unpack_drain for name in members):
+                for name in members:
+                    if programs.get(name) == unpack_drain:
+                        del programs[name]
+            common_completions = set.intersection(*(
+                {event for event in programs.get(name, ())
+                 if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION"}
+                for name in members))
+            for name in members:
+                if name in programs:
+                    programs[name] = tuple(event for event in programs[name]
+                        if event.kind != "_PyIR_OWNER_NORMAL_COMPLETION" or
+                        event in common_completions)
+            if all(programs.get(name) for name in members):
+                continue
+            for name in members:
+                if programs.get(name) in (
+                        (OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),),
+                        (OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),)):
+                    del programs[name]
     return result
 
 
@@ -5433,6 +5637,7 @@ class HandlerContract:
     observer_outcome: tuple[str, str]
     transfer_kind: str
     ownership_events: tuple[OwnershipEvent, ...]
+    call_input_holes: int
 
 
 def statement_shape(node):
@@ -5488,6 +5693,39 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
     return (len(parts) == 2
             and statement_shape(parts[0].body) == statement_shape(
                 Parser(specialize, "<binary specialization contract>").block()))
+
+
+def created_copy_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """The actual copy boundary has no preceding scratch transport."""
+    inputs, outputs = external_io(inst)
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (inst.name != "RETURN_GENERATOR" or not fmt.window or inputs
+            or len(outputs) != 1 or len(parts) != 1
+            or len(inst.parts) != 1):
+        return False
+    expected = """{
+        PyFunctionObject *func = _PyFrame_GetFunction(frame);
+        PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, _PyFrame_GetCode(frame));
+        ERROR_IF(gen == NULL);
+        SAVE_STACK();
+        _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
+        IR_CREATED_COPY(frame, gen_frame);
+        gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+        assert(frame->frame_obj == NULL);
+        gen->gi_frame_state = FRAME_CREATED;
+        gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *prev = frame->previous;
+        _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
+        _PyThreadState_PopFrame(tstate, frame);
+        frame = tstate->current_frame = prev;
+        next_instr = frame->return_pc;
+        RELOAD_STACK();
+        res = PyValue_FromObjectSteal((PyObject *)gen);
+        LLTRACE_RESUME_FRAME();
+    }"""
+    return statement_shape(parts[0].body) == statement_shape(
+        Parser(expected, "<created copy contract>").block())
 
 
 def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
@@ -5550,6 +5788,28 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                        for part, body in zip(parts, (instrument, periodic)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
+
+    if inst.name == "MAKE_CELL" and scalar_shape(0, 0):
+        body = """{
+            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
+            if (cell == NULL) { ERROR_NO_POP(); }
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            PyValue_XCLOSE(tmp);
+        }"""
+        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
+    if inst.name == "COPY_FREE_VARS" and scalar_shape(0, 0):
+        body = """{
+            PyCodeObject *co = _PyFrame_GetCode(frame);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
+            PyObject *closure = func->func_closure;
+            assert(oparg == co->co_nfreevars);
+            int offset = co->co_nlocalsplus - oparg;
+            for (int i = 0; i < oparg; ++i) {
+                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+            }
+        }"""
+        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
         "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",
@@ -6186,6 +6446,7 @@ def handler_contracts(analysis: Analysis,
             observer_outcome=observer_outcomes(inst, fmt),
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
+            call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
         )
     return result
 

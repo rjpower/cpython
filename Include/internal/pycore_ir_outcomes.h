@@ -377,6 +377,9 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
     if (window < 0 || relative < 0 || relative >= _PyIR_Extent(fmt->reads, arg)) {
         return 0;
     }
+    if (_PyIR_CallInputRole(fmt, relative) == _PyIR_CALL_INPUT_VIRTUAL_NULL) {
+        return 0;
+    }
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
         case LIST_APPEND:
         case SET_ADD:
@@ -441,6 +444,25 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
         }
     }
     return _PyIR_ReadsWindowHome(word, arg, home);
+}
+
+/* The successful final stack commit consumes inputs outside its unchanged
+ * window prefix. Through homes retain their logical values even when they
+ * are read; fresh outputs are handled independently by the caller. */
+static inline int
+_PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int through = _PyIR_Extent(fmt->through, arg);
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_BASE &&
+            home >= (int)fields[f] && home - (int)fields[f] < through)
+        {
+            return 0;
+        }
+    }
+    return _PyIR_ReadsHome(word, arg, home);
 }
 
 enum {
@@ -623,7 +645,7 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
         return unknown;
     }
 
-    switch (_PyIR_HandlerBase[handler]) {
+    switch (_PyIR_BaseOpcode(handler)) {
         case POP_TOP:
             /* The emitted scalar retirement detaches scratch A before
              * closing it. A normal continuation keeps other scratch homes. */
@@ -663,6 +685,11 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
                 return unknown;
             }
             if (home >= base && home - base < reads && home != dst) {
+                if (_PyIR_CallInputRole(fmt, home - base) ==
+                    _PyIR_CALL_INPUT_VIRTUAL_NULL)
+                {
+                    return preserve;
+                }
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
             }
             /* Neither a new result nor an overlapping child's unused tail
@@ -704,6 +731,20 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
                 return unknown;
             }
             if (home == (int)IR_A(word)) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+            }
+            return preserve;
+        case YIELD_VALUE:
+            if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
+                fmt->roles[1] != _PyIR_ROLE_BASE || reads != 1 || writes != 1 ||
+                through != 0 || base < 0)
+            {
+                return unknown;
+            }
+            if (home == dst) {
+                return unknown;
+            }
+            if (home == base) {
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
             }
             return preserve;
@@ -767,6 +808,96 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
         return unknown;
     }
     return preserve;
+}
+
+enum {
+    _PyIR_ABSENCE_UNKNOWN,
+    _PyIR_ABSENCE_PRESERVE,
+    _PyIR_ABSENCE_SET_EMPTY,
+    _PyIR_ABSENCE_SET_VALUE,
+};
+
+/* Successful CALL cleanup is a logical contract. A returned child can leave
+ * nonowning header bytes in the arena; they are not physical NULL facts.
+ * Native calls touch only their own window, so outside it this can preserve
+ * a prior absence fact but cannot create one. */
+static inline int
+_PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (home < nl || home >= limit) {
+        return _PyIR_ABSENCE_UNKNOWN;
+    }
+    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+    int extra = opcode == CALL ? 2 : opcode == CALL_KW ? 3 :
+        opcode == CALL_FUNCTION_EX ? 4 : -1;
+    int base = (int)IR_B(word), dst = (int)IR_A(word);
+    if (extra < 0) {
+        /* Reached suspension/child outcomes leave their new recipient live.
+         * Cursor/receiver updates have their own protocols, so the whole
+         * affected window loses absence; no completion slot is guessed empty.
+         * A prior empty tail stays owner-free after a completed child cleanup. */
+        if (opcode != YIELD_VALUE && opcode != SEND && opcode != FOR_ITER &&
+            opcode != CLEANUP_THROW)
+        {
+            return _PyIR_ABSENCE_UNKNOWN;
+        }
+        int reads = _PyIR_Extent(fmt->reads, arg);
+        int writes = _PyIR_Extent(fmt->writes, arg);
+        if (base < nl || reads < 0 || writes < 0 ||
+            base > limit - Py_MAX(reads, writes) ||
+            fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_BASE)
+        {
+            return _PyIR_ABSENCE_UNKNOWN;
+        }
+        if (home == dst) {
+            return _PyIR_ABSENCE_SET_VALUE;
+        }
+        if (opcode == FOR_ITER && reads == 2 &&
+            fmt->owner_events == 1 &&
+            _PyIR_OwnerPrograms[fmt->owner_program].kind ==
+                _PyIR_OWNER_NORMAL_COMPLETION)
+        {
+            /* The body result is published to A, including a named binding.
+             * A nonselected BASE+2 is neither an input nor an output home:
+             * retain only its incoming absence, never create a new one. */
+            return home >= base && home - base < reads
+                ? _PyIR_ABSENCE_UNKNOWN : _PyIR_ABSENCE_PRESERVE;
+        }
+        if (home >= base && home - base < Py_MAX(reads, writes)) {
+            return opcode == YIELD_VALUE && reads == 1 && writes == 1 && home == base
+                ? _PyIR_ABSENCE_SET_EMPTY : _PyIR_ABSENCE_UNKNOWN;
+        }
+        return _PyIR_ABSENCE_PRESERVE;
+    }
+    if (fmt->owner_events != 1 ||
+        _PyIR_OwnerPrograms[fmt->owner_program].kind != _PyIR_OWNER_CALL_DRAIN)
+    {
+        return _PyIR_ABSENCE_UNKNOWN;
+    }
+    int count = opcode == CALL_FUNCTION_EX ? 4 : arg + extra;
+    if (arg < 0 || count < extra || base < nl || base > limit - count ||
+        home < nl || home >= limit ||
+        fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_BASE ||
+        (opcode == CALL_FUNCTION_EX
+            ? fmt->roles[2] != _PyIR_ROLE_FB || fmt->roles[3] != _PyIR_ROLE_NONE
+            : fmt->roles[2] != _PyIR_ROLE_IMM || fmt->roles[3] != _PyIR_ROLE_FB) ||
+        _PyIR_Extent(fmt->reads, arg) != count ||
+        _PyIR_Extent(fmt->writes, arg) > 1 ||
+        _PyIR_Extent(fmt->through, arg) != 0 || fmt->dst != 0 ||
+        fmt->output_kind != _PyIR_OUTPUT_WINDOW_DST_FIRST)
+    {
+        return _PyIR_ABSENCE_UNKNOWN;
+    }
+    if (home == dst) {
+        return _PyIR_ABSENCE_SET_VALUE;
+    }
+    if (home >= base && home - base < count &&
+        _PyIR_CallInputRole(fmt, home - base) != _PyIR_CALL_INPUT_VIRTUAL_NULL)
+    {
+        return _PyIR_ABSENCE_SET_EMPTY;
+    }
+    return _PyIR_ABSENCE_PRESERVE;
 }
 
 static inline int

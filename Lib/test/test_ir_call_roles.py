@@ -253,6 +253,42 @@ class CallRoleTests(unittest.TestCase):
                                           values), 17)
                 self.assertEqual(seen, expected)
 
+    def test_early_loop_retirement_covers_its_single_observed_successor(self):
+        def invoke(fn, values):
+            for value in values:
+                if value:
+                    break
+            return fn(17)
+        self.assertTrue(any(row[0] == "POP_ITER" for row in
+                            _testinternalcapi.get_ir(invoke.__code__)))
+        for admitted in routes(invoke.__code__):
+            function = types.FunctionType(admitted, globals())
+            for values in ((), (0,), (0, 1, 2)):
+                self.assertEqual(function(lambda value: value, values), 17)
+
+    def test_local_loop_result_does_not_invent_a_scratch_output(self):
+        words = [("LOAD_CONST", 1), ("POP_TOP", 3),
+                 ("FOR_ITER", 0, 1, 0, 1), ("IR_JUMP", 0, 0, 2),
+                 ("LOAD_CONST", 1), ("CALL_NO_SELF", 1, 1, 0, 0),
+                 ("RETURN_VALUE", 1)]
+        self.assert_admitted(words, locals=("value",))
+        bad = words.copy()
+        bad[1] = ("LOAD_CONST", 3)
+        self.assert_rejected(words, bad, "child clobber home", locals=("value",))
+
+        def invoke(fn, values):
+            for value in values:
+                if value:
+                    continue
+            return fn(17)
+        rows = _testinternalcapi.get_ir(invoke.__code__)
+        self.assertTrue(any(row[0] == "FOR_ITER" and
+                            row[1] < invoke.__code__.co_nlocals for row in rows))
+        for admitted in routes(invoke.__code__):
+            function = types.FunctionType(admitted, globals())
+            for values in ((), (0, 1), (item for item in (0, 1))):
+                self.assertEqual(function(lambda value: value, values), 17)
+
     def test_specialization_deopt_trace_and_profile_preserve_roles(self):
         def invoke(fn, value):
             return fn(value)

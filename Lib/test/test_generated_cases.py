@@ -3182,7 +3182,8 @@ class TestIRCases(unittest.TestCase):
         contracts = ir_generator.handler_contracts(real, formats)
         for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
                      "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
-                     "CONTAINS_OP_JUMP", "DICT_MERGE", "LIST_APPEND"):
+                     "CONTAINS_OP_JUMP", "DICT_MERGE", "LIST_APPEND",
+                     "POP_ITER", "INSTRUMENTED_POP_ITER"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))

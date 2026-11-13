@@ -853,6 +853,17 @@ _PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
         if (home == dst) {
             return _PyIR_ABSENCE_SET_VALUE;
         }
+        if (opcode == FOR_ITER && reads == 2 &&
+            fmt->owner_events == 1 &&
+            _PyIR_OwnerPrograms[fmt->owner_program].kind ==
+                _PyIR_OWNER_NORMAL_COMPLETION)
+        {
+            /* The body result is published to A, including a named binding.
+             * A nonselected BASE+2 is neither an input nor an output home:
+             * retain only its incoming absence, never create a new one. */
+            return home >= base && home - base < reads
+                ? _PyIR_ABSENCE_UNKNOWN : _PyIR_ABSENCE_PRESERVE;
+        }
         if (home >= base && home - base < Py_MAX(reads, writes)) {
             return opcode == YIELD_VALUE && reads == 1 && writes == 1 && home == base
                 ? _PyIR_ABSENCE_SET_EMPTY : _PyIR_ABSENCE_UNKNOWN;

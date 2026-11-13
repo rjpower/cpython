@@ -1310,6 +1310,19 @@ class RelaxationTest(unittest.TestCase):
                 self.assertEqual(successors, ["IR_JUMP", "IR_JUMP"])
             else:
                 self.assertNotEqual(successors, ["IR_JUMP", "IR_JUMP"])
+            # The mutation below changes output geometry. Drop inherited
+            # empty-return certificates before the common proof selects them
+            # again, or keeps general frame-owned cleanup for residual homes.
+            return_general = {
+                dis._all_opmap["RETURN_VALUE_EMPTY"]: dis.opmap["RETURN_VALUE"],
+                dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
+                    dis.opmap["INSTRUMENTED_RETURN_VALUE"],
+            }
+            source_words = [int.from_bytes(code.co_code[off:off + 8], "little")
+                            for off in range(0, len(code.co_code), 8)]
+            source_bytes = b"".join(
+                ((word & ~0xffff) | return_general.get(word & 0xffff, word & 0xffff))
+                .to_bytes(8, "little") for word in source_words)
             word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
                                   "little")
             a, b, c, d = ((word >> shift) & IR_FIELD_MAX
@@ -1321,8 +1334,8 @@ class RelaxationTest(unittest.TestCase):
                     with self.subTest(shape=name, handler=handler, dst=dst):
                         replacement = encode_words((opcode.opmap[handler],
                                                     dst, b, c, d))
-                        data = (code.co_code[:8 * index] + replacement +
-                                code.co_code[8 * (index + 1):])
+                        data = (source_bytes[:8 * index] + replacement +
+                                source_bytes[8 * (index + 1):])
 
                         def construct():
                             return code.replace(
@@ -1745,7 +1758,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
         def replacement(a=5, *args, **kwargs):
             return ("new", a, args, kwargs)
         target.__code__ = replacement.__code__
@@ -1772,7 +1785,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
         testcapi.function_set_test_vectorcall(target)
         self.assertEqual(caller(target), "custom vectorcall")
 
@@ -1784,7 +1797,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             caller(target)
         if SPECIALIZES:
-            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
         events = []
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID
@@ -2404,7 +2417,7 @@ class RegCfgTest(unittest.TestCase):
             return 1
         self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
-        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL")
+        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL_NO_SELF")
         self.assertEqual(call[1], IR_FIELD_MAX)
         first = f.__code__.co_firstlineno
         result, events = trace(f, lambda: object())

@@ -5284,6 +5284,113 @@ class HandlerContract:
     result_phase: str
     output_kind: str
     observer_outcome: tuple[str, str]
+    transfer_kind: str
+
+
+def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
+    """Certify the bounded normal-edge subset from its actual owner operations.
+
+    These facts do not describe callback/error phases. Changed or synthetic
+    instruction bodies lose coverage instead of acquiring facts from a name.
+    """
+    unknown = "_PyIR_TRANSFER_UNKNOWN"
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return unknown
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    inputs, outputs = external_io(inst)
+
+    def scalar_shape(nin: int, nout: int) -> bool:
+        return (not fmt.window and len(inputs) == nin and len(outputs) == nout
+                and not any(item.is_array() for item in inputs)
+                and not any(entry.item.is_array() for entry in outputs))
+
+    def bodies_match(*bodies: str) -> bool:
+        return len(parts) == len(bodies) and all(
+            [token.text for token in part.body.tokens() if token.kind != "COMMENT"]
+            == [token.text for token in tokenize(body)]
+            for part, body in zip(parts, bodies))
+
+    scalar = {
+        "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",
+        "LOAD_CONST_INLINE_INT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineInt(value)); }",
+        "LOAD_CONST_INLINE_FLOAT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineFloat(value)); }",
+        "LOAD_COMMON_CONSTANT": "{ assert(oparg < NUM_COMMON_CONSTANTS); value = PyValue_DUP(tstate->interp->common_consts[oparg]); }",
+        "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
+        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); ERROR_IF(PyValue_IsNull(value)); }",
+    }
+    if inst.name in scalar:
+        if (scalar_shape(0, 1) and fmt.field_of(ROLE_DST) is not None
+                and bodies_match(scalar[inst.name])):
+            return "_PyIR_TRANSFER_FRESH"
+        return unknown
+    unbound = """
+        if (PyValue_IsNull(value_s)) {
+            _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
+                UNBOUNDLOCAL_ERROR_MSG,
+                _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg));
+            ERROR_IF(true);
+        }
+    """
+    if inst.name in ("LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK"):
+        body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
+                + unbound + " value = PyValue_DUP(value_s); }") \
+            if inst.name == "LOAD_FAST_CHECK" else \
+            "{ assert(!PyValue_IsNull(GETLOCAL(oparg))); value = PyValue_DUP(GETLOCAL(oparg)); }"
+        if bodies_match(body) and scalar_shape(0, 1):
+            return "_PyIR_TRANSFER_LOCAL_DUP"
+        return unknown
+    if inst.name == "LOAD_FAST_AND_CLEAR":
+        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL; }"):
+            return "_PyIR_TRANSFER_LOCAL_MOVE"
+        return unknown
+    close = "{ PyValue_XCLOSE(value); }"
+    if inst.name == "POP_TOP":
+        return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(close) else unknown
+    if inst.name == "STORE_FAST":
+        store = """{
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = value;
+            _PyValue_CheckHome(value);
+            DEAD(value);
+            trash = tmp;
+        }"""
+        return "_PyIR_TRANSFER_LOCAL_STORE" if scalar_shape(1, 0) and bodies_match(store, close) else unknown
+    if inst.name == "DELETE_FAST":
+        body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
+                + unbound + " PyValue tmp = GETLOCAL(oparg); "
+                "GETLOCAL(oparg) = PyValue_NULL; PyValue_XCLOSE(tmp); }")
+        # DELETE_FAST names its checked view v rather than value_s.
+        return "_PyIR_TRANSFER_LOCAL_CLEAR" if scalar_shape(0, 0) and bodies_match(
+            body.replace("value_s", "v")) else unknown
+    if inst.name == "COPY":
+        return "_PyIR_TRANSFER_COPY" if (fmt.window
+            and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
+            and extent([entry.item for entry in outputs], inst) == (1, "_PyIR_EXT_OPARG")
+            and bodies_match("{ top = PyValue_DUP(bottom); }")) else unknown
+    if inst.name == "SWAP":
+        return "_PyIR_TRANSFER_SWAP" if (fmt.window
+            and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
+            and extent([entry.item for entry in outputs], inst) == (0, "_PyIR_EXT_OPARG")
+            and bodies_match("{ PyValue temp = bottom; bottom = top; top = temp; }")) else unknown
+    if inst.name in ("IR_JUMP", "JUMP_FORWARD", "JUMP_BACKWARD_NO_INTERRUPT"):
+        return "_PyIR_TRANSFER_PRESERVE" if scalar_shape(0, 0) and bodies_match("{ JUMPTO(oparg); }") else unknown
+    if inst.name in ("POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"):
+        is_none = """{
+            if (PyValue_IsNone(value)) { b = PyValue_True; DEAD(value); }
+            else { b = PyValue_False; DECREF_INPUTS(); }
+        }"""
+        sense = "True" if inst.name == "POP_JUMP_IF_NONE" else "False"
+        jump = f"""{{
+            assert(PyValue_BoolCheck(cond));
+            int flag = PyValue_Is{sense}(cond);
+            DEAD(cond);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            if (flag) {{ JUMPTO(oparg); }}
+        }}"""
+        return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
+    if inst.name == "RETURN_VALUE" and canonical_frame_transfer_input(inst):
+        return "_PyIR_TRANSFER_EXIT"
+    return unknown
 
 
 def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
@@ -5835,6 +5942,7 @@ def handler_contracts(analysis: Analysis,
                           else RESULT_PHASE_NONE),
             output_kind=handler_output_kind(inst, fmt),
             observer_outcome=observer_outcomes(inst, fmt),
+            transfer_kind=normal_transfer_kind(inst, fmt),
         )
     return result
 

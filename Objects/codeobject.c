@@ -1825,6 +1825,13 @@ check_words(struct _PyCodeConstructor *con)
                              value, nl);
                 goto error;
             }
+            if (role >= _PyIR_ROLE_IN0 && value < (uint32_t)nl &&
+                !(fmt->borrow_mask & (1u << (role - _PyIR_ROLE_IN0))))
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd cannot borrow local slot %u", i, value);
+                goto error;
+            }
             // The field is the unit of an entry that fits the handler's
             // type; 0 is the shared header, which only a handler with no
             // operand in its entry can use.
@@ -1868,6 +1875,13 @@ check_words(struct _PyCodeConstructor *con)
             goto error;
         }
         int outputs = writes - through;
+        if ((fmt->transfer_kind == _PyIR_TRANSFER_COPY && arg < 1) ||
+            (fmt->transfer_kind == _PyIR_TRANSFER_SWAP && arg < 2))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has invalid transfer operands", i);
+            goto error;
+        }
         if ((fmt->flags & _PyIR_UNPACKS) && dst != IR_NO_DST) {
             if (dst < 0 || dst >= nl || outputs > nl - dst) {
                 PyErr_Format(PyExc_ValueError,
@@ -1895,6 +1909,13 @@ check_words(struct _PyCodeConstructor *con)
             }
         }
         int opcode = _PyIR_BaseOpcode(handler);
+        if ((opcode == LOAD_COMMON_CONSTANT && arg >= NUM_COMMON_CONSTANTS) ||
+            (opcode == LOAD_SMALL_INT && arg >= _PY_NSMALLPOSINTS))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid constant index", i);
+            goto error;
+        }
         if (OPCODE_HAS_CONST(opcode) &&
             (arg < 0 || arg >= PyTuple_GET_SIZE(consts)))
         {
@@ -1938,6 +1959,366 @@ error:
     return NULL;
 }
 
+typedef struct {
+    int start;
+    int end;
+    unsigned char reached;
+    unsigned char queued;
+} semantic_block;
+
+typedef struct {
+    int nblocks;
+    int nwords;
+    int head;
+    int tail;
+    int count;
+    int *queue;
+    semantic_block *blocks;
+    uint64_t *facts;
+} semantic_worklist;
+
+/* NULL and logical initialization are must-facts. Remaining owner obligations
+ * are may-facts: an owner on either incoming path still needs retirement.
+ * Such a bit neither proves readability nor promises a mortal count; values
+ * can be inline/immortal and another path can have an uninitialized home. */
+enum { SEM_NULL, SEM_INITIALIZED, SEM_MAY_OWNER, SEM_FACTS };
+
+static void
+semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state)
+{
+    semantic_block *b = &work->blocks[block];
+    uint64_t *stored = work->facts + (size_t)block * SEM_FACTS * work->nwords;
+    int changed = !b->reached;
+    for (int w = 0; w < SEM_FACTS * work->nwords; w++) {
+        uint64_t next = !b->reached ? state[w]
+            : w >= SEM_MAY_OWNER * work->nwords ? stored[w] | state[w]
+                                               : stored[w] & state[w];
+        changed |= next != stored[w];
+        stored[w] = next;
+    }
+    b->reached = 1;
+    if (changed && !b->queued) {
+        b->queued = 1;
+        work->queue[work->tail] = block;
+        work->tail = (work->tail + 1) % work->nblocks;
+        work->count++;
+    }
+}
+
+static unsigned int
+semantic_home_facts(const semantic_worklist *work, const uint64_t *state,
+                    int home, int nl)
+{
+    if (home < nl) {
+        /* Named bindings are initialized but may be unbound. Their boundness
+         * checks and local owner mutations remain runtime operations. */
+        return (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER);
+    }
+    int bit = home - nl;
+    unsigned int facts = 0;
+    for (int f = 0; f < SEM_FACTS; f++) {
+        facts |= ((state[f * work->nwords + bit / 64] >> (bit % 64)) & 1) << f;
+    }
+    return facts;
+}
+
+static void
+semantic_set_facts(const semantic_worklist *work, uint64_t *state,
+                   int home, int nl, unsigned int facts)
+{
+    int bit = home - nl;
+    uint64_t mask = UINT64_C(1) << (bit % 64);
+    for (int f = 0; f < SEM_FACTS; f++) {
+        uint64_t *word = &state[f * work->nwords + bit / 64];
+        *word = (*word & ~mask) | ((facts & (1u << f)) ? mask : 0);
+    }
+}
+
+/* Apply only positively certified normal transfers. Unknown rows lose all
+ * logical/owner proof. Existing physical NULL facts survive only where the
+ * independent physical transfer API positively certifies preservation.
+ * Inspect reads only after the fixed point, so an as-yet-unseen predecessor
+ * cannot cause a false rejection. */
+static int
+semantic_step(struct _PyCodeConstructor *con, semantic_worklist *work,
+              uint64_t *state, int pc, int inspect)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    _PyIRWord word = words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
+        int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS : _PyIR_FieldOparg(word);
+        int scratch = Py_MAX(con->stacksize, 1);
+        for (int bit = 0; bit < scratch; bit++) {
+            uint64_t mask = UINT64_C(1) << (bit % 64);
+            if (!(state[bit / 64] & mask)) {
+                continue;
+            }
+            _PyIRPhysicalTransfer physical = _PyIR_NormalPhysicalTransfer(
+                word, arg, 0, nl + bit, nl, nl + scratch);
+            if (physical.kind != _PyIR_PHYSICAL_PRESERVE) {
+                state[bit / 64] &= ~mask;
+            }
+        }
+        memset(state + work->nwords, 0,
+               (size_t)(SEM_FACTS - 1) * work->nwords * sizeof(uint64_t));
+        return 0;
+    }
+    int arg = _PyIR_FieldOparg(word);
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int homes[8], nhomes = 0;
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE ||
+            role >= _PyIR_ROLE_IN0)
+        {
+            homes[nhomes++] = (int)fields[f];
+        }
+        if (role == _PyIR_ROLE_BASE && fmt->transfer_kind == _PyIR_TRANSFER_COPY) {
+            homes[nhomes++] = (int)fields[f] + arg;
+        }
+        if (role == _PyIR_ROLE_BASE && fmt->transfer_kind == _PyIR_TRANSFER_SWAP) {
+            homes[nhomes++] = (int)fields[f] + arg - 1;
+        }
+    }
+    unsigned int next[8];
+    for (int h = 0; h < nhomes; h++) {
+        int home = homes[h];
+        next[h] = 0;
+        if (home < nl || home == IR_NO_DST) {
+            continue;
+        }
+        unsigned int old = semantic_home_facts(work, state, home, nl);
+        /* A certified NULL-safe retirement can close an empty home. This is
+         * not permission for completion/observer recovery to read an old
+         * retired owner; those existing provenance proofs remain separate. */
+        int accepts_empty = IR_HANDLER(word) == POP_TOP ||
+            (fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_STORE &&
+             (old & (1u << SEM_INITIALIZED)));
+        if (inspect && (old & (1u << SEM_NULL)) &&
+            _PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
+            !_PyIR_NullableHome(word, arg, home))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d reads unavailable scratch home %d", pc, home);
+            return -1;
+        }
+        _PyIRSemanticTransfer transfer = _PyIR_NormalSemanticTransfer(word, arg, home, nl);
+        if (inspect && (old & (1u << SEM_MAY_OWNER)) &&
+            (transfer.kind == _PyIR_SEMANTIC_FRESH ||
+             transfer.kind == _PyIR_SEMANTIC_DUPLICATE ||
+             (transfer.kind == _PyIR_SEMANTIC_MOVE && transfer.source < nl)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d overwrites scratch owner %d", pc, home);
+            return -1;
+        }
+        switch (transfer.kind) {
+            case _PyIR_SEMANTIC_PRESERVE:
+                next[h] = old;
+                break;
+            case _PyIR_SEMANTIC_RELEASE:
+                next[h] = 1u << SEM_NULL;
+                break;
+            case _PyIR_SEMANTIC_FRESH:
+                next[h] = (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER);
+                break;
+            case _PyIR_SEMANTIC_NULL:
+                next[h] = (1u << SEM_NULL) | (1u << SEM_INITIALIZED);
+                break;
+            case _PyIR_SEMANTIC_DUPLICATE:
+            case _PyIR_SEMANTIC_MOVE:
+                next[h] = semantic_home_facts(work, state, transfer.source, nl);
+                break;
+            default:
+                Py_UNREACHABLE();
+        }
+    }
+    for (int h = 0; h < nhomes; h++) {
+        if (homes[h] >= nl && homes[h] != IR_NO_DST) {
+            semantic_set_facts(work, state, homes[h], nl, next[h]);
+        }
+    }
+    if (inspect && fmt->transfer_kind == _PyIR_TRANSFER_EXIT) {
+        for (int w = 0; w < work->nwords; w++) {
+            if (state[SEM_MAY_OWNER * work->nwords + w]) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %d leaves an unretired scratch owner", pc);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Common-image normal-edge hardening, still under NULL authority. Per-block
+ * bitvectors cover the actual scratch extent. Allocation is O(words + blocks
+ * * ceil(scratch/64)); each must-bit can disappear once and each owner
+ * obligation can appear once at a block join.
+ * Unsupported families/exception entries have explicit unknown state and
+ * cannot authorize the later ownership representation switch. */
+static int
+validate_normal_transfers(struct _PyCodeConstructor *con)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
+    if (n == 0) {
+        return 0;
+    }
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    const unsigned char *exceptions = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    const unsigned char *exception_end = exceptions + PyBytes_GET_SIZE(con->exceptiontable);
+    int scratch = Py_MAX(con->stacksize, 1);
+    if (!_PyIR_ExceptionTableValid(exceptions, exception_end, n, nl, nl + scratch)) {
+        PyErr_SetString(PyExc_ValueError, "code: invalid exception table");
+        return -1;
+    }
+    int *block_at = PyMem_Calloc((size_t)n, sizeof(int));
+    if (block_at == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    block_at[0] = 1;
+    for (int i = 0; i < n; i++) {
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
+        if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+            !(fmt->flags & _PyIR_NAMES_TARGET))
+        {
+            int target = fmt->flags & _PyIR_FORWARD ? i + 1 + IR_DS(words[i]) : (int)IR_CD(words[i]);
+            block_at[target] = 1;
+            if (i + 1 < n) {
+                block_at[i + 1] = 1;
+            }
+        }
+        if (IS_SCOPE_EXIT_OPCODE(_PyIR_BaseOpcode(IR_HANDLER(words[i]))) && i + 1 < n) {
+            block_at[i + 1] = 1;
+        }
+    }
+    const unsigned char *cursor = exceptions;
+    while (cursor < exception_end) {
+        _PyIRExceptionEntry entry = {0};
+        int err = _PyIR_ExceptionNext(&cursor, exception_end, &entry);
+        assert(err == 0);
+        (void)err;
+        block_at[entry.target] = 1;
+    }
+    _PyIRSourceMap source;
+    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+                          PyBytes_GET_SIZE(con->linetable), &source) < 0)
+    {
+        PyMem_Free(block_at);
+        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
+        return -1;
+    }
+    for (uint32_t i = 0; i < source.nrecords; i++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, i, &event);
+        if (event.handler >= 0) {
+            block_at[event.handler] = 1;
+        }
+    }
+    int nblocks = 0;
+    for (int i = 0; i < n; i++) {
+        nblocks += block_at[i];
+    }
+    semantic_worklist work = {.nblocks = nblocks,
+                              .nwords = (scratch + 63) / 64};
+    work.blocks = PyMem_Calloc((size_t)nblocks, sizeof(*work.blocks));
+    work.queue = PyMem_Malloc((size_t)nblocks * sizeof(*work.queue));
+    size_t state_words = (size_t)SEM_FACTS * work.nwords;
+    if ((size_t)nblocks + 1 > SIZE_MAX / sizeof(uint64_t) / state_words) {
+        PyMem_Free(work.blocks);
+        PyMem_Free(work.queue);
+        PyMem_Free(block_at);
+        PyErr_NoMemory();
+        return -1;
+    }
+    work.facts = PyMem_Calloc(((size_t)nblocks + 1) * state_words, sizeof(uint64_t));
+    if (work.blocks == NULL || work.queue == NULL || work.facts == NULL) {
+        PyMem_Free(work.blocks);
+        PyMem_Free(work.queue);
+        PyMem_Free(work.facts);
+        PyMem_Free(block_at);
+        PyErr_NoMemory();
+        return -1;
+    }
+    int block = -1;
+    for (int i = 0; i < n; i++) {
+        if (block_at[i]) {
+            if (block >= 0) {
+                work.blocks[block].end = i;
+            }
+            work.blocks[++block].start = i;
+        }
+        block_at[i] = block;
+    }
+    work.blocks[block].end = n;
+    uint64_t *state = work.facts + (size_t)nblocks * state_words;
+    for (int bit = 0; bit < scratch; bit++) {
+        state[bit / 64] |= UINT64_C(1) << (bit % 64);
+    }
+    semantic_enqueue(&work, 0, state);
+    memset(state, 0, state_words * sizeof(uint64_t));
+    cursor = exceptions;
+    while (cursor < exception_end) {
+        _PyIRExceptionEntry entry = {0};
+        int err = _PyIR_ExceptionNext(&cursor, exception_end, &entry);
+        assert(err == 0);
+        (void)err;
+        semantic_enqueue(&work, block_at[entry.target], state);
+    }
+    for (uint32_t i = 0; i < source.nrecords; i++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, i, &event);
+        if (event.handler >= 0) {
+            semantic_enqueue(&work, block_at[event.handler], state);
+        }
+    }
+    while (work.count) {
+        int b = work.queue[work.head];
+        work.head = (work.head + 1) % nblocks;
+        work.count--;
+        work.blocks[b].queued = 0;
+        memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
+        int end = work.blocks[b].end;
+        for (int i = work.blocks[b].start; i < end; i++) {
+            (void)semantic_step(con, &work, state, i, 0);
+        }
+        int last = end - 1;
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
+        int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
+        if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+            !(fmt->flags & _PyIR_NAMES_TARGET))
+        {
+            int target = fmt->flags & _PyIR_FORWARD
+                ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+            semantic_enqueue(&work, block_at[target], state);
+        }
+        if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
+            semantic_enqueue(&work, block_at[end], state);
+        }
+    }
+    int result = 0;
+    for (int b = 0; b < nblocks && result == 0; b++) {
+        if (!work.blocks[b].reached) {
+            continue;
+        }
+        memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
+        for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+            if (semantic_step(con, &work, state, i, 1) < 0) {
+                result = -1;
+                break;
+            }
+        }
+    }
+    PyMem_Free(work.facts);
+    PyMem_Free(work.queue);
+    PyMem_Free(work.blocks);
+    PyMem_Free(block_at);
+    return result;
+}
+
 /* The normalized words and all semantic proofs refer to the same immutable
  * image. A caller's constructor and borrowed input references stay unchanged. */
 static PyObject *
@@ -1953,7 +2334,8 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
     if (validate_completion_words(&checked) < 0 ||
-        validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0)
+        validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
+        validate_normal_transfers(&checked) < 0)
     {
         Py_DECREF(words);
         return NULL;

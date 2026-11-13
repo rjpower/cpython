@@ -16,6 +16,85 @@ typedef struct {
     int dst;
 } _PyIRSlotOutcome;
 
+enum {
+    _PyIR_SEMANTIC_UNKNOWN,
+    _PyIR_SEMANTIC_PRESERVE,
+    _PyIR_SEMANTIC_RELEASE,
+    _PyIR_SEMANTIC_FRESH,
+    _PyIR_SEMANTIC_NULL,
+    _PyIR_SEMANTIC_DUPLICATE,
+    _PyIR_SEMANTIC_MOVE,
+};
+
+typedef struct {
+    int kind;
+    int source;
+} _PyIRSemanticTransfer;
+
+/* Logical value/owner transport, independent of the physical NULL proof below.
+ * This cold query is only authoritative for positively checked normal rows;
+ * it says nothing about their intervening callbacks or exceptional exits. */
+static inline _PyIRSemanticTransfer
+_PyIR_NormalSemanticTransfer(_PyIRWord word, int arg, int home, int nl)
+{
+    const _PyIRSemanticTransfer preserve = {_PyIR_SEMANTIC_PRESERVE, -1};
+    const _PyIRSemanticTransfer release = {_PyIR_SEMANTIC_RELEASE, -1};
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int dst = -1, input = -1, base = -1;
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            dst = (int)fields[f];
+        }
+        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+            base = (int)fields[f];
+        }
+        else if (fmt->roles[f] == _PyIR_ROLE_IN0) {
+            input = (int)fields[f];
+        }
+    }
+    switch (fmt->transfer_kind) {
+        case _PyIR_TRANSFER_FRESH:
+            return home == dst && dst != IR_NO_DST
+                ? (_PyIRSemanticTransfer){_PyIR_SEMANTIC_FRESH, -1} : preserve;
+        case _PyIR_TRANSFER_LOCAL_DUP:
+        case _PyIR_TRANSFER_LOCAL_MOVE:
+            if (home == dst && dst != IR_NO_DST) {
+                return (_PyIRSemanticTransfer){
+                    fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_DUP
+                        ? _PyIR_SEMANTIC_DUPLICATE : _PyIR_SEMANTIC_MOVE, arg};
+            }
+            if (home == arg && fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_MOVE) {
+                return (_PyIRSemanticTransfer){_PyIR_SEMANTIC_NULL, -1};
+            }
+            return preserve;
+        case _PyIR_TRANSFER_LOCAL_STORE:
+            if (home == arg) {
+                return (_PyIRSemanticTransfer){_PyIR_SEMANTIC_MOVE, input};
+            }
+            return home == input && input >= nl ? release : preserve;
+        case _PyIR_TRANSFER_LOCAL_CLEAR:
+            return home == arg
+                ? (_PyIRSemanticTransfer){_PyIR_SEMANTIC_NULL, -1} : preserve;
+        case _PyIR_TRANSFER_RETIRE:
+        case _PyIR_TRANSFER_EXIT:
+            return home == input && input >= nl ? release : preserve;
+        case _PyIR_TRANSFER_COPY:
+            return home == base + arg
+                ? (_PyIRSemanticTransfer){_PyIR_SEMANTIC_DUPLICATE, base} : preserve;
+        case _PyIR_TRANSFER_SWAP:
+            if (home == base || home == base + arg - 1) {
+                return (_PyIRSemanticTransfer){_PyIR_SEMANTIC_MOVE,
+                    home == base ? base + arg - 1 : base};
+            }
+            return preserve;
+        case _PyIR_TRANSFER_PRESERVE:
+            return preserve;
+        default:
+            return (_PyIRSemanticTransfer){_PyIR_SEMANTIC_UNKNOWN, -1};
+    }
+}
+
 static inline _PyIRSlotOutcome _PyIR_Outcome(_PyIRWord word, int taken);
 static inline int _PyIR_DefinesHome(_PyIRWord word, int arg, int home);
 

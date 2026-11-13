@@ -11,7 +11,7 @@ from analyzer import (
     CodeSection,
 )
 from cwriter import CWriter
-from typing import Callable, TextIO, Iterator, Iterable
+from typing import Callable, Container, TextIO, Iterator, Iterable
 from lexer import Token
 from stack import Local, Storage, StackError
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, ForStmt, WhileStmt, MacroIfStmt
@@ -165,6 +165,30 @@ def find_local(name: str, storage: Storage) -> Local | None:
         if var.name == name:
             return var
     return None
+
+
+def instruction_macro_args(tkn: Token, tkn_iter: TokenIterator,
+                           replacers: Container[str] = ()) -> tuple[list[list[Token]], Token]:
+    """Read the same structured arguments for source checks and lowering."""
+    lparen = next(tkn_iter)
+    if lparen.kind != "LPAREN":
+        raise analysis_error(f"Expected '(' after {tkn.text}", lparen)
+    args: list[list[Token]] = [[]]
+    depth = 0
+    for t in tkn_iter:
+        if t.kind == "RPAREN" and depth == 0:
+            return ([] if args == [[]] else args), t
+        if t.kind in ("LPAREN", "LBRACKET"):
+            depth += 1
+        elif t.kind in ("RPAREN", "RBRACKET"):
+            depth -= 1
+        if t.kind == "COMMA" and depth == 0:
+            args.append([])
+        else:
+            if t.text in replacers:
+                raise analysis_error(f"{t.text} in an argument of {tkn.text}", t)
+            args[-1].append(t)
+    raise analysis_error(f"Unterminated {tkn.text}", tkn)
 
 
 def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
@@ -594,27 +618,7 @@ class Emitter:
         return True
 
     def instruction_macro_args(self, tkn: Token, tkn_iter: TokenIterator) -> tuple[list[list[Token]], Token]:
-        lparen = next(tkn_iter)
-        if lparen.kind != "LPAREN":
-            raise analysis_error(f"Expected '(' after {tkn.text}", lparen)
-        args: list[list[Token]] = [[]]
-        depth = 0
-        for t in tkn_iter:
-            if t.kind == "RPAREN" and depth == 0:
-                if args == [[]]:
-                    args = []
-                return args, t
-            if t.kind in ("LPAREN", "LBRACKET"):
-                depth += 1
-            elif t.kind in ("RPAREN", "RBRACKET"):
-                depth -= 1
-            if t.kind == "COMMA" and depth == 0:
-                args.append([])
-            else:
-                if t.text in self._replacers:
-                    raise analysis_error(f"{t.text} in an argument of {tkn.text}", t)
-                args[-1].append(t)
-        raise analysis_error(f"Unterminated {tkn.text}", tkn)
+        return instruction_macro_args(tkn, tkn_iter, self._replacers)
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]], inst: Instruction | None) -> str:
         template = self.instruction_macros[tkn.text]

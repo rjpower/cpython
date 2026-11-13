@@ -2050,17 +2050,17 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        // res[1] because we need a pointer to res to pass it to _PyEval_LoadGlobalValue
+        // Publish the result before operation cleanup can reenter.
         op(_LOAD_GLOBAL, ( -- res[1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-            _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
+            IR_WRITE_OUTPUT(res, 0, value_load_global(GLOBALS(), BUILTINS(), name));
             IR_FINISH_VALUE_OPERATION();
-            ERROR_IF(PyValue_IsNull(*res));
+            ERROR_IF(PyValue_IsNull(res[0]));
         }
 
         op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {
             if (oparg & 1) {
-                null[0] = PyValue_NULL;
+                IR_WRITE_OUTPUT(null, 0, PyValue_NULL);
             }
         }
 
@@ -2224,7 +2224,7 @@ dummy_func(
         }
 
         inst(BUILD_STRING, (pieces[oparg] -- str)) {
-            PyObject *str_o = _Py_BuildString_ValueSteal(pieces, oparg);
+            PyObject *str_o = IR_BUILD_STRING(pieces);
             DEAD(pieces);
             ERROR_IF(str_o == NULL);
             str = PyValue_FromObjectSteal(str_o);
@@ -2347,7 +2347,7 @@ dummy_func(
         }
 
         inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
-            PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
+            PyObject *map_o = IR_BUILD_MAP(values);
             DEAD(values);
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
@@ -3952,15 +3952,14 @@ dummy_func(
         // A window: the method and self go to the canonical slots, which a
         // folded input, a local, would not name
         window op(_INSERT_NULL, (self -- method_and_self[2])) {
-            method_and_self[1] = self;
-            method_and_self[0] = PyValue_NULL;
+            IR_WRITE_OUTPUT(method_and_self, 1, self);
+            IR_WRITE_OUTPUT(method_and_self, 0, PyValue_NULL);
             DEAD(self);
         }
 
         op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2])) {
             PyObject *name = _Py_SpecialMethods[oparg].name;
-            int err = _PyObject_LookupSpecialMethod(name, &method_and_self[0],
-                                                    &method_and_self[1]);
+            int err = IR_LOOKUP_SPECIAL(name, method_and_self);
             if (err <= 0) {
                 if (err == 0) {
                     PyObject *owner = _PyValueTemps_Object(value_temps, method_and_self[1]);

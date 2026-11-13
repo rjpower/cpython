@@ -539,6 +539,15 @@ IR_MARKER_EFFECTS = {
                                "terminal", "frame"))),
 }
 
+# These checked adapters use the ordinary escaping-call spill/reload path.
+# Unlike IR_MARKER_EFFECTS, their emitter does not own a manual protocol.
+IR_HELPER_EFFECTS = {
+    "IR_BUILD_STRING": frozenset(("escapes",)),
+    "IR_BUILD_MAP": frozenset(("escapes",)),
+    "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
+    "IR_WRITE_OUTPUT": frozenset(),
+}
+
 
 def ir_marker_properties(op: parser.CodeDef) -> set[str]:
     return set().union(*(properties for marker, properties in
@@ -810,8 +819,9 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
             break
         if next_tkn.kind != lexer.LPAREN:
             continue
-        if tkn.text in IR_MARKER_EFFECTS:
-            if "escapes" in IR_MARKER_EFFECTS[tkn.text]:
+        effects = IR_MARKER_EFFECTS.get(tkn.text, IR_HELPER_EFFECTS.get(tkn.text))
+        if effects is not None:
+            if "escapes" in effects:
                 result[stmt] = EscapingCall(stmt, tkn, None)
             continue
         if tkn.kind == lexer.IDENTIFIER:

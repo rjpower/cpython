@@ -483,11 +483,13 @@ PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 PyAPI_FUNC(PyObject *)
 _Py_BuildString_ValueSteal(
+    struct _PyInterpreterFrame *frame,
     PyValue *arguments,
     int total_args);
 
 PyAPI_FUNC(PyObject *)
 _Py_BuildMap_ValueSteal(
+    struct _PyInterpreterFrame *frame,
     PyValue *arguments,
     int half_args);
 

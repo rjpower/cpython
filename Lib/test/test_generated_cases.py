@@ -3642,6 +3642,27 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         inst = analysis.instructions["INTERPRETER_EXIT"]
         self.assertTrue(ir_generator.native_entry_input_contract(inst))
+        formats = ir_generator.compute_formats(analysis)
+        for record in (False, True):
+            with self.subTest(record=record):
+                output = io.StringIO()
+                writer = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(writer, analysis, formats)
+                emitter.handler_format = formats[inst.name]
+                ir_generator.generate_handler(inst.name, inst, formats[inst.name],
+                                              emitter, writer, record)
+                body = output.getvalue()
+                self.assertIn("retval = IR_VIEW_NATIVE_INPUT(IR_A(ir_word));", body)
+                self.assertIn("IR_CONSUME_NATIVE_INPUT(IR_A(ir_word), retval)", body)
+                self.assertNotIn("IR_VIEW(", body)
+                self.assertNotIn("_PyFrame_ReadHome(", body)
+                self.assertNotIn("PyValue_IsNull(retval)", body)
+        ordinary = self.ir_output("""
+            inst(OP, (retval --)) { PyValue_XCLOSE(retval); }
+        """)
+        self.assertIn("IR_VIEW(IR_A(ir_word))", ordinary)
+        self.assertNotIn("IR_VIEW_NATIVE_INPUT", ordinary)
+        self.assertNotIn("IR_CONSUME_NATIVE_INPUT", ordinary)
         part = inst.parts[0]
         extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
         part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
@@ -3651,7 +3672,8 @@ class TestIRCases(unittest.TestCase):
         finally:
             part.body.body.pop()
         item = part.stack.inputs[0]
-        for attribute, changed in (("name", "other"), ("peek", True), ("size", "1")):
+        for attribute, changed in (("name", "other"), ("peek", True),
+                                   ("size", "1"), ("nullable", True)):
             old = getattr(item, attribute)
             setattr(item, attribute, changed)
             try:

@@ -163,6 +163,8 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 }
 
 #define _Py_RETURN_SLOT_REPLACE_REQUIRED (IR_FIELD_MAX + 1U)
+/* A fresh activation has not published a child or suspended for an input. */
+#define _Py_RETURN_SLOT_NONE UINT16_MAX
 
 static inline int
 _PyFrame_ReturnSlotIsValid(uint16_t recipient)
@@ -181,7 +183,8 @@ _PyFrame_ReturnSlotIndex(uint16_t recipient)
 static inline int
 _PyFrame_ReturnSlotIsDiscard(uint16_t recipient)
 {
-    assert(_PyFrame_ReturnSlotIsValid(recipient));
+    assert(recipient == _Py_RETURN_SLOT_NONE ||
+           _PyFrame_ReturnSlotIsValid(recipient));
     return recipient == IR_NO_DST;
 }
 
@@ -246,6 +249,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     if (redirected) {
         _PyFrame_CompleteRedirect(f);
     }
+    assert(_PyFrame_ReturnSlotIsValid(f->return_slot));
     if (_PyFrame_ReturnSlotIsDiscard(f->return_slot)) {
         PyValue_XCLOSE(v);
         return redirected;
@@ -369,7 +373,7 @@ _PyFrame_Initialize(
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
     frame->return_pc = frame->instr_ptr;
-    frame->return_slot = _PyFrame_EncodeReturnSlot(0, code->co_nlocalsplus);
+    frame->return_slot = _Py_RETURN_SLOT_NONE;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;

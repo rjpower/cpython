@@ -11,6 +11,33 @@ class EntryError(Exception):
 
 
 class DebuggerEntryTests(unittest.TestCase):
+    def test_first_native_callback_has_no_pending_python_recipient(self):
+        attempts = []
+
+        def callback(value):
+            return value
+
+        def target():
+            sorted((1,), key=callback)
+            return 73
+
+        def trace(frame, event, arg):
+            if frame.f_code is callback.__code__ and event == 'line':
+                parent = frame.f_back
+                self.assertIs(parent.f_code, target.__code__)
+                with self.assertRaisesRegex(ValueError, 'active call recipe'):
+                    parent.f_lineno = target.__code__.co_firstlineno + 2
+                attempts.append(True)
+            return trace
+
+        previous = sys.gettrace()
+        try:
+            sys.settrace(trace)
+            self.assertEqual(target(), 73)
+        finally:
+            sys.settrace(previous)
+        self.assertEqual(attempts, [True])
+
     def test_immediate_entry_and_commands(self):
         for backend in ('settrace', 'monitoring'):
             for command in ('continue', 'step', 'next'):

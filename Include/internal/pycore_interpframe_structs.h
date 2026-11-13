@@ -56,7 +56,8 @@ struct _PyInterpreterFrame {
     int32_t tlbc_index;
 #endif
     /* Recipient descriptor: low 12 bits name the slot; bit 12 requires
-     * replacement of its old owner. IR_NO_DST alone discards the value.
+     * replacement of its old owner. IR_NO_DST alone discards the value;
+     * UINT16_MAX means no recipient has been installed for this activation.
      * The slot receives the value when control comes back to this
      * frame: the dst of the call it is making, or for a suspended
      * generator the slot of the value it yielded, where the value sent in

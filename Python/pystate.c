@@ -1487,7 +1487,7 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.f_locals = NULL;
     _tstate->base_frame.frame_obj = NULL;
     _tstate->base_frame.instr_ptr = NULL;
-    _tstate->base_frame.return_slot = _PyFrame_EncodeReturnSlot(0, 0);
+    _tstate->base_frame.return_slot = _Py_RETURN_SLOT_NONE;
     _tstate->base_frame.return_pc = NULL;
     _tstate->base_frame.pending_kwargs = IR_NO_DST;
     _tstate->base_frame.owner = FRAME_OWNED_BY_INTERPRETER;

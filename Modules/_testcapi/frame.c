@@ -82,6 +82,26 @@ frame_new(PyObject *self, PyObject *args)
 
 
 static PyObject *
+frame_new_generator(PyObject *self, PyObject *args)
+{
+    PyObject *frame = frame_new(self, args);
+    if (frame == NULL) {
+        return NULL;
+    }
+    PyCodeObject *code = PyFrame_GetCode((PyFrameObject *)frame);
+    int flags = code->co_flags;
+    Py_DECREF(code);
+    if (flags & CO_ASYNC_GENERATOR) {
+        return PyAsyncGen_New((PyFrameObject *)frame, NULL, NULL);
+    }
+    if (flags & CO_COROUTINE) {
+        return PyCoro_New((PyFrameObject *)frame, NULL, NULL);
+    }
+    return PyGen_New((PyFrameObject *)frame);
+}
+
+
+static PyObject *
 frame_getvar(PyObject *self, PyObject *args)
 {
     PyObject *frame, *name;
@@ -121,6 +141,7 @@ static PyMethodDef test_methods[] = {
     {"frame_getbuiltins", frame_getbuiltins, METH_O, NULL},
     {"frame_getlasti", frame_getlasti, METH_O, NULL},
     {"frame_new", frame_new, METH_VARARGS, NULL},
+    {"frame_new_generator", frame_new_generator, METH_VARARGS, NULL},
     {"frame_getvar", frame_getvar, METH_VARARGS, NULL},
     {"frame_getvarstring", frame_getvarstring, METH_VARARGS, NULL},
     {NULL},

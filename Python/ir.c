@@ -436,7 +436,7 @@ make_exec(PyCodeObject *co)
         .nwords = (uint32_t)nwords,
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
-    if (_PyCode_BuildRetirementPlan(co, &exec->retirement_plan) < 0) {
+    if (_PyCode_BuildSemanticPlan(co, &exec->semantic_plan) < 0) {
         _PyMem_NoScanFree(exec);
         return NULL;
     }
@@ -522,8 +522,9 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
-    if (exec->retirement_plan != NULL && exec->retirement_plan->nsites != 0) {
-        PyMem_Free((void *)exec->retirement_plan);
+    if (exec->semantic_plan != NULL &&
+        (exec->semantic_plan->nsites != 0 || exec->semantic_plan->nphases != 0)) {
+        PyMem_Free((void *)exec->semantic_plan);
     }
     _PyMem_NoScanFree(exec);
 }
@@ -536,9 +537,9 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
-    if (exec->retirement_plan != NULL && exec->retirement_plan->nsites != 0) {
-        res += sizeof(_PyIRRetirementPlan) +
-            (size_t)exec->retirement_plan->nsites * sizeof(uint32_t);
+    if (exec->semantic_plan != NULL &&
+        (exec->semantic_plan->nsites != 0 || exec->semantic_plan->nphases != 0)) {
+        res += _PyIR_PlanSize(exec->semantic_plan);
     }
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
@@ -564,7 +565,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     }
     PyCodeObject *co = frame->f_executable;
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
-    if (exec == NULL || exec->retirement_plan == NULL ||
+    if (exec == NULL || exec->semantic_plan == NULL ||
         frame->ir_words != exec->words)
     {
         return _PyIR_SHADOW_UNCOVERED;
@@ -584,8 +585,8 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     {
         return _PyIR_SHADOW_UNCOVERED;
     }
-    const _PyIRRetirementPlan *plan = exec->retirement_plan;
-    if (plan->nsites != 0) {
+    const _PyIRCodePlan *plan = exec->semantic_plan;
+    if (!(plan->flags & _PyIR_PLAN_ALL_RETURNS)) {
         uint32_t low = 0, high = plan->nsites;
         while (low < high) {
             uint32_t mid = low + (high - low) / 2;
@@ -607,6 +608,97 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
          home < _PyFrame_NumSlotsForCodeObject(co); home++)
     {
         if (!PyValue_IsNull(frame->base[home])) {
+            return _PyIR_SHADOW_MISMATCH;
+        }
+    }
+    return _PyIR_SHADOW_EXACT;
+}
+
+int
+_PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
+{
+    unsigned int published = frame->phase_state;
+    if (!(published & _PyIR_PHASE_PUBLISHED) ||
+        (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
+        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3 || frame->f_executable == NULL)
+    {
+        return 0;
+    }
+    PyCodeObject *co = frame->f_executable;
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
+    int nl = co->co_nlocalsplus;
+    int scratch = Py_MAX(co->co_stacksize, 1);
+    if (exec == NULL || exec->semantic_plan == NULL || frame->base == NULL ||
+        frame->ir_words != exec->words || exec->nwords != Py_SIZE(co) ||
+        exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
+        scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
+    {
+        return 0;
+    }
+    uintptr_t pc = (uintptr_t)frame->instr_ptr;
+    uintptr_t start = (uintptr_t)exec->words;
+    if (pc < start || pc - start >= (size_t)exec->nwords * sizeof(_PyIRWord) ||
+        (pc - start) % sizeof(_PyIRWord))
+    {
+        return 0;
+    }
+    uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
+    uint8_t phase = (uint8_t)published;
+    const _PyIRCodePlan *plan = exec->semantic_plan;
+    const _PyIRPhaseSite *sites = _PyIR_PlanPhases(plan);
+    uint32_t low = 0, high = plan->nphases;
+    while (low < high) {
+        uint32_t mid = low + (high - low) / 2;
+        if (sites[mid].site < site ||
+            (sites[mid].site == site && sites[mid].phase < phase)) {
+            low = mid + 1;
+        }
+        else {
+            high = mid;
+        }
+    }
+    if (low == plan->nphases || sites[low].site != site || sites[low].phase != phase) {
+        return 0;
+    }
+    const _PyIRPhaseSite *row = sites + low;
+    /* The immutable builder validates and orders ranges once. Readers borrow
+     * this geometry; they do not construct a second decoder or revalidate it. */
+    assert(row->first <= plan->nranges && row->count <= plan->nranges - row->first);
+    const _PyIRPhaseRange *ranges = _PyIR_PlanRanges(plan) + row->first;
+    *out = (_PyIRHomeView){
+        .nbindings = (uint16_t)nl,
+        .scratch_limit = (uint16_t)scratch,
+        .nranges = row->count,
+        .ranges = ranges,
+    };
+    return 1;
+}
+
+uint8_t
+_PyIR_ShadowFramePhase(_PyInterpreterFrame *frame)
+{
+    _PyIRHomeView view;
+    if (!_PyIR_GetFrameHomeView(frame, &view)) {
+        return _PyIR_SHADOW_UNCOVERED;
+    }
+    const _PyIRPhaseRange *ranges = view.ranges;
+    uint32_t range = 0;
+    for (int bit = 0; bit < view.scratch_limit; bit++) {
+        while (range < view.nranges && ranges[range].end <= bit) {
+            range++;
+        }
+        PyValue value = frame->base[view.nbindings + bit];
+        if (range == view.nranges || ranges[range].begin > bit) {
+            if (!PyValue_IsNull(value)) {
+                return _PyIR_SHADOW_MISMATCH;
+            }
+        }
+        else if (PyValue_IsNull(value)) {
+            if (!(ranges[range].flags & _PyIR_PHASE_RANGE_NULLABLE)) {
+                return _PyIR_SHADOW_MISMATCH;
+            }
+        }
+        else if (!_PyValue_IsHome(value)) {
             return _PyIR_SHADOW_MISMATCH;
         }
     }

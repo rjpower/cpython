@@ -124,7 +124,8 @@ def extent_initializer(e: Extent) -> str:
 
 
 def format_initializer(fmt: IRFormat, shadow: str,
-                       contract: HandlerContract, events: list[str]) -> str:
+                       contract: HandlerContract, events: list[str],
+                       owner_program: tuple[int, int] = (0, 0)) -> str:
     # A STACK_ONLY opcode has a format for the CFG but no handler to run
     flags = [] if fmt.group in STACK_ONLY else ["_PyIR_VALID"]
     for present, flag in (
@@ -157,6 +158,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".result_phase = {contract.result_phase}, "
         f".output_kind = {contract.output_kind}, "
         f".transfer_kind = {contract.transfer_kind}, "
+        f".owner_program = {owner_program[0]}, .owner_events = {owner_program[1]}, "
         f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
@@ -171,6 +173,15 @@ def generate_ir_metadata(
 ) -> None:
     formats = compute_formats(analysis)
     contracts = handler_contracts(analysis, formats)
+    programs = {(): (0, 0)}
+    ownership = []
+    for name in sorted(contracts):
+        program = contracts[name].ownership_events
+        if program not in programs:
+            if len(program) > 65535 or len(ownership) + len(program) > 0xffffffff:
+                raise ValueError("ownership event table is too large")
+            programs[program] = len(ownership), len(program)
+            ownership.extend(program)
     insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
     fact_ids, bases, flags = handler_facts(analysis, formats)
@@ -184,6 +195,16 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
+        count = max(len(ownership), 1)
+        out.emit(f"PyAPI_DATA(const _PyIROwnershipEvent) _PyIR_OwnerPrograms[{count}];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit(f"const _PyIROwnershipEvent _PyIR_OwnerPrograms[{count}] = {{\n")
+        for event in ownership:
+            out.emit(f"{{ {event.kind}, {event.flags}, {event.dst}, "
+                     f"{event.src}, {event.extent} }},\n")
+        if not ownership:
+            out.emit("{0},\n")
+        out.emit("};\n#endif\n\n")
         out.emit("/* Handlers of the IR only, after the opcodes and the "
                  "pseudo-instructions */\n")
         out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
@@ -256,7 +277,8 @@ def generate_ir_metadata(
             events = (monitoring_events(event_handler, insts[event_handler])
                       if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
-                                      rows[name], events)
+                                      rows[name], events,
+                                      programs[rows[name].ownership_events])
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

@@ -1,6 +1,6 @@
 # Development process
 
-Start with the [goal](GOAL.md), [active plan](issues/activation53/plan.md),
+Start with the [goal](GOAL.md), [active plan](issues/frame-state54/plan.md),
 [status](STATUS.md) and [stage map](ROADMAP.md). Use [HANDOFF](HANDOFF.md) when
 taking over execution. The coordinator owns integration, merged validation,
 measurement and current project state.

@@ -1,12 +1,16 @@
 # Project status
 
 Golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected.
+Round54's [active plan](issues/frame-state54/plan.md) is in architectural review:
+one Astra research review and independent frame-field/register-validity audits
+precede five Sol implementation experiments. No round54 performance claim yet.
+
 All three activation53 candidates are rejected after six-pair confirmation:
 direct final-home construction, shared completion and native-only construction.
 Native-only improves generators 5.9%, but repeatedly loses 2.4% on DeltaBlue
 and 2.7% on Richards. No experimental code is absorbed.
 
-Start with the [goal](GOAL.md), [round plan](issues/activation53/plan.md),
+Start with the [goal](GOAL.md), [active plan](issues/frame-state54/plan.md),
 [current report](issues/activation53/report.md), [tables](issues/activation53/benchmark-tables.md)
 and [next decision](issues/activation53/next-steps.md).
 [HANDOFF](HANDOFF.md) owns exact paths and recovery. Canonical documentation is

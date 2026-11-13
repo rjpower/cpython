@@ -2,12 +2,21 @@
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
 are not the measured runtime. Start with [goal](GOAL.md),
-[status](STATUS.md), [round plan](issues/activation53/plan.md),
+[status](STATUS.md), [active plan](issues/frame-state54/plan.md),
 [current report](issues/activation53/report.md), [tables](issues/activation53/benchmark-tables.md)
 and [next decision](issues/activation53/next-steps.md).
 
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 Current evidence E=`BASE/pyjit-link-wave1/activation53`.
+
+## Round54: research active
+
+Packet `pyjit/issues/frame-state54`; new evidence
+`BASE/pyjit-link-wave1/frame-state54`. Astra researches five options covering
+register validity, header layout and transfer specialization. Independent Sol
+inventories cover fields and ownership validity. Implementation follows reviewed
+contracts in isolated golden51-derived source trees. Root owns native execution
+and integration; no round54 build or timing is running yet.
 
 ## Selected runtime and controls
 
@@ -94,7 +103,7 @@ state contraction, then existing-proof SEND/YIELD specialization or bounded
 compiled regions. Require a weighted native work-removal case before code.
 Constants need a weighted hidden-home census; feedback already uses direct
 scaled offsets rather than an entry-pointer table. Astra reviews broad designs,
-not implementation revisions. No new implementation lane is currently running.
+not implementation revisions. Round54 owns the new implementation decision.
 
 Never overlap quiet timing/profiles with builds, tests, GDB or bulk cleanup.
 Root owns integration, native execution, timing, commits and publication.

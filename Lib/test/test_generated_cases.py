@@ -3158,6 +3158,35 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual((-effect.base_offset).to_c(), "2 + oparg")
         self.assertEqual((effect.logical_sp - effect.base_offset).to_c(), "2 + oparg")
 
+    def test_structured_branch_common_vacate_is_an_actual_both_edge_recipe(self):
+        source = """
+        inst(OP, (value --)) {
+            PyValue_XCLOSE(value);
+            if (oparg) { JUMPTO(oparg); }
+        }
+        """
+        analysis = self.analyze(source)
+        formats = ir_generator.compute_formats(analysis)
+        contract = ir_generator.handler_contracts(analysis, formats)["OP"]
+        self.assertEqual(contract.ownership_events, (
+            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
+        # A raw frame operation before the common point has no footprint
+        # contract, even when the declared input/output counts stay identical.
+        changed = self.analyze(source.replace("PyValue_XCLOSE(value);",
+                                             "opaque(frame); PyValue_XCLOSE(value);"))
+        fmt = ir_generator.compute_formats(changed)
+        self.assertEqual(ir_generator.handler_contracts(changed, fmt)["OP"].ownership_events, ())
+        actual = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        real = analyzer.analyze_files([str(actual)])
+        formats = ir_generator.compute_formats(real)
+        contracts = ir_generator.handler_contracts(real, formats)
+        for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
+                     "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
+                     "CONTAINS_OP_JUMP"):
+            with self.subTest(handler=name):
+                self.assertEqual(contracts[name].ownership_events, (
+                    ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
+
     def test_actual_call_role_families_have_normal_drain_recipes(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

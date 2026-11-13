@@ -71,15 +71,41 @@ _PyFrame_GetCopyViewUnderNullControl(_PyInterpreterFrame *frame,
     return _PyIR_HOME_NULL_CONTROL_READABLE;
 }
 
-/* Keep the addressable view out of the tail-called interpreter handler. */
-Py_NO_INLINE void
-_PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+static Py_NO_INLINE void
+copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
     _PyIRHomeView view;
     _PyIRHomeAuthority authority =
         _PyFrame_GetCopyViewUnderNullControl(src, &view);
     src->instr_ptr++;
     _PyFrame_Copy(src, dest, &view, authority);
+}
+
+/* Only the actual RETURN_GENERATOR marker calls this entry. The whole-image
+ * flag covers every such site, including public/synthetic image sites. */
+Py_NO_INLINE void
+_PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
+{
+    PyCodeObject *code = _PyFrame_GetCode(src);
+    _PyCodeExec *exec = _PyFrame_Exec(src);
+    if (exec->semantic_plan == NULL ||
+        !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+    {
+        copy_created_generator_control(src, dest);
+        return;
+    }
+    int nl = code->co_nlocalsplus;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    src->instr_ptr++;
+    _PyFrame_CopyHeader(src, dest);
+    for (int i = 0; i < nl; i++) {
+        dest->base[i] = src->base[i];
+        src->base[i] = PyValue_NULL;
+    }
+    /* The current NULL control still requires initialized destination gaps. */
+    for (int i = nl; i < nslots; i++) {
+        dest->base[i] = PyValue_NULL;
+    }
 }
 
 void

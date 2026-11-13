@@ -272,19 +272,12 @@ _PyIRHomeAuthority _PyFrame_GetCopyViewUnderNullControl(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
 void _PyFrame_GetNullControlHomeView(
     _PyInterpreterFrame *frame, int remaining, _PyIRHomeView *view);
-void _PyFrame_CopyCreatedGenerator(
+PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
     _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
 
 static inline void
-_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
-              const _PyIRHomeView *view, _PyIRHomeAuthority authority)
+_PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
-    // Read the layout before transferring the executable owner.
-    int nslots = _PyFrame_NumSlots(src);
-    assert(authority == _PyIR_HOME_MUST_READABLE ||
-           authority == _PyIR_HOME_NULL_CONTROL_READABLE);
-    assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
-    assert(view->nbindings + view->scratch_limit <= nslots);
     dest->f_executable = src->f_executable;
     dest->base = dest->owned_slots;
     // Don't leave a dangling pointer to the old frame when creating generators
@@ -314,6 +307,18 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
 #ifdef Py_DEBUG
     dest->lltrace = src->lltrace;
 #endif
+}
+
+static inline void
+_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
+              const _PyIRHomeView *view, _PyIRHomeAuthority authority)
+{
+    int nslots = _PyFrame_NumSlots(src);
+    assert(authority == _PyIR_HOME_MUST_READABLE ||
+           authority == _PyIR_HOME_NULL_CONTROL_READABLE);
+    assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
+    assert(view->nbindings + view->scratch_limit <= nslots);
+    _PyFrame_CopyHeader(src, dest);
     uint32_t cursor = 0;
     int filled = 0, begin, end;
     while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {

@@ -5107,6 +5107,7 @@ check_frame_copy(PyObject *args, int mode)
     }
     _PyCodeExec *exec = NULL;
     int site = 0;
+    _PyIRWord protocol = 0;
     if (created || delegated) {
         exec = _PyCode_GetExec(code);
         if (exec == NULL) {
@@ -5118,14 +5119,27 @@ check_frame_copy(PyObject *args, int mode)
             PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
             return NULL;
         }
-        int opcode = created ? RETURN_GENERATOR : YIELD_DELEGATED;
-        while (site < exec->nwords &&
-               _PyIR_BaseOpcode(IR_HANDLER(exec->words[site])) != opcode)
-        {
+        while (site < exec->nwords) {
+            protocol = code->co_words[site];
+            int handler = IR_HANDLER(protocol);
+            if ((created && _PyIR_BaseOpcode(handler) == RETURN_GENERATOR) ||
+                (delegated && (handler == YIELD_DELEGATED ||
+                               handler == INSTRUMENTED_YIELD_DELEGATED)))
+            {
+                break;
+            }
             site++;
         }
         if (site == exec->nwords) {
             PyErr_SetString(PyExc_ValueError, "probe needs the actual copy/yield site");
+            return NULL;
+        }
+        if (delegated && (site + 1 >= exec->nwords ||
+                IR_B(protocol) < (uint32_t)nl || IR_B(protocol) >= (uint32_t)n ||
+                IR_D(protocol) < (uint32_t)nl || IR_D(protocol) >= (uint32_t)n ||
+                IR_D(protocol) == IR_A(protocol) || IR_D(protocol) == IR_B(protocol)))
+        {
+            PyErr_SetString(PyExc_ValueError, "probe needs admitted delegated operands");
             return NULL;
         }
     }
@@ -5151,7 +5165,7 @@ check_frame_copy(PyObject *args, int mode)
         src->base[i].bits = poison;
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-    int selected_home = delegated ? IR_D(exec->words[site]) : created ? 0 : nl + 1;
+    int selected_home = delegated ? IR_D(protocol) : created ? 0 : nl + 1;
     assert(selected_home >= 0 && selected_home < n);
     assert(!delegated || selected_home >= nl);
     src->base[selected_home] = _PyValue_Publish(&value);
@@ -5169,7 +5183,7 @@ check_frame_copy(PyObject *args, int mode)
         src->owner = FRAME_OWNED_BY_GENERATOR;
         src->ir_words = exec->words;
         src->instr_ptr = exec->words + site + 1;
-        src->return_slot = IR_A(exec->words[site]);
+        src->return_slot = IR_A(protocol);
         _PyFrame_PublishDelegatedSuspension(src);
         assert(_PyIR_DelegatedReceiverHome(src) == selected_home);
     }

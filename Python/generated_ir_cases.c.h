@@ -68,13 +68,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -88,7 +88,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -129,7 +129,7 @@
                 res = PyValue_FromDouble(a + b);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -155,7 +155,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -215,7 +215,7 @@
                 }
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -241,7 +241,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -310,7 +310,7 @@
                 PyObject *res_o = PyUnicode_Concat(left_o, right_o);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(res_o);
                 l = left;
@@ -337,7 +337,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -405,13 +405,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -425,7 +425,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -477,7 +477,7 @@
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -503,7 +503,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -556,7 +556,7 @@
                 PyObject *res_o = d->action(left_o, right_o);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
                 assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
@@ -589,7 +589,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -657,13 +657,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -677,7 +677,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -739,7 +739,7 @@
                 res = PyValue_FromInt64(quotient);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -765,7 +765,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -833,13 +833,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -853,7 +853,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -938,7 +938,7 @@
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
                 if (temp == NULL) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(temp);
             }
@@ -947,7 +947,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1015,13 +1015,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1035,7 +1035,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1103,13 +1103,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1123,7 +1123,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1191,13 +1191,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1211,7 +1211,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1279,13 +1279,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1299,7 +1299,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1367,13 +1367,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1387,7 +1387,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1455,13 +1455,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1475,7 +1475,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1543,13 +1543,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1563,7 +1563,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1631,13 +1631,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1651,7 +1651,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1719,13 +1719,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1739,7 +1739,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1807,13 +1807,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1827,7 +1827,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1895,13 +1895,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -1915,7 +1915,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -1983,13 +1983,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2003,7 +2003,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2071,13 +2071,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2091,7 +2091,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2158,7 +2158,7 @@
                 }
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -2184,7 +2184,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2252,13 +2252,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2272,7 +2272,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2340,13 +2340,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2360,7 +2360,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2401,7 +2401,7 @@
                 res = PyValue_FromDouble(a * b);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -2427,7 +2427,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2487,7 +2487,7 @@
                 }
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -2513,7 +2513,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2581,13 +2581,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2601,7 +2601,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2653,7 +2653,7 @@
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -2679,7 +2679,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2747,13 +2747,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2767,7 +2767,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2835,13 +2835,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -2855,7 +2855,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -2917,7 +2917,7 @@
                 res = PyValue_FromInlineInt(remainder);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -2943,7 +2943,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3011,13 +3011,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -3031,7 +3031,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3089,7 +3089,7 @@
                 res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -3115,7 +3115,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3183,13 +3183,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -3203,7 +3203,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3267,7 +3267,7 @@
                             }
                             if (retire_needed) {
                                 int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, ir_leaf_key, ir_leaf_dict, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL));
-                                if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                                if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                                 this_instr = frame->instr_ptr;
                                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                                 slots = _PyFrame_Slots(frame);
@@ -3282,7 +3282,7 @@
                                 frame->phase_state = 0;
                                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                                     next_instr = frame->instr_ptr + 1;
-                                    JUMP_TO_LABEL(error);
+                                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                                 }
                             }
                         }
@@ -3309,12 +3309,12 @@
                     value_operation_close3(held_sub, held_dict, PyValue_NULL);
                     frame->phase_state = 0;
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 pending = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), pending, held_sub, held_dict, 0);
                 if (PyValue_IsNull(pending)) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -3326,7 +3326,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3423,7 +3423,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3518,7 +3518,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3590,7 +3590,7 @@
                 STAT_INC(BINARY_OP, hit);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(res_o);
                 ls = list_st;
@@ -3621,7 +3621,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3721,7 +3721,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3824,7 +3824,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3923,7 +3923,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -3991,13 +3991,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -4011,7 +4011,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4052,7 +4052,7 @@
                 res = PyValue_FromDouble(a - b);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -4078,7 +4078,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4138,7 +4138,7 @@
                 }
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -4164,7 +4164,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4209,7 +4209,7 @@
                 res = PyValue_FromDouble(a / b);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -4235,7 +4235,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4303,13 +4303,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -4323,7 +4323,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4391,13 +4391,13 @@
                     value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 ir_binary_result = value_reader_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), ir_binary_result, ir_binary_right, ir_binary_left, ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0);
                 if (PyValue_IsNull(ir_binary_result)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -4411,7 +4411,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4463,7 +4463,7 @@
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 l = left;
                 r = right;
@@ -4489,7 +4489,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4539,7 +4539,7 @@
                 PyValue_XCLOSE(ir_own_B);
                 if (PyValue_IsNull(res)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_STORE_DST(IR_A(ir_word), res);
@@ -4547,7 +4547,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4584,7 +4584,7 @@
                 frame->phase_state = 0;
                 ir_obj_value = _PyValueTemps_Box(value_temps, value);
                 if (ir_obj_value == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(BUILD_INTERPOLATION);
             }
@@ -4595,7 +4595,7 @@
                 frame->phase_state = 0;
                 ir_obj_str = _PyValueTemps_Box(value_temps, str);
                 if (ir_obj_str == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(BUILD_INTERPOLATION);
             }
@@ -4630,7 +4630,7 @@
             PyValue_CLOSE(value);
             if (interpolation_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             interpolation = PyValue_FromObjectSteal(interpolation_o);
             IR_PUBLISH_TEMP(window[0], interpolation);
@@ -4639,7 +4639,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4669,7 +4669,7 @@
             PyObject *list_o = _PyList_FromValueStealOnSuccess(values, oparg);
             if (list_o == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             list = PyValue_FromObjectSteal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
@@ -4679,7 +4679,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4715,7 +4715,7 @@
             {
                 int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                 if (operation_failed < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -4724,14 +4724,14 @@
             }
             if (failed) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4768,7 +4768,7 @@
                 }
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg; i++) {
@@ -4791,7 +4791,7 @@
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 Py_DECREF(set_o);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             set = PyValue_FromObjectSteal(set_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
@@ -4801,7 +4801,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4840,7 +4840,7 @@
             IR_CLEAR_SLOTS(&window[0], oparg);
             if (slice_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             slice = PyValue_FromObjectSteal(slice_o);
             IR_PUBLISH_TEMP(window[0], slice);
@@ -4849,7 +4849,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4880,7 +4880,7 @@
             if (str_o == NULL) {
                 frame->phase_state = 0;
                 IR_CLEAR_SLOTS(&window[0], oparg);
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             str = PyValue_FromObjectSteal(str_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
@@ -4890,7 +4890,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4925,7 +4925,7 @@
                 frame->phase_state = 0;
                 ir_obj_strings = _PyValueTemps_Box(value_temps, strings);
                 if (ir_obj_strings == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
             }
@@ -4936,7 +4936,7 @@
                 frame->phase_state = 0;
                 ir_obj_interpolations = _PyValueTemps_Box(value_temps, interpolations);
                 if (ir_obj_interpolations == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
             }
@@ -4958,7 +4958,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (template_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             template = PyValue_FromObjectSteal(template_o);
             IR_STORE_DST(IR_A(ir_word), template);
@@ -4966,7 +4966,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -4994,7 +4994,7 @@
             PyObject *tup_o = _PyTuple_FromValueStealOnSuccess(values, oparg);
             if (tup_o == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             tup = PyValue_FromObjectSteal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
@@ -5004,7 +5004,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5063,7 +5063,7 @@
                         _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                         frame->phase_state = 0;
                         if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -5084,7 +5084,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -5102,7 +5102,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -5116,7 +5116,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5240,7 +5240,7 @@
                     PyValue_CLOSE(init_owner);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 self_or_null = PyValue_FromObjectSteal(self_o);
                 call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
@@ -5265,7 +5265,7 @@
                     tstate, frame, args-2, oparg,IR_A(ir_word), next_instr);
                 if (temp == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 call_clear_owned_slots(frame, window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 init_frame = PyValue_Wrap(temp);
@@ -5290,7 +5290,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5299,7 +5299,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5490,7 +5490,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5499,7 +5499,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5586,7 +5586,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -5618,7 +5618,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -5632,7 +5632,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5705,7 +5705,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -5736,7 +5736,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -5744,7 +5744,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5753,7 +5753,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5827,7 +5827,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -5858,7 +5858,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -5866,7 +5866,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5875,7 +5875,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -5949,7 +5949,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -5980,7 +5980,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -5988,7 +5988,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -5997,7 +5997,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6087,7 +6087,7 @@
                     call_state);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6104,7 +6104,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -6112,7 +6112,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -6121,7 +6121,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6178,7 +6178,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6212,7 +6212,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6226,7 +6226,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6271,7 +6271,7 @@
                     _Py_Specialize_CallFunctionEx(func, this_instr);
                     frame->phase_state = 0;
                     if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6292,7 +6292,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6310,7 +6310,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6324,7 +6324,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6381,7 +6381,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6415,7 +6415,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6429,7 +6429,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6501,7 +6501,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6541,7 +6541,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6555,7 +6555,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6600,7 +6600,7 @@
                     _Py_Specialize_CallFunctionEx(func, this_instr);
                     frame->phase_state = 0;
                     if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6621,7 +6621,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6639,7 +6639,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6653,7 +6653,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6710,7 +6710,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6744,7 +6744,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6758,7 +6758,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6830,7 +6830,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6870,7 +6870,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -6884,7 +6884,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -6956,7 +6956,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -6996,7 +6996,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7010,7 +7010,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7055,7 +7055,7 @@
                     _Py_Specialize_CallFunctionEx(func, this_instr);
                     frame->phase_state = 0;
                     if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -7076,7 +7076,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -7094,7 +7094,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7108,7 +7108,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7149,21 +7149,21 @@
                     res = _PyValue_Positive(value);
                     if (PyValue_IsNull(res)) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
                 else {
                     PyObject *value_o = _PyValueTemps_Object(value_temps, value);
                     if (value_o == NULL) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     frame->phase_state = 0;
                     frame->phase_state = 0;
                     PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
                     if (res_o == NULL) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     res = PyValue_FromObjectSteal(res_o);
                 }
@@ -7184,7 +7184,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -7237,7 +7237,7 @@
                         value_operation_close3(first, second, PyValue_NULL);
                         frame->phase_state = 0;
                         (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 else if (oparg == INTRINSIC_SETATTR) {
@@ -7266,7 +7266,7 @@
                         value_operation_close3(first, second, PyValue_NULL);
                         frame->phase_state = 0;
                         (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     res = PyValue_None;
                 }
@@ -7284,7 +7284,7 @@
                         value_operation_close3(first, second, PyValue_NULL);
                         frame->phase_state = 0;
                         (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     res = PyValue_FromObjectSteal(res_o);
                 }
@@ -7312,7 +7312,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -7389,7 +7389,7 @@
                 }
                 if (retval < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 (void)null;
                 frame->phase_state = 0;
@@ -7413,7 +7413,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -7422,7 +7422,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7471,7 +7471,7 @@
                     _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
                     frame->phase_state = 0;
                     if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -7491,7 +7491,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -7509,7 +7509,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7523,7 +7523,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7610,7 +7610,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -7633,7 +7633,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7647,7 +7647,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7704,7 +7704,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7718,7 +7718,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7767,7 +7767,7 @@
                     _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
                     frame->phase_state = 0;
                     if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -7787,7 +7787,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -7805,7 +7805,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7819,7 +7819,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -7906,7 +7906,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -7929,7 +7929,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -7943,7 +7943,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8000,7 +8000,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -8014,7 +8014,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8101,7 +8101,7 @@
                         call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -8115,7 +8115,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8202,7 +8202,7 @@
                         call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -8216,7 +8216,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8287,12 +8287,12 @@
                 Py_ssize_t len_i = _PyValue_Size(arg);
                 if (len_i < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromInt64(len_i);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 c = callable;
@@ -8322,7 +8322,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -8331,7 +8331,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8446,7 +8446,7 @@
                     _PyValue_CLOSE_POINTER(tmp);
                     call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = self;
@@ -8476,7 +8476,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -8485,7 +8485,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8579,7 +8579,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -8609,7 +8609,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -8617,7 +8617,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -8626,7 +8626,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8719,7 +8719,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -8749,7 +8749,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -8757,7 +8757,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -8766,7 +8766,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -8869,7 +8869,7 @@
                 PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
                 if (self == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
@@ -8886,7 +8886,7 @@
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = args[0];
@@ -8919,7 +8919,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -8927,7 +8927,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -8937,7 +8937,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9043,12 +9043,12 @@
                 PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
                 if (self == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyObject *arg = _PyValueTemps_Object(value_temps, arguments[1]);
                 if (arg == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -9063,7 +9063,7 @@
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = arguments[0];
@@ -9106,7 +9106,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -9114,7 +9114,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -9124,7 +9124,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9181,7 +9181,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -9195,7 +9195,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9243,7 +9243,7 @@
                         _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                         frame->phase_state = 0;
                         if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -9264,7 +9264,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -9282,7 +9282,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -9296,7 +9296,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9420,7 +9420,7 @@
                     PyValue_CLOSE(init_owner);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 self_or_null = PyValue_FromObjectSteal(self_o);
                 call_state |= CALL_SELF_PRESENT | CALL_EFFECTS;
@@ -9445,7 +9445,7 @@
                     tstate, frame, args-2, oparg,IR_A(ir_word), next_instr);
                 if (temp == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 call_clear_owned_slots(frame, window, 0, 2 + oparg, CALL_TRANSACTION_VECTOR, call_state);
                 init_frame = PyValue_Wrap(temp);
@@ -9470,7 +9470,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -9479,7 +9479,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9670,7 +9670,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -9679,7 +9679,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9766,7 +9766,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -9798,7 +9798,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -9812,7 +9812,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -9885,7 +9885,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -9916,7 +9916,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -9924,7 +9924,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -9933,7 +9933,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10007,7 +10007,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -10038,7 +10038,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10046,7 +10046,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10055,7 +10055,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10129,7 +10129,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -10160,7 +10160,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10168,7 +10168,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10177,7 +10177,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10267,7 +10267,7 @@
                     call_state);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -10284,7 +10284,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10292,7 +10292,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10301,7 +10301,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10382,7 +10382,7 @@
                 }
                 if (retval < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 (void)null;
                 frame->phase_state = 0;
@@ -10406,7 +10406,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10415,7 +10415,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10486,12 +10486,12 @@
                 Py_ssize_t len_i = _PyValue_Size(arg);
                 if (len_i < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromInt64(len_i);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 c = callable;
@@ -10521,7 +10521,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10530,7 +10530,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, 0, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10645,7 +10645,7 @@
                     _PyValue_CLOSE_POINTER(tmp);
                     call_clear_owned_slots(frame, window, 0, 2, CALL_TRANSACTION_VECTOR, call_state);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = self;
@@ -10675,7 +10675,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10684,7 +10684,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10778,7 +10778,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -10808,7 +10808,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10816,7 +10816,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10825,7 +10825,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -10918,7 +10918,7 @@
                     tstate, callable, arguments, total_args, NULL);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue temp = callable;
                 callable = result;
@@ -10948,7 +10948,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -10956,7 +10956,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -10965,7 +10965,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11068,7 +11068,7 @@
                 PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
                 if (self == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
@@ -11085,7 +11085,7 @@
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = args[0];
@@ -11118,7 +11118,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -11126,7 +11126,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11136,7 +11136,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11242,12 +11242,12 @@
                 PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
                 if (self == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyObject *arg = _PyValueTemps_Object(value_temps, arguments[1]);
                 if (arg == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -11262,7 +11262,7 @@
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = arguments[0];
@@ -11305,7 +11305,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -11313,7 +11313,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11323,7 +11323,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11380,7 +11380,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -11394,7 +11394,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11544,7 +11544,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11553,7 +11553,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11640,7 +11640,7 @@
                         call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -11654,7 +11654,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11725,7 +11725,7 @@
                 PyObject *res_o = _PyValue_Str(arg);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 res = PyValue_FromObjectSteal(res_o);
@@ -11746,7 +11746,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -11754,7 +11754,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11763,7 +11763,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11834,7 +11834,7 @@
                 PyObject *res_o = _PyValue_SequenceTuple(arg);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 res = PyValue_FromObjectSteal(res_o);
@@ -11855,7 +11855,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -11863,7 +11863,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11872,7 +11872,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -11955,7 +11955,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -11964,7 +11964,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12114,7 +12114,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12123,7 +12123,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12210,7 +12210,7 @@
                         call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state | CALL_PREPARED);
                     }
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -12224,7 +12224,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12295,7 +12295,7 @@
                 PyObject *res_o = _PyValue_Str(arg);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 res = PyValue_FromObjectSteal(res_o);
@@ -12316,7 +12316,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -12324,7 +12324,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12333,7 +12333,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12404,7 +12404,7 @@
                 PyObject *res_o = _PyValue_SequenceTuple(arg);
                 if (res_o == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 a = arg;
                 res = PyValue_FromObjectSteal(res_o);
@@ -12425,7 +12425,7 @@
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
@@ -12433,7 +12433,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12442,7 +12442,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12525,7 +12525,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12534,7 +12534,7 @@
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                 if (call_result.status < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 if (call_result.child != NULL) {
                     DISPATCH_INLINED(call_result.child);
@@ -12575,7 +12575,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
                 if (ir_obj_exc_value_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
             }
@@ -12586,7 +12586,7 @@
                 frame->phase_state = 0;
                 ir_obj_match_type_st = _PyValueTemps_Box(value_temps, match_type_st);
                 if (ir_obj_match_type_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
             }
@@ -12610,7 +12610,7 @@
                 frame->phase_state = 0;
                 PyValue_CLOSE(held_exc);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -12625,7 +12625,7 @@
             PyValue_CLOSE(held_exc);
             if (match_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (!Py_IsNone(match_o)) {
                 frame->phase_state = 0;
@@ -12640,7 +12640,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12673,7 +12673,7 @@
                 frame->phase_state = 0;
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
                 if (ir_obj_left == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
             }
@@ -12684,7 +12684,7 @@
                 frame->phase_state = 0;
                 ir_obj_right = _PyValueTemps_Box(value_temps, right);
                 if (ir_obj_right == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
             }
@@ -12705,7 +12705,7 @@
                 PyValue_CLOSE(held_right);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -12719,7 +12719,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12749,7 +12749,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
                 if (ir_obj_exc_value_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(CLEANUP_THROW);
             }
@@ -12769,14 +12769,14 @@
                 frame->phase_state = 0;
                 monitor_reraise(tstate, frame, this_instr);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(exception_unwind);
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
             frame->phase_state = 0;
             {
                 _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), _PyFrame_InstrAt(frame, oparg), completed, _PY_IR_SEND_THROW);
                 next_instr = ir_step_result.next;
-                if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                 DISPATCH();
             }
         }
@@ -12832,7 +12832,7 @@
                 PyValue_XCLOSE(ir_own_B);
                 if (PyValue_IsNull(cmp)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (oparg & 16) {
                     frame->phase_state = 0;
@@ -12843,7 +12843,7 @@
                     PyValue_CLOSE(cmp);
                     if (res_bool < 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     res = res_bool ? PyValue_True : PyValue_False;
                 }
@@ -12856,7 +12856,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -12938,7 +12938,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -13020,7 +13020,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -13076,7 +13076,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (PyValue_IsNull(cmp)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (oparg & 16) {
                     frame->phase_state = 0;
@@ -13087,7 +13087,7 @@
                     PyValue_CLOSE(cmp);
                     if (res_bool < 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     res = res_bool ? PyValue_True : PyValue_False;
                 }
@@ -13463,7 +13463,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -13518,7 +13518,7 @@
                 int res = _PyValue_Contains(right, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -13549,7 +13549,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -13609,7 +13609,7 @@
                 int res = PyDict_ContainsValue(right_o, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -13640,7 +13640,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -13694,7 +13694,7 @@
                 int res = _PyValue_Contains(right, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -13782,7 +13782,7 @@
                 int res = PyDict_ContainsValue(right_o, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -13879,7 +13879,7 @@
                 }
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -13979,7 +13979,7 @@
                 }
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -14010,7 +14010,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14058,7 +14058,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (result_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             result = PyValue_FromObjectSteal(result_o);
             IR_STORE_DST(IR_A(ir_word), result);
@@ -14066,7 +14066,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14140,7 +14140,7 @@
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -14169,7 +14169,7 @@
                     _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
                 );
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             PyValue tmp = GETLOCAL(oparg);
             _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL);
@@ -14206,7 +14206,7 @@
             PyValue_XCLOSE(ir_own_A);
             if (err) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -14244,7 +14244,7 @@
                     frame->phase_state = 0;
                     ir_obj_callable = _PyValueTemps_Box(value_temps, callable);
                     if (ir_obj_callable == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(DICT_MERGE);
                 }
@@ -14255,7 +14255,7 @@
                     frame->phase_state = 0;
                     ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
                     if (ir_obj_dict == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(DICT_MERGE);
                 }
@@ -14266,7 +14266,7 @@
                     frame->phase_state = 0;
                     ir_obj_update = _PyValueTemps_Box(value_temps, update);
                     if (ir_obj_update == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(DICT_MERGE);
                 }
@@ -14288,7 +14288,7 @@
                     Py_XDECREF(merged.object);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 u = update;
             }
@@ -14333,7 +14333,7 @@
                     frame->phase_state = 0;
                     ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
                     if (ir_obj_dict == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(DICT_UPDATE);
                 }
@@ -14344,7 +14344,7 @@
                     frame->phase_state = 0;
                     ir_obj_update = _PyValueTemps_Box(value_temps, update);
                     if (ir_obj_update == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(DICT_UPDATE);
                 }
@@ -14382,7 +14382,7 @@
                         }
                     }frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 upd = update;
             }
@@ -14422,7 +14422,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
                 if (ir_obj_exc_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(END_ASYNC_FOR);
             }
@@ -14457,7 +14457,7 @@
                 frame->phase_state = 0;
                 monitor_reraise(tstate, frame, this_instr);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(exception_unwind);
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
             DISPATCH();
         }
@@ -14539,7 +14539,7 @@
                              PyValue_TYPE(should_be_none)->tp_name);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), should_be_none);
             DISPATCH();
@@ -14570,7 +14570,7 @@
                 PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(res_o);
             }
@@ -14584,7 +14584,7 @@
                 PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(res_o);
             }
@@ -14626,7 +14626,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (res_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(IR_A(ir_word), res);
@@ -14634,7 +14634,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14689,14 +14689,14 @@
                     if (found < 0) {frame->phase_state = 0;
                         frame->phase_state = 0;
                         IR_PUBLISH_TEMP(window[1], null_or_index);
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                     frame->phase_state = 0;
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -14709,7 +14709,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14776,7 +14776,7 @@
                     slots = _PyFrame_Slots(frame);
                     if (_Py_EnterRecursivePy(tstate)) {
                         PyValue_XCLOSE(ir_resume_input);
-                        JUMP_TO_LABEL(exit_unwind_notrace);
+                        PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
@@ -14842,7 +14842,7 @@
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -14862,7 +14862,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14918,7 +14918,7 @@
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -14937,7 +14937,7 @@
                 next = PyValue_FromInt64(value);
                 if (PyValue_IsNull(next)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_PUBLISH_TEMP(window[2], next);
@@ -14946,7 +14946,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -14997,7 +14997,7 @@
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -15018,7 +15018,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15065,14 +15065,14 @@
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -15086,7 +15086,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15116,7 +15116,7 @@
                 frame->phase_state = 0;
                 ir_obj_obj = _PyValueTemps_Box(value_temps, obj);
                 if (ir_obj_obj == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(GET_AITER);
             }
@@ -15142,7 +15142,7 @@
                 frame->phase_state = 0;
                 PyValue_XCLOSE(ir_own_B);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -15153,7 +15153,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (iter_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (Py_TYPE(iter_o)->tp_as_async == NULL ||
                 Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
@@ -15167,7 +15167,7 @@
                 frame->phase_state = 0;
                 Py_DECREF(iter_o);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             iter = PyValue_FromObjectSteal(iter_o);
             IR_STORE_DST(IR_A(ir_word), iter);
@@ -15175,7 +15175,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15203,7 +15203,7 @@
                 frame->phase_state = 0;
                 ir_obj_aiter = _PyValueTemps_Box(value_temps, aiter);
                 if (ir_obj_aiter == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(GET_ANEXT);
             }
@@ -15215,7 +15215,7 @@
             PyObject *awaitable_o = _PyEval_GetANext(ir_obj_aiter);
             if (awaitable_o == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(IR_A(ir_word), awaitable);
@@ -15223,7 +15223,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15255,7 +15255,7 @@
                 frame->phase_state = 0;
                 ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
                 if (ir_obj_iterable == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(GET_AWAITABLE);
             }
@@ -15271,7 +15271,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (iter_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             iter = PyValue_FromObjectSteal(iter_o);
             IR_STORE_DST(IR_A(ir_word), iter);
@@ -15279,7 +15279,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15325,7 +15325,7 @@
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 if (PyValue_IsNull(got.first)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 iter = got.first;
                 index_or_null = got.second;
@@ -15427,19 +15427,19 @@
             Py_ssize_t len_i = _PyValue_Size(obj);
             if (len_i < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             len = PyValue_FromInt64(len_i);
             if (PyValue_IsNull(len)) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(IR_A(ir_word), len);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15469,7 +15469,7 @@
                 frame->phase_state = 0;
                 ir_obj_from = _PyValueTemps_Box(value_temps, from);
                 if (ir_obj_from == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(IMPORT_FROM);
             }
@@ -15486,7 +15486,7 @@
                     tstate, frame, ir_obj_from, name);
                 if (res_o == NULL) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = PyValue_FromObjectSteal(res_o);
             }
@@ -15496,7 +15496,7 @@
                 res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
                 if (PyValue_IsNull(res)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             IR_STORE_DST(IR_A(ir_word), res);
@@ -15504,7 +15504,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15538,7 +15538,7 @@
                 frame->phase_state = 0;
                 ir_obj_fromlist = _PyValueTemps_Box(value_temps, fromlist);
                 if (ir_obj_fromlist == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(IMPORT_NAME);
             }
@@ -15562,7 +15562,7 @@
                 _PyFrame_WriteHome(frame, &window[0], PyValue_NULL);
                 _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (!(oparg & 0x02)) {
                 frame->phase_state = 0;
@@ -15592,7 +15592,7 @@
             _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
             if (res_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(res_o);
             IR_PUBLISH_TEMP(window[0], res);
@@ -15601,7 +15601,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -15640,7 +15640,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -15662,7 +15662,7 @@
                 }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
                 if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR, call_state) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -15679,7 +15679,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -15719,7 +15719,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -15736,7 +15736,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -15776,7 +15776,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -15793,7 +15793,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -15833,7 +15833,7 @@
                 frame->phase_state = 0;
                 call_state |= CALL_PREPARED | CALL_EFFECTS;
                 if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -15850,7 +15850,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -15892,7 +15892,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -15912,7 +15912,7 @@
                 }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
                 if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS, call_state) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -15929,7 +15929,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -15971,7 +15971,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -15991,7 +15991,7 @@
                 }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
                 if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS, call_state) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -16008,7 +16008,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -16052,7 +16052,7 @@
                 {
                     call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
                     if (call_state & CALL_FAILED) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                 }
                 this_instr = frame->instr_ptr;
@@ -16074,7 +16074,7 @@
                 }
                 call_state |= CALL_MONITORED | CALL_EFFECTS;
                 if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR, call_state) < 0) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -16091,7 +16091,7 @@
                 {
                     _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     if (call_result.child != NULL) {
                         DISPATCH_INLINED(call_result.child);
@@ -16137,7 +16137,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (PyValue_IsNull(cmp)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (oparg & 16) {
                     frame->phase_state = 0;
@@ -16148,7 +16148,7 @@
                     PyValue_CLOSE(cmp);
                     if (res_bool < 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     res = res_bool ? PyValue_True : PyValue_False;
                 }
@@ -16179,7 +16179,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16202,7 +16202,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16244,7 +16244,7 @@
                 int res = _PyValue_Contains(right, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
@@ -16291,7 +16291,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16314,7 +16314,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16358,7 +16358,7 @@
                     frame->phase_state = 0;
                     ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
                     if (ir_obj_exc_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(INSTRUMENTED_END_ASYNC_FOR);
                 }
@@ -16393,7 +16393,7 @@
                     frame->phase_state = 0;
                     monitor_reraise(tstate, frame, this_instr);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(exception_unwind);
+                    PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -16421,7 +16421,7 @@
                 frame->phase_state = 0;
                 ir_obj_value = _PyValueTemps_Box(value_temps, value);
                 if (ir_obj_value == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_FOR);
             }
@@ -16434,7 +16434,7 @@
                 int err = monitor_stop_iteration(tstate, frame, this_instr, ir_obj_value);
                 if (err) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             frame->phase_state = 0;
@@ -16475,7 +16475,7 @@
                 frame->phase_state = 0;
                 ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
                 if (ir_obj_receiver == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_SEND);
             }
@@ -16486,7 +16486,7 @@
                 frame->phase_state = 0;
                 ir_obj_value = _PyValueTemps_Box(value_temps, value);
                 if (ir_obj_value == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_SEND);
             }
@@ -16507,7 +16507,7 @@
                     PyValue_CLOSE(held);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             if (!tstate->tracing) {
@@ -16522,7 +16522,7 @@
                     PyValue_CLOSE(held);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 next_instr = dest;
             }
@@ -16568,14 +16568,14 @@
                 if (found < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     IR_PUBLISH_TEMP(window[1], null_or_index);
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 frame->phase_state = 0;
                 {
                     _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_FOR_ITER);
                     next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                     DISPATCH();
                 }
             }
@@ -16599,7 +16599,7 @@
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 next_instr = frame->instr_ptr;
             DISPATCH();
@@ -16623,7 +16623,7 @@
                 tstate, frame, this_instr);
             if (next_opcode < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             next_instr = this_instr;
             if (_PyFb_HasEntry(next_opcode)) {
@@ -16708,7 +16708,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16731,7 +16731,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -16759,7 +16759,7 @@
                 int err = check_periodics(tstate);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -16780,7 +16780,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -16816,7 +16816,7 @@
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 next_instr = frame->instr_ptr;
             DISPATCH();
@@ -16851,7 +16851,7 @@
                 PyValue_CLOSE(held);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (!truth) {
                 res = held;
@@ -16872,7 +16872,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -16899,7 +16899,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -16935,7 +16935,7 @@
                 PyValue_CLOSE(held);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (truth) {
                 res = held;
@@ -16956,7 +16956,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -16983,7 +16983,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -17006,8 +17006,8 @@
             int original_opcode = 0;
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
-                int index = (int)(_PyFrame_InstrOffset(frame, this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                int index = _PyFrame_InstrOffset(frame, this_instr);
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 frame->phase_state = 0;
@@ -17018,7 +17018,7 @@
                 slots = _PyFrame_Slots(frame);
                 if (original_opcode < 0) {
                     next_instr = frame->instr_ptr+1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 next_instr = frame->instr_ptr;
                 if (next_instr != this_instr) {
@@ -17068,7 +17068,7 @@
                     frame->phase_state = 0;
                     ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
                     if (ir_obj_global_super_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
                 }
@@ -17079,7 +17079,7 @@
                     frame->phase_state = 0;
                     ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
                     if (ir_obj_class_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
                 }
@@ -17113,7 +17113,7 @@
                         _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                         _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
                 frame->phase_state = 0;
@@ -17160,7 +17160,7 @@
                 _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 if (PyValue_IsNull(super)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 frame->phase_state = 0;
@@ -17172,7 +17172,7 @@
                 PyValue_CLOSE(super);
                 if (PyValue_IsNull(attr)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             // _PUSH_NULL_CONDITIONAL
@@ -17187,7 +17187,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -17235,7 +17235,7 @@
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 next_instr = frame->instr_ptr;
             DISPATCH();
@@ -17272,7 +17272,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = err ? PyValue_True : PyValue_False;
             }
@@ -17299,7 +17299,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -17322,7 +17322,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -17368,7 +17368,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -17395,7 +17395,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -17443,7 +17443,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -17467,7 +17467,7 @@
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -17505,7 +17505,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = err ? PyValue_True : PyValue_False;
             }
@@ -17532,7 +17532,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -17555,7 +17555,7 @@
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -17593,7 +17593,7 @@
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {frame->phase_state = 0;
                             frame->phase_state = 0;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
                         DISPATCH();
@@ -17608,7 +17608,7 @@
                     int err = check_periodics(tstate);
                     if (err != 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
             }
@@ -17622,7 +17622,7 @@
                 slots = _PyFrame_Slots(frame);
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
                     next_instr = frame->instr_ptr;
@@ -17661,7 +17661,7 @@
                     frame->phase_state = 0;
                     PyValue_CLOSE(held);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 taken = held;
             }
@@ -17685,7 +17685,7 @@
                 if (generator_return) {
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                 }
                 else {
                     next_instr = frame->return_pc;
@@ -17726,7 +17726,7 @@
                     frame->phase_state = 0;
                     PyValue_CLOSE(held);
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 taken = held;
             }
@@ -17750,7 +17750,7 @@
                 if (generator_return) {
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                 }
                 else {
                     next_instr = frame->return_pc;
@@ -17788,7 +17788,7 @@
                     slots = _PyFrame_Slots(frame);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
                     // Explicit stack reload
@@ -17798,7 +17798,7 @@
                         frame->phase_state = 0;
                         if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                             next_instr = frame->instr_ptr + 1;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                     }
                     DISPATCH();
@@ -17866,7 +17866,7 @@
                     slots = _PyFrame_Slots(frame);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
                     // Explicit stack reload
@@ -18022,7 +18022,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18111,7 +18111,7 @@
                 int err = check_periodics(tstate);
                 if (err != 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT
@@ -18183,7 +18183,7 @@
                 PyValue_CLOSE(held);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (!truth) {
                 res = held;
@@ -18227,7 +18227,7 @@
                 PyValue_CLOSE(held);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (truth) {
                 res = held;
@@ -18270,7 +18270,7 @@
             int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             if (err < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -18305,7 +18305,7 @@
                     frame->phase_state = 0;
                     ir_obj_list_st = _PyValueTemps_Box(value_temps, list_st);
                     if (ir_obj_list_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(LIST_EXTEND);
                 }
@@ -18316,7 +18316,7 @@
                     frame->phase_state = 0;
                     ir_obj_iterable_st = _PyValueTemps_Box(value_temps, iterable_st);
                     if (ir_obj_iterable_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(LIST_EXTEND);
                 }
@@ -18343,7 +18343,7 @@
                                   Py_TYPE(iterable)->tp_name);
                     }frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(Py_IsNone(none_val));
                 i = iterable_st;
@@ -18423,12 +18423,12 @@
                     value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
                     frame->phase_state = 0;
                     (void)value_operation_finish(tstate, frame, this_instr, NULL);
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 frame->phase_state = 0;
                 pending = value_attribute_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), pending, pending_self, receiver, method);
                 if (PyValue_IsNull(pending)) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -18442,7 +18442,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18508,7 +18508,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -18529,7 +18529,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18626,7 +18626,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18703,7 +18703,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -18724,7 +18724,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18828,7 +18828,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -18906,7 +18906,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -18927,7 +18927,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19001,7 +19001,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19065,7 +19065,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19139,7 +19139,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19215,7 +19215,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19236,7 +19236,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19298,7 +19298,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19312,7 +19312,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19384,7 +19384,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19398,7 +19398,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19496,7 +19496,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19568,7 +19568,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19589,7 +19589,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19663,7 +19663,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19681,7 +19681,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19749,7 +19749,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19770,7 +19770,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19878,7 +19878,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -19899,7 +19899,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19925,7 +19925,7 @@
                 PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
             if (found.status < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (found.status == 0) {
                 frame->phase_state = 0;
@@ -19933,7 +19933,7 @@
                 _PyErr_SetString(tstate, PyExc_NameError,
                                  "__build_class__ not found");
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             bc = found.value;
             IR_STORE_DST(IR_A(ir_word), bc);
@@ -19941,7 +19941,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19969,7 +19969,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -19996,7 +19996,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20024,7 +20024,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20052,7 +20052,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20082,14 +20082,14 @@
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 frame->phase_state = 0;
                 IR_STORE_TEMP_DST(IR_A(ir_word), value);
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20117,7 +20117,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20145,7 +20145,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20173,7 +20173,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20203,7 +20203,7 @@
                     _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
                 );
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_A(ir_word), value);
@@ -20211,7 +20211,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20243,7 +20243,7 @@
                 frame->phase_state = 0;
                 ir_obj_class_dict_st = _PyValueTemps_Box(value_temps, class_dict_st);
                 if (ir_obj_class_dict_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
             }
@@ -20266,7 +20266,7 @@
                 PyValue_CLOSE(held_class_dict);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             PyValue selected;
             if (found.status == 0) {
@@ -20281,7 +20281,7 @@
                     PyValue_CLOSE(held_class_dict);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             else {
@@ -20296,7 +20296,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20328,7 +20328,7 @@
                 frame->phase_state = 0;
                 ir_obj_mod_or_class_dict = _PyValueTemps_Box(value_temps, mod_or_class_dict);
                 if (ir_obj_mod_or_class_dict == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
             }
@@ -20347,7 +20347,7 @@
             PyValue_CLOSE(held_namespace);
             if (found.status < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (found.status == 0) {
                 frame->phase_state = 0;
@@ -20355,7 +20355,7 @@
                 v = value_load_global(GLOBALS(), BUILTINS(), name);
                 if (PyValue_IsNull(v)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             else {
@@ -20366,7 +20366,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20413,7 +20413,7 @@
                 {
                     int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -20421,7 +20421,7 @@
                 }
                 if (PyValue_IsNull(res[0])) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             // _NULL_SLOT_CONDITIONAL
@@ -20573,7 +20573,7 @@
                 _PyErr_SetString(tstate, PyExc_SystemError,
                                  "no locals found");
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
             IR_STORE_DST(IR_A(ir_word), locals);
@@ -20581,7 +20581,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20608,14 +20608,14 @@
             v = _PyEval_LoadName(tstate, frame, name);
             if (PyValue_IsNull(v)) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(IR_A(ir_word), v);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20643,7 +20643,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20668,14 +20668,14 @@
             value = PyValue_FromInlineInt(oparg);
             if (PyValue_IsNull(value)) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20718,7 +20718,7 @@
                         PyObject *owner = _PyValueTemps_Object(value_temps, method_and_self[1]);
                         if (owner == NULL) {frame->phase_state = 0;
                             frame->phase_state = 0;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         frame->phase_state = 0;
                         frame->phase_state = 0;
@@ -20732,7 +20732,7 @@
                         _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
                     }frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             DISPATCH();
@@ -20790,7 +20790,7 @@
                     frame->phase_state = 0;
                     ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
                     if (ir_obj_global_super_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
                 }
@@ -20801,7 +20801,7 @@
                     frame->phase_state = 0;
                     ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
                     if (ir_obj_class_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
                 }
@@ -20835,7 +20835,7 @@
                         _PyFrame_WriteHome(frame, &window[1], PyValue_NULL);
                         _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
                 frame->phase_state = 0;
@@ -20882,7 +20882,7 @@
                 _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
                 if (PyValue_IsNull(super)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 frame->phase_state = 0;
@@ -20894,7 +20894,7 @@
                 PyValue_CLOSE(super);
                 if (PyValue_IsNull(attr)) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             // _PUSH_NULL_CONDITIONAL
@@ -20909,7 +20909,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -20978,7 +20978,7 @@
             _PyFrame_WriteHome(frame, &window[2], PyValue_NULL);
             if (found.status < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             attr_st = found.value;
             IR_PUBLISH_TEMP(window[0], attr_st);
@@ -20987,7 +20987,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21056,7 +21056,7 @@
                     PyValue_TYPE(self_st)->tp_getattro == PyObject_GenericGetAttr);
                 if (found.status < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (found.status) {
                     self_or_null = self_st;
@@ -21086,7 +21086,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21109,7 +21109,7 @@
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
             if (cell == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             PyValue tmp = GETLOCAL(oparg);
             _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_FromObjectSteal(cell));
@@ -21147,7 +21147,7 @@
                     frame->phase_state = 0;
                     ir_obj_codeobj_st = _PyValueTemps_Box(value_temps, codeobj_st);
                     if (ir_obj_codeobj_st == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(MAKE_FUNCTION);
                 }
@@ -21161,7 +21161,7 @@
                 PyFunction_New(codeobj, GLOBALS());
                 if (func_obj == NULL) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 co = codeobj_st;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), co);
@@ -21183,7 +21183,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21225,7 +21225,7 @@
                 (PyDictObject *)dict, stored_key, stored_value);
             if (err != 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -21267,7 +21267,7 @@
                     frame->phase_state = 0;
                     ir_obj_type = _PyValueTemps_Box(value_temps, type);
                     if (ir_obj_type == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(MATCH_CLASS);
                 }
@@ -21278,7 +21278,7 @@
                     frame->phase_state = 0;
                     ir_obj_names = _PyValueTemps_Box(value_temps, names);
                     if (ir_obj_names == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(MATCH_CLASS);
                 }
@@ -21299,7 +21299,7 @@
                 else {
                     if (_PyErr_Occurred(tstate)) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     attrs = PyValue_None;
                 }
@@ -21338,7 +21338,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21369,7 +21369,7 @@
                 frame->phase_state = 0;
                 ir_obj_subject = _PyValueTemps_Box(value_temps, subject);
                 if (ir_obj_subject == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(MATCH_KEYS);
             }
@@ -21380,7 +21380,7 @@
                 frame->phase_state = 0;
                 ir_obj_keys = _PyValueTemps_Box(value_temps, keys);
                 if (ir_obj_keys == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(MATCH_KEYS);
             }
@@ -21393,7 +21393,7 @@
                 ir_obj_subject, ir_obj_keys);
             if (values_or_none_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             values_or_none = PyValue_FromObjectSteal(values_or_none_o);
             IR_STORE_DST(IR_A(ir_word), values_or_none);
@@ -21401,7 +21401,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21429,7 +21429,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21457,7 +21457,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -21482,7 +21482,7 @@
             int err = _PyFrame_MaterializeKwargs(frame);
             if (err < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -21521,7 +21521,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc_value = _PyValueTemps_Box(value_temps, exc_value);
                 if (ir_obj_exc_value == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(POP_EXCEPT);
             }
@@ -21610,7 +21610,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = err ? PyValue_True : PyValue_False;
             }
@@ -22102,7 +22102,7 @@
                 PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = err ? PyValue_True : PyValue_False;
             }
@@ -22508,7 +22508,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc = _PyValueTemps_Box(value_temps, exc);
                 if (ir_obj_exc == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(PUSH_EXC_INFO);
             }
@@ -22531,7 +22531,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -22560,12 +22560,12 @@
             PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
             if (oparg > 0 && exc == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             PyObject *cause = oparg == 2 ? _PyValueTemps_Object(value_temps, args[1]) : NULL;
             if (oparg == 2 && cause == NULL) {frame->phase_state = 0;
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -22589,10 +22589,10 @@
                 frame->phase_state = 0;
                 monitor_reraise(tstate, frame, this_instr);
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(exception_unwind);
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
             frame->phase_state = 0;
-            JUMP_TO_LABEL(error);
+            PROCESS_ERROR_AT(RAISE, 0, this_instr);
         }
 
         TARGET(RERAISE) {
@@ -22620,7 +22620,7 @@
                 frame->phase_state = 0;
                 ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
                 if (ir_obj_exc_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(RERAISE);
             }
@@ -22641,7 +22641,7 @@
             frame->phase_state = 0;
             monitor_reraise(tstate, frame, this_instr);
             frame->phase_state = 0;
-            JUMP_TO_LABEL(exception_unwind);
+            PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
         }
 
         TARGET(RESERVED) {
@@ -22688,7 +22688,7 @@
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {frame->phase_state = 0;
                             frame->phase_state = 0;
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
                         DISPATCH();
@@ -22703,7 +22703,7 @@
                     int err = check_periodics(tstate);
                     if (err != 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
             }
@@ -22730,7 +22730,7 @@
                 func, _PyFrame_GetCode(frame));
             if (gen == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
@@ -22797,7 +22797,7 @@
                 if (generator_return) {
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                 }
                 else {
                     next_instr = frame->return_pc;
@@ -22849,7 +22849,7 @@
                 if (generator_return) {
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                 }
                 else {
                     next_instr = frame->return_pc;
@@ -22906,7 +22906,7 @@
                     frame->phase_state = 0;
                     ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
                     if (ir_obj_receiver == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(SEND);
                 }
@@ -22938,7 +22938,7 @@
                         slots = _PyFrame_Slots(frame);
                         if (_Py_EnterRecursivePy(tstate)) {
                             PyValue_XCLOSE(ir_resume_input);
-                            JUMP_TO_LABEL(exit_unwind_notrace);
+                            PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                         }
                         _PyFrame_SetReturnValue(frame, ir_resume_input);
                         LOAD_IP(0);
@@ -22959,14 +22959,14 @@
                         if (found < 0) {frame->phase_state = 0;
                             frame->phase_state = 0;
                             IR_PUBLISH_TEMP(window[1], null_or_index);
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                         frame->phase_state = 0;
                         {
                             _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_SEND);
                             next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                             DISPATCH();
                         }
                     }
@@ -22978,7 +22978,7 @@
                     _PyStatusValue sent = _PyValue_Send(receiver_o, v);
                     if (sent.status == PYGEN_ERROR) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     if (sent.status == PYGEN_RETURN) {
                         PyValue completed = sent.value;
@@ -22986,7 +22986,7 @@
                         {
                             _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_SEND);
                             next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                             DISPATCH();
                         }
                     }
@@ -23049,7 +23049,7 @@
                 PySendResult what = (PySendResult)sent.status;
                 if (what == PYGEN_ERROR) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (what == PYGEN_RETURN) {
                     PyValue completed = sent.value;
@@ -23057,7 +23057,7 @@
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_SEND);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -23140,7 +23140,7 @@
                     slots = _PyFrame_Slots(frame);
                     if (_Py_EnterRecursivePy(tstate)) {
                         PyValue_XCLOSE(ir_resume_input);
-                        JUMP_TO_LABEL(exit_unwind_notrace);
+                        PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
@@ -23202,7 +23202,7 @@
                     frame->phase_state = 0;
                     ir_obj_iter = _PyValueTemps_Box(value_temps, iter);
                     if (ir_obj_iter == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(SEND_VIRTUAL);
                 }
@@ -23218,14 +23218,14 @@
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {frame->phase_state = 0;
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
                         _PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed, _PY_IR_SEND);
                         next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         DISPATCH();
                     }
                 }
@@ -23253,7 +23253,7 @@
                 _PyErr_Format(tstate, PyExc_SystemError,
                               "no locals found when setting up annotations");
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -23262,7 +23262,7 @@
                 PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
             if (found.status < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             int err;
             if (found.status == 0) {
@@ -23272,7 +23272,7 @@
                 ann_dict = PyDict_New();
                 if (ann_dict == NULL) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -23284,7 +23284,7 @@
                 Py_DECREF(ann_dict);
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             else {
@@ -23322,7 +23322,7 @@
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             if (err) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -23356,7 +23356,7 @@
                 frame->phase_state = 0;
                 ir_obj_attr_st = _PyValueTemps_Box(value_temps, attr_st);
                 if (ir_obj_attr_st == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
             }
@@ -23367,7 +23367,7 @@
                 frame->phase_state = 0;
                 ir_obj_func_in = _PyValueTemps_Box(value_temps, func_in);
                 if (ir_obj_func_in == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
             }
@@ -23419,7 +23419,7 @@
                     frame->phase_state = 0;
                     ir_obj_set = _PyValueTemps_Box(value_temps, set);
                     if (ir_obj_set == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(SET_UPDATE);
                 }
@@ -23430,7 +23430,7 @@
                     frame->phase_state = 0;
                     ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
                     if (ir_obj_iterable == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(SET_UPDATE);
                 }
@@ -23443,7 +23443,7 @@
                                     ir_obj_iterable);
                 if (err < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 i = iterable;
             }
@@ -23514,7 +23514,7 @@
                 {
                     int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -23522,7 +23522,7 @@
                 }
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             DISPATCH();
@@ -23638,7 +23638,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -23716,7 +23716,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -23796,7 +23796,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -23867,7 +23867,7 @@
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
@@ -23996,7 +23996,7 @@
                     {
                         int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                         if (operation_failed < 0) {
-                            JUMP_TO_LABEL(error);
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -24004,7 +24004,7 @@
                     }
                     if (err < 0) {
                         frame->phase_state = 0;
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
                 else {
@@ -24022,7 +24022,7 @@
                         }
                         if (retire_needed) {
                             int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                            if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                            if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
                             this_instr = frame->instr_ptr;
                             ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                             slots = _PyFrame_Slots(frame);
@@ -24135,7 +24135,7 @@
             }
             if (err < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -24167,7 +24167,7 @@
             PyValue_XCLOSE(ir_own_A);
             if (error) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             DISPATCH();
         }
@@ -24219,7 +24219,7 @@
                 PyValue_XCLOSE(ir_own_D);
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             DISPATCH();
@@ -24281,7 +24281,7 @@
                 {
                     int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -24289,7 +24289,7 @@
                 }
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             DISPATCH();
@@ -24360,7 +24360,7 @@
                 {
                     int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -24368,7 +24368,7 @@
                 }
                 if (err) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             DISPATCH();
@@ -24546,7 +24546,7 @@
                 PyValue_CLOSE(value);
                 if (err < 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 res = err ? PyValue_True : PyValue_False;
             }
@@ -24817,7 +24817,7 @@
                 res = _PyValue_Invert(value);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 v = value;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
@@ -24836,7 +24836,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -24875,7 +24875,7 @@
                 }
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 v = value;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
@@ -24894,7 +24894,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -24926,7 +24926,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (truth < 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_A(ir_word), res);
@@ -24934,7 +24934,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -24965,7 +24965,7 @@
                 frame->phase_state = 0;
                 ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
                 if (ir_obj_seq == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(UNPACK_EX);
             }
@@ -24979,7 +24979,7 @@
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             if (res == 0) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (IR_IS_LOCAL(IR_B(ir_word))) {
                 int ir_n = ((oparg & 0xFF) + 1 + (oparg >> 8));
@@ -24987,7 +24987,7 @@
                 if (ir_rest >= 0 &&
                     finish_unpack_to_locals(tstate, frame, next_instr, value_temps, &IR_SLOT(IR_B(ir_word)), window, ir_n, ir_rest, 0) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25037,7 +25037,7 @@
                     frame->phase_state = 0;
                     ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
                     if (ir_obj_seq == NULL) {
-                        JUMP_TO_LABEL(error);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
                 }
@@ -25051,7 +25051,7 @@
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 if (res == 0) {
                     frame->phase_state = 0;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
             if (IR_IS_LOCAL(IR_D(ir_word))) {
@@ -25060,7 +25060,7 @@
                 if (ir_rest >= 0 &&
                     finish_unpack_to_locals(tstate, frame, next_instr, value_temps, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest, 0) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25132,7 +25132,7 @@
                 if (ir_rest >= 0 &&
                     finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest, 1) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25195,7 +25195,7 @@
                 if (ir_rest >= 0 &&
                     finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest, 1) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25260,7 +25260,7 @@
                 if (ir_rest >= 0 &&
                     finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest, 1) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25298,7 +25298,7 @@
                 frame->phase_state = 0;
                 ir_obj_exit_func = _PyValueTemps_Box(value_temps, exit_func);
                 if (ir_obj_exit_func == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
             }
@@ -25309,7 +25309,7 @@
                 frame->phase_state = 0;
                 ir_obj_exit_self = _PyValueTemps_Box(value_temps, exit_self);
                 if (ir_obj_exit_self == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
             }
@@ -25320,7 +25320,7 @@
                 frame->phase_state = 0;
                 ir_obj_val = _PyValueTemps_Box(value_temps, val);
                 if (ir_obj_val == NULL) {
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
             }
@@ -25348,7 +25348,7 @@
             Py_XDECREF(original_tb);
             if (res_o == NULL) {
                 frame->phase_state = 0;
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(res_o);
             IR_PUBLISH_TEMP(window[5], res);
@@ -25357,7 +25357,7 @@
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
-                    JUMP_TO_LABEL(error);
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
                 }
             }
             DISPATCH();
@@ -25477,119 +25477,40 @@
         {
             _PyValueTemps *const value_temps = NULL;
             {
-                #ifdef NDEBUG
-                if (!_PyErr_Occurred(tstate)) {
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    _PyErr_SetString(tstate, PyExc_SystemError,
-                             "error return without exception set");
-                }
-                #else
-                assert(_PyErr_Occurred(tstate));
-                #endif
-
-                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-                if (!_PyFrame_IsIncomplete(frame)) {
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PyFrameObject *f = _PyFrame_GetFrameObject(frame);
-                    if (f != NULL) {
-                        frame->phase_state = 0;
-                        frame->phase_state = 0;
-                        PyTraceBack_Here(f);
-                    }
-                }
                 frame->phase_state = 0;
-                frame->phase_state = 0;
-                _PyEval_MonitorRaise(tstate, frame, next_instr-1);
-                frame->phase_state = 0;
-                JUMP_TO_LABEL(exception_unwind);
+                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }}
 
         LABEL(exception_unwind)
         {
             _PyValueTemps *const value_temps = NULL;
             {
-                int offset = _PyFrame_InstrOffset(frame, next_instr - 1);
                 frame->phase_state = 0;
-                frame->phase_state = 0;
-                _PyExceptionHandler found = get_frame_exception_handler(frame, offset);
-                int exc_slot = found.exc_slot, handler = found.handler, lasti = found.lasti;
-                if (found.handled == 0) {
-                    assert(_PyErr_Occurred(tstate));
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    monitor_unwind(tstate, frame, next_instr-1);
-                    JUMP_TO_LABEL(exit_unwind);
-                }
-                int first = exc_slot - lasti;
-                assert(first >= _PyFrame_GetCode(frame)->co_nlocalsplus);
-                frame->phase_state = 0;
-                frame->phase_state = 0;
-                _PyFrame_ClearTemporaries(frame, first);
-                slots = _PyFrame_Slots(frame);
-                if (lasti) {
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                    _PyFrame_WriteHome(frame, slots + first, PyValue_TagIndex(frame_lasti));
-                }
-                frame->phase_state = 0;
-                frame->phase_state = 0;
-                PyObject *exc = _PyErr_GetRaisedException(tstate);
-                _PyFrame_WriteHome(frame, slots + exc_slot, PyValue_FromObjectSteal(exc));
-                next_instr = _PyFrame_InstrAt(frame, handler);
-                frame->phase_state = 0;
-                frame->phase_state = 0;
-                int err = monitor_handled(tstate, frame, next_instr, exc);
-                if (err < 0) {
-                    JUMP_TO_LABEL(exception_unwind);
-                }
-                #ifdef Py_DEBUG
-                if (frame->lltrace >= 5) {
-                    frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    lltrace_resume_frame(frame);
-                }
-                #endif
-                slots = _PyFrame_Slots(frame);
-                int opcode;
-                DISPATCH();
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }}
 
         LABEL(exit_unwind)
         {
             _PyValueTemps *const value_temps = NULL;
             {
-                assert(_PyErr_Occurred(tstate));
-                DTRACE_FUNCTION_RETURN();
-                JUMP_TO_LABEL(exit_unwind_notrace);
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
             }}
 
         LABEL(exit_unwind_notrace)
         {
             _PyValueTemps *const value_temps = NULL;
             {
-                assert(_PyErr_Occurred(tstate));
-                _Py_LeaveRecursiveCallPy(tstate);
-                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-                _PyInterpreterFrame *dying = frame;
-                frame = tstate->current_frame = dying->previous;
-                frame->pending_redirect = 0;
                 frame->phase_state = 0;
+                PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
+            }}
+
+        LABEL(throw_error)
+        {
+            _PyValueTemps *const value_temps = NULL;
+            {
                 frame->phase_state = 0;
-                _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
-                frame->pending_redirect = 0;
-                if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-                    tstate->current_frame = frame->previous;
-                    assert(frame == &IR_ACTIVATION()->entry.frame);
-                    return PyValue_NULL;
-                }
-                next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);
-                JUMP_TO_LABEL(error);
+                PROCESS_ERROR_AT(THROW, 0, next_instr - 1);
             }}
 
         LABEL(start_frame)
@@ -25600,7 +25521,7 @@
                 frame->phase_state = 0;
                 int too_deep = _Py_EnterRecursivePy(tstate);
                 if (too_deep) {
-                    JUMP_TO_LABEL(exit_unwind_notrace);
+                    PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                 }
                 DTRACE_FUNCTION_ENTRY();
                 next_instr = frame->instr_ptr;
@@ -25610,7 +25531,8 @@
                 frame->phase_state = 0;
                 int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
                 if (lltrace < 0) {
-                    JUMP_TO_LABEL(exit_unwind);
+                    frame->phase_state = 0;
+                    PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
                 }
                 frame->lltrace = lltrace;
                 assert(!_PyErr_Occurred(tstate));

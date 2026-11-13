@@ -4049,7 +4049,7 @@ class IREmitter(Emitter):
         again; the path ends here"""
         assert inst is not None
         self.check_exit_inputs(tkn, storage)
-        if uses_call_transaction(inst):
+        if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         self.emit(tkn)
@@ -4057,7 +4057,7 @@ class IREmitter(Emitter):
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
-        if uses_call_transaction(inst):
+        if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         fmt = self.format_of(inst)
@@ -5041,6 +5041,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.call_normal_drained = False
+    emitter.call_kind = ""
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
@@ -5226,7 +5227,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
                     "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
-    if transaction and emitter.call_fallback_used:
+    if call_window and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
         emitter.call_completion()
     out.start_line()

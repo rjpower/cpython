@@ -3486,6 +3486,22 @@ class TestCallTransactionMarkers(unittest.TestCase):
         labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
         self.assertEqual(len(labels), len(set(labels)))
 
+    def test_exact_method_post_effect_guards_forward_prepared_roles(self):
+        for name in ("CALL_BOUND_METHOD_EXACT_ARGS",
+                     "CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS"):
+            with self.subTest(handler=name):
+                body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
+                promoted = body.index("call_state |= CALL_SELF_PRESENT | CALL_EFFECTS")
+                wrapper_close = body.index("PyValue_CLOSE", promoted)
+                suffix = body[wrapper_close:]
+                guards = suffix.split("JUMP_TO_PREDICTED(")[:-1]
+                self.assertGreaterEqual(len(guards), 4)
+                for guard in guards:
+                    self.assertIn(f"if (call_state & CALL_EFFECTS) {{ goto call_transaction_fallback_{name}; }}", guard)
+                fallback = body.index(f"call_transaction_fallback_{name}:")
+                self.assertIn("call_transaction_run_vector(", body[fallback:])
+                self.assertIn("| call_state", body[fallback:])
+
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of
         # their locals except the box area (register-ir-v2-a3.md 3.5): the

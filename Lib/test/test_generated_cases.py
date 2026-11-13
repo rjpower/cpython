@@ -3110,6 +3110,35 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
+    def test_created_copy_recipe_checks_actual_transport(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        inst = analysis.instructions["RETURN_GENERATOR"]
+        self.assertTrue(ir_generator.created_copy_contract(inst, formats[inst.name]))
+        body = inst.parts[0].body
+        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
+                          "frame->base[0] = PyValue_NULL;"):
+            changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
+            body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
+            try:
+                self.assertFalse(ir_generator.created_copy_contract(inst, formats[inst.name]))
+            finally:
+                body.body.pop(0)
+        for name in ("MAKE_CELL", "COPY_FREE_VARS"):
+            with self.subTest(handler=name):
+                local = analysis.instructions[name]
+                fmt = formats[name]
+                self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
+                                 "_PyIR_TRANSFER_PRESERVE")
+                changed = self.analyze("\ninst(OP, (--)) { *slots = PyValue_NULL; }\n")
+                local.parts[0].body.body.append(changed.instructions["OP"].parts[0].body.body[0])
+                try:
+                    self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
+                                     "_PyIR_TRANSFER_UNKNOWN")
+                finally:
+                    local.parts[0].body.body.pop()
+
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

@@ -288,6 +288,7 @@ enum {
     _PyIR_OWNER_ERROR_BRANCH,
     _PyIR_OWNER_NORMAL_EXIT,
     _PyIR_OWNER_ERROR_EXIT,
+    _PyIR_OWNER_CREATED_COPY,
 };
 
 typedef struct {
@@ -412,6 +413,7 @@ typedef struct {
 } _PyIRCodePlan;
 
 #define _PyIR_PLAN_ALL_RETURNS 1u
+#define _PyIR_PLAN_ALL_CREATED_EMPTY 2u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
 
 typedef enum _PyIRHomeAuthority {

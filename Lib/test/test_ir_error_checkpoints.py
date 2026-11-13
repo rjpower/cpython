@@ -10,6 +10,7 @@ import _testinternalcapi
 import _opcode
 import opcode
 
+from test.support.ir_semantics import position_table
 from test.test_ir_call_roles import routes
 from test.test_ir_completion import exception_entry
 from test.test_ir_transfer_admission import make_code
@@ -215,7 +216,13 @@ class ErrorCheckpointTests(unittest.TestCase):
             ("LOAD_FAST", 4, 1), ("DELETE_FAST", 1),
             ("UNARY_INVERT", 5, 4), ("GET_ANEXT", 6, 5),
             ("RETURN_VALUE", 6),
-        ], slots=5, locals=("payload", "value", "mutable")).replace(co_argcount=2)
+        ], slots=5, locals=("payload", "value", "mutable")).replace(
+            co_argcount=2,
+            # Each real word has the same valid line and no columns. The
+            # ancestor redirect must reach the active-operation guard.
+            co_linetable=position_table(b"\xe8\x00" * 7))
+        self.assertEqual({line for line, *_ in image.co_positions()},
+                         {image.co_firstlineno})
         monitor.use_tool_id(tool, "published-result-error")
         try:
             monitor.register_callback(tool, monitor.events.RAISE, raised)

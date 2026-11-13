@@ -489,15 +489,26 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
             (status << _PyIR_PHASE_STATUS_SHIFT));
         assert(status != _PyIR_SHADOW_MISMATCH);
     }
-    PyValue *ref = _PyFrame_GetLocalsArray(frame);
-    PyValue *end = ref + _PyFrame_NumSlots(frame);
-    /* all slots; _Py_VISIT_VALUE skips NULL, indices and inline values */
-    for (; ref < end; ref++) {
-        if (!PyValue_IsTaggedIndex(*ref)) {
-            _PyValue_RecheckHome(*ref);
-        }
-        _Py_VISIT_VALUE(*ref);
+    _PyIRHomeView view;
+    int selected = frame->phase_state == _PyIR_PHASE_CREATED &&
+        _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
+    uint32_t cursor = 0;
+    int begin = 0, limit = _PyFrame_NumSlots(frame);
+    if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
+        return 0;
     }
+    /* Other lifecycle states retain the initialized NULL-control scan. */
+    do {
+        PyValue *ref = _PyFrame_GetLocalsArray(frame) + begin;
+        PyValue *end = _PyFrame_GetLocalsArray(frame) + limit;
+        for (; ref < end; ref++) {
+            if (!PyValue_IsTaggedIndex(*ref)) {
+                _PyValue_RecheckHome(*ref);
+            }
+            _Py_VISIT_VALUE(*ref);
+        }
+    } while (selected &&
+             _PyFrame_NextHomeRange(&view, &cursor, &begin, &limit));
     return 0;
 }
 

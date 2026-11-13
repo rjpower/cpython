@@ -4115,6 +4115,8 @@ class IREmitter(Emitter):
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER" and distance == "oparg":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4126,6 +4128,19 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         return False
+
+    def normal_completion(self, inst, fmt):
+        inputs, _ = external_io(inst)
+        if (not fmt.window or len(inputs) != 2 or
+                any(item.is_array() for item in inputs) or
+                fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A" or
+                fmt.dst_offset != 2):
+            raise analysis_error("unsupported normal completion window", inst.where)
+        # This actual helper route drains receiver/cursor only on its taken
+        # completion edge. A resumed generator reaches the same helper on
+        # return; a yielded body result does not take this edge.
+        self.normal_completions.add(OwnershipEvent(
+            "_PyIR_OWNER_NORMAL_COMPLETION", src=2, dst=1))
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
@@ -4158,6 +4173,8 @@ class IREmitter(Emitter):
         gen, kind = self.macro_args(tkn, tkn_iter, 2)
         assert inst is not None
         fmt = self.format_of(inst)
+        if kind == "_PY_IR_FOR_ITER":
+            self.normal_completion(inst, fmt)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4480,7 +4497,6 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
     return (not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
-            and not through_items(inst, *external_io(inst))
             and not any(t.text in {"frame", "slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
                         for t in uop_token_list(inst)))
@@ -5056,6 +5072,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.normal_observer_edges = set()
+    emitter.normal_completions = set()
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
@@ -5230,8 +5247,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
         # this final flush. Stack alignment/merge has checked both branch arms
         # at their common point, so consumed inputs are empty on either edge.
-        # Other normal exits, through/outcome protocols and raw frame access
-        # need their own transport recipe.
+        # The unchanged through prefix retains its inputs. Other normal
+        # exits, outcome protocols and raw frame access need their own recipe.
         emitter.normal_inputs_cleared = normal_vacate_capability(inst, fmt)
         if fmt.store_dst:
             emitter.release_displaced()
@@ -5270,6 +5287,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         elif emitter.normal_inputs_cleared:
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
+    emitter.ownership_events.extend(sorted(emitter.normal_completions,
+                                          key=lambda event: (event.dst, event.src)))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
@@ -5568,6 +5587,15 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         for name in handler_instructions(analysis):
             grouped.setdefault(formats[name].group, []).append(name)
         for members in grouped.values():
+            common_completions = set.intersection(*(
+                {event for event in programs.get(name, ())
+                 if event.kind == "_PyIR_OWNER_NORMAL_COMPLETION"}
+                for name in members))
+            for name in members:
+                if name in programs:
+                    programs[name] = tuple(event for event in programs[name]
+                        if event.kind != "_PyIR_OWNER_NORMAL_COMPLETION" or
+                        event in common_completions)
             if all(programs.get(name) for name in members):
                 continue
             for name in members:

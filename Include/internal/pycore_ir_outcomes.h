@@ -446,6 +446,25 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
     return _PyIR_ReadsWindowHome(word, arg, home);
 }
 
+/* The successful final stack commit consumes inputs outside its unchanged
+ * window prefix. Through homes retain their logical values even when they
+ * are read; fresh outputs are handled independently by the caller. */
+static inline int
+_PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int through = _PyIR_Extent(fmt->through, arg);
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_BASE &&
+            home >= (int)fields[f] && home - (int)fields[f] < through)
+        {
+            return 0;
+        }
+    }
+    return _PyIR_ReadsHome(word, arg, home);
+}
+
 enum {
     _PyIR_BINDING_NO_READ,
     _PyIR_BINDING_CHECKED_NULL,

@@ -158,6 +158,31 @@ class CallRoleTests(unittest.TestCase):
             ("LOAD_CONST", 1), ("CALL_NO_SELF", 1, 1, 0, 0),
             ("RETURN_VALUE", 1)])
 
+    def test_through_prefix_is_retained_and_consumed_tail_becomes_empty(self):
+        # DICT_MERGE preserves callable/self/args/dict and consumes only the
+        # trailing source. That source may become another call's self hole.
+        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
+                 ("LOAD_CONST", 3), ("LOAD_CONST", 4),
+                 ("DICT_MERGE", 0, 1), ("POP_TOP", 0),
+                 ("POP_TOP", 2), ("CALL_NO_SELF", 3, 3, 0, 0),
+                 ("RETURN_VALUE", 3)]
+        self.assert_admitted(words, slots=6)
+        # The dictionary in the unchanged prefix is not an empty self hole.
+        bad = words.copy()
+        bad[6] = ("LOAD_CONST", 2)
+        bad[7] = ("CALL_NO_SELF", 2, 2, 0, 0)
+        bad[8] = ("RETURN_VALUE", 2)
+        self.assert_rejected(words, bad, "virtual call input", slots=6)
+
+        def invoke(fn, values, names):
+            return fn(*values, **names)
+        self.assertTrue(any(row[0] == "DICT_MERGE" for row in
+                            _testinternalcapi.get_ir(invoke.__code__)))
+        for admitted in routes(invoke.__code__):
+            function = types.FunctionType(admitted, globals())
+            self.assertEqual(function(lambda *a, **kw: (a, kw), (17,), {"x": 18}),
+                             ((17,), {"x": 18}))
+
     def test_full_extent_and_resumed_recipient_are_not_implicit_holes(self):
         for home in (1, 63, 64, 4094):
             self.assert_admitted([
@@ -200,6 +225,33 @@ class CallRoleTests(unittest.TestCase):
         for admitted in routes(generator.__code__):
             function = types.FunctionType(admitted, globals())
             self.assertEqual(list(function(lambda value: value + 1, (1, 2))), [2, 3])
+
+    def test_loop_completion_releases_cursor_only_on_the_exit_edge(self):
+        words = [("LOAD_CONST", 0), ("FOR_ITER", 2, 0, 0, 4),
+                 ("POP_TOP", 1), ("POP_TOP", 2),
+                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
+                 ("LOAD_CONST", 0), ("CALL_NO_SELF", 0, 0, 0, 0),
+                 ("RETURN_VALUE", 0)]
+        self.assert_admitted(words)
+        bad = words.copy()
+        bad[2] = ("IR_JUMP", 0, 0, 3)
+        self.assert_rejected(words, bad, "virtual call input")
+
+        def invoke(fn, values):
+            for value in values:
+                fn(value)
+            return fn(17)
+        rows = _testinternalcapi.get_ir(invoke.__code__)
+        self.assertTrue(any(row[0] == "FOR_ITER" for row in rows))
+        self.assertGreaterEqual(sum("NO_SELF" in row[0] for row in rows), 2)
+        for admitted in routes(invoke.__code__):
+            function = types.FunctionType(admitted, globals())
+            for values, expected in (((), [17]), ((1, 2), [1, 2, 17]),
+                                     ((item for item in (1, 2)), [1, 2, 17])):
+                seen = []
+                self.assertEqual(function(lambda value: seen.append(value) or value,
+                                          values), 17)
+                self.assertEqual(seen, expected)
 
     def test_specialization_deopt_trace_and_profile_preserve_roles(self):
         def invoke(fn, value):

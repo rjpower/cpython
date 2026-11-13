@@ -9,7 +9,7 @@ and [next decision](issues/activation53/next-steps.md).
 BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 Current evidence E=`BASE/pyjit-link-wave1/activation53`.
 
-## Round54: isolated implementation and measurement
+## Round54: measured experiments and bounded revisions
 
 Packet `pyjit/issues/frame-state54`; new evidence
 `BASE/pyjit-link-wave1/frame-state54`. One broad Astra review and independent
@@ -17,21 +17,32 @@ Sol inventories accepted five isolated experiments, not five predicted wins.
 The [resolution](issues/frame-state54/review-resolution.md) records corrections
 and the [plan](issues/frame-state54/plan.md) owns admission.
 
-| Branch suffix under pyjit/frame54- | Change | State |
+| Branch under pyjit/ | Current head | State |
 | --- | --- | --- |
-| recipient | Existing recipient word records empty versus replace | Matching release/debug builds and focused checks pass; confirmation pending |
-| feedback | Derive feedback from execution prefix | Matching release/debug builds and 578 focused tests per role pass; confirmation running |
-| globals | Derive namespaces from independently pinned function | Sentinel tracing fixed; 799 focused tests per role pass; initial screen mixed |
-| locals | Optional mapping on frame object | Correcting complete GC publication before builds |
-| clears | Proved same-home integer overwrite | Narrow debug publication fix awaiting regenerated build |
+| frame54-recipient |612fb4e9d17 | Focused both roles; hot6/all29 screen;22/29 wins but coroutine loss |
+| frame54-feedback |7ea40d5d67c | Focused both roles; hot6/all29 screen; modest mean gain with coroutine loss |
+| frame54-globals |c2cc6777e4d | Focused both roles; hot6 mixed/worse |
+| frame54-locals |b48fe2d3989 | Focused both roles; initial hot screen; exec6 +22.2%, class6 +4.2% |
+| frame54-clears |4fbd16a1462 | Focused both roles; screen; native successful-route counts retained |
+| frame54-clears-validated |e95328ba1d6 | Shared constructor/selection proof; focused453+2 per role; hot6/all29 mixed |
+| frame54-compact |82afe7aef2d | F+N+L header80 actual; focused946 per role; hot screen rejected |
+| frame54-recipient-default |fcc82220ddd | NONE + cold C-API fix; both-role813 focus, remote and48-point/subtype ownership probes pass; screen running |
 
 Sources are `BASE/worktrees/frame54-SUFFIX`, builds
-`BASE/frame54-SUFFIX-{release,debug}`. Root owns generation, builds, runtime
+`BASE/frame54-SUFFIX-{release,debug}`. [Tables](issues/frame-state54/benchmark-tables.md)
+and [qualification](issues/frame-state54/qualification.md) retain actual manifests,
+logs, sample counts and failed attempts. Root owns generation, builds, runtime
 checks and quiet timings. Do not overlap them. The initial recipient generator
-effect annotation and namespace debug-sentinel bugs were fixed; failed logs
-remain evidence. Current initial timings are not golden admission. A component
-win does not establish composition. Selected51 stays immutable until merged
-validation, direct benchmarks and cold review pass.
+effect annotation, namespace debug sentinel, mapping publication/first-input
+and overwrite debug-publication bugs were fixed; failed logs remain evidence.
+
+The corrected S2 removes four repeated geometry checks using one pure proof in
+common code validation and specialization; actual type guards remain. Explicit
+NONE prevents fresh-frame defaults from masquerading as a real discarded child
+in debugger recipes. R2 separately fixes public frame-to-generator association,
+first-send discard and complete subtype publication; no optional-mapping layout
+is absorbed. All prior candidates/controls remain unchanged and no round54
+performance admission follows these source improvements alone.
 
 ## Selected runtime and controls
 

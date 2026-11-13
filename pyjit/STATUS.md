@@ -1,12 +1,18 @@
 # Project status
 
 Golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains selected.
-Round54's [active plan](issues/frame-state54/plan.md) is implementing five
-contracts after one broad Astra review and independent frame-field/register
-audits. Recipient proofs, feedback derivation and namespace derivation build
-and pass focused release/debug checks. Optional locals storage and same-home
-commit are correcting GC publication and a debug publication invariant. Quiet
-component measurements are underway; no round54 candidate is admitted.
+Round54's [active plan](issues/frame-state54/plan.md) has built and focused-tested
+all five reviewed experiments. F and R complete all29 screens and six-pair hot
+confirmation; their all29 means are 0.993748 and 0.989479 of selected51, but
+coroutine regressions remain. The 80-byte F+N+L composition passes focused
+checks and fails its initial hot screen. Constructor-validated same-home S2
+passes focused checks and has all29 mean 0.992128, with mixed hot confirmation.
+The recipient-NONE revision now passes 813 focused tests and the remote
+recipient check per role; three constructor failure probes retain code/mapping
+owners across 48 injected failure points per subtype and role. Timing is next. No round54 candidate is
+admitted. [Tables](issues/frame-state54/benchmark-tables.md) and
+[qualification](issues/frame-state54/qualification.md) retain sample scopes and
+failures; these are component results, not combined golden performance.
 
 All three activation53 candidates are rejected after six-pair confirmation:
 direct final-home construction, shared completion and native-only construction.

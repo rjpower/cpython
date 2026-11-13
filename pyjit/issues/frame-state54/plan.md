@@ -3,9 +3,11 @@
 Status: all five isolated implementations build and pass focused release/debug
 qualification after independent peer and source/native review. Quiet component
 screens and confirmations are underway. All tested changes have costs as well
-as savings; none has performance admission. A bounded instruction-geometry
-follow-up is under peer review because the first same-home variant repeats
-four checks on every successful arithmetic execution. Selected golden51
+as savings; none has performance admission. The constructor-validated overwrite revision is qualified and measured. The
+80-byte F+N+L composition passed focused checks but failed its hot screen. A
+bounded recipient revision now starts frames with explicit NONE, distinct from
+a real discard; it also corrects public native generator construction. It passes focused release/debug, remote-recipient and injected constructor
+allocation checks; direct timing is underway. Selected golden51
 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains immutable.
 
 The user requests one broad Astra review with five concrete improvements,

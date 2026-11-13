@@ -1295,6 +1295,8 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
     return 0;
 }
 
+/* These helpers delimit ownership of a counted C-local workspace. They do
+ * not link a GC root; explicit transition roots have a separate interface. */
 static inline void
 _PyThreadState_PushCValue(PyThreadState *tstate, _PyCValue *ref)
 {
@@ -1320,7 +1322,7 @@ _PyThreadState_PopCValue(PyThreadState *tstate, _PyCValue *ref)
 static inline PyValue
 _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
 {
-    PyValue res = ref->ref;  // a move: the record is popped
+    PyValue res = ref->ref;  // transfer the local workspace's owner
     _PyCValue_CLEAR(ref);
     return res;
 }

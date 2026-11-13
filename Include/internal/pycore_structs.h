@@ -56,11 +56,9 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
-// Define this to get precise tracking of values.
-
-// A value that can be stored in a regular C local variable and be visible
-// to the GC in the free threading build.
-// Used in combination with _PyThreadState_PushCValue().
+// An owned C-local value workspace, initialized/retired with the CValue API.
+// Mortal values carry real counts in both builds. This is not a precise root
+// registration; native conservative scanning remains a separate policy.
 typedef struct _PyCValue {
     PyValue ref;
 } _PyCValue;

@@ -775,9 +775,17 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
     }
 
     if (fmt->effects & _PyIR_PUSHES_FRAME) {
-        /* A child activation may reuse scratch homes beyond this row's
-         * declared input and output window. */
-        return unknown;
+        /* Only an actual independent reservation preserves the parent's
+         * homes outside its consumed inputs and eventual recipient. */
+        if (fmt->owner_events != 1) {
+            return unknown;
+        }
+        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+        if (event->kind != _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
+            !(event->flags & _PyIR_NORMAL_DISJOINT_CHILD))
+        {
+            return unknown;
+        }
     }
 
     /* In every other format, a read outside the unchanged prefix or a

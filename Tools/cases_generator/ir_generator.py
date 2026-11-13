@@ -2956,6 +2956,8 @@ class IREmitter(Emitter):
         # only a handler whose contract has BOXES does (boxing_handlers)
         self.has_record = True
         self.ownership_events: list[OwnershipEvent] = []
+        self.disjoint_child_publication: Uop | None = None
+        self.disjoint_child_drained = False
 
     def ownership_event(self, kind, *, flags=0, dst=0, src=0, extent=0):
         self.ownership_events.append(OwnershipEvent(
@@ -2963,6 +2965,16 @@ class IREmitter(Emitter):
 
     def publish_phase(self, phase):
         self.emit(f"frame->phase_state = _PyIR_PHASE_PUBLISHED | {phase};\n")
+
+    def save_stack(self, tkn, tkn_iter, uop, storage, inst):
+        result = super().save_stack(tkn, tkn_iter, uop, storage, inst)
+        if uop is self.disjoint_child_publication:
+            stack = storage.stack
+            assert isinstance(stack, IRStack)
+            if any(stack.owner.get(p) == "in" for p in stack.layout.in_fields):
+                raise analysis_error("disjoint child publication retains an input home", tkn)
+            self.disjoint_child_drained = True
+        return result
 
     def emit_save(self, storage: Storage) -> None:
         # A frame switch or unsupported escape cannot inherit a publication
@@ -4767,13 +4779,195 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+# These events permit observer callbacks and dynamic named-local writes, but
+# not a scratch redirect. Normal completion still reaches the emitted final
+# vacate; an instrumentation error follows the existing error route instead.
+NORMAL_FRAME_OBSERVERS = {
+    "_Py_call_instrumentation_2args": {
+        "PY_MONITORING_EVENT_CALL", "PY_MONITORING_EVENT_C_RETURN"},
+    "_Py_call_instrumentation_exc2": {"PY_MONITORING_EVENT_C_RAISE"},
+}
+
+
+def normal_observer_frame_footprint(part: Uop) -> bool:
+    """Explain every frame use by an audited observer-call argument."""
+    source = canonical_body_tokens(part)
+    if not source or any(text.lstrip().startswith("#") for text in source):
+        return False
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
+    if any(item.name in reserved for item in
+           (*part.stack.inputs, *part.stack.outputs, *part.caches)):
+        return False
+    tokens = [t for t in part.body.tokens() if t.kind != "COMMENT"]
+    covered: set[int] = set()
+    for at, token in enumerate(tokens):
+        if token.text not in NORMAL_FRAME_OBSERVERS:
+            continue
+        if (at + 1 >= len(tokens) or tokens[at + 1].text != "("
+                or at > 0 and tokens[at - 1].text in {".", "->"}):
+            return False
+        args: list[list[int]] = [[]]
+        depth = 0
+        for end in range(at + 2, len(tokens)):
+            text = tokens[end].text
+            if text == ")" and depth == 0:
+                break
+            if text == "," and depth == 0:
+                args.append([])
+                continue
+            if text in {"(", "[", "{"}:
+                depth += 1
+            elif text in {")", "]", "}"}:
+                depth -= 1
+            args[-1].append(end)
+        else:
+            return False
+        prefix = [[tokens[i].text for i in arg] for arg in args[:4]]
+        if (len(args) != 6 or prefix[0] != ["tstate"]
+                or len(prefix[1]) != 1
+                or prefix[1][0] not in NORMAL_FRAME_OBSERVERS[token.text]
+                or prefix[2:] != [["frame"], ["this_instr"]]):
+            return False
+        covered.add(args[2][0])
+    return all(token.text != "frame" or at in covered
+               for at, token in enumerate(tokens))
+
+
+def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
+    """A scalar input moved to an independently reserved returning child."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (any(not isinstance(part, (Uop, Skip)) for part in inst.parts)
+            or len(parts) < 3 or fmt.window or fmt.n_inputs != 1
+            or store_mode(inst, external_io(inst)[1]) != STORE_RETURN
+            or fmt.field_of(ROLE_DST) is None):
+        return None
+    producer, recipient, publish = parts[-3:]
+    if ([(i.name, i.peek, i.size) for i in producer.stack.inputs] != [("owner", False, "")]
+            or [(i.name, i.peek, i.size) for i in producer.stack.outputs] != [("new_frame", False, "")]
+            or producer.properties.escapes or producer.properties.eval_breaker
+            or producer.properties.switches_frame):
+        return None
+    saved_recipient = """{
+        frame->return_slot = (uint16_t)IR_DST_SLOT;
+        frame->return_pc = next_instr;
+    }"""
+    publication = """{
+        assert(!IS_PEP523_HOOKED(tstate));
+        _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
+        DEAD(new_frame);
+        SAVE_STACK();
+        assert(temp->previous == frame || temp->previous->previous == frame);
+        CALL_STAT_INC(inlined_py_calls);
+        frame = tstate->current_frame = temp;
+        tstate->py_recursion_remaining--;
+        RELOAD_STACK();
+        LOAD_IP(0);
+        IR_SKIP_RESUME();
+        DTRACE_FUNCTION_ENTRY();
+        LLTRACE_RESUME_FRAME();
+    }"""
+    if (statement_shape(recipient.body) != statement_shape(
+            Parser(saved_recipient, "<child recipient>").block())
+            or statement_shape(publish.body) != statement_shape(
+                Parser(publication, "<child publication>").block())
+            or recipient.stack.inputs or recipient.stack.outputs
+            or [(i.name, i.peek, i.size) for i in publish.stack.inputs] != [("new_frame", False, "")]
+            or publish.stack.outputs):
+        return None
+    guard_bodies = ("""{
+        PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+        assert(type_version != 0);
+        EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+    }""", "{ DEOPT_IF(IS_PEP523_HOOKED(tstate)); }")
+    if any(not guard.is_guard() or
+           not any(statement_shape(guard.body) == statement_shape(
+                       Parser(body, "<child guard>").block())
+                   for body in guard_bodies)
+           for guard in parts[:-3]):
+        return None
+    body = producer.body.body
+    if not all(isinstance(stmt, SimpleStmt) for stmt in body):
+        return None
+    statements = [_statement_text(stmt) for stmt in body]
+    constructors = [at for at, text in enumerate(statements)
+                    if "_PyFrame_PushUnchecked" in text]
+    if len(constructors) != 1:
+        return None
+    at = constructors[0]
+    constructor = statements[at]
+    prefix = ["_PyInterpreterFrame", "*", "pushed_frame", "=",
+              "_PyFrame_PushUnchecked", "(", "tstate", ",",
+              "PyValue_DUP", "(", "PyValue_FromObjectBorrow", "("]
+    suffix = [")", ")", ",", "frame", ")", ";"]
+    if (len(constructor) != len(prefix) + 1 + len(suffix)
+            or constructor[:len(prefix)] != prefix
+            or constructor[-len(suffix):] != suffix):
+        return None
+    tail = statements[at + 1:]
+    move = [t.text for t in tokenize("pushed_frame->base[0] = TAKE(owner);")]
+    wrap = [t.text for t in tokenize("new_frame = PyValue_Wrap(pushed_frame);")]
+    if len(tail) not in (2, 3) or tail[0] != move or tail[-1] != wrap:
+        return None
+    if len(tail) == 3:
+        # An independent immutable name argument; never another parent home.
+        extra = tail[1]
+        begin = [t.text for t in tokenize(
+            "pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(")]
+        end = [")", ")", ";"]
+        if (len(extra) != len(begin) + 1 + len(end)
+                or extra[:len(begin)] != begin or extra[-len(end):] != end):
+            return None
+    before = statements[:at]
+    # Parameterize only the captured function value, not arbitrary C effects.
+    # Shared guard/publication contracts and these read-only setup statements
+    # exclude aliases that could write the parent's otherwise untouched homes.
+    type_assert = [t.text for t in tokenize("assert(Py_IS_TYPE(descriptor, &PyFunction_Type));")]
+    descriptors = [text[4] for text in before
+                   if len(text) == len(type_assert) and text[:4] == type_assert[:4]
+                   and text[5:] == type_assert[5:]]
+    if len(descriptors) != 1:
+        return None
+    descriptor = descriptors[0]
+    if constructor[len(prefix)] not in {descriptor, "f"}:
+        return None
+    required = [
+        f"assert(Py_IS_TYPE({descriptor}, &PyFunction_Type));",
+        f"PyFunctionObject *f = (PyFunctionObject *){descriptor};",
+        "EXIT_IF(f->func_version != func_version);",
+        "PyCodeObject *code = (PyCodeObject *)f->func_code;",
+        "EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));",
+    ]
+    optional = ["assert((oparg & 1) == 0);", "assert(func_version != 0);",
+                "assert(code->co_argcount == 2);", "STAT_INC(LOAD_ATTR, hit);",
+                "PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);"]
+    required_tokens = [[t.text for t in tokenize(text)] for text in required]
+    allowed = required_tokens + [[t.text for t in tokenize(text)] for text in optional]
+    if (any(text not in before for text in required_tokens)
+            or any(text not in allowed for text in before)):
+        return None
+    if len(tail) == 3 and tail[1][len(begin)] != "name":
+        return None
+    return publish
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
     return (not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
-            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+            and not any(item.name in reserved for part in parts for item in
+                        (*part.stack.inputs, *part.stack.outputs, *part.caches))
+            and not any(t.kind.startswith("CMACRO") and
+                        any(name in t.text for name in reserved)
+                        for t in uop_token_list(inst))
+            and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
-                        for t in uop_token_list(inst)))
+                        for t in uop_token_list(inst))
+            and all(not any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS
+                            for t in part.body.tokens())
+                    or normal_observer_frame_footprint(part)
+                    for part in inst.parts if isinstance(part, Uop)))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | None:
@@ -5348,6 +5542,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
+    emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
+    emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
     emitter.send_yielded_published = False
     emitter.unpack_local_drained = False
@@ -5532,7 +5728,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # at their common point, so consumed inputs are empty on either edge.
         # The unchanged through prefix retains its inputs. Other normal
         # exits, outcome protocols and raw frame access need their own recipe.
-        emitter.normal_inputs_cleared = normal_vacate_capability(inst, fmt)
+        emitter.normal_inputs_cleared = (normal_vacate_capability(inst, fmt)
+                                         or emitter.disjoint_child_drained)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
@@ -5578,7 +5775,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             result_offset = next(iter(offsets)) if len(offsets) == 1 else None
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS",
-                flags=int(result_offset is not None), src=result_offset or 0))
+                flags=(int(result_offset is not None) |
+                       (2 if emitter.disjoint_child_drained else 0)),
+                src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         completions = emitter.normal_completions
         if emitter.send_yielded_published:
@@ -5900,12 +6099,13 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
             moved_results = [programs[name] for name in members
                              if len(programs.get(name, ())) == 1
                              and programs[name][0].kind == "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"
-                             and programs[name][0].flags]
+                             and programs[name][0].flags & 1]
             if moved_results and not all(programs.get(name) == moved_results[0]
                                          for name in members):
                 for name in members:
                     if programs.get(name) in moved_results:
-                        programs[name] = (OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),)
+                        event = programs[name][0]
+                        programs[name] = (replace(event, flags=event.flags & ~1, src=0),)
             unpack_drain = (OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
             if not all(programs.get(name) == unpack_drain for name in members):
                 for name in members:
@@ -5923,9 +6123,9 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
             if all(programs.get(name) for name in members):
                 continue
             for name in members:
-                if programs.get(name) in (
-                        (OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),),
-                        (OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),)):
+                program = programs.get(name, ())
+                if len(program) == 1 and program[0].kind in (
+                        "_PyIR_OWNER_NORMAL_CLEAR_INPUTS", "_PyIR_OWNER_CALL_DRAIN"):
                     del programs[name]
     return result
 

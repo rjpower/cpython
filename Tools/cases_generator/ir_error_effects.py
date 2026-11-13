@@ -111,12 +111,39 @@ class _Origin:
 class SourceErrorEffects:
     error_sources: frozenset[int]
     unwind_sources: frozenset[int]
-    terminal_sources: frozenset[int]
+    terminal_sources: frozenset[int | tuple[int, str]]
     helpers: frozenset[str]
     homes: HomeEffect
     may_fail: bool
     callback: bool
     changes_origin: bool
+
+
+def checked_native_step_effects(parts: tuple[Uop, ...]) -> SourceErrorEffects | None:
+    """Collect route identities after the caller proves the complete adapter.
+
+    This is not a second source grammar: the caller must supply the parts
+    from its existing positive native-step body/IO contract. Entered heap
+    children are disjoint, and the step helper owns encoded window/result
+    transport; callbacks preserve absence elsewhere. Every listed identity
+    still needs an independent reached emitter receipt.
+    """
+    if not parts or len({id(part) for part in parts}) != len(parts):
+        return None
+    tokens = [token for part in parts for token in part.body.tokens()]
+    errors = frozenset(id(token) for token in tokens if token.text in {
+        "ERROR_IF", "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"})
+    terminals = {id(token) for token in tokens if token.text in {
+        "IR_COMPLETE_STEP", "IR_ENTER_GENERATOR", "EXIT_IF", "DEOPT_IF",
+        "DISPATCH_SAME_OPARG"}}
+    # A native object projection in a guard requires an implicit pointer
+    # guard, independently of its later source-level type check.
+    terminals.update((id(part), name) for part in parts
+                     if part.is_guard() and not part.properties.inline_ok
+                     for name in part.object_inputs if name not in part.asserted_objects)
+    return SourceErrorEffects(errors, frozenset(), frozenset(terminals), frozenset(),
+                              HomeEffect.PRESERVES_SCRATCH_ABSENCE,
+                              True, True, False)
 
 
 def _call(tokens: list[Token]) -> list[list[Token]] | None:

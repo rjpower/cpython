@@ -73,7 +73,9 @@ Invariants:
 
 import argparse
 import ir_numbers
-from ir_error_effects import HomeEffect, analyze_error_effects
+from ir_error_effects import (
+    HomeEffect, analyze_error_effects, checked_native_step_effects,
+)
 import re
 from dataclasses import dataclass, fields, replace
 
@@ -1325,24 +1327,25 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
-def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
-    """The yielded receiver/output transport, separate from completion A.
+def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
+    """The native-step source footprint shared by normal and abrupt edges.
 
     The raw frame-bearing adapter has a bounded helper contract: successful
     VirtualIteratorNext can write only its cursor pointer. The other calls
     receive value snapshots, not home pointers. Full AST/IO matching keeps
     this temporary source bridge from accepting additional opaque writes.
-    The actual final flush or child-return publication supplies the event.
+    Normal transport still requires its final flush or child publication;
+    exceptional transport independently requires every error/exit receipt.
     """
     if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
             or fmt.dst_offset != 2 or
             any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
-        return False
+        return None
     inputs, outputs = external_io(inst)
     if (len(inputs) != 3 or len(outputs) not in (2, 3) or
         any(item.is_array() for item in inputs) or
         any(entry.item.is_array() for entry in outputs)):
-        return False
+        return None
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
@@ -1454,7 +1457,7 @@ def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
             # Guard/specializer prefixes may inspect or redispatch unchanged
             # inputs, but cannot acquire a frame/home-pointer capability.
             if index != len(parts) - 1 and not part.properties.always_exits:
-                return False
+                return None
             for prefix in parts[:index]:
                 if not any(
                     tuple(item.name for item in prefix.stack.inputs) == expected_in and
@@ -1464,9 +1467,9 @@ def send_yielded_source_contract(inst: Instruction, fmt: IRFormat) -> bool:
                     statement_shape(prefix.body) == statement_shape(
                         Parser(expected_body, "<SEND guard footprint>").block())
                     for expected_in, expected_out, expected_body in prefixes):
-                    return False
-            return True
-    return False
+                    return None
+            return tuple(parts[:index + 1])
+    return None
 
 
 def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
@@ -2984,6 +2987,8 @@ class IREmitter(Emitter):
         self.error_uncovered = True
         self.error_finalized = False
         self.error_local_dst = False
+        self.send_source_parts = None
+        self.error_redispatch_origin = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -4384,11 +4389,21 @@ class IREmitter(Emitter):
 
     def deopt_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.error_redispatch_origin
+        self.error_redispatch_origin = id(tkn)
+        try:
+            return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.error_redispatch_origin = previous
 
     def exit_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        return super().exit_if(tkn, tkn_iter, uop, storage, inst)
+        previous = self.error_redispatch_origin
+        self.error_redispatch_origin = id(tkn)
+        try:
+            return super().exit_if(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.error_redispatch_origin = previous
 
     def check_error_outputs(self, tkn: Token, storage: Storage) -> None:
         """An error exit stores no output, so no output may hold a TAKE()
@@ -4538,13 +4553,24 @@ class IREmitter(Emitter):
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
-        # Exporting a no-error route needs a checked redispatch closure;
-        # a source-only summary cannot certify a synthesized guard target.
-        self.error_uncovered = True
+        fmt = self.format_of(inst)
+        target = self.formats.get(inst.family.name) if inst.family is not None else None
+        if (self.send_source_parts is not None and self.error_redispatch_origin is not None
+                and inst.family is not None and inst.family.name == fmt.group
+                and target is not None and target.group == fmt.group
+                and (target.roles, target.window, target.n_inputs,
+                     target.dst_offset, target.imm, target.fb, target.borrow_mask) ==
+                    (fmt.roles, fmt.window, fmt.n_inputs,
+                     fmt.dst_offset, fmt.imm, fmt.fb, fmt.borrow_mask)):
+            # The positive adapter proof excludes effects before these guards.
+            # check_exit_inputs has checked their actual Storage state. The
+            # emitted target is exactly this same canonical protocol family.
+            self.error_terminal_sources.add(self.error_redispatch_origin)
+        else:
+            self.error_uncovered = True
         if self.call_kind:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
-        fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
         if binary_op:
             # The handler of the operation that the entry records
@@ -4667,7 +4693,7 @@ class IREmitter(Emitter):
             self.normal_completion(inst, fmt, kind)
         else:
             self.normal_completion_uncovered = True
-        if kind == "_PY_IR_SEND" and send_yielded_source_contract(inst, fmt):
+        if kind == "_PY_IR_SEND" and self.send_source_parts is not None:
             self.send_yielded_published = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
@@ -4696,6 +4722,10 @@ class IREmitter(Emitter):
         self.emit("LLTRACE_RESUME_FRAME();\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
+        # The entered heap frame cannot overlap the parent's values. Its
+        # failed entry/return retires the child before error re-enters parent.
+        self.abrupt_operand_sources.add(id(tkn))
+        self.error_terminal_sources.add(id(tkn))
         return False
 
     def ir_instruction_size(
@@ -4743,7 +4773,13 @@ class IREmitter(Emitter):
                     self.check_exit_inputs(inst.where, storage,
                                            f"The guard of {uop.name}")
                 self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
-                self.emit_jump_to_predicted(inst)
+                previous = self.error_redispatch_origin
+                if self.send_source_parts is not None and uop in self.send_source_parts:
+                    self.error_redispatch_origin = (id(uop), var.name)
+                try:
+                    self.emit_jump_to_predicted(inst)
+                finally:
+                    self.error_redispatch_origin = previous
                 self.emit("}\n")
                 var.known_object = True
                 continue
@@ -5401,7 +5437,10 @@ def operand_error_sources(inst: Instruction) -> frozenset[int] | None:
     Native callbacks may vacate other scratch homes through a redirect. That
     preserves the NO_HOME fact imported by this absence-only capability.
     """
-    source = analyze_error_effects(inst, HANDLER_LOCALS)
+    return operand_errors_from_summary(analyze_error_effects(inst, HANDLER_LOCALS))
+
+
+def operand_errors_from_summary(source) -> frozenset[int] | None:
     if (source is None or source.homes == HomeEffect.UNKNOWN
             or not source.error_sources):
         return None
@@ -6078,18 +6117,22 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
-    emitter.abrupt_operand_expected = operand_error_sources(inst)
+    emitter.send_source_parts = send_source_contract(inst, fmt)
+    emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
+    if emitter.error_source is None and emitter.send_source_parts is not None:
+        emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
+    emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
     emitter.abrupt_operand_sources = set()
     emitter.abrupt_operand_origin = None
     emitter.abrupt_operand_bridge_expected = set()
     emitter.abrupt_operand_bridges = set()
     emitter.abrupt_operand_uncovered = False
-    emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
     emitter.error_unwind_sources = set()
     emitter.error_terminal_sources = set()
     emitter.error_uncovered = False
     emitter.error_finalized = False
     emitter.error_local_dst = False
+    emitter.error_redispatch_origin = None
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
@@ -6272,7 +6315,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
         emitter.normal_null_receipts.append(
             {edge: stack.null_stores.get(edge, False) for edge in stack.null_paths})
-        if send_yielded_source_contract(inst, fmt):
+        if emitter.send_source_parts is not None:
             emitter.send_yielded_published = True
         if call_window:
             emitter.call_normal_drained = True
@@ -6637,6 +6680,10 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
                 emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
                 not emitter.abrupt_operand_uncovered and
+                not emitter.error_uncovered and
+                emitter.error_source is not None and
+                emitter.error_source.unwind_sources == emitter.error_unwind_sources and
+                emitter.error_source.terminal_sources == emitter.error_terminal_sources and
                 not ((boxes or formats[name].store_dst) and emitter.error_source is not None
                      and emitter.error_source.changes_origin))
         if programs is not None:

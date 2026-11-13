@@ -2066,6 +2066,7 @@ typedef struct {
     semantic_phases *phases;
     int created_empty;
     int completion_destination_empty;
+    int normal_null_destination_empty;
     semantic_delegated delegated;
 } semantic_worklist;
 
@@ -2553,6 +2554,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
 {
     work->created_empty = 0;
     work->completion_destination_empty = 0;
+    work->normal_null_destination_empty = 0;
     if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
         return -1;
     }
@@ -2720,6 +2722,12 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+                int dst = (int)IR_A(word);
+                work->normal_null_destination_empty =
+                    (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH | _PyIR_NORMAL_NULL_TAKEN)) &&
+                    dst >= nl && dst != IR_NO_DST &&
+                    ((semantic_home_facts(work, state, dst, nl) & (1u << SEM_NO_HOME)) ||
+                     _PyIR_ConsumesNormalInput(word, arg, dst));
                 /* The actual same-frame successful flush/vacate, with all
                  * family members covered, proves only consumed inputs empty.
                  * It does not make an output readable or grant phase coverage. */
@@ -2817,6 +2825,20 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
     const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
     for (int at = 0; at < fmt->owner_events; at++) {
         const _PyIROwnershipEvent *event = program + at;
+        if (event->kind == _PyIR_OWNER_NORMAL_CLEAR_INPUTS &&
+            (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH << edge)))
+        {
+            int dst = (int)IR_A(word);
+            if (dst >= image->nl && dst != IR_NO_DST &&
+                work->normal_null_destination_empty)
+            {
+                /* A reached final store produced NULL on this edge. It may
+                 * replace a consumed input or an already absent home only. */
+                semantic_set_facts(work, state, dst, image->nl,
+                                   (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+            }
+            continue;
+        }
         if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION) {
             continue;
         }
@@ -3094,7 +3116,7 @@ normal_transfer_proof(const semantic_image *image,
     work.queue = PyMem_Malloc((size_t)nblocks * sizeof(*work.queue));
     size_t state_words = (size_t)SEM_FACTS * work.nwords;
     int has_abrupt = nexceptions != 0 || source_recovery;
-    size_t vectors = (size_t)nblocks + 1 + (plan != NULL) + has_abrupt;
+    size_t vectors = (size_t)nblocks + 2 + has_abrupt;
     if (vectors > SIZE_MAX / sizeof(uint64_t) / state_words) {
         PyMem_Free(work.blocks);
         PyMem_Free(work.queue);
@@ -3123,9 +3145,10 @@ normal_transfer_proof(const semantic_image *image,
     }
     work.blocks[block].end = n;
     uint64_t *state = work.facts + (size_t)nblocks * state_words;
-    work.branch = plan != NULL ? state + state_words : NULL;
-    uint64_t *abrupt = has_abrupt
-        ? state + (1 + (plan != NULL)) * state_words : NULL;
+    /* Reuse this vector for exceptional phase inspection and independent
+     * normal successors; those operations occur in separate proof passes. */
+    work.branch = state + state_words;
+    uint64_t *abrupt = has_abrupt ? state + 2 * state_words : NULL;
     _PyIRExceptionEntry *handlers = NULL;
     int *source_links = NULL;
     int result = 0;
@@ -3245,6 +3268,8 @@ normal_transfer_proof(const semantic_image *image,
             int last = end - 1;
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
+            memcpy(work.branch, state, state_words * sizeof(uint64_t));
+            semantic_delegated outgoing = work.delegated;
             if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) && !IS_SCOPE_EXIT_OPCODE(opcode)) {
                 semantic_normal_edge(image, &work, state, last, 0);
                 semantic_enqueue(&work, block_at[end], state, complete);
@@ -3254,6 +3279,11 @@ normal_transfer_proof(const semantic_image *image,
             {
                 int target = fmt->flags & _PyIR_FORWARD
                     ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+                /* Each edge starts at the common post-transfer state,
+                 * including the finite protocol tuple. Fallthrough facts
+                 * must never become facts of the taken successor. */
+                memcpy(state, work.branch, state_words * sizeof(uint64_t));
+                work.delegated = outgoing;
                 semantic_normal_edge(image, &work, state, last, 1);
                 semantic_enqueue(&work, block_at[target], state, complete);
             }

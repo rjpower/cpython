@@ -4123,6 +4123,8 @@ class IREmitter(Emitter):
         fmt = self.format_of(inst)
         if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND", "_PY_IR_SEND_THROW"} and distance == "oparg":
             self.normal_completion(inst, fmt, kind)
+        else:
+            self.normal_completion_uncovered = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -4185,6 +4187,8 @@ class IREmitter(Emitter):
         fmt = self.format_of(inst)
         if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}:
             self.normal_completion(inst, fmt, kind)
+        else:
+            self.normal_completion_uncovered = True
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
@@ -5084,6 +5088,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
+    emitter.normal_completion_uncovered = False
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
@@ -5304,8 +5309,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         elif emitter.normal_inputs_cleared:
             emitter.ownership_events.append(OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_CLEAR_INPUTS"))
-    emitter.ownership_events.extend(sorted(emitter.normal_completions,
-                                          key=lambda event: (event.dst, event.src)))
+    if not emitter.normal_completion_uncovered:
+        emitter.ownership_events.extend(sorted(emitter.normal_completions,
+                                              key=lambda event: (event.dst, event.src)))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],

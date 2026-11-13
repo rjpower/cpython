@@ -3388,6 +3388,21 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
+    /* A constructor binder has taken the evaluated scratch inputs. Its
+     * caller's named bindings remain mutable, but no redirect recipe may
+     * reconstruct those consumed inputs before publication or failure unwind. */
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)PyThreadState_GET())->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        if (roots->caller_staged && roots->frame != NULL &&
+            roots->frame->previous == self->f_frame)
+        {
+            PyErr_SetString(PyExc_ValueError,
+                            "jump requires a staged constructor owner recipe");
+            return -1;
+        }
+    }
     /* Event eligibility permits a request; the phase and owner proofs below
      * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;
@@ -3502,6 +3517,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
             return -1;
         }
+        frame_at_line->phase_state = 0;
         frame_at_line->return_pc = frame_at_line->instr_ptr;
         self->f_line_next = -1;
         self->f_lineno = 0;
@@ -3778,6 +3794,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
     }
     /* No callback is possible between the final proof and the commit. */
+    frame->phase_state = 0;
     int nretired = 0;
     for (int i = 0; i < plan.nrestores; i++) {
         RegisterLocalRestore action = plan.restores[i];

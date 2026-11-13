@@ -826,8 +826,9 @@ value_frame_is_current(PyThreadState *tstate, _PyInterpreterFrame *frame)
 static _PyValuePair
 value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          PyValue first, PyValue second,
-                         int first_slot, int second_slot)
+                         int first_slot, int second_slot, uint16_t phase)
 {
+    frame->phase_state = 0;
     _PyValuePair rest = {first, second};
     if (!value_frame_is_current(tstate, frame)) {
         value_revalidation_error("dictionary store changed the active frame");
@@ -855,6 +856,7 @@ value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyValue_CheckTemp(slots[second_slot]);
         rest.second = PyValue_NULL;
     }
+    frame->phase_state = phase;
     /* Callback-current locals remain intact. Their extra evaluated
      * snapshots are still C-owned; only temporary owners moved back. */
     return rest;
@@ -1846,8 +1848,9 @@ static PyValue
 value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       _PyInstr *current, _PyValueTemps *temps,
                       int result_slot, PyValue result,
-                      PyValue first, PyValue second)
+                      PyValue first, PyValue second, uint16_t phase)
 {
+    frame->phase_state = 0;
     if (!value_frame_is_current(tstate, frame)) {
         PyErr_SetString(PyExc_SystemError, "value reader changed the active frame");
         PyValue_XCLOSE(result);
@@ -1872,8 +1875,10 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyFrame_Slots(frame)[result_slot] = result;
         _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
     }
+    frame->phase_state = phase;
     value_operation_close3(first, second, PyValue_NULL);
     _PyValueTemps_Close(temps);
+    frame->phase_state = 0;
     if (value_operation_refresh(tstate, frame, current,
                                 local ? result : PyValue_NULL) < 0) {
         return PyValue_NULL;
@@ -1904,7 +1909,7 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (!method) {
         return value_reader_complete(tstate, frame, current, temps,
                                      result_slot, result, receiver,
-                                     PyValue_NULL);
+                                     PyValue_NULL, 0);
     }
     int slot = result_slot;
     if (!value_frame_is_current(tstate, frame) ||
@@ -1986,6 +1991,7 @@ finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         PyValue *locals, PyValue *window, int n, int first,
                         int canonical)
 {
+    frame->phase_state = 0;
     int err = 0;
     for (int i = first; i < n; i++) {
         PyValue *element = &window[n - 1 - i];
@@ -2228,7 +2234,7 @@ handoff_staged_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
              ((_PyThreadStateImpl *)tstate)->transition_roots;
          roots != NULL; roots = roots->previous)
     {
-        if (roots->kind == _Py_TRANSITION_KIND_STAGED &&
+        if (roots->kind == _Py_TRANSITION_KIND_STAGED && !roots->caller_staged &&
             roots->frame != NULL && roots->frame == frame)
         {
             assert(!roots->result_present && roots->prefix == NULL);
@@ -2326,6 +2332,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
+    entry->frame.phase_state = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif
@@ -3440,6 +3447,129 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
         unstage_binding_frame(tstate, &staged);
     }
     return frame;
+}
+
+/* The shim's stage remains through self retirement and the final M2 closes.
+ * After the arena authority transfers, the outer node only blocks redirects
+ * of its caller; PopFrame cannot call out before we discard that metadata. */
+static void
+clear_init_shim(PyThreadState *tstate, _PyTransitionRoots *staged)
+{
+    _PyInterpreterFrame *shim = staged->frame;
+    PyObject *error = _PyErr_GetRaisedException(tstate);
+    _PyFrame_ClearTemporaries(shim, 0);
+    staged->remaining = 0;
+    staged->header_mask = 0;
+    _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
+    /* Deallocators preserve the raised-exception state they entered with.
+     * Thus restoring the saved error below cannot close a new exception. */
+    assert(!_PyErr_Occurred(tstate));
+    staged->caller_staged = 0;
+    staged->frame = NULL;
+    _PyThreadState_PopTransitionRoots(tstate, staged);
+    _PyErr_SetRaisedException(tstate, error);
+}
+
+static Py_NO_INLINE _PyInterpreterFrame *
+create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
+                       PyValue *window, int nargs, int destination,
+                       _PyInstr *next)
+{
+    PyCodeObject *shim_code = (PyCodeObject *)&_Py_InitCleanup;
+    CALL_STAT_INC(frames_pushed);
+    _PyInterpreterFrame *shim = _PyThreadState_PushFrame(
+        tstate, shim_code->co_framesize);
+    if (shim == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyFrame_InitializeTrampoline(shim, shim_code, 1, caller);
+    shim->base[0] = PyValue_DUP(window[1]);
+    _PyTransitionRoots shim_roots = {
+        .frame = shim,
+        .remaining = _PyFrame_NumSlots(shim),
+        .header_mask = _Py_TRANSITION_CODE,
+        .kind = _Py_TRANSITION_KIND_STAGED,
+        .caller_staged = 1,
+    };
+    _PyThreadState_PushTransitionRoots(tstate, &shim_roots);
+
+    PyValue small[8];
+    int argcount = nargs + 1;
+    PyValue *arguments = small;
+    if (argcount > (int)Py_ARRAY_LENGTH(small)) {
+        arguments = PyMem_Malloc(sizeof(PyValue) * argcount);
+        if (arguments == NULL) {
+            PyErr_NoMemory();
+            clear_init_shim(tstate, &shim_roots);
+            /* No input moved: the caller's error unwind still owns them. */
+            return NULL;
+        }
+    }
+    PyValue function = window[0];
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
+    window[0] = PyValue_NULL;
+    for (int i = 0; i < argcount; i++) {
+        arguments[i] = window[i + 1];
+        window[i + 1] = PyValue_NULL;
+    }
+    _PyTransitionRoots child_roots;
+    _PyInterpreterFrame *child = eval_frame_push_and_init_code(
+        tstate, function, NULL, arguments, argcount, NULL, shim, code,
+        &child_roots);
+    /* The binder consumed every argument on both outcomes. */
+    if (arguments != small) {
+        PyMem_Free(arguments);
+    }
+    Py_DECREF(code);
+    if (child == NULL) {
+        clear_init_shim(tstate, &shim_roots);
+        return NULL;
+    }
+    caller->return_slot = (uint16_t)destination;
+    caller->return_pc = next;
+    tstate->py_recursion_remaining--;
+    unstage_binding_frame(tstate, &child_roots);
+    shim_roots.remaining = 0;
+    shim_roots.header_mask = 0;
+    shim_roots.caller_staged = 0;
+    shim_roots.frame = NULL;
+    _PyThreadState_PopTransitionRoots(tstate, &shim_roots);
+    return child;
+}
+
+/* Reuse the ordinary typed initializer and exact positional mover. All
+ * callback-capable binding stays in the outlined continuation above. */
+Py_NO_INLINE _PyInterpreterFrame *
+_PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
+                        PyValue *window, int nargs, int destination,
+                        _PyInstr *next)
+{
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(window[0]);
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    assert(func->vectorcall == _PyFunction_Vectorcall);
+    if (!(code->co_flags & CO_OPTIMIZED) ||
+        (code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) ||
+        code->co_kwonlyargcount || code->co_argcount != nargs + 1 ||
+        code->_co_exec == NULL ||
+        !_PyThreadState_HasStackSpace(tstate,
+            code->co_framesize + _Py_InitCleanup.co_framesize))
+    {
+        return create_init_frame_slow(
+            tstate, caller, window, nargs, destination, next);
+    }
+    _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
+        tstate, (PyCodeObject *)&_Py_InitCleanup, 1, caller);
+    shim->base[0] = PyValue_DUP(window[1]);
+    PyValue function = window[0];
+    window[0] = PyValue_NULL;
+    _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, shim);
+    call_transfer_exact_args(child->base, window, nargs);
+    caller->return_slot = (uint16_t)destination;
+    caller->return_pc = next;
+    tstate->py_recursion_remaining--;
+    return child;
 }
 
 /* The caller owns its whole window until the final non-reentrant commit. */

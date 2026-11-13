@@ -500,7 +500,8 @@ def variable_used(node: parser.CodeDef, name: str) -> bool:
 def oparg_used(node: parser.CodeDef) -> bool:
     """Determine whether `oparg` is used in a node."""
     return any(
-        token.kind == "IDENTIFIER" and token.text == "oparg" for token in node.tokens
+        token.kind == "IDENTIFIER" and token.text in ("oparg", "IR_BINARY_READER")
+        for token in node.tokens
     )
 
 
@@ -523,6 +524,7 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 CALL_INVOKE_MARKERS = frozenset(("IR_INVOKE_CALL", "IR_INVOKE_GUARDED_PYTHON_CALL"))
 
 IR_MARKER_EFFECTS = {
+    "IR_BINARY_READER": frozenset(("escapes", "error", "sync", "pc")),
     "IR_OBSERVE_COMMITTED_BRANCH": frozenset(("escapes", "error", "sync", "pc")),
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),

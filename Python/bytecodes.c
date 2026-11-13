@@ -4491,45 +4491,34 @@ dummy_func(
 
             PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
             PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
+            EXIT_IF(init_func->vectorcall != _PyFunction_Vectorcall);
             PyCodeObject *code = (PyCodeObject *)init_func->func_code;
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize));
+            PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
             STAT_INC(CALL, hit);
             PyObject *self_o = PyType_GenericAlloc(tp, 0);
             if (self_o == NULL) {
+                PyValue_CLOSE(init_owner);
                 ERROR_NO_POP();
             }
             self_or_null = PyValue_FromObjectSteal(self_o);
             PyValue temp = callable;
-            callable = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
+            callable = init_owner;
             PyValue_CLOSE(temp);
         }
 
         op(_CREATE_INIT_FRAME, (init, self, args[oparg] -- init_frame)) {
-            /* The shim gets the result of __init__ in slot 1 */
-            _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
-                tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
-            /* Push self onto stack of shim */
-            shim->base[0] = PyValue_DUP(self);
-            _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
-                tstate, init, NULL, args-1, oparg+1, NULL, shim);
+            _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
+                tstate, frame, args-2, oparg, IR_DST_SLOT, next_instr);
+            if (temp == NULL) {
+                /* Preparation can leave the original window intact. Unwind
+                 * its actual homes before DEAD emits any successful clear. */
+                ERROR_NO_POP();
+            }
             DEAD(init);
             DEAD(self);
             DEAD(args);
             SYNC_SP();
-            if (temp == NULL) {
-                // self, a temporary of the shim
-                _PyFrame_ClearTemporaries(shim, 0);
-                _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
-                ERROR_NO_POP();
-            }
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
-            frame->return_pc = next_instr;
-            /* Account for pushing the extra frame.
-             * We don't check recursion depth here,
-             * as it will be checked after start_frame */
-            tstate->py_recursion_remaining--;
             init_frame = PyValue_Wrap(temp);
         }
 
@@ -5350,21 +5339,7 @@ dummy_func(
         }
 
         inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
-            PyValue held_left = TAKE(lhs);
-            PyValue held_right = TAKE(rhs);
-            INPUTS_DEAD();
-            SYNC_SP();
-            PyValue pending = oparg == NB_SUBSCR
-                ? value_subscript(held_left, held_right)
-                : _PyValue_BinaryOps[oparg](PyValue_Borrow(held_left),
-                                            PyValue_Borrow(held_right));
-            if (PyValue_IsNull(pending)) {
-                IR_RESTORE_VALUE_INPUTS(held_left, held_right);
-                value_operation_close3(held_right, held_left, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
-            }
-            IR_COMPLETE_VALUE_READER(pending, held_right, held_left);
-            res = pending;
+            IR_BINARY_READER(lhs, rhs, res);
         }
 
         macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;

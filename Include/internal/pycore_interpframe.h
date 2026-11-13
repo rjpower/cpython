@@ -167,6 +167,7 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 static inline void
 _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
+    f->phase_state = 0;
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
@@ -185,6 +186,7 @@ void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
+    f->phase_state = 0;
     int redirected = f->pending_redirect;
     if (redirected) {
         _PyFrame_CompleteRedirect(f);
@@ -212,6 +214,7 @@ int _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame);
 static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
+    f->phase_state = 0;
     for (int i = _PyFrame_NumSlots(f); i-- > first;) {
         PyValue ref = f->base[i];  // a move: cleared below
         if (!PyValue_IsNull(ref)) {
@@ -259,6 +262,10 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->return_pc = src->return_pc;
     dest->pending_kwargs = src->pending_kwargs;
     dest->pending_redirect = src->pending_redirect;
+    /* Copy/takeover has a different lifecycle until a supported producer
+     * publishes its exact site/phase. */
+    dest->phase_state = 0;
+    src->phase_state = 0;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;
 #ifdef Py_DEBUG
@@ -308,6 +315,7 @@ _PyFrame_Initialize(
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->phase_state = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
@@ -648,21 +656,15 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
-/* Pushes a trampoline frame without checking for space.
- * Must be guarded by _PyThreadState_HasStackSpace() */
-static inline _PyInterpreterFrame *
-_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int return_slot, _PyInterpreterFrame * previous)
+static inline void
+_PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
+                             int return_slot, _PyInterpreterFrame *previous)
 {
-    CALL_STAT_INC(frames_pushed);
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
     frame->f_funcobj = NULL;
     frame->f_executable = (PyCodeObject *)Py_NewRef(code);
-#ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;
-#endif
     frame->f_locals = NULL;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);
@@ -671,11 +673,24 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif
-    assert(return_slot < nslots);
+    assert(return_slot < _PyFrame_NumSlotsForCodeObject(code));
     frame->return_slot = (uint16_t)return_slot;
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->phase_state = 0;
+}
+
+/* Pushes a trampoline frame without checking for space.
+ * Must be guarded by _PyThreadState_HasStackSpace() */
+static inline _PyInterpreterFrame *
+_PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code,
+                               int return_slot, _PyInterpreterFrame *previous)
+{
+    CALL_STAT_INC(frames_pushed);
+    _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(
+        tstate, _PyFrame_NumSlotsForCodeObject(code));
+    _PyFrame_InitializeTrampoline(frame, code, return_slot, previous);
     return frame;
 }
 

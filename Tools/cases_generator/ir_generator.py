@@ -385,6 +385,7 @@ RELEASES = {
     "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
     "IR_TRY_DICT_FIRST_PROBE",
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
+    "IR_BINARY_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
     "_PyEval_FrameClearAndPopWithResult", "_PyErr_Clear",
 }
@@ -606,6 +607,8 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # use of a view (IREmitter.check_inplace_input()).  The C compiler rejects
 # a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
+    # The structured provider TAKEs evaluated snapshots before any callback.
+    "IR_BINARY_READER",
     "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
     "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
@@ -2030,6 +2033,15 @@ class SlotLayout:
         return SlotLayout(False, PointerOffset.zero(), {}, frozenset())
 
 
+@dataclass(frozen=True)
+class OwnershipEvent:
+    kind: str
+    flags: int = 0
+    dst: int = 0
+    src: int | str = 0
+    extent: int = 0
+
+
 def may_be_positive(diff: PointerOffset) -> bool:
     "Whether diff can be above zero; symbolic sizes are never negative"
     d = diff.as_int()
@@ -2595,6 +2607,7 @@ class IREmitter(Emitter):
         self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
+        self._replacers["IR_BINARY_READER"] = self.binary_reader
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
@@ -2642,6 +2655,104 @@ class IREmitter(Emitter):
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
         self.has_record = True
+        self.ownership_events: list[OwnershipEvent] = []
+
+    def ownership_event(self, kind, *, flags=0, dst=0, src=0, extent=0):
+        self.ownership_events.append(OwnershipEvent(
+            "_PyIR_OWNER_" + kind, flags, dst, src, extent))
+
+    def publish_phase(self, phase):
+        self.emit(f"frame->phase_state = _PyIR_PHASE_PUBLISHED | {phase};\n")
+
+    def emit_save(self, storage: Storage) -> None:
+        # A frame switch or unsupported escape cannot inherit a publication
+        # made at an earlier callback boundary, even if its PC still matches.
+        self.out.start_line()
+        self.emit("frame->phase_state = 0;\n")
+        super().emit_save(storage)
+
+    def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        left, right, result = self.macro_args(tkn, tkn_iter, 3)
+        if (not binary_reader_contract(inst, self.format_of(inst))
+                or [item.name for item in uop.stack.inputs] != [left, right]
+                or [item.name for item in uop.stack.outputs] != [result]):
+            raise analysis_error("IR_BINARY_READER needs its checked binary IO contract", tkn)
+        # Emit the owner transfer and its semantic event together. The native
+        # owners remain C locals under the selected native-root policy.
+        for index, (name, native) in enumerate((
+                (left, "ir_binary_left"), (right, "ir_binary_right"))):
+            self.ownership_event("READ", src=index)
+            token = replace(tkn, text=name)
+            field = self.view_field(token, storage)
+            value = name
+            if field is not None:
+                self.spend_owner(field, tkn, storage)
+                self.ensure_consumed(field, storage)
+                value = f"IR_TAKE({name}, {owner_name(field)})"
+                storage.stack.taken(storage.stack.field_position(field))
+            self.emit(f"PyValue {native} = {value};\n")
+            self.value_kill(token, storage, False)
+            self.ownership_event("TAKE", dst=index, src=index)
+        storage.clear_inputs("before binary provider")
+        storage.flush(self.out)
+        self.publish_phase("_PyIR_PHASE_BINARY_PROVIDER")
+        self.ownership_event("PHASE", src=5)
+        self.emit("PyValue ir_binary_result = oparg == NB_SUBSCR\n")
+        self.emit("    ? value_subscript(ir_binary_left, ir_binary_right)\n")
+        self.emit("    : _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
+        self.emit("PyValue_Borrow(ir_binary_right));\n")
+        self.emit("int ir_binary_phase_valid = frame->instr_ptr == this_instr &&\n")
+        self.emit("    (frame->phase_state & ~_PyIR_PHASE_STATUS_MASK) ==\n")
+        self.emit("    (_PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_PROVIDER);\n")
+        # The error branch has its own snapshot; it cannot leak into normal
+        # successor facts. Restore publishes only after its revalidation.
+        error_branch = len(self.ownership_events)
+        self.ownership_event("ERROR_BRANCH")
+        self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
+        self.emit("frame->phase_state = 0;\n")
+        self.emit("_PyValuePair ir_binary_rest = value_operation_restore2(tstate, frame, "
+                  f"ir_binary_left, ir_binary_right, {self.input_slot(inst, 0)}, "
+                  f"{self.input_slot(inst, 1)}, "
+                  "ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | "
+                  "_PyIR_PHASE_BINARY_ERROR_RESTORE : 0);\n")
+        self.emit("value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);\n")
+        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
+        self.emit("frame->phase_state = 0;\n")
+        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("}\n")
+        self.emit("frame->phase_state = 0;\n")
+        self.emit(f"ir_binary_result = value_reader_complete(tstate, frame, this_instr, "
+                  f"{self.temps}, {FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]}, "
+                  "ir_binary_result, ir_binary_right, ir_binary_left, "
+                  "ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | "
+                  "_PyIR_PHASE_BINARY_RETIRE : 0);\n")
+        self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
+        self.emit("frame->phase_state = 0;\n")
+        self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("}\n")
+        self.reader_reload()
+        self.emit(f"{result} = ir_binary_result;\n")
+        self.ownership_event("FRESH")
+        self.ownership_event("PHASE", src=6)
+        self.ownership_event("NORMAL_EXIT")
+        self.ownership_events[error_branch] = replace(
+            self.ownership_events[error_branch], dst=len(self.ownership_events))
+        self.ownership_event("RESTORE", src=0)
+        self.ownership_event("RESTORE", src=1)
+        self.ownership_event("PHASE", src=7)
+        self.ownership_event("ERROR_EXIT")
+        for output in storage.outputs:
+            if output.name == result:
+                output.in_local = True
+                output.memory_offset = None
+                output.ir_inplace = None
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        stack.bind(result, None)
+        stack.published_temporary_result = True
+        stack.code_ran()
+        return True
 
     @property
     def temps(self) -> str:
@@ -2802,7 +2913,7 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit(f"_PyValuePair ir_rest = value_operation_restore2(tstate, frame, "
                   f"{first}, {second}, {self.input_slot(inst, 0)}, "
-                  f"{self.input_slot(inst, 1)});\n")
+                  f"{self.input_slot(inst, 1)}, 0);\n")
         self.emit(f"{first} = ir_rest.first;\n")
         self.emit(f"{second} = ir_rest.second;\n")
         self.emit("}\n")
@@ -2817,11 +2928,13 @@ class IREmitter(Emitter):
         """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
         displaced, with the input boxes, then revalidate: the release can
         run __del__ or a weakref callback, which can run any Python."""
-        self.emit("if (!PyValue_IsNull(ir_displaced) &&\n")
-        self.emit("    finish_displaced_local(tstate, frame, next_instr, "
+        self.emit("if (!PyValue_IsNull(ir_displaced)) {\n")
+        self.emit("frame->phase_state = 0;\n")
+        self.emit("if (finish_displaced_local(tstate, frame, next_instr, "
                   f"{self.temps}, ir_displaced) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
+        self.emit("}\n")
         self.emit("}\n")
 
     def defer_observer_input(self, tkn, tkn_iter, uop, storage, inst):
@@ -3039,7 +3152,7 @@ class IREmitter(Emitter):
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
         self.emit(f"{result} = value_reader_complete(tstate, frame, this_instr, "
-                  f"{self.temps}, {dst}, {result}, {first}, {second});\n")
+                  f"{self.temps}, {dst}, {result}, {first}, {second}, 0);\n")
         self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
@@ -3569,6 +3682,16 @@ class IREmitter(Emitter):
         uops = [part for part in inst.parts if isinstance(part, Uop)] if inst else []
         self.stores_outputs = bool(uops) and uops[-1] is uop
         escape = uop.properties.escaping_calls.get(stmt)
+        phase_barrier = transaction_marker or any(t.text in {
+            "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
+            "IR_RETIRE_PUBLISHED_PAIR", "IR_COMPLETE_ATTR_READER",
+            "IR_COMPLETE_VALUE_READER", "IR_FINISH_VALUE_OPERATION",
+            "IR_RESTORE_VALUE_INPUTS", "IR_ABORT_VALUE_READER",
+            "INSTRUMENTED_JUMP",
+        } for t in stmt.contents)
+        if escape is not None or phase_barrier:
+            self.out.start_line()
+            self.emit("frame->phase_state = 0;\n")
         if escape is not None and self.pending_owner is not None:
             raise analysis_error(
                 f"code can run between OWNER() and IR_RETIRE_PUBLISHED, so "
@@ -3660,6 +3783,7 @@ class IREmitter(Emitter):
         """Clear the slots that the stack gave up, which the stack machine
         left above its stack pointer, and leave the rest to
         exception_unwind."""
+        self.emit("frame->phase_state = 0;\n")
         stack = storage.stack.copy()
         assert isinstance(stack, IRStack)
         stack.error_exit = True
@@ -3733,6 +3857,7 @@ class IREmitter(Emitter):
         "The inputs stay in their slots"
         self.check_owner_exit(tkn)
         self.check_error_outputs(tkn, storage)
+        self.emit("frame->phase_state = 0;\n")
         self.out.start_line()
         return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
 
@@ -4008,6 +4133,7 @@ class IREmitter(Emitter):
             box = f"ir_obj_{var.name}"
             self.boxes.add(box)
             self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
+            self.emit("frame->phase_state = 0;\n")
             self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
             self.emit(f"if ({box} == NULL) {{\n")
             # Every input is still in its slot: exception_unwind has them
@@ -4811,6 +4937,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  roles: dict[str, set[str]]) -> None:
     "One pass of generate_handler, which records the roles it finds"
     emitter.pending_owner = None
+    emitter.ownership_events = []
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
@@ -4995,6 +5122,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         raise SyntaxError(f"{name}: {len(stack.dst_stores)} dst stores "
                           f"({'; '.join(stack.dst_stores)}), but ir_displaced "
                           "holds one displaced local")
+    if not emitter.ownership_events:
+        kind = normal_transfer_kind(inst, fmt)
+        if kind != "_PyIR_TRANSFER_UNKNOWN":
+            # Audited leaf source contracts remain guards while their actual
+            # emitter transport is ported. There is one consumer interface;
+            # an uncovered body cannot acquire a recipe from its name.
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_LEAF", src=kind))
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
@@ -5255,12 +5390,17 @@ def boxes_into_record(code: str) -> bool:
     return False
 
 
-def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str]:
+def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
+                    programs: dict[str, tuple[OwnershipEvent, ...]] | None = None
+                    ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
     result = set()
     for name, inst in sorted(handler_instructions(analysis).items()):
         if formats[name].transparent:
+            kind = normal_transfer_kind(inst, formats[name])
+            if programs is not None and kind != "_PyIR_TRANSFER_UNKNOWN":
+                programs[name] = (OwnershipEvent("_PyIR_OWNER_LEAF", src=kind),)
             continue
         buffer = io.StringIO()
         out = CWriter(buffer, 0, False)
@@ -5268,6 +5408,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
         emitter.handler_format = formats[name]
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
+        if programs is not None:
+            programs[name] = tuple(emitter.ownership_events)
         if boxes_into_record(buffer.getvalue()):
             if any(isinstance(p, Uop) and any(
                     t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
@@ -5290,6 +5432,62 @@ class HandlerContract:
     output_kind: str
     observer_outcome: tuple[str, str]
     transfer_kind: str
+    ownership_events: tuple[OwnershipEvent, ...]
+
+
+def statement_shape(node):
+    """A source contract retaining preprocessor arms and their delimiters."""
+    if isinstance(node, Token):
+        return node.kind, node.text
+    if isinstance(node, list):
+        return tuple(statement_shape(item) for item in node
+                     if not isinstance(item, Token) or item.kind != "COMMENT")
+    if isinstance(node, Stmt):
+        return type(node), tuple(statement_shape(getattr(node, field.name))
+                                 for field in fields(node))
+    assert node is None
+    return None
+
+
+def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """The structured transaction owns its body, not arbitrary caller C."""
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return False
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    inputs, outputs = external_io(inst)
+    if (fmt.window or len(inputs) != 2 or len(outputs) != 1
+            or any(item.is_array() for item in inputs)
+            or outputs[0].item.is_array() or fmt.field_of(ROLE_DST) is None
+            or not parts):
+        return False
+    producer = parts[-1]
+    expected = ("{ IR_BINARY_READER(" + ", ".join(
+        [item.name for item in producer.stack.inputs]
+        + [item.name for item in producer.stack.outputs]) + "); }")
+    if statement_shape(producer.body) != statement_shape(
+            Parser(expected, "<binary provider contract>").block()):
+        return False
+    if len(parts) == 1:
+        return True
+    # This audited specialization leaf exits by redispatch after its call;
+    # there is no opaque callback followed by continuing borrowed inputs.
+    specialize = """{
+        #if ENABLE_SPECIALIZATION
+        _PyFbHeader *feedback = FB_COUNTER();
+        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            next_instr = this_instr;
+            _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
+            DISPATCH_SAME_OPARG();
+        }
+        OPCODE_DEFERRED_INC(BINARY_OP);
+        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        #endif  /* ENABLE_SPECIALIZATION */
+        assert(NB_ADD <= oparg);
+        assert(oparg <= NB_OPARG_LAST);
+    }"""
+    return (len(parts) == 2
+            and statement_shape(parts[0].body) == statement_shape(
+                Parser(specialize, "<binary specialization contract>").block()))
 
 
 def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
@@ -5346,23 +5544,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                 ERROR_IF(err != 0);
             }
         }"""
-        def body_shape(node):
-            # Stmt.tokens() flattens preprocessor branches without their
-            # #else/#endif delimiters. Keep that structure in this contract.
-            if isinstance(node, Token):
-                return node.kind, node.text
-            if isinstance(node, list):
-                return tuple(body_shape(item) for item in node
-                             if not isinstance(item, Token) or item.kind != "COMMENT")
-            if isinstance(node, Stmt):
-                return type(node), tuple(body_shape(getattr(node, field.name))
-                                         for field in fields(node))
-            assert node is None
-            return None
-
         if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or any(body_shape(part.body)
-                       != body_shape(Parser(body, "<RESUME contract>").block())
+                or any(statement_shape(part.body)
+                       != statement_shape(Parser(body, "<RESUME contract>").block())
                        for part, body in zip(parts, (instrument, periodic)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
@@ -5980,7 +6164,8 @@ def handler_contracts(analysis: Analysis,
                       formats: dict[str, IRFormat]) -> dict[str, HandlerContract]:
     "The handler's own columns of the contract, by handler name"
     ids = handler_ids(analysis)
-    boxing = boxing_handlers(analysis, formats)
+    programs = {}
+    boxing = boxing_handlers(analysis, formats, programs)
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -6000,6 +6185,7 @@ def handler_contracts(analysis: Analysis,
             output_kind=handler_output_kind(inst, fmt),
             observer_outcome=observer_outcomes(inst, fmt),
             transfer_kind=normal_transfer_kind(inst, fmt),
+            ownership_events=programs.get(name, ()),
         )
     return result
 
@@ -6024,6 +6210,8 @@ HANDLER_LOCALS = {
     "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",
+    "ir_binary_left", "ir_binary_right", "ir_binary_result",
+    "ir_binary_phase_valid", "ir_binary_rest",
 }
 HANDLER_POINTERS = {"slots", "window", "fb", "value_temps", "frame", "tstate",
                     "next_instr", "this_instr"}

@@ -1,6 +1,6 @@
 # Register execution and call ownership, model55
 
-Status: reviewed target architecture; independent post-review accepts the design contract. No runtime implementation or performance claim. See the [review resolution](../../issues/call-model55/review-resolution.md) and [migration plan](../../issues/call-model55/plan.md).
+Status: reviewed target architecture; independent post-review accepts the design contract. Implementation is active; this target is not the selected runtime and has no complete-model performance claim. See the [review resolution](../../issues/call-model55/review-resolution.md) and [migration plan](../../issues/call-model55/plan.md).
 Research date: 2026-11-12. Scope: the GIL interpreter first, with explicit requirements for later free-threaded support. Native JIT compilation is not a prerequisite or the proposed explanation for interpreter regressions.
 
 ## Decision
@@ -473,7 +473,7 @@ These are hypotheses, not measured savings. Count warm/cold calls, mortal/inline
 
 ## Implementation sequence and admission
 
-One architecture workstream owns the dependency chain below. Root owns integration, builds, qualification, quiet timing and selection. No runtime implementation is authorized by this planning document. Preserve selected54 and sealed historical evidence. Necessary semantic multi-exit contracts precede the representation switch; optional constants, return moves and release fusion do not block basic map correctness.
+One architecture workstream owns the dependency chain below. Root owns integration, builds, qualification, quiet timing and selection. Implementation is now authorized by the user; the [execution ledger](../../issues/call-model55/implementation.md) records actual coverage and evidence. Preserve selected54 and sealed historical evidence. Necessary semantic multi-exit contracts precede the representation switch; optional constants, return moves and release fusion do not block basic map correctness.
 
 ```text
 M0 concrete schema/census -> M1 typed+admission NULL

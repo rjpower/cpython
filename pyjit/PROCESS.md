@@ -6,7 +6,8 @@ taking over execution. The coordinator owns integration, merged validation,
 measurement and current project state.
 
 Round55 architecture research and independent post-review are complete;
-implementation has not started. The [proposal](design/proposals/register-call-model55.md)
+implementation is active under coordinator-owned integration and native execution.
+See the [execution ledger](issues/call-model55/implementation.md). The [proposal](design/proposals/register-call-model55.md)
 and [resolution](issues/call-model55/review-resolution.md) define the target and
 remaining implementation gates. Keep proposed contracts distinct from the
 selected runtime and preserve round54's rejected evidence.

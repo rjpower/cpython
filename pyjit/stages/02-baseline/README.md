@@ -14,7 +14,8 @@ limits. Round54 is closed. The [active plan](../../issues/call-model55/plan.md)
 and [proposed call model](../../design/proposals/register-call-model55.md)
 define a reviewed whole-lifecycle call/frame/register architecture, including
 a complete bitmap comparison. Research and independent post-review are complete;
-implementation has not started. [Status](../../STATUS.md) records actual
+implementation is active; the [execution ledger](../../issues/call-model55/implementation.md)
+records coverage and measurements. [Status](../../STATUS.md) records actual
 selection, qualification and performance limits. Native method and tracing JIT
 tiers belong to later stages; owning bridges support incremental extension ports.
 

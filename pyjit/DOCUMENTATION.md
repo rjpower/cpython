@@ -25,6 +25,6 @@ experiment records. Label planned JIT tiers explicitly.
 
 Round54 is closed at a correctness checkpoint with recorded qualification
 limits and no selected performance experiment. Round55 has a reviewed design
-and complete migration plan; no runtime implementation has started. Its proposal
+and complete migration plan; implementation is active in isolated worktrees. Its proposal
 stays separate from as-built runtime contracts until implementation and
 qualification establish a replacement.

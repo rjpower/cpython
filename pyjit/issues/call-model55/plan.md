@@ -1,9 +1,11 @@
 # Register call model: architecture and migration plan
 
-Status: architecture research, source audit and independent post-review complete.
+Status: implementation authorized and active. Architecture research, source
+audit and independent post-review are complete. Follow the
+[execution ledger](implementation.md) for worktree ownership, integration and measurements.
 The [review resolution](review-resolution.md) closes all five must-fix findings;
-the [peer report](peer-review.md) accepts the design contract. No runtime
-implementation or new benchmark campaign is part of this design checkpoint.
+the [peer report](peer-review.md) accepts the design contract. The current task
+implements M0–M7 and integrates candidates that earn admission into a new golden.
 
 The user asks for a holistic allocation, calling and ownership model rather
 than further adjustments within the existing model. Reconsider frame bitmaps,
@@ -55,9 +57,9 @@ language requirements.
    final explanation must show how the proposed model differs from the actual
    baseline and why its removed work can outweigh its added bookkeeping.
 
-Astra reviews the whole architecture once. Component review and corrections
-stay with Sol and the coordinator. Agents do not run builds, tests or profiles
-during this design task.
+Astra's broad review is complete. Component review and corrections stay with
+Sol high-effort agents and the coordinator. Root serializes generation, builds,
+native tests, profiles and quiet measurements; workers own disjoint source edits.
 
 ## Required design decisions
 
@@ -120,7 +122,7 @@ experiment. The proposal's M0–M7 table owns the exact schemas and admission ga
 ### Delegation when implementation starts
 
 Freeze shared interfaces before parallel edits. Each lane follows propose →
-peer review → implement → focused test → post-review → integrate. Sol medium
+peer review → implement → focused test → post-review → integrate. Sol high
 owns architecture-sensitive implementation and debugging; Terra/Luna medium
 can port bounded readers and keep documentation current once interfaces are
 fixed. Astra's broad review is complete and stays out of the inner loop.
@@ -146,5 +148,6 @@ comprehensions and silent logging. Use unchanged workloads and immutable
 controls; preserve all29 breadth at checkpoint selection. Static maps lose
 if publication/decoding/code growth exceeds saved traffic; the bitmap loses
 if bit maintenance/cache traffic exceeds its sparse teardown benefit. Retain
-selected54 if neither complete implementation earns admission. No implementation
-work has started as part of this design request.
+selected54 if neither complete implementation earns admission. Summarize what
+changed, what was learned and current hot-set metrics at each integration point;
+publish a final composition report when all stages have an evidenced disposition.

@@ -13,7 +13,8 @@ records the rejected experiments and selected cold constructor correction.
 Round55 has a reviewed holistic call/frame/register design and migration plan.
 The [target design](design/proposals/register-call-model55.md) and
 [review resolution](issues/call-model55/review-resolution.md) are complete;
-implementation has not started. Proposed contracts do not replace the as-built designs.
+implementation is active in isolated worktrees. The [execution ledger](issues/call-model55/implementation.md)
+and [active report](issues/call-model55/report.md) record integration and measurements. Proposed contracts do not replace the as-built designs.
 
 | Read | Purpose |
 | --- | --- |

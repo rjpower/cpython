@@ -13,8 +13,18 @@ Round55 has completed **architecture research and a reviewed migration plan**. S
 [review resolution](issues/call-model55/review-resolution.md) closes all five
 initial must-fix findings. Static scratch maps plus initialized locals are the
 first candidate; a complete physical-bitmap rival remains required before
-representation selection. Implementation has not started. The proposal
+representation selection. Implementation is active; the
+[execution ledger](issues/call-model55/implementation.md) records current lanes and gates.
+No new candidate has earned admission. The proposal
 does not replace as-built contracts.
+
+Current candidate `ce71fcfc240` composes typed metadata pins and common encoded-image
+admission. M1a passes 932 focused tests per GIL role; the separate M1b
+admission set passes 413 per role. These counts are distinct groups, not a
+deduplicated total. M1a timing is mixed, with a persistent silent-logging loss;
+it has not earned golden admission. Retirement roots and semantic transfer
+proofs remain in progress. The [active report](issues/call-model55/report.md)
+retains exact scopes, sample ranges, native evidence and failures.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [qualification](issues/frame-state54/qualification.md) retain closure evidence.
@@ -111,6 +121,6 @@ see their reports rather than historical source copies.
 
 Round55 reopens bitmap/static-map/NULL-home tradeoffs within a holistic
 call/frame architecture, including complete lifecycle and recurring costs. No
-bitmap or native-JIT answer is predetermined. Astra owns architecture research;
-implementation awaits the complete plan and review. The coordinator owns native
-evidence and measured selection.
+bitmap or native-JIT answer is predetermined. The broad Astra review and
+independent design post-review are complete; Sol high-effort lanes now implement
+the staged plan. The coordinator owns native evidence and measured selection.

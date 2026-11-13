@@ -2,7 +2,8 @@
 
 Canonical documentation is this checkout on `weaver/python-jit`. Its C files
 are not the measured runtime. Start with [goal](GOAL.md), [status](STATUS.md),
-[active plan](issues/call-model55/plan.md), [report](issues/frame-state54/report.md),
+[active plan](issues/call-model55/plan.md), [active report](issues/call-model55/report.md),
+[selected checkpoint report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [next decision](issues/frame-state54/next-steps.md).
 
@@ -27,7 +28,12 @@ Round55 holistic call/frame/bitmap architecture research and independent
 post-review are complete. Follow [plan](issues/call-model55/plan.md),
 [proposal](design/proposals/register-call-model55.md) and
 [resolution](issues/call-model55/review-resolution.md). No runtime implementation
-has started. No native jobs or performance rescue lanes are active.
+was part of the design checkpoint. The user has now authorized M0–M7 execution;
+follow the [implementation ledger](issues/call-model55/implementation.md).
+Active candidate source is BASE/worktrees/call55-integrated, with isolated
+call55-{pins,ir,gc} worker sources and call55-integrated-{release,debug} builds.
+New evidence is BASE/pyjit-link-wave1/call-model55. Root owns native jobs.
+Selected54 and its builds remain immutable controls.
 
 Completed candidate evidence under E:
 

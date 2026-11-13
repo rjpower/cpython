@@ -794,7 +794,7 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
         }
     }
     int window_reads = reads;
-    if (fmt->owner_events == 1) {
+    if ((fmt->flags & _PyIR_WINDOW) && fmt->owner_events == 1) {
         int event = _PyIR_OwnerPrograms[fmt->owner_program].kind;
         if (event == _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
             event == _PyIR_OWNER_UNPACK_LOCAL_DRAIN)

@@ -3,6 +3,7 @@
 import dis
 import marshal
 import struct
+import sys
 import types
 import unittest
 
@@ -15,6 +16,99 @@ from test.test_ir_call_roles import routes
 
 
 class SemanticContainerTests(unittest.TestCase):
+    def test_line_redirect_failure_uses_the_target_recovery(self):
+        class Marker(Exception):
+            pass
+
+        def target(make_value, cleanup, never):
+            start = destination = 0
+            try:
+                start = (
+                    make_value()
+                    + never()
+                )
+            except Marker:
+                return "source"
+            try:
+                destination = 2
+            except Marker:
+                cleanup()
+                return "target"
+            return "ordinary"
+
+        original = target.__code__
+        locations, _ = position_parts(original.co_linetable)
+        for code in (original, original.replace(co_linetable=position_table(locations))):
+            with self.subTest(edge_positions=code is original):
+                visited, released, completed = [], [], []
+
+                class Owner:
+                    def __del__(self):
+                        released.append("scratch")
+
+                def never():
+                    self.fail("redirect did not cancel the expression")
+
+                function = types.FunctionType(code, globals(), closure=target.__closure__)
+                monitor = sys.monitoring
+                tool = monitor.DEBUGGER_ID
+
+                def line(observed, lineno):
+                    if observed is code and lineno == code.co_firstlineno + 5 and not visited:
+                        frame = sys._getframe(1)
+                        self.assertIs(frame.f_code, code)
+                        frame.f_locals["destination"] = 9
+                        frame.f_lineno = code.co_firstlineno + 10
+                        self.assertEqual(released, ["scratch"])
+                        visited.append(True)
+                        raise Marker("redirected failure")
+
+                monitor.use_tool_id(tool, "redirected-observer")
+                try:
+                    monitor.register_callback(tool, monitor.events.LINE, line)
+                    monitor.set_local_events(tool, code, monitor.events.LINE)
+                    self.assertEqual(function(Owner, lambda: completed.append("target"), never),
+                                     "target")
+                finally:
+                    monitor.set_local_events(tool, code, 0)
+                    monitor.register_callback(tool, monitor.events.LINE, None)
+                    monitor.free_tool_id(tool)
+                self.assertEqual(visited, [True])
+                self.assertEqual(released, ["scratch"])
+                self.assertEqual(completed, ["target"])
+
+    def test_inert_protected_body_keeps_observer_error_ingress(self):
+        def target(value, cleanup):
+            try:
+                return value
+            finally:
+                cleanup()
+
+        original = target.__code__
+        protected = _opcode.get_exception_entries(original)[0][0]
+        for code in (original, original.replace(co_linetable=b"")):
+            with self.subTest(positions=code is original):
+                completed = []
+                function = types.FunctionType(code, globals())
+                monitor = sys.monitoring
+                tool = monitor.DEBUGGER_ID
+
+                def instruction(observed, offset):
+                    if observed is code and offset == protected:
+                        raise ValueError("observed inert word")
+
+                monitor.use_tool_id(tool, "inert-protected")
+                try:
+                    monitor.register_callback(tool, monitor.events.INSTRUCTION, instruction)
+                    monitor.set_local_events(tool, code, monitor.events.INSTRUCTION)
+                    with self.assertRaisesRegex(ValueError, "observed inert word"):
+                        function(object(), lambda: completed.append("finally"))
+                finally:
+                    monitor.set_local_events(tool, code, 0)
+                    monitor.register_callback(tool, monitor.events.INSTRUCTION, None)
+                    monitor.free_tool_id(tool)
+                self.assertEqual(completed, ["finally"])
+
     def template(self):
         def target(flag):
             try:

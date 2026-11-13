@@ -26,6 +26,10 @@ class Kind(Enum):
     INSTR = auto()
     ATOMIC_ADDRESS = auto()
     ATOMIC_FIELD = auto()
+    LINE_INFO = auto()
+    FEEDBACK = auto()
+    OBSERVED_OPCODE = auto()
+    SITE_INDEX = auto()
     VOID = auto()
     NULL = auto()
 
@@ -93,12 +97,35 @@ HELPERS = {
     # The macro has its own checked argument/terminal grammar below. Its
     # generated helper also owns the encoded input window and recipient.
     "IR_COMPLETE_STEP": native_helper((), Kind.VOID, True, True),
+    "_Py_call_instrumentation_line": native_helper(
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR, Kind.INSTR), Kind.OBSERVED_OPCODE, True, True),
+    "_Py_call_instrumentation_instruction": native_helper(
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.OBSERVED_OPCODE, True, True),
+    "_PyCode_GetOriginalOpcode": native_helper((Kind.LINE_INFO, Kind.SITE_INDEX), Kind.OBSERVED_OPCODE),
+    "INSTR_OFFSET_OF": native_helper((Kind.INSTR,), Kind.SITE_INDEX),
+    "_PyFb_HasEntry": native_helper((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
+    "FB_HEADER_OF": native_helper((Kind.INSTR, Kind.OBSERVED_OPCODE), Kind.FEEDBACK),
+    "PAUSE_ADAPTIVE_COUNTER": native_helper((Kind.FEEDBACK,), Kind.VOID),
+    "ORIGINAL_HANDLER": native_helper((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
+    "PRE_DISPATCH_GOTO": native_helper((), Kind.VOID),
 }
+
+# LINE may adopt a debugger target before failing. The setter normalizes that
+# target: context0 protected targets retain no scratch; protected-context paths
+# retain only matching exception origins. It clears other scratch and restores
+# saved bindings only to locals (register_resume_plan/frame_lineno_set_impl).
+# Its target PRE absence is therefore distinct from the old-PC snapshot. No
+# error phase/view is retained across the redirect. INSTRUCTION rejects jumps.
 
 
 SCALAR_CONSTANTS = {"_PY_EVAL_EVENTS_MASK", "RESUME_OPARG_LOCATION_MASK",
                     "RESUME_AFTER_YIELD_FROM", "PY_MONITORING_EVENT_PY_START",
                     "PY_MONITORING_EVENT_PY_RESUME"}
+SCALAR_KINDS = {Kind.SCALAR, Kind.OBSERVED_OPCODE, Kind.SITE_INDEX}
+
+
+def matches_kind(actual, expected):
+    return actual == expected or expected == Kind.SCALAR and actual in SCALAR_KINDS
 
 
 @dataclass
@@ -157,11 +184,14 @@ def _call(tokens: list[Token]) -> list[list[Token]] | None:
     return arguments if iterator.peek() is None else None
 
 
-def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEffects | None:
+def analyze_error_effects(inst: Instruction, reserved_names=(), *,
+                          observer_wrapper=False) -> SourceErrorEffects | None:
     """Summarize complete typed source, including an empty error-source set.
 
     Token identities are meaningful only for this analysis object. No summary
     alone proves that the emitter visited every route or finalized its homes.
+    Observer mode checks home confinement across intentional PC adoption; it
+    cannot supply an ordinary failing-origin or readable-shape certificate.
     """
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     # Source identities cannot distinguish two emissions of the same uop.
@@ -177,7 +207,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
                 "oparg", "PyValue_NULL", "FRAME_CO_CONSTS", "NULL", "true", "false",
                 "_PyFrame_GetCode", "ERROR_IF", "ERROR_NO_POP", "JUMPTO", "JUMPBY",
                 "DISPATCH", "DISPATCH_SAME_OPARG", "assert", "RELOAD_STACK",
-                "IR_COMPLETE_STEP", *HELPERS, *SCALAR_CONSTANTS, *reserved_names}
+                "IR_COMPLETE_STEP", "prev_instr", "DISPATCH_GOTO",
+                *HELPERS, *SCALAR_CONSTANTS, *reserved_names}
 
     def expression(tokens, variables):
         if not tokens:
@@ -193,6 +224,14 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
                      "_co_instrumentation_version"]:
             return Kind.ATOMIC_FIELD
         if texts == ["frame", "->", "instr_ptr"]:
+            return Kind.INSTR
+        if (observer_wrapper and len(texts) == 5 and
+                variables.get(texts[0]) == Kind.CODE and
+                texts[1:] == ["->", "_co_monitoring", "->", "lines"]):
+            return Kind.LINE_INFO
+        if (observer_wrapper and len(texts) >= 3 and texts[-2] == "+" and
+                expression(tokens[:-2], variables) == Kind.INSTR and
+                expression(tokens[-1:], variables) == Kind.SCALAR):
             return Kind.INSTR
         if (len(texts) == 9 and texts[:5] == ["(", "(", "PyStopIterationObject", "*", ")"]
                 and variables.get(texts[5]) == Kind.OBJECT
@@ -210,7 +249,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
                 condition = expression(tokens[:question], variables)
                 left = expression(tokens[question + 1:at], variables)
                 right = expression(tokens[at + 1:], variables)
-                return left if condition == Kind.SCALAR and left == right else None
+                return left if condition in SCALAR_KINDS and left == right else None
         depth = 0
         for at, text in enumerate(texts):
             if text == "(":
@@ -220,14 +259,14 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
             elif depth == 0 and text in {"==", "!=", "<", ">", "<=", ">=", "&&", "||"}:
                 left = expression(tokens[:at], variables)
                 right = expression(tokens[at + 1:], variables)
-                comparable = {Kind.SCALAR, Kind.OBJECT, Kind.NULL}
+                comparable = {*SCALAR_KINDS, Kind.OBJECT, Kind.NULL}
                 return (Kind.SCALAR if (left in comparable and right in comparable)
                         or left == right == Kind.INSTR else None)
             elif depth == 0 and text in {"&", "|", "^"}:
                 return (Kind.SCALAR if expression(tokens[:at], variables) == Kind.SCALAR
                         and expression(tokens[at + 1:], variables) == Kind.SCALAR else None)
         if texts[0] in {"!", "~"}:
-            return Kind.SCALAR if expression(tokens[1:], variables) == Kind.SCALAR else None
+            return Kind.SCALAR if expression(tokens[1:], variables) in SCALAR_KINDS else None
         if len(tokens) == 1:
             if texts[0] in {"true", "false", *SCALAR_CONSTANTS} or texts[0].isdigit():
                 return Kind.SCALAR
@@ -241,7 +280,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
                 return Kind.TSTATE
             if texts[0] == "frame":
                 return Kind.FRAME
-            if texts[0] in {"this_instr", "next_instr"}:
+            if texts[0] in {"this_instr", "next_instr"} or (
+                    observer_wrapper and texts[0] == "prev_instr"):
                 return Kind.INSTR
             if texts[0] == "PyExc_StopIteration":
                 return Kind.OBJECT
@@ -259,8 +299,18 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
         arguments = _call(tokens)
         if arguments is None or len(arguments) != len(contract.inputs):
             return None
-        if any(expression(argument, variables) != kind
+        if any(not matches_kind(expression(argument, variables), kind)
                for argument, kind in zip(arguments, contract.inputs)):
+            return None
+        observer_arguments = {
+            "_Py_call_instrumentation_line": ("tstate", "frame", "this_instr", "prev_instr"),
+            "_Py_call_instrumentation_instruction": ("tstate", "frame", "this_instr"),
+            "INSTR_OFFSET_OF": ("this_instr",),
+        }
+        if texts[0] in observer_arguments and tuple(tuple(t.text for t in arg)
+                for arg in arguments) != tuple((name,) for name in observer_arguments[texts[0]]):
+            return None
+        if texts[0] == "FB_HEADER_OF" and [t.text for t in arguments[0]] != ["next_instr"]:
             return None
         helpers.add(texts[0])
         return contract.result
@@ -270,13 +320,18 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
         if isinstance(stmt, BlockStmt):
             return all(statement(child, variables, origin) for child in stmt.body)
         if isinstance(stmt, IfStmt):
-            if expression(stmt.condition, variables) != Kind.SCALAR:
+            if expression(stmt.condition, variables) not in SCALAR_KINDS:
                 return False
             arms = [_Origin(origin.reachable, origin.changed) for _ in range(2)]
-            if not statement(stmt.body, variables.copy(), arms[0]):
+            branches = [variables.copy(), variables.copy()]
+            if not statement(stmt.body, branches[0], arms[0]):
                 return False
-            if stmt.else_body is not None and not statement(stmt.else_body, variables.copy(), arms[1]):
+            if stmt.else_body is not None and not statement(stmt.else_body, branches[1], arms[1]):
                 return False
+            for name in variables:
+                left, right = branches[0].get(name), branches[1].get(name)
+                variables[name] = left if left == right else Kind.SCALAR if (
+                    left in SCALAR_KINDS and right in SCALAR_KINDS) else variables[name]
             origin.reachable = any(arm.reachable for arm in arms)
             origin.changed = any(arm.reachable and arm.changed for arm in arms)
             return True
@@ -303,6 +358,10 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
         tokens = tokens[:-1]
         texts = [token.text for token in tokens]
         if texts[:1] == ["goto"]:
+            if observer_wrapper and texts == ["goto", "error"]:
+                errors.add(id(tokens[0]))
+                origin.reachable = False
+                return True
             if texts != ["goto", "exception_unwind"] or origin.changed:
                 return False
             unwinds.add(id(tokens[0]))
@@ -330,22 +389,24 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
             changes_origin = origin.changed = True
             return True
         if texts[:1] in (["ERROR_IF"], ["ERROR_NO_POP"], ["JUMPTO"], ["JUMPBY"],
-                         ["DISPATCH"], ["DISPATCH_SAME_OPARG"], ["assert"]):
+                         ["DISPATCH"], ["DISPATCH_SAME_OPARG"], ["assert"],
+                         *([["DISPATCH_GOTO"]] if observer_wrapper else [])):
             arguments = _call(tokens)
             if arguments is None:
                 return False
             name = texts[0]
-            count = 0 if name in {"ERROR_NO_POP", "DISPATCH", "DISPATCH_SAME_OPARG"} else 1
-            if len(arguments) != count or any(expression(arg, variables) != Kind.SCALAR
+            count = 0 if name in {"ERROR_NO_POP", "DISPATCH", "DISPATCH_SAME_OPARG",
+                                 "DISPATCH_GOTO"} else 1
+            if len(arguments) != count or any(expression(arg, variables) not in SCALAR_KINDS
                                               for arg in arguments):
                 return False
             if name in {"ERROR_IF", "ERROR_NO_POP"}:
-                if origin.changed:
+                if origin.changed and not observer_wrapper:
                     return False
                 errors.add(id(tokens[0]))
                 if name == "ERROR_NO_POP" or [t.text for t in arguments[0]] == ["true"]:
                     origin.reachable = False
-            elif name in {"DISPATCH", "DISPATCH_SAME_OPARG"}:
+            elif name in {"DISPATCH", "DISPATCH_SAME_OPARG", "DISPATCH_GOTO"}:
                 terminals.add(id(tokens[0]))
                 origin.reachable = False
             elif name in {"JUMPTO", "JUMPBY"}:
@@ -356,19 +417,26 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
         kind = None
         if texts[:2] == ["PyObject", "*"]:
             declaration, kind = 2, Kind.OBJECT
+        elif observer_wrapper and texts[:2] == ["PyCodeObject", "*"]:
+            declaration, kind = 2, Kind.CODE
         elif texts[:1] in (["PyValue"], ["int"], ["uintptr_t"]):
             declaration, kind = 1, Kind.VALUE if texts[0] == "PyValue" else Kind.SCALAR
         if declaration:
             if (len(tokens) < declaration + 3 or tokens[declaration].kind != "IDENTIFIER"
                     or texts[declaration] in variables or texts[declaration] in reserved
                     or texts[declaration + 1] != "="
-                    or expression(tokens[declaration + 2:], variables) != kind):
+                    or not matches_kind(expression(tokens[declaration + 2:], variables), kind)):
                 return False
-            variables[texts[declaration]] = kind
+            variables[texts[declaration]] = expression(tokens[declaration + 2:], variables)
             return True
         if len(tokens) >= 3 and texts[1] == "=" and texts[0] in variables:
-            return (texts[0] != "oparg"
-                    and expression(tokens[2:], variables) == variables[texts[0]])
+            actual = expression(tokens[2:], variables)
+            expected = variables[texts[0]]
+            if texts[0] == "oparg" or not (actual == expected or
+                    actual in SCALAR_KINDS and expected in SCALAR_KINDS):
+                return False
+            variables[texts[0]] = actual
+            return True
         return expression(tokens, variables) == Kind.VOID
 
     origin = _Origin()
@@ -384,6 +452,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=()) -> SourceErrorEf
             return None
         variables = {name: Kind.VALUE for name in names}
         variables["oparg"] = Kind.SCALAR
+        if observer_wrapper:
+            variables["opcode"] = Kind.SCALAR
         if not statement(part.body, variables, origin):
             return None
     used = [HELPERS[name] for name in helpers if name in HELPERS]

@@ -212,6 +212,9 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
+        observer_entry = all(contracts[name].observer_entry for name in
+                             ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"))
+        out.emit(f"#define _PyIR_OBSERVER_ENTRY_ABSENCE {int(observer_entry)}\n\n")
         count = max(len(ownership), 1)
         out.emit(f"PyAPI_DATA(const _PyIROwnershipEvent) _PyIR_OwnerPrograms[{count}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")

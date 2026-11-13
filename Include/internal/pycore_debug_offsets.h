@@ -151,6 +151,7 @@ typedef struct _Py_DebugOffsets {
         uint64_t owned_slots;
         uint64_t owner;
         uint64_t return_slot;
+        uint64_t phase_state;
         uint64_t tlbc_index;
     } interpreter_frame;
 
@@ -173,7 +174,15 @@ typedef struct _Py_DebugOffsets {
         // and the exception table use.
         uint64_t co_words;
         uint64_t co_tlbc;
+        uint64_t exec;
+        uint64_t nwords;
     } code_object;
+
+    struct {
+        uint64_t size;
+        uint64_t words;
+        uint64_t nwords;
+    } code_exec;
 
     // PyObject offset;
     struct _pyobject {
@@ -402,6 +411,7 @@ _PyDebugOffsets_Validate(const _Py_DebugOffsets *offsets)
         .owned_slots = offsetof(_PyInterpreterFrame, owned_slots), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
         .return_slot = offsetof(_PyInterpreterFrame, return_slot), \
+        .phase_state = offsetof(_PyInterpreterFrame, phase_state), \
         .tlbc_index = _Py_Debug_interpreter_frame_tlbc_index, \
     }, \
     .code_object = { \
@@ -418,6 +428,13 @@ _PyDebugOffsets_Validate(const _Py_DebugOffsets *offsets)
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
         .co_words = offsetof(PyCodeObject, co_words), \
         .co_tlbc = _Py_Debug_code_object_co_tlbc, \
+        .exec = offsetof(PyCodeObject, _co_exec), \
+        .nwords = offsetof(PyVarObject, ob_size), \
+    }, \
+    .code_exec = { \
+        .size = sizeof(_PyCodeExec), \
+        .words = offsetof(_PyCodeExec, words), \
+        .nwords = offsetof(_PyCodeExec, nwords), \
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \

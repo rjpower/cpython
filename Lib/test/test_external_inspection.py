@@ -4570,6 +4570,9 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             # Header size, previous, allocation-size field and data offset.
             for field in range(4):
                 reject(chunk + field * 8, struct.pack('=Q', (1 << 64) - 1))
+            executing = layout['code_exec_section']
+            for field in range(3):
+                reject(executing + field * 8, struct.pack('=Q', (1 << 64) - 1))
             assert RemoteUnwinder(os.getpid()).get_stack_trace()
         """))
 
@@ -4593,7 +4596,11 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                 slot = ctypes.c_uint16.from_address(address)
                 original = slot.value
                 assert coroutine.cr_await is not None
-                assert 2 <= original < layout['no_dst'], original
+                assert 0 <= original < layout['no_dst'], original
+                phase_address = id(coroutine) + layout['generator_frame'] + layout['phase_state']
+                phase = ctypes.c_uint16.from_address(phase_address)
+                original_phase = phase.value
+                assert original_phase & layout['phase_delegated'], original_phase
                 trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
                 targets = [target for info in trace for target in info.awaited_by
                            if target.task_name == 'bounded-target']
@@ -4602,6 +4609,11 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                            for coro in targets[0].coroutine_stack
                            for frame in coro.call_stack), targets
                 try:
+                    phase.value = 0
+                    slot.value = 65535
+                    assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                    slot.value = original
+                    phase.value = original_phase
                     slot.value = layout['no_dst']
                     assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
                     # Both are non-sentinel uint16 values, above this target's
@@ -4614,8 +4626,18 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                             assert 'return slot' in str(error), str(error)
                         else:
                             raise AssertionError(('accepted awaited slot', invalid))
+                    # A valid index cannot substitute for the certified A.
+                    limit = blocked.__code__.co_nlocals + max(blocked.__code__.co_stacksize, 1)
+                    slot.value = (original + 1) % limit
+                    try:
+                        RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                    except RuntimeError as error:
+                        assert 'return slot' in str(error), str(error)
+                    else:
+                        raise AssertionError('accepted unrelated resume recipient')
                 finally:
                     slot.value = original
+                    phase.value = original_phase
                     task.cancel()
                     try:
                         await task

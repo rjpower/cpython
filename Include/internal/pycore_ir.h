@@ -509,6 +509,7 @@ enum {
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
 #define _PyIR_PHASE_CAPTURED (1u << 11)
 #define _PyIR_PHASE_CREATED (1u << 12)
+#define _PyIR_PHASE_YIELD_DELEGATED (1u << 13)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -577,6 +578,12 @@ typedef struct {
  * A successful lookup selects a shape; it does not compare runtime values. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
     struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
+
+/* A finite admitted protocol role, independent of whole-home map authority.
+ * The caller holds a suspended-frame read claim or its actual successful
+ * saved-state execution claim. Returns the receiver home or -1 without
+ * allocating, preparing code or reading a home. */
+PyAPI_FUNC(int) _PyIR_DelegatedReceiverHome(struct _PyInterpreterFrame *frame);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

@@ -4769,12 +4769,15 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i}",
+    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i,s:n,s:n,s:i}",
         "descriptor", (unsigned long long)(uintptr_t)&_PyRuntime.debug_offsets,
         "chunk_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, stack_chunk),
         "generator_frame", (Py_ssize_t)offsetof(PyGenObject, gi_iframe),
         "return_slot", (Py_ssize_t)offsetof(_PyInterpreterFrame, return_slot),
-        "no_dst", IR_NO_DST);
+        "no_dst", IR_NO_DST,
+        "phase_state", (Py_ssize_t)offsetof(_PyInterpreterFrame, phase_state),
+        "code_exec_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, code_exec),
+        "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED);
 }
 
 static int

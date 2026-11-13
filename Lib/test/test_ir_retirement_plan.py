@@ -104,7 +104,7 @@ class RetirementPlanTests(unittest.TestCase):
             return value
 
         rows = _testinternalcapi.get_ir(f.__code__)
-        self.assertIn("CALL", [row[0] for row in rows])
+        self.assertIn("CALL_NO_SELF", [row[0] for row in rows])
         for code in self.routes(f.__code__):
             sites = return_sites(code)
             self.assertEqual(len(sites), 1)

@@ -2900,12 +2900,6 @@ static int
 semantic_step_core(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
-    work->created_empty = 0;
-    work->completion_destination_empty = 0;
-    work->normal_null_destination_empty = 0;
-    if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
-        return -1;
-    }
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (inspect && fmt->call_input_holes) {
@@ -3070,12 +3064,6 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
-                int dst = (int)IR_A(word);
-                work->normal_null_destination_empty =
-                    (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH | _PyIR_NORMAL_NULL_TAKEN)) &&
-                    dst >= nl && dst != IR_NO_DST &&
-                    ((semantic_home_facts(work, state, dst, nl) & (1u << SEM_NO_HOME)) ||
-                     _PyIR_ConsumesNormalInput(word, arg, dst));
                 /* The actual same-frame successful flush/vacate, with all
                  * family members covered, proves only consumed inputs empty.
                  * It does not make an output readable or grant phase coverage. */
@@ -3167,9 +3155,26 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
 {
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    work->created_empty = 0;
+    work->completion_destination_empty = 0;
+    work->normal_null_destination_empty = 0;
+    if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
+        return -1;
+    }
+    if (fmt->owner_events == 1) {
+        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+        if (event->kind == _PyIR_OWNER_NORMAL_CLEAR_INPUTS) {
+            int dst = (int)IR_A(word);
+            int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+            work->normal_null_destination_empty =
+                (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH | _PyIR_NORMAL_NULL_TAKEN)) &&
+                dst >= image->nl && dst != IR_NO_DST &&
+                ((semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)) ||
+                 _PyIR_ConsumesNormalInput(word, arg, dst));
+        }
+    }
     semantic_scalar_state normal = {0};
     int homes[4], nhomes = 0;
-    int incoming_complete = *complete;
     if (fmt->flags & _PyIR_ERROR_PROGRAM) {
         const _PyIROwnershipEvent *header =
             _PyIR_OwnerPrograms + fmt->owner_program + fmt->owner_events;
@@ -3188,10 +3193,10 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
             break;
         }
     }
-    if (semantic_step_core(image, work, state, pc, inspect, complete) < 0) {
-        return -1;
-    }
     if (normal.valid) {
+        /* This complete emitted graph already checks its reads, native
+         * owners and publications. Applying the conservative transfer too
+         * would erase incoming facts for homes the graph never touches. */
         if (normal.widens_nonnull) {
             memset(state + SEM_NONNULL * work->nwords, 0,
                    (size_t)work->nwords * sizeof(uint64_t));
@@ -3201,9 +3206,9 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 semantic_set_facts(work, state, homes[h], image->nl, normal.facts[h]);
             }
         }
-        *complete = incoming_complete;
+        return 0;
     }
-    return 0;
+    return semantic_step_core(image, work, state, pc, inspect, complete);
 }
 
 static void

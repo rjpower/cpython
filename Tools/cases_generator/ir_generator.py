@@ -6912,6 +6912,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 source.homes in {HomeEffect.NO_ARENA_WRITE,
                                  HomeEffect.PRESERVES_CANONICAL_OR_NULL} and
                 not source.changes_origin and not fmt.window and
+                not inst.properties.switches_frame and not inst.properties.returns and
                 not stack.reloaded and stack.home_node is not None and
                 stack.home_writes == stack.home_write_receipts and
                 not stack.possible_native_owners and not stack.unknown_read and

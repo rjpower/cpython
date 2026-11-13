@@ -3209,6 +3209,14 @@ class TestIRCases(unittest.TestCase):
                                   for escape in part.properties.escaping_calls.values()})
         for name in ("_LOAD_GLOBAL", "_PUSH_NULL_CONDITIONAL", "_INSERT_NULL"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+        for name, marker in (("BUILD_TUPLE", "IR_BUILD_TUPLE"),
+                             ("BUILD_LIST", "IR_BUILD_LIST")):
+            part = analysis.uops[name]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
+            escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
+            self.assertEqual(marker in escapes,
+                             analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
 
     def test_home_arrays_reject_unproved_bounds_and_pointer_escapes(self):
         def check(source):
@@ -3285,6 +3293,77 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
+
+    def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
+        body = """{
+            PyObject *object = IR_BUILD_TUPLE(values);
+            if (object == NULL) { ERROR_NO_POP(); }
+            INPUTS_DEAD();
+            result = PyValue_FromObjectSteal(object);
+        }"""
+        def check(changed, inputs="values[oparg]", outputs="result"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {changed}\n")
+            inst = analysis.instructions["OP"]
+            part = inst.parts[0]
+            self.assertTrue(ir_generator.home_operation_contract(part))
+            return inst
+
+        self.assertIsNotNone(check(body))
+        self.assertIsNotNone(check(body.replace("IR_BUILD_TUPLE", "IR_BUILD_LIST")))
+        for changed in (
+                body.replace("object == NULL", "object != NULL"),
+                body.replace("ERROR_NO_POP();", "ERROR_IF(true);"),
+                body.replace("INPUTS_DEAD();", ""),
+                body.replace("INPUTS_DEAD();", "opaque(); INPUTS_DEAD();"),
+                body.replace("INPUTS_DEAD();", "if (flag) { INPUTS_DEAD(); }"),
+                body.replace("INPUTS_DEAD();", "INPUTS_DEAD(); opaque();"),
+                body.replace("object);", "other);"),
+                body.replace("(values)", "(other)"),
+                body.replace("*object", "*values"),
+                body.replace("if (object", "if (other"),
+                body.replace("result =", "if (flag) result =")):
+            with self.subTest(changed=changed), self.assertRaises(SyntaxError):
+                check(changed)
+        for inputs, outputs in (("values[oparg*2]", "result"),
+                                ("extra, values[oparg]", "result"),
+                                ("values[oparg]", "result[1]")):
+            with self.subTest(inputs=inputs, outputs=outputs), self.assertRaises(SyntaxError):
+                check(body, inputs, outputs)
+        inst = check(body)
+        fmt = ir_generator.compute_formats(self.analyze(
+            "\ninst(OP, (values[oparg] -- result)) " + body + "\n"))["OP"]
+        self.assertTrue(ir_generator.normal_vacate_capability(inst, fmt))
+        extra = self.analyze("\ninst(EXTRA, (--)) { opaque(); }\n")
+        inst.parts.append(extra.instructions["EXTRA"].parts[0])
+        self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
+
+    def test_steal_success_handoff_uses_existing_call_and_final_flush(self):
+        for marker, helper in (("IR_BUILD_TUPLE", "_PyTuple_FromValueStealOnSuccess"),
+                               ("IR_BUILD_LIST", "_PyList_FromValueStealOnSuccess")):
+            source = f"""
+                inst(OP, (values[oparg] -- result)) {{
+                    PyObject *object = {marker}(values);
+                    if (object == NULL) {{ ERROR_NO_POP(); }}
+                    INPUTS_DEAD();
+                    result = PyValue_FromObjectSteal(object);
+                }}
+            """
+            analysis = self.analyze(source)
+            formats = ir_generator.compute_formats(analysis)
+            programs = {}
+            self.assertNotIn("OP", ir_generator.boxing_handlers(analysis, formats, programs))
+            self.assertEqual(programs["OP"][0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
+            output = self.ir_output(source)
+            self.assertIn(f"{helper}(values, oparg)", output)
+            self.assertNotIn(marker, output)
+            self.assertNotIn(f"{helper}(frame", output)
+            self.assertNotIn("_PyValueTemps value_owners", output)
+            call = output.index(f"{helper}(values, oparg)")
+            vacate = output.index("IR_CLEAR_SLOTS", call)
+            publish = output.index("IR_PUBLISH_TEMP", vacate)
+            self.assertLess(call, vacate)
+            self.assertLess(vacate, publish)
+            self.assertNotIn("finish_", output[call:publish])
 
     def test_home_operations_lower_through_actual_storage(self):
         output = self.ir_output("""

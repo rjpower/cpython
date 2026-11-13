@@ -78,6 +78,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    IR_HELPER_CALLEES,
     IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
     CALL_INVOKE_MARKERS,
@@ -2999,6 +3000,8 @@ class IREmitter(Emitter):
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
+        self._replacers["IR_BUILD_TUPLE"] = self.home_helper
+        self._replacers["IR_BUILD_LIST"] = self.home_helper
         self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
@@ -3101,7 +3104,13 @@ class IREmitter(Emitter):
     def home_helper(self, tkn, tkn_iter, uop, storage, inst):
         local, _ = self.checked_home_array(tkn, uop, storage)
         args, end = self.instruction_macro_args(tkn, tkn_iter)
-        if tkn.text == "IR_LOOKUP_SPECIAL":
+        if tkn.text in {"IR_BUILD_TUPLE", "IR_BUILD_LIST"}:
+            if (inst is None or inst.parts != [uop]
+                    or not steal_success_home_contract(uop)):
+                raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
+            helper = IR_HELPER_CALLEES[tkn.text]
+            expression = f"{helper}({local.name}, oparg)"
+        elif tkn.text == "IR_LOOKUP_SPECIAL":
             expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
                           f"&{local.name}[0], &{local.name}[1])")
         else:
@@ -4962,6 +4971,41 @@ NORMAL_FRAME_OBSERVERS = {
 }
 
 
+STEAL_SUCCESS_HOME_HELPERS = IR_HELPER_CALLEES.keys()
+
+
+def steal_success_home_contract(part: Uop) -> bool:
+    """A native container owns inputs only on the final flush's success path."""
+    inputs, outputs = part.stack.inputs, part.stack.outputs
+    statements = part.body.body
+    if (len(inputs) != 1 or inputs[0].peek or inputs[0].size != "oparg"
+            or len(outputs) != 1 or outputs[0].peek or outputs[0].is_array()
+            or len(statements) != 4 or not isinstance(statements[0], SimpleStmt)
+            or not isinstance(statements[1], IfStmt)
+            or not all(isinstance(stmt, SimpleStmt) for stmt in statements[2:])):
+        return False
+    call = _statement_text(statements[0])
+    if (len(call) != 9 or call[:2] != ["PyObject", "*"]
+            or call[3] != "=" or call[4] not in STEAL_SUCCESS_HOME_HELPERS
+            or call[5:] != ["(", inputs[0].name, ")", ";"]):
+        return False
+    result = call[2]
+    if result in {inputs[0].name, outputs[0].name, *HANDLER_LOCALS}:
+        return False
+    failure = statements[1]
+    if (failure.else_body is not None
+            or [t.text for t in failure.condition if t.kind != "COMMENT"] !=
+                ["(", result, "==", "NULL", ")"]
+            or not isinstance(failure.body, BlockStmt)
+            or len(failure.body.body) != 1
+            or not isinstance(failure.body.body[0], SimpleStmt)
+            or _statement_text(failure.body.body[0]) != ["ERROR_NO_POP", "(", ")", ";"]):
+        return False
+    return (_statement_text(statements[2]) == ["INPUTS_DEAD", "(", ")", ";"]
+            and _statement_text(statements[3]) ==
+                [outputs[0].name, "=", "PyValue_FromObjectSteal", "(", result, ")", ";"])
+
+
 def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
     """Check declared array capabilities without granting a raw pointer."""
     markers = [t for t in part.body.tokens() if t.text in IR_HELPER_EFFECTS]
@@ -5071,13 +5115,15 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("input take needs its unique index-matched owning array", token)
                 taken.add(array)
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP"}:
+            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
-                extent = "oparg" if token.text == "IR_BUILD_STRING" else "oparg*2"
+                extent = "oparg*2" if token.text == "IR_BUILD_MAP" else "oparg"
                 if (item is None or item.peek or not item.is_array() or
                         item.size != extent or len(inputs) != 1):
                     raise analysis_error("builder needs its sole declared owning array", token)
+                if token.text in STEAL_SUCCESS_HOME_HELPERS and not steal_success_home_contract(part):
+                    raise analysis_error("steal-success helper needs its checked success handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
             else:
@@ -5505,7 +5551,11 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
         return True
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
-    return (not inst.properties.switches_frame and not fmt.names_target
+    steals = [part for part in parts if any(
+        t.text in STEAL_SUCCESS_HOME_HELPERS for t in part.body.tokens())]
+    return (not steals or (len(steals) == 1 and inst.parts == steals
+                          and steal_success_home_contract(steals[0]))) and (
+            not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
             and not any(item.name in reserved for part in parts for item in
                         (*part.stack.inputs, *part.stack.outputs, *part.caches))

@@ -10,6 +10,7 @@
 #include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_home_bitmap.h" // counted physical home edges
 #include "pycore_stats.h"         // CALL_STAT_INC()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 
@@ -176,7 +177,12 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
     }
 #endif
     PyValue old = f->base[f->return_slot];  // a move: replaced below
-    f->base[f->return_slot] = v;
+    if (f->owner == FRAME_OWNED_BY_INTERPRETER) {
+        f->base[f->return_slot] = v;
+    }
+    else {
+        _PyFrame_WriteHome(f, f->base + f->return_slot, v);
+    }
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
 }
@@ -215,10 +221,14 @@ static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     f->phase_state = 0;
-    for (int i = _PyFrame_NumSlots(f); i-- > first;) {
-        PyValue ref = f->base[i];  // a move: cleared below
-        if (!PyValue_IsNull(ref)) {
-            f->base[i] = PyValue_NULL;
+    int end = _PyFrame_NumSlots(f);
+    while (end > first) {
+        int owner = _PyFrame_PreviousCountedHome(f, first, end);
+        while (--end > owner) {
+            f->base[end] = PyValue_NULL;
+        }
+        if (owner >= first) {
+            PyValue ref = _PyFrame_TakeHome(f, f->base + owner);
             PyValue_CLOSE(ref);
         }
     }
@@ -328,8 +338,8 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
         }
         while (filled < end) {
             // A move: the slots src leaves behind may be the caller's.
-            dest->base[filled] = src->base[filled];
-            src->base[filled++] = PyValue_NULL;
+            _PyFrame_MoveHome(src, src->base + filled, dest, dest->base + filled);
+            filled++;
         }
     }
     /* NULL shadow still initializes inactive destinations without loading the
@@ -349,8 +359,8 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
     const uint32_t *table = _PyCode_CONSTSLOTS(code);
     for (int i = 0; i < code->co_nconstslots; i++) {
-        frame->base[table[2 * i]] =
-            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
+        _PyFrame_WriteHome(frame, frame->base + table[2 * i],
+            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1])));
     }
 }
 
@@ -529,8 +539,8 @@ _PyFrame_GetLocals(_PyInterpreterFrame *frame);
 /* The data stack is untyped memory in pointer-sized units, which the public
  * PyThreadState and _PyStackChunk declare as PyObject *: frames take slots
  * (words) from its bottom and headers from its top.  These convert between
- * its addresses and slot addresses; they are the only casts between a
- * PyValue * and another pointer type outside the value headers
+ * its addresses and slot addresses. The bitmap allocation helpers also
+ * convert adjacent physical home and metadata addresses
  * (Tools/build/check_value_api.py, raw-bits). */
 static inline PyValue *
 _PyDataStack_Slots(PyObject **address)
@@ -588,6 +598,7 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)header;
     frame->base = _PyDataStack_Slots(tstate->datastack_top);
+    _PyFrame_BindChunkBitmap(frame, tstate->datastack_chunk, frame->base);
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = end;
@@ -615,6 +626,8 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
 #ifndef NDEBUG
     /* The code owner may already be cleared. Check the physical departing
      * suffix, including an overlapping caller's previously NULL tail. */
+    int departing = (int)(_PyDataStack_Slots(tstate->datastack_top) - frame->base);
+    assert(_PyFrame_NextCountedHome(frame, 0, departing) == departing);
     for (PyValue *p = frame->base;
          p < _PyDataStack_Slots(tstate->datastack_top); p++)
     {
@@ -688,6 +701,7 @@ _PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
     _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk,
         (PyObject **)frame, _PyDataStack_Address(physical_end));
     frame->saved_top = saved_top;
+    _PyFrame_BindChunkBitmap(frame, tstate->datastack_chunk, base);
     tstate->datastack_limit = (PyObject **)frame;
     if (end > saved_top) {
         tstate->datastack_top = _PyDataStack_Address(end);

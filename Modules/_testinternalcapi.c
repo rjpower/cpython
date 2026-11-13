@@ -4899,7 +4899,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     if (exec == NULL) {
         return NULL;
     }
-    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    PyValue *homes = PyMem_New(PyValue, nslots + _PyHomeBitmap_HeapWords(nslots));
     if (homes == NULL) {
         return PyErr_NoMemory();
     }
@@ -4917,6 +4917,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         .ir_words = exec->words,
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
+        .owner_bits = _PyHomeBitmap_InitStorage(homes, nslots),
     };
     uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason);
     PyMem_Free(homes);
@@ -4961,7 +4962,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     if (exec == NULL) {
         return NULL;
     }
-    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    PyValue *homes = PyMem_New(PyValue, nslots + _PyHomeBitmap_HeapWords(nslots));
     if (homes == NULL) {
         return PyErr_NoMemory();
     }
@@ -4975,6 +4976,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .ir_words = exec->words,
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
+        .owner_bits = _PyHomeBitmap_InitStorage(homes, nslots),
         .phase_state = (uint16_t)phase,
     };
     _PyIRHomeView view;
@@ -5070,7 +5072,7 @@ check_frame_copy(PyObject *args, int created)
         assert(site < exec->nwords);
     }
     size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
-        (size_t)n * sizeof(PyValue);
+        ((size_t)n + _PyHomeBitmap_HeapWords(n)) * sizeof(PyValue);
     _PyInterpreterFrame *src = PyMem_Calloc(1, size);
     _PyInterpreterFrame *dst = PyMem_Calloc(1, size);
     if (src == NULL || dst == NULL) {
@@ -5080,13 +5082,15 @@ check_frame_copy(PyObject *args, int created)
     }
     src->f_executable = (PyCodeObject *)Py_NewRef(code);
     src->base = src->owned_slots;
+    _PyFrame_InitHeapBitmap(src, n);
+    _PyFrame_InitHeapBitmap(dst, n);
     const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
     for (int i = nl; i < n; i++) {
         src->base[i].bits = poison;
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
     int selected_home = created ? 0 : nl + 1;
-    src->base[selected_home] = _PyValue_Publish(&value);
+    _PyFrame_WriteHome(src, src->base + selected_home, _PyValue_Publish(&value));
     const _PyIRPhaseRange selected = {.begin = 1, .end = 2};
     const _PyIRHomeView view = {
         .nbindings = (uint16_t)nl, .scratch_limit = 2,
@@ -5107,7 +5111,7 @@ check_frame_copy(PyObject *args, int created)
             correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
         }
     }
-    PyValue_XCLOSE(dst->base[selected_home]);
+    PyValue_XCLOSE(_PyFrame_TakeHome(dst, dst->base + selected_home));
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
     PyMem_Free(dst);
@@ -5145,7 +5149,73 @@ has_empty_created_copy_plan(PyObject *self, PyObject *arg)
         (exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY));
 }
 
+/* Exercise every physical first-bit alignment, including both endpoint masks
+ * and two frame views of the same storage. No fake frame is published. */
+static PyObject *
+check_home_bitmap(PyObject *self, PyObject *payload)
+{
+    const int selected[] = {0, 1, 63, 64, 65, 129};
+    const int endpoints[] = {0, 1, 2, 62, 63, 64, 65, 66, 128, 129, 130};
+    PyValue storage[193];
+    int correct = 1;
+    for (unsigned int first = 0; first < 64; first++) {
+        unsigned int origin = ((uintptr_t)storage >> 3) & 63;
+        PyValue *base = storage + ((first + 64 - origin) & 63);
+        uint64_t words[4] = {0};
+        _PyInterpreterFrame frame = {.base = base, .owner_bits = words};
+        for (int i = 0; i < 130; i++) {
+            base[i] = PyValue_NULL;
+        }
+        for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
+            _PyFrame_WriteHome(&frame, base + selected[i],
+                              PyValue_FromObjectSteal(Py_NewRef(payload)));
+        }
+        for (size_t b = 0; b < Py_ARRAY_LENGTH(endpoints); b++) {
+            for (size_t e = b; e < Py_ARRAY_LENGTH(endpoints); e++) {
+                int begin = endpoints[b], end = endpoints[e];
+                int next = end, previous = begin - 1;
+                for (size_t i = 0; i < Py_ARRAY_LENGTH(selected); i++) {
+                    int home = selected[i];
+                    if (begin <= home && home < end) {
+                        if (next == end) {
+                            next = home;
+                        }
+                        previous = home;
+                    }
+                }
+                correct &= _PyFrame_NextCountedHome(&frame, begin, end) == next;
+                correct &= _PyFrame_PreviousCountedHome(&frame, begin, end) == previous;
+            }
+        }
+        _PyInterpreterFrame alias = {
+            .base = base + 1,
+            .owner_bits = _PyHomeBitmap_Word(words, base, base + 1),
+        };
+        _PyFrame_MoveHome(&frame, base + 1, &alias, base + 1);
+        correct &= _PyFrame_HomeOwnsCount(&frame, base + 1);
+        _PyFrame_MoveHome(&frame, base + 63, &alias, base + 2);
+        correct &= !_PyFrame_HomeOwnsCount(&frame, base + 63);
+        correct &= _PyFrame_HomeOwnsCount(&alias, base + 2);
+        PyValue old = _PyFrame_TakeHome(&alias, base + 2);
+        _PyFrame_WriteHome(&alias, base + 2, PyValue_FromInlineInt(7));
+        PyValue_CLOSE(old);
+        correct &= !_PyFrame_HomeOwnsCount(&alias, base + 2);
+        int home;
+        while ((home = _PyFrame_NextCountedHome(&frame, 0, 130)) < 130) {
+            PyValue value = _PyFrame_TakeHome(&frame, base + home);
+            PyValue_CLOSE(value);
+        }
+        correct &= _PyFrame_PreviousCountedHome(&frame, 0, 130) == -1;
+    }
+    if (!correct) {
+        PyErr_SetString(PyExc_AssertionError, "physical home bitmap mismatch");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"check_home_bitmap", check_home_bitmap, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},

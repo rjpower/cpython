@@ -1867,10 +1867,15 @@ class SizeofTest(unittest.TestCase):
             return sys._getframe()
         x = func()
         if support.Py_GIL_DISABLED:
-            INTERPRETER_FRAME = '13Pi2HccP'
+            INTERPRETER_FRAME = '13Pi2Hcc2P'
         else:
-            INTERPRETER_FRAME = '13P2HccP'
-        check(x, size('3P5i2Qcc4P' + INTERPRETER_FRAME + 'P'))
+            INTERPRETER_FRAME = '13P2Hcc2P'
+        def bitmap_tail_size(code):
+            slots = (code.co_nlocals + len(code.co_cellvars)
+                     + len(code.co_freevars) + max(code.co_stacksize, 1))
+            return ((slots + 126) // 64) * 8
+        check(x, size('3P5i2Qcc4P' + INTERPRETER_FRAME + 'P')
+              + bitmap_tail_size(x.f_code))
         # function
         def func(): pass
         check(func, size('17Pi'))
@@ -1887,7 +1892,8 @@ class SizeofTest(unittest.TestCase):
             check(bar, size('PP'))
         # generator
         def get_gen(): yield 1
-        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'P'))
+        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'P')
+              + bitmap_tail_size(get_gen.__code__))
         # iterator
         check(iter('abc'), size('lP'))
         # callable-iterator

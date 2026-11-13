@@ -31,6 +31,8 @@ enum {
  * before closing or transferring it. Entries outside [begin, end) are unread. */
 typedef struct {
     PyValue *base;
+    /* NULL denotes native initialized values, not an arena bitmap. */
+    uint64_t *owner_bits;
     int capacity;
     int begin;
     int end;

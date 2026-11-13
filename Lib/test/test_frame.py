@@ -19,6 +19,15 @@ from test.support.script_helper import assert_python_ok
 from test import mapping_tests
 
 
+class HomeBitmapTest(unittest.TestCase):
+    def test_word_endpoints_and_overlapping_frame_views(self):
+        internal = import_helper.import_module('_testinternalcapi')
+        payload = []
+        before = sys.getrefcount(payload)
+        internal.check_home_bitmap(payload)
+        self.assertEqual(sys.getrefcount(payload), before)
+
+
 class ClearTest(unittest.TestCase):
     """
     Tests for frame.clear().

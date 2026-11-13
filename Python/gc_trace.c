@@ -76,8 +76,73 @@ visit_transition_value(PyValue value, visitproc visit, void *arg)
     return 0;
 }
 
-int
-_PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *arg)
+#ifndef Py_GIL_DISABLED
+/* Counted bits authorize these object reads independently of logical value
+ * maps. No-count objects remain the immortal-root pass's responsibility. */
+static int
+visit_counted_home_range(uint64_t *owner_bits, const PyValue *base,
+                         int begin, int end, visitproc visit, void *arg)
+{
+    for (int i = _PyHomeBitmap_NextCountedHome(owner_bits, base, begin, end);
+         i < end;
+         i = _PyHomeBitmap_NextCountedHome(owner_bits, base, i + 1, end))
+    {
+        PyValue value = base[i];
+        assert(PyValue_IsObject(value) && PyValue_RefcountOnObject(value));
+        _PyValue_RecheckHome(value);
+        Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+    }
+    return 0;
+}
+#endif
+
+static int
+visit_transition_home_range(_PyInterpreterFrame *frame, int begin, int end,
+                            int counted, visitproc visit, void *arg)
+{
+#ifndef Py_GIL_DISABLED
+    if (counted) {
+        /* The counted entry visits the physical arenas before records. */
+        if (frame->owner == FRAME_OWNED_BY_THREAD) {
+            return 0;
+        }
+        return visit_counted_home_range(frame->owner_bits, frame->base,
+                                        begin, end, visit, arg);
+    }
+#else
+    assert(!counted);
+#endif
+    for (int i = begin; i < end; i++) {
+        int err = visit_transition_value(frame->base[i], visit, arg);
+        if (err) {
+            return err;
+        }
+    }
+    return 0;
+}
+
+#ifndef Py_GIL_DISABLED
+static int
+transition_prefix_is_arena(PyThreadState *tstate, const _PyTransitionPrefix *prefix)
+{
+    uintptr_t begin = (uintptr_t)prefix->base;
+    uintptr_t end = (uintptr_t)(prefix->base + prefix->end);
+    for (_PyStackChunk *chunk = tstate->datastack_chunk;
+         chunk != NULL; chunk = chunk->previous)
+    {
+        if (begin >= (uintptr_t)chunk->data && end <= (uintptr_t)chunk->owner_bits) {
+            assert(prefix->owner_bits == _PyHomeBitmap_Word(
+                chunk->owner_bits, _PyDataStack_Slots(chunk->data), prefix->base));
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+static int
+visit_transition_roots(PyThreadState *tstate, visitproc visit, void *arg,
+                       int counted)
 {
     for (_PyTransitionRoots *roots =
              ((_PyThreadStateImpl *)tstate)->transition_roots;
@@ -100,22 +165,29 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         }
         else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
             assert(roots->homes == NULL);
-            for (int i = 0; i < roots->remaining; i++) {
-                int err = visit_transition_value(frame->base[i], visit, arg);
-                if (err) {
-                    return err;
-                }
+            int err = visit_transition_home_range(
+                frame, 0, roots->remaining, counted, visit, arg);
+            if (err) {
+                return err;
             }
         }
         else if (roots->home_authority == _PyIR_HOME_MUST_READABLE) {
             assert(roots->header_mask & _Py_TRANSITION_CODE);
             const _PyIRHomeView *view = roots->homes;
             assert(view != NULL);
-            uint32_t cursor = 0;
-            int begin, end;
-            while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
-                for (int i = begin; i < Py_MIN(end, roots->remaining); i++) {
-                    int err = visit_transition_value(frame->base[i], visit, arg);
+            if (counted) {
+                int err = visit_transition_home_range(
+                    frame, 0, roots->remaining, 1, visit, arg);
+                if (err) {
+                    return err;
+                }
+            }
+            else {
+                uint32_t cursor = 0;
+                int begin, end;
+                while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
+                    int err = visit_transition_home_range(
+                        frame, begin, Py_MIN(end, roots->remaining), 0, visit, arg);
                     if (err) {
                         return err;
                     }
@@ -149,6 +221,19 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         if (prefix != NULL) {
             assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
             assert(prefix->end <= prefix->capacity);
+#ifndef Py_GIL_DISABLED
+            if (counted && prefix->owner_bits != NULL) {
+                if (!transition_prefix_is_arena(tstate, prefix)) {
+                    int err = visit_counted_home_range(
+                        prefix->owner_bits, prefix->base, prefix->begin,
+                        prefix->end, visit, arg);
+                    if (err) {
+                        return err;
+                    }
+                }
+                continue;
+            }
+#endif
             for (int i = prefix->begin; i < prefix->end; i++) {
                 int err = visit_transition_value(prefix->base[i], visit, arg);
                 if (err) {
@@ -158,6 +243,13 @@ _PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *ar
         }
     }
     return 0;
+}
+
+/* Logical root inspection and FT marking retain no-count object edges. */
+int
+_PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *arg)
+{
+    return visit_transition_roots(tstate, visit, arg, 0);
 }
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
@@ -1157,21 +1249,67 @@ scan_structs(trace_t *t)
 
 /* --- precise roots ------------------------------------------------------- */
 
-int
-_PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
+static int
+trace_visit_counted_transition_roots(PyThreadState *p, visitproc visit, void *arg)
 {
-    for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
-        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
-            continue;
-        }
-        Py_VISIT(f->f_globals);
-        Py_VISIT(f->f_builtins);
-        int err = _PyFrame_Traverse(f, visit, arg);
+    return visit_transition_roots(p, visit, arg, 1);
+}
+
+/* Every physical arena edge is marked once, including staged and unlinked
+ * reservations. Frame headers and C results have separate explicit roots. */
+static int
+trace_visit_arena_owners(PyThreadState *p, visitproc visit, void *arg)
+{
+    for (_PyStackChunk *chunk = p->datastack_chunk;
+         chunk != NULL; chunk = chunk->previous)
+    {
+        const PyValue *base = _PyDataStack_Slots(chunk->data);
+        int end = (int)(((uintptr_t)chunk->owner_bits - (uintptr_t)base) /
+                        sizeof(PyValue));
+        int err = visit_counted_home_range(chunk->owner_bits, base, 0, end,
+                                           visit, arg);
         if (err) {
             return err;
         }
     }
-    return _PyGC_TraceVisitTransitionRoots(p, visit, arg);
+    return 0;
+}
+
+int
+_PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
+{
+    int err = trace_visit_arena_owners(p, visit, arg);
+    if (err) {
+        return err;
+    }
+    for (_PyInterpreterFrame *f = p->current_frame; f != NULL; f = f->previous) {
+        if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
+            continue;
+        }
+        /* Writer validation still has initialized NULL scratch. This control
+         * must be replaced before the bitmap rival admits stale words. */
+        if (f->phase_state & _PyIR_PHASE_PUBLISHED) {
+            uint8_t status = _PyIR_ShadowFramePhase(f);
+            f->phase_state = (uint16_t)(
+                (f->phase_state & ~_PyIR_PHASE_STATUS_MASK) |
+                (status << _PyIR_PHASE_STATUS_SHIFT));
+            assert(status != _PyIR_SHADOW_MISMATCH);
+        }
+        Py_VISIT(f->f_globals);
+        Py_VISIT(f->f_builtins);
+        Py_VISIT(f->frame_obj);
+        Py_VISIT(f->f_locals);
+        Py_VISIT(f->f_funcobj);
+        Py_VISIT(f->f_executable);
+        if (f->owner != FRAME_OWNED_BY_THREAD) {
+            err = visit_counted_home_range(f->owner_bits, f->base, 0,
+                                           _PyFrame_NumSlots(f), visit, arg);
+            if (err) {
+                return err;
+            }
+        }
+    }
+    return trace_visit_counted_transition_roots(p, visit, arg);
 }
 
 int

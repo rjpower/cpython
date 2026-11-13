@@ -1058,6 +1058,7 @@ gen_sizeof(PyObject *op, PyObject *Py_UNUSED(ignored))
     res = offsetof(PyGenObject, gi_iframe) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyGen_GetCode(gen);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
+    res += _PyHomeBitmap_HeapWords(_PyFrame_NumSlotsForCodeObject(code)) * sizeof(uint64_t);
     return PyLong_FromSsize_t(res);
 }
 
@@ -1143,10 +1144,12 @@ static PyObject *
 make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
 {
     int slots = _PyFrame_NumSlotsForCodeObject(code);
-    PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
+    PyGenObject *gen = PyObject_GC_NewVar(
+        PyGenObject, type, slots + _PyHomeBitmap_HeapWords(slots));
     if (gen == NULL) {
         return NULL;
     }
+    _PyFrame_InitHeapBitmap(&gen->gi_iframe, slots);
     gen->gi_frame_state = FRAME_CLEARED;
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
@@ -1215,12 +1218,14 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
                       PyObject *name, PyObject *qualname)
 {
     PyCodeObject *code = _PyFrame_GetCode(f->f_frame);
-    int size = code->co_nlocalsplus + code->co_stacksize;
-    PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, size);
+    int size = _PyFrame_NumSlotsForCodeObject(code);
+    PyGenObject *gen = PyObject_GC_NewVar(
+        PyGenObject, type, size + _PyHomeBitmap_HeapWords(size));
     if (gen == NULL) {
         Py_DECREF(f);
         return NULL;
     }
+    _PyFrame_InitHeapBitmap(&gen->gi_iframe, size);
     PyObject *origin = NULL;
     if (type == &PyCoro_Type) {
         int depth = _PyThreadState_GET()->coroutine_origin_tracking_depth;

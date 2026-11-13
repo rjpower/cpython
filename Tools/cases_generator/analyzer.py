@@ -660,6 +660,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_PushOverlapping",
     "_PyFrame_ReserveForCall",
     "_PyFrame_Initialize",
+    "_PyFrame_WriteHome",
     "call_transfer_exact_args",
     "_PyFrame_SetReturnValue",
     "_PyFrame_Slots",

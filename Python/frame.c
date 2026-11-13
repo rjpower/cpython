@@ -99,8 +99,7 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
     src->instr_ptr++;
     _PyFrame_CopyHeader(src, dest);
     for (int i = 0; i < nl; i++) {
-        dest->base[i] = src->base[i];
-        src->base[i] = PyValue_NULL;
+        _PyFrame_MoveHome(src, src->base + i, dest, dest->base + i);
     }
     /* The current NULL control still requires initialized destination gaps. */
     for (int i = nl; i < nslots; i++) {
@@ -185,7 +184,7 @@ _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
     if (dict == NULL) {
         return -1;
     }
-    frame->base[slot] = PyValue_FromObjectSteal(dict);
+    _PyFrame_WriteHome(frame, frame->base + slot, PyValue_FromObjectSteal(dict));
     frame->pending_kwargs = IR_NO_DST;
     return 0;
 }

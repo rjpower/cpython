@@ -530,7 +530,13 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
 #define IR_CONSUME_INPUT(F, V) \
     (IR_IS_LOCAL(F) ? PyValue_NULL \
-                    : (IR_SLOT(F) = PyValue_NULL, _PyIR_AdoptTemp(V)))
+                    : (_PyFrame_WriteHome(frame, &IR_SLOT(F), PyValue_NULL), \
+                       _PyIR_AdoptTemp(V)))
+
+/* Selected only by the checked interpreter-exit native-home contract. */
+#define IR_CONSUME_NATIVE_INPUT(F, V) \
+    (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
+     IR_SLOT(F) = PyValue_NULL, _PyIR_AdoptTemp(V))
 
 /* The DSL's TAKE(V) of view V, whose field's owner is OWN: a value with a
  * count of its own, for a home.  A local's (OWN is NULL) takes a new
@@ -542,7 +548,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -550,13 +556,13 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_STORE_CANONICAL_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = (V); \
+        _PyFrame_WriteHome(frame, &(SLOT), (V)); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
 #define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
     do { \
-        (SLOT) = (V); \
+        _PyFrame_WriteHome(frame, &(SLOT), (V)); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -564,7 +570,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \
     do { \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        _PyFrame_WriteHome(frame, &(SLOT), _PyValue_Publish(&(V))); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -591,7 +597,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = (VALUE); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), (VALUE)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
         } \
@@ -601,7 +607,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (VALUE); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), (VALUE)); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -620,7 +626,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL(F)) { \
             (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckHome(IR_SLOT(F)); \
         } \
         else if ((F) == IR_NO_DST) { \
@@ -628,7 +634,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -638,13 +644,11 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL(F)) { \
             (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
         } \
         else if ((F) == IR_NO_DST) { \
-            (RETIRED) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            (RETIRED) = _PyFrame_TakeHome(frame, &(SLOT)); \
         } \
     } while (0)
 
@@ -658,7 +662,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (V); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), (V)); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -670,7 +674,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyFrame_WriteHome(frame, &IR_SLOT(F), _PyValue_Publish(&(V))); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
@@ -683,9 +687,8 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
-            (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
     } while (0)
@@ -697,14 +700,12 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
+            _PyFrame_MoveHome(frame, &(SLOT), frame, &IR_SLOT(F)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
-            (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
         else if ((F) == IR_NO_DST) { \
-            PyValue ir_result = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            PyValue ir_result = _PyFrame_TakeHome(frame, &(SLOT)); \
             PyValue_XCLOSE(ir_result); \
         } \
     } while (0)
@@ -718,7 +719,8 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * finish_unpack_to_locals() does the rest out of line, so that the release
  * sees the locals as the STORE_FAST sequence leaves them. */
 static inline int
-_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
+_PyIR_UnpackToLocals(_PyInterpreterFrame *frame, PyValue *locals,
+                     PyValue *window, int n, int canonical)
 {
     for (int i = 0; i < n; i++) {
         PyValue old = locals[i];
@@ -727,23 +729,24 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
         }
         PyValue *element = &window[n - 1 - i];
         assert(!canonical || _PyValue_IsHome(*element));
-        locals[i] = canonical ? *element : _PyValue_Publish(element);
+        _PyFrame_WriteHome(frame, locals + i,
+                           canonical ? *element : _PyValue_Publish(element));
         _PyValue_CheckHome(locals[i]);
-        window[n - 1 - i] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, window + n - 1 - i, PyValue_NULL);
         PyValue_XCLOSE(old);
     }
     return -1;
 }
-#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N), 0)
+#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals(frame, (L), (W), (N), 0)
 #define IR_UNPACK_CANONICAL_TO_LOCALS(L, W, N) \
-    _PyIR_UnpackToLocals((L), (W), (N), 1)
+    _PyIR_UnpackToLocals(frame, (L), (W), (N), 1)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \
         PyValue *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyValue_NULL; \
+            _PyFrame_WriteHome(frame, ir_p + ir_i, PyValue_NULL); \
         } \
     } while (0)
 

@@ -1782,6 +1782,17 @@ def slot_uses(inst: Instruction) -> list[tuple[str, Token, str | None]]:
                     a < 2 or tokens[a - 2].kind not in OPERANDS):
                 func = enclosing_call(tokens, a - 1)
                 name = func.text if func is not None else None
+                if name == "_PyFrame_WriteHome":
+                    if [t.text for t in tokens[max(0, a - 5):a]] != [
+                            "_PyFrame_WriteHome", "(", "frame", ",", "&"]:
+                        raise analysis_error(
+                            f"{inst.name}: local store needs the active frame capability",
+                            tokens[i])
+                    # NULL ends that local owner; another value replaces it.
+                    tail = [t.text for t in tokens[b:b + 4]]
+                    uses.append(("clear" if tail == [",", "PyValue_NULL", ")", ";"]
+                                 else "store", tokens[i], None))
+                    continue
                 if name in SLOT_ADDRESS_READS:
                     uses.append(("read", tokens[i], None))
                     continue
@@ -2027,6 +2038,7 @@ class SlotLayout:
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
     canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
+    native_entry: bool = False  # checked native interpreter-exit homes
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2308,15 +2320,19 @@ class IRStack(Stack):
         view."""
         f = self.input_field(p)
         if p not in self.layout.borrowable:
-            out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+            if self.layout.native_entry:
+                out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+            else:
+                out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
             return
         names = self.views.get(p)
         if not names:
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
+        macro = "IR_CONSUME_NATIVE_INPUT" if self.layout.native_entry else "IR_CONSUME_INPUT"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"IR_CONSUME_INPUT({f}, {names[-1]})")
+                   f"{macro}({f}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
@@ -4071,7 +4087,7 @@ class IREmitter(Emitter):
         self.emit("PyValue ir_resume_input = PyValue_None;\n")
         self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
         self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
-        self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
+        self.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({base} + 2), PyValue_NULL);\n")
         self.emit("}\n")
         self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
         self.emit("frame->return_pc = next_instr;\n")
@@ -4846,6 +4862,28 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
     return CanonicalResult(producer, result)
 
 
+def native_entry_input_contract(inst: Instruction) -> bool:
+    if inst.name != "INTERPRETER_EXIT":
+        return False
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    expected = """{
+        assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
+        assert(_PyFrame_IsIncomplete(frame));
+        tstate->current_frame = frame->previous;
+        assert(!_PyErr_Occurred(tstate));
+        PyValue result = TAKE(retval);
+        INPUTS_DEAD();
+        assert(frame == &IR_ACTIVATION()->entry.frame);
+        LLTRACE_RESUME_FRAME();
+        return result;
+    }"""
+    if (len(parts) != 1 or len(inst.parts) != 1 or
+            statement_shape(parts[0].body) != statement_shape(
+                Parser(expected, "<native entry ownership>").block())):
+        raise analysis_error("bitmap native entry needs its checked contract", inst.where)
+    return True
+
+
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
     """A return or yield transfers a canonical home owner unchanged.
 
@@ -5095,6 +5133,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     layout = slot_layout(inst, fmt, mode)
     canonical = canonical_result_source(inst, fmt)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
+                     native_entry=native_entry_input_contract(inst),
                      canonical_result=canonical.result if canonical else None,
                      canonical_outputs=canonical_output_sources(inst, fmt))
     if emitter.execution_variant is not None:
@@ -5601,7 +5640,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
             if (cell == NULL) { ERROR_NO_POP(); }
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_FromObjectSteal(cell));
             PyValue_XCLOSE(tmp);
         }"""
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
@@ -5613,7 +5652,8 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+                _PyFrame_WriteHome(frame, frame->base + offset + i,
+                                   PyValue_XDUP(PyTuple_GET_VALUE(closure, i)));
             }
         }"""
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
@@ -5648,7 +5688,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             return "_PyIR_TRANSFER_LOCAL_DUP"
         return unknown
     if inst.name == "LOAD_FAST_AND_CLEAR":
-        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL; }"):
+        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL); }"):
             return "_PyIR_TRANSFER_LOCAL_MOVE"
         return unknown
     close = "{ PyValue_XCLOSE(value); }"
@@ -5657,7 +5697,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     if inst.name == "STORE_FAST":
         store = """{
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = value;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), value);
             _PyValue_CheckHome(value);
             DEAD(value);
             trash = tmp;
@@ -5666,7 +5706,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     if inst.name == "DELETE_FAST":
         body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
                 + unbound + " PyValue tmp = GETLOCAL(oparg); "
-                "GETLOCAL(oparg) = PyValue_NULL; PyValue_XCLOSE(tmp); }")
+                "_PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL); PyValue_XCLOSE(tmp); }")
         # DELETE_FAST names its checked view v rather than value_s.
         return "_PyIR_TRANSFER_LOCAL_CLEAR" if scalar_shape(0, 0) and bodies_match(
             body.replace("value_s", "v")) else unknown

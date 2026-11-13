@@ -240,9 +240,11 @@ ENCODING_FILES = (
 # count-free conversion of a borrow to an owner (register-ir-v2-a5b.md,
 # section 4.2), and the conversions between the addresses of the data stack,
 # which the public PyThreadState declares as PyObject **, and its slots
-# (Include/internal/pycore_interpframe.h).
+# (Include/internal/pycore_interpframe.h). The bitmap allocator also converts
+# the adjacent physical home and metadata regions without decoding a value.
 ENCODING_FUNCTIONS = ("_PyIR_AdoptTemp", "_PyDataStack_Slots",
-                      "_PyDataStack_Address")
+                      "_PyDataStack_Address", "_PyFrame_BindChunkBitmap",
+                      "_PyHomeBitmap_InitStorage")
 # The encoding constants of the value headers. The self-tests check that
 # each is still defined there, so that a rename cannot empty the rule.
 ENCODING_NAMES = (

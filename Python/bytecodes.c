@@ -249,7 +249,7 @@ dummy_func(
 
         inst(LOAD_FAST_AND_CLEAR, (-- value)) {
             value = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL);
         }
 
         // The assembler (Python/assemble.c) emits constant loads as the
@@ -295,7 +295,7 @@ dummy_func(
 
         op(_SWAP_FAST, (value -- trash)) {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
-            GETLOCAL(oparg) = value;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), value);
             _PyValue_CheckHome(value);
             DEAD(value);
             trash = tmp;
@@ -1233,8 +1233,8 @@ dummy_func(
         op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
             STAT_INC(BINARY_OP, hit);
             _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
-            pushed_frame->base[0] = TAKE(container);
-            pushed_frame->base[1] = TAKE(sub);
+            _PyFrame_WriteHome(pushed_frame, pushed_frame->base, TAKE(container));
+            _PyFrame_WriteHome(pushed_frame, pushed_frame->base + 1, TAKE(sub));
             INPUTS_DEAD();
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             frame->return_pc = next_instr;
@@ -2136,7 +2136,7 @@ dummy_func(
                 ERROR_IF(true);
             }
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
-            GETLOCAL(oparg) = PyValue_NULL;
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_NULL);
             PyValue_XCLOSE(tmp);
         }
 
@@ -2148,7 +2148,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            _PyFrame_WriteHome(frame, &GETLOCAL(oparg), PyValue_FromObjectSteal(cell));
             PyValue_XCLOSE(tmp);
         }
 
@@ -2219,7 +2219,8 @@ dummy_func(
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+                _PyFrame_WriteHome(frame, frame->base + offset + i,
+                                   PyValue_XDUP(PyTuple_GET_VALUE(closure, i)));
             }
         }
 
@@ -2864,7 +2865,7 @@ dummy_func(
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
             STAT_INC(LOAD_ATTR, hit);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), frame);
-            pushed_frame->base[0] = TAKE(owner);
+            _PyFrame_WriteHome(pushed_frame, pushed_frame->base, TAKE(owner));
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -2889,8 +2890,9 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                 tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), frame);
-            pushed_frame->base[0] = TAKE(owner);
-            pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
+            _PyFrame_WriteHome(pushed_frame, pushed_frame->base, TAKE(owner));
+            _PyFrame_WriteHome(pushed_frame, pushed_frame->base + 1,
+                               PyValue_DUP(PyValue_FromObjectBorrow(name)));
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -4341,10 +4343,10 @@ dummy_func(
             _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
                                 code, base, frame);
             if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                call_transfer_exact_args(base, window_base, oparg);
+                call_transfer_exact_args(pushed_frame, frame, window_base, oparg);
             }
             // The callee holds callable as its f_funcobj
-            window_base[0] = PyValue_NULL;
+            _PyFrame_WriteHome(frame, window_base, PyValue_NULL);
             INPUTS_DEAD();
             IR_WINDOW_TAKEN();
             new_frame = PyValue_Wrap(pushed_frame);
@@ -5575,7 +5577,7 @@ dummy_func(
             slots = _PyFrame_Slots(frame);
             if (lasti) {
                 int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                slots[first] = PyValue_TagIndex(frame_lasti);
+                _PyFrame_WriteHome(frame, slots + first, PyValue_TagIndex(frame_lasti));
             }
 
             /* Make the raw exception data
@@ -5583,7 +5585,7 @@ dummy_func(
                 so a program can emulate the
                 Python main loop. */
             PyObject *exc = _PyErr_GetRaisedException(tstate);
-            slots[exc_slot] = PyValue_FromObjectSteal(exc);
+            _PyFrame_WriteHome(frame, slots + exc_slot, PyValue_FromObjectSteal(exc));
             next_instr = INSTR_AT_OFFSET(handler);
 
             int err = monitor_handled(tstate, frame, next_instr, exc);

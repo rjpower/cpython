@@ -340,7 +340,8 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             _PyCell_SetValue((PyCellObject *)cell, replacement);
         } else if (PyValue_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
-            fast[i] = PyValue_XDUP(PyValue_FromObjectBorrow(value));
+            _PyFrame_WriteHome(frame->f_frame, fast + i,
+                               PyValue_XDUP(PyValue_FromObjectBorrow(value)));
         } else if (value != PyValue_AsKnownObjectBorrow(oldvalue)) {
             PyObject *old_obj = PyValue_AsKnownObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
@@ -351,9 +352,11 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
                 // frame dies, so LOAD_FAST_BORROW references to it elsewhere
                 // on the stack stay valid after the slot's own reference goes.
                 _Py_value_allow_borrows_outlive_close(fast[i]);
-                PyValue_CLOSE(fast[i]);
+                PyValue old = _PyFrame_TakeHome(frame->f_frame, fast + i);
+                PyValue_CLOSE(old);
             }
-            fast[i] = PyValue_XDUP(PyValue_FromObjectBorrow(value));
+            _PyFrame_WriteHome(frame->f_frame, fast + i,
+                               PyValue_XDUP(PyValue_FromObjectBorrow(value)));
         }
         return 0;
     }
@@ -3799,9 +3802,9 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < plan.nrestores; i++) {
         RegisterLocalRestore action = plan.restores[i];
         restored_values[i] = frame->base[action.home];
-        frame->base[action.home] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, frame->base + action.home, PyValue_NULL);
         retired[nretired++] = frame->base[action.local];
-        frame->base[action.local] = PyValue_NULL;
+        _PyFrame_WriteHome(frame, frame->base + action.local, PyValue_NULL);
     }
     if (!pending_call) {
         const uint32_t *constants = _PyCode_CONSTSLOTS(code);
@@ -3812,17 +3815,17 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             }
             if (!constant && !register_plan_has(&plan, slot - code->co_nlocalsplus)) {
                 retired[nretired++] = frame->base[slot];
-                frame->base[slot] = PyValue_NULL;
+                _PyFrame_WriteHome(frame, frame->base + slot, PyValue_NULL);
             }
         }
     }
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         if (PyValue_IsNull(frame->base[i]) && !register_plan_restores_local(&plan, i)) {
-            frame->base[i] = PyValue_None;
+            _PyFrame_WriteHome(frame, frame->base + i, PyValue_None);
         }
     }
     for (int i = 0; i < plan.nrestores; i++) {
-        frame->base[plan.restores[i].local] = restored_values[i];
+        _PyFrame_WriteHome(frame, frame->base + plan.restores[i].local, restored_values[i]);
         restored_values[i] = PyValue_NULL;
     }
     PyMem_Free(restored_values);
@@ -4083,6 +4086,7 @@ frame___sizeof___impl(PyFrameObject *self)
     res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyFrame_GetCode(self->f_frame);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
+    res += _PyHomeBitmap_HeapWords(_PyFrame_NumSlotsForCodeObject(code)) * sizeof(uint64_t);
     return PyValue_FromInt64(res);
 }
 
@@ -4162,11 +4166,13 @@ PyFrameObject*
 _PyFrame_New_NoTrack(PyCodeObject *code)
 {
     CALL_STAT_INC(frame_objects_created);
-    int slots = code->co_nlocalsplus + code->co_stacksize;
-    PyFrameObject *f = PyObject_GC_NewVar(PyFrameObject, &PyFrame_Type, slots);
+    int slots = _PyFrame_NumSlotsForCodeObject(code);
+    PyFrameObject *f = PyObject_GC_NewVar(
+        PyFrameObject, &PyFrame_Type, slots + _PyHomeBitmap_HeapWords(slots));
     if (f == NULL) {
         return NULL;
     }
+    _PyFrame_InitHeapBitmap((_PyInterpreterFrame *)f->_f_frame_data, slots);
     f->f_back = NULL;
     f->f_trace = NULL;
     f->f_trace_lines = 1;
@@ -4256,7 +4262,8 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     PyObject *closure = func->func_closure;
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
-        frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+        _PyFrame_WriteHome(frame, frame->base + offset + i,
+                           PyValue_XDUP(PyTuple_GET_VALUE(closure, i)));
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);

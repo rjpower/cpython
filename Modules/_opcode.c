@@ -412,6 +412,7 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {"call_input_holes", "bit k: CALL window input k is virtual NULL and is not read"},
+    {"error_routes", "complete exceptional routes, including conditional bridges and local publication"},
     {NULL}
 };
 
@@ -460,6 +461,7 @@ ir_contract_row(PyTypeObject *type, int h)
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->call_input_holes),
+        PyLong_FromLong(fmt->error_routes),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,
@@ -602,6 +604,10 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_PURE", _PyIR_PURE);
     ADD_IR_CONSTANT("IR_SPECIALIZES", _PyIR_SPECIALIZES);
     ADD_IR_CONSTANT("IR_BOXES", _PyIR_BOXES);
+    ADD_IR_CONSTANT("IR_ERROR_COMPLETE", _PyIR_ERROR_COMPLETE);
+    ADD_IR_CONSTANT("IR_ERROR_DIRECT", _PyIR_ERROR_DIRECT);
+    ADD_IR_CONSTANT("IR_ERROR_BRIDGE", _PyIR_ERROR_BRIDGE);
+    ADD_IR_CONSTANT("IR_ERROR_LOCAL_DST", _PyIR_ERROR_LOCAL_DST);
     ADD_IR_CONSTANT("IR_EXT_FIXED", _PyIR_EXT_FIXED);
     ADD_IR_CONSTANT("IR_EXT_OPARG", _PyIR_EXT_OPARG);
     ADD_IR_CONSTANT("IR_EXT_OPARG2", _PyIR_EXT_OPARG2);

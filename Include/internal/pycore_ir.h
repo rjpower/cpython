@@ -209,6 +209,13 @@ enum {
 #define _PyIR_BOXES         0x400   // may box a value into the value record
                                     // (_PyValueTemps), which it then needs
 
+/* Complete exceptional-route census from the actual emitter. Zero is
+ * unknown, not infallible. These bits establish no readable-home facts. */
+#define _PyIR_ERROR_COMPLETE  1u
+#define _PyIR_ERROR_DIRECT    2u
+#define _PyIR_ERROR_BRIDGE    4u
+#define _PyIR_ERROR_LOCAL_DST 8u
+
 #define _PyIR_NO_DST        INT8_MIN
 
 /* A count of slots as a function of the oparg: k plus the part of the oparg
@@ -349,6 +356,7 @@ typedef struct _PyIRFormat {
     uint32_t owner_program;
     uint16_t owner_events;
     uint8_t call_input_holes; // canonical virtual-NULL window inputs
+    uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves

@@ -1511,6 +1511,17 @@ call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame
                                _PyInstr *current, int base)
 {
     PyValue *homes = _PyFrame_Slots(frame) + base;
+    bool exact_tuple;
+    {
+        PyValueBorrow input = PyValue_Borrow(homes[2]);
+        exact_tuple = PyValue_IsObject(input) &&
+            PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(input));
+    }
+    if (exact_tuple) {
+        /* The window anchors this callback-free probe. Its borrow ends
+         * before refresh, which retains the preparation's reentry checks. */
+        return call_transaction_refresh(tstate, frame, current);
+    }
     PyValue args = PyValue_DUP(homes[2]);
     PyValue func = PyValue_DUP(homes[0]);
     PyValue obsolete = PyValue_NULL;

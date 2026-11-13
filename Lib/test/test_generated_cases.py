@@ -3514,6 +3514,31 @@ class TestIRCases(unittest.TestCase):
                         formats[name], emitter, writer, record)
                     self.assertIn("PyValue_IsNull(store_value)", output.getvalue())
 
+    def test_specialized_iteration_deopts_null_before_required_cursor(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        guard = analysis.uops["_GUARD_TOS_NOT_NULL"]
+        self.assertTrue(guard.stack.inputs[0].nullable)
+        ir_generator.validate_nullable_inputs(guard)
+        for name in ("FOR_ITER_LIST", "FOR_ITER_TUPLE", "FOR_ITER_VIRTUAL"):
+            parts = [part for part in analysis.instructions[name].parts
+                     if isinstance(part, analyzer.Uop)]
+            with self.subTest(name=name):
+                self.assertIs(parts[0], guard)
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    writer = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(writer, analysis, formats)
+                    emitter.handler_format = formats[name]
+                    ir_generator.generate_handler(name, analysis.instructions[name],
+                        formats[name], emitter, writer, record)
+                    body = output.getvalue()
+                    exit_at = body.index("JUMP_TO_PREDICTED(FOR_ITER)")
+                    self.assertLess(body.index("PyValue_IsNull(null_or_index)"), exit_at)
+                    self.assertLess(exit_at, body.index("code reads an absent required input"))
+
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
             inst(OP, (required, value:nullable, items[oparg]:nullable --)) {

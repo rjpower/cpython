@@ -3904,6 +3904,7 @@ dummy_func(
 
         macro(FOR_ITER_LIST) =
             unused/1 +  // Skip over the entry distance
+            _GUARD_TOS_NOT_NULL +
             _ITER_CHECK_LIST +
             _ITER_JUMP_LIST +
             _ITER_NEXT_LIST;
@@ -3938,6 +3939,7 @@ dummy_func(
 
         macro(FOR_ITER_TUPLE) =
             unused/1 +  // Skip over the entry distance
+            _GUARD_TOS_NOT_NULL +
             _ITER_CHECK_TUPLE +
             _ITER_JUMP_TUPLE +
             _ITER_NEXT_TUPLE;

@@ -6,11 +6,41 @@ import unittest
 
 import _opcode
 import _testinternalcapi
+from test import support
 from test.test_ir_call_roles import CONTRACT, HANDLERS, routes
 from test.test_ir_transfer_admission import encoded, make_code
 
 
 class HomeReadTests(unittest.TestCase):
+    @support.requires_specialization
+    def test_specialized_iteration_accepts_changed_null_cursor_protocol(self):
+        def collect(values):
+            result = []
+            for value in values:
+                result.append(value)
+            return result
+
+        class Iterable:
+            def __iter__(self):
+                return iter((7, 8))
+
+        for values, handler in (([1, 2, 3], "FOR_ITER_LIST"),
+                                ((1, 2, 3), "FOR_ITER_TUPLE")):
+            for code in routes(collect.__code__):
+                function = types.FunctionType(code, {})
+                for _ in range(2 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
+                    self.assertEqual(function(values), [1, 2, 3])
+                self.assertTrue(any(row[0] == handler
+                                    for row in _testinternalcapi.get_ir(code, True)))
+                with self.subTest(handler=handler):
+                    self.assertEqual(function(iter([4, 5])), [4, 5])
+                    self.assertEqual(function(Iterable()), [7, 8])
+                    self.assertEqual(function(iter(())), [])
+                    self.assertEqual(function(value for value in (9, 10)), [9, 10])
+                    self.assertEqual(function(values), [1, 2, 3])
+                    with self.assertRaises(TypeError):
+                        function(42)
+
     def test_delete_name_accepts_null_in_module_and_class_namespace(self):
         sources = ("item = 42\ndel item\n", "del item\n")
         for source in sources:

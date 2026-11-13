@@ -10,6 +10,7 @@ import weakref
 
 import _opcode
 import _testinternalcapi
+from test import support
 from test.test_ir_admission import construct
 from test.test_ir_transfer_admission import encoded, make_code
 
@@ -210,6 +211,32 @@ class CallRoleTests(unittest.TestCase):
             finally:
                 setter(old)
         self.assertEqual(call_rows(invoke.__code__)[0][0], "CALL_NO_SELF")
+
+    def test_exact_and_bound_specializations_keep_zero_two_and_many_arguments(self):
+        for count in (0, 2, 33):
+            names = [f"a{i}" for i in range(count)]
+            signature = ", ".join(names)
+            arguments = ", ".join(f"values[{i}]" for i in range(count))
+            result = "(" + ", ".join(names) + ("," if count == 1 else "") + ")"
+            namespace = {}
+            exec(f"def target({signature}):\n    return {result}\n"
+                 f"def method(self{', ' if count else ''}{signature}):\n"
+                 f"    return self, {result}\n"
+                 f"def plain(fn, values):\n    return fn({arguments})\n"
+                 f"def bound(fn, values):\n    return fn({arguments})\n", namespace)
+            values = tuple(object() for _ in range(count))
+            receiver = object()
+            bound = types.MethodType(namespace["method"], receiver)
+            for _ in range(200):
+                self.assertEqual(namespace["plain"](namespace["target"], values), values)
+                actual = namespace["bound"](bound, values)
+                self.assertIs(actual[0], receiver)
+                self.assertEqual(actual[1], values)
+            if not support.Py_GIL_DISABLED:
+                self.assertEqual(call_rows(namespace["plain"].__code__, True)[0][0],
+                                 "CALL_NO_SELF_PY_EXACT_ARGS")
+                self.assertEqual(call_rows(namespace["bound"].__code__, True)[0][0],
+                                 "CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS")
 
     def test_native_prepend_uses_owned_copy_without_arena_offset(self):
         receiver = object()

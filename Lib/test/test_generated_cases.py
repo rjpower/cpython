@@ -3204,7 +3204,7 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
         self.assertEqual(contracts["BUILD_TUPLE"].ownership_events, (
-            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
+            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS", flags=1),))
         body = analysis.instructions["BUILD_TUPLE"].parts[0].body
         changed = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
         body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])

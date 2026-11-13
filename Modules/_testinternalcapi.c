@@ -3377,6 +3377,10 @@ check_frame_code_pin(PyObject *self, PyObject *arg)
     ok = ok && _Py_IsImmortal((PyObject *)immortal)
          && _PyFrame_GetCode(&frame) == immortal;
     Py_CLEAR(frame.f_executable);
+    _PyInterpreterFrame sentinel = {.owner = FRAME_OWNED_BY_INTERPRETER};
+    PyObject *sentinel_code = PyUnstable_InterpreterFrame_GetCode(&sentinel);
+    ok = ok && sentinel_code == Py_None;
+    Py_XDECREF(sentinel_code);
     if (!ok) {
         PyErr_SetString(PyExc_AssertionError, "incorrect frame code ownership");
         return NULL;

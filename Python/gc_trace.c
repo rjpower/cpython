@@ -56,10 +56,66 @@
 #include "Python.h"
 #include "pycore_borrow.h"        // _PyBorrowStack_Visit()
 #include "pycore_gc_trace.h"
+#include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value_api.h"      // _PyValue_AsObjectAt()
+
+int
+_PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *arg)
+{
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)tstate)->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        _PyInterpreterFrame *frame = roots->frame;
+        assert(roots->remaining >= 0);
+        for (int i = 0; i < roots->remaining; i++) {
+            PyValue value = frame->base[i];
+            if (!PyValue_IsTaggedIndex(value)) {
+                _PyValue_RecheckHome(value);
+            }
+            if (PyValue_IsObject(value)) {
+                Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+            }
+        }
+        if (roots->header_mask & _Py_TRANSITION_CODE) {
+            Py_VISIT(frame->f_executable);
+        }
+        if (roots->header_mask & _Py_TRANSITION_FUNCTION) {
+            Py_VISIT(frame->f_funcobj);
+        }
+        if (roots->header_mask & _Py_TRANSITION_LOCALS) {
+            Py_VISIT(frame->f_locals);
+        }
+        if (roots->header_mask & _Py_TRANSITION_FRAME_OBJECT) {
+            Py_VISIT(frame->frame_obj);
+        }
+        if (roots->header_mask & _Py_TRANSITION_EXCEPTION) {
+            Py_VISIT(_PyGen_GetGeneratorFromFrame(frame)->gi_exc_state.exc_value);
+        }
+        if (roots->result_present && PyValue_IsObject(roots->result)) {
+            Py_VISIT(PyValue_AsKnownObjectBorrow(roots->result));
+        }
+        _PyTransitionPrefix *prefix = roots->prefix;
+        if (prefix != NULL) {
+            assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
+            assert(prefix->end <= prefix->capacity);
+            for (int i = prefix->begin; i < prefix->end; i++) {
+                PyValue value = prefix->base[i];
+                if (!PyValue_IsTaggedIndex(value)) {
+                    _PyValue_RecheckHome(value);
+                }
+                if (PyValue_IsObject(value)) {
+                    Py_VISIT(PyValue_AsKnownObjectBorrow(value));
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
@@ -1072,7 +1128,7 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
             return err;
         }
     }
-    return 0;
+    return _PyGC_TraceVisitTransitionRoots(p, visit, arg);
 }
 
 int

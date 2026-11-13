@@ -1412,7 +1412,8 @@ class ConstSlotsTest(unittest.TestCase):
         code = self.loop.__code__
         with self.assertRaisesRegex(
                 ValueError, "changing the number of variables"):
-            code.replace(co_varnames=code.co_varnames + ('extra',))
+            code.replace(co_nlocals=code.co_nlocals + 1,
+                         co_varnames=code.co_varnames + ('extra',))
         with self.assertRaisesRegex(
                 ValueError, "changing the number of variables"):
             code.replace(co_nlocals=2, co_varnames=code.co_varnames[:2])

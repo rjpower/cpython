@@ -1313,8 +1313,8 @@ invalid:
     return -1;
 }
 
-int
-_PyCode_Validate(struct _PyCodeConstructor *con)
+static int
+validate_code_structure(struct _PyCodeConstructor *con)
 {
     /* Check argument types */
     if (con->argcount < con->posonlyargcount || con->posonlyargcount < 0 ||
@@ -1347,6 +1347,13 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
     }
     if (PyBytes_GET_SIZE(con->code) % sizeof(_PyIRWord) != 0) {
         PyErr_SetString(PyExc_ValueError, "code: co_code is malformed");
+        return -1;
+    }
+    Py_ssize_t nlocalsplus = PyTuple_GET_SIZE(con->localsplusnames);
+    if (nlocalsplus > IR_MAX_SLOTS ||
+        Py_MAX(con->stacksize, 1) > IR_MAX_SLOTS - nlocalsplus)
+    {
+        PyErr_SetString(PyExc_ValueError, "code: frame exceeds register limit");
         return -1;
     }
     if (con->fbinit != NULL
@@ -1387,11 +1394,6 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
                             "code: empty or release-only executable instruction");
             return -1;
         }
-    }
-    if (validate_completion_words(con) < 0 || validate_source_map(con) < 0 ||
-        validate_virtual_kwargs(con) < 0)
-    {
-        return -1;
     }
     return 0;
 }
@@ -1638,10 +1640,10 @@ error:
     return -1;
 }
 
-/* The caller is responsible for ensuring that the given data is valid. */
-
-PyCodeObject *
-_PyCode_New(struct _PyCodeConstructor *con)
+/* Only the common admission boundary below calls this allocator. Its private
+ * constructor may be adjusted while normalizing locations and frame size. */
+static PyCodeObject *
+new_code(struct _PyCodeConstructor *con)
 {
     if (intern_code_constants(con) < 0) {
         return NULL;
@@ -1754,10 +1756,11 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
     }
     uint32_t end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1])
                                : _PyIR_FBINIT_ARG(table[0]);
-    return (end - unit) * 8 >= fmt->fb_size;
+    return _PyIR_FBINIT_KIND(table[i]) == fmt->fb_kind &&
+           (end - unit) * 8 >= fmt->fb_size;
 }
 
-/* Check the fields of words from outside the compiler and marshal that the
+/* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
  * for an operand kept in the entry is not the shared entry 0.  Returns the
@@ -1765,8 +1768,13 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
  * constant handlers that no longer fit their constant run LOAD_CONST, as
  * after code.replace(co_consts=...). */
 static PyObject *
-check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
+check_words(struct _PyCodeConstructor *con)
 {
+    PyObject *code = con->code;
+    PyObject *fbinit = con->fbinit;
+    PyObject *consts = con->consts;
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int nslots = nl + Py_MAX(con->stacksize, 1);
     PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
     Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
@@ -1786,9 +1794,16 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
             goto error;
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+        int base = -1, dst = -1;
         for (int k = 0; k < 4; k++) {
             int role = fmt->roles[k];
             uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
+            if (role == _PyIR_ROLE_BASE) {
+                base = (int)value;
+            }
+            else if (role == _PyIR_ROLE_DST) {
+                dst = (int)value;
+            }
             if (role == _PyIR_ROLE_DST && value == IR_NO_DST
                 && (fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS)))
             {
@@ -1802,6 +1817,14 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                              nslots);
                 goto error;
             }
+            if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
+                value >= (uint32_t)nl)
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd names local slot %u of %d", i,
+                             value, nl);
+                goto error;
+            }
             // The field is the unit of an entry that fits the handler's
             // type; 0 is the shared header, which only a handler with no
             // operand in its entry can use.
@@ -1811,6 +1834,85 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd has no feedback entry %u", i,
                              value);
+                goto error;
+            }
+        }
+        int arg;
+        if (fmt->imm == _PyIR_LOC_FBARG) {
+            if (handler >= _PyIR_BINARY_OP_FIRST &&
+                handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST)
+            {
+                arg = handler - _PyIR_BINARY_OP_FIRST;
+            }
+            else {
+                uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                int ordinal = _PyIR_FbFind(table, nfb,
+                    fields[fmt->fb - _PyIR_LOC_A]);
+                assert(ordinal > 0);
+                arg = (int)_PyIR_FBINIT_ARG(table[ordinal]);
+            }
+        }
+        else {
+            arg = _PyIR_FieldOparg(word);
+        }
+        int reads = _PyIR_Extent(fmt->reads, arg);
+        int writes = _PyIR_Extent(fmt->writes, arg);
+        int through = _PyIR_Extent(fmt->through, arg);
+        if (reads < 0 || writes < 0 || through < 0 || through > reads ||
+            through > writes ||
+            (base >= 0 && (base < nl ||
+                          base > nslots - Py_MAX(reads, writes))))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid register window", i);
+            goto error;
+        }
+        int outputs = writes - through;
+        if ((fmt->flags & _PyIR_UNPACKS) && dst != IR_NO_DST) {
+            if (dst < 0 || dst >= nl || outputs > nl - dst) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an invalid unpack local window", i);
+                goto error;
+            }
+        }
+        else if (fmt->output_kind == _PyIR_OUTPUT_REGISTER_DST && outputs > 0) {
+            if ((dst == IR_NO_DST && outputs != 1) ||
+                (dst != IR_NO_DST &&
+                 (dst < 0 || outputs > nslots - dst ||
+                  (dst < nl && (!(fmt->flags & _PyIR_STORE_DST) || outputs != 1)))))
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an invalid output window", i);
+                goto error;
+            }
+        }
+        if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD | _PyIR_NAMES_TARGET)) {
+            Py_ssize_t target = fmt->flags & _PyIR_FORWARD ? i + 1 + arg : arg;
+            if (target < 0 || target >= nwords) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an invalid branch target", i);
+                goto error;
+            }
+        }
+        int opcode = _PyIR_BaseOpcode(handler);
+        if (OPCODE_HAS_CONST(opcode) &&
+            (arg < 0 || arg >= PyTuple_GET_SIZE(consts)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an invalid constant index", i);
+            goto error;
+        }
+        if (OPCODE_HAS_NAME(opcode)) {
+            int index = arg;
+            if (opcode == LOAD_GLOBAL || opcode == LOAD_ATTR) {
+                index >>= 1;
+            }
+            else if (opcode == LOAD_SUPER_ATTR || opcode == IMPORT_NAME) {
+                index >>= 2;
+            }
+            if (index < 0 || index >= PyTuple_GET_SIZE(con->names)) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an invalid name index", i);
                 goto error;
             }
         }
@@ -1836,6 +1938,43 @@ error:
     return NULL;
 }
 
+/* The normalized words and all semantic proofs refer to the same immutable
+ * image. A caller's constructor and borrowed input references stay unchanged. */
+static PyObject *
+validate_semantic_image(struct _PyCodeConstructor *con)
+{
+    if (validate_code_structure(con) < 0) {
+        return NULL;
+    }
+    PyObject *words = check_words(con);
+    if (words == NULL) {
+        return NULL;
+    }
+    struct _PyCodeConstructor checked = *con;
+    checked.code = words;
+    if (validate_completion_words(&checked) < 0 ||
+        validate_source_map(&checked) < 0 || validate_virtual_kwargs(&checked) < 0)
+    {
+        Py_DECREF(words);
+        return NULL;
+    }
+    return words;
+}
+
+PyCodeObject *
+_PyCode_New(struct _PyCodeConstructor *con)
+{
+    PyObject *words = validate_semantic_image(con);
+    if (words == NULL) {
+        return NULL;
+    }
+    struct _PyCodeConstructor checked = *con;
+    checked.code = words;
+    PyCodeObject *co = new_code(&checked);
+    Py_DECREF(words);
+    return co;
+}
+
 /* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
  * words in fbinit, or NULL for none, and the constant-slot table in
  * constslots, or NULL for none: the constructor adds its hidden slots to
@@ -1856,7 +1995,6 @@ code_new_with_fbinit(
     PyCodeObject *co = NULL;
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
-    PyObject *checked = NULL;
     PyObject *padded = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
@@ -2010,14 +2148,6 @@ code_new_with_fbinit(
         .exceptiontable = exceptiontable,
     };
 
-    if (_PyCode_Validate(&con) < 0) {
-        goto error;
-    }
-    checked = check_words(code, fbinit, consts, nlocalsplus + stacksize);
-    if (checked == NULL) {
-        goto error;
-    }
-    con.code = checked;
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
         PyErr_SetString(PyExc_ValueError,
                         "code: co_nlocals != len(co_varnames)");
@@ -2032,7 +2162,6 @@ code_new_with_fbinit(
 error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
-    Py_XDECREF(checked);
     Py_XDECREF(padded);
     return co;
 }

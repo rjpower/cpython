@@ -154,10 +154,11 @@ class FrameCodePinTests(unittest.TestCase):
         self.assertIs(frame.f_code, code_ref())
         frame.clear()
         support.gc_collect()
-        self.assertIsNone(function_ref())
+        self.assertIsNotNone(function_ref())
         self.assertIs(frame.f_code, code_ref())
         del frame
         support.gc_collect()
+        self.assertIsNone(function_ref())
         self.assertIsNone(code_ref())
 
     def test_completed_generator_keeps_code_without_function(self):

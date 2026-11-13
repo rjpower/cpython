@@ -28,6 +28,70 @@ class SourceNumbers(ir_numbers.NumberTable):
 
 
 class ErrorEffectTests(unittest.TestCase):
+    def test_pre_observer_wrappers_require_actual_error_and_call_receipts(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        if not source.is_file():
+            self.skipTest("requires bytecodes.c")
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        names = ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION")
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        line = analysis.instructions["INSTRUMENTED_LINE"]
+        self.assertFalse(any(call.call.text == "_PyCode_GetOriginalOpcode"
+                             for call in line.properties.escaping_calls.values()))
+        for name in names:
+            self.assertTrue(contracts[name].observer_entry)
+            # Redirecting observer wrappers do not become ordinary-body
+            # error contracts or full readable-home shapes.
+            self.assertFalse(contracts[name].error_routes)
+        with mock.patch.object(ir_generator.IREmitter, "observer_call_receipt", lambda *args: None):
+            missing = ir_generator.handler_contracts(analysis, formats)
+        self.assertFalse(any(missing[name].observer_entry for name in names))
+        original = ir_generator.IREmitter.goto_label
+
+        def missing_line_error(emitter, token, label, storage):
+            original(emitter, token, label, storage)
+            emitter.observer_errors.discard(id(token))
+
+        with mock.patch.object(ir_generator.IREmitter, "goto_label", missing_line_error):
+            missing = ir_generator.handler_contracts(analysis, formats)
+        self.assertFalse(missing[names[0]].observer_entry)
+        self.assertTrue(missing[names[1]].observer_entry)
+        original_flush = ir_generator.IREmitter.operand_error_flush
+
+        def missing_instruction_error(emitter, *args):
+            original_flush(emitter, *args)
+            emitter.observer_errors.discard(emitter.abrupt_operand_origin)
+
+        with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", missing_instruction_error):
+            missing = ir_generator.handler_contracts(analysis, formats)
+        self.assertFalse(missing[names[1]].observer_entry)
+
+    def test_pre_observer_source_uses_typed_metadata_and_exact_callback_roles(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        if not source.is_file():
+            self.skipTest("requires bytecodes.c")
+        text = source.read_text()
+        changes = (
+            ("int original_opcode = 0;", "int original_opcode = 0; window[0] = PyValue_NULL;"),
+            ("int original_opcode = 0;", "int original_opcode = 0; opaque(frame);"),
+            ("tstate, frame, this_instr, prev_instr", "tstate, frame, next_instr, prev_instr"),
+            ("code->_co_monitoring->lines, index", "code->_co_monitoring->lines, 0"),
+            ("original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);",
+             "original_opcode = 42;"),
+            ("int original_opcode = 0;", "int _Py_call_instrumentation_line = 0; int original_opcode = 0;"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            changed = Path(directory) / "bytecodes.c"
+            for before, after in changes:
+                with self.subTest(change=after):
+                    self.assertIn(before, text)
+                    changed.write_text(text.replace(before, after, 1))
+                    analysis = analyzer.analyze_files([str(changed)])
+                    formats = ir_generator.compute_formats(analysis)
+                    inst = analysis.instructions["INSTRUMENTED_LINE"]
+                    self.assertIsNone(ir_generator.observer_entry_source(inst, formats[inst.name]))
+
     def analyze(self, body, effect="-- value"):
         with tempfile.TemporaryDirectory() as directory:
             filename = Path(directory) / "source.c"

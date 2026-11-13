@@ -3300,8 +3300,7 @@ normal_transfer_proof(const semantic_image *image,
             for (int i = 0; i < nexceptions; i++) {
                 const _PyIRExceptionEntry *entry = &handlers[i];
                 for (int pc = entry->start; pc < entry->end; pc++) {
-                    if (!work.blocks[block_at[pc]].reached &&
-                        semantic_has_exceptional_predecessor(image, pc))
+                    if (!work.blocks[block_at[pc]].reached)
                     {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                                  entry->slot, entry->lasti);
@@ -3347,6 +3346,16 @@ normal_transfer_proof(const semantic_image *image,
             for (int i = work.blocks[b].start; i < end; i++) {
                 const _PyIRExceptionEntry *entry =
                     semantic_exception_at(handlers, nexceptions, i);
+                if (entry != NULL) {
+                    /* LINE/INSTRUCTION can fail before an inert body runs.
+                     * Their shared checked wrappers may vacate scratch, but
+                     * never populate an incoming absent home. This PRE edge
+                     * exists even when its source receipt is uncovered. */
+                    int floor = _PyIR_OBSERVER_ENTRY_ABSENCE ? nl + scratch : nl;
+                    semantic_exception_entry(image, &work, abrupt, state, floor,
+                                             entry->slot, entry->lasti);
+                    semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
+                }
                 if (entry != NULL &&
                     semantic_has_exceptional_predecessor(image, i))
                 {

@@ -5393,8 +5393,8 @@ dummy_func(
             int original_opcode = 0;
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
-                int index = (int)(INSTR_OFFSET_OF(this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                int index = INSTR_OFFSET_OF(this_instr);
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(

@@ -35,3 +35,42 @@ template and its tests to the new consuming/returning contract. The yield proof'
 old PyValue sentinel guard likewise needs the typed-NULL source spelling.
 Keep exact proof checks; do not bypass them. Generated metadata, source coverage
 tests and both-role candidate execution are coordinator gates.
+
+2026-11-12 integration fixture follow-up: independently reviewed the integrated
+`test_code.py`-only delta. Source GO. Old consumed-home/NULL-copy/discarded-save
+witnesses now assert early construction rejection; valid-image runtime controls
+retain actual line jumps and check reconstructed call state or restored outer
+binding. The distinct-local witness changes only STORE_FAST destination B,
+preserving the second saved source A, so normal transfer remains valid while
+the observer must still reject missing restoration. No native execution was
+performed for this peer; root owns the focused rerun.
+
+Profile-led fast retirement contract peer GO, before implementation. Existing
+`PyValue_RefcountOnObject` exactly matches XCLOSE's count classification,
+including NULL/index/scalar/no-count values. Under the GIL, a count greater than
+one followed by existing `Py_DECREF_MORTAL` cannot reach deallocation, weakref
+or reftracer-destroy callbacks. Reusing that primitive preserves statistics,
+ref-debug totals/static-immortal checks and dynamically immortalized untagged
+owners; do not duplicate raw refcount writes. Counts at most one remain
+unconsumed for outlined retirement and its existing diagnostics. FT counted
+values always take that latter route.
+
+No callback/poll occurs between a true result's non-last decrement and the
+caller's home-NULL/cursor store, so that store may follow consumption. False
+must leave the home and count intact before slow roots link. Retain existing
+debug home validation and avoid admitting wrapped/borrowed mortal homes. Limit
+the first source consumer to the actual TryClear predicate/XCLOSE pair. Native
+mask/branch/stack work and matched elapsed/PMU evidence must establish any gain;
+typed-header tests and other retirement costs are not savings from this helper.
+This peer authorizes no source implementation without coordinator GO.
+
+Fast-close four-file source postreview GO after coordinator authorization:
+helper uses the existing classifier and decref, TryClear retains a false home
+and NULLs only after true, with no intervening callback. Probes balance normal,
+last, no-count and both wrapped-pointer encodings (a real two-reference object
+is used in release), verify pending-exception identity, and use the existing
+unregistered stack-object precedent for a prior owner dynamically immortalized.
+No allocated immortal leaks or extra ref-debug total mutation is introduced.
+Five focused methods exercise count delta, last-owner retention and exactly-once
+finalization. Source only; role runs and native/performance admission are root
+gates.

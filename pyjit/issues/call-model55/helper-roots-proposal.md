@@ -49,6 +49,21 @@ This ledger is not a full census. Every callback and early exit must eventually
 have a concrete authority row; retaining native policy does not excuse missing
 arena owners or stale heap/container edges. No scanner is weakened in this step.
 
+The first adapter has GC peer GO and is implemented for source post-review in
+`call55-pins`. It is not tested or integrated evidence. Generic unpack now
+consumes the sequence owner and keeps its initialized suffix through iterator
+and sequence cleanup. The reached function is explicitly noinline. Exact
+specializations and native conservative policy are unchanged. Five focused
+methods cover simple/starred cleanup, short/excess/raised prefixes, nested
+unpack and traced ancestor redirect rejection with named-local mutation.
+
+Current observer proof is bounded: ordinary `f_lineno` mutation outside a trace
+is rejected; a trace inside iterator/destructor code sees UNPACK as an active
+ancestor operation, while the pending-child redirect recipe admits CALL/CALL_KW
+only. The focused fixture checks this rejection rather than changing admission.
+M4 still needs verified POST handoff before prefix disarm and a complete
+callback/observer phase matrix.
+
 ## First real arena adapter: generic unpack
 
 Use the existing reached outlined `_PyEval_UnpackIterableValue`, not a universal
@@ -102,6 +117,25 @@ transfers its owning callable window only after guards. Follow exported binder
 callers and provider duplicates to prove the public internal entry contract.
 A borrowed/deferred mortal input must be repaired at its producer, not silently
 upgraded. Executing code remains pinned independently of mutable function code.
+
+Completed source producer proof for the implemented accessor:
+
+| Initializer route | Owning producer and commit |
+| --- | --- |
+| `Objects/frameobject.c:init_frame` | Explicit DUP from newly constructed function; direct heap homes initialized before admission. |
+| Generic `eval_frame_push_and_init_code` | Consumes `func`; exported vector providers in `Objects/call.c` and `_PyEval_Vector` explicitly DUP the callable; fallback binder duplicates parent callable before consuming it. |
+| EX binder | Its contract consumes `func`; fallback EX caller DUPs the parent callable. Tuple/kwargs cleanup does not convert that transferred function owner to a borrow. |
+| `_PyFrame_PushUnchecked` | `getitem` cache produces DUP; property and overridden-getattribute paths explicitly DUP the guarded function. |
+| `_PyFrame_PushOverlapping` | Known positional/default/keyword routes move `homes[0]` after all guards, NULL it and complete child publication without callback. |
+| Exact CALL bytecode | Guarded callable window owns the value; callback-free initialization transfers it and clears window slot0 before dispatch. Heap-caller argument moves use the same callable owner. |
+| Init trampoline caller | Init callable is an owning result/duplicate consumed by the exported binder; the code-backed trampoline itself has no function pin. |
+
+The helper asserts canonical home and function type in debug, including the
+actual immortal requirement for a tagged function, and removes generic object
+bridge classification from release initialization. A focused internal helper
+checks that mortal function count transfer into/out of the frame adds no second
+count. Runtime/immortal/finalization qualification remains root-owned; source
+assertions do not distinguish a borrowed mortal by tag alone.
 
 ## Implementation boundaries and gates
 

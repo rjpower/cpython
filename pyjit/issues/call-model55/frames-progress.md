@@ -74,3 +74,133 @@ per active retirement. These are source/layout obligations, not measured native
 instruction or elapsed claims. Root must regenerate the RETURN template and
 escaping-call classification, compile both roles, execute the fixtures and
 inspect actual fast/slow native stack frames before integration.
+
+## M3 selected policy and first staged arena adapter
+
+The [collector policy](collector-policy.md) separates counted native owners from
+arena authority. Revised [helper proposal](helper-roots-proposal.md) removes the
+blanket CValue/CObject registration plan. Existing native stack/register/PyMem
+discovery, including live numeric leaf boxes, remains explicit; M4 removes arena
+scans only. The narrow dead-FT-CValue-loop cleanup has
+[source peer GO](cvalue-cleanup-peer.md), and the full placement census has
+[source peer GO](allocation-peer.md). Neither selects a placement or qualifies FT.
+
+Implemented generic unpack's staged output prefix plus the typed owned-function
+transfer in `call55-pins` over integrated `d3ee27923a9`. GC's
+[source post-review](unpack-peer.md) is GO; root generation, builds and focused
+execution remain pending. The helper consumes the sequence owner on all exits,
+keeps initialized backwards outputs through iterator/sequence cleanup, advances
+prefix authority before every error close and hands successful output authority
+back to the NULL frame without an intervening callback. Five fixture methods
+check precise simple/starred cleanup, short/excess/raised partial outputs, nested
+prefixes and traced ancestor redirect rejection plus named-local mutation.
+
+The initializer's typed transfer now uses an explicit owned-function accessor
+with debug canonical/type/immortal assertions and no generic ownership fallback
+in release. The helper proposal records every source initializer route and
+upstream owning producer, including explicit vector-provider DUPs, guarded
+window transfers, property/getitem paths, constructor and init trampoline.
+Its count fixture checks that transfer adds no second count. Debug bits alone
+cannot distinguish a borrowed mortal; the source ownership contract is required.
+
+No M4 POST-phase handoff, complete binder staging or complete callback matrix is
+claimed. Those remain required before removing arena scans or scratch NULL
+authority. The typed helper does not change independent executing-code lifetime.
+Own diff review and whitespace checks pass; this lane runs no native jobs.
+
+
+## M3 bounded generic binder staging
+
+Implemented the [reviewed outer-lifetime binder scope](binder-staging-proposal.md)
+in `call55-pins` after frozen unpack component `f80a7c23676`. Both private
+constructors require caller-owned transition storage. The child links its full
+initialized NULL/value range and independent typed headers before the first
+binding callback. EX vector, borrow-scope and tuple/dict cleanup remain inside
+the outer lifetime. The fallback publishes current_child before disarming; a
+failed private child transfers to M2 without a callback or poll between pop and
+retirement. Exact overlap routes have no new record or per-argument stores.
+
+Exported constructors are outlined and retain the record through their own
+cleanup; their unknown caller's post-return/provider/PEP523 handoff remains an
+explicit open arena-authority gate. This bounded increment does not complete
+M3/M4. The source matrix preserves native counted-owner policy and identifies
+actual activation and observer obligations.
+
+Five precise-ID fixture methods cover generic EX and native provider binding,
+installed positional/prior-keyword owners, defaults/kw-only/kwargs, nested
+partial children, callback collection, caller-local mutation, equality failure,
+selected-code mutation and record-chain exhaustion. EX finalizer-last-release
+coverage remains a separate fixture obligation; ordinary fallback parent homes
+retain provider tuple/dict owners until publication, so no fabricated last-close
+claim is made. Host AST parse, usage census and diff whitespace checks pass.
+No candidate native code or build ran in this lane. GC's
+[source post-review](binder-staging-peer.md) is GO for both production changes
+and all five fixtures; the two-file runtime diff is frozen for root validation.
+
+## M3 provider handoff protocol
+
+Root and GC approved the full
+[provider/PEP 523 protocol](provider-handoff-proposal.md). A typed STAGED node
+keeps initialized child homes through the actual outer provider and hook scope.
+External evaluator publication or gapless retirement handoff disarms all
+frame authority and sets its pointer NULL; the empty node stays linked through
+post-default cleanup. Strict custom consumption and optional default handoff
+share one lookup primitive. Outer providers retire an unconsumed child on hook
+substitute/error, using the node's state rather than inspecting consumed frame
+storage. No head lookup enters ordinary exact CALL/SEND dispatch or hot return.
+
+GC owns packed kind/header, visitor, retiring kind and all-node four-field query
+ports. The current record remains 40 bytes and reason/status offsets remain
+22/23. Frames began the thin value-provider delegation and explicit ceval
+interfaces; evaluator and fixture edits await root's coherent reason/schema
+merge. Source-only peer GO for GC's four-file kind delta is recorded in team
+messages. Full source post-review and root execution remain pending.
+
+The production perf-trampoline hook delegates once to saved/default evaluation;
+its preceding compile/write-state callbacks are inside the live stage, and it
+reads no frame state after delegate return. Raw pop/copy consumers and initshim
+construction/failure are enumerated. Shim ownership remains a separate actual
+arena gate; successful callback-free handoff alone does not prove failure paths.
+
+
+Provider source is now complete over `63c35c2b6d7`: five files, with one shared
+outlined kind/identity handoff, object/value outer scopes and explicit custom
+activate/retire contracts. Empty nodes hold no frame pointer after publication;
+missing-token paths test identity before storage reads, including NULL and
+second consumption. Constructor-success flags guard record use. No inline
+CALL/SEND/hot-return branch or generated source changed.
+
+Seven fixture methods and a scoped selective C hook cover default delegation,
+pre/post nested callback reuse, arena growth/collection, abandonment success and
+error, explicit retire/custom activation, forced recoverable entry failure,
+code mutation, object scalar-result identity and constructor failure. Existing
+retirement queries already select RETIRING explicitly. AST parse, usage census
+and diff checks pass. GC source post-review is requested; root owns native
+builds, execution, cost evidence and integration. Independent initshim arena
+ownership remains open and is being designed in the GC lane.
+
+
+GC provider production post-review is GO. Its test-helper reentry finding is
+fixed with an explicit running guard across all selected-code/observer/result
+closes. A sixth fixture triggers actual last-code-constant destruction after
+code replacement, attempts nested probe entry during cleanup, checks rejection
+and later reuse. Host fixture AST and whitespace checks pass. Final fixture
+peer and root native validation remain pending; no candidate execution ran here.
+
+
+STAGED nullable LOCALS/FRAME_OBJECT authority is unconditional after GC contract
+review, permitting sanctioned hook field installation before publication while
+execution pins and storage geometry remain fixed. A seventh fixture installs an
+actual strong locals mapping and checks direct transition identity before versus
+body/post handoff. RETIRING masks remain progress snapshots. Fixture AST and
+whitespace checks pass; final peer and root execution remain pending.
+
+
+Provider final source/fixture peer is GO. The frozen diff is exactly
+Include/internal/pycore_ceval.h, Objects/call.c, Python/ceval.c,
+Modules/_testinternalcapi.c and Lib/test/test_pyvalue_api.py over `63c35c2b6d7`
+(619+/43-). All seven fixture methods parse; usage and whitespace checks pass.
+Root has the commit-ready manifest and focused provider/retirement/binder/unpack/
+PEP523 test list. No runtime/generation job ran here; root owns validation and
+integration. Actual phase maps and initshim arena ownership remain independent
+M3/M4 gates, with bounded peer work continuing in the other lanes.

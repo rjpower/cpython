@@ -65,3 +65,43 @@ mixed-lattice worklist and diamond tests; that finding is closed. Source is
 frozen for root generation and release/debug checks. The exact RETURN/YIELD
 source predicates must match the integrated runtime without weakening their
 token checks.
+
+Root merged/regenerated the normal-transfer increment and built both roles.
+New admission tests pass. Generator source fixtures needed newline/updated
+RETURN-helper expectations, and observer fixtures now distinguish statically
+unavailable-input rejection from valid runtime restoration/jump behavior.
+Root's subsequent merged M3 checkpoint reports 961 focused tests passing in
+both roles. The worklist still supplies partial admission hardening only.
+
+The current [semantic phase plan](semantic-phase-plan.md) has root, frames and
+GC design GO. Its first persistent retirement certificate/query is implemented
+and frozen after GC source postreview GO: the shared proof uses an immutable image
+view and separate monotone all-path completeness; exact normal returns require
+every scratch home canonically NULL and no remaining obligation. Unsupported
+and all-certified/default code allocate no side plan, mixed coverage stores
+sorted site IDs. An eight-byte executing-header pointer preserves the existing
+local-count offset relative to words; interpreter frame size is unchanged.
+The cold no-allocation query validates image/site/reason before inspecting the
+full scratch control. GC supplies stored status/query/probe, root supplies
+literal producer hooks. No generated files/builds/native tests ran in this lane.
+Peer corrections preserve canonical physical zero-stack geometry and reject
+unproved RESUME pointer writes through a positive complete-body contract.
+The cold probe entry is exported for the internal test extension.
+
+This first empty-scratch shape is plumbing evidence, not useful complete map
+authority. Shared emitter callback/retire/publication events, call NULL protocol,
+error/staged/suspended phases and lifecycle consumers follow before M4.
+
+Root approved the profile-led fast-close contract after GC review. The isolated
+source patch adds `_PyValue_TryXCloseNoReentry` and changes only the first
+retirement slot loop: existing ownership classification, one existing mortal
+decrement on a GIL-proved non-last owner, false with owner intact otherwise.
+Focused probes cover exact count changes, last-owner retention and one finalizer,
+pending exception identity, inline/NULL/index/no-count tags, both wrapped-pointer
+encodings and a dynamically immortalized prior untagged owner. Host syntax and
+diff checks pass; independent GC source postreview GO is recorded. Source is
+frozen for root native/performance checks.
+The integrated RESUME contract now compares parsed preprocessor structure rather
+than its flattened token stream; actual-source host analysis covers RESUME and
+rejects shifted macro branches and opaque scratch mutations. GC source GO;
+root owns generation and executable validation.

@@ -18,22 +18,23 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Current candidate `2f7067cdde1` composes typed metadata pins, common encoded-image
-admission and explicit nested retirement/observer-prefix roots. The root bridge
-passes nine targeted tests per role that inspect only precise records, and a
-940-test frame/call/GC focus per role; cold source review is GO. Scratch NULLs
-and conservative arena scanning remain authoritative. Its two-pair selected54
-screen is DeltaBlue 1.010977, generators 0.985657, coroutines 1.040258,
-Richards 0.993525, comprehensions 1.014623 and silent logging 1.087839;
-it does not earn admission. Complete semantic maps and all lifecycle adapters remain open.
-The earlier M1 candidate
-`ce71fcfc240` composes typed metadata pins and common encoded-image
-admission. M1a passes 932 focused tests per GIL role; the separate M1b
-admission set passes 413 per role. These counts are distinct groups, not a
-deduplicated total. M1a timing is mixed, with a persistent silent-logging loss;
-it has not earned golden admission. Retirement roots and semantic transfer
-proofs remain in progress. The [active report](issues/call-model55/report.md)
-retains exact scopes, sample ranges, native evidence and failures.
+Latest measured candidate `01586ea4d0b` composes typed pins, common admission,
+partial register-transfer proof, nested retirement/observer roots and staged
+unpack outputs. It passes 961 focused frame/call/GC/unpack tests per GIL role;
+the preceding IR focus passes 425 per role. These groups overlap and are not a
+deduplicated total. Cold source/native review is GO for these bounded ports.
+Scratch NULLs and conservative arena scanning remain authoritative.
+
+Its two-pair selected54 screen is mixed and loses silent logging by 23.8% and
+coroutines by 5.1%. Direct all29 versus upstream is 1.171628, with 6/29 faster;
+logging remains 7.1% faster than upstream. Matched PMU evidence still shows
+36–40% more instructions in DeltaBlue/generators/coroutines. A new duplicate
+classification in retirement is the strongest incremental regression lead;
+a reviewed classify-once close and complete lifecycle maps remain in progress.
+No candidate is promoted. The [active report](issues/call-model55/report.md)
+retains exact sample scopes, ranges, profiles and qualification limits. New
+retirement certificates and binder/provider adapters are being integrated;
+neither complete semantic maps nor a bitmap rival has been qualified.
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and
 [qualification](issues/frame-state54/qualification.md) retain closure evidence.

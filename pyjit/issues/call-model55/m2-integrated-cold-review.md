@@ -83,6 +83,24 @@ removing arena scans or NULL clearing. The fast path adds callback classificatio
 the slow record now includes a prefix pointer. Source separation alone does
 not prove that native hot stack size or latency improved.
 
+Root subsequently supplied retained `m2-roots-native-python` dumps under
+`BASE/pyjit-link-wave1/call-model55/m2-native-*`. Read-only inspection confirms
+owned slots at offset 112, function at 32 and the prefix-bearing transition
+record at 40 bytes; `sizeof(_PyInterpreterFrame)==120` includes its one declared
+slot. `_TAIL_CALL_RETURN_VALUE` reserves 16 stack bytes and contains no automatic
+transition record. The separate `clear_thread_frame_slow` reserves 48 bytes
+after saved registers and contains the stack canary plus record link/unlink;
+`clear_generator_slow` reserves 72 after its saved register, also with a canary.
+The fast thread clear saves three registers plus 8 stack bytes, retains its
+result in a register and tail-jumps to the slow continuation. Fast generator
+clear saves two registers and tail-jumps similarly. `_PyFrame_TryClearExceptCode`
+has per-home tag/last-count tests, NULL stores and refcount decrements; outlining
+does not remove that work. RETURN publishes its result only after clear returns.
+These observations support the intended record-placement separation, not a
+speedup claim. Root's two-pair hot ratios versus selected54 were Delta 1.010977,
+generators 0.985657, coroutines 1.040258, Richards 0.993525,
+comprehensions 1.014623 and logging 1.087839; root did not admit this checkpoint.
+
 ## Remaining M2: complete semantic coverage before authority
 
 The pending IR table/worklist is **partial admission hardening**. Its temporary

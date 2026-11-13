@@ -1,8 +1,12 @@
 # M2 semantic transfer and shadow-map increment
 
-Status: proposed after M1b source review; no schema or generated changes yet.
-This is a dependency plan for executable increments, not an ownership proof.
-Selected54 and M1b keep initialized/NULL homes as execution authority.
+Status: initial M2 dependency plan. Its bounded generated normal-transfer table
+and admission worklist are peer approved and integrated; root generation and
+both-role builds pass, with focused fixture corrections in progress. The
+retirement/prefix collector bridge is also integrated. None establishes full
+ownership-map authority; NULL homes remain authoritative. The current
+[semantic phase plan](semantic-phase-plan.md) specifies the next code-owned
+retirement certificate and complete family/phase coverage gates.
 
 The first collector consumer should be the agreed unlinked-frame retirement
 continuation plus its independent result owner. The GC lane confirms that its
@@ -170,3 +174,85 @@ NULL in an admitted ordinary-call family is deferred to the producer/site
 census. Prefer evaluating the existing ordinary-call forms before paying a new
 NULL store at every call. Both approaches must establish the same explicit
 logical NULL fact before stale scratch is permitted.
+
+## Profile-led fast retirement proposal
+
+2026-11-12. Root approved the bounded implementation after GC contract GO.
+The value helper, first retirement-loop consumer and focused tests are frozen
+after independent GC source postreview GO; native and performance validation remain
+with root. No gain or broader ownership authority is claimed.
+Reference is frozen M3 `01586ea4d0b`, with root's retained
+`E55/m3-perf-record/*-flat.txt` and matched cycles/instructions evidence.
+Logging attributes 414 samples/16.78% to `_PyFrame_TryClearExceptCode`, including
+6.60% at inline `PyValue_IsObject`/`_PyValue_MayDealloc`; coroutine retirement
+attributes 180 samples/7.16%. RETURN→thread/generator clear callchains identify
+actual reached paths. Record final results are valid with zero lost samples;
+the command files' initial `valid:false` is superseded by final result metadata.
+At 499 Hz, these roughly 2.5K-sample profiles locate work but do not establish an
+exclusive removable budget, per-call counts or causation for the elapsed gap.
+
+The fresh selected54 cycles/instructions run reports 12/12 valid invocations
+with stable identity. Read-only three-round per-loop geometric means are:
+
+| Case | Selected54 instructions / cycles | M3 instructions / cycles |
+| --- | --- | --- |
+| Silent logging | 13,301.03 / 3,440.77 | 13,831.03 / 4,356.41 |
+| Coroutines | 409.045M / 136.451M | 409.287M / 142.344M |
+
+These are separate matched-to-upstream runs, not direct interleaved M3/54
+pairs. Logging adds about 4.0% instructions and 26.6% cycles; coroutine instruction
+counts are nearly flat while cycles rise about 4.3%. M3/upstream instruction
+ratios are 0.991900 and 1.390894 respectively; selected54/upstream are 0.953890
+and 1.386260. Sampling cannot assign those whole-program changes exclusively to
+retirement. Call-boundary/register-save traffic, typed-header checks and the
+remaining interpreter work still count. Root owns matched comparison and
+performance admission.
+
+The concrete source duplication is `_PyValue_MayDealloc(ref)` followed by
+`PyValue_XCLOSE(ref)`: the first tests full object encoding/tag/refcount, and the
+second tests count ownership again before decrement. Propose a by-value
+`bool _PyValue_TryXCloseNoReentry(PyValue owner)` in `pycore_value.h`:
+
+- Classify once using existing `PyValue_RefcountOnObject`. NULL, inline values,
+  internal indices and no-count immortal tags succeed without object access.
+  The caller supplies the same valid frame value accepted by existing XCLOSE;
+  wrapped/invalid words do not gain admission, and existing debug frame/home
+  checks stay in place.
+- Under the GIL, a counted owner succeeds only when `Py_REFCNT(object)>1`.
+  Consume once through existing `Py_DECREF_MORTAL`, preserving its statistics,
+  `Py_REF_DEBUG` totals/checks and dynamically immortalized untagged-owner
+  behavior. Do not introduce a raw decrement or a duplicate RC implementation.
+  Count 1, or an invalid nonpositive count, returns false with owner/count intact;
+  the existing slow close retains negative-refcount diagnostics. No reftracer
+  destruction/deallocation/sanitizer-free event occurs on a proved non-last
+  decrement. Native inspection must confirm the compiler removes redundant
+  classification/deallocation branches; source intent is insufficient.
+- FT counted owners always return false; a count observation is not a
+  concurrent no-reentry proof. The current PyValue private ABI is GIL-only, so
+  this branch contract alone is not FT qualification. No-count values succeed
+  as before, including interpreter immortal clearing semantics.
+- True consumes the by-value owner; false leaves it with the caller. The frame
+  or detached-array home stays unchanged until success. NULL it and advance the
+  cursor after success, before any possible callback. A non-last decrement has
+  no callback/poll between decrement and that store, so an earlier home store
+  is unnecessary. On false, the stopped home remains owned and the outlined
+  continuation registers it before any actual close.
+
+First change only the real `_PyFrame_TryClearExceptCode` loop, replacing the
+predicate plus XCLOSE pair. The observer detached-prefix loop has the same
+pattern and is a second bounded candidate after the first passes; do not port
+all `_MayDealloc` consumers or conditional bytecode ownership implicitly.
+Typed header last-reference tests and `clear_thread_frame`'s own hot costs are
+separate work, not savings delivered by this value helper. NULL authority,
+result handoff, association takeover, code fixed-last and reservations remain.
+
+Focused C/value tests must prove non-last consumes exactly once; last returns
+false without destructor/count change; existing slow close then destroys once;
+NULL/index/inline/immortal/dynamically immortal values and pending exceptions
+retain existing behavior. Keep ref-debug accounting and all reached nested
+retirement/result/code/observer fixtures. Root checks release/debug and relevant
+instrumented configurations, inspects fast/slow native paths, then compares
+matched PMU cycles/instructions and elapsed workloads against frozen M3 and
+selected54. Root and GC approved the contract before implementation.
+This experiment complements complete semantic ownership work; it is not an
+alternative admission path or a claim that static-map work is complete.

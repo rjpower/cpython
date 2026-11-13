@@ -128,3 +128,156 @@ function offset 32, transition record size 40; struct size 120 includes its firs
 eight-byte value cell. Native handler/cleanup dumps are retained under
 `E/m2-native-*`. No full-suite or FT qualification is claimed. Semantic transfer
 admission and actual staged-arena adapters are the next integrations.
+
+## M2b: generated normal-transfer admission
+
+Candidate `b75e9cc3201` adds a generated, source-checked transfer column and
+a construction-time worklist over the full admitted scratch extent. Definite
+initialization/NULL intersect at joins; possible owner obligations union.
+Checks run after convergence. Unknown families deliberately lose authority;
+this is partial admission hardening, not a persistent map or permission to read
+stale homes. The [independent peer](ir-m2-peer.md) caught and closed the initial
+owner-intersection error before integration.
+
+Both roles pass 425 filtered IR/code/marshal/completion tests (nine skips),
+plus four targeted generated-contract tests. Initial checks exposed source
+fixture formatting and old RETURN-helper assertions, now corrected. Four
+synthetic observer witnesses read unavailable scratch; three now assert
+construction rejection and also execute valid observer counterparts. The
+distinct-local restoration witness instead preserves its valid source and
+changes only the destination local. No admission bypass or new quarantine was
+added. Source peers reviewed these corrections. The initial full generator
+run and all focused reruns are retained separately; no green full-suite claim
+is made. The completed two-pair screen `E/m2-transfer-hot-screen-golden`
+keeps stable clean identities and shows the following selected54 ratios:
+
+| Workload | Candidate/control elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.988641 | 0.978920–0.998458 |
+| Generators | 0.985761 | 0.979232–0.992333 |
+| Coroutines | 1.050681 | 1.047777–1.053592 |
+| Richards | 0.985502 | 0.981323–0.989699 |
+| Comprehensions | 1.004111 | 1.000617–1.007618 |
+| Logging silent | 1.258762 | 1.249965–1.267620 |
+
+This does not earn admission. Do not attribute the changed logging ratio to
+the cold validator from timing alone; profiles/native work are needed after
+the direct typed-owner boundary is integrated. Retained exact release ELF:
+`E/m2-transfer-native-python`.
+
+## M3a: staged unpack and typed function-owner transfer
+
+Candidate `01586ea4d0b` gives generic unpack an explicit initialized output
+suffix through iterator and source cleanup. Both actual callers now transfer
+the source owner into that helper. The frame initializer consumes a canonical
+owned function directly, removing the generic borrowed/owned conversion arm.
+The complete producer audit is in the [helper contract](helper-roots-proposal.md).
+The [cold source/native review](m3-integrated-cold-review.md) is GO for this
+bounded integration. Exported native workspaces retain their counted-owner
+policy; the dead FT-only, unproduced C-value chain is removed, without a claim
+of FT qualification.
+
+Six new prefix/count cases pass per role, then the 15-module frame/call/GC/unpack
+focus passes 961 filtered tests per role (15 release skips, 13 debug).
+Native exact CALL loses the generic ownership-classification/acquisition arm
+and keeps its existing 64-byte stack reservation; RETURN retains 16 bytes.
+The reached generic unpack helper reserves 120 bytes plus saved registers,
+including its transition/prefix records. No scratch clearing or arena scanning
+is removed. A complete binder/provider lifecycle is still open.
+
+Two-pair `E/m3-unpack-hot-screen-golden` versus selected54 has stable clean
+identities:
+
+| Workload | Candidate/control elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 0.994313 | 0.982491–1.006277 |
+| Generators | 1.001126 | 0.999477–1.002779 |
+| Coroutines | 1.051245 | 1.044862–1.057667 |
+| Richards | 0.979027 | 0.974508–0.983566 |
+| Comprehensions | 1.024117 | 1.023364–1.024870 |
+| Logging silent | 1.238056 | 1.199267–1.278100 |
+
+It does not earn admission. The direct transfer alone does not repair the
+composition's persistent coroutine/logging losses. All29 versus upstream and
+matched interval profiling are next, before attributing those losses. The exact
+release ELF and handler/helper dumps are retained as `E/m3-unpack-native-*`
+and `E/m3-native-*`. Full qualification and complete map authority remain open.
+
+### Frozen M3 diagnosis versus upstream and selected54
+
+Completed `E/m3-unpack-all29-upstream`: two balanced pairs, stable clean
+identities, unchanged workloads. Overall elapsed geometric mean is 1.171628;
+6/29 cases are faster. This is a direct upstream comparison of the M3
+preparation candidate, not a selected checkpoint or full qualification.
+
+| Workload | Candidate/upstream elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.190287 | 1.184318–1.196287 |
+| Generators | 1.431423 | 1.411937–1.451178 |
+| Coroutines | 1.324636 | 1.316873–1.332444 |
+| Richards | 1.218718 | 1.174511–1.264588 |
+| Comprehensions | 1.376634 | 1.372985–1.380293 |
+| Logging silent | 0.928949 | 0.922065–0.935885 |
+
+Sealed FIFO intervals count only hot execution after warmup, with CPU15, hash0
+and JIT off. `E/m3-perf-cycles-instructions` completes 24/24 valid invocations,
+three balanced pairs, stable identities and 100% counter running. Normalized
+per-loop candidate/upstream ratios:
+
+| Workload | Instructions | Cycles |
+| --- | ---: | ---: |
+| DeltaBlue | 1.366246 | 1.164945 |
+| Generators | 1.396111 | 1.449748 |
+| Coroutines | 1.390894 | 1.315266 |
+| Logging silent | 0.991900 | 0.911121 |
+
+`E/m3-perf-record` completes 8/8 valid five-second records, with matching build
+IDs, stable identities and no lost records. Flat samples locate different
+remaining costs: DeltaBlue spends 11.0% in exact CALL and substantial samples
+in guarded attribute handlers; generators spend 26.4% in SEND and 13.7% in
+YIELD; coroutines spread across exact CALL (10.4%), generator construction,
+completion and cleanup. Call setup alone cannot explain the generator gap.
+
+Fresh selected54 intervals, `E/baseline54-perf-cycles-instructions` and
+`E/baseline54-perf-record`, complete 12/12 stat and 4/4 record invocations,
+respectively. Their separate upstream-normalized logging instruction/cycle
+ratios are 0.953890/0.723324; coroutine ratios are 1.386260/1.254979.
+Keep these separate campaigns distinct from direct timing pairs. Logging's
+extra elapsed work is larger than its instruction increase; coroutine
+instructions change little. Do not infer a pure store-count explanation.
+
+The strongest incremental lead is retirement: M3 logging samples place 16.8%
+in `_PyFrame_TryClearExceptCode` and 6.4% in `clear_thread_frame`, versus
+selected54's 7.7% in `_PyFrame_ClearExceptCode` and 2.8% in its clear/pop
+boundary. M3's classifier accounts for a substantial subset. Source and
+native inspection show the new fast sweep classifies an owner to prove no
+reentry, then classifies it again in XCLOSE. The proposed correction is a
+single value-layer operation that consumes an owner only if it can close
+without reentry; failure leaves it for the outlined rooted route. Use existing
+RC/debug bookkeeping, with counted FT owners still outlined. This is a general
+ownership operation, not a workload special case. Peer contract review is GO;
+implementation and matched tests/timing remain required. Sample shares are
+diagnostic evidence, not promised removable cycle budgets.
+
+### Shadow certificate and reader composition
+
+Integrated `a95bcbbf836` adds persistent normal-return certificates, explicit
+retirement reasons, comparison status recorded at the actual cold producer,
+staged binder records and the shared heap-frame clear loop. It retains NULL
+authority and conservative arena scanning. The code execution header grows
+from 32 to 40 bytes; the hot frame header does not grow. The bounded certificate
+recognizes proved empty scratch at normal return, not general callback phases.
+
+Thirteen selected retirement/binder tests and six generated-contract/heap-clear
+tests pass in each role. The wider 25-module focus runs 1,373 tests per role:
+24 modules pass, while `test_external_inspection` has one failure in each role.
+Its deliberately corrupted source map now reaches lazy execution-image proof
+before the inspector. Diagnosis and a correction preserving the malformed-map
+reader check are pending; this composition is not a passing integration yet.
+The focus groups overlap; do not add them into a deduplicated total.
+
+Provider `be36adec43a` and classify-once retirement `31f2e3a2e22` have independent
+source review but no native integration evidence yet. The provider keeps the
+staged child visible through custom evaluator hooks and cleanup, including
+nullable headers installed by the hook. It disarms before reservation reuse.
+Constructor shim ownership and complete static/bitmap authority remain open.

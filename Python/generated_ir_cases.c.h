@@ -24924,7 +24924,7 @@
             PyValue_XCLOSE(ir_own_B);
             if (truth < 0) {
                 frame->phase_state = 0;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                PROCESS_ERROR_AT(RAISE, 1, this_instr);
             }
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_A(ir_word), res);

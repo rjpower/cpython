@@ -31,10 +31,10 @@ and `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstr
 | Active source under BASE/worktrees | Branch | Owner and next work |
 | --- | --- | --- |
 | call55-integrated | pyjit/call55-integrated | Root: generation, builds, native checks, measurements, integration |
-| call55-pins | pyjit/call55-pins | Sol high frames: known-home commits, counted bitmap writers/readers |
-| call55-ir | pyjit/call55-ir | Sol high IR: exceptional receipts/admission, semantic recovery container, fixtures |
-| call55-gc | pyjit/call55-gc | Sol high GC: error effect summary/processor, active selection, observation |
-| call55-bitmap | pyjit/call55-bitmap | Root-owned composition of isolated counted-bitmap rival |
+| call55-pins | pyjit/call55-pins | Sol high frames: complete presence execution readers and stale-scratch policy |
+| call55-ir | pyjit/call55-ir | Sol high IR: positive ERROR phases and full static authority |
+| call55-gc | pyjit/call55-gc | Sol high GC: lifecycle review and ERROR/presence composition |
+| call55-bitmap | pyjit/call55-bitmap | Root-owned frozen presence rival composition |
 
 Reuse the three live workers; all four agent slots are occupied. Source-only
 component peers are continuing cross-lane reviews, not fresh-context audits.
@@ -44,111 +44,77 @@ Never mutate a source while its native job or quiet measurement is running.
 
 ## Current static checkpoint
 
-`979f624cac1` is the exact native identity in both
-`BASE/call55-integrated-{release,debug}` builds; each completes 117/79.
-The preceding e90 composition passes 167 focused cases per role, including all
-123 `test_ir` cases. Its semantic-base projection in five CFG readers closes
-the new bool source-jump regression; setter permissions and fixture semantics
-are unchanged. Current monotone exceptional receipts pass 13 cases per role.
-The initial 8 source-generator methods are expensive under debug: run pure
-producer tests once on the host and native metadata/runtime controls separately.
-Evidence: `E/exceptional-routes-scope-*` and `E/monotone-absence-*`.
+Source4db1bb0b5e3 and both native builds complete117/79 modules. It contains
+IRSC1 semantic recovery, IRSM2 optional positions, shared typed projections,
+independent PRE observer ingress, checked CALL input cleanup and the actual
+outlined ERROR processor. Its direct ingress passes the current handler's
+bridge workspace; no successful-path record or extra handler argument is added.
+Checkpoint0 is initialized-NULL control; positive ERROR authority remains open.
 
-Current source `7a70dc35b75` additionally composes reader84e81 and main7a70:
-IRSC1 semantic recovery, IRSM2 optional positions, common admission and all
-execution/observation/dis/remote adapters. Source peers and host checks pass;
-both-role 117/79 builds pass, but focused integration finds fixture and real
-admission gaps; see E/irsc-send-* logs. W source main commit is6dccb599c17;
-GC reader source486b406189d. Root resolved one absence-fixture conflict by
-preserving normalized physical positions and the new separate recovery table.
-SEND is composed at25585. Current I9be99bb3d3f adds the reviewed typed
-projection grammar after the actual async trace; freezer/native gates pending.
+The preceding d045 composition passes361 cases in eight debug modules and
+admits687/687 source files, including all189 stdlib entries. Fixture-only13b
+passes143 disassembly cases per role. Current4db freezer passes five bootstrap
+and all27 wider admission probes. Its ten-module runtime/monitoring group runs
+1,093 cases per role: nine modules pass, tracing retains exactly six selected54
+jump-error identities. Evidence: E/observer-pre-*, E/error-scope-*.
 
-The freezer still passes five bootstrap and 26/27 broader probes. Remaining
-async admission loses absence across protected SEND at word24; GC owns the
-shared entry/error/completion receipt and guard family closure, with IR/frames
-actual peers. No getter or test-specific exception. The earlier compile-only
-census passes682/684 images, including all189 standard-library entries.
+Five new ERROR witnesses initially fail both roles on fixture assumptions.
+Outer kind2 transition records belong to the runner; require exact initial
+chain restoration. assertRaises clears retired traceback frames, erasing the
+captured local before inspection; inspect before explicit clearing. Reviewed
+fixture3881c3a9a18 preserves actual owner/GC/phase/cursor assertions and checks
+mutation both during cleanup and after capture. Root composes it and exact
+emitter fixture43c1b5b049a at I73ea72ad45d. Both native identity rebuilds complete
+117/79, and all five ERROR witnesses pass per role. The4db runtime is unchanged
+by these fixture-only source updates; quiet hot6 campaigns complete.
 
-Source coverage at979:328 handlers,284 nonempty normal phase programs,
-12 COMPLETE exceptional contracts, four ordinary abrupt and four suspend abrupt.
-These counts do not establish complete ownership/readability authority.
-`E/authority-census-e90` retains its initial wrong-field script failure and
-corrected result; `E/authority-census-979` is the current successful census.
+Retained4db release ELF is E/error-scope-native/python, SHA256
+1c8cb55439680d6f8c713ed07d4b6ccab8366d75cbdff99eb6915291dfcb0fd4.
+CALL_NO_SELF442 bytes, EMPTY return780, instrumented LINE356; prior d045 has
+402/747/311. The outlined processor is2,009 bytes. No code-size win is claimed.
+Static frame header stays112 bytes before homes; HomeView16, format44.
 
-The latest two-pair selected54 screen is
-`E/monotone-absence-hot-screen-golden`: DeltaBlue1.130007,
-generators1.008836,coroutines1.017062,Richards1.032109,
-comprehensions1.023607,logging1.278120. Ranges are in the report. This is no
-broad gain and no isolated A/B attribution. There is no new979 direct-upstream
-or PMU campaign. `E/logging-code-inventory-979` finds matching hot-frame
-geometry and warm families, with no hidden constant locals in logging's hot
-functions. Do not attribute that gap to constant initialization.
-
-Exact ELF/dumps at `E/monotone-absence-native`, SHA256
-`d5aa77f5015bee3ff846525f76272067e4b607e8c801718d964501c17073b4c9`.
-Format metadata stays44 bytes, new error_routes uses padding byte27;
-HomeView stays16 bytes; fixed frame header is owned_slots offset112
-(`sizeof`120 includes the first value cell). Static NULL homes and conservative
-arena scanning remain authority. General RETURN uses real residual-owner
-cleanup; EMPTY retains the small path. M4 has not switched.
+The latest two-pair elapsed screen is I73ea72ad45d. Against54, hot order
+DeltaBlue/generators/coroutines/Richards/comprehensions/logging gives
+0.960034/1.023798/1.021070/0.993148/1.012176/1.183415. Direct upstream gives
+1.155724/1.431449/1.285008/1.237290/1.382734/0.866682. Pair ranges and stable
+campaign identities are in the report, E/error-scope-hot-screen-{golden,upstream}.
+This is mixed, with four cases losing both54 pairs. No new PMU or promotion.
 
 ## Bitmap checkpoint
 
-B `0ee3a61aba3` is clean and matches both
-`BASE/call55-bitmap-{release,debug}` native builds,117/79 each. Eight focused
-modules pass 176 tests per role, eight skips. Five bootstrap and26/27 broader
-compile probes pass. Nine copied body guards are replaced by checked common
-Storage operations. It is not a stale-scratch representation checkpoint.
+B0c47a4616ef and both builds complete117/79. All27 ownership/provider/writer
+cases and510 cases across eight lifecycle/runtime modules pass per role.
+The one non-NULL presence plane includes inline, control, immortal and counted
+values; zero never permits loading a stale word. HomeView has typed range and
+presence forms; heap capture rebinds the latter. Local child lookup clips
+waiting parent overlap, pending unpack prefixes own edges externally until
+callback-free publication, and checked CALL drains detach before finalizers.
+GC/private drains use presence. Native conservative discovery remains policy;
+conservative arena enumeration is removed only in this rival.
 
-The earlier bf7 two-pair selected54 screen loses all six cases: DeltaBlue 1.335421,
-generators 1.222776, coroutines 1.333615, Richards 1.210015,
-comprehensions 1.279180, logging 1.603326. Each pair loses. Evidence
-`E/bitmap-home-writer-hot-screen-golden` and exact ELF/dumps
-`E/bitmap-home-writer-native`. This prices bit maintenance plus retained NULL
-work, not the final representation. Old-value/bit checks are redundant where
-emission already holds the canonical owner; the bounded known-home packet
-carries those facts without another frame field or record.
+Old execution frontier, copy-gap and Take NULL stores remain in the measured
+checkpoint. Its two-pair54 screen loses every pair: hot order
+1.239062/1.227331/1.340243/1.173746/1.261055/1.684383. This prices presence plus
+old execution work, not the complete rival. Evidence:
+E/bitmap-presence-gc-integration-*, E/bitmap-presence-drain-*.
 
-That checkpoint uses counted bits: zero is not permission to read
-inline/control/no-count homes. See [writer closure](issues/call-model55/writer-closure-ledger.md),
-[authority assessment](issues/call-model55/bitmap-authority-assessment.md)
-and [known-home proposal](issues/call-model55/known-home-capabilities.md).
-The three matching known-home bodies are now composed and qualified under
-NULL control. Their new B screen also loses every pair:1.327228,1.228186,
-1.350701,1.217027,1.250380,1.587998 in hot order. Evidence
-`E/bitmap-known-home-{checkpoint,focus,native,hot-screen-golden}`. Root selects
-same-byte non-NULL occupancy as the next complete-rival direction. Its typed
-16-byte HomeView now distinguishes immutable ranges from positive presence;
-capture rebinds the view to destination storage. Local active-child lookup
-clips overlap, and unsupported foreign queries return NONE explicitly. Pending
-unpack cells remain externally owned until callback-free publication. GC and
-private drains consume presence; conservative arena enumeration is removed
-in the draft. Native stack/register/PyMem discovery policy is unchanged.
-
-Presence packet4a1a39fa9e3 and I25585 compose cleanly at B20576b58f4b.
-Both builds complete117/79; the presence/provider focus passes17 cases per role.
-Four lifecycle modules pass25 release cases, but that driver also requested a
-nonexistent copy module and fails overall. Corrected debug selection pending.
-Frames has found a real raw CloseStack CALL writer; its shared checked drain
-must land before presence qualification. Keep B frozen during native work. Execution frontier, copy gap
-initialization and physical Take NULL writes remain: raw nullable readers still
-need readable NULL. This is an ownership authority change, not yet a complete
-stale-scratch candidate. No second plane, FT claim or zero-bit load permission.
-
-The first B full build lacked UUID headers because pkg-config's sysroot was
-missing. Reconfigure used exact I CONFIG_ARGS and
-`PKG_CONFIG_SYSROOT_DIR=BASE/devlibs/root`; every MODULE_* compile/link flag
-now matches I. The failed commands remain evidence, not runtime failures.
+Frames develops complete GIL stale-scratch execution policy in P, merged from
+exact B0c47. Shared input-only required/nullable roles and positive array reads
+must close every C/generated/observer/remote consumer before fill removal.
+Bindings stay physically initialized. Under Py_GIL_DISABLED the existing
+physical-NULL policy remains; concurrent stale storage is a separate gate.
+GC composes current ERROR scope into an isolated branch in G, coordinating
+shared files with frames. Root alone mutates B and generates/builds it.
 
 ## Remaining work and diagnostic limits
 
 M0 placement census/review selects shared storage and initialized named locals
 as reference; actual dirty-local/chunk/copy work still needs measurement.
-M1–M3 are partial. Complete actual callback/error/poll/observer producer and
-reader coverage, semantic recovery off optional positions, and the real error
-processor with explicit origin/view/cursor. Error route metadata/admission
-and recovery-container proposals are in progress, not native authority.
+M1–M3 are partial. Semantic recovery and actual cold ERROR extraction are
+integrated; complete positive callback/error/poll/read authority remains open.
+A normal event program is not complete lifecycle coverage. Do not assign
+positive ERROR checkpoints until their actual transformed home shape is proved.
 M4 static switch/non-stack allocation, complete M5 rival, remaining bounded
 M6 and M7 selection/qualification remain open. Keep working; a preparatory
 source packet or reviewed design is not the full user checkpoint.

@@ -103,7 +103,7 @@ not establish speedup, implemented bitmap authority or completed migration.
 ## Reviewed recommendation and implementation sequence
 
 Use static scratch ownership maps with initialized named locals as the first
-complete candidate. Compare a physical mortal-owner bitmap under the same call
+complete candidate. Compare a physical non-NULL presence bitmap under the same call
 ABI and initialized-value policy before choosing the final representation.
 Keep exact-call overlap, inline return, direct hot caches and the current
 112-byte GIL header initially. Replace generic code/function values with typed

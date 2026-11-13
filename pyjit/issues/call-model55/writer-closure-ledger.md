@@ -49,3 +49,12 @@ copy/traverse readers; see bitmap-authority-assessment.md.
 
 GC gives bounded source/policy GO to this ledger. It is a queue of concrete
 obligations, not an assertion that every row has complete event coverage.
+
+The execution-reader census made `_POP_TOP_OPARG` a concrete writer blocker:
+raw `_PyValue_CloseStack` clears words before CLOSE but leaves B presence bits
+set until later final vacate. A native specialized CALL finalizer can collect
+in that interval. The new P packet supplies a sole-owning-array checked drain,
+ordinary helper escape handling and strict frame/Storage provenance; it takes
+each owner before closing in the original reverse order. External native
+CloseStack is unchanged. The original later final vacate remains charged,
+with no claim that this correctness packet removes that duplicate work.

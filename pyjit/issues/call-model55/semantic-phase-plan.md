@@ -1,13 +1,13 @@
 # Semantic ownership and phase plans
 
-Status: active model55 source, with NULL homes and conservative arena scanning
-still authoritative. The first phase composition through `ed08ab64c7e` has
-both-role focused, native and performance evidence. Later copy/created/return
-ports have focused evidence. The integrated disjoint-child/EH-prefix source
-`5cc8b675e3d` builds both roles; complete qualification remains open. The next
-async-exit admission bridge is `0ac9e26413c`. Explicit delegated suspension is
-source-reviewed in `30a3dd63963`, composed with that integrated base in
-`6063d7c6385`, and still awaits merged generation and native qualification. The
+Status: active model55 source, with initialized NULL control still authoritative
+where static readable maps are incomplete. The integrated `d045` composition
+builds both roles. Its release qualification passes the semantic/code/remote
+and full IR modules, including real PRE observer errors and an accepted LINE
+redirect followed by callback failure. Position-independent IRSC recovery,
+explicit delegated suspension, general/EMPTY returns, shared checked writers
+and grouped exceptional-effect contracts are implemented. None supplies
+complete lifecycle/readability coverage. The
 [report](report.md) owns exact results; the [ledger](implementation.md) owns
 stage completion. This document describes implemented contracts and separates
 remaining M4 requirements. The [target model](../../design/proposals/register-call-model55.md)
@@ -34,7 +34,8 @@ flowchart TD
     L --> Q[Cold matched-frame selector]
     P --> Q
     Q --> R[Copy / retirement / collector consumers]
-    O[Source positions and observer recovery container] -. current cold recovery-edge dependency .-> V
+    O[Code-owned IRSC semantic recovery] --> V
+    X[Optional IRSM positions] -. stable edge IDs, location delivery only .-> O
 ```
 
 Ordinary dispatch does not decode the phase plan. SiteId is an immutable word
@@ -44,9 +45,10 @@ store at an actual reached boundary. Phase zero cannot reacquire authority.
 
 Opaque frame/window accesses and unconverted helper effects lose coverage.
 Audited leaf bodies remain narrow source guards while their transport is
-ported. Exact body matching is not general C verification. The bitmap branch's
-[temporary writer footprint bridge](bitmap-writer-capability-plan.md) must be
-replaced by emitter-owned home-write/helper adapters before final selection.
+ported. Exact body matching is not general C verification. Shared checked
+array writes, TAKE loops and builder adapters now replace the bitmap branch's
+temporary writer-body bridge. Remaining raw/helper/terminal guards must move
+to the same emitter-owned capabilities before final selection.
 
 ## Facts and authority
 
@@ -147,7 +149,10 @@ CREATED bit12 certifies the reached created-copy state; ready code, generator
 ownership and actual created state must still match. The created fast copy
 moves initialized bindings and never reads inactive source scratch. Explicit
 [YIELD_DELEGATED](yield-delegated-proposal.md) bit13/operand/claim interfaces are
-frozen for implementation, not a qualified current runtime contract.
+implemented and covered by merged focused tests. Admission proves the finite
+retained-receiver/outgoing pairing; literal suspension publication and matched
+continuation authorize only that protocol reader. They do not certify a full
+suspended home map.
 
 ## Handoff and root consumers
 
@@ -174,39 +179,58 @@ The shared frame selector serves copy and collector consumers. GIL subtraction,
 FT deferred-count adjustment, external root marking and generic logical
 `tp_traverse` retain distinct tag policies. Native stack/register/PyMem discovery
 remains separately selected; removing arena enumeration does not imply a fully
-precise native collector. The bitmap rival's set count bit supplies positive
-counted-edge authority, while a zero bit grants no inline/control/object read.
+precise native collector. The bitmap rival's single presence plane selects
+non-NULL canonical values, including inline, tagged-control and immortal
+values. Consumers still classify counted edges separately. An absent bit
+licenses no raw load; explicit nullable reads synthesize NULL through their
+checked input interface.
 
 ## Source attribution and observer recovery
 
-Ordinary executable EH entries come from `co_exceptiontable`. The current cold
-worklist also decodes the IRSM source container to seed observer recovery
-triples `(handler, exc_slot, lasti)`. It does not use line or column values, but
-this remains a semantic-container dependency. Optional source positions cannot
-become execution authority.
+The frozen source component `6dccb599c17`, together with reader packet
+`486b406189d`, stores executable EH and observer recovery in IRSC1
+`co_exceptiontable`. IRSM2 `co_linetable` holds optional positions only. The
+common worklist, runtime EH search and observer recovery use semantic rows even
+when the position array is empty. A missing position cannot suppress a real
+backedge trace; it supplies no replacement source-line event.
 
-Before M4, emit and admit those recovery entries separately from source-only
-positions and supply worklist/runtime recovery from the code-owned semantic
-representation. Position stripping must not change ownership or exception
-coverage. A malformed source container cannot silently grant coverage. Remote
-value readers additionally need stopped-target/read-claim authority; a running
-PC sample is not permission to read homes.
+Universal admission, paired serialization, static InitCleanup, code replacement,
+loaders, reader ports, Clinic declarations and regenerated frozen products are
+integrated and have passed native component qualification. Remote value readers still need their
+stopped-target/read claim; a running PC sample grants no home authority.
 
-## Next source packet: ordinary abrupt confinement
+PRE LINE/INSTRUCTION error edges exist independently of body error routes and
+optional position rows. The generated wrapper intersection preserves only
+incoming `NO_HOME` below the actual EH floor; a missing callback, error-flush
+or terminal receipt removes that preservation without removing the edge.
+Runtime origin selection is independent of this proof.
 
-The root's generated census at `863b6d0cb08`, retained as
-`call-normal-coverage.json`, contains 324 named contracts and 64 without an
-ownership program. That count is a normal-transport inventory, not a count of
-complete maps: a normal drain receipt says nothing about an intervening
+Accepted LINE redirects use `Objects/frameobject.c:register_resume_plan` and
+`frame_lineno_set_impl`. With no handled context, a protected destination gets
+no retained scratch. Within a handled context, preservation requires matching
+exception-protocol origins at source and target. Commit clears other scratch
+and restores saved bindings only into locals. The FOR-pair shortcut requires an
+empty decoded EH slice. Consequently, redirect-then-raise uses a normalized
+target shape rather than inheriting the old origin or view. Native controls
+exercise the sole scratch owner's finalizer before the callback raises, and
+the destination's distinct cleanup, with full and absent optional quads.
+
+## Ordinary abrupt absence
+
+The root's generated `authority-census-e90/results.json` inventories normal
+programs and COMPLETE exceptional-route contracts separately. Neither count
+measures complete maps: a normal drain receipt says nothing about an intervening
 callback, error, poll or suspension. Regenerate the census from source for each
-composition rather than maintaining a second instruction list here.
+composition rather than maintaining a second instruction list here. Grouped
+SEND routes and typed common-constant/jump projections close the previously
+observed coroutine prefix loss; the matching five bootstrap and 27 admission
+probes pass. This is absence coverage, not full readable-map closure.
 
-The immediate consumer is the existing exceptional-prefix worklist. A held
-call hole below GET_ANEXT's receiver is lost because the current abrupt
-capability covers suspension only. The next packet must establish general
-operand confinement from shared emission, without copying GET_ANEXT's C body.
-It proposes the following division; names and the metadata encoding require
-root freeze before implementation.
+The exceptional-prefix worklist consumes shared emitted error receipts and a
+typed helper-effect summary, without copying GET_ANEXT's C body. A complete
+exceptional-route census distinguishes inert protected words from real error
+predecessors; zero/unknown metadata remains conservative. The implemented
+division is:
 
 - `IRStack` records the actual homes used by load, TAKE, consume, store,
   vacate and output movement. Explicit folded fields and window positions are
@@ -230,6 +254,12 @@ root freeze before implementation.
   and explicit recipient. The EH merge retains only incoming NO_HOME below
   that floor and the handler's clear floor. It grants no NULL, initialization,
   readable range, owner, normal drain or pending SEND tuple fact.
+
+Native callbacks may change named bindings and vacate scratch through an
+accepted debugger redirect. The follow-on effect is therefore
+PRESERVES_SCRATCH_ABSENCE, distinct from NO_ARENA_WRITE; neither grants readable
+homes. Source-recovery predecessors remain independent unknown ingress.
+Adopting a redirected PC before a later error/boxing route loses coverage.
 
 This adds no runtime lookup, publication store, frame field or per-code
 allocation. It reuses the existing per-block full-extent vectors and abrupt
@@ -289,13 +319,12 @@ permanent fallback.
 
 ## Separating semantic recovery from optional positions
 
-Root, GC and frames have reviewed this concrete schema and API. Source
-implementation and merged qualification remain pending; no serialization or
-runtime source change is included yet. Keep the existing
+The integrated source component has passed independent source review and native
+component qualification. It keeps the existing
 `co_exceptiontable` reference and existing code plan. The code pin retains both
 semantic and position bytes; add no code/frame pointer or side allocation.
 
-The proposed byte grammar is:
+The implemented byte grammar is:
 
 | Stored field | Representation | Meaning |
 | --- | --- | --- |
@@ -309,9 +338,8 @@ The empty semantic sentinel is a declared current-format case, not recognition
 of old nonempty raw EH tables. Reject old nonempty unversioned EH data and
 IRSM version 1 at common admission; there is no semantic fallback to line data.
 Raw constructor location bytes, including empty bytes, remain optional location
-input and normalize to version 2. Root should freeze the empty-sentinel choice
-before implementation; an always-header alternative needs deliberate shared
-empty storage rather than an allocation for every code object.
+input and normalize to version 2. Codes with neither semantic kind retain the
+shared empty bytes object.
 
 Semantic row index is the stable edge ID. Preserve duplicate rows: two elided
 origins can have equal `(from,to,edge,handler,exc_slot,lasti)` but distinct ordered
@@ -387,17 +415,15 @@ image validation; it is not synthesized from a missing line array. General to
 EMPTY return normalization preserves sites/operand roles and does not rewrite
 semantic IDs.
 
-Reserve the next pyc magic (currently 64422 after the general-return change),
-freeze IRSC1/IRSM2 together, and rebuild frozen/deepfreeze artifacts in the same
-component. Direct marshal reads receive structural ValueError for obsolete or
+The component reserves pyc magic 64422 after the general-return change.
+IRSC1/IRSM2 and rebuilt frozen/deepfreeze artifacts must compose together. Direct marshal reads receive structural ValueError for obsolete or
 malformed envelopes rather than a hidden old-IRSM interpretation. Generic
 marshal field order/version need not change because both fields remain bytes.
 No stored old-format or runtime dual-decoder period is proposed.
 
-Before implementation, freeze shared header/API spellings and split readers
-with GC/frames. Then make one reviewable component: format/assembler/common
-admission, all readers, tool adapters and tests; root owns generation/native
-qualification. Useful counterexamples are: stripping all positions retains the
+The frozen component includes format/assembler/common admission, all readers,
+tool adapters and tests; root owns generation/native qualification. Its
+regression controls cover: stripping all positions retains the
 same EH/recovery bytes and plan/admission outcome; removing columns retains a
 source callback's selected handler; malformed recovery is rejected with both
 full and empty positions; changing only a position cannot authorize a retired
@@ -426,6 +452,124 @@ are reached phase stores, range/cursor iteration, binding validity checks,
 code-plan bytes and preparation work. Native roots remain governed by their
 selected policy. None of these removals is authorized merely by a successful
 normal admission census.
+
+## Next grouped authority packet
+
+This is a source proposal following the IRSC freeze, not completed M4 coverage.
+The source census on `f9f5928cbfa` has 328 named handlers across 122 canonical
+groups: 284 have a nonempty normal program and 18 have COMPLETE error-route metadata.
+Of the 284 programs, 145 are sole normal-clear receipts, 66 sole CALL drains,
+26 sole LEAF transfers, 12 sole completion receipts, five sole unpack drains,
+two finite delegated protocols, one created copy, and 27 multi-event programs.
+The 44 missing normal programs and the 310 non-COMPLETE error contracts are
+different gaps. These are counts from the generated artifact, not a permanent
+instruction list or a count of readable maps. There are 115 window handlers,
+164 handlers with escaping source effects and two checked PRE observer wrappers;
+these sets overlap. Regenerate after each source composition and
+report changes by emitted mechanism, including specialized and instrumented
+members; a present normal-clear receipt never counts as a full lifecycle.
+
+The current worklist deliberately clears initialization/owner must coverage
+on an unknown transfer even when it preserves some absence. Consequently,
+extending normal-clear receipts alone cannot close static authority. The next
+interface makes actual emitted transport the common source for execution
+read checks, callback shapes and exceptional checkpoints:
+
+| Existing producer | Common facts to emit | Reader that uses them |
+| --- | --- | --- |
+| `IRStack.load/pop`, native object projection | Actual encoded input home and nullable/control role; metadata-only passthrough emits no read | Universal definite-assignment check before an executable home read |
+| `consume/taken`, checked array TAKE, final vacate | Actual owner move and physical home becoming vacant; borrowed-local TAKE remains DUP | Normal successors, error snapshots and selected owner retirement |
+| `store`, checked output write, final output move | Canonical value or explicit NULL/control, actual destination and overwritten owner lifetime | Must-readable shapes and recipient overwrite validation |
+| Escaping helper call | Actual pre-call flushed homes, detached native owners, audited helper home effect and actual post-call reload | Literal reached callback phase and its invalidation after redirect |
+| Explicit/implicit error flush | Actual post-flush homes plus original failing word and route identity | Outlined error scope through traceback, monitoring, handler installation and M2 handoff |
+| Checked child/terminal adapter | Explicit overlap/disjoint reservation, retained parent homes and selected outcome | Parent WAIT, staged construction, suspend/resume and return consumers |
+
+Extend the current eight-byte ownership-event program; do not add a second
+opcode decoder or a parallel helper table. Event references come from actual
+`Storage`/`SlotLayout` locations, not logical stack depth: explicit folded IN
+fields, BASE-relative windows, actual DST and native-only owners remain
+separate. Array operations use the existing checked extent/loop interface.
+Project existing normal-absence capabilities from the same graph explicitly;
+adding a read/checkpoint event must not silently defeat a sole-event consumer.
+Typed helper ownership effects extend the shared source analyzer independently
+of whether the call escapes. Unknown helpers revoke the relevant route.
+The first ERROR suffix uses the spare `format.flags` bit `0x8000` and a counted
+header in that same interned program. The existing normal-event projection
+remains unchanged. It adds no format-row field or second event allocation.
+
+Readability is a must-fact distinct from MAY_OWNER. An actual read must have its
+required initialized role on every predecessor; a nullable owner range permits
+canonical NULL only where the protocol declares it. Reads of an absent home
+cannot become safe because the current development arena happens to contain
+NULL. Explicit NULL/index controls belong in the readable selection even when
+they carry no counted edge. Named bindings retain dynamic boundness and cell
+rules. Every execution read, including COPY/SWAP endpoints and diagnostics,
+must consume this authority before scratch initialization can be removed.
+
+The first vertical group is scalar native-value transport with checked input
+projections, no child reservation and a complete actual error-route census.
+Start with the existing typed native helper/error-no-pop path, not a copied
+GET_ANEXT body. Its source ownership signature and emitted load/flush/output
+operations establish the facts; renaming the operation changes no permission.
+An opaque helper, extra raw write, uncovered projection guard or missing error
+receipt removes coverage. Preserve ordinary spill/reload and callback effects.
+The concrete consumers are admission's actual read check and the outlined
+error processor's selected readable scratch drain. Tests must reach a positive
+checkpoint with a nonempty surviving scratch owner, run traceback/monitor and
+finalizer collection, and exercise local mutation, failure, escape and both
+join orders. Unsupported routes remain explicit control while the group is
+being developed; they cannot supply the final M4 switch.
+
+For the error selector, reuse the existing 16-byte PhaseSite row. One reserved
+byte becomes selector class ACTIVE=0 or ERROR=1, with the common ordered key
+`(immutable site, class, uint8 id)`. Checkpoint 0 is uncovered; IDs 1..255 are
+family-local and generation rejects overflow. The pure cold API is
+`_PyIR_GetErrorHomeView(frame, origin, checkpoint, out)`, returning the existing
+HomeAuthority without allocation, home reads or public-PC reconstruction.
+`origin` belongs to the pinned executing image. Error rows come only from the
+actual post-error-flush graph, never normal IO or successful CALL_DRAIN. The
+emitter must enter the five-argument error processor before generic
+`JUMP_TO_LABEL` bridge finishing. The processor owns the view/cursor through
+bridge disposal, callbacks, suffix drain and handler-role publication; no
+post-pop code/geometry lookup is permitted. Source recovery remains its own
+IRSC ingress. Parent propagation requires an actual WAIT/entry transfer.
+
+Follow with grouped window builders/unpack cursors, overlapping/disjoint child
+handoffs, then suspension and observer recovery. Each group closes actual read,
+normal, callback, error and lifecycle consumers together; no group qualifies
+from an opcode name or a successful compile census. The runtime work to remove
+is the full scratch suffix scan/drain and inactive-copy/GC reads for those
+selected states. Costs are eight-byte generated events, interned code-plan
+rows/ranges, cold proof work, reached publication stores and error-only lookup;
+ordinary inline instructions gain no generic plan search or owner record.
+Native inspection must price register lifetimes and stores after composition.
+
+### Finite closure sequence
+
+This sequence closes shared producer mechanisms and their consumers. Family
+batches instantiate these mechanisms; they do not introduce permission lists.
+Each batch must expose its remaining UNKNOWN rows and missing readers from the
+generated source census before the next batch lands.
+
+| Order | Producer group and dependency | Complete consumer boundary |
+| --- | --- | --- |
+| 1 | Common `Storage` read roles and `IRStack` load, consume, store, move and vacate receipts; scalar native-value helpers; actual error-flush suffix | Required/nullable read admission, callback invalidation, positive ERROR selection, clipped scratch drain and bindings-only M2 handoff |
+| 2 | Scalar fresh/local/copy/move/SWAP/branch transports using group 1; explicit NULL normalization and tagged controls | Every scalar input and alias is readable on all paths; both normal outcomes and error/callback snapshots share those facts |
+| 3 | Declared window arrays, checked index loops, builders and unpack adapters using groups 1–2; initialized prefix/suffix cursors | Native helper input ranges, failure/retry, publication and surplus retirement; selected ranges replace full-N scans |
+| 4 | CALL preparation/provider/binding phases and actual child-entry transfers; overlap and disjoint reservations remain distinct | Actual parent WAIT shape, promoted self/kwargs roles, child error/return, staged failure and takeover without reconstructing from CALL success |
+| 5 | Frame creation, generator construction, FOR/SEND cursor protocols, suspension and resume-recipient installation | Created/suspended copy and GC, retained finite readers, close/throw, vacancy before sent input and literal invalidation before mutation |
+| 6 | Real exceptional predecessors, handler-entry exception/lasti publication and IRSC recovery; PRE/POST observer normalization | RAISE/handled/unwind/source callbacks use transformed readable shapes, with no inherited pre-redirect or old-checkpoint view |
+| 7 | Common lifecycle selection and captured views, using groups 1–6; explicit retirement record/cursor authority | Copy/escape, all collector policies, heap clear/dealloc, thread/gen retirement, debugger/diagnostic/remote readers and the last code pin |
+| 8 | Universal admission and source coverage gate over all groups | Every executable read and reached callback/lifecycle state has static authority or explicit admitted normalization; unsupported defaults cannot reach the stale implementation |
+
+Group 1 is the next source slice, not a declaration that only scalar execution
+will be completed. It supplies reusable machinery for the remaining seven
+groups. The final switch removes scratch initialization/frontier extension,
+scratch-only NULL fills, inactive-home copy/scan and full reserved-suffix
+retirement together. Named binding initialization and native-buffer policies
+remain explicit. Static and dynamic-presence candidates keep the same frame
+ABI and Python semantics; their different proof, publication, bit-read and
+materialization costs must be measured after all reader gates are closed.
 
 ## Remaining M4 gates
 

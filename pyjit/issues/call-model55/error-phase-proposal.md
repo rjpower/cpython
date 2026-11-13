@@ -1,9 +1,27 @@
 # Error and unwind selection
 
 Initial source audit: integrated `863b6d0cb08`, refreshed against the current
-delegated composition and shared abrupt producer work. Proposal only; NULL
-control remains authoritative. The delegated cohort now has merged native
-evidence; it does not provide general ERROR selection.
+delegated composition and shared abrupt producer work. NULL control remains
+authoritative. The delegated cohort has merged native evidence; it does not
+provide general ERROR selection.
+
+The first runtime implementation `c0e9cd3fe6b` and matching ingress
+`0a690f32829` are integrated. Root reports both 117/79 builds and all five
+ERROR lifecycle tests passing per role at `73ea`, after fixture-only
+`3881c3a9a18`. Positive checkpoint generation remains separate.
+The runtime executes checkpoint zero under an
+explicit initialized NULL-control view: selection precedes bridge finishing,
+one cursor spans monitoring and scratch drainage, and the callback-free M2
+handoff carries only bindings. Kind 3 supplies metadata, never external owner
+edges. The exact bit-14 marker dispatches the common frame selector to that
+live scope; copied descriptors retain code-owned/static ranges only. The
+foreign lookup requires the GIL or actual STW. A cold executing-thread guard
+spans the verifier's HEAD-held recursive traversal; its four bytes occupy
+existing padding on the asserted 64-bit layout. No successful instruction
+gains a record, lookup or argument. No positive ERROR checkpoint or final
+stale-scratch authority is claimed by this extraction. The isolated bitmap
+composition uses actual presence selection; its source/native gates remain
+open independently of this static NULL-control checkpoint.
 
 The next coherent consumer is the actual error processor, not a normal-edge
 map reused at an error PC. Capture an emitter-owned exceptional checkpoint
@@ -350,6 +368,13 @@ worklist change require peer/root freeze before source edits.
 
 ## Next cold admission increment: real exceptional predecessors
 
+The first producer/metadata component is committed as `93519833847`, with
+IR's used cold EH consumer integrated separately. One shared source grammar
+now supplies both operand-footprint and exceptional-route projections; the
+old helper table/parser is removed. Root reports both-role native passage at
+`e90`. The follow-on absence-effect source below is separately reviewed and
+awaits merged generation/native checks.
+
 The current loop in `normal_transfer_proof` enqueues an EH predecessor before
 every protected word, including words with no path to error processing. This
 can erase retained absence at an inert jump or constant publication. The
@@ -398,8 +423,9 @@ an empty ERROR-token set; current `operand_error_sources` returns None for
 that case and cannot certify inertness. Checked primitive projections, value
 moves, constants and encoded jumps may compose. Helper summaries distinguish
 no-arena-write from no-error/control-transfer. Raw frame/window aliases,
-unknown calls/macros, addresses, preprocessing or manual terminals lose
-COMPLETE. No instruction name, successful drain or infallible annotation
+unknown calls/macros and untyped addresses or terminals lose COMPLETE.
+Native metadata projections and both structured `Py_GIL_DISABLED` arms have
+explicit typed contracts. No instruction name, successful drain or infallible annotation
 substitutes for this check.
 
 Expected explicit ERROR/direct-unwind routes must equal receipts recorded
@@ -431,6 +457,24 @@ of its normal completion receipt. Its `monitor_reraise` argument must be
 observational for scratch. The source grammar validates those exact helper
 interfaces and all error/monitor routes; aliases or changed arguments revoke
 the footprint. No whole-body clone or opcode-specific abrupt flag is planned.
+
+The follow-on shared effect is `PRESERVES_SCRATCH_ABSENCE`, distinct from
+`NO_ARENA_WRITE` and UNKNOWN. CLOSE/XCLOSE, pending calls and observation may
+change bindings or vacate scratch through a debugger redirect. The setter
+moves saved scratch only into bindings and NULLs unpreserved scratch; it does
+not install a new scratch owner. Nested Python callbacks allocate outside the
+active parent prefix, and an executing generator cannot resume itself.
+Only encoded operand/recipient transport can destroy prior NO_HOME. This is
+an absence proof, not permission to read a cleared or stale cell.
+
+Source control flow rejects ERROR or direct unwind after adopting a changed
+`next_instr`. Actual RESUME tests errors before adopting `frame->instr_ptr`.
+A handler that can box and change origin loses both census and operand
+coverage because terminal bridge failure would need the new origin.
+`IR_COMPLETE_STEP` supplies its own reached status-error/terminal identity;
+its encoded window/result confinement is independent of normal completion.
+Source observer recovery remains a separate unknown ingress, including its
+own exception recipe. No helper name alone supplies that recipe.
 
 The second unknown-ingress pass uses the same producer classifier for
 unreached words. It must not manufacture an unknown edge from a positively

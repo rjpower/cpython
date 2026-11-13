@@ -252,8 +252,9 @@ continuation.
 ## Errors and observation
 
 `f_lasti`, disassembly and exception offsets remain compact executable indices.
-Eliminated source LINE spans are edge metadata in the code's normalized source
-container. Their callbacks publish an observer-only source cursor and line;
+Eliminated source LINE spans are stable recovery edges in the code's IRSC1
+`co_exceptiontable`. Optional IRSM2 `co_linetable` positions join those edges
+for location delivery. Their callbacks publish an observer-only source cursor and line;
 they do not invent an INSTRUCTION event or a virtual public offset.
 
 The constructor's completion proof follows normal/error/source-callback edges,
@@ -270,11 +271,19 @@ inlined-comprehension error semantics without a second unwind engine.
 
 When a source observer fails, it copies the resolved semantic exception recipe
 to the evaluator activation with its frame identity. The unwinder consumes and
-clears that recipe for the matching frame without decoding the source map.
+clears that recipe for the matching frame without decoding positions.
 Nested Python entry has a separate activation. The frame object's source ordinal
-serves display independently and need not exist on allocation failure. Compiler
-line predicates and the mixed serialized observer container remain separate
-limitations; this change does not eliminate them.
+serves display independently and need not exist on allocation failure. Removing
+optional positions leaves EH and recovery rows unchanged. Stable semantic row
+IDs also index observer state when no position quad is present.
+
+A PRE LINE or INSTRUCTION callback may raise even when the instruction body
+cannot. Admission keeps that exceptional predecessor independently of ordinary
+error-route metadata. Its checked wrapper can preserve incoming logical
+absence below the handler's clear floor; it cannot establish initialization or
+readability. If LINE redirects and then raises, the setter has already cleared
+unrelated scratch and retained only matching exception-protocol origins, so
+handler selection follows the normalized target rather than an old-PC view.
 
 ```mermaid
 flowchart LR

@@ -7,27 +7,38 @@ The official CPython AI policy and applicable agent/project guidance were read.
 
 ## Current checkpoint, 2026-11-13
 
-GC is synced to integrated `30a18f4768c` at merge `8fb8b1149ad`. General-return
-runtime `a35d826f04e` and the remote discard fixture repair `700a367ccea` are
-separately frozen components; root is composing the runtime with IR's matching
-general/EMPTY forms and universal normalization. The prior CALL, delegated,
-copy/created, heap retirement and collector components are integrated. Exact
-native results remain in the root-owned report, not this historical lane log.
+Root reports integrated `73ea` passes both 117/79 builds and five reached ERROR
+lifecycle tests per role; the broader nine modules pass both roles against the
+retained `4db` runtime. Outlined ERROR `c0e9cd3fe6b` and ingress `0a690f32829`
+are integrated. Fixture repair `3881c3a9a18` inspects escaped bindings before
+explicit clear and checks restoration of the preexisting transition chain.
+Kind 3 is metadata-only, with a progressive cursor and bindings-only M2
+handoff. This is checkpoint-zero initialized NULL control, not positive static
+ERROR coverage. Exact artifacts/native evidence remain root-owned.
 
-Current source work is the separate exceptional-producer census: new typed
-`ir_error_effects.py`, actual emitter receipt matching and one padding byte in
-the cold format. Six parser/source methods pass in the host harness; no
-candidate execution or generated product is claimed. The EH consumer is not
-ported yet and nothing is committed as an unused standalone API. COMPLETE is
-earned from typed source and actual error/terminal/publication receipts;
-unknown remains unknown. RESUME monitor cannot inherit a generic no-write
-capability because accepted redirects can mutate scratch. The canonical
-`error-phase-proposal.md` records the frozen five-argument processor ABI and
-the remaining source/lookup gates, including actual HEAD-held traversal scope.
+GC now reviews IR's positive producer and frames' stale-reader packet. A
+separate `pyjit/call55-gc-bitmap` branch in G starts at `0c47a4616ef` and
+composes PRE/ERROR with actual presence views and a shared reverse iterator.
+B/P/I remain untouched by this lane; root owns generation/native checks.
+This composition has no stale-execution or final representation qualification.
+Earlier component descriptions below are historical checkpoints.
 
-NULL control and conservative native-owner policy remain authoritative. The
-bitmap rival's positive counted consumers do not authorize zero-bit or
-generic no-count reads. Source peers do not establish the final M4 switch.
+Exceptional-route producer/metadata `93519833847` replaces the duplicate
+operand parser with one typed source grammar and actual emitter receipts.
+IR's cold consumer skips only positively inert ordinary EH predecessors;
+source recovery stays independent. The next four-file draft adds monotone
+scratch-absence effects for callbacks and typed RESUME/CLEANUP_THROW helper
+interfaces. Eight new source methods and the existing GetANext provenance
+method pass on the host; this follow-on has no native qualification yet.
+Accepted debugger redirects can vacate scratch, so callback effects are not
+called no-write. Neither absence effect grants readable-home authority.
+The canonical `error-phase-proposal.md` records the five-argument processor
+ABI and remaining source/lookup gates, including actual HEAD-held traversal.
+
+Static NULL control and conservative native-owner policy remain authoritative.
+The bitmap rival now uses non-NULL presence for canonical inline/control and
+object values as well as counted edges; zero never permits a load. Source
+peers do not establish the final M4 switch.
 
 ## Earlier checkpoints
 

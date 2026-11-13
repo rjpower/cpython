@@ -99,14 +99,19 @@ shared header-only entry. Free-threaded specialization remains disabled.
 
 The serialized `co_fbinit` records include feedback sizes and offsets. Changes
 to their geometry require a new bytecode magic, even when handler numbers and
-the eight-byte word encoding stay unchanged. Current magic **64418** identifies
-48-byte attribute entries with independent guarded-value storage. At the
+the eight-byte word encoding stay unchanged. Current magic **64422** identifies
+the position-independent semantic recovery container. Attribute entries have
+48 bytes with independent guarded-value storage. At the
 4096-unit limit, optional sites without private capacity use shared entry zero;
 the compiler must preserve required feedback and valid generic execution.
 
 Compiler source-only operations occupy no executable word. Pristine streams
-admit semantic operations and real control transfers; source-only line events live in the versioned
-`co_linetable` container alongside ordinary word-position data. `f_lasti`,
+admit semantic operations and real control transfers. `co_exceptiontable`
+contains IRSC1 execution EH bytes and stable six-field recovery rows, or the
+shared empty sentinel. IRSM2 `co_linetable` contains ordinary word positions
+and optional source-event position quads. Removing positions preserves the
+recovery rows, their IDs and execution semantics. No semantic reader falls
+back to location bytes. `f_lasti`,
 disassembly offsets, jump targets and `co_positions()` describe compact real
 words. `co_lines()` also retains source-only zero-width entries. There is no
 second public instruction coordinate domain and no INSTRUCTION event for an
@@ -238,9 +243,19 @@ transfers are excluded from this copied-row path.
 
 On source-observer failure, the observer passes the resolved semantic recovery
 recipe into activation-local pending state; the unwinder consumes it for the
-matching frame without decoding a source map. The frame display ordinal remains
-separate. Compiler line predicates and the serialized container that combines
-observer recovery with source positions remain future work.
+matching frame without decoding positions. The frame display ordinal remains
+separate. Cold observation maps join optional positions to stable semantic
+rows; absent positions suppress location delivery without erasing recovery or
+changing ordinary backedge tracing. Common admission covers compiler output,
+public construction/replacement, marshal and execution preparation.
+
+LINE and INSTRUCTION wrappers can fail before an otherwise inert instruction.
+Their PRE exception edge is independent of ordinary-body error receipts and
+optional positions. Checked wrapper emission preserves only prior logical
+absence below the actual EH clear floor; uncovered wrappers retain the edge
+with unknown facts. An accepted LINE redirect normalizes the destination
+scratch shape before a later callback failure uses that destination's handler.
+This supplies no complete readable-home map.
 
 The new non-neutral permission requires exact scope/site/edge/continuation and
 redirect generation, inherited handled context, empty stopped and target

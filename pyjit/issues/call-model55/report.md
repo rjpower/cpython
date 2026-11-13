@@ -4,9 +4,145 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-## Current integration: exceptional effects and semantic CFG
+## Current qualification: semantic recovery and cold error processing
 
-Static `979f624cac1` is the current clean source and native identity in both
+The IRSC1/IRSM2 split and independent PRE observer ingress are implemented.
+The preceding native d045 composition passes361 cases in eight debug modules;
+fixture-only13b passes all143 disassembly cases in each role without removing
+operand, handler, cache or offset assertions. The compile census admits687/687
+source files, including all189 standard-library entries. Source positions are
+optional; semantic recovery remains independently required.
+
+Current source/native `4db1bb0b5e3` adds one outlined error processor and invokes
+it directly from the reached handler with that handler's actual bridge
+workspace. Both builds complete117/79 modules. Five bootstrap and27 wider
+admission probes pass. The ten-module lifecycle/monitoring group runs1,093
+cases per role: nine modules pass; tracing retains six debugger-jump errors
+whose identities match selected54. This is not a green group or full suite.
+
+The five new error-scope witnesses initially fail in both roles. Four assertions
+assume a globally empty transition chain despite the runner's legitimate outer
+records. The captured-local assertion runs after assertRaises clears the
+exception traceback's retired frames. The separate fixture correction requires
+exact restoration of the initial chain and inspects capture
+before explicitly clearing it. Actual selected roots, nested ERROR scopes and
+GC checks reach their expected states. Failed logs are retained rather than
+relabeled as runtime passes.
+
+Reviewed fixture3881c3a9a18 and exact-emission fixture43c1b5b049a compose at
+`73ea72ad45d`. Both117/79 identity rebuilds pass; all five ERROR witnesses now
+pass per role. The runtime implementation remains the one qualified at4db.
+Active and captured local mutation, exact scope restoration and original
+owner/GC/cursor assertions remain exercised.
+
+Checkpoint0 remains initialized-NULL control. Positive ERROR read snapshots,
+complete lifecycle authority and the atomic static switch remain open. There
+is no new PMU conclusion for this composition. Native capture
+records the actual effect: CALL_NO_SELF grows from402 to442 bytes, EMPTY return
+from747 to780, and instrumented LINE from311 to356; the outlined processor is
+2,009 bytes. This extraction has not established a hot-code size win.
+Evidence: `E/observer-pre-*`, `E/error-scope-*`. Current release ELF SHA256
+`1c8cb55439680d6f8c713ed07d4b6ccab8366d75cbdff99eb6915291dfcb0fd4`.
+
+## Latest measured checkpoint: cold error processor
+
+Two balanced-pair campaigns measure clean source/native73ea72ad45d against
+selected54 and upstream. Both complete without failures, retain stable identities,
+and use the unchanged CPU15/hash0/JIT-disabled workload. Lower is better.
+
+| Workload | Candidate/selected54 | Pair range | Candidate/upstream | Pair range |
+| --- | ---: | ---: | ---: | ---: |
+| DeltaBlue | 0.960034 | 0.948999–0.971196 | 1.155724 | 1.142005–1.169607 |
+| Generators | 1.023798 | 1.020435–1.027172 | 1.431449 | 1.402385–1.461114 |
+| Coroutines | 1.021070 | 1.017804–1.024348 | 1.285008 | 1.283057–1.286963 |
+| Richards | 0.993148 | 0.992950–0.993345 | 1.237290 | 1.234680–1.239906 |
+| Comprehensions | 1.012176 | 1.009033–1.015329 | 1.382734 | 1.382534–1.382934 |
+| Logging silent | 1.183415 | 1.143183–1.225062 | 0.866682 | 0.853959–0.879595 |
+
+DeltaBlue improves in both selected54 pairs, while generators, coroutines,
+comprehensions and logging lose in both. Richards is slightly faster. This
+mixed screen does not select a new golden, establish isolated causal benefit
+from outlining, or replace all29/confirmation/PMU gates. No campaign ratios
+are multiplied or pooled. ERROR checkpoint0 still uses initialized NULL control;
+full static and bitmap stale-scratch alternatives remain in implementation.
+Evidence: `E/error-scope-hot-screen-{golden,upstream}` and
+`E/error-scope-fixtures-*`; exact source/native73ea72ad45d.
+
+## Previous measured checkpoint: checked argument drain
+
+Static `7199c0c886d` and matching presence composition `0c47a4616ef` build
+all 117 modules, 79 shared, in both roles. The raw CALL argument drain now uses
+the actual Storage array capability and detaches each home before its close.
+External initialized buffers retain their raw API. Later final vacates remain
+and are charged; this is not a claimed store-elimination win.
+
+All 10 static home-writer cases pass in each role, including the warmed native
+max() CALL whose finalizers mutate named locals, collect and run the precise
+frame visitor in ordinary and generator frames. Four semantic readers, five
+container cases and five absence cases also pass both roles. The selected
+debug group passes 27 cases total. Its broader release group runs 32 with three
+fixture failures: two assertions assume empty bytes have distinct identity,
+and one expects an inert POP_TOP to erase an exceptional absence fact.
+Separate fixture commits retain the real negative geometry and unknown-helper
+checks; their merged runtime validation is pending.
+
+The first host drain-lowering gate caught a missing release classification.
+Adding the real release to RELEASES makes both source methods and full cases,
+metadata and contract generation pass. The original gate failure is retained.
+The native admission matrix at 9be passes five bootstrap and all 27 broader
+compile probes, including the former coroutine blocker.
+
+Two balanced-pair campaigns complete with stable identities and no failures:
+
+| Workload | Candidate/selected54 | Pair range | Candidate/upstream | Pair range |
+| --- | ---: | ---: | ---: | ---: |
+| DeltaBlue | 1.026479 | 1.010466–1.042746 | 1.200646 | 1.197332–1.203970 |
+| Generators | 1.036776 | 1.033283–1.040280 | 1.494462 | 1.487910–1.501042 |
+| Coroutines | 1.012456 | 1.000648–1.024404 | 1.267816 | 1.256195–1.279544 |
+| Richards | 0.997493 | 0.995969–0.999020 | 1.245978 | 1.242504–1.249462 |
+| Comprehensions | 1.006190 | 1.003691–1.008696 | 1.400423 | 1.395889–1.404972 |
+| Logging silent | 1.239763 | 1.193648–1.287660 | 0.875438 | 0.858616–0.892589 |
+
+There is no broad gain versus54. Logging remains faster than upstream in this
+screen but loses substantially to54. These comparisons do not isolate the drain
+or replace all 29 breadth, confirmation or PMU evidence. Both complete ownership
+representations and final selection remain open; golden is unchanged.
+
+Evidence: `E/checked-input-drain-{checkpoint,focus,debug,native,hot-screen-*}`,
+`E/checked-input-drain-host`, `E/metadata-projections-*`, and
+`E/bitmap-checked-input-drain-*`. Retained release ELF SHA256
+`d6fca8b09f15bc320504a871cee3a57d1fef4022497e6ffc8e2e4a5a0663e317`.
+Static255 release/debug ELFs are retained separately in `E/irsc-send-native`
+with their actual identities and explicit later source advance.
+
+The matching B composition passes all27 ownership/provider/writer cases per
+role, then all510 cases per role across GC, generators, generator expressions,
+coroutines, frames, weak references, finalization and profiling. These groups
+overlap; they are not a full suite. Its two-pair selected54 screen still loses
+every pair:
+
+| Workload | Presence B/selected54 | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.239062 | 1.218223–1.260257 |
+| Generators | 1.227331 | 1.218643–1.236080 |
+| Coroutines | 1.340243 | 1.336084–1.344415 |
+| Richards | 1.173746 | 1.173103–1.174390 |
+| Comprehensions | 1.261055 | 1.249969–1.272239 |
+| Logging silent | 1.684383 | 1.682658–1.686109 |
+
+Both identities stay stable; there is no workload failure. This is the reached
+presence authority with retained execution NULL work, not a complete stale
+rival. It cannot select the final representation. The next packet uses explicit
+required versus nullable input roles and positive reads before removing old
+scratch initialization; its added read checks are part of the price.
+Evidence: `E/bitmap-presence-gc-integration-*`,
+`E/bitmap-presence-drain-hot-screen-golden` and
+`E/bitmap-presence-drain-native`. Retained ELF SHA256
+`3ed043bd83a3dd6906bb235d78d58d60713e667bcfa307e9a4ee7aff31a1e678`.
+
+## Previous integration: exceptional effects and semantic CFG
+
+Static `979f624cac1` was the clean source and native identity in both
 roles. Both builds complete 117 modules, 79 shared, without failed imports.
 The preceding `e90c6a4b7f9` composition passes 167 focused cases per role,
 including all 123 `test_ir` cases. This closes the new debugger-jump regression:

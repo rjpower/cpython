@@ -8,57 +8,64 @@ and [report](issues/call-model55/report.md) own the active effort. The reviewed
 [target model](design/proposals/register-call-model55.md) is a proposal until
 its lifecycle and qualification gates pass.
 
-Current static native checkpoint `979f624cac1` builds all 117 modules,
-79 shared, in release and debug. The preceding composition passes 167 focused
-cases per role, including all 123 `test_ir` cases. Its semantic CFG correction
-closes the newly introduced debugger-jump regression without weakening setter
-permissions. The latest exceptional-effect extension passes 13 focused cases
-per role. These are overlapping groups, not a deduplicated qualification total.
+Current static source/native `73ea72ad45d` and presence composition
+`0c47a4616ef` build all 117 modules, 79 shared, in release/debug. The static
+branch now includes the outlined error processor and direct ingress with each
+handler's actual bridge workspace. Bootstrap5+27 admission passes. Nine runtime
+modules pass in each role; the ten-module group runs1,093 cases and retains the
+same six selected54 debugger-jump errors. Five new error-scope witnesses pass
+both roles after reviewed fixture corrections: outer runner transition records
+are legitimate, and assertRaises itself clears the escaped traceback frame
+before its local check. Active/captured mutation and exact initial-chain
+restoration remain asserted. The preceding4db runtime is unchanged by these
+fixture-only follow-ups.
 
-Source `25585dd6a46` separates required semantic recovery (IRSC1 in
-`co_exceptiontable`) from optional source positions (IRSM2 in `co_linetable`).
-It includes common admission, execution, observation, disassembly and remote
-reader changes. Both native builds complete 117/79; focused integration finds
-fixture ports and real admission gaps still to resolve. SEND is now covered,
-but an actual predecessor trace finds the remaining async proof loss in two
-read-only metadata/instruction projections. Their reviewed shared grammar
-correction is current source `9be99bb3d3f`, pending native admission. No
-admission exception or additional quarantine has been introduced.
+Required recovery is now separate from optional source positions: IRSC1 in
+`co_exceptiontable`, IRSM2 in `co_linetable`, with common admission and all
+execution/observation/disassembly/remote readers. Stripping positions preserves
+semantic rows and execution. The source admission matrix passes five bootstrap
+and all 27 wider compile probes after a native trace identifies two missing
+read-only metadata/instruction projection contracts. PRE observer ingress is
+now independently proved even for inert bodies. The compile census admits
+687/687 files; the preceding composition passes361 cases in eight debug modules,
+and the exact disassembly fixture follow-up passes143 cases per role.
+The six selected debugger-jump failures reproduce unchanged on54 in both roles;
+no new quarantine has been added.
 
-Static scratch NULL homes and conservative arena scanning remain authority.
-M4 has not switched. Normal phase programs cover 284/328 handlers, but only
-12 exceptional contracts are complete; those counts are different obligations.
-The outlined error processor and complete callback/readability coverage remain
-open. Exact calls already overlap argument storage, and direct hot caches and
-the 112-byte fixed GIL header are retained.
+Static scratch NULL homes and conservative arena scanning remain authority;
+M4 has not switched. The bitmap ownership composition has one non-NULL presence
+plane, shared-arena partitioning, external pending-prefix ownership, rebinding
+on heap capture and sparse drains. Its earlier presence/provider checks pass
+17 cases per role. The checked CALL drain composition passes27 ownership cases
+and510 cases in eight runtime modules per role. Execution still keeps
+initialized NULL storage: its separate read-policy implementation must cover
+required values, nullable/control inputs, arrays, observation and remote access
+before removing those fills. See the
+[authority assessment](issues/call-model55/bitmap-authority-assessment.md).
+The static processor's checkpoint0 remains initialized-NULL control; positively
+proved error snapshots and full static authority are under implementation.
+No complete static or bitmap representation has earned selection.
 
-Bitmap native checkpoint `0ee3a61aba3` builds both 117/79 roles and passes
-176 focused cases per role, eight skips. Its counted-bit preparation still pays
-for NULL maintenance and loses every hot-screen pair. The isolated source lane
-is converting the same bytes to one non-NULL presence plane, including roots,
-heap capture, staged prefixes and sparse teardown. The ownership composition `20576b58f4b` builds both roles and passes17
-targeted presence/provider cases per role. A raw CALL cleanup writer still
-needs conversion before qualification. Execution retains initialized NULL values until
-actual readers have an explicit policy; a zero presence bit permits no load.
-See the [authority assessment](issues/call-model55/bitmap-authority-assessment.md).
-
-The latest static two-pair screen versus54 gives DeltaBlue **1.130007**,
-generators **1.008836**, coroutines **1.017062**, Richards **1.032109**,
-comprehensions **1.023607** and silent logging **1.278120**. Lower is better.
-No broad gain is established. Logging varies substantially across screens;
-these are separate campaigns, not isolated source-effect measurements.
+The latest static two-pair screen at73ea versus54 gives DeltaBlue **0.960034**,
+generators **1.023798**, coroutines **1.021070**, Richards **0.993148**,
+comprehensions **1.012176** and silent logging **1.183415**. Direct upstream
+ratios are respectively **1.155724**, **1.431449**, **1.285008**, **1.237290**,
+**1.382734** and **0.866682**. Lower is better. Both campaigns have stable
+identities and no failures. DeltaBlue improves in this screen; four cases lose
+to54 in both pairs. No broad gain or isolated outlining benefit is established.
+The report retains all pair ranges and prior screens.
 A native inventory finds identical logging hot-frame geometry and warm
-attribute/call families in candidate and54; hidden constant-local initialization
-does not explain this gap. Pair ranges and evidence are in the report.
+attribute/call families in candidate979 and54; hidden constant-local
+initialization does not explain that earlier gap.
 
-Latest broad direct-upstream evidence remains `ed08ab64c7e`: all29 geometric
+Latest broad direct-upstream evidence remains `ed08ab64c7e`: all 29 geometric
 mean **1.165467**, six faster; matched DeltaBlue instruction ratio **1.368099**.
-No newer hot screen replaces that breadth or PMU result. The latest full55
-foundation diagnostics run 54,763 cases per role and find an allocation-injection
-crash. Its positive-readiness fix passes the original OOM test and 837 focused
-cases per role, but there has been no green full55 run afterward. Existing
-qualification limits below remain explicit. Only the GDB pretty-print class
-is quarantined. Current qualification is GIL-only.
+No hot screen replaces that breadth or PMU result. The latest full55 foundation
+diagnostics run 54,763 cases per role and find an allocation-injection crash.
+Its positive-readiness fix passes the original OOM test and 837 focused cases
+per role, but there has been no green full55 run afterward. Existing limits
+below remain explicit. Only the GDB pretty-print class is quarantined.
+Current qualification is GIL-only.
 
 Round54's [report](issues/frame-state54/report.md),
 [tables](issues/frame-state54/benchmark-tables.md) and

@@ -520,3 +520,35 @@ general-return extent. GC gives actual source GO; five source/parser checks
 and diff checks pass. Root owns commit/regeneration/native qualification.
 The authority assessment now distinguishes already-implemented counted roots
 and drains from the proposed same-byte non-NULL plane for copy/traversal.
+
+The first 17-path presence packet is source-frozen with root/GC actual source
+GO and IR schema/iterator GO. A single bit now denotes a canonical non-NULL
+home owned by its frame. Pending unpack prefix values stay external until a
+callback-free bit commit; waiting callers use actual child overlap, and
+foreign THREAD queries return explicit NONE. Selected/captured views are tag
+2 of either representation; tag 3 only requests a deferred frame-presence
+view. Public generator copies reject unavailable views before moving storage.
+The inspection helper snapshots IDs before allocating Python output. AST,
+diff and value API text checks pass; generation/native gates remain root work.
+This packet removes conservative arena ranges and skipped-zero retirement
+stores but retains scratch initialization, semantic NULL stores and copy gap
+fills for raw execution reads. The next packet must choose and price the real
+execution-reader policy before removing that remaining work.
+
+The immediate checked input-drain repair has root/GC actual source GO. It
+replaces only `_POP_TOP_OPARG`'s raw frame-array CloseStack call with a strict
+Storage-bound helper, taking each home before close in reverse order. External
+buffers keep their existing API. Root's first host smoke caught a missing
+RELEASES classification; the corrected source and actual lowering tests plus
+full cases/metadata emission pass on retry. The existing final-vacate cost is
+retained. The targeted warmed native CALL finalizer/GC test covers THREAD and
+GEN routes; execution remains root work. The execution-reader policy and its
+27-array source census are in bitmap-authority-assessment.md.
+
+Root subsequently qualifies presence/drain0c47: both117/79 builds, all27
+ownership/provider/writer cases and510 runtime cases per role pass. Its hot6
+screen loses every pair while execution NULL work remains. The complete GIL
+stale-reader packet is now WIP in P; FT retains physical-NULL policy. Required
+and nullable input roles, positive array checks and actual finite/helper/
+observer/remote readers must close before source freeze. No WIP source or
+store-count estimate is a native stale-execution pass.

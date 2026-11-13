@@ -4,6 +4,7 @@ import re
 import sys
 import textwrap
 import threading
+import types
 import unittest
 import weakref
 try:
@@ -299,6 +300,84 @@ class FrameAttrsTest(unittest.TestCase):
             self.assertIs(ex.value, c)
         else:
             raise AssertionError('coroutine did not exit')
+
+
+class FrameEnvironmentTest(unittest.TestCase):
+    def test_escaped_frame_keeps_function_environments(self):
+        class Namespace(dict):
+            pass
+
+        def capture():
+            return sys._getframe()
+
+        def replacement():
+            return None
+
+        globals_dict = Namespace(sys=sys)
+        builtins_dict = Namespace()
+        globals_dict["__builtins__"] = builtins_dict
+        globals_ref = weakref.ref(globals_dict)
+        builtins_ref = weakref.ref(builtins_dict)
+        function = types.FunctionType(capture.__code__, globals_dict)
+        frame = function()
+        code = frame.f_code
+        function.__code__ = replacement.__code__
+        del function, globals_dict, builtins_dict
+        support.gc_collect()
+        try:
+            self.assertIs(frame.f_code, code)
+            self.assertIsNotNone(globals_ref())
+            self.assertIsNotNone(builtins_ref())
+            self.assertIs(frame.f_globals, globals_ref())
+            self.assertIs(frame.f_builtins, builtins_ref())
+            frame.clear()
+            support.gc_collect()
+            self.assertIs(frame.f_code, code)
+            self.assertIsNotNone(globals_ref())
+            self.assertIsNotNone(builtins_ref())
+            self.assertIs(frame.f_globals, globals_ref())
+            self.assertIs(frame.f_builtins, builtins_ref())
+        finally:
+            frame.clear()
+
+    def test_environment_inspection_during_local_retirement(self):
+        class Namespace(dict):
+            pass
+
+        holder = {}
+        observed = []
+
+        class Inspect:
+            def __del__(self):
+                frame = holder["frame"]
+                observed.append((id(frame.f_globals), id(frame.f_builtins),
+                                 frame.f_code))
+
+        def capture(token):
+            return sys._getframe()
+
+        def replacement():
+            return None
+
+        globals_dict = Namespace(sys=sys)
+        builtins_dict = Namespace()
+        globals_dict["__builtins__"] = builtins_dict
+        expected = (id(globals_dict), id(builtins_dict), capture.__code__)
+        function = types.FunctionType(capture.__code__, globals_dict)
+        token = Inspect()
+        frame = function(token)
+        holder["frame"] = frame
+        function.__code__ = replacement.__code__
+        del token, function, globals_dict, builtins_dict
+        support.gc_collect()
+        try:
+            frame.clear()
+            self.assertEqual(observed, [expected])
+            self.assertEqual((id(frame.f_globals), id(frame.f_builtins),
+                              frame.f_code), expected)
+        finally:
+            holder.clear()
+            frame.clear()
 
 
 class WeakRefTest(unittest.TestCase):

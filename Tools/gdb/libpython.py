@@ -1156,11 +1156,19 @@ class PyFramePtr:
     def _f_special(self, name, convert=PyObjectPtr.from_pyobject_ptr):
         return convert(self._gdbval[name])
 
+    def _f_environment(self, name):
+        function = self._f_special("f_funcobj")
+        if function.is_null() or function.safe_tp_name() != "function":
+            return PyObjectPtr(gdb.Value(0).cast(PyObjectPtr.get_gdb_type()))
+        function_ptr = function._gdbval.cast(
+            gdb.lookup_type("PyFunctionObject").pointer())
+        return PyObjectPtr.from_pyobject_ptr(function_ptr[name])
+
     def _f_globals(self):
-        return self._f_special("f_globals")
+        return self._f_environment("func_globals")
 
     def _f_builtins(self):
-        return self._f_special("f_builtins")
+        return self._f_environment("func_builtins")
 
     def _f_code(self):
         return self._f_special("f_executable", PyCodeObjectPtr.from_pyobject_ptr)

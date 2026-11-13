@@ -4537,7 +4537,7 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
     }
 
     _PyInterpreterFrame *frame = _PyEval_GetFrame();
-    if (frame == NULL || frame->f_globals != frame->f_locals) {
+    if (frame == NULL || _PyFrame_GetGlobals(frame) != frame->f_locals) {
         Py_DECREF(abs_name);
         PyErr_SetString(PyExc_SyntaxError,
                         "'lazy import' is only allowed at module level");

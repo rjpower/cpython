@@ -442,7 +442,8 @@ RELEASES = {
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "IR_BINARY_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
-    "_PyEval_FrameClearAndPopWithResult", "_PyErr_Clear",
+    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
+    "_PyErr_Clear",
 }
 NOT_RELEASES = {
     # A release whose destructor, that of an exact type, runs no Python
@@ -6048,10 +6049,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     and canonical_body_tokens(transfer)
                     == [token.text for token in tokenize(expected_yield)]):
                 return True
-    if [p.name for p in parts] not in (
-        ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
-        ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
-    ):
+    if (len(parts) != 2 or parts[0].name not in {
+            "_MAKE_HEAP_SAFE", "_RETURN_VALUE_EVENT"} or
+            parts[1].name not in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"}):
         return False
     prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
     body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
@@ -6060,7 +6060,6 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         PyValue temp = retval;
         DEAD(retval);
         SAVE_STACK();
-        _PyFrame_AssertTemporariesClear(frame);
         DTRACE_FUNCTION_RETURN();
         _Py_LeaveRecursiveCallPy(tstate);
         _PyInterpreterFrame *dying = frame;
@@ -6070,6 +6069,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
+    if parts[1].name == "_RETURN_VALUE":
+        expected_body = expected_body.replace("_PyEval_FrameClearAndPopWithResult",
+                                              "_PyEval_FrameClearAndPopGeneralWithResult")
     if body != [t.text for t in tokenize(expected_body)]:
         return False
     if parts[0].name == "_MAKE_HEAP_SAFE":
@@ -7060,7 +7062,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
-    if inst.name == "RETURN_VALUE" and canonical_frame_transfer_input(inst):
+    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
+            canonical_frame_transfer_input(inst)):
         return "_PyIR_TRANSFER_EXIT"
     return unknown
 

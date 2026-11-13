@@ -3856,6 +3856,14 @@ class IREmitter(Emitter):
             stack.code_ran()
         if reachable:
             self.consume_killed(storage)
+        if (inst is not None and _statement_text(stmt) == [
+                "FT_ATOMIC_STORE_INT8_RELEASE", "(", "gen", "->",
+                "gi_frame_state", ",", "FRAME_SUSPENDED", "+", "oparg",
+                ")", ";"] and abrupt_suspend_contract(inst, self.format_of(inst))):
+            # The actual release publishes the suspended state only after
+            # its own homes/header commits. This receipt is separate from
+            # successful normal vacates and from readable phase recipes.
+            self.abrupt_prefix = True
         return reachable, tkn, storage
 
     def decref_inputs(
@@ -5285,6 +5293,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.pending_owner = None
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
+    emitter.abrupt_prefix = False
     emitter.disjoint_child_publication = disjoint_child_transport(inst, fmt)
     emitter.disjoint_child_drained = False
     emitter.normal_result_offsets = set()
@@ -5786,7 +5795,8 @@ def boxes_into_record(code: str) -> bool:
 
 
 def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
-                    programs: dict[str, tuple[OwnershipEvent, ...]] | None = None
+                    programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
+                    abrupt: dict[str, bool] | None = None
                     ) -> set[str]:
     "The handlers whose generated code may box into the value record"
     import io
@@ -5803,6 +5813,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.handler_format = formats[name]
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
+        if abrupt is not None:
+            abrupt[name] = emitter.abrupt_prefix
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
         if boxes_into_record(buffer.getvalue()):
@@ -5867,6 +5879,7 @@ class HandlerContract:
     transfer_kind: str
     ownership_events: tuple[OwnershipEvent, ...]
     call_input_holes: int
+    abrupt_prefix: bool
 
 
 def statement_shape(node):
@@ -5881,6 +5894,86 @@ def statement_shape(node):
                                  for field in fields(node))
     assert node is None
     return None
+
+
+def abrupt_suspend_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """All own-frame writes of this complete suspension stay at A or B.
+
+    The resume API writes the saved recipient, including throw entry; a
+    close/throw execution claim alone does not change suspended homes. The
+    checked yield observer allows named-local changes but rejects scratch
+    redirects. Native bridges remain the existing counted C workspace.
+    """
+    if (not fmt.window or fmt.field_of(ROLE_DST) != "A"
+            or fmt.field_of(ROLE_BASE) != "B" or fmt.dst_offset != 0):
+        return False
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if len(parts) != len(inst.parts):
+        return False
+    expected = [
+        (("value",), ("taken",), "{ taken = TAKE(value); }"),
+        (("retval",), ("value",), """{
+            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+            frame->instr_ptr++;
+            PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+            assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
+            assert(oparg == 0 || oparg == 1);
+            PyValue temp = retval;
+            DEAD(retval);
+            SAVE_STACK();
+            DTRACE_FUNCTION_RETURN();
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
+            _Py_LeaveRecursiveCallPy(tstate);
+            _PyInterpreterFrame *gen_frame = frame;
+            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+            _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
+            frame = tstate->current_frame = frame->previous;
+            gen_frame->previous = NULL;
+            ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
+            #ifdef Py_DEBUG
+            if (frame->f_executable != NULL) {
+                Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
+                assert(i >= 0 && i <= INT_MAX);
+                int opcode = _PyIR_BaseOpcode(
+                    _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
+                assert(opcode == SEND || opcode == FOR_ITER);
+            }
+            #endif
+            RELOAD_STACK();
+            next_instr = frame->return_pc;
+            value = temp;
+            LLTRACE_RESUME_FRAME();
+        }"""),
+    ]
+    if len(parts) == 3:
+        expected.insert(0, (("val",), ("val",), """{
+            int err = _Py_call_instrumentation_arg(
+                    tstate, PY_MONITORING_EVENT_PY_YIELD,
+                    frame, this_instr, val);
+            if (err) {
+                RELOAD_STACK();
+                ERROR_NO_POP();
+            }
+            if (frame->instr_ptr != this_instr) {
+                RELOAD_STACK();
+                next_instr = frame->instr_ptr;
+                DISPATCH();
+            }
+        }"""))
+    if len(parts) != len(expected):
+        return False
+    for part, (inputs, outputs, body) in zip(parts, expected):
+        if (tuple(item.name for item in part.stack.inputs) != inputs
+                or tuple(item.name for item in part.stack.outputs) != outputs
+                or any(item.is_array() for item in
+                       (*part.stack.inputs, *part.stack.outputs))
+                or not canonical_body_tokens(part)
+                or statement_shape(part.body) != statement_shape(
+                    Parser(body, "<abrupt suspension footprint>").block())):
+            return False
+    return True
 
 
 def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
@@ -6654,7 +6747,14 @@ def handler_contracts(analysis: Analysis,
     "The handler's own columns of the contract, by handler name"
     ids = handler_ids(analysis)
     programs = {}
-    boxing = boxing_handlers(analysis, formats, programs)
+    abrupt = {}
+    boxing = boxing_handlers(analysis, formats, programs, abrupt)
+    for group in {fmt.group for fmt in formats.values()}:
+        members = [name for name in handler_instructions(analysis)
+                   if formats[name].group == group]
+        if not all(abrupt.get(name, False) for name in members):
+            for name in members:
+                abrupt[name] = False
     result = {}
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
@@ -6676,6 +6776,7 @@ def handler_contracts(analysis: Analysis,
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
             call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
+            abrupt_prefix=abrupt.get(name, False),
         )
     return result
 

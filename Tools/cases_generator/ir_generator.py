@@ -4608,6 +4608,11 @@ class IREmitter(Emitter):
         self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
+        # The reached helper owns its result and whole encoded window on
+        # every error exit. Its status check and dispatch are terminal here.
+        self.abrupt_operand_sources.add(id(tkn))
+        self.error_terminal_sources.add(id(tkn))
+        self.error_finalized = True
         return False
 
     def normal_completion(self, inst, fmt, kind):
@@ -5391,9 +5396,13 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
 
 
 def operand_error_sources(inst: Instruction) -> frozenset[int] | None:
-    """Project the shared source proof onto ordinary operand error routes."""
+    """Only encoded transport can destroy incoming scratch absence.
+
+    Native callbacks may vacate other scratch homes through a redirect. That
+    preserves the NO_HOME fact imported by this absence-only capability.
+    """
     source = analyze_error_effects(inst, HANDLER_LOCALS)
-    if (source is None or source.homes != HomeEffect.NO_ARENA_WRITE
+    if (source is None or source.homes == HomeEffect.UNKNOWN
             or not source.error_sources):
         return None
     return source.error_sources
@@ -6619,6 +6628,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.handler_format = formats[name]
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
+        boxes = boxes_into_record(buffer.getvalue())
         if abrupt is not None:
             abrupt[name] = emitter.abrupt_prefix
         if operand_abrupt is not None:
@@ -6626,10 +6636,11 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 emitter.abrupt_operand_expected is not None and
                 emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
                 emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
-                not emitter.abrupt_operand_uncovered)
+                not emitter.abrupt_operand_uncovered and
+                not (boxes and emitter.error_source is not None
+                     and emitter.error_source.changes_origin))
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
-        boxes = boxes_into_record(buffer.getvalue())
         if error_routes is not None:
             error_routes[name] = emitted_error_routes(emitter, formats[name], boxes)
         if boxes:
@@ -6706,7 +6717,8 @@ ERROR_ROUTE_FLAGS = ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_DIRECT",
 def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tuple[str, ...]:
     """Match complete typed source to actual flush and terminal receipts."""
     source = emitter.error_source
-    if (source is None or source.homes != HomeEffect.NO_ARENA_WRITE
+    if (source is None or source.homes == HomeEffect.UNKNOWN
+            or source.changes_origin and boxes
             or emitter.error_uncovered or emitter.abrupt_operand_uncovered
             or source.error_sources != emitter.abrupt_operand_sources
             or source.unwind_sources != emitter.error_unwind_sources

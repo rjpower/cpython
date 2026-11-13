@@ -4511,13 +4511,78 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+# These events permit observer callbacks and dynamic named-local writes, but
+# not a scratch redirect. Normal completion still reaches the emitted final
+# vacate; an instrumentation error follows the existing error route instead.
+NORMAL_FRAME_OBSERVERS = {
+    "_Py_call_instrumentation_2args": {
+        "PY_MONITORING_EVENT_CALL", "PY_MONITORING_EVENT_C_RETURN"},
+    "_Py_call_instrumentation_exc2": {"PY_MONITORING_EVENT_C_RAISE"},
+}
+
+
+def normal_observer_frame_footprint(part: Uop) -> bool:
+    """Explain every frame use by an audited observer-call argument."""
+    source = canonical_body_tokens(part)
+    if not source or any(text.lstrip().startswith("#") for text in source):
+        return False
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
+    if any(item.name in reserved for item in
+           (*part.stack.inputs, *part.stack.outputs, *part.caches)):
+        return False
+    tokens = [t for t in part.body.tokens() if t.kind != "COMMENT"]
+    covered: set[int] = set()
+    for at, token in enumerate(tokens):
+        if token.text not in NORMAL_FRAME_OBSERVERS:
+            continue
+        if (at + 1 >= len(tokens) or tokens[at + 1].text != "("
+                or at > 0 and tokens[at - 1].text in {".", "->"}):
+            return False
+        args: list[list[int]] = [[]]
+        depth = 0
+        for end in range(at + 2, len(tokens)):
+            text = tokens[end].text
+            if text == ")" and depth == 0:
+                break
+            if text == "," and depth == 0:
+                args.append([])
+                continue
+            if text in {"(", "[", "{"}:
+                depth += 1
+            elif text in {")", "]", "}"}:
+                depth -= 1
+            args[-1].append(end)
+        else:
+            return False
+        prefix = [[tokens[i].text for i in arg] for arg in args[:4]]
+        if (len(args) != 6 or prefix[0] != ["tstate"]
+                or len(prefix[1]) != 1
+                or prefix[1][0] not in NORMAL_FRAME_OBSERVERS[token.text]
+                or prefix[2:] != [["frame"], ["this_instr"]]):
+            return False
+        covered.add(args[2][0])
+    return all(token.text != "frame" or at in covered
+               for at, token in enumerate(tokens))
+
+
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
     return (not inst.properties.switches_frame and not fmt.names_target
             and handler_output_kind(inst, fmt) != "_PyIR_OUTPUT_OUTCOME"
-            and not any(t.text in {"frame", "slots", "window", "DISPATCH",
+            and not any(item.name in reserved for part in parts for item in
+                        (*part.stack.inputs, *part.stack.outputs, *part.caches))
+            and not any(t.kind.startswith("CMACRO") and
+                        any(name in t.text for name in reserved)
+                        for t in uop_token_list(inst))
+            and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
-                        for t in uop_token_list(inst)))
+                        for t in uop_token_list(inst))
+            and all(not any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS
+                            for t in part.body.tokens())
+                    or normal_observer_frame_footprint(part)
+                    for part in inst.parts if isinstance(part, Uop)))
 
 
 def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | None:

@@ -379,6 +379,14 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
+/* The first used shadow shape has nullable bindings and no scratch owners.
+ * Zero sites is the shared default for all certified normal-return sites;
+ * a nonempty plan lists only its certified canonical sites in sorted order. */
+typedef struct {
+    uint32_t nsites;
+    uint32_t sites[];
+} _PyIRRetirementPlan;
+
 enum {
     _PyIR_RETIRE_NONE,
     _PyIR_RETIRE_NORMAL_RETURN,
@@ -397,6 +405,7 @@ typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction
                             // has an entry
+    const _PyIRRetirementPlan *retirement_plan;
     uint32_t nwords;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
@@ -426,6 +435,17 @@ extern _PyIRStaticExec _PyIR_InitCleanup;
 /* The executing copy of co, allocated if this is its first call, or NULL
  * with an exception set. */
 PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
+
+/* Build from the admitted immutable image. NULL means no certified site;
+ * allocation failure returns -1 with an exception. */
+int _PyCode_BuildRetirementPlan(PyCodeObject *co,
+                              const _PyIRRetirementPlan **plan);
+
+/* No allocation or callback. Query once before retirement cursor changes;
+ * this development comparison never changes NULL authority. */
+struct _PyInterpreterFrame;
+PyAPI_FUNC(uint8_t) _PyIR_ShadowRetirement(struct _PyInterpreterFrame *frame,
+                                        uint8_t reason);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

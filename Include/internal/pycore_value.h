@@ -875,6 +875,28 @@ PyValue_XCLOSE(PyValue ref)
     }
 }
 
+/* Consume ref only if closing it cannot reenter Python. On false the caller
+ * retains the owner. A successful caller may clear its home afterward: no
+ * callback or interpreter poll can observe the intervening stale bits. */
+static inline bool
+_PyValue_TryXCloseNoReentry(PyValue ref)
+{
+    if (!PyValue_RefcountOnObject(ref)) {
+        return true;
+    }
+#ifdef Py_GIL_DISABLED
+    /* Another thread could drop the other count before our decrement. */
+    return false;
+#else
+    PyObject *object = BITS_TO_PTR(ref);
+    if (Py_REFCNT(object) <= 1) {
+        return false;
+    }
+    Py_DECREF_MORTAL(object);
+    return true;
+#endif
+}
+
 static inline void
 PyValue_XCLOSE_SPECIALIZED(PyValue ref, destructor destruct)
 {
@@ -1042,6 +1064,20 @@ VALUE_CHECK_FUNC(Code)
 #define PyValue_CodeCheck(V0) (PyValue_CodeCheck)(PyValue_Borrow(V0))
 VALUE_CHECK_FUNC(Function)
 #define PyValue_FunctionCheck(V0) (PyValue_FunctionCheck)(PyValue_Borrow(V0))
+
+/* Consume a canonical function owner into a typed strong pin. Unlike the
+ * generic object bridge this boundary accepts no borrowed/deferred mortal
+ * reference: its callers have already acquired or transferred the owner. */
+static inline PyFunctionObject *
+_PyValue_FunctionOwnerSteal(PyValue owner)
+{
+    assert(!PyValue_IsNull(owner));
+    assert(_PyValue_IsHome(owner));
+    assert(PyValue_FunctionCheck(owner));
+    PyFunctionObject *function = (PyFunctionObject *)BITS_TO_PTR_MASKED(owner);
+    assert((owner.bits & Py_TAG_BITS) == 0 || _Py_IsImmortal((PyObject *)function));
+    return function;
+}
 
 static inline bool
 PyValue_LongCheck(PyValueBorrow value)

@@ -74,7 +74,7 @@ Invariants:
 import argparse
 import ir_numbers
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
@@ -396,6 +396,10 @@ NOT_RELEASES = {
     "_PyFrame_AssertTemporariesClear",      # a debug check
     "_PyGC_CLEAR_ARRAY",                    # expands to nothing
     "LOAD_FAST_AND_CLEAR",                  # an opcode
+    # Semantic reason constants passed to the actual release boundary.
+    "_PyIR_RETIRE_NONE", "_PyIR_RETIRE_NORMAL_RETURN",
+    "_PyIR_RETIRE_ERROR_UNWIND", "_PyIR_RETIRE_HEAP_CLEAR",
+    "_PyIR_RETIRE_STAGED_FAILURE",
 }
 
 
@@ -5310,6 +5314,58 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             [token.text for token in part.body.tokens() if token.kind != "COMMENT"]
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
+
+    if inst.name == "RESUME" and scalar_shape(0, 0):
+        # These audited helper contracts may poll/instrument and change
+        # control flow; ordinary completion writes no scratch. Require the
+        # complete bodies, not a token blacklist that can miss pointer stores.
+        # Callback/error phases remain uncovered.
+        if [part.name for part in parts] != [
+                "_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]:
+            return unknown
+        instrument = """{
+            #ifdef Py_GIL_DISABLED
+            int check_instrumentation = 1;
+            #else
+            int check_instrumentation = (tstate->tracing == 0);
+            #endif
+            if (check_instrumentation) {
+                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
+                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
+                if (code_version != global_version) {
+                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
+                    if (err) { ERROR_NO_POP(); }
+                    next_instr = this_instr;
+                    DISPATCH();
+                }
+            }
+        }"""
+        periodic = """{
+            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                int err = check_periodics(tstate);
+                ERROR_IF(err != 0);
+            }
+        }"""
+        def body_shape(node):
+            # Stmt.tokens() flattens preprocessor branches without their
+            # #else/#endif delimiters. Keep that structure in this contract.
+            if isinstance(node, Token):
+                return node.kind, node.text
+            if isinstance(node, list):
+                return tuple(body_shape(item) for item in node
+                             if not isinstance(item, Token) or item.kind != "COMMENT")
+            if isinstance(node, Stmt):
+                return type(node), tuple(body_shape(getattr(node, field.name))
+                                         for field in fields(node))
+            assert node is None
+            return None
+
+        if (any(part.stack.inputs or part.stack.outputs for part in parts)
+                or any(body_shape(part.body)
+                       != body_shape(Parser(body, "<RESUME contract>").block())
+                       for part, body in zip(parts, (instrument, periodic)))):
+            return unknown
+        return "_PyIR_TRANSFER_PRESERVE"
 
     scalar = {
         "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",

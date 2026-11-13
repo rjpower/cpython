@@ -4777,7 +4777,7 @@
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
                     _PyFrame_ClearTemporaries(shim, 0);
-                    _PyEval_FrameClearAndPop(tstate, shim);
+                    _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
                     JUMP_TO_LABEL(error);
                 }
                 frame->return_slot = (uint16_t)IR_A(ir_word);
@@ -18638,7 +18638,6 @@
             PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            Py_DECREF(seq_o);
             if (res == 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -18705,7 +18704,6 @@
                 PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-                Py_DECREF(seq_o);
                 if (res == 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -19153,7 +19151,7 @@
                 _PyInterpreterFrame *dying = frame;
                 frame = tstate->current_frame = dying->previous;
                 frame->pending_redirect = 0;
-                _PyEval_FrameClearAndPop(tstate, dying);
+                _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
                 frame->pending_redirect = 0;
                 if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                     tstate->current_frame = frame->previous;

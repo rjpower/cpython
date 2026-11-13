@@ -349,40 +349,8 @@ _PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
                             PyObject *kwnames)
 {
     assert(PyFunction_Check(func));
-    PyFunctionObject *f = (PyFunctionObject *)func;
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    assert(nargs >= 0);
-    assert(nargs == 0 || args != NULL);
-    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
-    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-    /* _PyEvalFramePushAndInit consumes owners: DUP the window. */
-    PyValue small[8];
-    PyValue *owners = small;
-    if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
-        owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
-        if (owners == NULL) {
-            _PyErr_NoMemory(tstate);
-            return PyValue_NULL;
-        }
-    }
-    for (Py_ssize_t i = 0; i < total; i++) {
-        owners[i] = PyValue_DUP(args[i]);
-    }
-    PyObject *locals = NULL;
-    if (!(((PyCodeObject *)f->func_code)->co_flags & CO_OPTIMIZED)) {
-        locals = Py_NewRef(f->func_globals);
-    }
-    _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        owners, nargs, kwnames, NULL);
-    if (owners != small) {
-        PyMem_Free(owners);
-    }
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
-    EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    return _PyEval_EvalFrameValue(tstate, frame, 0);
+    return _PyEval_VectorValue(tstate, (PyFunctionObject *)func, args,
+                               nargsf, kwnames);
 }
 
 /* The object vectorcall of a core callable with a value vectorcall (D8):

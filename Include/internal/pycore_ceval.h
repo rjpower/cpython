@@ -167,6 +167,21 @@ _PyEval_Vector(PyThreadState *tstate,
             PyObject* const* args, size_t argcount,
             PyObject *kwnames);
 
+/* Borrow the input window; the outlined provider owns construction through
+ * evaluation, including a custom evaluator's callbacks and frame handoff. */
+PyAPI_FUNC(PyValue) _PyEval_VectorValue(PyThreadState *tstate,
+                                       PyFunctionObject *func,
+                                       const PyValue *args, size_t nargsf,
+                                       PyObject *kwnames);
+
+/* Strict custom-evaluator handoffs require a live staged token before reading
+ * frame storage. Activation follows current-frame publication; retirement
+ * consumes an unentered non-current frame. Both leave an empty outer node. */
+PyAPI_FUNC(int) _PyEval_ActivateStagedFrame(PyThreadState *tstate,
+                                          _PyInterpreterFrame *frame);
+PyAPI_FUNC(int) _PyEval_RetireStagedFrame(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame);
+
 extern int _PyEval_ThreadsInitialized(void);
 extern void _PyEval_InitGIL(PyThreadState *tstate, int own_gil);
 extern void _PyEval_FiniGIL(PyInterpreterState *interp);
@@ -332,12 +347,14 @@ PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyValueBorrow su
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
+/* Consumes v, including on error; initialized arena outputs survive cleanup. */
 PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
 /* The returned owner remains C-owned until ordinary result publication. */
 PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopWithResult(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
 /* Error/close paths carry no detached result. */
-PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame, uint8_t reason);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
 enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
 enum _PyIRStepStatus {

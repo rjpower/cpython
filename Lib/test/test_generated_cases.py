@@ -1117,7 +1117,8 @@ class TestIRCases(unittest.TestCase):
         for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
-                retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
+                retired = handler.index(
+                    "temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")
                 published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
                 self.assertLess(retired, completed)
@@ -2994,7 +2995,7 @@ class TestIRCases(unittest.TestCase):
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
                 def kind_for(body):
-                    analysis = self.analyze(f"inst({name}, ({effect})) {{ {body} }}")
+                    analysis = self.analyze(f"\ninst({name}, ({effect})) {{ {body} }}\n")
                     inst = analysis.instructions[name]
                     fmt = ir_generator.compute_formats(analysis)[name]
                     return ir_generator.normal_transfer_kind(inst, fmt)
@@ -3005,12 +3006,45 @@ class TestIRCases(unittest.TestCase):
 
     def test_normal_transfer_requires_matching_io(self):
         # The same body with a different window cannot acquire COPY geometry.
-        source = "inst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }"
+        source = "\ninst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }\n"
         analysis = self.analyze(source)
         inst = analysis.instructions["COPY"]
         fmt = ir_generator.compute_formats(analysis)["COPY"]
         self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
                          "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_resume_normal_transfer_checks_helper_footprint(self):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        inst = analysis.instructions["RESUME"]
+        fmt = ir_generator.compute_formats(analysis)["RESUME"]
+        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                         "_PyIR_TRANSFER_PRESERVE")
+        body = [part for part in inst.parts if isinstance(part, analyzer.Uop)][-1].body
+        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
+                          "*(slots + offset) = PyValue_NULL;",
+                          "frame->base[0] = PyValue_NULL;"):
+            with self.subTest(statement=statement):
+                changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
+                body.body.append(changed.instructions["OP"].parts[0].body.body[0])
+                try:
+                    self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                                     "_PyIR_TRANSFER_UNKNOWN")
+                finally:
+                    body.body.pop()
+
+        # Flattening both preprocessor arms loses their boundary: the same
+        # statements in a different arm must not satisfy the source proof.
+        instrument = [part for part in inst.parts
+                      if isinstance(part, analyzer.Uop)][0].body
+        branch = instrument.body[0]
+        original = branch.body.pop()
+        branch.else_body.insert(0, original)
+        try:
+            self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                             "_PyIR_TRANSFER_UNKNOWN")
+        finally:
+            branch.body.append(branch.else_body.pop(0))
 
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -3026,7 +3060,7 @@ class TestIRCases(unittest.TestCase):
             "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
             "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
             "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
-            "IR_JUMP": "PRESERVE", "RETURN_VALUE": "EXIT",
+            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE", "RETURN_VALUE": "EXIT",
             "CALL": "UNKNOWN", "LOAD_ATTR": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():

@@ -161,7 +161,7 @@ extern PyValue _PyEval_EvalFrameValue(PyThreadState *tstate,
                                       _PyInterpreterFrame *frame,
                                       int throwflag);
 
-extern PyObject*
+PyAPI_FUNC(PyObject *)
 _PyEval_Vector(PyThreadState *tstate,
             PyFunctionObject *func, PyObject *locals,
             PyObject* const* args, size_t argcount,

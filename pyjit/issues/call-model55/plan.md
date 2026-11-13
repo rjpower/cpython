@@ -92,11 +92,13 @@ permanent dual ABIs or invoking new permission requirements.
 
 ## Completion
 
-Close this design checkpoint when the proposal answers the full lifecycle,
-independent review findings are resolved or explicitly bounded, the migration
-plan is actionable, and canonical documents and Loom agree. Do not claim an
-optimality proof, achieved speedup, implemented bitmap or completed runtime
-migration from a reviewed design alone.
+The design checkpoint is closed: the proposal and independent review define
+the full lifecycle and migration gates. The active implementation checkpoint
+closes only when M0–M7 have evidenced dispositions, the complete static and
+bitmap alternatives have been evaluated under the same ABI, and qualified
+winners have been selected or rejected with retained evidence. Canonical
+documents and Loom must agree. A partial source port or reviewed design does
+not establish speedup, implemented bitmap authority or completed migration.
 
 ## Reviewed recommendation and implementation sequence
 

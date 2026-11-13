@@ -26,9 +26,9 @@ commits reviewed source before measurements.
 | Stage | State | Required next evidence |
 | --- | --- | --- |
 | M0 allocation/interfaces | Initial census/contracts reviewed; shared+NULL reference retained through M3 | Quantify full placement alternatives before final physical ABI selection |
-| M1 typed pins/admission | M1a typed pins dd3c9fc8d9e passes 932 focused tests per role and native/source review; hot confirmation mixed, no admission. M1b ce71fcfc240 builds and passes 413 focused tests per role; initial fixture failures corrected | Corrected admission checks, composition tests and measured selection |
-| M2 shadow maps/roots | First retirement producer/collector bridge implemented and source-reviewed in worker trees; semantic edge worklist in development | Merged native/GC tests; full phase and logical-owner shadow coverage still open |
-| M3 all lifecycle readers | Observer prefix reviewed; helper/native root census active | Callback, partial failure, mutation, suspension and escape coverage under NULL authority |
+| M1 typed pins/admission | M1a typed pins dd3c9fc8d9e passes 932 focused tests per role and native/source review; hot confirmation mixed, no admission. M1b ce71fcfc240 passes 413 focused tests per role; two-pair screen still loses logging | Carry typed owned-function proof across call boundary; qualify and price composition |
+| M2 shadow maps/roots | Retirement/observer bridge integrated as 2f7067cdde1; nine precise-root tests and 940-test core focus pass per role; cold source GO. Semantic worklist 26b1e8d4900 source-reviewed, pending generation/integration | Hot screen/native split evidence; full phase and logical-owner shadow coverage still open |
+| M3 all lifecycle readers | Detached observer prefix integrated; staged unpack and typed function transfer next; native policy fixed | Callback, partial failure, mutation, suspension and escape coverage under NULL authority |
 | M4 static switch | Not started | Atomic reader/collector/allocator switch and representation qualification |
 | M5 bitmap comparison | Not started | Same placement/boundness/transfer ABI and complete measured lifecycle |
 | M6 optional lowering | Not started | Independently attributable useful increments |
@@ -46,3 +46,16 @@ debugger/LLTrace failures, GC-verifier instability and the unexplained full-run
 profiling failure as explicit limits; do not add quarantines. The existing GDB
 pretty-print quarantine remains unchanged. Source-only review does not count
 as a runtime pass, and a source-level store reduction does not establish a win.
+
+## Collector policy decision during M3 review
+
+Keep ordinary native stack/register/PyMem conservative discovery as an explicit
+policy in this checkpoint. GIL cyclic RC already preserves real counted C
+owners without a root head; extra per-owner chains would mainly serve the
+optional verifier and add stores on ordinary native calls. Do not conflate
+removing arena enumeration with a fully precise native GC migration. M3 must
+cover every active/staged/retiring arena and heap owner partition, including
+native/provider/binder windows and dynamic prefixes. Scalar boxes remain live
+leaf roots under native discovery. The [collector policy audit](collector-policy.md)
+records the distinction and source costs. The [helper proposal](helper-roots-proposal.md)
+prioritizes actual staged arena gaps rather than blanket C-local registration.

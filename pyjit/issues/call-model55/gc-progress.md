@@ -83,3 +83,12 @@ authorize no frame homes, headers or result, so nested active-frame writes canno
 invalidate their root recipe. Fast closes allocate/link no record; the outlined
 continuation owns the optional descriptor until pop, before array free. Host AST
 parse and diff check pass. Frames source post-review and merged execution pending.
+
+Observer prefix component is committed as `d2c5233fdf6`; frames source post-review
+GO is in its peer file. Root owns candidate execution of the real jump fixture.
+The [collector-policy audit](collector-policy.md) separates cyclic RC needs from
+verifier/native policies and prices blanket scalar registration. Root retained
+native conservative roots for M4 and approved a narrow CValue cleanup instead:
+remove an unproduced FT head/impossible link loop and correct workspace comments,
+with no new heads/stores or producer ports. Four-file delta is source-reviewed
+GO by frames, diff check/reference census clean, pending root integration.

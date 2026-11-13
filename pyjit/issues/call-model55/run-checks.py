@@ -22,6 +22,7 @@ def main():
     parser.add_argument('tests', nargs='*')
     parser.add_argument('--role', choices=['release', 'debug'])
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--match', action='append', default=[])
     args = parser.parse_args()
     manifest = EVIDENCE / f'{args.tag}-{args.stage}-commands.json'
     if manifest.exists():
@@ -40,10 +41,14 @@ def main():
             command = ['make', '-s', 'PYTHON_FOR_REGEN=uv run --no-project python -B',
                        'regen-cases']
         else:
-            command = [str(build / 'python'), '-B', '-m', 'test', '-j8',
-                       '--ignore', GDB_DISPLAY]
+            command = [str(build / 'python'), '-B', '-m', 'test', '-j8']
             if args.verbose:
                 command.append('-v')
+            for pattern in args.match:
+                command += ['-m', pattern]
+            # Regrtest's first filter sets the default for unmatched tests.
+            # Put positive selections first so --ignore does not admit all.
+            command += ['--ignore', GDB_DISPLAY]
             if args.stage == 'focus':
                 if not args.tests:
                     parser.error('focus requires test modules')

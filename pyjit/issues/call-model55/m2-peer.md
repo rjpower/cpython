@@ -48,3 +48,14 @@ direct untracked-generator deallocation while a held GeneratorExit anchor remain
 after higher-numbered local/scratch cleanup. Its unraisable hook retains only the
 message, avoiding resurrection that would bypass the intended path. Runtime
 evidence is still pending. No new quarantine or disabled test was introduced.
+
+First coordinator release execution exposed a fixture phase error: the held
+GeneratorExit test observed False. Source diagnosis traces injected exception
+to `PyTraceBack_Here`, whose traceback strongly owns the frame. Takeover moves
+Trigger into that escaped frame. Exception cleanup then removes its root bit
+before decref, and traceback/frame destruction can trigger Trigger afterwards;
+that already-finalizing exception must not be marked as a remaining owner.
+Proposed fixture correction clears the caught error's traceback before yielding,
+so Trigger executes during the intended direct generator-prefix retirement.
+Root must verify this inference on the candidate. Keeping EXCEPTION set during
+its own close would violate the root contract and is not a proposed fix.

@@ -84,5 +84,47 @@ fixture issues: missing specialized handler lookup and synthetic operands whose
 invalid domains prevented the intended semantic proof. Corrected fixtures keep
 valid surrounding domains and assert specific malformed-domain errors; no
 validator, test or functionality was disabled. Existing valid compiled images,
-marshal, completion and operand-mode checks pass. A two-pair hot screen is in
-progress. Full qualification and golden admission remain open.
+marshal, completion and operand-mode checks pass. The completed two-pair hot
+screen versus selected54 is DeltaBlue 1.003606, generators 1.007832, coroutines
+1.079173, Richards 0.966024, comprehensions 1.012161 and silent logging 1.151141.
+Campaign `E/m1-admission-hot-screen-golden` has stable clean identities; logging
+range is 1.080176–1.226767. These samples do not earn admission. The exact release
+ELF is retained as `E/m1-admission-native-python`. Full qualification remains open.
+
+## M2a: explicit retiring owners and observer prefixes
+
+Candidate `2f7067cdde1` adds a nested transition-root chain for reached,
+potentially reentrant retirement. The ordinary path first performs only proven
+callback-free closes. Outlined continuations root the remaining initialized
+homes, typed headers and independent result through the final code/exception
+close. A detached observer-redirection array uses the same chain with an
+explicit prefix cursor. This is still NULL-authoritative: arena scans and
+scratch clearing remain. The [cold source review](m2-integrated-cold-review.md)
+is GO for this bounded bridge, not for static maps.
+
+Both builds pass nine precise-root cases, using a visitor that does not rely on
+conservative scanning, and the 13-module frame/call/GC focus passes 940 filtered
+tests per role (15 release skips, 13 debug). Two new fixtures initially selected
+the wrong construction/retirement phase; closure cells and traceback escape
+were corrected without changing runtime code or weakening root assertions.
+The initial overly broad test selection also reran the same nine known debugger
+errors; the runner's ordered positive filters now select the intended cases.
+
+Two-pair `E/m2-roots-hot-screen-golden` versus selected54:
+
+| Workload | Candidate/control elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.010977 | 0.990699–1.031670 |
+| Generators | 0.985657 | 0.985638–0.985677 |
+| Coroutines | 1.040258 | 1.039816–1.040699 |
+| Richards | 0.993525 | 0.991457–0.995597 |
+| Comprehensions | 1.014623 | 1.009436–1.019837 |
+| Logging silent | 1.087839 | 1.079558–1.096184 |
+
+Pre/postflight clean source/native identities match. This does not earn
+admission or establish an isolated causal cost. The exact release ELF is
+retained as `E/m2-roots-native-python`. Non-running GDB shows homes offset 112,
+function offset 32, transition record size 40; struct size 120 includes its first
+eight-byte value cell. Native handler/cleanup dumps are retained under
+`E/m2-native-*`. No full-suite or FT qualification is claimed. Semantic transfer
+admission and actual staged-arena adapters are the next integrations.

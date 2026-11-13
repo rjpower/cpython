@@ -18,7 +18,16 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Current candidate `ce71fcfc240` composes typed metadata pins and common encoded-image
+Current candidate `2f7067cdde1` composes typed metadata pins, common encoded-image
+admission and explicit nested retirement/observer-prefix roots. The root bridge
+passes nine targeted tests per role that inspect only precise records, and a
+940-test frame/call/GC focus per role; cold source review is GO. Scratch NULLs
+and conservative arena scanning remain authoritative. Its two-pair selected54
+screen is DeltaBlue 1.010977, generators 0.985657, coroutines 1.040258,
+Richards 0.993525, comprehensions 1.014623 and silent logging 1.087839;
+it does not earn admission. Complete semantic maps and all lifecycle adapters remain open.
+The earlier M1 candidate
+`ce71fcfc240` composes typed metadata pins and common encoded-image
 admission. M1a passes 932 focused tests per GIL role; the separate M1b
 admission set passes 413 per role. These counts are distinct groups, not a
 deduplicated total. M1a timing is mixed, with a persistent silent-logging loss;

@@ -290,8 +290,8 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #  define UNLOCK_OBJECT(op) ((void)0)
 #endif
 
-#define GLOBALS() frame->f_globals
-#define BUILTINS() frame->f_builtins
+#define GLOBALS() _PyFrame_GetGlobals(frame)
+#define BUILTINS() _PyFrame_GetBuiltins(frame)
 #define LOCALS() frame->f_locals
 #define CONSTS() _PyFrame_GetCode(frame)->co_consts
 #define NAMES() _PyFrame_GetCode(frame)->co_names

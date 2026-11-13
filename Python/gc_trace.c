@@ -1065,8 +1065,11 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER) {
             continue;
         }
-        Py_VISIT(f->f_globals);
-        Py_VISIT(f->f_builtins);
+        // Internal init-cleanup frames have no function or namespaces.
+        if (PyValue_FunctionCheck(f->f_funcobj)) {
+            Py_VISIT(_PyFrame_GetGlobals(f));
+            Py_VISIT(_PyFrame_GetBuiltins(f));
+        }
         int err = _PyFrame_Traverse(f, visit, arg);
         if (err) {
             return err;

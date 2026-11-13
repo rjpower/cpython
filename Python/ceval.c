@@ -2270,8 +2270,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.f_funcobj = PyValue_Wrap((void *)0xaaa0);
     entry->frame.f_locals = (PyObject*)0xaaa1;
     entry->frame.frame_obj = (PyFrameObject*)0xaaa2;
-    entry->frame.f_globals = (PyObject*)0xaaa3;
-    entry->frame.f_builtins = (PyObject*)0xaaa4;
 #endif
     entry->frame.f_executable = PyValue_None;
     entry->frame.base = entry->frame.owned_slots;
@@ -4304,7 +4302,7 @@ _PyEval_GetBuiltins(PyThreadState *tstate)
 {
     _PyInterpreterFrame *frame = _PyThreadState_GetFrame(tstate);
     if (frame != NULL) {
-        return frame->f_builtins;
+        return _PyFrame_GetBuiltins(frame);
     }
     return tstate->interp->builtins;
 }
@@ -4418,7 +4416,7 @@ _PyEval_GetGlobals(PyThreadState *tstate)
     if (current_frame == NULL) {
         return NULL;
     }
-    return current_frame->f_globals;
+    return _PyFrame_GetGlobals(current_frame);
 }
 
 PyObject *
@@ -4562,7 +4560,7 @@ PyObject* PyEval_GetFrameGlobals(void)
     if (current_frame == NULL) {
         return NULL;
     }
-    return Py_XNewRef(current_frame->f_globals);
+    return Py_XNewRef(_PyFrame_GetGlobals(current_frame));
 }
 
 PyObject* PyEval_GetFrameBuiltins(void)
@@ -4954,7 +4952,7 @@ static int
 is_lazy_import_module_level(void)
 {
     _PyInterpreterFrame *frame = _PyEval_GetFrame();
-    return frame != NULL && frame->f_globals == frame->f_locals;
+    return frame != NULL && _PyFrame_GetGlobals(frame) == frame->f_locals;
 }
 
 PyObject *
@@ -5599,7 +5597,7 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
     if (found.status != 0) {
         return found.value;
     }
-    namespace = frame->f_globals;
+    namespace = _PyFrame_GetGlobals(frame);
     found.status = PyDict_GetValue(namespace, PyValue_FromObjectBorrow(name),
                                    &found.value);
     if (found.status < 0) {
@@ -5615,7 +5613,7 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
         }
         return found.value;
     }
-    namespace = frame->f_builtins;
+    namespace = _PyFrame_GetBuiltins(frame);
     found = value_load_from_dict(tstate, namespace, name);
     if (found.status != 0) {
         return found.value;

@@ -81,12 +81,6 @@ _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 static inline PyCodeObject* _Py_NO_SANITIZE_THREAD
 _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
 {
-    // globals and builtins may be NULL on a legit frame, but it's unlikely.
-    // It's more likely that it's a sign of an invalid frame.
-    if (f->f_globals == NULL || f->f_builtins == NULL) {
-        return NULL;
-    }
-
     if (PyValue_IsNull(f->f_executable)) {
         return NULL;
     }
@@ -131,6 +125,20 @@ static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
     PyObject *func = PyValue_AsKnownObjectBorrow(f->f_funcobj);
     assert(PyFunction_Check(func));
     return (PyFunctionObject *)func;
+}
+
+/* Normal frames retain the function that owns these readonly bindings.
+ * Internal trampoline/base frames have no function or namespace. */
+static inline PyObject *
+_PyFrame_GetGlobals(_PyInterpreterFrame *frame)
+{
+    return _PyFrame_GetFunction(frame)->func_globals;
+}
+
+static inline PyObject *
+_PyFrame_GetBuiltins(_PyInterpreterFrame *frame)
+{
+    return _PyFrame_GetFunction(frame)->func_builtins;
 }
 
 static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
@@ -247,8 +255,6 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     // and coroutines:
     dest->previous = NULL;
     dest->f_funcobj = src->f_funcobj;
-    dest->f_globals = src->f_globals;
-    dest->f_builtins = src->f_builtins;
     dest->f_locals = src->f_locals;
     dest->frame_obj = src->frame_obj;
     dest->instr_ptr = src->instr_ptr;
@@ -306,9 +312,6 @@ _PyFrame_Initialize(
     frame->base = base;
     frame->f_funcobj = func;
     frame->f_executable = _PyFrame_CodeHome(code);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
-    frame->f_builtins = func_obj->func_builtins;
-    frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
     frame->frame_obj = NULL;
     (void)tstate;
@@ -649,10 +652,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     frame->previous = previous;
     frame->f_funcobj = PyValue_None;
     frame->f_executable = _PyFrame_CodeHome(code);
-#ifdef Py_DEBUG
-    frame->f_builtins = NULL;
-    frame->f_globals = NULL;
-#endif
     frame->f_locals = NULL;
     frame->frame_obj = NULL;
     _PyFrame_InitIRInstrPtr(frame, code);

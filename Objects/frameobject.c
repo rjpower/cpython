@@ -1228,7 +1228,7 @@ static PyObject *
 frame_globals_get_impl(PyFrameObject *self)
 /*[clinic end generated code: output=7758788c32885528 input=7fff7241357d314d]*/
 {
-    PyObject *globals = self->f_frame->f_globals;
+    PyObject *globals = _PyFrame_GetGlobals(self->f_frame);
     if (globals == NULL) {
         globals = Py_None;
     }
@@ -1247,7 +1247,7 @@ static PyObject *
 frame_builtins_get_impl(PyFrameObject *self)
 /*[clinic end generated code: output=45362faa6d42c702 input=27c696d6ffcad2c7]*/
 {
-    PyObject *builtins = self->f_frame->f_builtins;
+    PyObject *builtins = _PyFrame_GetBuiltins(self->f_frame);
     if (builtins == NULL) {
         builtins = Py_None;
     }

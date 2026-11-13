@@ -53,7 +53,7 @@ Evidence is `E/scalar-storage-*`, including `scalar-storage-host` and
 are about 43% slower than upstream, DeltaBlue about 18%; logging is faster.
 
 The broad ed08 comparison and matched PMU are in the same report at
-`:1195–1217`: `E/m2-phase-all 29-upstream`,
+`:1195–1217`: `E/m2-phase-all29-upstream`,
 `E/m2-phase-perf-cycles-instructions` and `E/m2-phase-perf-record`.
 The all29 geometric mean 1.165467 and six wins are historical, not current-ccb
 qualification. DeltaBlue's matched instruction ratio 1.368099 and cycle
@@ -134,12 +134,12 @@ dynamic frequency and elapsed time are five different levels of evidence.
 | W 3cfc empty-family repair | Qualify separately from the broad W packet | Empty emitted-family metadata regression, full emission by root, exact diff showing no ordinary handler semantics change |
 | W 071d + 4c646 + 9c297 IRSC2 | Qualify independently; freeze interface while ordinary lanes start | Full products, reader/magic 64423 consistency, malformed metadata/position-stripping and retained-EH runtime/GC/debugger cases; then coherent suite gate |
 | P80b retained lifecycle for B | Peer and qualify against the exact B composition | Sparse-release cursor/retained-root visibility, nested callbacks, escape and active/heap providers |
-| B0e918 complete presence rival | Keep isolated and unselected until diagnosis closes | Retest three corrected fixtures from older 31/34 result; close monitor/profile failures; current root reports 480 passes in seven lifecycle modules, not a complete gate; then matched timing |
+| B0e918 complete presence rival | Keep isolated and unselected until diagnosis closes | Retest three corrected fixtures from older 31/34 result; close monitor/profile failures; root reports 480 tests across the diagnostic run: seven modules pass and two fail, not a complete gate; then matched timing |
 | Full static M4 | Continue as its own bounded storage workstream | Positive array, CALL_WAIT, suspension, observer, transformed-handler and read proofs before stale cells or conservative arena scanning are removed |
 
 These newer packet statuses are from the coordinator's task handoff, except the
-heads and source inspected above. Canonical STATUS/HANDOFF still contain older B
-progress. This review deliberately does not rewrite them or upgrade source-only
+heads and source inspected above. At review time, canonical STATUS/HANDOFF still contained older B
+progress; root subsequently updated both in f3f195af48d. This review deliberately does not rewrite them or upgrade source-only
 work. Root must attach final evidence paths and identities when integrating.
 
 ## Recommended order and alternatives

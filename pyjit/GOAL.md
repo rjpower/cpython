@@ -13,9 +13,10 @@ observer reconstruction contract before removal.
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
-under one architecture. Astra is reviewing the combined design at high effort
-before implementation. Sol workers will implement reviewed increments; the
-coordinator owns integration, qualification and selection.
+under one architecture. Astra completed the [combined design](design/proposals/interpreter-performance56.md)
+and [critical audit](issues/interpreter-performance56/review.md). Sol workers
+peer the concrete increments and implement them; the coordinator owns
+integration, qualification and selection.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while preserving logging performance. Frame clearing is

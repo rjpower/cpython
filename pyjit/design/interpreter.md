@@ -14,6 +14,10 @@ separates language behavior from that implementation choice.
 The [debugger transfer model](debugger-frame-transfers.md) defines explicit
 entry, cold context/owner proofs and bounded saved-local restoration.
 
+The [combined performance proposal](proposals/interpreter-performance56.md)
+and [critical audit](../issues/interpreter-performance56/review.md) describe
+reviewed successor work; they do not upgrade the selected implementation.
+
 ## Entry and dispatch
 
 A code object holds pristine eight-byte IR words and feedback initialization.

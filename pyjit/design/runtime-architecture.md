@@ -31,6 +31,10 @@ flowchart TD
     Extensions[Rebuilt bridges and opaque extension API] --> Values
 ```
 
+The [combined performance proposal](proposals/interpreter-performance56.md)
+and [critical audit](../issues/interpreter-performance56/review.md) describe
+reviewed successor work; they do not upgrade the selected implementation.
+
 ## Subsystem references
 
 | Subsystem | Design and source organization |

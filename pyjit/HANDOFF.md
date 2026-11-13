@@ -6,23 +6,24 @@ is stale and must not be built. Start [goal](GOAL.md) →
 [architecture](design/runtime-architecture.md) / [status](STATUS.md).
 Follow [process](PROCESS.md). Do not restart completed runtime integration.
 
-## Active review
+## Active integration
 
-Astra high runs in Loom session `koiua7b4`, branch
-`weaver/interpreter-performance56-astra`, worktree
-`/home/power/code/cpython/.worktrees/interpreter-performance56-astra`.
-It owns only the combined proposal and critical review under
-`design/proposals/interpreter-performance56.md` and
-`issues/interpreter-performance56/review.md`. Root owns the active plan,
-status, goal, integration and native evidence. Retrieve the reviewed source
-and peer it before implementing. Inner Sol lanes are frozen; their next
-assignments follow the combined plan. Root may continue bounded read-only
-qualification of existing candidates while review proceeds.
+Astra high completed the combined design/audit in 6036b9a5ce7, integrated here
+as bd32753b5a0. Read [proposal](design/proposals/interpreter-performance56.md)
+and [review](issues/interpreter-performance56/review.md). No native evidence was
+produced by that source review. Sol frames, IR and GC workers now peer the
+call/borrowing, value/action and specialization contracts against actual sources
+before bounded implementation. Do not call Astra in the inner loop.
 
-Use `loom sessions poll koiua7b4` and the session's durable conversation to
-check progress. It was launched explicitly with `--model gpt-6-astra --effort high`.
-The launch brief/manifest is under BASE/pyjit-link-wave1/interpreter-performance56.
-No new goal-tool task was created; GOAL.md and its Loom mirror own direction.
+Root admitted isolated empty-family fix 3cfc808 as I1413a9fe218. Its new host
+gate E55/scalar-results-host-empty-family passes 33 methods and full cases,
+metadata and contracts emission. The reused driver's final message incorrectly
+says thirty-two; unittest's actual count is 33. Full generation passes under
+scalar-results-qualified; product review precedes commit and native build.
+
+The launch brief/manifest remains under E56. The active plan keeps full static
+M4 and bitmap qualification separate from ordinary value/call improvements.
+Root owns full generation, native evidence, publication and selection.
 
 ## Controls
 
@@ -45,7 +46,7 @@ and `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstr
 
 | Source under BASE/worktrees | Branch / head | Native state and next gate |
 | --- | --- | --- |
-| call55-integrated | pyjit/call55-integrated / ccb96ccff6c | Shared builds still8232dd8adde. New VALUE source passes 32 narrow methods and full cases; metadata generation fails empty family. Reviewed isolated fix3cfc808 is not applied here. |
+| call55-integrated | pyjit/call55-integrated / 1413a9fe218 | Shared builds still 8232dd8adde. VALUE/error-copy and isolated empty-family repair pass 33 narrow methods and full cases/metadata/contracts; full generation passes; product review pending. |
 | call55-bitmap | pyjit/call55-bitmap /0e918ddc25b | Both 117/79 builds. Release34 focused cases pass; debug HomeRead aborts in a synthetic image. Monitoring/profile failures remain. No bitmap timing. |
 | call55-ir | pyjit/call55-ir /3cfc808d8eb | Clean; includes frozen IRSC2 compiler/readers/runtime9c297 plus separate empty-family fix. No native/full generation. |
 | call55-pins | pyjit/call55-frames-retained /80b3de991c6 | Clean source-reviewed presence-provider retained runtime; no native. Earlier separate fixes are already integrated into B. |
@@ -61,7 +62,7 @@ The [report](issues/call-model55/report.md) owns pair ranges and earlier evidenc
 VALUE source007069 → I0df398, repair5e623 → Iccb96. Root full host gates:
 E55/scalar-results-host (Storage.copy KeyError val), retry (full cases PASS,
 metadata empty-PUSH_NULL family IndexError). Source peer3cfc808 fixes only
-that empty family; it must gain a new full-host gate before generation/build.
+that empty family; new I1413a9 full-host gate passes.
 Do not include IRSC2 just to pick up this isolated fix.
 
 IRSC2 static packet order:071d1ef3c09,4c646c88ae4,9c297510ac3. It contains

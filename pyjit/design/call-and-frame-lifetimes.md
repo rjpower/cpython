@@ -12,6 +12,10 @@ a Python language rule. The selected RC runtime still needs bounded owning
 storage and valid reentry phases. See [language/lifetime policy](lifetimes-and-language-semantics.md),
 [register IR](register-ir.md) and the [observer contract](handler-and-observer-contract.md).
 
+The [combined performance proposal](proposals/interpreter-performance56.md)
+and [critical audit](../issues/interpreter-performance56/review.md) describe
+reviewed successor work; they do not upgrade the selected implementation.
+
 ## One owning-frame ABI
 
 A frame owns its executing code and function separately, plus bindings and

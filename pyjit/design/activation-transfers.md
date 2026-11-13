@@ -10,6 +10,10 @@ none changes this selected contract. Golden54 adds only the public C-constructor
 repair below. The [active performance plan](../issues/interpreter-performance56/plan.md)
 reviews successor contracts separately from implemented behavior.
 
+The [combined performance proposal](proposals/interpreter-performance56.md)
+and [critical audit](../issues/interpreter-performance56/review.md) describe
+reviewed successor work; they do not upgrade the selected implementation.
+
 ## Ordinary calls and returns
 
 An activation owns its function, independently pinned executing code, named

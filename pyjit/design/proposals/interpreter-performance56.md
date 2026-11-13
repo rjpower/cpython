@@ -321,16 +321,20 @@ refreshes current state. The known binder already supports positional defaults
 and bounded keywords; extend its admission only where one checked binding plan
 replaces repeated work. Retain Python error precedence and duplicate-key handling.
 
-Commit is non-reentrant and cannot fail after the first owner move: reserve
-capacity and perform fallible preparation first. Install the new base before
-using a reused header to initialize homes. Transfer argument ownership, fill
+The owner-moving commit is callback-free and cannot fail after its first move:
+reserve capacity and perform its fallible preparation first. Later entry checks
+may still fail, for example recursion entry after publishing a generator child.
+Such a failure exits from committed child state and never retries the call.
+Install the new base before using a reused header to initialize homes. Transfer argument ownership, fill
 required bindings/defaults, install independent code/function pins, save the
 recipient and continuation, then publish a complete child. Remaining owners
 may be released only after that publication. No generic retry is legal after
 commit. Exact thread calls keep overlap; heap/native adapters move or copy only
 as required by their input ownership contract.
 
-While the child runs, `CALL_WAIT` partitions the shared arena: overlapping
+While the child runs, the logical `CALL_WAIT` ownership state partitions the
+shared arena; this does not imply an implemented phase marker or complete
+static WAIT readability proof. In that partition, overlapping
 argument homes belong to the child, surviving caller homes to the caller.
 Cold GC, escape and error readers use that partition, including retained EH
 values. They must not traverse both owners for the same transferred edge or

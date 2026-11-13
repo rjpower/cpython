@@ -2,7 +2,9 @@
 
 Current work is [stage2 interpreter performance](issues/interpreter-performance56/plan.md):
 one combined architecture for value transport, borrowing, calls/returns and
-specialization. Astra is reviewing it at high effort before implementation.
+specialization. Astra completed its [combined design](design/proposals/interpreter-performance56.md)
+and [audit](issues/interpreter-performance56/review.md); Sol source peer review
+and foundation qualification are active.
 The [goal](GOAL.md) and [architecture](design/runtime-architecture.md) define
 the project; [HANDOFF](HANDOFF.md) owns exact execution state.
 
@@ -58,7 +60,7 @@ These are inputs to the combined review, not selected replacements:
 
 | Component | Actual state |
 | --- | --- |
-| Scalar facts | Native8232 qualifies the first GET_ANEXT/UNARY_NOT error snapshots. New VALUE-result source in Iccb96 passes 32 narrow checks and full cases emission; metadata generation awaits the reviewed empty-family fix3cfc808. Full static scratch authority is unfinished. |
+| Scalar facts | Native8232 qualifies the first GET_ANEXT/UNARY_NOT error snapshots. VALUE/error-copy plus isolated empty-family repair in I1413a9 pass 33 narrow checks and full cases/metadata/contracts emission. Full generation passes; product review and native gates follow. Full static scratch authority is unfinished. |
 | Bitmap execution readers | B0e918 builds 117/79 in both roles. All34 focused cases pass release. Debug aborts in a constructed HomeRead image at LOAD_COMMON_CONSTANT; its other four selected modules pass. Earlier release lifecycle diagnostics pass seven modules but fail monitoring/profiling with absent-input errors. No complete bitmap timing or qualification. |
 | Explicit exceptional transfers | Compiler071d, readers4c646 and runtime/container9c297 are source-reviewed with Clinic/AST checks only. IRSC2 names retained homes and protocol destinations explicitly. Full generation and native qualification remain pending; the allocator is still canonical. |
 

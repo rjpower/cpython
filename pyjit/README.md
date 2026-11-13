@@ -7,9 +7,9 @@ and tracing JIT. Extensions are rebuilt and ported.
 Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md)
 and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
-stage unifies value transport, borrowing, calls and specialization. Astra's
-combined design review precedes implementation; the coordinator integrates
-reviewed and measured increments. Selected54 remains golden. The
+stage unifies value transport, borrowing, calls and specialization. The [combined design](design/proposals/interpreter-performance56.md) and
+[critical audit](issues/interpreter-performance56/review.md) define the next
+increments; the coordinator integrates reviewed and measured changes. Selected54 remains golden. The
 [model55 report](issues/call-model55/report.md) retains the preceding experiments
 and pending source components. Proposed contracts remain separate from the
 as-built designs below.

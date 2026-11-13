@@ -1,16 +1,16 @@
 # Interpreter performance checkpoint
 
-Status: combined design review, before implementation. No stage56 performance
+Status: combined design reviewed; concrete increments in source peer review. No stage56 performance
 claim and no new golden. The [active plan](plan.md) owns execution; the
 [project status](../../STATUS.md) owns aggregate qualification. The canonical
-architecture describes selected code; the incoming Astra design is a proposal
+architecture describes selected code; the [combined design](../../design/proposals/interpreter-performance56.md) is a proposal
 until implemented and qualified.
 
 ## Baseline
 
 Selected54 remains61015a9452d9069646fb5fede9ff963896833b89. The latest measured
 static experiment is 8232dd8adde, built117/79 in release/debug. It passes 23
-focused and 233 IR/code cases per role plus5+27 bootstrap/compile probes.
+focused and 233 IR/code cases per role plus 5+27 bootstrap/compile probes.
 The six cases below each have two balanced pairs; lower elapsed ratios are
 better. Campaigns use fixed workloads, matched GCC, CPU15/hash0 and JIT disabled.
 
@@ -57,7 +57,10 @@ transfer component has source reviews/Clinic only. Neither is a qualified
 performance result. The active combined plan decides which source pieces to
 reuse and which prerequisites each ordinary-path increment actually needs.
 
-Astra high's combined design is in progress. No speedup has been assigned to
+Astra high completed the combined architecture and audit in 6036b9a5ce7.
+Root's first foundation gate at I1413a9 passes 33 narrow methods and full cases,
+metadata and contracts emission (E55/scalar-results-host-empty-family); full
+generation and native qualification follow. No speedup has been assigned to
 any proposed stage56 change. Each selected implementation will add its own
 source/native identity, focused checks, removed work, measurements and decision
 here; the final checkpoint includes all 29 and matched profiles versus upstream.

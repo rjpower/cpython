@@ -1,11 +1,11 @@
 # Interpreter performance: combined plan
 
-Status: combined design review in progress, requested 2026-11-13. Astra runs at
-high effort in Loom session `koiua7b4`; implementation follows review and
-coordinator integration. This is the active successor to the model55 migration
-plan. The [goal](../../GOAL.md), [architecture](../../design/runtime-architecture.md)
-and [status](../../STATUS.md) are the entry path. The
-[handoff](../../HANDOFF.md) records source/build identities and operational state.
+Status: combined architecture reviewed by Astra high in 6036b9a5ce7; source
+peer review and foundation qualification active. This is the active successor
+to model55. Read the [design](../../design/proposals/interpreter-performance56.md)
+and [critical audit](review.md), then the experiments below. The [goal](../../GOAL.md),
+[architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
+and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
 ## Outcome
 
@@ -35,23 +35,31 @@ necessary unless a stronger lifetime proof replaces them.
 
 ## Design gate and sequence
 
-Astra will produce one combined design and critical source review, with Mermaid
-execution/ownership diagrams, implementation dependencies and falsifiable cost
-hypotheses. Root will integrate it into this plan and the architecture chain.
-The dependency order is provisional until that review:
+Astra's review preserves the current frame ABI and requires one checked
+value/owner/effect contract in existing generator and register passes. It rejects
+persistent borrowed homes, another value rollout, a universal runtime call
+object and waiting for all static storage proofs before any ordinary-path gain.
+Sol peers each concrete proposal before implementation. Root freezes experiment
+inputs and records source, generated, native and dynamic evidence separately.
 
-1. Freeze the source, native controls and current evidence; finish documentation
-   cleanup and classify the outstanding model55 components.
-2. Define the shared value/ownership/effect contracts and land bounded ordinary
-   value-transport improvements that do not require the entire frame migration.
-3. Extend borrowing and unify specialization around those contracts, with
-   independent experiments where file ownership and interfaces permit.
-4. Apply the common call/return/resume convention and the required frame and
-   exception-transfer pieces. Remove superseded adapters and bookkeeping as
-   their replacement becomes authoritative.
-5. Qualify the combined implementation, measure all 29 and the hot set directly
-   against golden54/upstream, inspect matched profiles, select winners and
-   publish the follow-up plan.
+| Lane | Next concrete work | Owner and exit |
+| --- | --- | --- |
+| Foundation | I VALUE/error-copy plus isolated empty-family repair; qualify full generation and native focused behavior | Root;33 narrow/full cases/metadata/contracts pass at 1413a9; products/build/native pending |
+| Early call | Exact-object-tuple CALL_EX probe before owning snapshots, preserving final refresh/nonexact path | Frames Sol; propose/peer, expected mortal-pair delta and actual hot-set frequency |
+| Shared facts/transport | Extend existing helper/action facts for one frequent canonical producer; replace its old special proof | IR Sol; immediate consumer, negative proof tests and emitted/native removal |
+| Borrowing | Multi-use callback-free folding, then acyclic CFG joins with explicit owning snapshots | IR/frames peers; net surviving-word and DUP/CLOSE reduction after materialization |
+| Completion | One remaining binding/recipient or completion duplication under the common ownership contract | Frames Sol; keep overlap, code pins, CALL_WAIT partition and inline return |
+| Specialization | One hot arithmetic or attribute/call family consuming shared guard/effect/result facts | GC Sol; cache hit/miss/invalidation proof and fewer hot checks/bridges |
+| Cold storage | Independently qualify IRSC2; diagnose bitmap monitor/profile and synthetic debug failure | Root with source peers; full M4 remains a separate lifecycle gate |
+| Selection | Compose qualified winners; direct hot6 and all29 versus frozen parent, golden54 and upstream | Root; coherent full diagnostics and cold post-review |
+
+The first call and transport proposals proceed in parallel. Shared facts are a
+bounded foundation for broader borrowing/specialization, not a framework project.
+Cross-line observer reconstruction and arbitrary allocation require their own
+qualified readers/transfers. They do not block safe local optimizations on
+initialized-NULL homes. After two revisions with no native removal or measurable
+benefit, close that experiment and choose the next high-frequency cost; do not
+silently abandon the entire workstream.
 
 Every increment follows propose → peer review → implement → focused test →
 post-review → integrate. Sol workers own disjoint implementation and review

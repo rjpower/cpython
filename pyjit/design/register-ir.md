@@ -13,6 +13,10 @@ observation. Release points implement the selected RC runtime; they are not a
 Python guarantee of immediate finalization. See
 [language and lifetime policy](lifetimes-and-language-semantics.md).
 
+The [combined performance proposal](proposals/interpreter-performance56.md)
+and [critical audit](../issues/interpreter-performance56/review.md) describe
+reviewed successor work; they do not upgrade the selected implementation.
+
 ## Producer path
 
 ```mermaid

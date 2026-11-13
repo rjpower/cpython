@@ -1834,6 +1834,13 @@ check_words(struct _PyCodeConstructor *con)
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
         int base = -1, dst = -1;
+        if ((handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) &&
+            (i + 1 >= nwords || IR_D(word) == IR_A(word) || IR_D(word) == IR_B(word)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has invalid delegated suspension operands", i);
+            goto error;
+        }
         for (int k = 0; k < 4; k++) {
             int role = fmt->roles[k];
             uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
@@ -1939,6 +1946,14 @@ check_words(struct _PyCodeConstructor *con)
             }
         }
         int opcode = _PyIR_BaseOpcode(handler);
+        if ((opcode == YIELD_VALUE || opcode == INSTRUMENTED_YIELD_VALUE) &&
+            handler != YIELD_DELEGATED &&
+            handler != INSTRUMENTED_YIELD_DELEGATED && arg != 0)
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd needs an explicit delegated yield", i);
+            goto error;
+        }
         if (opcode == COPY_FREE_VARS && arg != nfreevars) {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has an invalid free-variable count", i);
@@ -2007,12 +2022,22 @@ typedef struct {
     Py_ssize_t source_size;
 } semantic_image;
 
+enum { SEM_DELEGATED_NONE, SEM_DELEGATED_KNOWN, SEM_DELEGATED_UNKNOWN };
+
+typedef struct {
+    int receiver, outgoing, origin;
+    unsigned char kind;
+    unsigned char reserved[3];
+} semantic_delegated;
+static_assert(sizeof(semantic_delegated) == 16, "bounded delegated role tuple");
+
 typedef struct {
     int start;
     int end;
     unsigned char reached;
     unsigned char queued;
     unsigned char complete;
+    semantic_delegated delegated;
 } semantic_block;
 
 typedef struct {
@@ -2041,6 +2066,7 @@ typedef struct {
     semantic_phases *phases;
     int created_empty;
     int completion_destination_empty;
+    semantic_delegated delegated;
 } semantic_worklist;
 
 /* NULL, nonNULL and logical initialization are must-facts. Owner obligations
@@ -2061,6 +2087,25 @@ semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
     semantic_block *b = &work->blocks[block];
     uint64_t *stored = work->facts + (size_t)block * SEM_FACTS * work->nwords;
     int changed = !b->reached;
+    semantic_delegated next = work->delegated;
+    if (b->reached) {
+        const semantic_delegated *old = &b->delegated;
+        if (old->kind == SEM_DELEGATED_NONE && next.kind == SEM_DELEGATED_NONE) {
+            next = *old;
+        }
+        else if (old->kind == SEM_DELEGATED_KNOWN && next.kind == SEM_DELEGATED_KNOWN &&
+                 old->receiver == next.receiver && old->outgoing == next.outgoing)
+        {
+            if (old->origin != next.origin) {
+                next.origin = -1;
+            }
+        }
+        else {
+            next = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+        }
+    }
+    changed |= memcmp(&next, &b->delegated, sizeof(next)) != 0;
+    b->delegated = next;
     complete = !b->reached ? complete : b->complete && complete;
     changed |= b->complete != complete;
     b->complete = (unsigned char)complete;
@@ -2078,6 +2123,16 @@ semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
         work->tail = (work->tail + 1) % work->nblocks;
         work->count++;
     }
+}
+
+static void
+semantic_exception_enqueue(semantic_worklist *work, int block,
+                           const uint64_t *state)
+{
+    semantic_delegated normal = work->delegated;
+    work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+    semantic_enqueue(work, block, state, 0);
+    work->delegated = normal;
 }
 
 static unsigned int
@@ -2439,12 +2494,68 @@ semantic_empty_scratch(const semantic_image *image,
     return 1;
 }
 
+/* One pending pair suffices for the frontend SEND -> delegated-yield
+ * protocol. It denotes role homes, not object identity or a complete map. */
+static int
+semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
+                        const uint64_t *state, int pc, int inspect)
+{
+    _PyIRWord word = image->words[pc];
+    int handler = IR_HANDLER(word);
+    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
+        semantic_delegated pair = work->delegated;
+        int dst = (int)IR_A(word);
+        int valid = pair.kind == SEM_DELEGATED_KNOWN &&
+            pair.receiver == (int)IR_D(word) && pair.outgoing == (int)IR_B(word) &&
+            (dst < image->nl || dst == IR_NO_DST || dst == pair.outgoing ||
+             (semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)));
+        work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_NONE};
+        if (inspect && !valid) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d has no delegated SEND role proof", pc);
+            return -1;
+        }
+        return 0;
+    }
+    if (work->delegated.kind != SEM_DELEGATED_KNOWN) {
+        return 0;
+    }
+    int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->transfer_kind == _PyIR_TRANSFER_SWAP) {
+        int first = (int)IR_A(word), last = first + arg - 1;
+        int *homes[] = {&work->delegated.receiver, &work->delegated.outgoing};
+        for (int i = 0; i < 2; i++) {
+            if (*homes[i] == first) {
+                *homes[i] = last;
+            }
+            else if (*homes[i] == last) {
+                *homes[i] = first;
+            }
+        }
+        return 0;
+    }
+    int homes[] = {work->delegated.receiver, work->delegated.outgoing};
+    for (int i = 0; i < 2; i++) {
+        if (_PyIR_NormalPhysicalTransfer(word, arg, 0, homes[i], image->nl,
+                image->nl + image->scratch).kind != _PyIR_PHYSICAL_PRESERVE)
+        {
+            work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
+            break;
+        }
+    }
+    return 0;
+}
+
 static int
 semantic_step(const semantic_image *image, semantic_worklist *work,
               uint64_t *state, int pc, int inspect, int *complete)
 {
     work->created_empty = 0;
     work->completion_destination_empty = 0;
+    if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
+        return -1;
+    }
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (inspect && fmt->call_input_holes) {
@@ -2584,6 +2695,18 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 return 0;
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_YIELD_DELEGATED:
+                /* The finite SEND role proof authorizes these inputs, not
+                 * an arbitrary suspended scratch shape. The outgoing owner
+                 * is detached; a later activation supplies the recipient. */
+                semantic_set_facts(work, state, (int)IR_B(word), nl,
+                                   (1u << SEM_NULL) | (1u << SEM_NO_HOME));
+                home = (int)IR_A(word);
+                if (home >= nl && home != IR_NO_DST) {
+                    semantic_set_facts(work, state, home, nl, 0);
+                }
+                *complete = 0;
+                return 0;
             case _PyIR_OWNER_NORMAL_COMPLETION:
                 /* Completion transport belongs to its selected edge. FOR's
                  * body destination is not produced on completion: retain
@@ -2694,9 +2817,22 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
     const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
     for (int at = 0; at < fmt->owner_events; at++) {
         const _PyIROwnershipEvent *event = program + at;
-        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != edge) {
+        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION) {
             continue;
         }
+        if (edge == 0 && (event->flags & _PyIR_COMPLETION_SEND_YIELDED)) {
+            assert(event->src == 3 && event->extent == 2);
+            /* This is the actual yielded/body publication, independently
+             * of A, which belongs to the SEND completion route. */
+            work->delegated = (semantic_delegated){
+                .receiver = (int)IR_B(word), .outgoing = (int)IR_B(word) + event->extent,
+                .origin = pc, .kind = SEM_DELEGATED_KNOWN};
+            continue;
+        }
+        if (event->dst != edge) {
+            continue;
+        }
+        work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_NONE};
         /* The actual completion consumes its full window before any result
          * publication. Logical absence does not imply physical NULL. */
         int has_result = event->flags & _PyIR_COMPLETION_HAS_RESULT;
@@ -3038,7 +3174,7 @@ normal_transfer_proof(const semantic_image *image,
                     if (!work.blocks[block_at[pc]].reached) {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                                  entry->slot, entry->lasti);
-                        semantic_enqueue(&work, block_at[entry->target], abrupt, 0);
+                        semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
                         break;
                     }
                 }
@@ -3052,7 +3188,7 @@ normal_transfer_proof(const semantic_image *image,
                     {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                                  event.exc_slot, event.lasti);
-                        semantic_enqueue(&work, block_at[event.handler], abrupt, 0);
+                        semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
                     }
                 }
             }
@@ -3064,6 +3200,7 @@ normal_transfer_proof(const semantic_image *image,
             work.blocks[b].queued = 0;
             memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
             int complete = work.blocks[b].complete;
+            work.delegated = work.blocks[b].delegated;
             /* Source recovery has no abrupt footprint receipt yet. Its actual
              * from-block contributes an unknown prefix, independently of EH. */
             if (source_links != NULL) {
@@ -3072,7 +3209,7 @@ normal_transfer_proof(const semantic_image *image,
                     _PyIRSource_Event(&source, (uint32_t)i, &event);
                     semantic_exception_entry(image, &work, abrupt, NULL, 0,
                                              event.exc_slot, event.lasti);
-                    semantic_enqueue(&work, block_at[event.handler], abrupt, 0);
+                    semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
                 }
             }
             int end = work.blocks[b].end;
@@ -3083,7 +3220,7 @@ normal_transfer_proof(const semantic_image *image,
                     semantic_exception_entry(image, &work, abrupt, state,
                                              semantic_abrupt_floor(image, i),
                                              entry->slot, entry->lasti);
-                    semantic_enqueue(&work, block_at[entry->target], abrupt, 0);
+                    semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
                 }
                 (void)semantic_step(image, &work, state, i, 0, &complete);
             }
@@ -3118,6 +3255,13 @@ normal_transfer_proof(const semantic_image *image,
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
             for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+                if (IR_HANDLER(words[i]) == YIELD_DELEGATED ||
+                    IR_HANDLER(words[i]) == INSTRUMENTED_YIELD_DELEGATED) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "code: word %d has no delegated entry proof", i);
+                    result = -1;
+                    break;
+                }
                 if (_PyIR_FormatOf(IR_HANDLER(words[i]))->call_input_holes) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has no virtual call entry proof", i);
@@ -3129,6 +3273,7 @@ normal_transfer_proof(const semantic_image *image,
         }
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
         int complete = work.blocks[b].complete;
+        work.delegated = work.blocks[b].delegated;
         for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
             if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
@@ -3178,6 +3323,7 @@ normal_transfer_proof(const semantic_image *image,
                     memcpy(state, work.facts + (size_t)b * state_words,
                            state_words * sizeof(uint64_t));
                     int complete = work.blocks[b].complete;
+                    work.delegated = work.blocks[b].delegated;
                     for (int i = work.blocks[b].start;
                          i < work.blocks[b].end; i++)
                     {

@@ -53,6 +53,10 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
+    if name == "YIELD_DELEGATED":
+        return "YIELD_VALUE"
+    if name == "INSTRUMENTED_YIELD_DELEGATED":
+        return "INSTRUMENTED_YIELD_VALUE"
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
     # The fused handlers, their specialisations and twins stand for the

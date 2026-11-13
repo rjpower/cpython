@@ -327,7 +327,13 @@ class ContractTests(unittest.TestCase):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                self.assertEqual(sorted(inputs), list(range(row.ninputs)))
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                    self.assertEqual(row.ninputs, 3)
+                    self.assertEqual(sorted(inputs), [0, 2])
+                    self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
+                    self.assertEqual(row.borrow_mask, 0)
+                else:
+                    self.assertEqual(sorted(inputs), list(range(row.ninputs)))
                 if row.flags & _opcode.IR_WINDOW:
                     self.assertIn(_opcode.IR_ROLE_BASE, roles)
                     # at most the sources read through fields of their own
@@ -470,6 +476,7 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
             "INSTRUMENTED_RETURN_VALUE": {"PY_RETURN"},
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
+            "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
             "INSTRUMENTED_JUMP_BACKWARD": {"JUMP"},
             "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
@@ -566,6 +573,7 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
+                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "RETURN_GENERATOR"})
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
@@ -928,6 +936,13 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                    # Frontend YIELD_VALUE1 is normalized to three logical
+                    # inputs/outputs before allocation. Its cursor dependency
+                    # remains in SSA without a physical input field.
+                    self.assertEqual(expected, (1, 1))
+                    self.assertEqual(extent(row.through, oparg), 2)
+                    expected = (3, 3)
                 if min(expected) < 0:
                     continue
                 if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT")):

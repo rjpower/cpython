@@ -1769,6 +1769,18 @@ dummy_func(
             _MAKE_HEAP_SAFE +
             _YIELD_VALUE;
 
+        ir_only no_fold op(_YIELD_DELEGATED,
+            (receiver, unused_cursor, retval -- receiver, unused_cursor, value)) {
+            IR_METADATA_PASSTHROUGH(1);
+            PyValue outgoing = TAKE(retval);
+            IR_SUSPEND_DELEGATED(outgoing);
+        }
+
+        macro(YIELD_DELEGATED) = _YIELD_DELEGATED;
+
+        macro(INSTRUMENTED_YIELD_DELEGATED) =
+            _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
+
         inst(POP_EXCEPT, (exc_value -- )) {
             _PyErr_StackItem *exc_info = tstate->exc_info;
             Py_XSETREF(exc_info->exc_value,

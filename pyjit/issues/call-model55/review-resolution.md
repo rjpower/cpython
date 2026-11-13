@@ -42,3 +42,12 @@ collector accounting, malformed images, partial failures, callback mutation,
 escaped/suspended frames, retention and performance. The peer checked seven
 worked lifecycle traces; that does not replace implementation tests or prove
 a speedup. Current golden54 and its qualification limits remain unchanged.
+
+The subsequent allocation clarification separates physical placement from
+ownership representation: shared storage is the initial reference, not a
+register-machine requirement. M0 compares separate locals/scratch, clean-range
+reuse and explicit local validity before fixing placement interfaces. Static
+and mortal-bitmap candidates must use the same selected placement and boundness
+policy, with entry/exit/cold/packing costs included.
+The independent peer checked this bounded addendum and found no material issue;
+its design-only disposition and remaining runtime gates are unchanged.

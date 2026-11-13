@@ -249,6 +249,41 @@ free removal of all initialization. A separate dynamic local-boundness bitmap
 is a possible later alternative, with its own write/observation cost; a mortal
 owner bit alone cannot supply that boundness.
 
+### Allocation policy is a separate design choice
+
+The entry stores above follow from **shared physical storage plus NULL-based
+local boundness**, not from register execution. Reserving stack space can be
+a pointer adjustment; establishing what reused cells mean is separate work.
+More capacity alone does not make a reused cell unbound or release its previous
+owner. The IR's logical bindings and scratch values need not share an address
+range, even though the current allocation and overlap ABI do so.
+
+| Placement and boundness | Work avoided | Work retained or introduced |
+| --- | --- | --- |
+| Shared arena, initialized locals; initial reference layout | Extra arenas and base bookkeeping; preserves current argument overlap | Unbound locals overlapping dirty scratch need entry NULL stores unless cleanliness is proved |
+| Separate locals and scratch regions; clean-local invariant | Locals never inherit dirty scratch; retired NULL locals can be reused without entry clearing | Maintain the clean-local invariant on deletion/retirement, reserve both regions, handle cold capacity, preserve or repack argument windows and measure extra bases/locality |
+| Shared or separate storage, explicit local-validity bits | No NULL store is needed merely to mark a local unbound | Initialize/reset validity words; maintain bits for binding/deletion and observer writes; gate every potentially unbound read and walker; mortal-owner bits remain a separate fact |
+| Proved clean ranges within shared storage | Avoid clearing already-clean local ranges while keeping one arena | Track range cleanliness correctly across dirty scratch, callbacks, chunk growth and heap moves; count metadata and branch costs |
+
+A separate scratch region is feasible. It must reserve each activation's
+live-across-call scratch until the child returns; one unpartitioned global
+scratch buffer would clobber caller values. Suspended and escaped activations
+retain their own authorized state under either placement. Bound arguments
+still require binding; unbound locals require an unbound representation, not
+necessarily zero-filled value cells. A local-validity map must distinguish
+unbound from valid inline zero/None, and owner retirement remains independent.
+
+M0 compares these allocation policies before freezing physical interfaces.
+Do not treat shared placement or callee-local clearing as inevitable. Keep
+the initial shared/NULL layout as the controlled reference unless a different
+placement has a complete transfer, boundness and reuse contract. A placement
+experiment must include cold initialization, exit cleaning/validity traffic,
+argument packing and arena growth; moving stores from entry to exit is not by
+itself removed work. The static-versus-mortal-bitmap comparison must use the
+same selected placement and boundness policy on both branches. Separate
+placement and validity changes remain independently attributable increments,
+not prerequisites for establishing scratch-map correctness.
+
 ## Common call and return ABI
 
 ```mermaid
@@ -450,7 +485,7 @@ M0 concrete schema/census -> M1 typed+admission NULL
 
 | Stage | Named output and interface/file ownership | Required gate / falsifier |
 | --- | --- | --- |
-| M0: schemas and census | Freeze the initial PC+PhaseId/site/range schema, K=8 policy and the seven traces above. Inventory every home reader/root source and emitted publication point. Owners: proposal, IR metadata/generator and collector reviewers; count ordinary/heap calls, mortal transitions, NULL clears, roots/records, phases and metadata bytes on selected54. | No production behavior change. Verify representative source/native paths. Reject plans that add one phase store/map lookup/large record per removed clear; quantify callback versus fast routes and phase cardinality. Adjust a schema only by explicit reviewed revision, not “implementation will decide.” |
+| M0: schemas and census | Freeze the initial PC+PhaseId/site/range schema, K=8 policy and the seven traces above. Inventory every home reader/root source and emitted publication point. Compare shared storage, separate locals/scratch, clean ranges and explicit local validity before freezing placement interfaces. Owners: proposal, frame allocator, IR metadata/generator and collector reviewers; count ordinary/heap calls, mortal transitions, NULL clears, roots/records, phases and metadata bytes on selected54. | No production behavior change. Verify representative source/native paths. Reject plans that add one phase store/map lookup/large record per removed clear; quantify callback versus fast routes and phase cardinality. Adjust a schema only by explicit reviewed revision, not “implementation will decide.” |
 | M1: typed pins and one admission entry, still NULL | Introduce typed independent code/function interfaces and explicit sentinel kinds. Establish SemanticDescriptor/ExecImage contract and common ValidateSemanticImage. Owners: interpframe headers, ir.c, codeobject.c, assemble.c, marshal.c, regcfg verifier, cases/metadata generators, disassembly and format magic/version tests. Semantic descriptor version can exist before constant operands. | All homes remain valid/NULL. Mutable code/default/provider tests, malformed construction/replace/marshal, constructor failures, family restores and observed handlers. Strict API policy reviewed; no compiler-only trust, new per-call image RC or per-inline generation lookup. Account direct-access dependencies even if typed C emits unchanged native work. |
 | M2: generated shadow authority and GC bridge, still NULL | Emit initialized/value-owner phase maps and progress recipes from transfer IR. Add lazy nested TransitionRecord collector interface, retiring reservation and header/C roots. Owners: regcfg/generator, gc.c/gc_trace.c/gc_free_threading.c, native bridge/root reviewers and frame.c. | Shadow compares **logical initialized values and unique counted edges**, not nonNULL=mortal bitmap. Include nullable initialized outputs, inline/immortal values, unbound locals, typed header edges, mapped/C transfers and overlap partitions. Assert coverage of active, staged, prefix, heap and retiring roots. No stale scratch yet; no conservative arena scan removed yet. |
 | M3: every reader and lifecycle, still NULL | Convert traversal, clear/copy, frame exposure/mutation, traceback/errors/debugger/remote/JIT support, code constructors, generator creation/resume/throw/close and public frame conversion to descriptor authority. Keep NULL stores as development redundancy. Owners: frame/genobject/ceval and observer/extension interfaces with independent owner census. | Poison/debug side checks and allocation failures; callback collect/recurse/rebind/redirect/raise/resurrect; dynamic unpack prefix; mappings; escaped/suspended state; nested arena growth. No owner insertion behind a retirement cursor. Publish/refresh correctness demonstrated with NULL control, not guessed from unused bits. |

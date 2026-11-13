@@ -109,7 +109,7 @@ experiment. The proposal's M0–M7 table owns the exact schemas and admission ga
 
 | Integration | Deliverable | Gate before advancing |
 | --- | --- | --- |
-| M0 | Freeze transfer, site/phase, root and reader contracts; census selected54 | Count both removed work and new local initialization/publication/record costs |
+| M0 | Freeze transfer, site/phase, root and reader contracts; census selected54; compare shared storage, separate locals/scratch, clean ranges and explicit local validity before fixing placement interfaces | Count entry and exit work, cold initialization, argument packing, extra bases, local validity, publication and record costs; shared placement is a reference, not a register-machine requirement |
 | M1 | Typed pins and common semantic-image validation | Focused code replacement, construction, marshal, hooks and failure tests; retain NULL homes |
 | M2–M3 | Shadow ownership plans, nested collector roots and all lifecycle readers | Compare logical values and unique owners; callback, partial failure, suspension and escape coverage; retain NULL homes |
 | M4 | One coherent switch to map-authoritative scratch and non-stack allocation | Complete root/reader review, focused plus full integration checks; remove scratch clearing and arena-value scanning together |

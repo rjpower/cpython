@@ -5670,7 +5670,7 @@ dummy_func(
             next_instr = frame->instr_ptr;
             IR_SKIP_RESUME();
         #ifdef Py_DEBUG
-            int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
+            int lltrace = maybe_lltrace_resume_frame(frame);
             if (lltrace < 0) {
                 JUMP_TO_LABEL(exit_unwind);
             }

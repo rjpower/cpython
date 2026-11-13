@@ -2759,10 +2759,10 @@ sys__getframemodulename_impl(PyObject *module, int depth)
     while (f && (_PyFrame_IsIncomplete(f) || depth-- > 0)) {
         f = f->previous;
     }
-    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
+    if (f == NULL || f->f_funcobj == NULL) {
         return PyValue_None;
     }
-    PyObject *func = PyValue_AsKnownObjectBorrow(f->f_funcobj);
+    PyObject *func = (PyObject *)f->f_funcobj;
     PyObject *r = PyFunction_GetModule(func);
     if (!r) {
         PyErr_Clear();

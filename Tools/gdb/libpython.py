@@ -1092,9 +1092,9 @@ class PyFramePtr:
         self._gdbval = gdbval
         if self.is_optimized_out():
             return
-        self.co = self._f_code()
         if self.is_shim():
             return
+        self.co = self._f_code()
         self.co_name = self.co.pyop_field('co_name')
         self.co_filename = self.co.pyop_field('co_filename')
 

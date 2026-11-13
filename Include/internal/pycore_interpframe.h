@@ -21,10 +21,9 @@ extern "C" {
     _PyFrame_InstrOffset((IF), (IF)->instr_ptr)
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
-    assert(!PyValue_IsNull(f->f_executable));
-    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
-    assert(PyCode_Check(executable));
-    return (PyCodeObject *)executable;
+    assert(f->f_executable != NULL);
+    assert(PyCode_Check(f->f_executable));
+    return f->f_executable;
 }
 
 /* The executing copy of the code of f, which f->instr_ptr points into. */
@@ -87,15 +86,14 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
         return NULL;
     }
 
-    if (PyValue_IsNull(f->f_executable)) {
+    if (f->f_executable == NULL) {
         return NULL;
     }
-    void *ptr;
-    memcpy(&ptr, &f->f_executable, sizeof(f->f_executable));
+    PyCodeObject *ptr = f->f_executable;
     if (_PyMem_IsPtrFreed(ptr)) {
         return NULL;
     }
-    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
+    PyObject *executable = (PyObject *)f->f_executable;
     if (_PyObject_IsFreed(executable)) {
         return NULL;
     }
@@ -128,9 +126,9 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
-    PyObject *func = PyValue_AsKnownObjectBorrow(f->f_funcobj);
-    assert(PyFunction_Check(func));
-    return (PyFunctionObject *)func;
+    assert(f->f_funcobj != NULL);
+    assert(PyFunction_Check(f->f_funcobj));
+    return f->f_funcobj;
 }
 
 static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
@@ -288,13 +286,6 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
     }
 }
 
-static inline PyValue
-_PyFrame_CodeHome(PyCodeObject *code)
-{
-    assert(code != NULL && PyCode_Check(code));
-    return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)code));
-}
-
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
@@ -304,9 +295,9 @@ _PyFrame_Initialize(
 {
     frame->previous = previous;
     frame->base = base;
-    frame->f_funcobj = func;
-    frame->f_executable = _PyFrame_CodeHome(code);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectSteal(func);
+    frame->f_funcobj = func_obj;
+    frame->f_executable = (PyCodeObject *)Py_NewRef(code);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
@@ -424,19 +415,37 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame);
 PyAPI_FUNC(void) _PyValue_CheckFrame(_PyInterpreterFrame *frame);
 #endif
 
-/* Clears all references in the frame.
- * If take is non-zero, then the _PyInterpreterFrame frame
- * may be transferred to the frame object it references
- * instead of being cleared. Either way
- * the caller no longer owns the references
- * in the frame.
- * take should  be set to 1 for heap allocated
- * frames like the ones in generators and coroutines.
- *
- * Exported for external JIT support
- */
- PyAPI_FUNC(void)
-_PyFrame_ClearExceptCode(_PyInterpreterFrame * frame);
+/* A refcount test only proves a close callback-free while holding the GIL. */
+static inline bool
+_PyFrame_ObjectMayReenter(PyObject *object)
+{
+    if (object == NULL) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    return !_Py_IsImmortal(object);
+#else
+    return Py_REFCNT(object) == 1;
+#endif
+}
+
+enum {
+    _Py_FRAME_CLEAR_DONE = -1,
+    _Py_FRAME_CLEAR_ASSOCIATION = -2,
+    _Py_FRAME_CLEAR_LOCALS = -3,
+    _Py_FRAME_CLEAR_FUNCTION = -4,
+};
+
+struct _PyTransitionRoots;
+int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
+void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+                            struct _PyTransitionRoots *roots);
+void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
+                                  struct _PyTransitionRoots *roots);
+
+/* Retire frame and exception owners while preserving a detached result.
+ * Code remains owned by the generator. Close/deallocation passes NULL. */
+PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg);
@@ -647,8 +656,8 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
-    frame->f_funcobj = PyValue_None;
-    frame->f_executable = _PyFrame_CodeHome(code);
+    frame->f_funcobj = NULL;
+    frame->f_executable = (PyCodeObject *)Py_NewRef(code);
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;

@@ -1480,8 +1480,8 @@ init_threadstate(_PyThreadStateImpl *_tstate,
 
     // Initialize the embedded base frame - sentinel at the bottom of the frame stack
     _tstate->base_frame.previous = NULL;
-    _tstate->base_frame.f_executable = PyValue_None;
-    _tstate->base_frame.f_funcobj = PyValue_NULL;
+    _tstate->base_frame.f_executable = NULL;
+    _tstate->base_frame.f_funcobj = NULL;
     _tstate->base_frame.f_globals = NULL;
     _tstate->base_frame.f_builtins = NULL;
     _tstate->base_frame.f_locals = NULL;

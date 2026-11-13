@@ -41,6 +41,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_regcfg.h"        // _PyRegPass_SetKeepAcrossCode()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
+#include "pycore_transition_roots.h" // _PyGC_TraceVisitTransitionRoots()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // _PyValue_RecheckHome()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
@@ -1117,7 +1118,7 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_FunctionCheck(f->f_funcobj)) {
+    if (f->f_funcobj != NULL) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1179,7 +1180,7 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_FunctionCheck(f->f_funcobj)) {
+    if (f->f_funcobj != NULL) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -3356,23 +3357,30 @@ pyvalue_entry_null(PyObject *self, PyObject *unused)
 }
 
 static PyObject *
-check_frame_code_home(PyObject *self, PyObject *arg)
+check_frame_code_pin(PyObject *self, PyObject *arg)
 {
     if (!PyCode_Check(arg) || _Py_IsImmortal(arg)) {
         PyErr_SetString(PyExc_ValueError, "expected a mortal code object");
         return NULL;
     }
     Py_ssize_t before = Py_REFCNT(arg);
-    PyValue home = _PyFrame_CodeHome((PyCodeObject *)arg);
-    int ok = home.bits == (uintptr_t)arg && Py_REFCNT(arg) == before + 1;
-    PyValue_CLOSE(home);
+    _PyInterpreterFrame frame = {
+        .f_executable = (PyCodeObject *)Py_NewRef(arg),
+    };
+    int ok = _PyFrame_GetCode(&frame) == (PyCodeObject *)arg
+             && Py_REFCNT(arg) == before + 1;
+    Py_CLEAR(frame.f_executable);
     ok = ok && Py_REFCNT(arg) == before;
 
     PyCodeObject *immortal = (PyCodeObject *)&_Py_InitCleanup;
-    home = _PyFrame_CodeHome(immortal);
-    ok = ok && _Py_IsImmortal((PyObject *)immortal) &&
-         home.bits == ((uintptr_t)immortal | Py_TAG_REFCNT);
-    PyValue_CLOSE(home);
+    frame.f_executable = (PyCodeObject *)Py_NewRef(immortal);
+    ok = ok && _Py_IsImmortal((PyObject *)immortal)
+         && _PyFrame_GetCode(&frame) == immortal;
+    Py_CLEAR(frame.f_executable);
+    _PyInterpreterFrame sentinel = {.owner = FRAME_OWNED_BY_INTERPRETER};
+    PyObject *sentinel_code = PyUnstable_InterpreterFrame_GetCode(&sentinel);
+    ok = ok && sentinel_code == Py_None;
+    Py_XDECREF(sentinel_code);
     if (!ok) {
         PyErr_SetString(PyExc_AssertionError, "incorrect frame code ownership");
         return NULL;
@@ -4414,8 +4422,38 @@ remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
         "no_dst", IR_NO_DST);
 }
 
+static int
+append_transition_root_id(PyObject *object, void *arg)
+{
+    PyObject *address = PyLong_FromVoidPtr(object);
+    if (address == NULL) {
+        return -1;
+    }
+    int status = PyList_Append((PyObject *)arg, address);
+    Py_DECREF(address);
+    return status;
+}
+
+/* Bypass conservative arena/C-stack roots so tests exercise the precise bridge. */
+static PyObject *
+get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *ids = PyList_New(0);
+    if (ids == NULL) {
+        return NULL;
+    }
+    if (_PyGC_TraceVisitTransitionRoots(_PyThreadState_GET(),
+                                       append_transition_root_id, ids) < 0)
+    {
+        Py_DECREF(ids);
+        return NULL;
+    }
+    return ids;
+}
+
 static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
+    {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,
@@ -4434,7 +4472,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_from_object_borrow_inline", pyvalue_from_object_borrow_inline, METH_O, NULL},
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
-    {"check_frame_code_home", check_frame_code_home, METH_O, NULL},
+    {"check_frame_code_pin", check_frame_code_pin, METH_O, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
     {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},

@@ -14,6 +14,7 @@ from test.support.bytecode_helper import encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 CONTRACT = _opcode.get_ir_contract()
+HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
 
 
 def construct(code, **changes):
@@ -29,6 +30,10 @@ def construct(code, **changes):
 
 
 def replace_word(code, index, word):
+    handler, *fields = word
+    if isinstance(handler, str):
+        handler = HANDLERS[handler]
+    word = (handler, *fields)
     return code.co_code[:8 * index] + encode_words(word) + code.co_code[8 * (index + 1):]
 
 
@@ -69,7 +74,7 @@ class AdmissionTests(unittest.TestCase):
         reached = set()
         for index, word in enumerate(words):
             name, *fields = word
-            row = CONTRACT[opcode.opmap[name]]
+            row = CONTRACT[HANDLERS[name]]
             if name == "CALL":
                 reached.add(name)
                 base = row.roles.index(_opcode.IR_ROLE_BASE)

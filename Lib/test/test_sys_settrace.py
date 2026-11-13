@@ -3415,6 +3415,65 @@ class JumpFrameModelTestCase(unittest.TestCase):
         def __add__(self, other):
             return self
 
+    def test_redirect_retirement_prefix_roots(self):
+        for mutate in (False, True):
+            with self.subTest(mutate=mutate):
+                observations = []
+                payload_ids = []
+                frames = []
+                redirected = False
+
+                class Trigger:
+                    def __del__(self):
+                        ids = set(_testinternalcapi.get_transition_root_ids())
+                        observations.append(('trigger', payload_ids[-1] in ids))
+                        if mutate:
+                            frames[-1].f_locals['changed'] = True
+                        support.gc_collect()
+
+                class Payload:
+                    def __init__(self):
+                        payload_ids.append(id(self))
+
+                    def __del__(self):
+                        observations.append(('payload',))
+
+                def marker():
+                    self.fail('redirect did not skip the abandoned expression')
+
+                namespace = {'trigger': Trigger, 'payload': Payload,
+                             'marker': marker}
+                exec('def f():\n'
+                     '    changed = False\n'
+                     '    [\n'
+                     '        trigger(),\n'
+                     '        payload(),\n'
+                     '        marker(),\n'
+                     '    ]\n'
+                     '    return changed\n', namespace)
+                function = namespace['f']
+                code = function.__code__
+
+                def tracer(frame, event, arg):
+                    nonlocal redirected
+                    if frame.f_code is code and event == 'line':
+                        if frame.f_lineno == 6 and not redirected:
+                            redirected = True
+                            frames.append(frame)
+                            frame.f_lineno = 8
+                    return tracer
+
+                old_trace = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    result = function()
+                finally:
+                    sys.settrace(old_trace)
+                self.assertTrue(redirected)
+                self.assertIs(result, mutate)
+                self.assertEqual(observations, [('trigger', True), ('payload',)])
+                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
     def run_with_line_jumps(self, source):
         namespace = {}
         exec(source, namespace)

@@ -91,11 +91,11 @@ class KnownEntryTests(unittest.TestCase):
                               err)
 
 
-class FrameCodeHomeTests(unittest.TestCase):
-    def test_code_home_tag_and_count(self):
-        code = self.test_code_home_tag_and_count.__code__.replace()
+class FrameCodePinTests(unittest.TestCase):
+    def test_code_pin_count(self):
+        code = self.test_code_pin_count.__code__.replace()
         self.assertFalse(sys._is_immortal(code))
-        _testinternalcapi.check_frame_code_home(code)
+        _testinternalcapi.check_frame_code_pin(code)
 
     def test_active_code_survives_replacement(self):
         def original(function, replacement, reference):
@@ -131,6 +131,54 @@ class FrameCodeHomeTests(unittest.TestCase):
         del generator
         self.assertIsNone(reference())
 
+    def test_escaped_frame_keeps_independent_pins(self):
+        def body(callback):
+            callback()
+            return sys._getframe()
+
+        code = body.__code__.replace()
+        function = types.FunctionType(code, {'sys': sys})
+        code_ref = weakref.ref(code)
+        function_ref = weakref.ref(function)
+        functions = [function]
+        del code, function
+
+        def check_active():
+            support.gc_collect()
+            self.assertIsNotNone(function_ref())
+            self.assertIsNotNone(code_ref())
+
+        frame = functions.pop()(check_active)
+        support.gc_collect()
+        self.assertIsNotNone(function_ref())
+        self.assertIs(frame.f_code, code_ref())
+        frame.clear()
+        support.gc_collect()
+        self.assertIsNotNone(function_ref())
+        self.assertIs(frame.f_code, code_ref())
+        del frame
+        support.gc_collect()
+        self.assertIsNone(function_ref())
+        self.assertIsNone(code_ref())
+
+    def test_completed_generator_keeps_code_without_function(self):
+        def body():
+            yield 1
+
+        code = body.__code__.replace()
+        function = types.FunctionType(code, {})
+        code_ref = weakref.ref(code)
+        function_ref = weakref.ref(function)
+        generator = function()
+        del code, function
+        self.assertEqual(list(generator), [1])
+        support.gc_collect()
+        self.assertIsNone(function_ref())
+        self.assertIs(generator.gi_code, code_ref())
+        del generator
+        support.gc_collect()
+        self.assertIsNone(code_ref())
+
     def test_context_and_init_trampoline(self):
         class Item:
             def __init__(self, fail=False):
@@ -143,6 +191,234 @@ class FrameCodeHomeTests(unittest.TestCase):
             self.assertIsInstance(context.run(Item), Item)
         with self.assertRaisesRegex(ValueError, "init"):
             context.run(Item, True)
+
+
+class TransitionRootTests(unittest.TestCase):
+    def test_nested_retirement_roots_and_arena_growth(self):
+        references = {}
+        observations = []
+        payload = Item()
+        namespace = {}
+        assignments = ''.join(f'    local_{i} = depth\n' for i in range(128))
+        exec('def grow(depth):\n' + assignments +
+             '    if depth:\n        grow(depth - 1)\n', namespace)
+
+        class Result:
+            def __init__(self, name):
+                references[name] = weakref.ref(self)
+
+        class Trigger:
+            def __init__(self, name):
+                self.name = name
+
+            def __del__(self):
+                name = self.name
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append((name, id(payload) in ids,
+                                     id(references[name]()) in ids,
+                                     name != 'inner' or
+                                     id(references['outer']()) in ids))
+                namespace['grow'](24)
+                support.gc_collect()
+                if name == 'outer':
+                    nested = retire('inner', payload)
+                    observations.append(('nested-result',
+                                         isinstance(nested, Result)))
+
+        def retire(name, remaining):
+            trigger = Trigger(name)
+            return Result(name)
+
+        result = retire('outer', payload)
+        self.assertIs(result, references['outer']())
+        self.assertEqual(observations, [('outer', True, True, True),
+                                        ('inner', True, True, True),
+                                        ('nested-result', True)])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_result_published_after_finalizer_mutates_caller(self):
+        caller = sys._getframe()
+        observations = []
+        references = []
+        target = 'before'
+
+        class Result:
+            def __init__(self):
+                references.append(weakref.ref(self))
+
+        class Trigger:
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append((caller.f_locals['target'],
+                                     id(references[-1]()) in ids))
+                caller.f_locals['target'] = 'during'
+                support.gc_collect()
+
+        def retire():
+            trigger = Trigger()
+            return Result()
+
+        target = retire()
+        self.assertIs(target, references[-1]())
+        self.assertEqual(observations, [('before', True)])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_final_code_close_keeps_result_root(self):
+        observations = []
+        references = []
+
+        class Result:
+            def __init__(self):
+                references.append(weakref.ref(self))
+
+        class Constant:
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append(id(references[-1]()) in ids)
+                support.gc_collect()
+
+        def body():
+            return Result()
+
+        constant = Constant()
+        code = body.__code__.replace(co_consts=body.__code__.co_consts +
+                                     (constant,))
+        function = types.FunctionType(code, {'Result': Result},
+                                      closure=body.__closure__)
+        functions = [function]
+        del code, constant, function
+        result = functions.pop()()
+        self.assertIs(result, references[-1]())
+        self.assertEqual(observations, [True])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_frame_association_close_keeps_result_root(self):
+        observations = []
+        references = []
+
+        class Result:
+            def __init__(self):
+                references.append(weakref.ref(self))
+
+        class Trace:
+            def __call__(self, *args):
+                return self
+
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append(id(references[-1]()) in ids)
+                support.gc_collect()
+
+        def retire():
+            sys._getframe().f_trace = Trace()
+            return Result()
+
+        result = retire()
+        self.assertIs(result, references[-1]())
+        self.assertEqual(observations, [True])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_unstarted_generator_deallocation_roots(self):
+        observations = []
+        payload = Item()
+
+        class Trigger:
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append((id(payload) in ids,
+                                     id(retire.__code__) in ids))
+                support.gc_collect()
+
+        def retire(remaining, trigger):
+            yield
+
+        generator = retire(payload, Trigger())
+        del generator
+        self.assertEqual(observations, [(True, True)])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_generator_completion_keeps_result_root(self):
+        observations = []
+        references = []
+        payload = Item()
+
+        class Result:
+            def __init__(self):
+                references.append(weakref.ref(self))
+
+        class Trigger:
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append((id(payload) in ids,
+                                     id(references[-1]()) in ids))
+                support.gc_collect()
+
+        def retire(remaining):
+            trigger = Trigger()
+            if False:
+                yield
+            return Result()
+
+        generator = retire(payload)
+        with self.assertRaises(StopIteration) as stopped:
+            next(generator)
+        self.assertIs(stopped.exception.value, references[-1]())
+        self.assertEqual(observations, [(True, True)])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_generator_deallocation_keeps_exception_root(self):
+        exception_ids = []
+        observations = []
+        unraisable = []
+
+        class Trigger:
+            def __del__(self):
+                ids = set(_testinternalcapi.get_transition_root_ids())
+                observations.append(exception_ids[-1] in ids)
+                support.gc_collect()
+
+        def retire(trigger):
+            try:
+                yield
+            except GeneratorExit as error:
+                exception_ids.append(id(error))
+                # Keep this on direct generator retirement: a traceback
+                # would let the escaped frame own Trigger until the exception
+                # itself is already being destroyed.
+                error.__traceback__ = None
+                yield
+
+        generator = retire(Trigger())
+        next(generator)
+        # Keep only the message: retaining the unraisable's object would
+        # resurrect the generator and defer the direct deallocation path.
+        def hook(error):
+            unraisable.append(str(error.exc_value))
+
+        with support.swap_attr(sys, 'unraisablehook', hook):
+            del generator
+            support.gc_collect()
+        self.assertEqual(unraisable, ['generator ignored GeneratorExit'])
+        self.assertEqual(observations, [True])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+
+    def test_exception_retirement_collects_without_leaking_roots(self):
+        observations = []
+
+        class Trigger:
+            def __del__(self):
+                support.gc_collect()
+                observations.append('finalized')
+
+        def retire():
+            trigger = Trigger()
+            raise ValueError('retire')
+
+        with self.assertRaisesRegex(ValueError, 'retire'):
+            retire()
+        support.gc_collect()
+        self.assertEqual(observations, ['finalized'])
+        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
 class ValueFormatTests(unittest.TestCase):

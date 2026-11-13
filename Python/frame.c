@@ -5,7 +5,8 @@
 #include "pycore_frame.h"         // _PyFrame_New_NoTrack()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
-#include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
+#include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
+#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
 void
@@ -27,8 +28,8 @@ _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     Py_VISIT(frame->frame_obj);
     Py_VISIT(frame->f_locals);
-    _Py_VISIT_VALUE(frame->f_funcobj);
-    _Py_VISIT_VALUE(frame->f_executable);
+    Py_VISIT(frame->f_funcobj);
+    Py_VISIT(frame->f_executable);
     return _PyGC_VisitFrameStack(frame, visit, arg);
 }
 
@@ -91,7 +92,8 @@ _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
 }
 
 static void
-take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
+take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
+               _PyTransitionRoots *roots)
 {
     Py_BEGIN_CRITICAL_SECTION(f);
     assert(frame->owner < FRAME_OWNED_BY_INTERPRETER);
@@ -100,7 +102,10 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     _PyFrame_Copy(frame, new_frame);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
-    frame->f_executable = PyValue_DUP(new_frame->f_executable);
+    frame->f_executable = (PyCodeObject *)Py_NewRef(new_frame->f_executable);
+    roots->remaining = 0;
+    roots->header_mask = _Py_TRANSITION_CODE |
+        (roots->header_mask & _Py_TRANSITION_EXCEPTION);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     if (_PyFrame_IsIncomplete(new_frame)) {
@@ -200,37 +205,151 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
     clear_slots(frame, _PyFrame_NumSlots(frame));
 }
 
-void
-_PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
+/* Stop before the first close that can call Python. The interrupted owner
+ * stays in its home until the outlined continuation has published its roots. */
+int
+_PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
 {
-    /* It is the responsibility of the owning generator/coroutine
-     * to have cleared the enclosing generator, if any. */
-    assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
-           FT_ATOMIC_LOAD_INT8_RELAXED(_PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) == FRAME_CLEARED);
-    // GH-99729: Clearing this frame can expose the stack (via finalizers). It's
-    // crucial that this frame has been unlinked, and is no longer visible:
     assert(_PyThreadState_GET()->current_frame != frame);
-    PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
-    if (f != NULL) {
+    assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
+           FT_ATOMIC_LOAD_INT8_RELAXED(
+               _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) == FRAME_CLEARED);
+    if (FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj) != NULL) {
+        return _Py_FRAME_CLEAR_ASSOCIATION;
+    }
+    int remaining = _PyFrame_NumSlots(frame);
+    if (frame->owner == FRAME_OWNED_BY_THREAD) {
+        _PyFrame_AssertTemporariesClear(frame);
+        remaining = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    }
+#ifdef Py_DEBUG
+    _PyValue_CheckFrame(frame);
+#endif
+    while (remaining > 0) {
+        PyValue ref = frame->base[remaining - 1];
+#ifdef Py_GIL_DISABLED
+        /* Another thread can drop a count between a refcount test and close. */
+        if (PyValue_RefcountOnObject(ref)) {
+#else
+        if (_PyValue_MayDealloc(ref)) {
+#endif
+            return remaining;
+        }
+        frame->base[--remaining] = PyValue_NULL;
+        PyValue_XCLOSE(ref);
+    }
+    if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
+        return _Py_FRAME_CLEAR_LOCALS;
+    }
+    Py_CLEAR(frame->f_locals);
+    if (_PyFrame_ObjectMayReenter((PyObject *)frame->f_funcobj)) {
+        return _Py_FRAME_CLEAR_FUNCTION;
+    }
+    Py_CLEAR(frame->f_funcobj);
+    return _Py_FRAME_CLEAR_DONE;
+}
+
+void
+_PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, PyValue result,
+                        _PyTransitionRoots *roots)
+{
+    int remaining = stage > 0 ? stage : 0;
+    if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
+        remaining = frame->owner == FRAME_OWNED_BY_THREAD
+            ? _PyFrame_GetCode(frame)->co_nlocalsplus : _PyFrame_NumSlots(frame);
+    }
+    *roots = (_PyTransitionRoots){
+        .frame = frame,
+        .remaining = remaining,
+        .header_mask = _Py_TRANSITION_CODE |
+            (frame->owner == FRAME_OWNED_BY_GENERATOR
+                ? _Py_TRANSITION_EXCEPTION : 0) |
+            (frame->f_funcobj != NULL ? _Py_TRANSITION_FUNCTION : 0) |
+            (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0) |
+            (frame->frame_obj != NULL ? _Py_TRANSITION_FRAME_OBJECT : 0),
+        .result_present = !PyValue_IsNull(result),
+        .result = result,
+    };
+}
+
+void
+_PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
+                              _PyTransitionRoots *roots)
+{
+    assert(roots->frame == frame);
+    if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
+        PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
+        assert(f != NULL);
         f->f_line_next = -1;
+        roots->header_mask &= ~_Py_TRANSITION_FRAME_OBJECT;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
-            take_ownership(f, frame);
+            take_ownership(f, frame, roots);
             Py_DECREF(f);
             return;
         }
         Py_DECREF(f);
     }
-    if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        // A frame on the frame stack ends with its temporaries NULL: a
-        // return leaves them so, and so does the unwinding of an exception.
-        _PyFrame_AssertTemporariesClear(frame);
-        clear_slots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    while (roots->remaining > 0) {
+        int slot = --roots->remaining;
+        PyValue ref = frame->base[slot];
+        frame->base[slot] = PyValue_NULL;
+        PyValue_XCLOSE(ref);
     }
-    else {
-        _PyFrame_ClearLocals(frame);
+    roots->header_mask &= ~_Py_TRANSITION_LOCALS;
+    Py_CLEAR(frame->f_locals);
+    roots->header_mask &= ~_Py_TRANSITION_FUNCTION;
+    Py_CLEAR(frame->f_funcobj);
+}
+
+static Py_NO_INLINE PyValue
+clear_generator_slow(PyGenObject *gen, int stage, PyValue result)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+#ifndef NDEBUG
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    PyObject **top = tstate->datastack_top;
+    PyObject **limit = tstate->datastack_limit;
+#endif
+    _PyTransitionRoots roots;
+    _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    if (stage != _Py_FRAME_CLEAR_DONE) {
+        _PyFrame_FinishClearExceptCode(frame, stage, &roots);
     }
-    PyValue_CLEAR(frame->f_funcobj);
+    Py_END_CRITICAL_SECTION();
+    roots.header_mask &= ~_Py_TRANSITION_EXCEPTION;
+    _PyErr_ClearExcState(&gen->gi_exc_state);
+    /* The generator retains code even after its frame/exception clear. */
+    roots.header_mask &= ~_Py_TRANSITION_CODE;
+#ifndef NDEBUG
+    assert(tstate->datastack_chunk == chunk);
+    assert(tstate->datastack_top == top);
+    assert(tstate->datastack_limit == limit);
+#endif
+    result = roots.result;
+    roots.result = PyValue_NULL;
+    roots.result_present = 0;
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    return result;
+}
+
+PyValue
+_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
+{
+    int stage;
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    stage = _PyFrame_TryClearExceptCode(&gen->gi_iframe);
+    Py_END_CRITICAL_SECTION();
+    if (stage != _Py_FRAME_CLEAR_DONE ||
+        _PyFrame_ObjectMayReenter(gen->gi_exc_state.exc_value))
+    {
+        return clear_generator_slow(gen, stage, result);
+    }
+    _PyErr_ClearExcState(&gen->gi_exc_state);
+    return result;
 }
 
 /* Unstable API functions */
@@ -238,7 +357,8 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return PyValue_AsPyObjectNew(frame->f_executable);
+    return Py_NewRef(frame->f_executable != NULL
+                     ? (PyObject *)frame->f_executable : Py_None);
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

@@ -9,6 +9,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY()
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
+#include "pycore_transition_roots.h" // _PyGC_TraceVisitTransitionRoots()
 #include "pycore_list.h"          // _PyList_GetItemRef()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_INT_RELAXED()
@@ -249,8 +250,8 @@ merge_refcount(PyObject *op, Py_ssize_t extra)
 static void
 frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
 {
-    // Nothing to convert: every word in a frame (f_executable, f_funcobj and
-    // the slots) is an owner, never a deferred or borrowed reference.
+    // Nothing to convert: typed header pins and value homes own strong
+    // references, never deferred or borrowed references.
     assert(frame->owner == FRAME_OWNED_BY_FRAME_OBJECT ||
            frame->owner == FRAME_OWNED_BY_GENERATOR);
 }
@@ -443,7 +444,8 @@ gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *stat
             }
 
             PyValue *top = f->base + _PyFrame_NumSlots(f);
-            gc_visit_value(f->f_executable);
+            // The typed code and function pins already contribute counted
+            // references; only value homes can require deferred adjustment.
             while (top != f->base) {
                 --top;
                 gc_visit_value(*top);
@@ -832,7 +834,15 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
             }
 
             PyValue *top = f->base + _PyFrame_NumSlots(f);
-            if (gc_visit_value_mark_alive(args, f->f_executable) < 0) {
+            if (f->f_executable != NULL &&
+                gc_mark_enqueue((PyObject *)f->f_executable, args) < 0)
+            {
+                err = -1;
+                goto exit;
+            }
+            if (f->f_funcobj != NULL &&
+                gc_mark_enqueue((PyObject *)f->f_funcobj, args) < 0)
+            {
                 err = -1;
                 goto exit;
             }
@@ -843,6 +853,12 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
                     goto exit;
                 }
             }
+        }
+        if (_PyGC_TraceVisitTransitionRoots(p,
+                gc_mark_enqueue_no_buffer_visitproc, args) < 0)
+        {
+            err = -1;
+            goto exit;
         }
     }
 exit:

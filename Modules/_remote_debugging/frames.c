@@ -180,23 +180,21 @@ is_frame_valid(
     uintptr_t frame_addr,
     uintptr_t code_object_addr
 ) {
-    if ((void*)code_object_addr == NULL) {
-        return 0;  // Frame being cleared
-    }
-    // An executable is always an object pointer. Anything else, such as an
-    // inline int, means the sample read a frame that had been popped and
-    // whose memory now holds another frame's stack values.
+    // A code pin is a direct object pointer. An address outside pointer
+    // space can mean a popped frame now holds another frame's values.
     if (code_object_addr >= Py_PTR_LIMIT) {
         return 0;
     }
 
     void* frame = (void*)frame_addr;
-
     char owner = GET_MEMBER(char, frame, unwinder->debug_offsets.interpreter_frame.owner);
     if (owner == FRAME_OWNED_BY_INTERPRETER) {
         return FRAME_PARSE_INTERPRETER;  // C frame or sentinel base frame
     }
 
+    if ((void*)code_object_addr == NULL) {
+        return 0;  // Frame being cleared
+    }
     if (owner != FRAME_OWNED_BY_GENERATOR && owner != FRAME_OWNED_BY_THREAD) {
         PyErr_Format(PyExc_RuntimeError, "Unhandled frame owner %d.\n", owner);
         set_exception_cause(unwinder, PyExc_RuntimeError, "Unhandled frame owner type in async frame");
@@ -216,7 +214,7 @@ parse_frame_buffer(
     *address_of_code_object = 0;
 
     *previous_frame = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.previous);
-    uintptr_t code_object = GET_MEMBER_NO_TAG(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.executable);
+    uintptr_t code_object = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.executable);
     int frame_valid = is_frame_valid(unwinder, (uintptr_t)frame, code_object);
     if (frame_valid != 1) {
         return frame_valid;
@@ -277,7 +275,7 @@ parse_frame_from_chunks(
 
     char *frame = (char *)frame_ptr;
     *previous_frame = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.previous);
-    uintptr_t code_object = GET_MEMBER_NO_TAG(uintptr_t, frame_ptr, unwinder->debug_offsets.interpreter_frame.executable);
+    uintptr_t code_object = GET_MEMBER(uintptr_t, frame_ptr, unwinder->debug_offsets.interpreter_frame.executable);
     int frame_valid = is_frame_valid(unwinder, (uintptr_t)frame, code_object);
     if (frame_valid != 1) {
         return frame_valid;

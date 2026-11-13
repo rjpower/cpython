@@ -1488,7 +1488,7 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
-            _PyEval_FrameClearAndPop(tstate, dying);
+            temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
             RELOAD_STACK();
             IR_RETURN_TO_CALLER(temp, generator_return);
         }
@@ -1731,7 +1731,7 @@ dummy_func(
             ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
             FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
             #ifdef Py_DEBUG
-            if (!PyValue_IsNone(frame->f_executable)) {
+            if (frame->f_executable != NULL) {
                 Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
                 assert(i >= 0 && i <= INT_MAX);
                 int opcode = _PyIR_BaseOpcode(
@@ -2216,8 +2216,7 @@ dummy_func(
         inst(COPY_FREE_VARS, (--)) {
             /* Copy closure variables to free variables */
             PyCodeObject *co = _PyFrame_GetCode(frame);
-            assert(PyValue_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(frame->f_funcobj);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyObject *closure = func->func_closure;
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
@@ -5254,8 +5253,7 @@ dummy_func(
         }
 
         window inst(RETURN_GENERATOR, (-- res)) {
-            assert(PyValue_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(frame->f_funcobj);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
             ERROR_IF(gen == NULL);
             SAVE_STACK();

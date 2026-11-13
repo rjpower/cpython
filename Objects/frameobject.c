@@ -21,6 +21,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT64_RELAXED()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tstate.h"
+#include "pycore_transition_roots.h" // _PyTransitionPrefix
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value_ops.h"     // _PyValue_GetItem()
@@ -3334,6 +3335,33 @@ static bool frame_is_suspended(PyFrameObject *frame)
     return false;
 }
 
+/* The redirect already committed its new frame state. These detached owners
+ * must survive nested callbacks without reading that frame's old bindings. */
+static Py_NO_INLINE void
+retire_redirect_values_slow(_PyInterpreterFrame *frame, PyValue *values,
+                           int begin, int count)
+{
+    _PyTransitionPrefix prefix = {
+        .base = values,
+        .capacity = count,
+        .begin = begin,
+        .end = count,
+    };
+    _PyTransitionRoots roots = {
+        .frame = frame,
+        .prefix = &prefix,
+    };
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    while (prefix.begin < prefix.end) {
+        int slot = prefix.begin++;
+        PyValue value = values[slot];
+        values[slot] = PyValue_NULL;
+        PyValue_XCLOSE(value);
+    }
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+}
+
 /* A debugger transfer is a cold transaction over an observed register phase.
  * Prove the target's incoming owners and semantic protocol roots before
  * changing any home: a line number cannot create an iterator, handled
@@ -3799,7 +3827,17 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     /* All surplus owners are detached before the first callback. A nested
      * redirect can now install new owners without later closes clearing them. */
     for (int i = 0; i < nretired; i++) {
-        PyValue_XCLOSE(retired[i]);
+        PyValue value = retired[i];
+#ifdef Py_GIL_DISABLED
+        if (PyValue_RefcountOnObject(value)) {
+#else
+        if (_PyValue_MayDealloc(value)) {
+#endif
+            retire_redirect_values_slow(self->f_frame, retired, i, nretired);
+            break;
+        }
+        retired[i] = PyValue_NULL;
+        PyValue_XCLOSE(value);
     }
     PyMem_Free(retired);
     return 0;
@@ -3905,8 +3943,8 @@ frame_dealloc(PyObject *op)
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
         int nslots = _PyFrame_NumSlots(frame);
-        PyValue_CLEAR(frame->f_executable);
-        PyValue_CLEAR(frame->f_funcobj);
+        Py_CLEAR(frame->f_executable);
+        Py_CLEAR(frame->f_funcobj);
         Py_CLEAR(frame->f_locals);
         PyValue *locals = _PyFrame_GetLocalsArray(frame);
         PyValue *sp = locals + nslots;
@@ -4160,7 +4198,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
           && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
-          && PyValue_FunctionCheck(frame->f_funcobj)))
+          && frame->f_funcobj != NULL))
     {
         /* Free vars are initialized */
         return;

@@ -414,10 +414,18 @@ typedef struct {
 #define _PyIR_PLAN_ALL_RETURNS 1u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
 
+typedef enum _PyIRHomeAuthority {
+    _PyIR_HOME_NONE,
+    _PyIR_HOME_SHADOW_CANDIDATE,
+    _PyIR_HOME_MUST_READABLE,
+    /* Explicit development adapter, never emitted by a code-plan builder. */
+    _PyIR_HOME_NULL_CONTROL_READABLE,
+} _PyIRHomeAuthority;
+
 typedef struct {
     uint32_t site, first, count;
-    uint8_t phase;
-    uint8_t reserved[3];
+    uint8_t phase, authority;
+    uint8_t reserved[2];
 } _PyIRPhaseSite;
 
 typedef struct {
@@ -473,6 +481,7 @@ enum {
 #define _PyIR_PHASE_PUBLISHED (1u << 8)
 #define _PyIR_PHASE_STATUS_SHIFT 9
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
+#define _PyIR_PHASE_CAPTURED (1u << 11)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -534,10 +543,13 @@ typedef struct {
     const _PyIRPhaseRange *ranges;
 } _PyIRHomeView;
 
-/* Returns zero before reading homes if the active publication is not covered.
+/* Returns NONE before reading homes if the active publication is not covered.
+ * Candidate authority permits the NULL-shadow comparison only. MUST_READABLE
+ * proves every selected canonical home is initialized on every predecessor;
+ * unconverted control/index roles cannot acquire that authority from owner bits.
  * A successful lookup selects a shape; it does not compare runtime values. */
-PyAPI_FUNC(int) _PyIR_GetFrameHomeView(struct _PyInterpreterFrame *frame,
-                                    _PyIRHomeView *out);
+PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
+    struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
 
 /* Free the executing copy of a code object that is being freed. */
 extern void _PyCode_ClearExec(PyCodeObject *co);

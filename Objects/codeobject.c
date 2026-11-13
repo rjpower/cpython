@@ -2106,13 +2106,22 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
         }
     }
     uint32_t nranges = 0;
+    _PyIRHomeAuthority authority = _PyIR_HOME_MUST_READABLE;
     for (int bit = 0; bit < image->scratch; bit++) {
         unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
         if (!(facts & (1u << SEM_MAY_OWNER))) {
             if (!(facts & (1u << SEM_NULL))) {
                 return 0;
             }
+            if (facts & (1u << SEM_INITIALIZED)) {
+                /* An initialized nonowner NULL is a control value, not an
+                 * absent home. Port its explicit range role before copying. */
+                authority = _PyIR_HOME_SHADOW_CANDIDATE;
+            }
             continue;
+        }
+        if (!(facts & (1u << SEM_INITIALIZED))) {
+            authority = _PyIR_HOME_SHADOW_CANDIDATE;
         }
         /* Complete NULL-control paths contain a canonical value or NULL in
          * each candidate home. Language readability is a separate must-fact;
@@ -2190,7 +2199,8 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
     }
     build->sites = sites;
     sites[build->nsites++] = (_PyIRPhaseSite){
-        .site = (uint32_t)site, .phase = phase, .first = first, .count = nranges};
+        .site = (uint32_t)site, .phase = phase, .authority = (uint8_t)authority,
+        .first = first, .count = nranges};
     return 0;
 }
 

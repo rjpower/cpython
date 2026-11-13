@@ -614,7 +614,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     return _PyIR_SHADOW_EXACT;
 }
 
-int
+_PyIRHomeAuthority
 _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
 {
     unsigned int published = frame->phase_state;
@@ -622,7 +622,7 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
         (published >> _PyIR_PHASE_STATUS_SHIFT) == 3 || frame->f_executable == NULL)
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     PyCodeObject *co = frame->f_executable;
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
@@ -633,14 +633,14 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
         scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     uintptr_t pc = (uintptr_t)frame->instr_ptr;
     uintptr_t start = (uintptr_t)exec->words;
     if (pc < start || pc - start >= (size_t)exec->nwords * sizeof(_PyIRWord) ||
         (pc - start) % sizeof(_PyIRWord))
     {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
     uint8_t phase = (uint8_t)published;
@@ -658,9 +658,14 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         }
     }
     if (low == plan->nphases || sites[low].site != site || sites[low].phase != phase) {
-        return 0;
+        return _PyIR_HOME_NONE;
     }
     const _PyIRPhaseSite *row = sites + low;
+    if (row->authority != _PyIR_HOME_SHADOW_CANDIDATE &&
+        row->authority != _PyIR_HOME_MUST_READABLE)
+    {
+        return _PyIR_HOME_NONE;
+    }
     /* The immutable builder validates and orders ranges once. Readers borrow
      * this geometry; they do not construct a second decoder or revalidate it. */
     assert(row->first <= plan->nranges && row->count <= plan->nranges - row->first);
@@ -671,14 +676,15 @@ _PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
         .nranges = row->count,
         .ranges = ranges,
     };
-    return 1;
+    return (_PyIRHomeAuthority)row->authority;
 }
 
 uint8_t
 _PyIR_ShadowFramePhase(_PyInterpreterFrame *frame)
 {
     _PyIRHomeView view;
-    if (!_PyIR_GetFrameHomeView(frame, &view)) {
+    _PyIRHomeAuthority authority = _PyIR_GetFrameHomeView(frame, &view);
+    if (authority == _PyIR_HOME_NONE) {
         return _PyIR_SHADOW_UNCOVERED;
     }
     const _PyIRPhaseRange *ranges = view.ranges;

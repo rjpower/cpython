@@ -3360,7 +3360,8 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual([token.text for token in guard.body.tokens()
                           if token.kind != "COMMENT"],
                          ["{", "DEOPT_IF", "(", "PyValue_IsNull", "(",
-                          "value", ")", ")", ";", "}"])
+                          "store_value", ")", ")", ";", "}"])
+        formats = ir_generator.compute_formats(analysis)
         for name in ("STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE",
                      "STORE_ATTR_SHAPE_ADD", "STORE_ATTR_WITH_HINT", "STORE_ATTR_SLOT"):
             parts = [part for part in analysis.instructions[name].parts
@@ -3370,6 +3371,15 @@ class TestIRCases(unittest.TestCase):
                 self.assertTrue(any(item.used and not item.nullable
                     for part in parts[1:] for item in part.stack.inputs
                     if item.name == "value"))
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    writer = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(writer, analysis, formats)
+                    emitter.handler_format = formats[name]
+                    ir_generator.generate_handler(name, analysis.instructions[name],
+                        formats[name], emitter, writer, record)
+                    self.assertIn("PyValue_IsNull(store_value)", output.getvalue())
 
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""

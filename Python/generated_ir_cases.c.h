@@ -4772,8 +4772,7 @@
             }
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = values[i];
-                values[i] = PyValue_NULL;
+                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
                 if (err == 0) {
                     frame->phase_state = 0;
                     frame->phase_state = 0;
@@ -25003,8 +25002,8 @@
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyList_ITEMS(seq_o);
-                for (int i = oparg; --i >= 0; ) {
-                    *values++ = PyValue_XDUP(items[i]);
+                for (int i = 0; i < oparg; i++) {
+                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
                 }
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
@@ -25067,8 +25066,8 @@
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyTuple_ITEMS(seq_o);
-                for (int i = oparg; --i >= 0; ) {
-                    *values++ = PyValue_XDUP(items[i]);
+                for (int i = 0; i < oparg; i++) {
+                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
                 }
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);

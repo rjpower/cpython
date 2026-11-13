@@ -117,3 +117,95 @@ can cost more code space than the generic body. If optimized native already
 eliminates this work, the mechanism has no cost result. If terminal hit counts
 are negligible, make no broad claim. Parent/hot6 confirmation and all29 gates
 still decide selection; nominal argument count alone cannot admit it.
+
+## Frequent generator handoff
+
+The next independent slice is based on I `6a00c6a08d4`, compared with pinned
+upstream `3a440b65695615e9fd9912342b79cdd54fced0d2`. Both already enter
+specialized SEND/FOR generator frames directly, link the exception stack and
+return yielded values without a new Python call. The fork also skips an inert
+RESUME. The upstream stack interpreter pushes to a known stack position;
+the fork publishes to an explicit recipient, supporting pending redirects,
+discard and displaced named-local owners. Those semantics must survive.
+
+There is a concrete admission gap: `names_return_slot()` does not recognize
+the actual terminal `IR_ENTER_GENERATOR`. Consequently `FOR_ITER_GEN` selects
+`STORE_LEAVE`, and its generated prologue deoptimizes whenever A names a local
+or `IR_NO_DST`. Store elimination can give an ordinary `for item in iterator`
+that local A. The intrinsic already writes the correct parent return slot
+before linking the child, and a child yield uses `SetReturnValue`; the missing
+compiler capability prevents that implemented path from being used.
+
+Root's retained generator profile has the matching generic outer path:
+`FOR_ITER` → `VirtualIteratorNext` → `gen_iternext_value` → `EvalFrameValue`.
+`SEND_GEN` accounts for 27.91% physical-symbol self samples and
+`YIELD_DELEGATED` 13.94%; these identify frequent boundaries, not removable
+percentages. Evidence is under `E56/call-ex-perf-record`. Root's complete
+generator comparison reports about 49.3% more native instructions and 47.2%
+more cycles than upstream. The admission gap is a mechanism hypothesis for
+part of that difference, not an attribution of the whole gap.
+
+The isolated proposal/implementation uses a small shared `GeneratorEntryRecipe`
+from the actual top-level terminal intrinsic, literal kind, scalar IO and
+unchanged two-input prefix. Its legacy frame output has only the unreachable
+stack-model consumer. Preceding guard parts use the shared typed effect walk:
+no arena write, callback, origin adoption or unknown helper. No opcode-name
+permission or second full-body table is introduced. The same recipe is
+consumed by store selection and actual intrinsic lowering. FOR yields to A;
+SEND yields to B+2 independently of completion A. Existing normal/error/WAIT
+receipts remain separate and unchanged.
+
+For FOR, select the existing `STORE_RETURN` protocol and remove the local/
+discard fallback. Do not steal an old local early or cache it across child
+execution. The eventual yield publishes first, then retires the actual current
+displaced owner. A finalizer or observer can mutate that binding. Discard closes
+the yielded owner through the same established protocol. Keep child, parent
+continuation and exception-state commit before any failing entry or owner
+cleanup. A type/state/PEP-523 miss still falls back before that handoff.
+
+The source expectation is removal of the unconditional local/discard deopt and,
+for affected sites, the nested native iterator/evaluator call chain per item.
+The source is unchanged for scratch recipients. Measure actual entered
+`FOR_ITER_GEN` sites and failed local-recipient guards, rather than just seeing
+a specialized handler in feedback: the old handler can remain installed while
+deoptimizing every time. Falsify the hypothesis if sites use scratch recipients,
+the direct entry count does not rise, or optimized native/workload costs do not
+improve. Extra source checking adds no hot runtime descriptor or frame field.
+
+Focused source fixtures emit actual FOR/SEND handlers in both record modes and
+reject changed literal/IO, conditional/duplicate/suffixed terminals and poisoned
+prefix guards. Runtime fixtures cover L replacement with a finalizer that
+observes the published value, mutates locals and collects; trace callbacks;
+scratch tuple-unpack and constructed discard; and a different iterator type at
+the same warmed site. Native qualification remains root-owned.
+
+## Publication caller audit
+
+At I `6a00c6a08d4`, `SetReturnValue` already receives a canonical owning value;
+it does not call Publish. `PublishReturnSlot` is used only by that helper.
+Its home check is diagnostic, and its live work is recipient selection,
+publication and displaced-owner retirement. Removing normalization from these
+two helpers would therefore remove no existing normalization.
+
+| Actual producer | Value boundary and publication |
+| --- | --- |
+| `IR_ENTER_GENERATOR` SEND | Moves the already canonical sent home; FOR supplies canonical None; both use `SetReturnValue` |
+| Delegated suspension | TAKE of the canonical outgoing home, then `SetReturnValue` after suspension commit |
+| Ordinary YIELD | Checked canonical frame transport selects `IR_STORE_CANONICAL_RETURN`; no Publish |
+| Ordinary/EMPTY RETURN | Checked canonical frame transport, or explicit Publish for an uncovered native C result, then the same final publication |
+| `CompleteGeneratorReturn` | Canonical input; native interpreter entry uses `SetReturnValue`, ordinary SEND/FOR uses literal canonical completion |
+| `gen_send_value_ex` | Canonical None or an owning duplicate of its borrowed API argument, followed by `SetReturnValue`; the duplicate cannot be dropped without argument-lifetime proof |
+| Remaining `IR_STORE_RETURN` expansions | RETURN_GENERATOR and the terminal cleanup result retain their explicit native-to-home publication boundary |
+| Native CALL result transaction | Has its own actual `_PyValue_Publish(&result)` boundary; this is separate from `SetReturnValue` |
+
+Rare redirect/displacement paths may still force register liveness, branches or
+spills in every SEND/yield handler. That needs optimized native comparison;
+flat inline attribution alone cannot establish which instructions disappear.
+Any later outlining or once-admitted recipient geometry is a separate measured
+increment, preserving all public constructors, native entry, callbacks and
+storage authority. Do not add a universal per-yield descriptor switch.
+
+Root also observes recurring `FillConstSlots` attribution in coroutine exact
+calls. This is follow-up inventory only: count existing constant-slot folding
+and entry stores before proposing pool/rematerialization changes, and charge
+any added per-read decoding. No constant or frame-encoding change is included.

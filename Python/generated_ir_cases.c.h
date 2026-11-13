@@ -24815,7 +24815,7 @@
                 res = _PyValue_Invert(value);
                 if (PyValue_IsNull(res)) {frame->phase_state = 0;
                     frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    PROCESS_ERROR_AT(RAISE, 1, this_instr);
                 }
                 v = value;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);

@@ -195,8 +195,8 @@ two helpers would therefore remove no existing normalization.
 | Ordinary/EMPTY RETURN | Checked canonical frame transport, or explicit Publish for an uncovered native C result, then the same final publication |
 | `CompleteGeneratorReturn` | Canonical input; native interpreter entry uses `SetReturnValue`, ordinary SEND/FOR uses literal canonical completion |
 | `gen_send_value_ex` | Canonical None or an owning duplicate of its borrowed API argument, followed by `SetReturnValue`; the duplicate cannot be dropped without argument-lifetime proof |
-| Remaining `IR_STORE_RETURN` expansions | RETURN_GENERATOR and the terminal cleanup result retain their explicit native-to-home publication boundary |
-| Native CALL result transaction | Has its own actual `_PyValue_Publish(&result)` boundary; this is separate from `SetReturnValue` |
+| Remaining `IR_STORE_RETURN` expansions | RETURN_GENERATOR and instrumented ordinary YIELD retain explicit publication for source transport not certified canonical |
+| Native CALL result transaction | Has its own checked result construction and generated recipient publication; it does not call `SetReturnValue` |
 
 Rare redirect/displacement paths may still force register liveness, branches or
 spills in every SEND/yield handler. That needs optimized native comparison;

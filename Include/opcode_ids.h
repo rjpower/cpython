@@ -275,7 +275,7 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
-#define IR_NUM_HANDLERS                        363
+#define IR_NUM_HANDLERS                        365
 
 #ifdef __cplusplus
 }

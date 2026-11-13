@@ -17670,7 +17670,71 @@
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
                 frame->phase_state = 0;
-                _PyFrame_AssertTemporariesClear(frame);
+                DTRACE_FUNCTION_RETURN();
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *dying = frame;
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+                frame = tstate->current_frame = dying->previous;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
+                slots = _PyFrame_Slots(frame);
+                frame->phase_state = 0;
+                assert(_PyValue_IsHome(temp));
+                if (generator_return) {
+                    _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_step_result.next;
+                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                }
+                else {
+                    next_instr = frame->return_pc;
+                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                }
+                LLTRACE_RESUME_FRAME();
+                DISPATCH();
+            }
+        }
+
+        TARGET(INSTRUMENTED_RETURN_VALUE_EMPTY) {
+            int opcode = INSTRUMENTED_RETURN_VALUE_EMPTY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE_EMPTY);
+            PyValueBorrow val;
+            PyValue taken;
+            PyValue retval;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _RETURN_VALUE_EVENT
+            {
+                val = IR_VIEW(IR_A(ir_word));
+                ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), val);
+                PyValue held = IR_TAKE(val, ir_own_A);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                int err = _Py_call_instrumentation_arg(
+                    tstate, PY_MONITORING_EVENT_PY_RETURN,
+                    frame, this_instr, held);
+                if (err) {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    PyValue_CLOSE(held);
+                    frame->phase_state = 0;
+                    JUMP_TO_LABEL(error);
+                }
+                taken = held;
+            }
+            // _RETURN_VALUE_EMPTY
+            {
+                retval = taken;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                PyValue temp = retval;
+                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
@@ -22717,7 +22781,58 @@
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
                 frame->phase_state = 0;
-                _PyFrame_AssertTemporariesClear(frame);
+                DTRACE_FUNCTION_RETURN();
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *dying = frame;
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+                frame = tstate->current_frame = dying->previous;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
+                slots = _PyFrame_Slots(frame);
+                frame->phase_state = 0;
+                assert(_PyValue_IsHome(temp));
+                if (generator_return) {
+                    _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_step_result.next;
+                    if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }
+                }
+                else {
+                    next_instr = frame->return_pc;
+                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                }
+                LLTRACE_RESUME_FRAME();
+                DISPATCH();
+            }
+        }
+
+        TARGET(RETURN_VALUE_EMPTY) {
+            int opcode = RETURN_VALUE_EMPTY;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(RETURN_VALUE_EMPTY);
+            PyValueBorrow value;
+            PyValue taken;
+            PyValue retval;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _MAKE_HEAP_SAFE
+            {
+                value = IR_VIEW(IR_A(ir_word));
+                ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
+                taken = IR_TAKE(value, ir_own_A);
+            }
+            // _RETURN_VALUE_EMPTY
+            {
+                retval = taken;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                PyValue temp = retval;
+                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;

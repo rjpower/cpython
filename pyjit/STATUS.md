@@ -18,7 +18,7 @@ representation selection. Implementation is active; the
 No new candidate has earned admission. The proposal
 does not replace as-built contracts.
 
-Latest measured candidate `ed08ab64c7e` composes typed pins, common admission,
+Latest broadly measured candidate `ed08ab64c7e` composes typed pins, common admission,
 nested transition roots, staged binding/provider/unpack/constructor ownership,
 fixed-last heap teardown, classify-once retirement and the first shared-emitter
 phase plans. NULL scratch homes and conservative arena scanning remain authority.
@@ -46,8 +46,16 @@ positive execution readiness before cache nomination; the unchanged OOM case
 and 837 focused cases pass both roles afterward. This does not turn the failed
 full diagnostics into a green suite.
 
-Selected-home authority and copy/escape ports are next in integration; virtual
-CALL roles and immutable-code generator construction are in progress. Complete
+Selected-home authority/copy ports `197fd05cb27` pass 84 precise and 588
+lifecycle cases per role. Immutable-code generator allocation `8f6567840e7`
+fixes a reproduced release/debug crash and passes its four provider-mutation
+subcases plus 399 focused cases per role. Newer hot screens still lose
+generators/coroutines/logging versus selected54; they have no direct all29
+upstream campaign. Certified empty-created copy `9f28c0fa16d` passes 580
+lifecycle and five generated-contract tests per role; its hot screen still
+loses DeltaBlue 6.1%, generators 3.7% and silent logging 14.6% versus54.
+The explicit created marker/getter/collector composition `21311f241fb` is
+building. Explicit CALL roles are in progress. Complete
 static authority and the full physical-bitmap rival remain open. Shared storage
 with NULL named locals is the reviewed M4 reference, not a measured layout winner.
 Round54's [report](issues/frame-state54/report.md),

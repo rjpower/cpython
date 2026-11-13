@@ -1,7 +1,12 @@
 # Created-generator allocation and copy authority
 
-2026-11-12. Next bounded packet after the first copy/control component. No
-implementation in this proposal. Root owns generation and native validation.
+2026-11-12. Next bounded packet after the first copy/control component.
+Root owns generation and native validation. The allocation correction is
+integrated and tested at `8f6567840e7`. The certificate consumer is integrated
+at `9f28c0fa16d`: both builds and 580 lifecycle tests per role pass; raw admission
+fixtures need correction before that component is qualified. The next
+[created lifecycle selector](created-selector-proposal.md) is source-reviewed
+and awaits integration.
 
 ## Executing code determines allocation
 
@@ -51,6 +56,10 @@ unreached and observer-entry sites as uncovered; inline values and initialized
 control values are obligations too. The flag applies to the whole immutable
 executing image, so the created helper consumes one ready plan flag rather
 than searching a phase table or guessing a PC. Bindings stay dynamic [0,L).
+Price flag-only plan storage explicitly. Shared defaults must cover the
+ALL_CREATED_EMPTY and ALL_RETURNS combinations, or the free rule must identify
+allocated flag-only plans; today's zero-site/zero-phase test must not leak
+such allocations.
 
 The initial certificate covers normal function-created empty scratch. Audited
 MAKE_CELL/COPY_FREE_VARS emission contracts must positively preserve scratch;
@@ -60,7 +69,12 @@ events and created shape are certified. A later matched SUSPENDED view must
 preserve the resume recipient and delegated-receiver roles; it is not implied
 by this empty-created flag.
 
-The helper supplies a MUST_READABLE empty-scratch view only under the flag.
+The real consumer must separate the certified empty common copy from the
+outlined query/view control continuation; branching inside the existing
+canary-bearing function would still charge its prologue. Root native evidence
+prices that current continuation at 88 local plus 48 saved bytes, 136 below
+entry. Do not add a speculative fast API without the actual flag consumer.
+The certified copy supplies MUST_READABLE empty scratch only under the flag.
 Otherwise the existing named NULL-control adapter remains an explicit
 development limit. This removes source scratch loads and transfers for the
 certified path; destination inactive NULL filling stays until its readers are
@@ -75,3 +89,35 @@ must be sequenced after its source freeze. No concurrent whole-file edits to
 the builder or generator. The first copy/control packet must commit before
 this one. GC/IR design peer, root freeze, source peer, then root generation and
 focused both-role execution remain the gates.
+
+## Concrete certificate packet
+
+Root merged the allocator fix separately. The six-file frames packet now
+counts every physical CREATED_COPY event and compares that count with stable
+fixed-point empty proofs supplied by IR's semantic-step event. Unsupported,
+unreachable and observer-entry sites cannot disappear from the denominator.
+IR owns the exact emitter contract and checked local-only prefix capability;
+frames owns certificate aggregation and its actual consumer.
+
+Three shared flag-only plans cover ALL_RETURNS, ALL_CREATED_EMPTY and their
+combination. This adds 32 static bytes over the former return-only default,
+no per-code row/header growth or flag-only allocation. Existing zero-row
+free/size accounting remains valid. Mixed plans keep the same row allocation.
+
+The reached created helper now tests the immutable flag and moves dynamic
+bindings through the common header-move primitive. It neither constructs a
+view nor reads source scratch. Its uncovered branch calls a separate outlined
+query/view continuation. Destination scratch still gets NULL stores. Public
+frame-to-generator continues using its actual captured view, regardless of
+the code's created flag. There is no new hot header, handler argument, record
+or generator field.
+
+The bounded cold probe calls the actual certified copy primitive with poisoned
+inactive scratch, balanced counted/inline payloads and a real prepared code
+plan; it executes no malformed image. Three fixture methods cover generator,
+coroutine and async-generator certificates, cell/free-variable preservation
+through real resume, and the genexpr iterator case remaining uncovered. IR
+owns additional raw branch/unreachable/multi-site negatives. Host AST and
+whitespace checks pass; no native job ran here. IR and GC source peers are GO.
+The six-file packet is frozen over `81a76326039` (186+/29-); coordinator
+generation/native/cost checks remain pending.

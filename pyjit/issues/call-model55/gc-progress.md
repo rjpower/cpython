@@ -139,3 +139,14 @@ Root integrated the heap-deallocator and first shared-emitter plan/consumer at
 `ed08` then passed nine phase tests per role; the nonempty-survivor provider and
 operand-retirement comparison passed in the first run too. The shadow plan and
 stored query remain partial coverage under NULL control, with no M4 admission.
+
+The CALL runtime/compiler packet is stable in the GC lane; frames' runtime
+peer and IR's fixture/compiler resource peers are GO. Public-image positive
+absence proof and the combined generated family/test packet remain IR gates.
+The separate two-file created-selector collector packet is prepared for source
+peer: only the exact CREATED marker with common MUST-readable authority selects
+ranges; other states retain NULL-control reads. FT also requires the world
+stopped. It reuses the common range iterator and existing per-value visitor
+policy, with no deferred-reference-loop or active-phase authority change.
+Root owns the literal marker and combined producer/getter integration; no native
+validation of this new collector packet is claimed here.

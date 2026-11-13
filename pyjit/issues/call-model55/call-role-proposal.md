@@ -1,9 +1,9 @@
 # Certified CALL input roles
 
-2026-11-12. Design against integrated `9136c202e8e`; no source edits yet.
-NULL control remains. Root freezes encoding/interfaces before implementation;
-IR owns the concurrent generic-binary emitter work. This increment removes
-specific call-hole reads, not the remaining all-phase M4 gates.
+2026-11-13. Root froze the encoding/interfaces; source packets are in progress
+against integrated `6ff13875cfe` as recorded below. NULL control remains.
+IR owns generated families and common admission/proof work. This increment
+removes specific call-hole reads; the remaining all-phase M4 gates stay open.
 
 ## Actual missing authority
 
@@ -146,8 +146,8 @@ handler/code/data size, role/argument traffic and actual prepend copying.
 
 GC owns this proposal/census; freeze source ownership with IR and frames before
 implementation. IR's generic-binary region is disjoint, but shared emitter
-metadata/header and bytecodes hunks must integrate through root. No source edit
-or native job is claimed by this document.
+metadata/header and bytecodes hunks integrate through root. Source status is
+recorded below; root owns native validation.
 
 ## Bounded peer disposition
 
@@ -159,5 +159,44 @@ instrumentation using the 16-bit family domain. Frames requires explicit role
 forwarding through rechecks, copies and offset helpers, including EX kwargs
 and post-effect method/constructor promotion. Both agree that withholding arena
 OFFSET closes the unproved writable-hole capability; its native-copy cost must
-be measured. No additional design must-fix remains. Root still freezes the
-encoding and coordinated source ownership before implementation.
+be measured. Root froze the encoding and coordinated source ownership before
+implementation.
+
+## Source checkpoint
+
+GC's source packet uses integrated `6ff13875cfe` as its base. Its files are
+`pycore_regcfg.h`, `regcfg.c`, `regcfg_passes.c`, `assemble.c`, `ceval.c`, the
+call-only bodies in `bytecodes.c`, and `_testinternalcapi/value_call.c`.
+IR owns synthetic families/pinned IDs, emitter/metadata, common admission and
+observer/outcome proofs, cold specialization mapping, and admitted role tests.
+The components require combined generation/building; neither is standalone.
+
+Runtime SELF_PRESENT=32 and KWARGS_PRESENT=64 use the existing call-state
+scalar and old transaction preparation field, preserving runner argument count
+and cold-record extent. Method preparation always returns the updated state;
+FAILED=128 marks an error after promotion, and both callers assign state before
+testing it. Thus error/deopt cleanup cannot recover the old absent-self role.
+Exact transfer takes an explicit enum role. Shared clear/native publication
+and detachment skip absent cells rather than reading or filling them.
+
+The compiler proof intersects canonical entry facts over complete continued
+regions, retaining a single fresh-register work vector. Persistent state is
+bounded by blocks times the actual canonical stack domain (at most 4095), not
+blocks times all fresh registers. Fresh definitions replace their facts before
+use. COPY/SWAP snapshot inputs, declared through geometry preserves values, and
+exception joins retain only the canonical handler prefix. Flags are selected
+after convergence and checked after existing structural verification. No-call
+functions and verifiers without role flags skip proof allocation.
+
+VCallPrepend is a test-only native delegate in the existing value-call module.
+It holds a GC-traversed bound method, rejects incoming OFFSET before any
+args[-1] access and forwards the original arguments/flags through its real
+value provider to the prepend-copy branch. An argument fingerprint adds a
+source-mutation check without another owner bank; Python fixtures must also
+check exact receiver/argument/keyword identity through callbacks and failures.
+Frames' runtime peer and IR's fixture and compiler resource-proof peers are GO.
+The common public-image absence proof, coherent generated residual inspection
+and root native tests remain before the packet freezes. The absence fact must
+exclude logical home obligations, including inline/control values; lack of a
+possible counted owner after an unknown operation is insufficient. Successful
+CALL cleanup certifies only its actual window, not arbitrary parent scratch.

@@ -4,14 +4,18 @@ This is an active report, not a final selection. Selected54 remains golden.
 The [implementation ledger](implementation.md) owns stage state; the
 [design](../../design/proposals/register-call-model55.md) owns the target.
 
-Latest measured checkpoint: shared-emitter phase composition `ed08ab64c7e`.
+Latest broad measurement: shared-emitter phase composition `ed08ab64c7e`.
 Both roles pass 675 core, nine phase and nine selected generated-contract cases
 (overlapping groups). All29 versus upstream is 1.165467, six faster; the
 selected54 hot screen loses DeltaBlue 5.5% and silent logging 15.2%. PMU shows
 36.8% more DeltaBlue instructions than upstream. This is a preparatory
 integration under NULL authority, not a performance winner. Selected-home
 copy/escape and explicit CALL roles are next; complete static and bitmap
-representations remain unimplemented. Detailed campaigns follow below.
+representations remain unimplemented. Newer copy/escape197fd and pinned-code
+allocation8f656 have focused passes and mixed/worse selected54 hot screens;
+their exact results follow below. Certified empty-created copying passes its
+lifecycle and generated-contract checks but remains slower than54. Its explicit
+created-state collector composition is building. No new golden has been selected.
 
 ## M1a: independent typed metadata owners
 
@@ -559,3 +563,115 @@ identities and no lost records. DeltaBlue flat samples place exact CALL at
 The preparation is not a winner: it publishes phase state while retaining the
 clearing and scans the final representation must replace. Source review and
 focused correctness justify continuing the migration, not promoting this head.
+
+### Selected-home copy and escaped capture
+
+`197fd05cb27` composes the typed NONE/CANDIDATE/MUST_READABLE/control authority,
+40-byte discriminated transition record, shared range iterator and three actual
+copy callers. Cold PyFrameObject capture adds 16 bytes and an authority byte
+in existing padding. Current retiring/staged paths explicitly use initialized
+NULL control; empty zero-binding takeover is valid. A selected copy moves only
+bindings/selected scratch, leaves inactive source words unread and initializes
+destination gaps. Code stays pinned through the last borrowed range access.
+Resume, clear and accepted redirects invalidate old captured authority.
+
+Both roles pass 84 precise checks (including five copy and nine phase methods),
+then 588 lifecycle tests. Release skips eight in each group; debug skips eight
+precise and five lifecycle. The groups are not added as a deduplicated total.
+Both builds retain 117/79 modules and zero failed imports. Peers found and fixed
+zero-binding takeover and an addressable handler-local view before integration.
+Native `E/m3-copy-native` retains exact CALL/RETURN at 64/16 local bytes;
+RETURN_GENERATOR has 16 bytes. Its outlined copy helper reserves 88 local bytes
+plus 48 saved-register bytes, including a stack canary. That total is a real
+cost, not an incremental comparison against a matched prior dump.
+
+`E/m3-copy-hot-screen-golden`, two balanced stable pairs, remains a regression:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.044005 | 1.033343–1.054777 |
+| Generators | 1.075557 | 1.065416–1.085795 |
+| Coroutines | 1.090394 | 1.089870–1.090919 |
+| Richards | 0.998938 | 0.994422–1.003474 |
+| Comprehensions | 1.012691 | 1.010188–1.015199 |
+| Logging silent | 1.322760 | 1.302868–1.342955 |
+
+Runtime copies mostly retain control authority. The bounded poisoned-storage
+probe proves the actual selected-copy primitive skips inactive words; it does
+not prove complete created/suspended maps. No selection follows from this port.
+
+### Executing-code generator allocation
+
+`8f6567840e7` integrates and regenerates the [allocation correction](created-copy-proposal.md).
+MakeCoro/make_gen take the frame's pinned executing code for kind and capacity;
+mutable function metadata still supplies names. No new reference/header field
+is added. The actual pre-fix197fd regression fixture fails release with SIGSEGV
+and debug with the coro_flags assertion/SIGABRT after a PEP523 hook replaces a
+large generator's function code. Frozen fixture/commands/logs are retained in
+`E/m3-created-mutation-before-*`, with its source commit and hash.
+
+After the fix, the regression method passes four subcases: small ordinary or
+generator replacement through object/value providers. It resumes the original
+large generator and verifies its high local and payload, then exhausts it.
+The six-module core set passes 399 tests per role (10 release skips, eight
+debug), including the precise method. Both builds retain 117/79 modules.
+This is targeted correctness evidence, not another full-suite qualification.
+
+The unchanged `E/m3-created-code-hot-screen-golden` has stable clean identities:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.047574 | 1.025668–1.069948 |
+| Generators | 1.059448 | 1.051670–1.067285 |
+| Coroutines | 1.091109 | 1.074128–1.108358 |
+| Richards | 0.992269 | 0.989101–0.995447 |
+| Comprehensions | 0.992878 | 0.971603–1.014619 |
+| Logging silent | 1.234617 | 1.183199–1.288269 |
+
+Do not attribute cross-campaign differences to the allocation fix or infer an
+upstream comparison for this head from earlier ratios. It remains experimental.
+
+### Certified empty-created copying
+
+`9f28c0fa16d` composes the source-reviewed emitter CREATED_COPY event, positive
+local-only prefix capabilities, whole-image physical-site census and fast copy
+consumer. Only reached, complete, physically empty scratch at every creation
+site grants the shared plan flag. Unreachable/observer-entry sites prevent it;
+generator-expression prelude iterators remain uncovered. Flag-only plans use
+shared defaults, with 32 additional static bytes and no per-code flag-only
+allocation. COPY_FREE_VARS exact-count admission precedes its local-only proof.
+
+The common copy path has no addressable view: it moves current bindings and
+fills destination scratch without loading source scratch. The control/query
+path is separately outlined. Initial release compilation caught a missing
+semicolon in marker emission; the generator fix and regenerated output are
+committed. Both-role rebuilds pass with 117/79 modules and no import failures.
+The nine-module lifecycle set passes 580 tests per role (14 release skips,
+13 debug); five selected generated-contract tests pass per role. Frame tests
+include three new real-kind/cell/genexpr methods. Four raw certificate methods
+initially fail admission because their fabricated RETURN_GENERATOR uses A=1
+instead of IR_NO_DST and an observer target is one past the sole instruction.
+Test-only correction76630 retains the proof assertions; its rerun is pending.
+
+Native `E/m3-created-empty-native` retains the exact9f28 executable. The fast
+helper has no stack adjustment, addressable view, query call or canary; it
+moves only [0,L), then tail-calls memset for destination scratch. The uncovered
+query/view path stays separately outlined. CALL/RETURN retain 64/16 local bytes.
+Native x86 alignment instructions are unrelated to executable register-IR words.
+
+`E/m3-created-empty-hot-screen-golden` has two balanced pairs, stable identities
+and no measurement/postflight failure:
+
+| Workload | Candidate/selected54 elapsed | Pair range |
+| --- | ---: | ---: |
+| DeltaBlue | 1.061219 | 1.049174–1.073402 |
+| Generators | 1.037414 | 1.037337–1.037491 |
+| Coroutines | 1.004650 | 0.997956–1.011389 |
+| Richards | 1.011461 | 1.005396–1.017562 |
+| Comprehensions | 1.012978 | 1.006242–1.019759 |
+| Logging silent | 1.145609 | 1.141360–1.149873 |
+
+The composition still loses and retains NULL clearing/arena scans. This is no
+promotion, and cross-campaign changes are not an isolated causal comparison.
+The explicit CREATED marker/getter and actual collector consumers now compose
+at21311f241fb; their combined builds/checks are pending.

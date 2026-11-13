@@ -285,3 +285,44 @@ owning the query/view/PC advance/copy. GC and IR final source peers are GO;
 the nine-file patch is frozen over `9dedff18010` (352+/10-). Root owns coherent
 schema integration, generation and runtime verification. No native job ran in
 this lane.
+
+The first copy packet commits as `f54f99d0914`. Next, the independently reviewed
+created allocation fix passes the executing code pin through `_Py_MakeCoro`
+and its three private constructors. Kind and geometry no longer consult
+mutable function code; names remain function metadata. The separate four-file
+patch adds one provider regression with four subcases (object/value provider,
+larger generator replaced by smaller ordinary/generator code before default).
+AST/whitespace and full caller census checks pass; source peers are requested.
+The actual created-shape certificate remains deferred until the shared builder
+and event generator are available. No native execution occurred here.
+
+GC and IR source peers approve the allocator patch; its four files are frozen
+over `f54f99d0914` (51+/9-). Root's integrated first-copy composition passes
+the separate 84 precise and 588 core tests per role. Root native inspection
+prices the outlined copy helper at 88 local plus 48 saved bytes (136 below
+entry), including its addressable-view stack canary. RETURN_GENERATOR keeps
+16 local bytes; exact CALL/RETURN keep 64/16. The next created certificate must
+give its certified common path a separate callback-free copy from the outlined
+query/view control path, rather than paying the latter's entry cost always.
+
+Created certificate source is concrete on `81a76326039`: six frames files
+(186+/29-) count actual event sites against stable empty proofs, share all
+flag-only defaults, and consume the flag in a no-view common copy with a
+separate outlined control continuation. IR owns the event/semantic-step and
+audited local-only prefix contracts on disjoint hunks. Three new test methods
+cover all generator kinds via actual poison-copy probes, cell/free-variable
+resume and genexpr rejection; IR adds synthetic branch/site negatives. IR
+and GC actual source peers are GO. Host AST/diff checks pass; the packet is
+frozen for root generation/native validation. Normal-created/suspended reader
+authority is not implied by the copy flag.
+
+The copy component commits as `514fb9af661`. The next created-reader packet
+has both design peers and concrete producer/selector source: exact standalone
+bit12 marker after certified copy, CAPTURED-first common getter with actual
+GEN/CREATED/ready-pin checks, and no phase-zero reacquisition. GC's two actual
+collector ports use the common iterator under GIL or FT world-stop, retaining
+the existing control path otherwise. The three-file frames patch (97+/3-)
+adds live local-write/collect/resume and marker-invalidation coverage plus an
+actual GIL visitor poison probe on private untracked embedded storage. GC
+producer and collector source peers are GO; IR final producer peer and root
+coherent generation/native checks remain pending. No native job ran here.

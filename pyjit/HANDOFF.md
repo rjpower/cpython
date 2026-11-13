@@ -75,9 +75,20 @@ M2 shared-emitter phase events and meaningful nonempty shadows are integrated
 at `6ff13875cfe`, with fixture-only corrections `ed08ab64c7e`. Source/native
 bounded post-review is GO under NULL control. Heap teardown resets through
 InitClearRoots before callbacks. IR home authority, GC probe/record union and
-frames copy producers are merged and regenerated through `197fd05cb27`;
-both-role builds are running. Five copy fixtures, stricter authority assertions
-and native cost checks remain.
+frames copy producers at `197fd05cb27` pass 84 precise and 588 lifecycle cases
+per role. `8f6567840e7` adds pinned-code generator allocation: the new fixture
+crashes pre-fix197fd release/debug, then passes four mutation subcases and 399
+focused cases per role after the fix. Both builds retain 117/79 modules.
+Created-copy source `9f28c0fa16d` composes IR event `9db7ea96578`, frames
+consumer `514fb9af661` and emitter punctuation fix `2e620b73bf3`, with generated
+products. Initial compile failed on the marker's missing semicolon; the fixed
+version builds both roles and passes 580 lifecycle plus five generator-contract
+tests per role. Its raw admission fixtures used invalid RETURN_GENERATOR A
+fields and a one-past observer target; test-only correction `76630a14599`
+retains the coverage. Current `21311f241fb` also composes bit literal37d,
+producer/getter4a8 and GC542; both-role rebuilds are running. Native copy helper
+has no stack allocation/query; hot6 still loses versus54. The bitmap source
+worktree starts at9f28 and must absorb complete M4 before rival measurement.
 Workers implement virtual CALL roles and copy/escape/created-frame ports.
 The [reader census](issues/call-model55/lifecycle-readers.md)
 queues copy/escape, unwind, results/resume, GC and observation ports.

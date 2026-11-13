@@ -15,22 +15,26 @@ Evidence E=`BASE/pyjit-link-wave1/call-model55`.
 | call55-pins | pyjit/call55-pins | Sol frames/calls: frame header, binding, lifecycle |
 | call55-ir | pyjit/call55-ir | Sol IR/image: transfer metadata and common validation |
 | call55-gc | pyjit/call55-gc | Sol GC/observation: collectors and external readers |
+| call55-bitmap | pyjit/call55-bitmap | Sol frames: isolated bitmap rival; portable storage ports first |
 
-All start from immutable selected54
+The four initial lanes start from immutable selected54
 `61015a9452d9069646fb5fede9ff963896833b89`. Controls, selected source and
 selected release/debug builds remain untouched. Initial integration builds are
 `BASE/call55-integrated-{release,debug}`, using the selected54 configurations
 and module flags. Root records generation/build/test commands under E and
 commits reviewed source before measurements.
+The bitmap source lane starts from integrated `9f28c0fa16d`; it must absorb
+the complete M4 interfaces before authority switching or rival measurements.
+Starting portable storage work does not establish a complete bitmap variant.
 
 | Stage | State | Required next evidence |
 | --- | --- | --- |
 | M0 allocation/interfaces | Source census and [placement cost model](placement-cost-model.md) independently reviewed. Shared arena plus initialized NULL named locals selected as M4 reference; split bases retain dirty-local fills and add addressing/reservation work | Measure actual dirty-local fills, chunk work and copy traffic at the static checkpoint; local validity remains a separate unimplemented alternative |
 | M1 typed pins/admission | M1a typed pins dd3c9fc8d9e passes 932 focused tests per role and native/source review; hot confirmation mixed, no admission. M1b ce71fcfc240 passes 413 focused tests per role; two-pair screen still loses logging | Carry typed owned-function proof across call boundary; qualify and price composition |
 | M2 shadow maps/roots | Shared-emitter/GC phase composition through ed08ab64c7e passes 675 core, nine phase and nine selected generated-contract cases per role; bounded source/native review GO. Hot6/all29/PMU show preparatory cost; no admission | Complete callback/exception/observer phases and general owner maps; partial coverage does not authorize stale scratch. Typed home authority and copy/escape packet are next |
-| M3 all lifecycle readers | Provider/classify-once de95475accb has core/native/hot6/all29/PMU evidence. Constructor 9136c202e8e passes 3 precise and 942 core cases per role; heap teardown 0851fd51801 passes its precise fixture and 420 core cases per role. Full diagnostics expose a new OOM crash; 7c42db43224 fixes the specialization readiness proof, original OOM passes both roles | Retain NULL authority. Finish fix qualification and [reader ports](lifecycle-readers.md), including copy/escape, suspension and virtual CALL roles |
+| M3 all lifecycle readers | Provider/constructor/heap foundation has focused/native/performance evidence. OOM readiness fix passes both roles. Copy197fd passes 84 precise and 588 lifecycle cases per role; pinned-code allocation8f656 passes its four mutation subcases and 399 focused cases. Certified empty-created9f28 passes 580 lifecycle and five contract tests per role; raw admission fixtures corrected separately. Created selector/collector21311 is building | Retain NULL authority. Finish [reader ports](lifecycle-readers.md), explicit CALL roles, created/suspended/exception contracts and merged qualification |
 | M4 static switch | Not started | Atomic reader/collector/allocator switch and representation qualification |
-| M5 bitmap comparison | [Concrete implementation design](bitmap-implementation.md) has both peers' GO; no source implementation yet | Same placement/boundness/transfer ABI and complete measured lifecycle |
+| M5 bitmap comparison | [Concrete implementation design](bitmap-implementation.md) has both peers' GO; portable storage source work begins in an isolated subtree | Absorb complete M4 interfaces; same placement/boundness/transfer ABI and complete measured lifecycle |
 | M6 optional lowering | Not started | Independently attributable useful increments |
 | M7 final selection | Not started | Integrated source/native review, qualification, retention and unchanged-workload comparisons |
 

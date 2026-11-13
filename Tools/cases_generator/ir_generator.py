@@ -169,12 +169,16 @@ class ExecutionVariant:
     base: str
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
+    shape_cases: bool = False
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
 EXECUTION_VARIANTS = {
     "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
         "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
+    "LOAD_ATTR_SHAPE_POLY": ExecutionVariant("LOAD_ATTR_SHAPE", shape_cases=True),
+    "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP": ExecutionVariant(
+        "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",), shape_cases=True),
 }
 
 
@@ -680,6 +684,7 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # use of a view (IREmitter.check_inplace_input()).  The C compiler rejects
 # a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
+    "IR_DUP_SHAPE_READ",
     # The structured provider TAKEs evaluated snapshots before any callback.
     "IR_BINARY_READER",
     "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
@@ -739,6 +744,7 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
+    "IR_GUARD_SHAPE_READ",
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
@@ -2632,6 +2638,10 @@ class IRStack(Stack):
         self.possible_native_owners: set[int] = set()
         self.expired_values: set[int] = set()
         self.loaded_value: int | None = None
+        # A checked guard supplies one offset to a read of the same current
+        # receiver. It is metadata, not a value or an owning Storage token.
+        self.shape_read_binding: tuple[str, str] | None = None
+        self.shape_read_complete = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2658,6 +2668,8 @@ class IRStack(Stack):
         other.possible_native_owners = set(self.possible_native_owners)
         other.expired_values = set(self.expired_values)
         other.loaded_value = None
+        other.shape_read_binding = self.shape_read_binding
+        other.shape_read_complete = self.shape_read_complete
         return other
 
     def home_action(self, kind: str, field: int = 0,
@@ -2766,6 +2778,7 @@ class IRStack(Stack):
 
     def code_ran(self, *, current_identity=False) -> None:
         "Code that can rebind a local may have run: each view may dangle"
+        self.shape_read_binding = None
         self.home_action("_PyIR_OWNER_STORAGE_CALLBACK", flags=2 if current_identity else 0)
         for names in self.views.values():
             self.stale.update(names)
@@ -3182,6 +3195,10 @@ class IRStack(Stack):
 
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
+        if self.shape_read_binding != other.shape_read_binding:
+            self.shape_read_binding = other.shape_read_binding = None
+        self.shape_read_complete = other.shape_read_complete = (
+            self.shape_read_complete and other.shape_read_complete)
         if (self.home_writes != self.home_write_receipts or
                 other.home_writes != other.home_write_receipts):
             self.home_node = other.home_node = None
@@ -3326,6 +3343,8 @@ class IREmitter(Emitter):
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
         self._replacers["IR_CANONICAL_OUTPUTS"] = self.canonical_outputs
+        self._replacers["IR_GUARD_SHAPE_READ"] = self.guard_shape_read
+        self._replacers["IR_DUP_SHAPE_READ"] = self.shape_read_value
         self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
         self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
         self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
@@ -3725,6 +3744,78 @@ class IREmitter(Emitter):
             raise analysis_error(f"{tkn.text} takes {count} variables", end)
         assert next(tkn_iter).kind == "SEMI"
         return names
+
+    def guard_shape_read(self, tkn, tkn_iter, uop, storage, inst):
+        args, _ = instruction_macro_args(tkn, tkn_iter)
+        assert next(tkn_iter).kind == "SEMI"
+        text = [[token.text for token in arg] for arg in args]
+        if (len(text) != 3 or len(text[0]) != 4 or
+                text[0][:2] != ["PyValue_AsKnownObjectBorrow", "("] or
+                text[0][-1] != ")" or
+                any(len(arg) != 1 for arg in text[1:])):
+            raise analysis_error("shape guard requires a current object input and cache fields", tkn)
+        name = text[0][2]
+        version, shape = text[1][0], text[2][0]
+        caches = {cache.name: cache.size for cache in uop.caches}
+        var = find_local(name, storage)
+        if (inst is None or self.format_of(inst).fb_layout != "_PyFbAttr" or
+                (version, shape) != ("type_version", "shape") or
+                caches != {"type_version": 2, "shape": 0} or
+                len(uop.body.body) != 1 or len(storage.inputs) != 1 or
+                storage.inputs[0] is not var or var.ir_inplace is None or
+                not var.known_object or not uop.is_guard() or
+                self.statement.contents[0] is not tkn):
+            raise analysis_error("shape guard requires unchanged typed attribute inputs", tkn)
+        self.check_exit_inputs(tkn, storage)
+        pointer = f"PyValue_AsKnownObjectBorrow({name})"
+        variant = self.execution_variant
+        if variant is not None and variant.shape_cases:
+            self.emit(f"(void){version}; (void){shape};\n")
+            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, {pointer});\n")
+            self.emit("if (ir_selected_offset < 0) {\n")
+            self.emit_jump_to_predicted(inst)
+            self.emit("}\n")
+            self.emit("ir_shape_offset = (uint32_t)ir_selected_offset;\n")
+            source = "ir_shape_offset"
+        else:
+            self.emit(f"PyTypeObject *tp = Py_TYPE({pointer});\n")
+            self.emit(f"assert({version} != 0);\n")
+            self.emit(f"if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != {version}) {{\n")
+            self.emit_jump_to_predicted(inst)
+            self.emit("}\n")
+            self.emit(f"if (_PyObject_Shape({pointer}) != {shape}) {{\n")
+            self.emit_jump_to_predicted(inst)
+            self.emit("}\n")
+            source = "fb->offset"
+        storage.stack.shape_read_binding = (var.ir_inplace, source)
+        storage.stack.shape_read_complete = False
+        self.shape_read_guards += 1
+        return True
+
+    def shape_read_value(self, tkn, tkn_iter, uop, storage, inst):
+        args, _ = instruction_macro_args(tkn, tkn_iter)
+        if (len(args) != 2 or any(len(arg) != 1 or arg[0].kind != "IDENTIFIER"
+                                 for arg in args)):
+            raise analysis_error("shape read requires current receiver and bound offset", tkn)
+        name, offset = (arg[0].text for arg in args)
+        text = _statement_text(self.statement)
+        direct = (len(text) == 9 and text[0] in {var.name for var in storage.outputs} and
+                  text[1:] == ["=", "IR_DUP_SHAPE_READ", "(", name,
+                               ",", offset, ")", ";"])
+        var = find_local(name, storage)
+        binding = storage.stack.shape_read_binding
+        if (not direct or binding is None or var is None or var.ir_inplace != binding[0] or
+                not var.known_object or len(storage.inputs) != 1 or
+                storage.inputs[0] is not var or
+                [(cache.name, cache.size) for cache in uop.caches] != [(offset, 1)]):
+            raise analysis_error("shape read has no current guarded offset", tkn)
+        # The read and its anchor are one primitive; source cannot substitute
+        # a different pointer after acquiring the metadata capability.
+        storage.stack.shape_read_binding = None
+        storage.stack.shape_read_complete = True
+        self.shape_read_uses += 1
+        self.emit(f" shape_read_dup(PyValue_AsKnownObjectBorrow({name}), {offset})")
+        return True
 
     def canonical_outputs(self, tkn, tkn_iter, uop, storage, inst):
         # canonical_output_sources validates the complete declaration before
@@ -4493,6 +4584,7 @@ class IREmitter(Emitter):
         return out
 
     def emit_IfStmt(self, stmt, uop, storage, inst):
+        storage.stack.shape_read_binding = None
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         # A condition may assign/address an output through C syntax. Such
@@ -4523,6 +4615,7 @@ class IREmitter(Emitter):
         return storage
 
     def emit_WhileStmt(self, stmt, uop, storage, inst):
+        storage.stack.shape_read_binding = None
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
@@ -4530,6 +4623,7 @@ class IREmitter(Emitter):
         return super().emit_WhileStmt(stmt, uop, storage, inst)
 
     def emit_ForStmt(self, stmt, uop, storage, inst):
+        storage.stack.shape_read_binding = None
         storage.stack.home_node = None
         return super().emit_ForStmt(stmt, uop, storage, inst)
 
@@ -4551,6 +4645,7 @@ class IREmitter(Emitter):
             self.native_scopes.pop()
 
     def emit_MacroIfStmt(self, stmt, uop, storage, inst):
+        storage.stack.shape_read_binding = None
         self.native_condition_depth += 1
         try:
             return super().emit_MacroIfStmt(stmt, uop, storage, inst)
@@ -4683,6 +4778,9 @@ class IREmitter(Emitter):
                         ) -> tuple[bool, Token | None, Storage]:
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
+        if not any(token.text in {"IR_GUARD_SHAPE_READ", "IR_DUP_SHAPE_READ"}
+                   for token in stmt.contents):
+            storage.stack.shape_read_binding = None
         leaf_marker = any(t.text == "IR_TRY_DICT_FIRST_PROBE" for t in stmt.contents)
         transaction_marker = any(t.text in IR_MARKER_EFFECTS
                                  for t in stmt.contents)
@@ -5458,7 +5556,10 @@ def write_uop(
             elif cache.size == 4:
                 value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
             else:
-                value = f"uint32_t {cache.name} = fb->{cache.name};"
+                binding = storage.stack.shape_read_binding
+                source = (binding[1] if cache.name == "offset" and binding is not None
+                          else f"fb->{cache.name}")
+                value = f"uint32_t {cache.name} = {source};"
             emitter.emit(value + "\n")
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
@@ -6757,6 +6858,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  roles: dict[str, set[str]]) -> None:
     "One pass of generate_handler, which records the roles it finds"
     emitter.pending_owner = None
+    emitter.shape_read_guards = 0
+    emitter.shape_read_uses = 0
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
@@ -6932,6 +7035,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         out.emit(f"assert(!IR_IS_LOCAL({dst}) && {dst} != IR_NO_DST);\n")
     declare_variables(inst, out, emitter.declared_roles)
+    if emitter.execution_variant is not None and emitter.execution_variant.shape_cases:
+        out.emit("uint32_t ir_shape_offset;\n")
     for k in range(fmt.n_inputs):
         if fmt.borrow_mask & (1 << k):
             own = owner_name(fmt.input_field(k))
@@ -6960,6 +7065,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             raise
         if not reachable or emitter.call_finished:
             break
+    if (emitter.execution_variant is not None and emitter.execution_variant.shape_cases and
+            (emitter.shape_read_guards != 1 or emitter.shape_read_uses != 1 or
+             not stack.shape_read_complete)):
+        raise analysis_error("polymorphic shape execution needs one dominating checked read", inst.where)
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
@@ -8179,9 +8288,10 @@ def result_publication_contract(
     "Validate the source of the first-output publication postcondition."
     marker = "IR_RETIRE_PUBLISHED_RESULT"
     canonical = "IR_CANONICAL_HOME_DUP"
+    shape = "IR_DUP_SHAPE_READ"
     canonical_occurrences = [
         (part, token) for part in inst.parts if isinstance(part, Uop)
-        for token in part.body.tokens() if token.text == canonical]
+        for token in part.body.tokens() if token.text in {canonical, shape}]
     if len(canonical_occurrences) > 1:
         raise analysis_error(
             f"{inst.name}: duplicate canonical home declaration", inst.where)
@@ -8257,14 +8367,21 @@ def result_publication_contract(
         if canonical_source:
             canonical_producer, canonical_token = canonical_occurrences[0]
             assignment = _statement_text(result_assignment)
+            producer_marker = canonical_token.text
+            inputs = {item.name for item in producer.stack.inputs}
+            args = (assignment[4:5] if producer_marker == canonical else
+                    assignment[4:7:2])
+            shape_args = (producer_marker != shape or
+                          (len(args) == 2 and args[0] in inputs and
+                           [(cache.name, cache.size) for cache in producer.caches] == [(args[1], 1)]))
             if (canonical_producer is not producer
-                    or len(assignment) != 7
-                    or assignment[:4] != [result, "=", canonical, "("]
-                    or not re.fullmatch(r"[A-Za-z_]\w*", assignment[4])
-                    or assignment[5:] != [")", ";"]):
+                    or len(assignment) != (7 if producer_marker == canonical else 9)
+                    or assignment[:4] != [result, "=", producer_marker, "("]
+                    or not all(re.fullmatch(r"[A-Za-z_]\w*", arg) for arg in args)
+                    or not shape_args or assignment[-2:] != [")", ";"]):
                 raise analysis_error(
                     f"{inst.name}: canonical home declaration must be the "
-                    "direct result assignment with one identifier", canonical_token)
+                    "direct checked result assignment", canonical_token)
         _publication_result(inst, fmt, result, producer)
         outputs = external_io(inst)[1]
         _validate_publication_suffix(inst, producer, outputs, result)
@@ -8390,7 +8507,9 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
             ("_PyIR_PURE", p.pure),
             ("_PyIR_SPECIALIZES", specializes),
             ("_PyIR_BOXES", boxes),
-            ("_PyIR_NATIVE_ONLY", native_entry_input_contract(inst))):
+            ("_PyIR_NATIVE_ONLY", native_entry_input_contract(inst)),
+            ("_PyIR_LEARNED_ONLY", bool(EXECUTION_VARIANTS.get(name) and
+                                      EXECUTION_VARIANTS[name].shape_cases))):
         if present:
             effects.append(bit)
     return effects
@@ -8490,6 +8609,7 @@ HANDLER_LOCALS = {
     "retire_needed", "retire_failed", "operation_failed",
     "ir_binary_left", "ir_binary_right", "ir_binary_result",
     "ir_binary_phase_valid", "ir_binary_rest",
+    "ir_shape_offset",
 }
 HANDLER_POINTERS = {"slots", "window", "fb", "value_temps", "frame", "tstate",
                     "next_instr", "this_instr"}

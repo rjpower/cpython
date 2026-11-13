@@ -386,6 +386,9 @@ fb_block(_PyInstr *instr)
 static fb_row
 fb_row_of(_PyFbHeader *h, int opcode)
 {
+    if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+        opcode = LOAD_ATTR_SHAPE;
+    }
     fb_row row = {0};
     switch (h->kind) {
         case FB_UNARY:
@@ -404,6 +407,9 @@ fb_row_of(_PyFbHeader *h, int opcode)
             /* A historical observation copies metadata, never a live borrow.
              * The recorded handler identifies the active payload member. */
             switch (opcode) {
+                case LOAD_ATTR_SHAPE:
+                    row.payload.read_kind = ((_PyFbAttr *)h)->read_kind;
+                    break;
                 case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
                 case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
                 case LOAD_ATTR_CLASS:
@@ -593,6 +599,39 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     h->state = poly->handler[1] != 0 ? FB_POLY : FB_MONO;
 }
 
+/* Nomination has already proved each offset against its exact type/name and
+ * filled shape. Execution still checks the current type version and shape. */
+static int
+fb_shape_read_set(_PyInstr *instr, _PyFbHeader *h)
+{
+#ifdef Py_SHAPES
+    if (h->state != FB_POLY || h->poly == 0) {
+        return 0;
+    }
+    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    int count = 0;
+    for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
+        if (poly->handler[count] != LOAD_ATTR_SHAPE ||
+            poly->payload[count].read_kind != _Py_FB_READ_SHAPE ||
+            poly->type_version[count] == 0 ||
+            poly->aux[count] == _Py_SHAPE_NONE)
+        {
+            return 0;
+        }
+        for (int earlier = 0; earlier < count; earlier++) {
+            if (poly->type_version[earlier] == poly->type_version[count]) {
+                return 0;
+            }
+        }
+    }
+    return count >= 2;
+#else
+    (void)instr;
+    (void)h;
+    return 0;
+#endif
+}
+
 /* The specialisation of a fused compare-and-jump that runs the compare's
  * specialised_opcode, for the words whose handler is fused. */
 static inline int
@@ -652,6 +691,11 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!is_shared_entry(h));
     set_counter(h, adaptive_counter_cooldown());
     fb_record(instr, h, handler);
+    if (specialized_opcode == LOAD_ATTR_SHAPE && fb_shape_read_set(instr, h)) {
+        int poly_handler = handler == LOAD_ATTR_SHAPE_LOCAL_TEMP
+            ? LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP : LOAD_ATTR_SHAPE_POLY;
+        (void)set_opcode(instr, poly_handler);
+    }
 }
 
 static inline void
@@ -956,6 +1000,9 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     int opcode;
     if (_PyShape_HasSlot(type, shape, index)) {
         opcode = base_op == LOAD_ATTR ? LOAD_ATTR_SHAPE : STORE_ATTR_SHAPE;
+        if (base_op == LOAD_ATTR) {
+            fb->read_kind = _Py_FB_READ_SHAPE;
+        }
     }
     else if (base_op == LOAD_ATTR) {
         return 0;

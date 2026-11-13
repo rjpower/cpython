@@ -211,6 +211,8 @@ enum {
                                     // (_PyValueTemps), which it then needs
 #define _PyIR_NATIVE_ONLY   0x800   // checked synthetic activation homes;
                                     // never admitted in a code image
+#define _PyIR_LEARNED_ONLY  0x1000  // requires a reached feedback nomination;
+                                    // never admitted in a code image
 
 /* Complete exceptional-route census from the actual emitter. Zero is
  * unknown, not infallible. These bits establish no readable-home facts. */

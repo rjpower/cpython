@@ -769,6 +769,45 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
+/* Every executable row was nominated by the checked managed-shape lookup.
+ * No pointer from the bank escapes this callback-free selection. */
+static inline int64_t
+shape_read_offset(_PyFbBlock *block, _PyFbAttr *entry, PyObject *owner)
+{
+#ifdef Py_SHAPES
+    assert(entry->h.poly != 0 && entry->h.poly <= block->npoly);
+    const _PyFbPoly *poly = &block->poly[entry->h.poly - 1];
+    uint32_t version = Py_TYPE(owner)->tp_version_tag;
+    if (version == 0) {
+        return -1;
+    }
+    for (int i = 0; i < FB_POLY_SIZE; i++) {
+        if (poly->type_version[i] == version) {
+            if (poly->payload[i].read_kind != _Py_FB_READ_SHAPE ||
+                _PyObject_Shape(owner) != poly->aux[i])
+            {
+                return -1;
+            }
+            return poly->index[i];
+        }
+    }
+#else
+    (void)block;
+    (void)entry;
+    (void)owner;
+#endif
+    return -1;
+}
+
+static inline PyValue
+shape_read_dup(PyObject *owner, uint32_t offset)
+{
+    PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
+    /* The current type and shape guards prove that this slot is filled. */
+    assert(!PyValue_IsNull(found));
+    return IR_CANONICAL_HOME_DUP(found);
+}
+
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with
  * entry FB at unit F, keeps in the arg field of the entry.  These sites
  * always have an entry of their own: the assembler assigns theirs first and

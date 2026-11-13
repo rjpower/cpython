@@ -4144,6 +4144,77 @@ def generated_address_sites(text):
     return sites
 
 
+class TestShapeReadMetadata(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.temp_input_filename = str(Path(directory.name) / "source.c")
+
+    def shape_read_handler(self, source, name, record=False):
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        output = io.StringIO()
+        out = CWriter(output, 0, False)
+        emitter = ir_generator.IREmitter(out, analysis, formats)
+        instruction = ir_generator.handler_instructions(analysis)[name]
+        ir_generator.generate_handler(name, instruction, formats[name], emitter, out, record)
+        return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name], record)
+
+    def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
+        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        for record in (False, True):
+            for suffix in ("", "_LOCAL_TEMP"):
+                for poly in (False, True):
+                    name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
+                    with self.subTest(name=name, record=record):
+                        handler, effects = self.shape_read_handler(source, name, record)
+                        self.assertEqual("shape_read_offset(" in handler, poly)
+                        self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
+                        self.assertIn("uint32_t offset = " +
+                                      ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
+                        self.assertIn("attr = shape_read_dup(", handler)
+                        self.assertLess(handler.index("uint32_t offset ="),
+                                        handler.index("attr = shape_read_dup("))
+                        if not poly:
+                            self.assertLess(handler.index("tp->tp_version_tag"),
+                                            handler.index("_PyObject_Shape("))
+                        if suffix:
+                            self.assertIn("ir_own_B = PyValue_NULL;", handler)
+                            self.assertNotIn("IR_CONSUME_INPUT(B", handler)
+
+    def test_shape_read_rejects_a_missing_or_changed_guard(self):
+        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        guard = "IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);"
+        for changed in ("(void)owner;", guard.replace("type_version, shape", "shape, type_version"),
+                        guard + " offset++;", guard + " PyValue_CLOSE(owner);"):
+            with self.subTest(changed=changed):
+                with self.assertRaisesRegex(SyntaxError, "shape (guard|read)"):
+                    self.shape_read_handler(source.replace(guard, changed, 1), "LOAD_ATTR_SHAPE_POLY")
+
+    def test_shape_read_binding_expires_before_an_intervening_effect(self):
+        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        read = "attr = IR_DUP_SHAPE_READ(owner, offset);"
+        for prefix, error in (
+                ("offset++;", "shape read has no current guarded offset"),
+                ("PyValue_CLOSE(owner);", "view 'owner' is read after a call"),
+                ("unknown_effect();", "view 'owner' is read after a call"),
+                ("frame->phase_state = 0;", "shape read has no current guarded offset"),
+                ("if (flag) { offset++; }", "shape read has no current guarded offset"),
+                ("for (int i=0; i<0; i++) { offset++; }", "shape read has no current guarded offset")):
+            with self.subTest(prefix=prefix):
+                with self.assertRaisesRegex(SyntaxError, error):
+                    self.shape_read_handler(source.replace(read, prefix + " " + read, 1),
+                                            "LOAD_ATTR_SHAPE_POLY")
+
+    def test_polymorphic_shape_requires_the_actual_read_action(self):
+        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        changed = source.replace("attr = IR_DUP_SHAPE_READ(owner, offset);",
+                                 "attr = PyValue_None;", 1)
+        with self.assertRaisesRegex(SyntaxError, "one dominating checked read"):
+            self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY")
+
+
 class TestCallTransactionMarkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

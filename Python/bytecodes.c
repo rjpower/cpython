@@ -2719,13 +2719,12 @@ dummy_func(
             EXIT_IF(_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape);
         }
 
+        op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner -- owner)) {
+            IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);
+        }
+
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-            // The shape proves the slot filled.
-            assert(!PyValue_IsNull(found));
-            attr = IR_CANONICAL_HOME_DUP(found);
+            attr = IR_DUP_SHAPE_READ(owner, offset);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
             IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
@@ -2733,8 +2732,7 @@ dummy_func(
 
         macro(LOAD_ATTR_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _GUARD_SHAPE +
+            _GUARD_SHAPE_READ +
             _LOAD_ATTR_SHAPE +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;

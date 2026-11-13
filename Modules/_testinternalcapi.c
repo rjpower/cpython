@@ -4923,12 +4923,107 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
+/* Initialize a covered control shape without executing the image or
+ * publishing the fake frame. Only inline values enter the scratch homes. */
+static PyObject *
+check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *code_object;
+    int site, phase, dirty_home = -1, missing_home = -1;
+    int unaligned = 0, wrong_image = 0;
+    static char *keywords[] = {
+        "code", "site", "phase", "dirty_home", "missing_home",
+        "unaligned", "wrong_image", NULL,
+    };
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iipp:check_ir_frame_phase",
+                                    keywords, &code_object, &site, &phase,
+                                    &dirty_home, &missing_home, &unaligned,
+                                    &wrong_image))
+    {
+        return NULL;
+    }
+    if (!PyCode_Check(code_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    int nl = code->co_nlocalsplus;
+    if (site < 0 || site > Py_SIZE(code) || phase < 0 || phase > UINT16_MAX ||
+        nl < 0 || nslots < nl || nslots > IR_MAX_SLOTS ||
+        (dirty_home != -1 && (dirty_home < nl || dirty_home >= nslots)) ||
+        (missing_home != -1 && (missing_home < nl || missing_home >= nslots)))
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid frame phase control probe");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
+    if (homes == NULL) {
+        return PyErr_NoMemory();
+    }
+    for (int i = 0; i < nslots; i++) {
+        homes[i] = PyValue_NULL;
+    }
+    uintptr_t pc = (uintptr_t)exec->words + (size_t)site * sizeof(*exec->words);
+    _PyInterpreterFrame frame = {
+        .f_executable = code,
+        .base = homes,
+        .ir_words = exec->words,
+        .instr_ptr = (_PyInstr *)pc,
+        .owner = FRAME_OWNED_BY_THREAD,
+        .phase_state = (uint16_t)phase,
+    };
+    _PyIRHomeView view;
+    int covered = _PyIR_GetFrameHomeView(&frame, &view);
+    int dirty_selected = 0, missing_required = 0;
+    if (covered) {
+        for (uint32_t r = 0; r < view.nranges; r++) {
+            const _PyIRPhaseRange *range = view.ranges + r;
+            for (int bit = range->begin; bit < range->end; bit++) {
+                int home = view.nbindings + bit;
+                homes[home] = PyValue_FromInlineInt(17);
+                dirty_selected |= home == dirty_home;
+                missing_required |= home == missing_home &&
+                    !(range->flags & _PyIR_PHASE_RANGE_NULLABLE);
+            }
+        }
+    }
+    if ((dirty_home >= 0 && (!covered || dirty_selected)) ||
+        (missing_home >= 0 && (!covered || !missing_required)))
+    {
+        PyMem_Free(homes);
+        PyErr_SetString(PyExc_ValueError,
+                        "dirty home must be absent and missing home must be required");
+        return NULL;
+    }
+    if (dirty_home >= 0) {
+        homes[dirty_home] = PyValue_FromInlineInt(17);
+    }
+    if (missing_home >= 0) {
+        homes[missing_home] = PyValue_NULL;
+    }
+    _PyIRWord other_image = 0;
+    if (wrong_image) {
+        frame.ir_words = &other_image;
+    }
+    frame.instr_ptr = (_PyInstr *)(pc + unaligned);
+    uint8_t status = _PyIR_ShadowFramePhase(&frame);
+    PyMem_Free(homes);
+    return PyLong_FromLong(status);
+}
+
 static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
     {"get_ir_frame_phases", get_ir_frame_phases, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
+     METH_VARARGS | METH_KEYWORDS, NULL},
+    {"check_ir_frame_phase", _PyCFunction_CAST(check_ir_frame_phase),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},

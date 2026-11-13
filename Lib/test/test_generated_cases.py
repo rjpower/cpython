@@ -3033,6 +3033,19 @@ class TestIRCases(unittest.TestCase):
                 finally:
                     body.body.pop()
 
+        # Flattening both preprocessor arms loses their boundary: the same
+        # statements in a different arm must not satisfy the source proof.
+        instrument = [part for part in inst.parts
+                      if isinstance(part, analyzer.Uop)][0].body
+        branch = instrument.body[0]
+        original = branch.body.pop()
+        branch.else_body.insert(0, original)
+        try:
+            self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
+                             "_PyIR_TRANSFER_UNKNOWN")
+        finally:
+            branch.body.append(branch.else_body.pop(0))
+
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])

@@ -1347,9 +1347,10 @@ run_staged_provider(PyObject *module, PyObject *args)
                                &payload, 1, NULL);
     }
     else {
-        PyValue argument = PyValue_FromObjectBorrow(payload);
+        PyValue argument = PyValue_DUP(PyValue_FromObjectBorrow(payload));
         PyValue value = _PyEval_VectorValue(tstate, (PyFunctionObject *)function,
                                             &argument, 1, NULL);
+        PyValue_CLOSE(argument);
         result = PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
         PyValue_XCLOSE(value);
     }
@@ -3718,6 +3719,123 @@ pyvalue_internal_contract(PyObject *self, PyObject *unused)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+pyvalue_try_xclose(PyObject *self, PyObject *obj)
+{
+    PyValue owner = PyValue_FromObjectSteal(Py_NewRef(obj));
+    PyObject *primary = PyObject_CallNoArgs(PyExc_RuntimeError);
+    if (primary == NULL) {
+        PyValue_XCLOSE(owner);
+        return NULL;
+    }
+    PyErr_SetRaisedException(Py_NewRef(primary));
+    Py_ssize_t before = Py_REFCNT(obj);
+    int closed = _PyValue_TryXCloseNoReentry(owner);
+    Py_ssize_t after = Py_REFCNT(obj);
+    PyObject *actual = PyErr_GetRaisedException();
+    int preserved = actual == primary;
+    Py_XDECREF(actual);
+    Py_DECREF(primary);
+    if (!closed) {
+        PyValue_XCLOSE(owner);
+    }
+    if (!preserved) {
+        PyErr_SetString(PyExc_AssertionError, "close changed the raised exception");
+        return NULL;
+    }
+    return Py_BuildValue("(inn)", closed, before, after);
+}
+
+static PyObject *
+pyvalue_try_xclose_last(PyObject *self, PyObject *factory)
+{
+    PyObject *obj = PyObject_CallNoArgs(factory);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyValue owner = PyValue_FromObjectSteal(obj);
+    if (!PyValue_RefcountOnObject(owner) || Py_REFCNT(obj) != 1) {
+        PyValue_XCLOSE(owner);
+        PyErr_SetString(PyExc_ValueError, "factory must return a unique counted owner");
+        return NULL;
+    }
+    int closed = _PyValue_TryXCloseNoReentry(owner);
+    if (closed) {
+        /* The object may already be freed if the ownership contract broke. */
+        PyErr_SetString(PyExc_AssertionError, "close consumed the last count");
+        return NULL;
+    }
+    Py_ssize_t remaining = Py_REFCNT(obj);
+    PyValue_XCLOSE(owner);
+    if (remaining != 1) {
+        PyErr_SetString(PyExc_AssertionError, "failed close changed its owner");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+pyvalue_try_xclose_internal(PyObject *self, PyObject *Py_UNUSED(unused))
+{
+    PyValue no_count[] = {
+        PyValue_NULL, PyValue_TagIndex(7), PyValue_FromInlineInt(-7),
+        PyValue_FromDoubleNotNaN(-0.0), PyValue_None, PyValue_True,
+#ifdef Py_DEBUG
+        PyValue_Wrap((void *)0x1000),
+#endif
+    };
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(no_count); i++) {
+        if (!_PyValue_TryXCloseNoReentry(no_count[i])) {
+            PyErr_SetString(PyExc_AssertionError, "no-count close failed");
+            return NULL;
+        }
+    }
+    /* A release-build Wrap has the encoding of a counted pointer; a debug
+     * Wrap has an invalid tag. Neither is admitted to a frame home here. */
+    PyObject *list = PyList_New(0);
+    if (list == NULL) {
+        return NULL;
+    }
+    Py_INCREF(list);
+    PyValue wrapped = PyValue_Wrap(list);
+    int counted = PyValue_RefcountOnObject(wrapped);
+    int closed = _PyValue_TryXCloseNoReentry(wrapped);
+    int ok = Py_REFCNT(list) == 2 - (closed && counted);
+#ifdef Py_GIL_DISABLED
+    ok = ok && closed == !counted;
+#else
+    ok = ok && closed;
+#endif
+    if (!closed || !counted) {
+        Py_DECREF(list);
+    }
+    Py_DECREF(list);
+    if (!ok) {
+        PyErr_SetString(PyExc_AssertionError, "incorrect wrapped pointer close");
+        return NULL;
+    }
+#ifndef Py_GIL_DISABLED
+    /* Like test_py_set_immortal, use an unregistered stack object so this
+     * test neither leaks an immortal allocation nor alters ref-debug totals.
+     * The untagged owner predates the change to dynamic immortality. */
+    PyObject object = {0};
+    object.ob_refcnt = 1;
+    object.ob_type = &PyBaseObject_Type;
+    PyValue owner = PyValue_FromObjectSteal(&object);
+    if (!PyUnstable_SetImmortal(&object)) {
+        PyErr_SetString(PyExc_AssertionError, "could not immortalize test object");
+        return NULL;
+    }
+    Py_ssize_t before = Py_REFCNT(&object);
+    if (!_PyValue_TryXCloseNoReentry(owner)
+        || Py_REFCNT(&object) != before - 1 || !_Py_IsImmortal(&object)) {
+        PyErr_SetString(PyExc_AssertionError, "incorrect immortal owner close");
+        return NULL;
+    }
+#endif
+    Py_RETURN_NONE;
+}
+
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
 
@@ -4794,6 +4912,9 @@ static PyMethodDef module_functions[] = {
     {"frame_has_virtual_kwargs", frame_has_virtual_kwargs, METH_NOARGS},
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
+    {"pyvalue_try_xclose", pyvalue_try_xclose, METH_O, NULL},
+    {"pyvalue_try_xclose_last", pyvalue_try_xclose_last, METH_O, NULL},
+    {"pyvalue_try_xclose_internal", pyvalue_try_xclose_internal, METH_NOARGS, NULL},
     {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},
     {"pyvalue_home_violation_sites", pyvalue_home_violation_sites, METH_NOARGS, NULL},
     {"pyvalue_append_box", pyvalue_append_box, METH_VARARGS, NULL},

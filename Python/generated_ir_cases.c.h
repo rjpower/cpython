@@ -4777,7 +4777,7 @@
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
                     _PyFrame_ClearTemporaries(shim, 0);
-                    _PyEval_FrameClearAndPop(tstate, shim);
+                    _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
                     JUMP_TO_LABEL(error);
                 }
                 frame->return_slot = (uint16_t)IR_A(ir_word);
@@ -19151,7 +19151,7 @@
                 _PyInterpreterFrame *dying = frame;
                 frame = tstate->current_frame = dying->previous;
                 frame->pending_redirect = 0;
-                _PyEval_FrameClearAndPop(tstate, dying);
+                _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
                 frame->pending_redirect = 0;
                 if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                     tstate->current_frame = frame->previous;

@@ -4635,6 +4635,9 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             def sample(read):
                 return read()
 
+            # Prepare its executing image while the semantic map is valid;
+            # the mutations below target remote-memory decoding.
+            sample(lambda: None)
             table = sample.__code__.co_linetable
             assert table[:4] == b'IRSM'
             address = ctypes.pythonapi.PyBytes_AsString

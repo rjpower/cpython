@@ -989,7 +989,8 @@ extern int _PyObject_IsInstanceDictEmpty(PyObject *);
 
 // Export for 'math' shared extension
 PyAPI_FUNC(PyObject*) _PyObject_LookupSpecial(PyObject *, PyObject *);
-PyAPI_FUNC(int) _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
+PyAPI_FUNC(int) _PyObject_LookupSpecialMethod(struct _PyInterpreterFrame *frame,
+                                              PyObject *attr, PyValue *method,
                                               PyValue *self);
 
 // Calls the method named `attr` on `self`, but does not set an exception if

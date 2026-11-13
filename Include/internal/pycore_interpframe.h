@@ -160,6 +160,15 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
+/* A checked physical home capability, shared with the bitmap placement. */
+static inline void
+_PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
+{
+    assert(frame != NULL && home >= frame->base);
+    assert(home < frame->base + _PyFrame_NumSlots(frame));
+    *home = value;
+}
+
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
  * slot that f named. A temporary destination has no owner; a local's old value,
  * where a call stores its result in a local, is released as STORE_FAST

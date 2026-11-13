@@ -78,6 +78,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
     CALL_INVOKE_MARKERS,
     CodeSection,
@@ -103,6 +104,8 @@ from generators_common import (
     enclosing_callee,
     instruction_macro_args,
     find_local,
+    instruction_macro_args,
+    tokens_text,
     type_and_null,
     write_header,
 )
@@ -2909,6 +2912,10 @@ class IREmitter(Emitter):
         self._replacers["IR_CREATED_COPY"] = self.created_copy
         self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
         self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
+        self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
+        self._replacers["IR_BUILD_STRING"] = self.home_helper
+        self._replacers["IR_BUILD_MAP"] = self.home_helper
+        self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
@@ -2983,6 +2990,43 @@ class IREmitter(Emitter):
         self.out.start_line()
         self.emit("frame->phase_state = 0;\n")
         super().emit_save(storage)
+
+    def checked_home_array(self, tkn, uop, storage):
+        operation = home_operation_contract(uop).get(id(tkn))
+        if operation is None:
+            raise analysis_error("missing checked home operation", tkn)
+        name, index = operation
+        local = find_local(name, storage)
+        stack = storage.stack
+        if (local is None or not local.is_array() or not isinstance(stack, IRStack)
+                or stack.physical_sp is None or stack.reloaded):
+            raise analysis_error("home adapter requires active frame storage", tkn)
+        # Storage.for_uop alone binds this pointer from the physical layout.
+        # The source contract rejects every rebinding or pointer escape.
+        return local, index
+
+    def write_output_home(self, tkn, tkn_iter, uop, storage, inst):
+        local, index = self.checked_home_array(tkn, uop, storage)
+        args, end = self.instruction_macro_args(tkn, tkn_iter)
+        self.out.start_line()
+        self.out.emit_at(f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
+                         f"{tokens_text(args[2])})", tkn)
+        self.out.last_token = end
+        return True
+
+    def home_helper(self, tkn, tkn_iter, uop, storage, inst):
+        local, _ = self.checked_home_array(tkn, uop, storage)
+        args, end = self.instruction_macro_args(tkn, tkn_iter)
+        if tkn.text == "IR_LOOKUP_SPECIAL":
+            expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
+                          f"&{local.name}[0], &{local.name}[1])")
+        else:
+            helper = ("_Py_BuildString_ValueSteal" if tkn.text == "IR_BUILD_STRING"
+                      else "_Py_BuildMap_ValueSteal")
+            expression = f"{helper}(frame, {local.name}, oparg)"
+        self.out.emit_at(expression, tkn)
+        self.out.last_token = end
+        return True
 
     def created_copy(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
@@ -4817,6 +4861,144 @@ NORMAL_FRAME_OBSERVERS = {
 }
 
 
+def home_operation_contract(part: Uop) -> dict[int, tuple[str, int]]:
+    """Check declared array capabilities without granting a raw pointer."""
+    markers = [t for t in part.body.tokens() if t.text in IR_HELPER_EFFECTS]
+    if not markers:
+        return {}
+    inputs = {item.name: item for item in part.stack.inputs}
+    outputs = {item.name: item for item in part.stack.outputs}
+    contexts: list[tuple[list[Token], tuple[tuple[int, tuple[str, ...]], ...]]] = []
+
+    def collect(stmt, guards=()):
+        if isinstance(stmt, SimpleStmt):
+            contexts.append((stmt.contents, guards))
+        elif isinstance(stmt, BlockStmt):
+            for child in stmt.body:
+                collect(child, guards)
+        elif isinstance(stmt, IfStmt):
+            contexts.append((stmt.condition, guards))
+            condition = tuple(t.text for t in stmt.condition if t.kind != "COMMENT")
+            collect(stmt.body, guards + ((id(stmt), condition),))
+            if stmt.else_body is not None:
+                collect(stmt.else_body, guards + ((id(stmt), ("else",)),))
+        else:
+            raise analysis_error("home adapter requires checked statement control", markers[0])
+
+    collect(part.body)
+    if any(t.kind.startswith("CMACRO") for t in part.body.tokens()):
+        raise analysis_error("home adapter cannot cross preprocessor control", markers[0])
+
+    def name(arg):
+        return arg[0].text if len(arg) == 1 and arg[0].kind == "IDENTIFIER" else None
+
+    def in_bounds(item, index, guards):
+        if item.size.isdigit():
+            return index < int(item.size)
+        return (item.size == "oparg & 1" and index == 0 and
+                any(condition == ("(", "oparg", "&", "1", ")")
+                    for _, condition in guards))
+
+    used: dict[str, StackItem] = {}
+    covered: set[int] = set()
+    operations: dict[int, tuple[str, int]] = {}
+    order = {id(token): at for at, token in enumerate(part.body.tokens())}
+    writes: list[tuple[str, int, tuple[tuple[int, tuple[str, ...]], ...], int]] = []
+    for tokens, guards in contexts:
+        iterator = TokenIterator(tokens)
+        for token in iterator:
+            if token.text not in IR_HELPER_EFFECTS:
+                continue
+            args, end = instruction_macro_args(token, iterator, IR_HELPER_EFFECTS)
+            if token.text == "IR_WRITE_OUTPUT":
+                statement = [t for t in tokens if t.kind != "COMMENT"]
+                if (statement[0] is not token or statement[-1].text != ";" or
+                        statement[-2] is not end):
+                    raise analysis_error("output home write must be a statement", token)
+                array = name(args[0]) if len(args) == 3 else None
+                item = outputs.get(array)
+                index = (int(args[1][0].text) if len(args) == 3 and
+                         len(args[1]) == 1 and args[1][0].text.isdigit() else -1)
+                if item is None or not item.is_array() or index < 0 or not in_bounds(item, index, guards):
+                    raise analysis_error("output home needs a declared array and proved index", token)
+                covered.add(id(args[0][0]))
+                writes.append((array, index, guards, order[id(end)]))
+            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP"}:
+                array = name(args[0]) if len(args) == 1 else None
+                item = inputs.get(array)
+                extent = "oparg" if token.text == "IR_BUILD_STRING" else "oparg*2"
+                if (item is None or item.peek or not item.is_array() or
+                        item.size != extent or len(inputs) != 1):
+                    raise analysis_error("builder needs its sole declared owning array", token)
+                index = 0
+                covered.add(id(args[0][0]))
+            else:
+                array = name(args[1]) if len(args) == 2 else None
+                item = inputs.get(array)
+                output = outputs.get(array)
+                if (item is None or not item.peek or item.size != "2" or
+                        output is None or not output.peek or output.size != "2" or
+                        len(inputs) != 1 or len(outputs) != 1 or name(args[0]) is None):
+                    raise analysis_error("special lookup needs its declared two-home through pair", token)
+                index = 0
+                covered.add(id(args[1][0]))
+            assert array is not None and item is not None
+            used[array] = item
+            operations[id(token)] = (array, index)
+
+    # A declared array's generated pointer cannot be copied, rebound, passed
+    # elsewhere or used as a raw write target after acquiring a capability.
+    # Raw reads are complete by-value arguments of these existing typed
+    # readers, never a member lvalue or an address hidden in parentheses.
+    readers = {"PyValue_IsNull": (0, 1), "_PyValueTemps_Object": (1, 2)}
+    reads: set[int] = set()
+    if "oparg" in declared_locals(list(part.body.tokens())):
+        raise analysis_error("home extent cannot be shadowed", markers[0])
+    for tokens, guards in contexts:
+        for at, token in enumerate(tokens):
+            if token.kind == "AND" and is_unary_and(tokens, at):
+                raise analysis_error("home adapter cannot expose a raw address", token)
+            if token.text not in readers or (at and tokens[at - 1].text in {".", "->"}):
+                continue
+            args, _ = instruction_macro_args(token, TokenIterator(tokens[at + 1:]))
+            position, count = readers[token.text]
+            if len(args) != count:
+                continue
+            if position == 1 and [t.text for t in args[0]] != ["value_temps"]:
+                continue
+            arg = args[position]
+            if (len(arg) == 4 and arg[0].text in used and arg[1].text == "[" and
+                    arg[2].text.isdigit() and arg[3].text == "]"):
+                reads.add(id(arg[0]))
+    for tokens, guards in contexts:
+        for at, token in enumerate(tokens):
+            if token.text == "oparg":
+                before, after = at - 1, at + 1
+                while before >= 0 and tokens[before].kind == "LPAREN":
+                    before -= 1
+                while after < len(tokens) and tokens[after].kind == "RPAREN":
+                    after += 1
+                if ((before >= 0 and tokens[before].kind in ASSIGNMENTS) or
+                        (after < len(tokens) and tokens[after].kind in ASSIGNMENTS)):
+                    raise analysis_error("home extent cannot be mutated or exposed", token)
+            if token.text not in used or id(token) in covered:
+                continue
+            if (at >= 2 and tokens[at - 2].text == "DEAD" and
+                    tokens[at - 1].text == "(" and at + 1 < len(tokens) and
+                    tokens[at + 1].text == ")"):
+                continue
+            if (id(token) in reads and
+                    in_bounds(used[token.text], int(tokens[at + 2].text), guards)):
+                index = int(tokens[at + 2].text)
+                if token.text in inputs or any(
+                        array == token.text and written == index and
+                        before < order[id(token)] and all(guard in guards for guard in path)
+                        for array, written, path, before in writes):
+                    continue
+            raise analysis_error("home array escapes its checked adapter", token)
+    return operations
+
+
 def normal_observer_frame_footprint(part: Uop) -> bool:
     """Explain every frame use by an audited observer-call argument."""
     source = canonical_body_tokens(part)
@@ -5168,7 +5350,10 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
             and not any(item.name in reserved for part in parts for item in
                         (*part.stack.inputs, *part.stack.outputs, *part.caches))
             and not any(t.kind.startswith("CMACRO") and
-                        any(name in t.text for name in reserved)
+                        (any(name in t.text for name in reserved) or
+                         "_PyFrame_" in t.text or "_PyHomeBitmap_" in t.text)
+                        for t in uop_token_list(inst))
+            and not any(t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
                         for t in uop_token_list(inst))
             and not any(t.text in {"slots", "window", "DISPATCH",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}

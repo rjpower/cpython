@@ -4703,7 +4703,7 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
     if (compiled == NULL) {
         return NULL;
     }
-    PyCodeObject *bindings = (PyCodeObject *)PyTuple_GET_ITEM(
+    PyCodeObject *bindings = (PyCodeObject *)_PyTuple_GET_OBJECT(
         ((PyCodeObject *)compiled)->co_consts, 0);
     assert(PyCode_Check(bindings) && bindings->co_nlocalsplus == 1);
     PyThreadState state = {0};

@@ -369,3 +369,6 @@ LOAD_ATTR_SHAPE_LOCAL_TEMP 319
 
 # Materialize a compiler-proven virtual local binding on its first read.
 # removed: MATERIALIZE_KWARGS 325
+
+# Execution-only certified inline integer same-home commit.
+BINARY_OP_ADD_INT_OVERWRITE_TEMP 326

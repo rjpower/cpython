@@ -737,6 +737,64 @@ class TestIRCases(unittest.TestCase):
         self.assertIsNone(ir_generator.canonical_result_source(
             instruction, formats['BINARY_OP_ADD_INT']))
 
+    def test_same_home_overwrite_rejects_changed_commit(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        start = source.index('inline_ok pure op(_BINARY_OP_ADD_INT,')
+        end = source.index('inline_ok pure op(_BINARY_OP_SUBTRACT_INT,', start)
+        producer = source[start:end]
+        variant = ir_generator.EXECUTION_VARIANTS[
+            "BINARY_OP_ADD_INT_OVERWRITE_TEMP"]
+        for suffix in ("opaque();", "_Py_HandlePending(tstate);",
+                       "ERROR_NO_POP();", "EXIT_IF(true);",
+                       "PyValue_XCLOSE(res);"):
+            with self.subTest(suffix=suffix):
+                changed = (source[:start] + producer.replace(
+                    "INPUTS_DEAD();", "INPUTS_DEAD(); " + suffix, 1)
+                    + source[end:])
+                Path(self.temp_input_filename).write_text(changed)
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                with self.assertRaisesRegex(
+                        SyntaxError, "same-home overwrite lacks a checked inline commit"):
+                    ir_generator.validate_same_home_overwrite(
+                        analysis.instructions["BINARY_OP_ADD_INT"],
+                        formats["BINARY_OP_ADD_INT"], variant)
+
+        # The later inline retirement is part of the proof too.
+        changed = source.replace(
+            "PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);",
+            "PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc); opaque();", 1)
+        Path(self.temp_input_filename).write_text(changed)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        with self.assertRaisesRegex(SyntaxError, "checked inline commit"):
+            ir_generator.validate_same_home_overwrite(
+                analysis.instructions["BINARY_OP_ADD_INT"],
+                formats["BINARY_OP_ADD_INT"], variant)
+
+    def test_same_home_overwrite_keeps_guarded_error_and_fallback(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        output = io.StringIO()
+        ir_generator.generate_ir([], analysis, output, False)
+        body = self.handler(output.getvalue(), "BINARY_OP_ADD_INT_OVERWRITE_TEMP")
+        fallback = body.index("JUMP_TO_PREDICTED(BINARY_OP_ADD_INT)")
+        self.assertLess(fallback, body.index("value = IR_VIEW"))
+        self.assertIn("IR_A(ir_word) != IR_B(ir_word)", body)
+        self.assertIn("IR_C(ir_word) == IR_B(ir_word)", body)
+        self.assertIn("IR_IS_LOCAL(IR_B(ir_word))", body)
+        error = body.index("if (PyValue_IsNull(res))")
+        adopted = body.index("ir_own_B = _PyIR_AdoptTemp(l)")
+        self.assertLess(error, adopted)
+        self.assertIn("IR_CONSUME_INPUT(IR_C(ir_word), r)", body)
+        self.assertNotIn("IR_CONSUME_INPUT(IR_B(ir_word)", body)
+        self.assertIn("IR_SLOT(IR_B(ir_word)) = res;", body)
+
     def test_canonical_inline_int_renamed_source(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

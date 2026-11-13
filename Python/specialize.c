@@ -443,6 +443,9 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
+    else if (opcode == BINARY_OP_ADD_INT_OVERWRITE_TEMP) {
+        opcode = BINARY_OP_ADD_INT;
+    }
     poly->handler[i] = (uint16_t)opcode;
 }
 
@@ -566,6 +569,9 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
+    else if (opcode == BINARY_OP_ADD_INT_OVERWRITE_TEMP) {
+        opcode = BINARY_OP_ADD_INT;
+    }
     if (h->poly == 0) {
         h->state = FB_MONO;
         return;
@@ -629,6 +635,14 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
         if (IR_B(word) < (uint32_t)nlocalsplus &&
             IR_A(word) >= (uint32_t)nlocalsplus && IR_A(word) != IR_NO_DST) {
             handler = LOAD_ATTR_SHAPE_LOCAL_TEMP;
+        }
+    }
+    else if (handler == BINARY_OP_ADD_INT) {
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
+        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
+        if (IR_A(word) == IR_B(word) && IR_C(word) != IR_B(word)
+            && IR_B(word) >= (uint32_t)nlocalsplus && IR_B(word) != IR_NO_DST) {
+            handler = BINARY_OP_ADD_INT_OVERWRITE_TEMP;
         }
     }
     if (!set_opcode(instr, handler)) {

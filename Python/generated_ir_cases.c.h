@@ -230,6 +230,92 @@
             DISPATCH();
         }
 
+        TARGET(BINARY_OP_ADD_INT_OVERWRITE_TEMP) {
+            int opcode = BINARY_OP_ADD_INT;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BINARY_OP_ADD_INT);
+            if (IR_A(ir_word) != IR_B(ir_word) || IR_C(ir_word) == IR_B(ir_word) || IR_B(ir_word) == IR_NO_DST || IR_IS_LOCAL(IR_B(ir_word))) {
+                JUMP_TO_PREDICTED(BINARY_OP_ADD_INT);
+            }
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
+            PyValue res;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            // _GUARD_TOS_INT
+            {
+                value = IR_VIEW(IR_C(ir_word));
+                if (!PyValue_IsInlineInt(value)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
+            }
+            // _GUARD_NOS_INT
+            {
+                left = IR_VIEW(IR_B(ir_word));
+                if (!PyValue_IsInlineInt(left)) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
+            }
+            // _BINARY_OP_ADD_INT
+            {
+                right = value;
+                (void)right;
+                int64_t a = _PyValue_IntScaled(left);
+                int64_t b = _PyValue_IntScaled(right);
+                int64_t sum;
+                STAT_INC(BINARY_OP, hit);
+                if (__builtin_add_overflow(a, b, &sum)) {
+                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
+                }
+                else {
+                    res = _PyValue_FromIntScaled(sum);
+                }
+                if (PyValue_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
+                l = left;
+                r = right;
+                ir_own_B = _PyIR_AdoptTemp(l);
+                ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), r);
+            }
+            // _POP_TOP_INT
+            {
+                value = r;
+                (void)value;
+                assert(PyValue_LongCheckExact(value));
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
+            }
+            // _POP_TOP_INT
+            {
+                value = l;
+                (void)value;
+                assert(PyValue_LongCheckExact(value));
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_B(ir_word)), res);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
+            DISPATCH();
+        }
+
         TARGET(BINARY_OP_ADD_UNICODE) {
             int opcode = BINARY_OP_ADD_UNICODE;
             (void)(opcode);

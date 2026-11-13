@@ -2,7 +2,7 @@
 // from:
 //   Python/bytecodes.c
 // Do not edit!
-static py_tail_call_funcptr instruction_funcptr_handler_table[320];
+static py_tail_call_funcptr instruction_funcptr_handler_table[327];
 
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
@@ -13,6 +13,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_start_frame(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD_FLOAT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD_INT(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD_INT_OVERWRITE_TEMP(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_ADD_UNICODE(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_AND(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_BINARY_OP_AND_INT(TAIL_CALL_PARAMS);
@@ -310,7 +311,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
 JUMP_TO_LABEL(error);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[320] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[327] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -631,4 +632,11 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[320] = {
     [317] = _TAIL_CALL_UNKNOWN_OPCODE,
     [318] = _TAIL_CALL_UNKNOWN_OPCODE,
     [319] = _TAIL_CALL_LOAD_ATTR_SHAPE_LOCAL_TEMP,
+    [320] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [321] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [322] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [323] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [324] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [325] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [326] = _TAIL_CALL_BINARY_OP_ADD_INT_OVERWRITE_TEMP,
 };

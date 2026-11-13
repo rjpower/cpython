@@ -512,10 +512,9 @@ gen_try_set_executing(PyGenObject *gen)
  * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
 #define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
 
-/* The owner of V, the view of a temporary whose slot the same expression
- * clears: the count moves from the slot to the C local.  The one
- * count-free conversion from a borrow to an owner; only IR_CONSUME_INPUT
- * uses it. */
+/* Adopt a temporary view without adding a count. IR_CONSUME_INPUT clears
+ * its source home; a certified inline numeric commit instead overwrites
+ * that exact home before any possible observation. */
 static inline PyValue
 _PyIR_AdoptTemp(PyValueBorrow view)
 {

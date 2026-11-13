@@ -150,12 +150,15 @@ class ExecutionVariant:
     base: str
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
+    overwrite_input: str | None = None
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
 EXECUTION_VARIANTS = {
     "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
         "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
+    "BINARY_OP_ADD_INT_OVERWRITE_TEMP": ExecutionVariant(
+        "BINARY_OP_ADD_INT", temp_fields=("A",), overwrite_input="B"),
 }
 
 
@@ -2019,6 +2022,7 @@ class SlotLayout:
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
     canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
+    overwrite_input: str | None = None  # certified inline same-home overwrite
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2298,8 +2302,13 @@ class IRStack(Stack):
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
-        consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"IR_CONSUME_INPUT({f}, {names[-1]})")
+        if field == self.layout.overwrite_input:
+            # The checked numeric commit overwrites this exact scratch home
+            # before the next possible observation. Its input owns no count.
+            consume = f"_PyIR_AdoptTemp({names[-1]})"
+        else:
+            consume = ("PyValue_NULL" if field in self.layout.local_fields else
+                       f"IR_CONSUME_INPUT({f}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
@@ -2352,12 +2361,17 @@ class IRStack(Stack):
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
             if lay.dst in lay.temp_fields:
+                if lay.overwrite_input is not None:
+                    slot = f"IR_SLOT({FIELD_VARS[lay.overwrite_input]})"
                 if self.final and self.published_temporary_result:
                     return True
                 if (var.name == canonical_result
                         or var.name in lay.canonical_outputs):
-                    out.emit(f"assert(PyValue_IsNull({slot}) || "
-                             f"PyValue_Is({slot}, {var.name}));\n")
+                    if lay.overwrite_input is not None:
+                        out.emit(f"assert(PyValue_IsInlineInt({slot}));\n")
+                    else:
+                        out.emit(f"assert(PyValue_IsNull({slot}) || "
+                                 f"PyValue_Is({slot}, {var.name}));\n")
                     out.emit(f"{slot} = {var.name};\n")
                     out.emit(f"_PyValue_CheckTemp({slot});\n")
                 else:
@@ -4271,6 +4285,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+    validate_same_home_overwrite(inst, fmt, emitter.execution_variant)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -4567,6 +4582,25 @@ def canonical_inline_int_source(parts: list[Uop]) -> CanonicalResult | None:
     return None
 
 
+def validate_same_home_overwrite(inst: Instruction, fmt: IRFormat,
+                                 variant: ExecutionVariant | None) -> None:
+    "Prove the actual guarded numeric body and its nonescaping commit suffix."
+    if variant is None or variant.overwrite_input is None:
+        return
+    if (variant.base != "BINARY_OP_ADD_INT" or variant.overwrite_input != "B"
+            or variant.temp_fields != ("A",) or variant.local_fields
+            or fmt.window or not fmt.store_dst or fmt.n_inputs != 2
+            or fmt.field_of(ROLE_DST) != "A"
+            or fmt.input_field(0) != "B" or fmt.input_field(1) != "C"
+            or fmt.borrow_mask != 3
+            or any(not isinstance(part, (Uop, Skip)) for part in inst.parts)
+            or canonical_inline_int_source(
+                [part for part in inst.parts if isinstance(part, Uop)]) is None):
+        raise analysis_error(
+            "same-home overwrite lacks a checked inline commit suffix",
+            inst.where)
+
+
 def canonical_result_source(inst: Instruction, fmt: IRFormat
                             ) -> CanonicalResult | None:
     "Recognize bounded source proofs, independently of instruction names."
@@ -4845,6 +4879,15 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
+    if (emitter.execution_variant is not None
+            and emitter.execution_variant.overwrite_input is not None):
+        # This release-mode fallback also protects direct execution of a
+        # malformed refinement. No input has been changed or consumed yet.
+        out.emit("if (IR_A(ir_word) != IR_B(ir_word) || "
+                 "IR_C(ir_word) == IR_B(ir_word) || "
+                 "IR_B(ir_word) == IR_NO_DST || IR_IS_LOCAL(IR_B(ir_word))) {\n")
+        out.emit(f"JUMP_TO_PREDICTED({emitter.execution_variant.base});\n")
+        out.emit("}\n")
     if record:
         # The handler's value record, the box area (R27 deletes it)
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
@@ -4955,7 +4998,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                      canonical_outputs=canonical_output_sources(inst, fmt))
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
-                         temp_fields=emitter.execution_variant.temp_fields)
+                         temp_fields=emitter.execution_variant.temp_fields,
+                         overwrite_input=emitter.execution_variant.overwrite_input)
     stack: Stack = IRStack(layout, roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True

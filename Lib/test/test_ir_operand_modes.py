@@ -274,5 +274,66 @@ class OperandModeGeneratorTests(unittest.TestCase):
                         gen.compute_formats(self.analysis)
 
 
+@unittest.skipIf(support.Py_GIL_DISABLED, "requires integer specialization")
+class SameHomeIntegerTests(unittest.TestCase):
+    def test_two_scratch_inputs_retire_before_result_observation(self):
+        def add(x, y):
+            return (x + 1) + (y + 2)
+
+        for _ in range(ROUNDS):
+            self.assertEqual(add(10, 20), 33)
+        self.assertIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(add))
+        self.assertEqual(add((1 << 50) - 2, 2), (1 << 50) + 3)
+        self.assertEqual(add(1.5, 2.5), 7.0)
+
+    def test_inline_overflow_guard_miss_and_source_observation(self):
+        def add(x, y):
+            return (x + 1) + y
+
+        for _ in range(ROUNDS):
+            self.assertEqual(add(10, 20), 31)
+        self.assertIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(add))
+        self.assertNotIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP",
+                         [word[0] for word in _testinternalcapi.get_ir(add.__code__)])
+        # Both inputs of the second add fit int51; its result needs boxing.
+        self.assertEqual(add((1 << 50) - 2, 3), (1 << 50) + 2)
+        self.assertEqual(add(2.5, 3.5), 7.0)
+        for _ in range(ROUNDS):
+            self.assertEqual(add(10, 20), 31)
+        events = []
+
+        def tracer(frame, event, arg):
+            if frame.f_code is add.__code__:
+                frame.f_trace_opcodes = True
+                if event == "opcode":
+                    events.append(frame.f_lasti)
+            return tracer
+
+        previous = sys.gettrace()
+        try:
+            sys.settrace(tracer)
+            self.assertEqual(add(10, 20), 31)
+        finally:
+            sys.settrace(previous)
+        additions = [i.offset for i in dis.get_instructions(add)
+                     if i.opname == "BINARY_OP"]
+        self.assertEqual(len(additions), 2)
+        self.assertTrue(all(offset in events for offset in additions))
+
+    def test_local_and_discard_destinations_keep_generic_owner_paths(self):
+        def local(x, y):
+            result = (x + 1) + y
+            return result
+
+        def discarded(x, y):
+            (x + 1) + y
+
+        for _ in range(ROUNDS):
+            self.assertEqual(local(10, 20), 31)
+            self.assertIsNone(discarded(10, 20))
+        self.assertNotIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(local))
+        self.assertNotIn("BINARY_OP_ADD_INT_OVERWRITE_TEMP", handlers(discarded))
+
+
 if __name__ == "__main__":
     unittest.main()

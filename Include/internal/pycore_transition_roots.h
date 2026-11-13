@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
+#include "pycore_ir.h"           // _PyIR_RETIRE_*, _PyIR_SHADOW_*
 #include "pycore_tstate.h"       // _PyThreadStateImpl
 #include "pycore_value.h"        // PyValue
 
@@ -45,9 +46,21 @@ typedef struct _PyTransitionRoots {
     int remaining;
     unsigned char header_mask;
     unsigned char result_present;
+    /* Producer outcome, retained after code detach; observers never recheck. */
+    unsigned char retire_reason;
+    unsigned char shadow_status;
     PyValue result;
     _PyTransitionPrefix *prefix;
 } _PyTransitionRoots;
+
+#if SIZEOF_VOID_P == 8
+static_assert(offsetof(_PyTransitionRoots, retire_reason) == 22,
+              "retirement reason must use existing record padding");
+static_assert(offsetof(_PyTransitionRoots, shadow_status) == 23,
+              "shadow status must use existing record padding");
+static_assert(sizeof(_PyTransitionRoots) == 40,
+              "retirement observation must not grow the record");
+#endif
 
 static inline void
 _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
@@ -56,6 +69,10 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
     assert(roots->frame != NULL);
     assert(roots->remaining >= 0);
     assert((roots->header_mask & ~31) == 0);
+    assert(roots->retire_reason <= _PyIR_RETIRE_STAGED_FAILURE);
+    assert(roots->shadow_status <= _PyIR_SHADOW_MISMATCH);
+    assert(roots->retire_reason != _PyIR_RETIRE_NONE ||
+           roots->shadow_status == _PyIR_SHADOW_UNCOVERED);
     assert(!(roots->header_mask & _Py_TRANSITION_EXCEPTION) ||
            roots->frame->owner == FRAME_OWNED_BY_GENERATOR);
     assert(roots->remaining == 0 ||

@@ -379,6 +379,20 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
+enum {
+    _PyIR_RETIRE_NONE,
+    _PyIR_RETIRE_NORMAL_RETURN,
+    _PyIR_RETIRE_ERROR_UNWIND,
+    _PyIR_RETIRE_HEAP_CLEAR,
+    _PyIR_RETIRE_STAGED_FAILURE,
+};
+
+enum {
+    _PyIR_SHADOW_UNCOVERED,
+    _PyIR_SHADOW_EXACT,
+    _PyIR_SHADOW_MISMATCH,
+};
+
 typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction

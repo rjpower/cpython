@@ -4451,9 +4451,39 @@ get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ids;
 }
 
+/* Observe the reached producer's result, including prefix-only records.
+ * Code and frame geometry may already be gone; do not rerun a shadow check. */
+static PyObject *
+get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *states = PyList_New(0);
+    if (states == NULL) {
+        return NULL;
+    }
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        PyObject *state = Py_BuildValue("(ii)", roots->retire_reason,
+                                       roots->shadow_status);
+        if (state == NULL) {
+            Py_DECREF(states);
+            return NULL;
+        }
+        int status = PyList_Append(states, state);
+        Py_DECREF(state);
+        if (status < 0) {
+            Py_DECREF(states);
+            return NULL;
+        }
+    }
+    return states;
+}
+
 static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
+    {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,

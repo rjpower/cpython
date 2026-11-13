@@ -209,6 +209,8 @@ enum {
                                     // counter drives specialisation
 #define _PyIR_BOXES         0x400   // may box a value into the value record
                                     // (_PyValueTemps), which it then needs
+#define _PyIR_NATIVE_ONLY   0x800   // checked synthetic activation homes;
+                                    // never admitted in a code image
 
 /* Complete exceptional-route census from the actual emitter. Zero is
  * unknown, not infallible. These bits establish no readable-home facts. */

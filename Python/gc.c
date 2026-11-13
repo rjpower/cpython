@@ -487,7 +487,18 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR ||
            frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
     _PyIRHomeView view;
-    _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+        _PyIRHomeAuthority authority = _PyFrame_GetErrorHomeView(NULL, frame, &view);
+        assert(authority == _PyIR_HOME_MUST_READABLE);
+        if (authority != _PyIR_HOME_MUST_READABLE) {
+            /* This container still owns its allocation; select only actual
+             * present values, never an initialized full-value fallback. */
+            _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+        }
+    }
+    else {
+        _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+    }
     uint32_t cursor = 0;
     int begin, limit;
     while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {

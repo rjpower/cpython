@@ -1835,7 +1835,16 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
     int selected = _PyInterpreterState_GET()->stoptheworld.world_stopped;
     if (selected) {
         /* Preserve the existing per-value deferred/count policy below. */
-        _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+        if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+            _PyIRHomeAuthority authority = _PyFrame_GetErrorHomeView(NULL, frame, &view);
+            assert(authority == _PyIR_HOME_MUST_READABLE);
+            if (authority != _PyIR_HOME_MUST_READABLE) {
+                _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+            }
+        }
+        else {
+            _PyFrame_GetPresenceHomeView(frame, _PyFrame_NumSlots(frame), &view);
+        }
     }
     uint32_t cursor = 0;
     int begin = 0, limit = _PyFrame_NumSlots(frame);

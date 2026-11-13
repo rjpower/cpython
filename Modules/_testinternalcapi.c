@@ -5040,7 +5040,7 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
 /* Snapshot identities before any Python allocation can reenter or move an
  * associated generator frame. No value or frame pointer is used afterward. */
 static PyObject *
-get_frame_present_object_ids(PyObject *self, PyObject *arg)
+get_frame_selected_object_ids(PyObject *self, PyObject *arg)
 {
     if (!PyFrame_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "expected a frame");
@@ -5381,6 +5381,37 @@ check_home_bitmap(PyObject *self, PyObject *payload)
             }
         }
         correct &= visited == Py_ARRAY_LENGTH(selected);
+        for (size_t e = 0; e < Py_ARRAY_LENGTH(endpoints); e++) {
+            view.scratch_limit = endpoints[e] > 0 ? endpoints[e] - 1 : 0;
+            cursor = UINT32_MAX;
+            int last = 130;
+            visited = 0;
+            while (_PyFrame_PreviousHomeRange(&view, &cursor, &begin, &end)) {
+                for (int i = end; i-- > begin;) {
+                    correct &= i < last;
+                    correct &= i < 1 + view.scratch_limit || i == 0;
+                    correct &= _PyFrame_HomeIsPresent(&frame, base + i);
+                    last = i;
+                    visited++;
+                }
+            }
+            int expected = 1;  /* Dynamic binding zero is always included. */
+            for (size_t i = 1; i < Py_ARRAY_LENGTH(selected); i++) {
+                expected += selected[i] < 1 + view.scratch_limit;
+            }
+            correct &= visited == expected;
+        }
+        view.scratch_limit = 129;
+        cursor = UINT32_MAX;
+        correct &= _PyFrame_PreviousHomeRange(&view, &cursor, &begin, &end);
+        correct &= begin == 129 && end == 130;
+        /* Model a callback vacating another selected home. The next lookup
+         * must reload the plane instead of retaining the preceding run. */
+        PyValue moved = _PyFrame_TakeKnownHome(
+            &frame, base + 65, PyValue_Borrow(base[65]));
+        correct &= _PyFrame_PreviousHomeRange(&view, &cursor, &begin, &end);
+        correct &= begin == 64 && end == 65;
+        _PyFrame_PublishVacantHome(&frame, base + 65, moved);
         for (size_t b = 0; b < Py_ARRAY_LENGTH(endpoints); b++) {
             for (size_t e = b; e < Py_ARRAY_LENGTH(endpoints); e++) {
                 int begin = endpoints[b], end = endpoints[e];
@@ -5396,6 +5427,15 @@ check_home_bitmap(PyObject *self, PyObject *payload)
                 }
                 correct &= _PyFrame_NextPresentHome(&frame, begin, end) == next;
                 correct &= _PyFrame_PreviousPresentHome(&frame, begin, end) == previous;
+                correct &= _PyHomeBitmap_PreviousBit(
+                    words, first, begin, end, 1) == previous;
+                int absent = end - 1;
+                while (absent >= begin &&
+                       _PyFrame_HomeIsPresent(&frame, base + absent)) {
+                    absent--;
+                }
+                correct &= _PyHomeBitmap_PreviousBit(
+                    words, first, begin, end, 0) == absent;
             }
         }
         _PyInterpreterFrame alias = {
@@ -5479,7 +5519,7 @@ static PyMethodDef module_functions[] = {
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"get_frame_home_view", get_frame_home_view, METH_O},
-    {"get_frame_present_object_ids", get_frame_present_object_ids, METH_O},
+    {"get_frame_selected_object_ids", get_frame_selected_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},

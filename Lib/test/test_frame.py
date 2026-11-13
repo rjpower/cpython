@@ -36,8 +36,8 @@ class HomeBitmapTest(unittest.TestCase):
 
         def child(value):
             parent_frame = sys._getframe(1)
-            own_ids = internal.get_frame_present_object_ids(sys._getframe())
-            parent_ids = internal.get_frame_present_object_ids(parent_frame)
+            own_ids = internal.get_frame_selected_object_ids(sys._getframe())
+            parent_ids = internal.get_frame_selected_object_ids(parent_frame)
             observations.append((id(value) in own_ids, id(value) in parent_ids))
             return value
 
@@ -69,7 +69,7 @@ class HomeBitmapTest(unittest.TestCase):
                 if payload_ids:
                     support.gc_collect()
                     external = internal.get_transition_root_ids()
-                    homes = internal.get_frame_present_object_ids(self.frame)
+                    homes = internal.get_frame_selected_object_ids(self.frame)
                     observations.append((all(value in external for value in payload_ids),
                                          all(value not in homes for value in payload_ids)))
                 if self.index == 2:
@@ -89,7 +89,7 @@ class HomeBitmapTest(unittest.TestCase):
         result = next(gen)
         self.assertEqual(observations, [(True, True), (True, True)])
         self.assertEqual([id(value) for value in result], payload_ids)
-        homes = internal.get_frame_present_object_ids(gen.gi_frame)
+        homes = internal.get_frame_selected_object_ids(gen.gi_frame)
         self.assertTrue(all(value in homes for value in payload_ids))
         gen.close()
 
@@ -106,7 +106,7 @@ class HomeBitmapTest(unittest.TestCase):
         gen = suspended(marker)
         next(gen)
         frame = gen.gi_frame
-        ids = internal.get_frame_present_object_ids(frame)
+        ids = internal.get_frame_selected_object_ids(frame)
         self.assertIn(id(marker), ids)
         self.assertIn(id(None), ids)
         referents = gc.get_referents(gen)
@@ -137,7 +137,7 @@ class HomeBitmapTest(unittest.TestCase):
             self.assertIn('named', frame.f_locals)
             self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
             with self.assertRaisesRegex(ValueError, 'protected home view'):
-                internal.get_frame_present_object_ids(frame)
+                internal.get_frame_selected_object_ids(frame)
         finally:
             finish.set()
             thread.join(support.SHORT_TIMEOUT)
@@ -705,7 +705,7 @@ class CopyHomeViewTest(unittest.TestCase):
         # The created certificate was invalidated; dynamic presence remains a
         # separate provider for the actually suspended frame's current homes.
         self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
-        self.assertIn(id(payload), internal.get_frame_present_object_ids(frame))
+        self.assertIn(id(payload), internal.get_frame_selected_object_ids(frame))
         gen.close()
         frame.clear()
 
@@ -764,7 +764,7 @@ class CopyHomeViewTest(unittest.TestCase):
         self.assertEqual(internal.get_frame_home_view(frame), (2, 0, 0, 0))
         frame.clear()
         self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
-        self.assertEqual(internal.get_frame_present_object_ids(frame), [])
+        self.assertEqual(internal.get_frame_selected_object_ids(frame), [])
 
     def test_selected_copy_skips_inactive_words(self):
         internal = import_helper.import_module('_testinternalcapi')
@@ -798,7 +798,7 @@ class CopyHomeViewTest(unittest.TestCase):
         self.assertEqual(frame.f_locals['scalar'], 17)
         frame.clear()
         self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
-        self.assertEqual(internal.get_frame_present_object_ids(frame), [])
+        self.assertEqual(internal.get_frame_selected_object_ids(frame), [])
 
     def test_created_generator_and_suspended_escape_values(self):
         internal = import_helper.import_module('_testinternalcapi')

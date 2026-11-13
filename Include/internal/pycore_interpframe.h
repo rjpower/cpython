@@ -362,9 +362,69 @@ _PyFrame_NextHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
+/* Initialize cursor to UINT32_MAX. Each interval is returned once, from
+ * selected scratch down to bindings; callers may clip it by a live cursor. */
+static inline bool
+_PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
+                           int *begin, int *end)
+{
+    if (view->kind > _PyIR_HOME_VIEW_PRESENCE ||
+        (view->kind == _PyIR_HOME_VIEW_RANGES && view->first_bit != 0) ||
+        (view->kind == _PyIR_HOME_VIEW_PRESENCE && view->nranges != 0))
+    {
+        assert(!"invalid home view encoding");
+        return false;
+    }
+    if (view->kind == _PyIR_HOME_VIEW_PRESENCE) {
+        if (*cursor == UINT32_MAX) {
+            *cursor = (uint32_t)view->nbindings + view->scratch_limit + 1;
+        }
+        if (*cursor == 0) {
+            return false;
+        }
+        int home = _PyHomeBitmap_PreviousBit(view->presence, view->first_bit,
+            view->nbindings, (int)*cursor - 1, 1);
+        if (home >= view->nbindings) {
+            /* A close may vacate another home. Reload the actual plane on
+             * the next call rather than retaining a run across callbacks. */
+            *begin = home;
+            *end = home + 1;
+            *cursor = (uint32_t)home + 1;
+            return true;
+        }
+        *cursor = 0;
+        *begin = 0;
+        *end = view->nbindings;
+        return *end != 0;
+    }
+    if (*cursor == UINT32_MAX) {
+        assert(view->nranges < UINT32_MAX);
+        *cursor = view->nranges + 1;
+    }
+    while (*cursor > 1) {
+        const _PyIRPhaseRange *range = &view->ranges[--*cursor - 1];
+        *begin = view->nbindings + range->begin;
+        *end = view->nbindings + Py_MIN(range->end, view->scratch_limit);
+        if (*begin < *end) {
+            return true;
+        }
+    }
+    if (*cursor == 1) {
+        *cursor = 0;
+        *begin = 0;
+        *end = view->nbindings;
+        return *end != 0;
+    }
+    return false;
+}
+
 /* The caller pins code and frame storage for the entire view/copy commit. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyFrame_GetHomeView(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
+/* Copies metadata only. Foreign native scopes require the GIL or actual STW;
+ * owner_hint supplies identity, not quiescence or HEAD_LOCK ownership. */
+_PyIRHomeAuthority _PyFrame_GetErrorHomeView(
+    PyThreadState *owner_hint, _PyInterpreterFrame *frame, _PyIRHomeView *view);
 void _PyFrame_GetPresenceHomeView(
     _PyInterpreterFrame *frame, int remaining, _PyIRHomeView *view);
 PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
@@ -629,6 +689,7 @@ enum {
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
 int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+PyValue _PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason);
 void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
                             int initial_extent, PyValue result,
                             struct _PyTransitionRoots *roots);

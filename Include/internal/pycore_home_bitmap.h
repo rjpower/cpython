@@ -159,6 +159,28 @@ _PyHomeBitmap_NextBit(const uint64_t *bits, unsigned int first,
 }
 
 static inline int
+_PyHomeBitmap_PreviousBit(const uint64_t *bits, unsigned int first,
+                          int begin, int end, int present)
+{
+    while (end > begin) {
+        unsigned int physical = first + (unsigned int)end - 1;
+        unsigned int bit = physical & 63;
+        unsigned int width = Py_MIN(bit + 1, (unsigned int)(end - begin));
+        uint64_t mask = UINT64_MAX >> (63 - bit);
+        if (width < bit + 1) {
+            mask &= UINT64_MAX << (bit + 1 - width);
+        }
+        uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(bits[physical >> 6]);
+        word = (present ? word : ~word) & mask;
+        if (word) {
+            return end - 1 - bit + _PyHomeBitmap_HighBit(word);
+        }
+        end -= width;
+    }
+    return begin - 1;
+}
+
+static inline int
 _PyHomeBitmap_NextPresentHome(uint64_t *presence_bits, const PyValue *base,
                              int begin, int end)
 {

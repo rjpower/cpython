@@ -17,6 +17,8 @@ enum {
     _Py_TRANSITION_KIND_EXTERNAL,
     _Py_TRANSITION_KIND_RETIRING,
     _Py_TRANSITION_KIND_STAGED,
+    /* Active-frame selection metadata, never an external owner. */
+    _Py_TRANSITION_KIND_ERROR,
 };
 
 enum {
@@ -64,7 +66,7 @@ typedef struct _PyTransitionRoots {
     PyValue result;
     union {
         _PyTransitionPrefix *prefix;  /* EXTERNAL only */
-        const _PyIRHomeView *homes;   /* RETIRING/STAGED only */
+        const _PyIRHomeView *homes;   /* RETIRING/STAGED/ERROR */
     };
 } _PyTransitionRoots;
 
@@ -83,7 +85,7 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
 {
     assert(roots->frame != NULL);
     assert(roots->remaining >= 0);
-    assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
+    assert(roots->kind <= _Py_TRANSITION_KIND_ERROR);
     assert(!roots->caller_staged ||
            roots->kind == _Py_TRANSITION_KIND_STAGED);
     assert((roots->header_mask & ~31) == 0);
@@ -93,9 +95,14 @@ _PyThreadState_PushTransitionRoots(PyThreadState *tstate,
            roots->shadow_status == _PyIR_SHADOW_UNCOVERED);
     assert(!(roots->header_mask & _Py_TRANSITION_EXCEPTION) ||
            roots->frame->owner == FRAME_OWNED_BY_GENERATOR);
-    assert(roots->remaining == 0 ||
+    assert(roots->kind == _Py_TRANSITION_KIND_ERROR || roots->remaining == 0 ||
            (roots->header_mask & _Py_TRANSITION_CODE));
-    if (roots->kind != _Py_TRANSITION_KIND_EXTERNAL) {
+    if (roots->kind == _Py_TRANSITION_KIND_ERROR) {
+        assert(roots->header_mask == 0 && !roots->result_present);
+        assert(roots->home_authority == _PyIR_HOME_MUST_READABLE);
+        assert(roots->homes != NULL);
+    }
+    else if (roots->kind != _Py_TRANSITION_KIND_EXTERNAL) {
         assert(roots->home_authority != _PyIR_HOME_SHADOW_CANDIDATE);
         if (roots->home_authority == _PyIR_HOME_NONE) {
             assert(roots->remaining == 0 && roots->homes == NULL);
@@ -128,8 +135,9 @@ _PyThreadState_PopTransitionRoots(PyThreadState *tstate,
                                  _PyTransitionRoots *roots)
 {
     assert(((_PyThreadStateImpl *)tstate)->transition_roots == roots);
-    assert(roots->kind <= _Py_TRANSITION_KIND_STAGED);
-    assert(roots->frame != NULL || roots->kind == _Py_TRANSITION_KIND_STAGED);
+    assert(roots->kind <= _Py_TRANSITION_KIND_ERROR);
+    assert(roots->frame != NULL || roots->kind == _Py_TRANSITION_KIND_STAGED ||
+           roots->kind == _Py_TRANSITION_KIND_ERROR);
     assert(!roots->caller_staged);
     assert(roots->remaining == 0);
     assert(roots->header_mask == 0);

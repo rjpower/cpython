@@ -1,12 +1,12 @@
 # Register state and frame layout: round54
 
-Status: Astra research and independent inventories complete. Five contracts
-accepted for isolated experiments in the [resolution](review-resolution.md).
-All five handwritten implementations have peer review. Options 1/2/3 build
-in release/debug; focused checks are running or passed. Option 4 is correcting
-GC publication and option 5 its debug overwrite invariant before final builds.
-No round54 candidate has performance admission. Selected
-golden51 `0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` is the immutable baseline.
+Status: all five isolated implementations build and pass focused release/debug
+qualification after independent peer and source/native review. Quiet component
+screens and confirmations are underway. All tested changes have costs as well
+as savings; none has performance admission. A bounded instruction-geometry
+follow-up is under peer review because the first same-home variant repeats
+four checks on every successful arithmetic execution. Selected golden51
+`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254` remains immutable.
 
 The user requests one broad Astra review with five concrete improvements,
 followed by Sol implementation lanes, measured selection and a combined golden.

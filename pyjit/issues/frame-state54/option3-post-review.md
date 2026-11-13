@@ -97,3 +97,29 @@ The correction is source-approved. Generated output still needs root's refresh,
 followed by matching debug bootstrap and release/debug focused validation.
 The pre-fix debug failure remains part of the evidence; this review does not
 claim that the corrected native checks passed.
+
+### Current corrected identity
+
+Rechecked the clean source tree at
+`c2cc6777e4d72e6688854c0423459971fc81b355` (parent `a4210e5b9e8`). The
+commit contains the three handwritten LLTrace changes and the matching generated
+one-argument start-frame call. Exact source search now finds no eager
+`maybe_lltrace_resume_frame(frame, GLOBALS())` call in handwritten or generated
+cases. No additional namespace implementation change appears in this commit.
+
+Current ELF identities read with readelf (no inferior):
+
+- `BASE/frame54-globals-release/python`: GNU build ID
+  `cfbfa6d57a013cdcc45fbac5c6c24d35e5666fe1`.
+- `BASE/frame54-globals-debug/python`: GNU build ID
+  `6572eb72037b40e0b1a89dd1e253152975486d17`.
+
+Read-only nm confirms the current release addresses and sizes match the native
+table above. Debug objdump directly verifies the corrected order in
+`maybe_lltrace_resume_frame` at `0x387856`: compare owner at `0x38785d` and
+branch for interpreter owner at `0x387861`, before loading f_funcobj at
+`0x38786a`. Function type comparison at `0x38788c` precedes its globals load at
+`0x387896`; the following NULL test precedes namespace access. Thus native code
+preserves the short-circuit protection for the fake interpreter-entry function
+and the legitimate None-function cleanup frame. This is static native
+inspection, not a claim that this reviewer ran bootstrap or tests.

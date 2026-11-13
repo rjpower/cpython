@@ -38,6 +38,13 @@ validation. Astra is not in the implementation loop.
   frame completion. Existing root paths retain its mapping while it stays
   untracked; track on actual complete observer publication or complete heap
   transition. This correction is subject to actual source and runtime gates.
+- Generator suspension metadata must follow the explicit owner-specific copy
+  contract after state publication moves into that helper. Unknown owner
+  expressions fail generation; actual generator/IR contract tests cover it.
+- The public frame-to-generator conversion exposed a preexisting association
+  assertion and invalid first-send recipient. The corrected conversion uses
+  the same validated discard recipient as ordinary RETURN_GENERATOR before
+  complete publication. Both original failures and corrected checks are retained.
 - Static native inspection found the same-home ADD input NULL store survives;
   integer input close machinery is already optimized away. Count only work
   actually removed. Make alias equality visible in emitted C; a release-elided

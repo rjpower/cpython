@@ -1,9 +1,10 @@
 # Option 4: locals mapping on the optional frame object
 
-Status: proposal awaiting coordinator and independent field-owner review.
+Status: reviewed contract, implemented with the deferred-tracking refinement
+below; independent source GO recorded in option4-post-source.md.
 Source audited: `BASE/worktrees/frame54-locals`, selected51
-`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`. No source changes, generation,
-builds or native execution yet. Canonical startup, process, ABI, inventories,
+`0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254`. Handwritten source and tests are
+ready; generation/build/native qualification belong to root. Canonical startup, process, ABI, inventories,
 Astra review and CPython AI policy were read.
 
 ## Representation and interface
@@ -28,6 +29,14 @@ invariant. Define this layout conversion once, with owner/address assertions.
 Cold getters/setters and teardown use the same explicit owner helper; no caller
 guesses a second mapping location. Interpreter sentinels return NULL.
 
+An optional arena extension was considered but is not selected: current arena
+capacity and home layout derive from code geometry, whereas even optimized
+code can receive an explicit mapping through eval/code and PyFrame_New APIs.
+Adding conditional arena bytes would require new allocation/extent/ownership
+rules for both thread and heap frames. Reusing frame_obj keeps one existing
+cold owner and makes that cost explicit, at the price of eager variable tails
+on supplied-mapping entry. This is an assessment of option 4, not a new mode.
+
 ## Preparation and complete caller census
 
 `eval_frame_push_and_init_code` is the only normal initializer supplied with a
@@ -41,8 +50,9 @@ block. No partial child exists in either case.
 After successful reservation, commit without callbacks: transfer locals to the
 prepared object's mapping, NULL the preparation locals variable, and pass the
 prepared object to Initialize. Initialize installs f_frame and frame_obj after
-the header/homes are ready. Track this object before any binder callback or GC
-poll. Binder failure uses the usual fully clearable child retirement. No
+the header/homes are ready. Keep this private thread record untracked through
+binding and execution until complete observer publication or a complete heap
+move. Binder failure uses the usual fully clearable child retirement. No
 rollback begins after Initialize consumes func/object. Code stays independently
 pinned by the provider through preparation and binding.
 
@@ -106,10 +116,25 @@ Frame-object destruction never relies on a mapping cache in the header.
 
 Visit the mapping once in `frame_traverse`, before its non-FRAME_OBJECT early
 return. Remove mapping visitation from `_PyFrame_Traverse`; that routine visits
-frame_obj and ordinary header/home owners. Crucially, mapping-bearing objects
-must be GC-tracked after complete association even while their frame lives on a
-thread or generator: selected lazy objects can be untracked until takeover,
-which would hide the new edge. If a nonoptimized NULL-mapping frame later gets
+frame_obj and ordinary header/home owners. Keep the eager thread record
+untracked until actual publication: a structurally initialized header can still
+be semantically incomplete before binding and RESUME, so early tracking exposes
+an invalid observer object through gc.get_objects/get_referrers. Existing-object
+_PyFrame_GetFrameObject publication locks the object, materializes kwargs using
+its current f_frame association, and tracks it only on success. Complete
+generator copy tracks the moved object after header/homes/owner/association
+commit and before making the generator resumable, under the association lock.
+Takeover already tracks the complete owned frame. No RESUME guard is added.
+
+This reviewed refinement supersedes Astra's and this proposal's original
+early-tracking prescription. The private thread record has bounded lifetime;
+classic cyclic GC sees its mapping count as an external root. The selected
+precise trace follows frame_obj into untracked initialized records (gc_trace.c
+mark/mark_visit:712–773 and mark_precise_roots:1181), while conservative reserved
+header scans retain staging records and queue their raw initialized blocks
+(1025–1045). Both GC enumeration implementations omit untracked records. Heap
+tracking is still required without observation so mapping→generator→record→
+mapping cycles can collect. If a nonoptimized NULL-mapping frame later gets
 an empty dict through either locals getter, fully associate and track its
 object before exposing the mapping. No tracked prepared object has f_frame=NULL.
 Retain existing critical sections and atomic publication in free-threaded code.
@@ -144,7 +169,11 @@ New discoverable tests will live in test.test_frame.TestFrameLocalsMapping:
 test_exec_custom_mapping_identity, test_class_prepare_mapping,
 test_mapping_error_traceback_escape, test_mapping_cycle_collection,
 test_mapping_finalizer_observes_cleared_homes, test_generator_frame_mapping,
-test_trace_mapping_identity, and test_prepare_allocation_failure. Allocation
+test_trace_mapping_identity, test_prepare_allocation_failure,
+test_private_mapping_gc_visibility and test_unobserved_generator_mapping_cycle.
+The added visibility check collects during unobserved exec and class execution
+and checks both GC enumeration APIs; the cycle check never requests gi_frame.
+Allocation
 failure uses an isolated subprocess and the existing
 _testcapi.call_with_nomemory(start, stop, exec, code, globals, mapping), which
 arms allocation failure in C and removes hooks before returning to Python.

@@ -3481,6 +3481,29 @@ class TestIRCases(unittest.TestCase):
                     with self.assertRaises(SyntaxError):
                         ir_generator.validate_nullable_inputs(inst.parts[0])
 
+    def test_attribute_delete_reaches_pristine_before_required_store(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        specializing = analysis.uops["_SPECIALIZE_STORE_ATTR"]
+        self.assertTrue(specializing.stack.inputs[0].nullable)
+        ir_generator.validate_nullable_inputs(specializing)
+        guard = analysis.uops["_GUARD_STORE_ATTR_VALUE"]
+        self.assertTrue(guard.stack.inputs[0].nullable)
+        ir_generator.validate_nullable_inputs(guard)
+        self.assertEqual([token.text for token in guard.body.tokens()
+                          if token.kind != "COMMENT"],
+                         ["{", "DEOPT_IF", "(", "PyValue_IsNull", "(",
+                          "value", ")", ")", ";", "}"])
+        for name in ("STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE",
+                     "STORE_ATTR_SHAPE_ADD", "STORE_ATTR_WITH_HINT", "STORE_ATTR_SLOT"):
+            parts = [part for part in analysis.instructions[name].parts
+                     if isinstance(part, analyzer.Uop)]
+            with self.subTest(name=name):
+                self.assertIs(parts[0], guard)
+                self.assertTrue(any(item.used and not item.nullable
+                    for part in parts[1:] for item in part.stack.inputs
+                    if item.name == "value"))
+
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
             inst(OP, (required, value:nullable, items[oparg]:nullable --)) {

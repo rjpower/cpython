@@ -1988,7 +1988,7 @@ dummy_func(
             STORE_ATTR_SHAPE_ADD,
         };
 
-        specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
+        specializing op(_SPECIALIZE_STORE_ATTR, (v:nullable, owner -- v, owner)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2994,8 +2994,13 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(PyValue_AsKnownObjectBorrow(value)));
         }
 
+        op(_GUARD_STORE_ATTR_VALUE, (value:nullable, owner -- value, owner)) {
+            DEOPT_IF(PyValue_IsNull(value));
+        }
+
         macro(STORE_ATTR_INSTANCE_VALUE) =
             unused/1 +
+            _GUARD_STORE_ATTR_VALUE +
             _LOCK_OBJECT +
             _GUARD_TYPE_VERSION_LOCKED +
             _GUARD_DORV_NO_DICT +
@@ -3015,6 +3020,7 @@ dummy_func(
 
         macro(STORE_ATTR_SHAPE) =
             unused/1 +
+            _GUARD_STORE_ATTR_VALUE +
             _GUARD_TYPE_VERSION +
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE;
@@ -3035,6 +3041,7 @@ dummy_func(
 
         macro(STORE_ATTR_SHAPE_ADD) =
             unused/1 +
+            _GUARD_STORE_ATTR_VALUE +
             _GUARD_TYPE_VERSION +
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE_ADD;
@@ -3105,6 +3112,7 @@ dummy_func(
 
         macro(STORE_ATTR_WITH_HINT) =
             unused/1 +
+            _GUARD_STORE_ATTR_VALUE +
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_WITH_HINT;
 
@@ -3125,6 +3133,7 @@ dummy_func(
 
         macro(STORE_ATTR_SLOT) =
             unused/1 +
+            _GUARD_STORE_ATTR_VALUE +
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_SLOT;
 

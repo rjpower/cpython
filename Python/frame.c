@@ -227,16 +227,10 @@ _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
 #endif
     while (remaining > 0) {
         PyValue ref = frame->base[remaining - 1];
-#ifdef Py_GIL_DISABLED
-        /* Another thread can drop a count between a refcount test and close. */
-        if (PyValue_RefcountOnObject(ref)) {
-#else
-        if (_PyValue_MayDealloc(ref)) {
-#endif
+        if (!_PyValue_TryXCloseNoReentry(ref)) {
             return remaining;
         }
         frame->base[--remaining] = PyValue_NULL;
-        PyValue_XCLOSE(ref);
     }
     if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
         return _Py_FRAME_CLEAR_LOCALS;

@@ -102,7 +102,6 @@ from generators_common import (
     Emitter,
     TokenIterator,
     enclosing_callee,
-    instruction_macro_args,
     find_local,
     instruction_macro_args,
     tokens_text,
@@ -2969,6 +2968,7 @@ class IREmitter(Emitter):
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
         self.formats = formats
+        self.null_outputs: frozenset[str] | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst

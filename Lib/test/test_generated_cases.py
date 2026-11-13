@@ -4214,6 +4214,23 @@ class TestShapeReadMetadata(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "one dominating checked read"):
             self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY")
 
+    def test_shape_read_rejects_private_native_name_shadows(self):
+        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        for name in ("shape_read_offset", "shape_read_dup", "ir_shape_offset",
+                     "ir_selected_offset"):
+            for declaration in (f"int {name};", f"#define {name} opaque\n"):
+                prefix = ("op(_SHADOW_SHAPE_HELPER, (owner -- owner)) {\n" +
+                          declaration + "\n}\n")
+                changed = source.replace("        macro(LOAD_ATTR_SHAPE) =",
+                                         prefix + "        macro(LOAD_ATTR_SHAPE) =", 1)
+                changed = changed.replace("            _GUARD_SHAPE_READ +",
+                                          "            _SHADOW_SHAPE_HELPER +\n"
+                                          "            _GUARD_SHAPE_READ +", 1)
+                for record in (False, True):
+                    with self.subTest(name=name, declaration=declaration, record=record):
+                        with self.assertRaisesRegex(SyntaxError, "shape read reserved native name"):
+                            self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY", record)
+
 
 class TestCallTransactionMarkers(unittest.TestCase):
     @classmethod

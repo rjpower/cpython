@@ -3748,6 +3748,19 @@ class IREmitter(Emitter):
     def guard_shape_read(self, tkn, tkn_iter, uop, storage, inst):
         args, _ = instruction_macro_args(tkn, tkn_iter)
         assert next(tkn_iter).kind == "SEMI"
+        # Prefix uops share the handler's C scope. They must not replace the
+        # private primitives or locals that implement this checked read.
+        reserved = {"shape_read_offset", "shape_read_dup", "ir_shape_offset",
+                    "ir_selected_offset"}
+        if inst is not None and (
+                reserved.intersection(uop_tokens(inst)) or
+                any(token.kind.startswith("CMACRO") and
+                    any(name in token.text for name in reserved)
+                    for token in uop_token_list(inst)) or
+                any(item.name in reserved for part in inst.parts
+                    if isinstance(part, Uop)
+                    for item in (*part.stack.inputs, *part.stack.outputs, *part.caches))):
+            raise analysis_error("shape read reserved native name", tkn)
         text = [[token.text for token in arg] for arg in args]
         if (len(text) != 3 or len(text[0]) != 4 or
                 text[0][:2] != ["PyValue_AsKnownObjectBorrow", "("] or

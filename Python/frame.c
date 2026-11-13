@@ -36,6 +36,25 @@ _PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
         *view = f->f_capture;
         return (_PyIRHomeAuthority)f->f_capture_authority;
     }
+    if (frame->phase_state == _PyIR_PHASE_CREATED) {
+        if (frame->owner != FRAME_OWNED_BY_GENERATOR ||
+            FT_ATOMIC_LOAD_INT8_RELAXED(
+                _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) != FRAME_CREATED ||
+            frame->f_executable == NULL)
+        {
+            return _PyIR_HOME_NONE;
+        }
+        PyCodeObject *code = frame->f_executable;
+        _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+        if (exec == NULL || frame->ir_words != exec->words ||
+            exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
+        {
+            return _PyIR_HOME_NONE;
+        }
+        *view = (_PyIRHomeView){.nbindings = (uint16_t)code->co_nlocalsplus};
+        return _PyIR_HOME_MUST_READABLE;
+    }
     return _PyIR_GetFrameHomeView(frame, view);
 }
 
@@ -106,6 +125,7 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
     for (int i = nl; i < nslots; i++) {
         dest->base[i] = PyValue_NULL;
     }
+    dest->phase_state = _PyIR_PHASE_CREATED;
 }
 
 void

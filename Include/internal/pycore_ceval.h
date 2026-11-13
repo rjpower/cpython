@@ -338,7 +338,8 @@ PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, 
 PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopWithResult(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
 /* Error/close paths carry no detached result. */
-PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame, uint8_t reason);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
 enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
 enum _PyIRStepStatus {

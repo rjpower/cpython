@@ -2240,7 +2240,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        _PyEval_FrameClearAndPop(tstate, frame);
+        _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_ERROR_UNWIND);
         return PyValue_NULL;
     }
 
@@ -2329,7 +2329,7 @@ early_exit:
     // GH-99729: We need to unlink the frame *before* clearing it:
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame = dying->previous;
-    _PyEval_FrameClearAndPop(tstate, dying);
+    _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
     assert(frame == &entry->frame);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
@@ -2961,7 +2961,7 @@ fail_post_args:
  * code/exception close, whose referents can themselves invoke Python. */
 static Py_NO_INLINE PyValue
 clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        int stage, PyValue result)
+                        int stage, PyValue result, uint8_t reason)
 {
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
@@ -2974,7 +2974,10 @@ clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #endif
     _PyTransitionRoots roots;
     _PyFrame_InitClearRoots(frame, stage, result, &roots);
+    roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
+    roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
+    assert(roots.shadow_status != _PyIR_SHADOW_MISMATCH);
     if (stage != _Py_FRAME_CLEAR_DONE) {
         _PyFrame_FinishClearExceptCode(frame, stage, &roots);
     }
@@ -2998,7 +3001,7 @@ clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static PyValue
 clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   PyValue result)
+                   PyValue result, uint8_t reason)
 {
     assert(frame->owner == FRAME_OWNED_BY_THREAD);
     assert((PyObject **)frame == tstate->datastack_limit);
@@ -3007,7 +3010,7 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (stage != _Py_FRAME_CLEAR_DONE ||
         _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
     {
-        return clear_thread_frame_slow(tstate, frame, stage, result);
+        return clear_thread_frame_slow(tstate, frame, stage, result, reason);
     }
     Py_CLEAR(frame->f_executable);
     _PyThreadState_PopFrame(tstate, frame);
@@ -3016,7 +3019,7 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static PyValue
 clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                PyValue result)
+                PyValue result, uint8_t reason)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -3026,7 +3029,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    result = _PyFrame_ClearGenerator(gen, result);
+    result = _PyFrame_ClearGenerator(gen, result, reason);
     // No escaping call may follow this store before evaluator return.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     return result;
@@ -3161,22 +3164,30 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
                               exit, value, _PY_IR_FOR_ITER, true);
 }
 
-PyValue
-_PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
-                                  _PyInterpreterFrame *frame, PyValue result)
+static PyValue
+frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue result, uint8_t reason)
 {
     // By this point, tstate->current_frame is already set to the parent frame.
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        return clear_thread_frame(tstate, frame, result);
+        return clear_thread_frame(tstate, frame, result, reason);
     }
-    return clear_gen_frame(tstate, frame, result);
+    return clear_gen_frame(tstate, frame, result, reason);
+}
+
+PyValue
+_PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
+                                  _PyInterpreterFrame *frame, PyValue result)
+{
+    return frame_clear_and_pop(tstate, frame, result, _PyIR_RETIRE_NORMAL_RETURN);
 }
 
 void
-_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame)
+_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        uint8_t reason)
 {
-    (void)_PyEval_FrameClearAndPopWithResult(tstate, frame, PyValue_NULL);
+    (void)frame_clear_and_pop(tstate, frame, PyValue_NULL, reason);
 }
 
 /* Binding owns initialized arena homes before the child is current. The
@@ -3228,7 +3239,8 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
         /* Transfer to retirement without a callback or poll. */
         unstage_binding_frame(tstate, staged);
-        (void)clear_thread_frame(tstate, frame, PyValue_NULL);
+        (void)clear_thread_frame(tstate, frame, PyValue_NULL,
+                                _PyIR_RETIRE_STAGED_FAILURE);
         return NULL;
     }
     return frame;
@@ -3574,7 +3586,7 @@ done:
         if (child_staged) {
             unstage_binding_frame(call->tstate, &staged);
         }
-        _PyEval_FrameClearAndPop(call->tstate, child);
+        _PyEval_FrameClearAndPop(call->tstate, child, _PyIR_RETIRE_STAGED_FAILURE);
         child = NULL;
     }
     if (child == NULL) {

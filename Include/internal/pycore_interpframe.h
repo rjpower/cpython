@@ -445,7 +445,8 @@ void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
 
 /* Retire frame and exception owners while preserving a detached result.
  * Code remains owned by the generator. Close/deallocation passes NULL. */
-PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
+PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result,
+                                          uint8_t reason);
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg);

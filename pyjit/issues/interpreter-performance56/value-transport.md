@@ -57,8 +57,7 @@ facts, with no new handler argument, runtime descriptor or frame field.
 | --- | --- | --- |
 | Exact-type guard | Actual current object token and successful guard edge | Exact tuple or list, tied to that token |
 | Index guard | Actual current index token; successful nonnegative and upper-bound edges | Index within this container's current extent |
-| `PyTuple_GET_VALUE` / `PyList_GET_VALUE` | Matching exact-container and bounds facts | Canonical borrowed VALUE, anchored to container argument 0; no owned count, allocation, callback or arena write |
-| `PyValue_XDUP` | Live anchored borrow | Independent owning token with the same representation; nullable remains nullable |
+| `IR_DUP_CANONICAL_ELEMENT` | Matching exact-container, bounds and current anchor facts | Atomic canonical element read plus XDUP; independent owning result, no exposed C borrow or callback |
 | Existing successful NULL guard | Exact current result token | Normal-edge non-NULL refinement only |
 | Actual Storage publication | Live owning result and canonical fact | Existing canonical temporary/recipient store plus the existing action receipt |
 

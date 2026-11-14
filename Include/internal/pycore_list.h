@@ -51,12 +51,15 @@ PyAPI_FUNC(int) PyList_InsertValue(PyObject *list, Py_ssize_t where,
 /* These consume their input on success and failure. */
 Py_VALUE_COMPAT(_PyList_AppendTakeValue)
 PyAPI_FUNC(int) _PyList_AppendTakeRef(PyListObject *self, PyObject *newitem);
+PyAPI_FUNC(int) _PyList_AppendTakeValue(PyListObject *self, PyValue value);
 PyAPI_FUNC(int) _PyList_AppendTakeValueResize(PyListObject *self, PyValue value);
 
 /* As with the existing take API, the caller supplies any required list lock.
-   Capacity already allocated needs no callback or new input reference. */
+   Capacity already allocated needs no callback or new input reference.
+   Interpreter append bodies use this directly; other core callers keep the
+   outlined take API so other translation units retain their call boundary. */
 static inline int
-_PyList_AppendTakeValue(PyListObject *self, PyValue value)
+_PyList_AppendTakeValueFast(PyListObject *self, PyValue value)
 {
     assert(PyValue_IsLanguageValue(value));
     Py_ssize_t n = Py_SIZE(self);

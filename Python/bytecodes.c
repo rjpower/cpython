@@ -1238,7 +1238,7 @@ dummy_func(
 
         inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
             PyValue item = TAKE(v);
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            int err = _PyList_AppendTakeValueFast((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             ERROR_IF(err < 0);
         }
 
@@ -4815,7 +4815,7 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(self_o));
             STAT_INC(CALL, hit);
             PyValue item = TAKE(arg);
-            int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
+            int err = _PyList_AppendTakeValueFast((PyListObject *)self_o, item);
             UNLOCK_OBJECT(self_o);
             if (err) {
                 // arg is consumed even on failure: close the other inputs

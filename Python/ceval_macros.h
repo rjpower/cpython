@@ -105,14 +105,7 @@
  * PyValue_NULL with an exception set. */
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-/* Uniform 64-byte dispatch alignment limits instruction-cache layout
- * sensitivity to unrelated handler size changes. */
-#if _Py__has_attribute(aligned)
-#   define _Py_TAIL_CALL_ALIGN __attribute__((aligned(64)))
-#else
-#   define _Py_TAIL_CALL_ALIGN
-#endif
-#define TARGET(op) Py_NO_INLINE _Py_TAIL_CALL_ALIGN PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+#define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
 
 #define DISPATCH_GOTO() \

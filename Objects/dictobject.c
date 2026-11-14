@@ -1360,6 +1360,28 @@ start:
     return ix;
 }
 
+/* The caller keeps the dictionary and query alive through equality callbacks.
+ * Acquire the result before returning to any input-owner cleanup. */
+static int
+dict_lookup_value(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                  PyValue *result)
+{
+    *result = PyValue_NULL;
+    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
+    Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &value);
+    if (ix == DKIX_ERROR) {
+        return -1;
+    }
+    if (PyValue_IsNull(value)) {
+        return 0;
+    }
+    assert(ix >= 0);
+    assert(PyValue_IsLanguageValue(value));
+    _PyValue_RecheckHome(value);
+    *result = PyValue_DUP(value);
+    return 1;
+}
+
 int
 (_PyDict_GetValue_KnownHash)(PyObject *op, PyValueBorrow key, Py_hash_t hash,
                            PyValue *result)
@@ -1375,20 +1397,8 @@ int
     /* Equality can remove the query's last external owner. Capture the found
      * value before releasing our query pin, which can itself reenter. */
     PyValue query = PyValue_XDUP(key);
-    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
-    Py_ssize_t ix = _Py_dict_lookup((PyDictObject *)op, query, hash, &value);
     PyValue owned = PyValue_NULL;
-    int status = 0;
-    if (ix == DKIX_ERROR) {
-        status = -1;
-    }
-    else if (!PyValue_IsNull(value)) {
-        assert(ix >= 0);
-        assert(PyValue_IsLanguageValue(value));
-        _PyValue_RecheckHome(value);
-        owned = PyValue_DUP(value);
-        status = 1;
-    }
+    int status = dict_lookup_value((PyDictObject *)op, query, hash, &owned);
     PyValue_XCLOSE(query);
     *result = owned;
     return status;
@@ -2038,6 +2048,35 @@ cached_str_hash(PyValueBorrow key)
     return PyUnstable_Unicode_GET_CACHED_HASH(object);
 }
 
+static int
+dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
+{
+    *result = PyValue_NULL;
+    Py_hash_t cached = cached_str_hash(key);
+    if (cached != -1) {
+        /* No Python code can run: the hash is cached and str equality is
+         * native, so the key and the dict need no extra owner. */
+        return _PyDict_GetValue_KnownHash((PyObject *)mp, key, cached, result);
+    }
+    PyObject *dict_owner = Py_NewRef(mp);
+    PyValue query = PyValue_XDUP(key);
+    PyValue value = PyValue_NULL;
+    Py_hash_t hash = _PyValue_Hash(query);
+    int status = -1;
+    if (hash != -1) {
+        status = dict_lookup_value(mp, query, hash, &value);
+    }
+    else if (PyValue_IsObject(query)) {
+        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(query));
+    }
+    /* Hashing and cleanup can remove the inputs' last external owners. Keep
+     * the selected snapshot independent until every local owner is retired. */
+    PyValue_XCLOSE(query);
+    Py_XDECREF(dict_owner);
+    *result = value;
+    return status;
+}
+
 int
 (PyDict_GetValue)(PyObject *op, PyValueBorrow key, PyValue *result)
 {
@@ -2046,29 +2085,7 @@ int
         PyErr_BadInternalCall();
         return -1;
     }
-    Py_hash_t cached = cached_str_hash(key);
-    if (cached != -1) {
-        /* No Python code can run: the hash is cached and str equality is
-         * native, so the key and the dict need no extra owner. */
-        return _PyDict_GetValue_KnownHash(op, key, cached, result);
-    }
-    PyObject *dict_owner = Py_NewRef(op);
-    PyValue query = PyValue_XDUP(key);
-    PyValue value = PyValue_NULL;
-    Py_hash_t hash = _PyValue_Hash(query);
-    int status = -1;
-    if (hash != -1) {
-        status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
-    }
-    else if (PyValue_IsObject(query)) {
-        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(query));
-    }
-    /* Hashing and cleanup can remove the inputs' last external owners. Keep
-     * the selected snapshot independent until every local owner is retired. */
-    PyValue_XCLOSE(query);
-    Py_XDECREF(dict_owner);
-    *result = value;
-    return status;
+    return dict_get_value((PyDictObject *)op, key, result);
 }
 
 int
@@ -4582,7 +4599,7 @@ dict_get_impl(PyDictObject *self, PyValueBorrow key,
 /*[clinic end generated code: output=9d509cf2f3d049dd input=279ddb5790b6b107]*/
 {
     PyValue v;
-    int status = PyDict_GetValue((PyObject *)self, key, &v);
+    int status = dict_get_value(self, key, &v);
     if (status < 0) {
         return PyValue_NULL;
     }

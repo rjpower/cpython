@@ -13,10 +13,14 @@ observer reconstruction contract before removal.
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
-under one architecture. Astra completed the [combined design](design/proposals/interpreter-performance56.md)
-and [critical audit](issues/interpreter-performance56/review.md). Sol workers
-peer the concrete increments and implement them; the coordinator owns
-integration, qualification and selection.
+under one architecture. The next workstream is the reviewed
+[parity design](design/proposals/interpreter-parity58.md), supported by a
+[source/native ledger](issues/interpreter-parity58/research.md) and
+[implementation order](issues/interpreter-parity58/README.md). It extends the
+[combined design](design/proposals/interpreter-performance56.md), with explicit
+coverage gates before claiming the remaining gap is removable. Sol workers peer
+and implement admitted increments; the coordinator owns integration,
+qualification and selection. No round58 runtime change is implemented yet.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while preserving logging performance. Frame clearing is

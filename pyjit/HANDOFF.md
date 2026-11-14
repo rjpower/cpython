@@ -3,9 +3,13 @@
 Canonical documentation is this checkout. Its C source is stale; do not build
 it. Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md),
 [architecture](design/runtime-architecture.md) and [status](STATUS.md). The
-[comprehension plan](issues/comprehensions57/plan.md) owns the active workstream;
-the [candidate design](design/proposals/comprehension-hot-paths57.md) records
-its contracts. Follow [process](PROCESS.md). The coordinator owns integration,
+[parity workstream](issues/interpreter-parity58/README.md) owns the next work;
+its [design](design/proposals/interpreter-parity58.md),
+[research](issues/interpreter-parity58/research.md) and
+[peer review](issues/interpreter-parity58/review.md) are complete. No round58
+runtime implementation or native campaign has begun. The completed
+[comprehension plan](issues/comprehensions57/plan.md) retains round57 evidence.
+Follow [process](PROCESS.md). The coordinator owns integration,
 qualification, measurement and selection.
 
 ## Selected checkpoint and controls

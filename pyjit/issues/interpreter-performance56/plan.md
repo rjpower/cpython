@@ -9,6 +9,14 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
+The next workstream is [interpreter parity58](../interpreter-parity58/README.md).
+Its [reviewed design](../../design/proposals/interpreter-parity58.md) and
+[research ledger](../interpreter-parity58/research.md) replace the isolated
+followup ordering below with a coherent ownership/effect/lowering strategy.
+Round58 is design-complete; implementation and native qualification have not
+started. Selected57 remains the baseline. Preserve the earlier designs and
+rejected experiments as evidence, not as selected implementation.
+
 ## Outcome
 
 Improve the interpreter across DeltaBlue, generators, coroutines, Richards,
@@ -86,7 +94,7 @@ retirement. All ten are now retired; 12 current mirrors retain the goal → plan
 architecture/status chain. Canonical design/review evidence remains in git.
 
 
-## Followup priorities
+## Pre-review followup priorities
 
 Current qualification and selection are complete. The next proposals use
 selected57 counters and the selected56 profiles for unchanged call/resume paths;
@@ -108,7 +116,7 @@ actual native removal, balanced elapsed results and broad regression checks;
 they imply neither a universal runtime call object nor a new frame ABI.
 
 
-## Parallel regression lane and delegation
+## Pre-review regression lane and delegation
 
 Root owns integration, quiet timing and selection. Assign Sol workers disjoint
 proposals for (1) resume/delegated yield, (2) exact-call admission/binding, and

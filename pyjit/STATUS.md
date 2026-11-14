@@ -7,6 +7,16 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 [architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
 direction, selected contracts and exact execution paths.
 
+The next [parity workstream](issues/interpreter-parity58/README.md) has a completed
+Astra [architectural review](design/proposals/interpreter-parity58.md), a
+[source/native ledger](issues/interpreter-parity58/research.md) and
+[coordinator peer review](issues/interpreter-parity58/review.md). The design
+connects demanded materialization, typed effect-bounded lowering, short physical
+regions and call/resume completion. Its remaining-work budget is conditional:
+comprehension instruction parity requires removing 30.38% of selected57's
+instructions, not another small getter improvement. No round58 implementation,
+build or measurement has occurred; selected57 below remains unchanged.
+
 ## Selected checkpoint and performance
 
 Selected57: **0dcba75bb3df40c32137db453b001f7e8f101de0**, branch

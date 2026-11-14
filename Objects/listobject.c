@@ -417,11 +417,12 @@ PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
 
 /* The input owner is consumed on both outcomes. */
 int
-_PyList_AppendTakeValue(PyListObject *self, PyValue value)
+_PyList_AppendTakeValueResize(PyListObject *self, PyValue value)
 {
     assert(PyValue_IsLanguageValue(value));
     Py_ssize_t n = Py_SIZE(self);
-    if (self->allocated <= n && list_resize(self, n + 1) < 0) {
+    assert(self->allocated <= n);
+    if (list_resize(self, n + 1) < 0) {
         PyValue_CLOSE(value);
         return -1;
     }

@@ -2493,6 +2493,7 @@ def validate_element_native_bindings(inst: Instruction) -> None:
         names = (item.name for item in (*part.stack.inputs, *part.stack.outputs, *part.caches))
         if (ELEMENT_NATIVE_SYMBOLS.intersection(names) or
                 any(token.text in ELEMENT_NATIVE_SYMBOLS and id(token) not in calls
+                    or token.kind == "CMACRO_OTHER"
                     or token.kind.startswith("CMACRO") and
                     (re.match(r"\s*#\s*(?:define|undef)\b", token.text) or
                      any(name in token.text for name in ELEMENT_NATIVE_SYMBOLS))

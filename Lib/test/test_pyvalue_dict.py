@@ -470,6 +470,65 @@ class DictValueMutationTests(unittest.TestCase):
 
 
 class DictValueReaderTests(unittest.TestCase):
+    def test_cached_string_query_pins_mixed_table_during_equality(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        query = "cached-string-mixed-table-query"
+        query_hash = hash(query)
+
+        for mode in (0, 2):  # GetValue returns an owner; ContainsValue does not.
+            with self.subTest(mode=mode):
+                holders = []
+                events = []
+
+                class Value:
+                    pass
+
+                class Mapping(dict):
+                    def __del__(self):
+                        self.clear()
+                        events.append("mapping retired")
+
+                class Stored:
+                    def __hash__(self):
+                        return query_hash
+
+                    def __eq__(self, other):
+                        events.append(("query", other))
+                        holders.clear()
+                        gc.collect()
+                        events.append(("alive during equality",
+                                       mapping_ref() is not None))
+                        return True
+
+                    def __del__(self):
+                        events.append({17: "reentered"}.get(17))
+
+                value = Value()
+                value_ref = weakref.ref(value)
+                mapping = Mapping({Stored(): value})
+                mapping_ref = weakref.ref(mapping)
+                holders.extend((mapping, query))
+                del mapping, value
+                # The provider receives borrows from holders without a
+                # call-window owner; equality removes the external owner.
+                status, result = capi.dict_public_value_retirement(holders, mode)
+                self.assertEqual(status, 1)
+                if mode == 0:
+                    self.assertIsNotNone(result)
+                    self.assertIs(result, value_ref())
+                else:
+                    self.assertIsNone(result)
+                self.assertIn(("query", query), events)
+                self.assertIn(("alive during equality", True), events)
+                self.assertEqual(holders, [])
+                gc.collect()
+                self.assertIsNone(mapping_ref())
+                self.assertIn("mapping retired", events)
+                self.assertIn("reentered", events)
+                del result
+                gc.collect()
+                self.assertIsNone(value_ref())
+
     def test_owned_reader_keeps_entry_error(self):
         capi = import_helper.import_module("_testinternalcapi")
         marker = object()

@@ -728,7 +728,7 @@ _PyMethodDescr_CallFast(PyThreadState *tstate, PyMethodDescrObject *method,
 {
     assert(Py_IS_TYPE(method, &PyMethodDescr_Type));
     assert(nargs >= 1);
-    assert(PyValue_TYPE(args[0]) == method->d_common.d_type);
+    assert(PyValue_TYPE(PyValue_Borrow(args[0])) == method->d_common.d_type);
     int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
     if (flags == METH_FASTCALL) {
         /* Object methods retain the adapter's boxes and borrow scope. */

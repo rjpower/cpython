@@ -179,6 +179,8 @@ class CanonicalElementTests(unittest.TestCase):
                 "PyObject * const PyValue_AsKnownObjectBorrow = replacement;",
                 "PyObject *(*PyValue_AsKnownObjectBorrow)(PyValueBorrow) = replacement;",
                 "volatile Py_ssize_t (*PyList_GET_SIZE)(PyObject *) = replacement;",
+                '#include "alias.h"\n',
+                '#pragma push_macro("hidden_alias")\n',
                 "#define PyValue_AsKnownObjectBorrow replacement\n"):
             with self.subTest(declaration=declaration), self.assertRaises(SyntaxError):
                 self.emit(source.replace(prefix, prefix + declaration, 1), "FOR_ITER_LIST")

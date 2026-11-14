@@ -8412,7 +8412,7 @@
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
-                int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
+                int err = _PyList_AppendTakeValueFast((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
                     PyValue tmp = self;
@@ -10613,7 +10613,7 @@
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 call_clear_owned_slots(window, 2, 1, CALL_TRANSACTION_VECTOR, call_state);
-                int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
+                int err = _PyList_AppendTakeValueFast((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
                 if (err) {
                     PyValue tmp = self;
@@ -18271,7 +18271,7 @@
             PyValue item = IR_TAKE(v, ir_own_B);
             frame->phase_state = 0;
             frame->phase_state = 0;
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            int err = _PyList_AppendTakeValueFast((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             if (err < 0) {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);

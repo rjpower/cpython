@@ -29,7 +29,11 @@ PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 /* A borrow rooted by the list. Retain it (PyValue_DUP()) before a mutation
    can remove its owner. Internal, like every function that returns a
    PyValueBorrow: the operations that read or retain one are internal. */
-PyAPI_FUNC(PyValueBorrow) PyList_GET_VALUE(PyObject *op, Py_ssize_t index);
+static inline PyValueBorrow
+PyList_GET_VALUE(PyObject *op, Py_ssize_t index)
+{
+    return PyValue_Borrow(_PyList_CAST(op)->ob_item[index]);
+}
 #define PyList_GET_VALUE(op, index) \
     PyList_GET_VALUE(_PyObject_CAST(op), (index))
 

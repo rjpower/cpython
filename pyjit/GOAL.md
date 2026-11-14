@@ -26,9 +26,12 @@ facts survive lowering and native boundaries.
 
 Start here, then read the active plan, [architecture](design/runtime-architecture.md)
 and [status](STATUS.md). Status distinguishes selected, measured and experimental
-source. Selected56 is the incremental golden checkpoint; golden54 remains immutable.
-The [current report](issues/interpreter-performance56/report.md) records accepted
-broad regressions and the remaining upstream gap. The [model55 report](issues/call-model55/report.md)
+source. Selected57 adds dictionary provider cleanup and lifetime repair;
+golden56 and golden54 remain immutable comparison points.
+The [current report](issues/comprehensions57/report.md) records the rejected
+comprehension optimizations, isolated dictionary repair and remaining upstream
+gap. The [selected56 report](issues/interpreter-performance56/report.md) retains
+its accepted broad regressions. The [model55 report](issues/call-model55/report.md)
 retains its measured results and unresolved qualification; its pending ownership
 and exception-transfer components are inputs to the combined plan, not an
 independent requirement to finish every old experiment first.

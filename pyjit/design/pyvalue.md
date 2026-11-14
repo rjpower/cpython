@@ -225,6 +225,37 @@ return uses outlined full-extent cleanup for retained scratch. Logical
 current NULL-control storage policy remains. See the call/frame contract for
 exceptions, frame escape, child overlap and initialized arena storage.
 
+### Dictionary reader callbacks
+
+Internal dictionary value readers protect their dictionary and query across
+callback-capable lookup, then acquire a found result before retiring those
+input pins. Public readers validate at entry; typed `dict.get` enters the same
+provider below that validation. One lookup/result-acquisition helper requires
+its caller to supply the dictionary/query lifetime, avoiding nested scopes on
+the general path. Callers still owe borrowed inputs their ordinary valid lifetime.
+A cached exact-string hash proves only that hashing needs no callback. In a
+mixed GENERAL table, a stored custom key's equality can execute Python. The
+callback-free shortcut therefore also requires a Unicode-only table under the
+GIL. GetValue and ContainsValue use the same admission rule; free-threaded code
+uses the scoped route without an unlocked table-kind read. The
+[round-57 report](../issues/comprehensions57/report.md) records the isolated
+repair and its qualification, separately from rejected speed changes.
+
+```mermaid
+flowchart TD
+    reader[Validated dictionary and query] --> admit{Cached exact string and Unicode-only table under GIL?}
+    admit -->|yes| direct[Native comparison and result acquisition]
+    admit -->|no| pin[Pin dictionary and query]
+    pin --> lookup[Hash and compare with callbacks allowed]
+    lookup --> acquire[Acquire found result owner]
+    acquire --> release[Release input pins]
+    direct --> done[Return result or membership status]
+    release --> done
+```
+
+Membership has no result owner to acquire. Error paths preserve the active
+exception through cleanup. Cached hashes are not lifetime or effect proofs.
+
 ## Storage and collection
 
 | Home | Current representation |

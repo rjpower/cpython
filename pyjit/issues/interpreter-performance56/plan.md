@@ -1,8 +1,10 @@
 # Interpreter performance: combined plan
 
-Status: selected56 is landed after architecture review, implementation, peers,
-merged qualification and direct measurement. This is the active successor
-to model55. Read the [design](../../design/proposals/interpreter-performance56.md)
+Status: selected57 adds dictionary provider cleanup and lifetime repair to
+selected56 after peer review, focused qualification and direct measurement.
+The [current report](../comprehensions57/report.md) records the small broad gain,
+accepted losses and rejected larger composition. This active stage succeeds
+model55. Read the [design](../../design/proposals/interpreter-performance56.md)
 and [critical audit](review.md), then the experiments below. The [goal](../../GOAL.md),
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
@@ -69,8 +71,8 @@ instruction ratios are clues, not additive removable cycle budgets.
 
 Each integration reports what work disappeared and its hot-set result. Use
 larger confirmation only when the initial evidence warrants it; run all 29 and
-matched upstream profiles for final selection. Keep golden54 if no qualified
-composition improves the result. Startup RSS and zero-box counts are not gates.
+matched upstream profiles for final selection. Retain the current golden if no
+qualified composition earns selection. Startup RSS and zero-box counts are not gates.
 
 ## Documentation cleanup
 
@@ -86,8 +88,9 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Followup priorities
 
-Current qualification and selection are complete. The next proposals use the
-current883 profiles; no new implementation is part of checkpoint closure.
+Current qualification and selection are complete. The next proposals use
+selected57 counters and the selected56 profiles for unchanged call/resume paths;
+no further implementation is part of checkpoint closure.
 The [independent cold review](review-integration.md) ranks five followups:
 
 | Priority | Hypothesis and first evidence gate |
@@ -134,11 +137,17 @@ profile samples into an additive savings budget.
 
 ## New comprehension evidence
 
-The [focused diagnosis](comprehensions-analysis.md) adds a concrete ordinary-path
-lane: specialized native methods currently re-enter generic value dispatch;
-list iteration loses canonical result facts; list append always calls out.
-The workload executes fewer inner-loop opcode words than upstream but 46.44%
-more native instructions overall. Prioritize checked method entry and canonical
-FOR_ITER_LIST transport alongside the resume/call lanes, then measure append
-fast-path placement. Avoid assuming any one item closes the 33.7% gap or restoring
-the rejected getter-inline patch without a new broad result.
+The [focused diagnosis](comprehensions-analysis.md) identified repeated method
+redispatch, dictionary wrappers, lost list result facts and unconditional append
+calls at golden56. Its workload executed fewer inner-loop opcode words than
+upstream but 46.44% more native instructions. Those concrete costs motivated
+the four-lane experiment, rather than establishing that any one fix would close
+the gap. Selected57 still executes 43.64% more comprehension instructions.
+
+The [comprehension workstream](../comprehensions57/plan.md) is complete. All four
+changes were implemented and the composition qualified and measured, but logging and
+coroutine regressions prevent selecting it. Selected57 retains only the shared
+dictionary provider and callback-lifetime repair; its small broad mean benefit
+comes with explicit coroutine/raytrace and generator debt. Golden56 stays frozen.
+The [report](../comprehensions57/report.md) and
+[tables](../comprehensions57/benchmark-tables.md) own current comparisons.

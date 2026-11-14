@@ -1,180 +1,153 @@
 # Coordinator handoff
 
-Canonical documentation is this checkout on `weaver/python-jit`; its C source
-is stale and must not be built. Start [goal](GOAL.md) →
-[active plan](issues/interpreter-performance56/plan.md) →
-[architecture](design/runtime-architecture.md) / [status](STATUS.md).
-Follow [process](PROCESS.md). Do not restart completed runtime integration.
+Canonical documentation is this checkout. Its C source is stale; do not build
+it. Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md),
+[architecture](design/runtime-architecture.md) and [status](STATUS.md). The
+[comprehension plan](issues/comprehensions57/plan.md) owns the active workstream;
+the [candidate design](design/proposals/comprehension-hot-paths57.md) records
+its contracts. Follow [process](PROCESS.md). The coordinator owns integration,
+qualification, measurement and selection.
 
-## Selected checkpoint
+## Selected checkpoint and controls
 
-Selected56 is **883524c180e4486b47df77ee2276c9276c0ec32c**, branch
-`pyjit/round56-golden`, tag `pyjit-golden-20261113-interpreter-performance`.
-I is BASE/worktrees/call55-integrated, branch `pyjit/call55-integrated`, clean
-at that head. Builds are BASE/call55-integrated-{release,debug}. Do not build C.
-Astra's architecture/audit6036 was integrated as bd32753 and refined8cc069;
-no new Astra inner-loop review is needed. Sol component peers and an independent
-cold reviewer completed source/selection review.
+Selected57 is `0dcba75bb3df40c32137db453b001f7e8f101de0`, branch
+`pyjit/round57-golden`, tag `pyjit-golden-20261114-dictionary-readers`.
+The [report](issues/comprehensions57/report.md),
+[tables](issues/comprehensions57/benchmark-tables.md) and
+[cold review](issues/comprehensions57/review.md) record selection and debt.
+Golden56 remains immutable: commit
+`883524c180e4486b47df77ee2276c9276c0ec32c`, branch `pyjit/round56-golden`, tag
+`pyjit-golden-20261113-interpreter-performance`.
 
-Read the [report](issues/interpreter-performance56/report.md),
-[all tables](issues/interpreter-performance56/benchmark-tables.md) and
-[plan](issues/interpreter-performance56/plan.md). Root explicitly accepts five
-broad regressions for the mostly-better incremental checkpoint; golden54 is
-preserved unchanged as rollback/comparison. No parity or universally faster claim.
+Current I is `0dcba75bb3df40c32137db453b001f7e8f101de0` in
+`BASE/worktrees/call55-integrated`, branch `pyjit/comp57-dictionary-candidate`.
+Its range from golden56 contains only the dictionary reader cleanup, mixed-table
+cached-string lifetime repair and tests. Both `comp57-dictionary` builds complete
+117 modules/79 extensions; 28 focused reader methods and 203 methods across
+three dictionary modules pass per role (overlapping coverage). Native capture:
+E55/comp57-dictionary-native, SHA256
+`db38aeb4ab220e89d0b32a213fa69a8f51c397e8dd47736ec555c8a81a487fe2`.
+All timing and PMU campaigns are complete and validated under
+E57/dictionary-measurement. All29 is .995586/golden56 and 1.127137/upstream;
+the upstream two-pair aggregate includes large XML outliers. Root explicitly
+accepts six-pair coroutine/raytrace losses of about 2% and the generator mean
+loss with its wide range. Comprehensions and DeltaBlue are near flat. No native
+job remains active. Do not repeat measurements to find a favorable result.
 
-### Qualification and native identity
+The initial composition `9ec291998f7395fedf21f456e5eb58c2187d2e23` is preserved
+on `pyjit/comp57-qualified-initial`, with retained `comp57-final2` evidence.
+Full release at `3235a266f14` and debug at `9ec` each execute 55,045 tests. Release found the six baseline debugger errors plus one assertion-lint
+failure; the explicit-borrow correction passes its final release focused check.
+It changes no release instruction: final `.text` matches the measured `70a`
+composition byte for byte. Debug's only errors are the same six debugger cases.
+Final verbose checks match their names exactly in both roles. Five bootstrap
+images and 27 compile probes pass. Only GDB `PrettyPrintTests` is quarantined.
+Qualification retains these baseline limits; no green full-suite claim.
 
-Runtime composition includes scalar graph/owner receipts, exact-tuple CALL_EX,
-direct native completion entries, generator recipient admission, SHAPE PIC,
-canonical container transport and exact-coroutine transfer. The logical-vacancy
-repair0dcc→dab1 changes five consumers without granting NULL/read authority.
-Fixture/generator repairs end at cb3; final 883 changes only LLTrace expectations.
+Evidence: E55/comp57-final-release-release-full.log,
+comp57-final2-debug-debug-full.log, comp57-final2-lint-release-focus.log,
+comp57-final2-freezer-commands.json and E57/final-debugger-baseline.json.
+Initial `9ec` release ELF: E55/comp57-final2-native/python, SHA256
+`57ffcfa3e292913294909d8a485208368bd8d37439b43db45deb8f7f1f8cabf0`.
 
-Coherent full cb3 release/debug each run 55,023 tests, no crash. Release 588 modules
-OK with only six sys_settrace errors; debug 587 with the same six plus stale
-LLTrace. Final 883 debug LLTrace 3 pass; release 3 skip. Final 484-method debugger
-checks per role reproduce exactly the six baseline failures. Five bootstrap
-images, 27 compile probes/freezer build and both 117/79 module builds pass.
-Full regeneration is product-byte-identical. No new quarantine; GIL-only.
+Four reviewed changes were integrated: checked native method entry, shared
+dictionary lookup layers, checked private list iteration, and inline spare
+capacity append. The preceding two-lane composition had a logging regression;
+the four-lane composition also loses and is rejected.
+The uniform 64-byte handler alignment trial was rejected and reverted. Its
+separate branch `pyjit/comp57-alignment-trial` at `cd0` is retained as evidence.
+See the [workstream plan](issues/comprehensions57/plan.md) for the measured
+screens and next gates. The interpreter-local append trial `0748` remains on
+`pyjit/comp57-integrated`: 172 focused methods pass per role, but its screen
+loses logging 21.16%, coroutines 3.30% and Richards 3.66% despite a 7.30%
+comprehension gain. Its ELF is E55/comp57-local1-native. It is rejected too.
 
-Evidence: E56/qualification56/{check.py,commands.json,
-final-fixture-identity.json,final-debugger-baseline.json}; full logs
-E55/perf56-closure56-{release,debug}-{release,debug}-full.log. Final native:
-E55/perf56-final56-native/python, SHA256
-`2f46bcc126b8857095bd8b25a9256ad0f76fe65667e023e96edd4d7acd21f4cc`.
-Final build/trace/jump/freezer commands use E55/perf56-final56-*.
-Preserve the earlier failed qualification attempts; report explains repairs.
+The frozen golden56 control is
+`BASE/worktrees/round56-golden`, branch `pyjit/round56-golden`, with build
+`BASE/round56-golden-release`; its module record is
+`E57/control-retry-build.log` (117 modules, 79 extensions). Do not modify this
+control. Root owns all native jobs and serialized quiet timing windows.
 
-### Measurement
+Retain the earlier comparison controls as well:
 
-All final campaigns use883 with stable source/native identities:
-E56/closure56-all29-{golden,upstream} (116 commands each),
-closure56-confirm7-golden (84), closure56-perf-stat (24),
-closure56-perf-record (8). E56/final-measurement/{check.py,commands.json,
-analyze.py,numbers.json} owns execution and derived tables.
-Geomean .984655/golden,1.141077/upstream. Six focus cases win every confirmation
-pair; Raytrace loses every pair. Ratios/ranges are not confidence intervals.
-
-E56/regression-diagnostic records 18 golden/candidate stat commands and 6 profiles;
-its isolated capture.py is peer-approved, source hash85751251…195b2cac.
-Raytrace instructions/cycles1.020394/1.039664; spectral_norm.972709/1.024014;
-nqueens1.015206/1.039182. More work does not explain every regression; exclusive
-cause remains open. Do not reuse modified inputs for sealed campaign validation.
-
-Historical82e libc-copy attribution is under
-E56/qualification56/libc-profile-analysis; its isolated symfs uses retained ELF,
-not current native. All109 samples at libc0x19846d unwind to zero-filled created-
-generator scratch. Do not transfer its 4.33% attribution to current profiles.
-Current and historical ELFs, failed experiments and source branches are retained.
-
-The rejected inline-list accessor is reverted; no diagnostic counters remain.
-The closed COPY-web census is E56/multi-use-borrow-census. Conditional as-built
-patches were applied on selection; canonical designs now describe selected56.
-Full M4, bitmap readers and IRSC2 remain separate unfinished qualification gates.
-
-Next work follows the five prioritized hypotheses in the active plan, with a
-parallel accepted-regression lane. No native job remains active at handoff.
-Root owns merged qualification/selection; workers propose/peer/implement small
-increments and use focused tests before a coherent full gate.
-
-## Controls
-
-BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
-E55=`BASE/pyjit-link-wave1/call-model55`.
-E56=`BASE/pyjit-link-wave1/interpreter-performance56`.
-One GCC15.2 configuration, CPU15, hash0, JIT disabled. Preserve these controls:
-
-| Role | Source under BASE/worktrees | Build under BASE | Head |
+| Role | Source worktree | Build | Modules / extensions |
 | --- | --- | --- | --- |
-| Golden54 | frame54-cold-construction | frame54-cold-construction-{release,debug} |61015a9452d9069646fb5fede9ff963896833b89 |
-| Prior51 | round51-golden | round51-golden-{release,debug} |0e5e61f4c6bc820f2dd1a5f9ee6f7f1768834254 |
-| Upstream | upstream-3a440b6 | upstream-release-devlibs-3a440b6 |3a440b65695615e9fd9912342b79cdd54fced0d2 |
+| Golden54 | `R/frame54-cold-construction` | `BASE/frame54-cold-construction-{release,debug}` | 117 / 79 |
+| Prior51 | `R/round51-golden` | `BASE/round51-golden-{release,debug}` | See round-56 report |
+| Upstream | `R/upstream-3a440b6` | `BASE/upstream-release-devlibs-3a440b6` | 116 / 78 |
 
-Golden54 modules117/79, upstream116/78. Control module logs:
-`BASE/pyjit-link-wave1/frame-state54/cold-construction-initial-release-build.log`
+Golden54 remains immutable at `61015a9452d9069646fb5fede9ff963896833b89`;
+upstream is `3a440b65695615e9fd9912342b79cdd54fced0d2`. Their comparison logs
+remain under `BASE/pyjit-link-wave1/frame-state54/cold-construction-initial-release-build.log`
 and `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log`.
 
-## Frozen implementation and evidence
+## Work and evidence locations
 
-| Source under BASE/worktrees | Branch / head | Native state and next gate |
+`BASE` is `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`;
+`R` is `BASE/worktrees`. Evidence roots are `E55=BASE/pyjit-link-wave1/call-model55`,
+`E56=BASE/pyjit-link-wave1/interpreter-performance56`, and
+`E57=BASE/pyjit-link-wave1/comprehensions57`.
+
+The initial `9ec` campaigns are complete: E57/final-measurement/{numbers.json,
+benchmark-tables.md} validates all 29/control (two pairs each), hot-nine/golden
+(six pairs), and upstream/golden PMU. All-29 elapsed is 1.001784/golden56 and
+1.144639/upstream; do not promote it. Silent logging and coroutines regress in
+every confirmation pair despite unchanged instruction counts versus golden.
+The six-event frontend diagnostic failed with all counters not counted; retain
+its failure and make no cache-specific claim. The local-append trial also loses;
+do not repeat full qualification or run arbitrary padding/alignment sweeps.
+The minimal correctness-only `72ee` branch is preserved at
+`pyjit/comp57-golden-candidate`, with E55/comp57-correctness-native. Its all29
+is flat, but DeltaBlue loses 6.94% in confirmation, reproduced by four diagnostic
+pairs. E57/correctness-measurement retains validated timing and diagnostic
+numbers/tables. The selected dictionary-only subset removes nested lookup/pin
+layers as well; no further candidate or layout sweep follows this closure.
+Its matched upstream instruction ratios are DeltaBlue 1.361424, comprehensions
+1.436416 and coroutines 1.307831. Full tables and hashes remain in
+dictionary-measurement.
+
+Existing component worktrees and branches are retained:
+
+| Worktree | Branch | Head |
 | --- | --- | --- |
-| call55-integrated | pyjit/call55-integrated /883524c180e | Selected56; full diagnostics and final direct timings complete, six baseline debugger errors remain. |
-| call55-bitmap | pyjit/call55-bitmap /0e918ddc25b | Both 117/79 builds. Release 34 focused pass; debug HomeRead and monitor/profile failures remain. No timing. |
-| call55-ir | pyjit/perf56-absence-facts /0dccdf84069 | Vacancy fix source reviewed/integrated; generated-case closure complete in I. Prior value-replay e61a and IRSC2 branch3cfc retained. |
-| call55-pins | pyjit/perf56-coro-await-transfer /a852d11faf6 | Recipient, fixture and await packets integrated; focused native checks pass in I. Retained-EH80b preserved on pyjit/call55-frames-retained. |
-| call55-gc | pyjit/perf56-inline-list-borrow /4a591c4b168 | Getter experiment rejected/reverted in I after repeated coroutine regression; prior PIC5976 and monitor/EH branches preserved. |
+| `R/call55-ir` | `pyjit/comp57-local-append` | `20d149b1163` |
+| `R/call55-pins` | `pyjit/comp57-checked-method` | `6987a396f83` |
+| `R/call55-gc` | `pyjit/comp57-dict-only` | `0dcba75bb3d` |
 
-Historical measured I8232: E55/scalar-storage-hot-screen-{golden,upstream}; stable
-identities/no errors. E55/scalar-storage-{release,debug}-build.log has117/79;
-runtime checks23 and admission233 per role; freezer5+27 passes. Retained ELF
-E55/scalar-storage-native SHA256
-2aba9d15fc2092083917d8998083a59cf4e3d038c131801084b2c9b49827223a.
-The [report](issues/call-model55/report.md) owns pair ranges and earlier evidence.
+Use I for integration; worker branches are component packets without every root
+compile correction. Preserve them, old golden controls and all retained outputs.
+Prior `pyjit/comp57-list-paths` at `c04e0503353` and `pyjit/comp57-dict-read`
+at `015e2e3bcc9` remain intact. Do not treat them as selected runtime code.
+The bitmap `0e918`, IRSC2 and M4 experiments are independent and remain
+experimental; they are not requirements for this workstream. The
+[call-model55 report](issues/call-model55/report.md) and
+[round-56 report and tables](issues/interpreter-performance56/report.md) own
+their historical details and qualification evidence.
 
-VALUE source007069 → I0df398, repair5e623 → Iccb96. Root full host gates:
-E55/scalar-results-host (Storage.copy KeyError val), retry (full cases PASS,
-metadata empty-PUSH_NULL family IndexError). Source peer3cfc808 fixes only
-that empty family; new I1413a9 full-host gate passes.
-Do not include IRSC2 just to pick up this isolated fix.
+## Native work rules
 
-IRSC2 static packet order:071d1ef3c09,4c646c88ae4,9c297510ac3. It contains
-compiler identities, ID-only recovery, explicit retained/protocol homes,
-32-byte cold HomeView and static runtime/readers/tooling/fixtures. Magic64423;
-IRSC2 header24B, recovery rows16B; no old nonempty fallback. Static handler
-entry remains honest CONTROL3; the bitmap adaptation uses actual presence2.
-Hot static frame112B and roots40B do not grow. Full maps and arbitrary
-allocation remain incomplete. P80b is the separate presence-provider runtime;
-never replace whole shared headers across those providers. Source reviews and
-Clinic/AST checks passed, not full generation or native qualification.
+Use the existing helpers in `issues/call-model55` for native commands,
+builds and qualification. Host Python commands use
+`UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`. Keep build
+and generation jobs serialized. During a quiet timing window, workers may read
+or edit source but must stop host tests and heavy jobs; never mutate the measured
+tree. Require exact source and native identities, stable workloads, matched
+configuration and balanced campaign pairs.
 
-B stale-reader integration corrected native-entry capability, delete protocols,
-reused frame-base initialization, missing bitmap-header build dependency,
-LIST/TUPLE cursor deoptimization and a debug-only raw absence assertion.
-E55/bitmap-assert-closure-* builds both roles at 0e918. Current focused evidence:
-E55/bitmap-reader-fixtures-corrected-*; release34PASS, debug other four modules
-pass but HomeRead aborts at LOAD_COMMON_CONSTANT in a constructed template.
-Earlier E55/bitmap-stale-lifecycle-release-focus.log reports 480 tests, seven
-modules pass, monitoring/profile fail. Do not call it617PASS. Source diagnosis
-suggests optional CALL self roles are lost by renamed C inputs; actual first
-GDB diagnostic is still needed. GC's proposed reconstruction uses the current
-uop's declared logical input position, not a nullable waiver.
+Do not reuse a runner with an embedded old source identity. Retain native ELF
+and disassembly before advancing builds. Startup RSS is not a throughput gate.
+The existing six debugger-jump errors are baseline limits; the GDB `PrettyPrintTests`
+class remains the sole quarantine. Do not describe either as a green full suite.
 
-## Native execution
+## Documentation and preservation
 
-Host scripts: `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
-Root alone runs full generation, native builds/tests, GDB, profiles and timing.
-Use E55 [run-checks.py](issues/call-model55/run-checks.py),
-[check-freezer.py](issues/call-model55/check-freezer.py) and
-[capture-native.py](issues/call-model55/capture-native.py) for durable manifests.
-Full generation includes global labels. Candidate build preflights must match
-clean source, native identity, magic, source Lib and strict module counts.
-Header changes must invalidate all consumers; PYTHON_HEADERS now includes
-pycore_home_bitmap.h in B.
+Keep the active chain clear: goal → workstream plan → architecture/status.
+Historical reviews and experiment reports remain linked references, not active
+plans. Update the plan and status when qualification or selection changes.
+Publish canonical docs before guarded Loom mirrors and verify exact readback;
+the artifact root is `http://127.0.0.1:7878/s/xzzlxx17/artifacts/`.
 
-Serialize native/generation jobs. During quiet timing, workers may read/edit
-source but must stop host tests and heavy jobs; never mutate the measured tree.
-Use immutable controls, unchanged workloads and stable before/after identities.
-Do not multiply independent campaign ratios. Full suites belong at coherent
-representation gates. Only existing GDB PrettyPrintTests is quarantined.
-The selected/full-diagnostic limits are in status and the current56 report;
-round54's report retains the baseline limits.
-
-The new PMU wrapper pyjit/issues/call-model55/capture-checkpoint-perf.py requires a complete all 29
-repeat campaign and explicit exact candidate head. Do not reuse an old wrapper
-with an embedded source identity. Retain ELF/disassembly before advancing builds.
-Startup RSS is not a throughput gate. Reuse established storage/caches; do not
-remove controls or another task's worktrees and outputs.
-
-## Publication and preservation
-
-Push committed canonical docs before guarded Loom mirrors and verify exact
-readback. Artifact root is `http://127.0.0.1:7878/s/xzzlxx17/artifacts/`.
-The active chain is goal → plan → architecture/status; historical reviews and
-progress pages are not separate active plans. Cleanup keeps evidence in git
-history and retained experiment outputs. Do not mark experimental source golden.
-
-Authenticated publication uses gh's HTTPS credential helper without changing
-origin. Preserve unrelated preexisting files
+Preserve unrelated pre-existing files:
 `pyjit/bench/results/checkpoint-6a0e4c12c17.md`,
-`pyjit/issues/checkpoint-closure/ctypes-rawpin-build.log` and
+`pyjit/issues/checkpoint-closure/ctypes-rawpin-build.log`, and
 `pyjit/issues/checkpoint-closure/w5-release.lock`.

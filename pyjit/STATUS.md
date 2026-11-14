@@ -1,47 +1,62 @@
 # Project status
 
-Current work is [stage2 interpreter performance](issues/interpreter-performance56/plan.md):
-one combined architecture for value transport, borrowing, calls/returns and
-specialization. Astra completed its [combined design](design/proposals/interpreter-performance56.md)
-and [audit](issues/interpreter-performance56/review.md); implementation and peer review are complete for the current composition;
-root qualification, measurement and incremental selection are complete.
-The [goal](GOAL.md) and [architecture](design/runtime-architecture.md) define
-the project; [HANDOFF](HANDOFF.md) owns exact execution state.
+Current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
+The [comprehension workstream](issues/comprehensions57/plan.md) is complete:
+select the dictionary-only cleanup and lifetime repair; reject the larger
+method/list composition and its losing revisions. The [goal](GOAL.md),
+[architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
+direction, selected contracts and exact execution paths.
 
-## Selection and performance
+## Selected checkpoint and performance
 
-Selected56: **883524c180e4486b47df77ee2276c9276c0ec32c**, branch
-`pyjit/round56-golden`, tag `pyjit-golden-20261113-interpreter-performance`.
-Golden54 remains immutable at `61015a9452d9069646fb5fede9ff963896833b89`.
+Selected57: **0dcba75bb3df40c32137db453b001f7e8f101de0**, branch
+`pyjit/round57-golden`, tag `pyjit-golden-20261114-dictionary-readers`.
+Golden56 `883524c180e4486b47df77ee2276c9276c0ec32c` and golden54
+`61015a9452d9069646fb5fede9ff963896833b89` remain immutable.
 
-Direct all-29 comparisons give **.984655/golden54** (17 wins) and
-**1.141077/upstream** (seven wins). In six-pair confirmation, all six focus
-workloads improve in every pair: Richards .712389, silent logging .904529,
-generators .951182, DeltaBlue .981856, comprehensions .983860, coroutines .990377.
-Raytrace regresses 4.50% in every pair. Broad spectral_norm/nqueens regress
-about 3.5%, XML iterparse 2.7% and chaos 2.5%. Root accepts these unresolved
-losses for an incremental landing, explicitly overriding the audit's suggested
->2% promotion tripwire, with independent selection review. This is not parity.
+Dictionary lookup/result acquisition share one implementation below public
+validation and typed `dict.get`. Arbitrary callbacks retain dictionary/query
+pins; results are acquired before input cleanup. Cached exact-string shortcuts
+also require a Unicode-only table under the GIL: mixed-table equality can run
+Python. Both GetValue and ContainsValue use that admission rule. No method,
+list, generator, frame or IR changes from the rejected composition are selected.
 
-Matched upstream native instruction ratios are 1.361430 for DeltaBlue,
-1.411083 for generators and 1.307831 for coroutines. More common-path work
-remains; historical generator-copy zeroing is identified but cannot explain
-the entire gap. [Report](issues/interpreter-performance56/report.md) and
-[complete tables](issues/interpreter-performance56/benchmark-tables.md) own
-ratios, ranges, diagnostic profiles and selection rationale.
+The direct all-29 observed means are **.995586/golden56** (16 wins) and
+**1.127137/upstream** (six wins). These are two-pair aggregates, not precise or
+statistically established speedups; the upstream XML iterparse pairs have
+large opposing outliers. In separate six-pair confirmation, comprehensions
+.997484, DeltaBlue 1.000239 and logging .992049 are near flat with mixed pairs.
+Richards .991167, spectral_norm .931732 and nqueens .987729 improve in every pair.
+Root explicitly accepts coroutines 1.019635 and raytrace 1.020117 losses in every
+pair. Generators 1.024797 has a wide .992243–1.119177 range and remains debt too.
+This is a correctness/abstraction checkpoint with a small broad benefit, not
+parity. The [report](issues/comprehensions57/report.md),
+[complete tables](issues/comprehensions57/benchmark-tables.md) and
+[cold review](issues/comprehensions57/review.md) own evidence and selection.
+Matched upstream counters still show 36.14% extra native instructions in
+DeltaBlue, 43.64% in comprehensions and 30.78% in coroutines. More common-path
+work remains; frame clearing alone does not explain those instruction gaps.
 
-Coherent full release/debug at cb3 each execute 55,023 tests with no crash.
-Release has only six baseline debugger-jump errors; debug additionally found
-one stale LLTrace assertion. Final883 changes only that fixture, with identical
-runtime sources: all three debug trace methods pass; release skips them. Final
-verbose sys_settrace checks reproduce the same six baseline errors per role.
-Both builds complete 117 modules/79 shared; regeneration, five bootstrap images
-and 27 compile probes pass. No green full-suite claim is made. GIL qualification
-only; existing GDB PrettyPrintTests remains the sole quarantine.
+Both final builds complete 117 modules/79 shared extensions; all 203 methods
+across three dictionary modules pass per role. The 28 focused reader methods
+also pass and overlap that coverage. No generated protocol changed. Selected56
+supplies the inherited coherent full-system checkpoint; no fresh full 55k run
+is claimed for this two-file successor. The rejected four-lane composition ran
+55,045 tests per role, retaining six baseline debugger errors and closing one
+release assertion-lint finding. Only GDB PrettyPrintTests remains quarantined;
+qualification is GIL-only. See the report for exact heads and limits.
 
-The inline-list experiment is rejected/reverted after a 10.7% coroutine
-regression despite removing its native call/spills. The initial COPY-web census
-found zero eligible surviving candidates; no speculative pass was added.
+The rejected composition reduced comprehension instructions 4.8% but lost
+logging 13.2% and coroutines 4.6% in confirmation. Uniform handler alignment and
+interpreter-local append also lost. The minimal lifetime-only repair retained
+6.9% DeltaBlue and about 3% comprehension regressions in its last diagnostic despite
+near-identical instruction counts. All source, native captures and results are
+preserved; no further layout or padding sweep is planned.
+
+The [selected56 report](issues/interpreter-performance56/report.md) retains
+its earlier 1.53% aggregate gain over golden54 and accepted regression debt.
+Bitmap, IRSC2 and full static scratch authority remain independent unfinished
+gates. Native method and tracing JIT tiers remain unfinished.
 
 ## Implemented architecture
 

@@ -1,18 +1,19 @@
 # Activation transfers
 
-Selected runtime: golden54 `61015a9452d9069646fb5fede9ff963896833b89`.
-This document describes its call, construction and resume boundaries. The
+This document describes the selected call, construction and resume boundaries;
+[status](../STATUS.md) records the selected identity and qualification. The
 [frame ABI](call-and-frame-lifetimes.md), [register IR](register-ir.md) and
 [interpreter](interpreter.md) define storage, encoding and observation in detail.
 Round53's [report](../issues/activation53/report.md) and
 [review](../issues/activation53/astra-review.md) record rejected alternatives;
-none changes this selected contract. Golden54 adds only the public C-constructor
-repair below. The [active performance plan](../issues/interpreter-performance56/plan.md)
-reviews successor contracts separately from implemented behavior.
+none changes this selected contract. The public C-constructor repair remains
+separate from ordinary creation. The [active performance plan](../issues/interpreter-performance56/plan.md)
+distinguishes implemented increments from remaining successor work.
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-reviewed successor work; they do not upgrade the selected implementation.
+the architecture and its review. The selected56 subset is described here;
+remaining storage-authority and borrowing proposals are identified in status.
 
 ## Ordinary calls and returns
 
@@ -33,7 +34,7 @@ flowchart TD
     init --> enter[Save recipient and continuation; link child]
     enter --> dispatch[Dispatch child in the same evaluator]
     dispatch --> result[Hold canonical result owner]
-    result --> retire[Unlink child; clear locals; release reservation]
+    result --> retire[Unlink child; retire required homes; release reservation]
     retire --> publish[Publish to actual caller recipient]
     publish --> close[Retire displaced owner]
     close --> resume[Reload callback-selected continuation and dispatch]
@@ -47,6 +48,10 @@ temporary moves its owner; returning a named local currently duplicates it befor
 frame retirement, since an exposed frame can retain that local. Ordinary return
 publishes inline. It does not enter the generator-completion adapter or normalize
 an already canonical result through the generic value bridge.
+Certified `RETURN_VALUE_EMPTY` clears thread bindings only. General
+`RETURN_VALUE` uses the outlined full-extent cleanup, including retained scratch;
+both protect the result, executing code and reservation through callbacks and
+frame-object takeover.
 
 The caller's instruction cursor records the executed call while its separate
 return PC records future control. A finalizer may expose the caller, install
@@ -59,8 +64,13 @@ events from this semantic state.
 
 The selected path constructs a temporary thread frame using the existing binder
 and initializer. Any creation prefix executes normally. RETURN_GENERATOR allocates
-the generator/coroutine object, moves the header and every physical home, NULLs
-source homes and releases the thread reservation. The object retains its own
+the generator/coroutine object and selects one of two ownership moves. A code
+plan with `ALL_CREATED_EMPTY` certifies absent scratch at every creation site:
+the fast path moves the header and bindings, then initializes destination
+scratch to NULL without reading source scratch. Otherwise, the protected copy
+view supplies the readable homes, including any retained scratch; the copy
+moves those homes and NULL-fills destination gaps. Both clear moved source
+homes and release the thread reservation. The object retains its own
 executing code and function owners. Initial resume uses the actual successor and
 the explicit incoming recipient.
 
@@ -70,8 +80,11 @@ flowchart TD
     bind --> prefix[Execute creation prefix if present]
     prefix --> constructor[RETURN_GENERATOR]
     constructor --> allocate[Allocate generator or coroutine]
-    allocate --> move[Move header and physical homes; clear source homes]
-    move --> seal[Seal CREATED heap frame; release thread reservation]
+    allocate --> proof{All creation scratch proved absent?}
+    proof -->|Yes| bindings[Move header and bindings; initialize destination scratch]
+    proof -->|No| copy[Move readable copy view; initialize destination gaps]
+    bindings --> seal[Seal CREATED heap frame; release thread reservation]
+    copy --> seal
     seal --> return[Return canonical generator or coroutine owner]
 ```
 
@@ -81,9 +94,10 @@ hooks, origin tracking, allocation errors, observers and alternate evaluators
 retain their established behavior. Allocation occurs once at creation, not on
 each resume.
 
-The physical-home move is broader than upstream's live-stack copy. Its source
-NULL stores maintain the arena's initialized-frontier invariant; deleting them
-requires a replacement lifetime proof. Constants also move with the frame.
+Destination scratch initialization remains real work even on the empty-created
+path. Logical `NO_HOME` proves absence, not physical NULL or readable bytes;
+it does not permit removing the current NULL-control initialization. Constants
+move with the bindings. Moved-source NULL stores preserve reusable arena storage.
 
 Public `PyGen_New`, `PyCoro_New` and `PyAsyncGen_New` construction from an
 existing frame bypasses ordinary RETURN_GENERATOR. This cold ingress explicitly
@@ -101,6 +115,17 @@ Exact SEND/FOR admission already dispatches the child within the same evaluator.
 It publishes the child input, frame/exception links and recursion state, then
 polls and dispatches. Initial non-None send and running/finished state have their
 own semantic checks. Real parent frames remain visible while their children run.
+
+The actual terminal `IR_ENTER_GENERATOR` and its source-checked IO/guard recipe
+select the yielded-result recipient. FOR uses A, including folded locals and
+discard; SEND keeps B+2. This recipe does not supply normal, exceptional or
+suspended-home authority.
+
+GET_AWAITABLE can transfer an exact coroutine's input owner directly when its
+callback-free state predicate accepts it. Folded locals still duplicate; other
+states/custom awaitables keep the general helper and error path. The two arms
+meet only a first-publication owning-result fact, with no token-identity or
+home-readability claim.
 
 Yield reverses those links, marks suspension and transfers a canonical owner to
 the parent's declared recipient. Completion first retires the child while
@@ -129,16 +154,22 @@ flowchart TD
 SEND completion may overlap an input home. FOR exhaustion retains the last item
 binding. Observed PRE/POST callbacks, failures and supported observer redirects
 retain the existing semantic transaction. Ordinary and interpreter-entry
-recipient paths handle their pending redirects.
-No persistent chain cache, completion descriptor or extra continuation-kind
-store is installed on every resume.
+recipient paths handle their pending redirects. Literal native completion
+terminals call `_PyEval_CompleteForIter`, `_PyEval_CompleteSend` or
+`_PyEval_CompleteSendThrow` without a runtime kind argument; FOR also omits the
+destination argument. They share the existing completion body and retain
+general publication. VM generator return separately decodes the immutable
+parent word and selects its canonical-input instantiation. No persistent chain
+cache, completion descriptor or extra continuation-kind store is installed on
+every resume.
 
 ## Evidence and limits
 
 The selected header occupies 14 eight-byte words on the measured configuration,
 versus upstream's 10. Extra execution-image and recipient state, canonical-value
-classification and full physical-home construction/clear remain costs. Overlap
-and the initialized frontier save work upstream still performs. Source store
+classification, destination initialization and general full-extent cleanup
+remain costs. Overlap and the initialized frontier save work upstream still
+performs. Source store
 counts and flat samples alone cannot establish their net elapsed-time cost.
 
 Round53 tested direct final-home construction across IR/native calls, a shared

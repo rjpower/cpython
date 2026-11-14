@@ -3,8 +3,7 @@
 This page describes the selected register interpreter and its call paths.
 [Status](../STATUS.md) records qualification, measurements and limits.
 The [active performance plan](../issues/interpreter-performance56/plan.md)
-reviews a combined architecture. Its proposed contracts do not change the
-selected implementation described here.
+records adopted increments and remaining proposals under one architecture.
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
 and [observer contract](handler-and-observer-contract.md) describe the same
@@ -16,7 +15,8 @@ entry, cold context/owner proofs and bounded saved-local restoration.
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-reviewed successor work; they do not upgrade the selected implementation.
+the architecture and its review. The selected56 subset is described here;
+remaining storage-authority and borrowing proposals are identified in status.
 
 ## Entry and dispatch
 
@@ -68,25 +68,39 @@ the same ownership and displaced-owner handling; raw providers still publish
 their results through the ordinary boundary.
 
 Plain yield transfers an unchanged canonical input through the existing
-canonical return sink. Specialized list indexing uses the canonical final store
-only after the complete guard/bounds/duplicate/retirement chain is proved. Its
-early temporary publication before retiring the list remains ordinary. Proofs
-bind the original token structure to the AST actually emitted; altered bodies
-fall back to ordinary publication. Instrumented yield keeps its full boundary.
+canonical return sink. Exact list and tuple integer indexing share checked
+integer/type/index guards and `IR_DUP_CANONICAL_ELEMENT`. The latter performs
+the anchored element read and owning XDUP together. Current value tokens and
+the lexical index bind its dependencies; mutation, control flow or a callback
+expires unconsumed guards. The live canonical result selects the existing
+canonical temporary and final stores before and after anchor retirement.
+There is no separate list-body matcher. The list interval relies on the GIL;
+free-threaded execution takes the generic path. Instrumented yield keeps its
+full boundary.
+
+Canonical representation, ownership and home readability are separate facts.
+Canonical stores still require the existing owning publication protocol. A
+native VALUE result may be private until publication; its result type alone
+supplies neither canonical bits nor a readable frame home.
 
 Temporary future-read liveness is not owner occupancy. Cleanup must retain or
 retire an initialized owner even if no later Python operation reads it. GC,
 frame copying, unwind and debugger inspection share that invariant. Normal
-thread retirement clears local homes after proving temporary homes NULL;
-exceptional and escaped/generator paths retain their appropriate full handling.
+thread retirement uses the local-only path for certified `RETURN_VALUE_EMPTY`.
+General `RETURN_VALUE` uses outlined full-extent cleanup, protecting retained
+scratch and the result through callbacks. Exceptional and escaped/generator
+paths retain their appropriate full handling.
 
 Thread chunks have opposing header/value stacks and one initialized frontier.
 Reservation establishes valid value cells before constructing a header, filling
 only the uncertain suffix. A header truncates that frontier before overwriting
 value-capable memory; pop never restores a saved frontier. All retirement and
 reentry paths must leave reusable value cells NULL. Separate heap frames are
-initialized once, while full ownership copies initialize their destination by
-moving every home. See the [frame ABI](call-and-frame-lifetimes.md).
+initialized at construction. Copies move their selected protected homes and
+NULL-initialize destination gaps. Certified empty creation moves header/bindings
+only and initializes destination scratch. Logical absence is distinct from
+physical NULL, initialization and readability; it does not remove the current
+NULL-control policy. See the [frame ABI](call-and-frame-lifetimes.md).
 
 Guarded integer ADD and SUB use a whole-producer proof of canonical output
 across their inline and boxed-overflow arms. The proof checks the guards,
@@ -107,9 +121,15 @@ The class-value path requires absence from shared instance keys and valid inline
 values, or a type with no instance dictionary. Shared-key insertion invalidates
 the owning type before publishing a new name; dictionary replacement invalidates
 inline values. Type/MRO changes invalidate the class-value proof. Descriptor and
-custom-hook classification remains unchanged. Polymorphic snapshots copy inert
-metadata according to the recorded handler; they never turn stale payloads into
-borrows or owners.
+custom-hook classification remains unchanged. Historical snapshots remain inert
+unless they satisfy the checked SHAPE-read contract. Two to four homogeneous SHAPE rows for distinct types can execute only after
+actual shape lookup nominated their scalar offset and read kind. A hit checks
+the cached nonzero type version and shape against the current receiver, then
+uses the same callback-free read and owner acquisition through
+`IR_DUP_SHAPE_READ` as the monomorphic path. This does not add FT synchronization.
+No row pointer or borrowed field escapes selection. Misses retain the existing
+specialization policy; arbitrary handler history is not executable authority.
+The learned-only variants cannot be installed through public code images.
 
 Direct class-object reads use the same guarded canonical payload for admitted
 objects and inline scalars. The existing class/MRO version and, when required,
@@ -224,12 +244,20 @@ physical continuation plus the signed distance selects completion, including
 an assembler-provided far-jump adapter. No general metadata decoder is needed
 on this positively declared return path.
 
-One C completion body serves all providers. Proved VM returns instantiate it
-with a literal SEND/FOR kind and canonical input, letting the compiler remove
-redundant publication and inapplicable owner checks. Native and THROW providers
-use the same body with general publication. The existing observer adapter,
-window detachment, destination installation and post-retirement PC reload are
-shared; the specialization introduces no frame state or per-resume work.
+One C completion body serves all providers. Generated literal-kind calls use
+`_PyEval_CompleteForIter`, `_PyEval_CompleteSend` or
+`_PyEval_CompleteSendThrow`; FOR passes no destination or kind argument, and
+SEND/THROW pass no kind argument. These entries retain general publication.
+`_PyEval_CompleteGeneratorReturn` separately decodes the immutable parent word
+and supplies the proved canonical input. The observer adapter, window
+detachment, destination installation and post-retirement PC reload are shared;
+there is no extra frame state or continuation-kind store.
+
+A parsed terminal `IR_ENTER_GENERATOR` recipe supplies recipient transport.
+Its checked IO, unchanged guard prefix and actual terminal emission allow a
+FOR child to use A, including a folded local or discard. SEND deliberately
+keeps its yielded recipient at B+2. This recipient proof grants no additional
+normal, exceptional or suspended-home authority.
 
 Completion separates fallible PRE observation while original owners exist from
 POST observation after the semantic outcome is committed. It detaches windows,
@@ -253,6 +281,15 @@ recursion links are committed. Delegated suspension retains the actual receiver
 lookup relationship. Initial generator construction uses the same explicit
 recipient model. Hidden interpreter/initialization entry starts at its real word-zero
 continuation.
+
+GET_AWAITABLE has a callback-free exact-coroutine identity arm. The predicate
+uses the same accepted frame states as the general helper; TAKE moves a scratch
+owner or duplicates a folded local. Other states and custom `__await__` retain
+the original helper, input close, error and conversion path. A terminal result ownership
+proof preserves recipient folding across those two arms without
+removing the value-alias fact or inventing a shared result token. The actual
+acquisition receipt is consumed at the first publication; it is not a normal
+or exceptional readability map.
 
 ## Errors and observation
 
@@ -331,11 +368,11 @@ Exact relaxation adapters normalize LINE landings while their helper words keep
 real INSTRUCTION events. Setter, exception and frame-clear paths invalidate the
 handoff before callbacks. Broader event parity remains under qualification.
 
-## Active model55 error processing
+## Error processing
 
-Candidate `dc6bad8a625` runs errors through `_PyEval_ProcessError`, an outlined
-function in the evaluator translation unit. Golden54 remains unchanged; the
-[report](../issues/call-model55/report.md) owns measured identities and limits.
+Errors run through `_PyEval_ProcessError`, an outlined function in the evaluator
+translation unit. The [report](../issues/call-model55/report.md) records the
+static/bitmap experiments and their limits.
 The reached handler passes the immutable origin, emitted checkpoint and its
 actual bridge workspace before bridge disposal can call Python. Successful
 instructions gain no descriptor, lookup or handler argument.
@@ -366,12 +403,15 @@ flowchart TD
     R -->|no| X[Exit evaluator]
 ```
 
-The first proved static snapshots cover GET_ANEXT's projection and native
-failure routes. Missing proof selects explicit initialized-NULL control while
-this migration is incomplete. Installing exception/lasti changes the shape;
-the handled callback likewise uses control until that transform is certified.
-The bitmap experiment selects its actual presence plane instead. Neither
-checkpoint zero nor an instruction's normal program grants static readability.
+Proved static snapshots replay actual scalar Storage reads, takes,
+publications and callbacks, including GET_ANEXT and checked unary-result paths.
+A complete normal graph supplies its transfer directly; uncovered graphs keep
+the conservative transfer. Missing error proof selects explicit initialized-NULL
+control while this migration is incomplete. Installing exception/lasti changes
+the shape; the handled callback likewise uses control until that transform is
+certified. The bitmap experiment selects its actual presence plane instead.
+Neither checkpoint zero nor a normal-completion program alone authorizes an
+ERROR-scope read.
 The function loops over unwound Python frames and returns HANDLED or EXIT;
 it does not add one recursive native unwinder call per Python frame.
 

@@ -7,7 +7,7 @@ qualification, measurements and limits.
 
 The [active plan](../issues/interpreter-performance56/plan.md) combines value
 transport, borrowing, call/return conventions and specialization. Its broad
-review precedes implementation. The contracts below describe the selected
+review guided the selected56 increments. The contracts below describe the selected
 runtime; experimental ownership/IRSC2 source is identified in status and is not
 an implemented replacement.
 
@@ -33,7 +33,8 @@ flowchart TD
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-reviewed successor work; they do not upgrade the selected implementation.
+the architecture and its review. The selected56 subset is described here;
+remaining storage-authority and borrowing proposals are identified in status.
 
 ## Subsystem references
 

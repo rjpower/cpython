@@ -4,8 +4,7 @@ This page defines the executable and ownership contract of the selected runtime.
 [Status](../STATUS.md) owns qualification and performance. The observer and
 debugger rules below do not authorize every source transfer.
 The [active performance plan](../issues/interpreter-performance56/plan.md)
-reviews borrowing, values, calls and specialization separately from this
-selected encoding.
+records adopted and remaining borrowing, value, call and specialization work.
 
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
 [observer contract](handler-and-observer-contract.md) define ownership and
@@ -15,7 +14,8 @@ Python guarantee of immediate finalization. See
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-reviewed successor work; they do not upgrade the selected implementation.
+the architecture and its review. The selected56 subset is described here;
+remaining storage-authority and borrowing proposals are identified in status.
 
 ## Producer path
 
@@ -92,6 +92,10 @@ live owner may need cleanup despite having no later program read. The
 verifier checks slot ranges, window extents, destination legality, and jump
 boundaries. A jump target is a word index and must land on an instruction.
 Exception ranges and source lines are likewise expressed in word offsets.
+Logical `NO_HOME` and physical NULL are separate must-facts. A vacated home
+cannot supply a required read; logical absence alone establishes neither
+initialized bits nor a readable home. Empty-return and created-copy proofs
+also require complete coverage and no remaining may-owner obligation.
 
 ## Compact execution and source positions
 
@@ -130,17 +134,37 @@ is distinct from dispatching a release operation. Shared-owner/exception/branch
 cleanup words remain a separate unfinished inventory. The overall objective
 of eliminating standalone release-only execution is not yet complete.
 
-A single shape-reader ownership variant, `LOAD_ATTR_SHAPE_LOCAL_TEMP`, remains:
-its local input and temporary destination are static. Generated canonical,
-family, statistics and feedback mappings cover the physical handler domain.
-Adaptive disassembly names the specialization; internal executing-IR inspection
-can expose an ownership variant. This does not create a product of every mode.
+The shape reader retains `LOAD_ATTR_SHAPE_LOCAL_TEMP`: its local input and
+temporary destination are static. `LOAD_ATTR_SHAPE_POLY` and its LOCAL_TEMP
+variant select a bounded bank of checked SHAPE-read rows while using the same
+owning read and publication body. Each executable row has an actual lookup
+nomination, a nonzero type version, cached shape checked against the current
+receiver, and scalar offset; history alone is insufficient. Learned-only
+handlers are rejected by public image
+admission. Generated family, statistics and feedback mappings cover the physical
+handler domain. Adaptive disassembly names the specialization; internal IR
+inspection can expose an ownership variant. There is no product of every mode.
 
 `IR_CANONICAL_OUTPUTS` marks a checked terminal producer of multiple owning
 canonical outputs. Its bounded proof accepts guarded-home
 duplication and unchanged canonical-input transfer, and rejects unproved
 transformations or escaping prefixes. Output provenance is independent of the
 existing receiver-retirement proof; ownership transfers still occur normally.
+
+Single-result list/tuple indexing instead uses checked exact-container and
+bounds facts attached to current value tokens. `IR_DUP_CANONICAL_ELEMENT`
+acquires the element owner before either input retires. Its live representation
+fact selects canonical stores through the existing Storage publication path;
+it is independent of ownership, non-NULL and frame-home initialization. Control,
+mutation and callbacks expire outstanding element capabilities. The list path
+uses the GIL and takes the generic path under FT.
+
+A separate terminal owning-result projection can meet distinct result tokens
+across normal arms. It requires one new scalar output, direct assignments only,
+complete owner closure and actual TAKE/native-result acquisition receipts.
+The value-alias description remains intact. Its weaker Local fact authorizes
+only the first publication; it grants no token phi or readable-home map.
+GET_AWAITABLE uses this for its exact-coroutine TAKE arm and original fallback.
 
 Guarded integer ADD and SUB use a separate whole-producer proof to preserve
 canonical ownership across their inline and boxed-overflow result join. The
@@ -198,6 +222,13 @@ receiver window but completes into its explicit result recipient. CLEANUP_THROW
 has its own named real target and shares SEND completion ownership. YIELD_VALUE
 names its incoming resume recipient separately from its outgoing value.
 Semantic edge definitions override the frontend's stack-shape union.
+
+A source-checked terminal `IR_ENTER_GENERATOR` recipe supplies the child yield
+recipient: FOR uses A and SEND uses B+2. The emitter validates the same literal
+kind, IO and terminal part before the handoff. This is a recipient fact only;
+normal/error/WAIT contracts remain independent. Literal completion terminals
+lower to `_PyEval_CompleteForIter`, `_PyEval_CompleteSend` or
+`_PyEval_CompleteSendThrow`, which share the owning completion body.
 
 Source-edge assembly follows the same controlling operation as word encoding.
 A fused comparison uses its paired conditional jump's target and fallthrough,
@@ -270,9 +301,9 @@ pre-site survivor recipe or a source-only fallback. Existing PRE restoration
 and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
 transfers require separate stopped-state authority.
 
-## Active model55 ERROR metadata
+## Scalar Storage and ERROR metadata
 
-Candidate `dc6bad8a625` appends a counted ERROR suffix to the existing interned
+The generator appends a counted ERROR suffix to the existing interned
 ownership-event program, behind format flag `0x8000`. Normal event counts keep
 their existing meaning. This adds no executable instruction, format-row field
 or second event allocation. The same Storage instance records the actual
@@ -285,12 +316,14 @@ checkpoint0 means uncovered. A cold query takes an explicit origin under the
 executing-code pin and reads metadata only. It cannot infer authority from a
 public frame PC, debug positions or the checkpoint number alone.
 
-The first ERROR slice preserves a complete incoming scalar shape without home
-writes. Required inputs need positive initialized/non-NULL facts; existing
-canonical homes may widen to canonical-or-NULL across an audited callback.
-MAY ownership alone never grants readability. Unknown transfers and ambiguous
-joins stay uncovered. General scalar actions, windows, call handoffs and
-transformed handler-entry shapes remain in the
+The bounded scalar graph records actual reads, saves, vacates, publications,
+native-result facts, guards, callbacks and joins. A complete normal graph
+supplies its transfer directly. Required inputs need positive initialized/
+non-NULL facts; existing canonical homes may widen to canonical-or-NULL across
+an audited callback. MAY ownership alone never grants readability. Unknown
+transfers and ambiguous joins stay uncovered; missing ERROR proof retains
+explicit initialized-NULL control. Windows, call handoffs and transformed
+handler-entry shapes still require their own proofs in the
 [migration plan](../issues/call-model55/semantic-phase-plan.md).
 
 ## Explicit boundary

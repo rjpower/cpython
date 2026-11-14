@@ -166,12 +166,22 @@ that contract. Closing an arbitrary object may reenter Python and requires the
 normal publication, error-preservation and revalidation rules.
 
 Generic publication uses `_PyValue_Publish`/`_PyValue_Canonicalize` before a
-home store. Generated canonical stores bypass that conversion only when the
-complete producer/transfer chain proves the same canonical result and owner
-identity. Numeric leaves, local duplication, list-child final publication and
-plain frame transfers have bounded proofs; an opcode name alone is insufficient.
-The list reader's earlier temporary publication remains generic. Unknown chains
-retain normal publication. `_PyValue_CheckHome` checks canonical homes in debug.
+home store. Generated canonical stores bypass that conversion only with a live
+canonical representation fact and the existing owning publication protocol.
+Local duplication, numeric constructors, guarded exact list/tuple element
+acquisition, canonical literals and plain frame transfers supply bounded facts;
+an opcode name or native VALUE result type is insufficient. Exact container
+reads acquire an owner without a callback before anchor retirement. Their
+checked results use canonical temporary and final stores. Outstanding bounds/anchor
+facts expire on mutation, control flow or callback; the list interval relies on
+the GIL. Unknown chains retain normal publication. `_PyValue_CheckHome` checks
+canonical homes in debug.
+
+Representation, ownership, non-NULL and home readability remain independent.
+A branch join may preserve a terminal result's separately acquired owner while
+losing its common token identity; that weaker fact permits only its first
+publication. It cannot make a private native result canonical, duplicate a C
+alias into another owner, or authorize a stale frame-home read.
 
 ## Ownership and publication
 
@@ -209,15 +219,17 @@ Store and callback order is part of correctness:
 
 Python does not guarantee prompt finalization. The implementation still must
 avoid leaks, unbounded retention, stale roots and reuse of uncleared slots.
-Ordinary thread-frame retirement requires scratch NULL; it does not close an
-arbitrary retained scratch region. See the call/frame contract for exceptions,
-frame escape, child overlap and initialized arena storage.
+Certified empty-scratch return uses local-only thread retirement. General
+return uses outlined full-extent cleanup for retained scratch. Logical
+`NO_HOME` is not a physical NULL, initialization or readability fact; the
+current NULL-control storage policy remains. See the call/frame contract for
+exceptions, frame escape, child overlap and initialized arena storage.
 
 ## Storage and collection
 
 | Home | Current representation |
 | --- | --- |
-| Frame | base[] locals/cells/free vars/temporaries, f_executable and f_funcobj are PyValues. Globals/builtins/locals mappings remain object pointers. |
+| Frame | base[] locals/cells/free vars/temporaries contain PyValues. f_executable and f_funcobj are owning typed object pointers; globals/builtins/locals mappings remain object pointers. |
 | Tuple, list, struct sequence | Element arrays contain PyValues. |
 | Dict | Generic keys and values contain PyValues; specialized unicode keys remain PyObject pointers. Split-dict/inline-instance values contain PyValues. |
 | Set/frozenset | Keys contain PyValues; empty entries use NULL. |

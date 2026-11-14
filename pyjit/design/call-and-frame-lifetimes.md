@@ -3,8 +3,7 @@
 This page defines frame ownership, call completion and observation in the
 selected runtime. [Status](../STATUS.md) records qualification and limits.
 The [active performance plan](../issues/interpreter-performance56/plan.md)
-reviews the next value, ownership and call architecture; it does not change
-this as-built ABI.
+records implemented value, ownership and call improvements plus remaining work.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -14,7 +13,8 @@ storage and valid reentry phases. See [language/lifetime policy](lifetimes-and-l
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-reviewed successor work; they do not upgrade the selected implementation.
+the architecture and its review. The selected56 subset is described here;
+remaining storage-authority and borrowing proposals are identified in status.
 
 ## One owning-frame ABI
 
@@ -45,6 +45,10 @@ Thread headers and homes occupy opposing stacks in a shared chunk. Heap
 generators/coroutines and escaped frame objects instead embed the header and a
 variable home tail. Frame objects are optional for ordinary optimized calls;
 class/module/exec locals mappings can be required by execution itself.
+The 16-bit phase publication fits existing header padding. An escaped frame
+object separately stores a `_PyIRHomeView` (16 bytes in this measured profile)
+and its authority tag. This cold capture state is not part of the 112-byte
+interpreter-frame header.
 
 Round54 measured removing the feedback cache, the two environment caches and
 the direct mapping owner, separately and together. The composed header really
@@ -59,16 +63,20 @@ change must account for the frequency of all readers, not just its setup size.
 | Initialized | Bits can be safely inspected | Canonical PyValue or NULL throughout physical value storage |
 | Owning | A counted edge must remain or be retired | Home contents and tag; NULL owns nothing |
 | Future-read live | A later operation needs the current value | Compiler dataflow, distinct from owner occupancy |
+| Logically absent | No logical value remains in this home, including an inline or index value | `NO_HOME`; physical NULL also proves absence, but absence alone grants no initialization or readability |
 | Pending empty kwargs | No Python object has been exposed yet | One compiler-proven local index, otherwise IR_NO_DST |
 
 Locals remain observable even after their last program read. Dead-but-owned
 temporaries can also survive until semantic consumption. The compiler's owner
 occupancy constrains compaction and overlapping windows; future-read liveness
 alone does not authorize dropping a GC edge or reading uninitialized memory.
-GC traversal and frame copies inspect the physical homes. Unwind retires the
-appropriate suffix and preserves handler-required anchors. Normal thread clear
-is already local-only after asserting scratch owners NULL; generator/exposed
-paths have their corresponding complete ownership handling.
+GC traversal and frame copies use their actual protected home view. Unwind
+retires the appropriate suffix and preserves handler-required anchors.
+Certified `RETURN_VALUE_EMPTY` takes the local-only thread cleanup path;
+general `RETURN_VALUE` uses outlined full-extent cleanup for retained scratch.
+Both preserve result/code ownership and the actual cleanup extent through
+callbacks and frame-object takeover. Generator/exposed paths retain their
+corresponding complete ownership handling.
 
 NULL remains the empty-home authority. There is no parallel occupancy bitmap.
 A bitmap replacing NULL would have to govern every physical-home read, move,
@@ -108,8 +116,12 @@ outer pop never restores an obsolete saved frontier. A departing frame remains
 reserved through all decrefs, even after unlinking, and leaves reusable cells
 NULL before pop. This covers ordinary/exceptional entry, overlap, recursion
 failure and generator construction, through a common storage reservation
-contract. Heap frames initialize once at actual construction; full ownership
-copies write every destination home and clear every moved source.
+contract. Heap frames initialize at actual construction. Ownership copies read
+only the selected protected view, clear each moved source, and initialize every
+destination gap to NULL. Retirement takeover clips the view to the remaining
+cursor and stores that view and authority in the escaped frame. The finite
+delegated-receiver role survives only if its actual home was included in the
+copy; a phase bit alone does not authorize a home read.
 
 ## Known Python binding and generic providers
 
@@ -193,10 +205,12 @@ owner state. This is one ABI with guarded fast binding, not two frame models.
 
 ## Generator entry
 
-Generator and coroutine creation moves the frame into its owning object. The
-copy preserves all homes, including live scratch: generator-expression GET_ITER
-can run before RETURN_GENERATOR and retain scratch ownership. The code owner
-and all transferred values remain valid through the move.
+Generator and coroutine creation moves the frame into its owning object.
+`ALL_CREATED_EMPTY` permits moving only header/bindings and NULL-initializing
+destination scratch. Without that whole-image certificate, the protected copy
+view retains required scratch: generator-expression GET_ITER can run before
+RETURN_GENERATOR. The code owner and transferred values remain valid through
+the move. See [activation transfers](activation-transfers.md#generative-construction).
 
 ## Deferred empty kwargs
 
@@ -235,6 +249,21 @@ repeating exact-number publication checks. Tuple/list unpack has a separately
 proved canonical source path; generic value-slot/native providers retain
 publication unless their producer contract proves it. These bounded producer
 chains do not authorize blanket removal of normalization from raw results.
+
+Exact list/tuple indexing acquires an independent owner through a callback-free
+checked element read and XDUP. Its canonical representation follows the live
+result token into temporary and final stores; neither input may retire before
+the owning acquisition. Callback, mutation and control boundaries expire any
+unconsumed bounds/anchor fact. The list interval relies on the GIL.
+`PyList_GET_VALUE` remains out of line; `PyTuple_GET_VALUE` is static inline.
+Both borrow from their container; neither adds lifetime or FT synchronization.
+
+GET_AWAITABLE's exact-coroutine identity arm uses TAKE instead of acquiring and
+closing a redundant reference. A scratch input moves; a folded local still
+duplicates. General awaitables and rejected coroutine states keep the original
+helper/error path. A terminal output-owner fact meets both normal arms and is
+consumed at first publication. It does not erase value aliasing, create a
+shared result identity, or authorize static frame reads.
 
 Pure local duplication uses the same canonical final store. The generator
 requires the exact local-index read and owned duplicate, with no input owner,
@@ -294,6 +323,14 @@ held input owner. A last-owner finalizer therefore sees a valid running frame.
 Native entry duplicates/transfers according to its provider contract and reaches
 the same recipient protocol. Delegated suspension keeps the real receiver/home
 relationship needed by yield-from inspection.
+
+The generator-entry recipient recipe is checked from the actual terminal
+`IR_ENTER_GENERATOR`, fixed IO and unchanged guard prefix. FOR installs A as
+the child's recipient, while SEND keeps B+2. Literal native completions call
+`_PyEval_CompleteForIter`, `_PyEval_CompleteSend` or
+`_PyEval_CompleteSendThrow`; all share the same detach/publish/close/refresh
+body. Generator return retains its immutable-word decode and canonical-input
+path. No descriptor, extra kind store or ordinary CALL completion hop is added.
 
 ## Reentry, debugger redirects and observers
 
@@ -358,13 +395,21 @@ selection and frame clearing invalidate that continuation state before callbacks
 
 ## Canonical source and reader publication
 
-`attr = IR_CANONICAL_HOME_DUP(found)` records a narrow producer fact on the
-existing frozen publication contract. The checker accepts the direct,
-unconditional assignment with one simple identifier argument and its matching
-retirement marker; existing assignment, output, and suffix checks still
-apply. The generator does not prove the C pointer provenance of `found`. The
-shape-home writer audit establishes that premise, while the intrinsic's fatal
-debug assertion checks `_PyValue_IsHome(found)` before duplication.
+Direct instance/module producers can use
+`attr = IR_CANONICAL_HOME_DUP(found)` under the existing narrow publication
+contract. Its simple-identifier, direct-assignment and retirement checks do
+not prove arbitrary C pointer provenance; the writer audit and fatal canonical
+home assertion establish that premise.
+
+The SHAPE reader instead uses a checked current-owner guard followed by the
+callback-free read and owner acquisition
+`attr = IR_DUP_SHAPE_READ(owner, offset)`. The guard binds the receiver identity
+and current type/shape metadata; the read consumes that binding and acquires the
+canonical owner without exposing a borrow across another source statement.
+Monomorphic and checked polymorphic rows use this same read/publication body.
+Control, cache/owner mutation or an intervening statement revokes the binding.
+This remains an explicit typed interface, not a general C alias verifier.
+It adds no free-threaded synchronization.
 
 The internal `_PyObject_StoreInstanceValue` boundary now states and asserts
 that its borrowed input is a canonical home value or NULL. In-tree object and

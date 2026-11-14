@@ -1,340 +1,196 @@
-# Interpreter performance checkpoint
+# Selected56: interpreter performance report
 
-Status: integrated and measured candidate **82e857384f8**, not selected.
-Current broad/control timing, PMU and confirmation are complete; full
-qualification remains pending. Golden54 remains
-61015a9452d9069646fb5fede9ff963896833b89. The [plan](plan.md) owns workstreams;
-[status](../../STATUS.md) owns aggregate qualification. The [combined design](../../design/proposals/interpreter-performance56.md)
-and [review](review.md) distinguish proposed contracts from selected behavior.
+Selected runtime: **883524c180e4486b47df77ee2276c9276c0ec32c**, branch
+`pyjit/round56-golden`, tag `pyjit-golden-20261113-interpreter-performance`.
+Golden54 remains immutable at `61015a9452d9069646fb5fede9ff963896833b89`.
+Upstream is `3a440b65695615e9fd9912342b79cdd54fced0d2`.
 
-The inline list-accessor followup 5e3ac28ca03 is **rejected**. Both builds and
-117 targeted methods per role passed, but six-pair confirmation gave
-coroutines 1.107292/golden (all six regress) and raytrace 1.035096 (no useful
-improvement). It removed a call and six spills from the list handler, shrinking
-831→771 bytes and 48→16 stack bytes, while whole .text grew 384 bytes. Native
-work removal alone did not pass the performance gate. The source move has no
-identified semantic defect; the regression's cause is unproven. Branch
-pyjit/perf56-inline-list-borrow and E56/inline-list-* remain evidence.
+The candidate reduces geometric-mean elapsed time **1.53% versus golden54**,
+with 17 of 29 cases improving. It remains **14.11% slower than upstream** on
+that mean, with seven cases faster. All six focus workloads improve in every
+six-pair confirmation. This is useful incremental progress, not parity.
+[All comparisons and pair ranges](benchmark-tables.md) are direct measurements.
 
-Root reverted it at 7a21d4c5027. That commit's source tree is exactly the measured
-82e857 tree (c48ca12bab75f49a9b704ea093860d040fa86cea). Both native rebuilds pass 117/79;
-final coherent qualification remains pending; measurements below retain their actual
-82e857 source/native identity until final repeat evidence is available.
+## Selection and accepted regressions
 
-## Qualification closure
+Root explicitly overrides the broad audit's suggested “no unexplained repeatable
+>2% regression” promotion tripwire for this checkpoint. An independent cold
+selection peer supports the judgment under the user's allowance for mostly-better
+incremental progress. The six focus wins, broad mean improvement and stronger
+qualification justify landing; the losses remain unresolved performance debt.
+Golden54 remains the comparison and rollback point.
 
-Full release at7a21 completed55,023 tests with116 failures across13 modules;
-576 modules passed. No green full gate is claimed. Debug was interrupted after
-5,310 tests/128 files once a real scalar-state inconsistency was identified.
-A focused native reproducer confirms consumed-slot reads are accepted on three
-public routes and16 empty-retirement checks lose their certificate.
+Raytrace regresses **4.50%** in six confirmation pairs, range 3.88–4.95%.
+The broad run also regresses spectral_norm 3.53%, nqueens 3.52%,
+xml_etree_iterparse 2.70% and chaos 2.51%. These are visible measured losses,
+not noise or resolved findings. No exclusive causal explanation is established.
 
-VACATE correctly records logical NO_HOME without promising physical NULL;
-older read rejection and empty-home consumers still require SEM_NULL alone.
-The reviewed codeobject repair uses one absence predicate at five consumers,
-retains all complete/MAY_OWNER/INIT/nullable gates, and writes no new facts.
-Physical dirty-inline retirement checks remain MISMATCH controls. Existing
-semantic tests are preserved. The repair is integrated atdab1ffaed3d; ac4c7019f9b
-adds peered current magic/table pins, exact call names, genuinely unknown unary
-controls and the actual cold frame-capture sizeof formula. Both builds pass 117/79.
-The three unchanged admission/retirement regression methods now pass in both
-roles; broader five-module verification is active.
-
-Seven generated-case failures require separate closure. All six current
-sys_settrace jump error names also occur in selected54’s exact release and
-debug logs; E56/qualification-fixes/debugger-baseline-comparison.json records
-the comparison. They remain unresolved observation limits, rather than new
-failures of this composition. No new quarantine or semantic waiver
-is introduced. Current admission source differs from the measured82e857 tree;
-final qualification and measurement must use the new identity. Evidence:
-E56/final-qualification, E55/perf56-admission-diagnostic and
-E55/perf56-qualification-verbose. All failed attempts remain sealed.
-
-## Current source composition
-
-Container transport and the exact-coroutine transfer are integrated at
-cfb91380cff; global-label initialization repair c4b679bcc48 follows it. Actual
-merged-source peers found no blocker. All 51 source methods pass. All-format
-comparison against f291 has no changes: GET_AWAITABLE retains STORE_DST and
-folding. The host runner's two initial extraction failures omitted os/re;
-the corrected runner passes its full suite, then exposed the genuine missing
-emitter initialization during full label emission. That source defect is fixed;
-full regeneration now passes.
-
-The generated diff changes nine handlers. Nine publication sites across eight
-handlers now consume existing canonical facts: list temporary (one), tuple
-temporary/final (two), GET_ANEXT final (one), and five NULL/boolean literal
-stores. GET_AWAITABLE instead adds a callback-free exact-coroutine identity arm
-that transfers its input owner. No new frame field or public operand layout is
-introduced. Retained disassembly confirms native removal; current composition
-measurements follow below, with older exact-head evidence retained separately.
-
-An independent Sol cold review of actual 113a4ded473 source found no blocker.
-Its five followups are: remove a redundant uninstrumented native-call refresh
-if it survives compilation; centralize compiler fact invalidation/meet;
-migrate the next measured numeric producer into shared facts; count terminal
-completion before further ABI work; diagnose logging at the final identity
-before widening PIC selection. These are prioritized followups, not speed
-claims. The review confirms that own-result joins grant no replay/home
-readability, coroutine fallback remains intact, and GIL SHAPE guard/read/acquire
-holds no feedback pointer across a callback.
-
-Both native builds pass 117/79 at 113a. The first 18-module release integration
-run passes 17 modules and fails only the new executing-coroutine test's expected
-exception type. A frozen three-way probe gives ValueError on upstream, golden54
-and candidate. One-line fixture correction 82e857384f8 preserves message/state/
-cleanup witnesses. Both builds pass 117/79 again; all 154 methods now pass in each role.
-The five bootstrap and 27 compile probes also pass. Root retained native ELF/disassembly under
-E55/perf56-transport-await-native (SHA256
-e9d36ff85b79b03eeeb3d75e86dd59320f78965e1407f3696cee2b16e4555725).
-The timing campaigns below use this retained ordinary executable.
-
-## Current merged hot-set screen
-
-Source/native **82e857384f8** passes 154 focused methods per role, the five-plus-27
-bootstrap/compile matrix, unchanged-format comparison, full generation and
-both 117/79 builds. The first two balanced pairs against golden54 complete with
-stable identities and no command errors. Lower elapsed ratios are better.
-
-| Case | /golden54 | Pair range |
+| Focus benchmark | Six-pair /golden54 | Direct all-29 /upstream |
 | --- | ---: | ---: |
-| deltablue |0.960183 |0.936213–0.984768 |
-| generators |0.934380 |0.930759–0.938014 |
-| coroutines |1.010237 |0.993797–1.026950 |
-| richards |0.720826 |0.710400–0.731405 |
-| comprehensions |0.975365 |0.974345–0.976387 |
-| logging_silent |0.951952 |0.898421–1.008671 |
+| DeltaBlue | .981856 | 1.162111 |
+| Generators | .951182 | 1.371818 |
+| Coroutines | .990377 | 1.255482 |
+| Richards | .712389 | .875120 |
+| Comprehensions | .983860 | 1.337402 |
+| Silent logging | .904529 | .690918 |
 
-This screen supports broad qualification rather than selection. Richards,
-generators and comprehensions improve in both pairs; DeltaBlue also improves.
-Coroutine and logging pairs straddle parity. The earlier f291 logging regression
-is not reproduced in this composition, but confirmation must price its variance.
-The broad upstream comparison follows. Evidence: E56/transport-await-hot6-golden.
+The campaigns differ: do not infer upstream changes by multiplying these columns.
+Silent logging is already faster than upstream; formatted/simple logging remain
+slower. The logging parity goal is not a claim about every logging mode.
 
-### Six-pair confirmation
+## What landed
 
-Six balanced pairs at the same82e857 identity confirm Richards and generator
-gains. All commands succeed and before/after identities match. DeltaBlue,
-comprehensions and logging improve in every pair. Coroutine range still crosses
-parity; raytrace's mean regression remains, with one faster pair.
+The [combined architecture](../../design/proposals/interpreter-performance56.md)
+and [critical audit](review.md) guided four workstreams under shared value,
+ownership, effect and observer contracts. Sol peers reviewed proposals and actual
+changes; root generated, built, qualified and measured the composition.
 
-| Case | /golden54 | Pair range |
+- Scalar replay tracks actual saves, vacates, publications, native results,
+  guards, callbacks and joins. Required-read/retirement consumers now recognize
+  logical vacancy without granting physical NULL, initialization or readability.
+  Current arena/producers still clear physical cells; full M4 is unfinished.
+- Exact-tuple CALL_EX preparation probes before taking owning snapshots. It
+  skips up to three mortal reference pairs on eligible calls. The focus six
+  execute no CALL_EX sites, so this has no assigned broad speedup.
+- Literal FOR/SEND/THROW native completion entries share one implementation.
+  Generator recipient admission derives from the actual checked entry recipe;
+  SEND's yielded recipient remains distinct from its completion destination.
+- Managed SHAPE specialization executes two to four homogeneous cached receiver
+  rows through the same guarded read/acquire body. No cache footprint increase
+  or method/store/SLOT expansion. A separate warmed diagnostic confirms actual
+  PIC use in DeltaBlue/Richards and zero selector attempts in logging.
+- Checked list/tuple producers carry canonical element facts into publication;
+  exact-coroutine GET_AWAITABLE moves a scratch owner instead of acquiring and
+  closing another reference. Folded locals duplicate and generic fallback remains.
+  Shared generator facts replace the old list-body matcher.
+
+PyValue integration was already complete. Private numeric C results and remaining
+bridges are transport/ownership work, not a second format rollout. The existing
+borrow pass and copy propagation already remove many local reads. A reproducible
+census of 21 files/426 CFGs found **zero eligible surviving callback-free COPY webs**
+in the proposed first morphology; no speculative extra pass was added. Broader
+CFG/materialization borrowing remains a separate hypothesis.
+
+The as-built [IR](../../design/register-ir.md), [interpreter](../../design/interpreter.md),
+[frames](../../design/call-and-frame-lifetimes.md),
+[activation transfers](../../design/activation-transfers.md) and
+[PyValue](../../design/pyvalue.md) include the selected contracts. Bitmap readers,
+IRSC2 exceptional transfers and full static scratch authority remain experimental.
+
+## Why upstream is still faster
+
+Matched counters show **36.14% more native instructions in DeltaBlue**,
+**41.11% in generators** and **30.78% in coroutines**. Their cycle ratios are
+1.152042,1.340458 and1.238294 respectively. The runtime still executes more
+common-path work despite direct overlapped exact calls and canonical values.
+Register IR alone does not make its generated C cheaper than upstream.
+
+Current generator flat samples concentrate in SEND_GEN 31.82% and
+YIELD_DELEGATED 13.07%; terminal generator completion is 1.90%. Reworking only
+terminal completion cannot plausibly close the whole generator gap. Coroutine
+samples spread across exact calls 10.69%, completion 7.39%, deallocation 7.02%,
+SEND_GEN 6.01%, clear 5.80%, creation 5.76% and GET_AWAITABLE 4.02%. DeltaBlue
+retains exact-call 11.36%, PIC-read 9.31% and method-read 6.41% work. These are
+physical-symbol flat samples, not additive removable budgets or causal speedups.
+
+The code still pays admission/binding/recipient and owner maintenance at calls;
+resume/yield use separate state, frame/exception links and recipient boundaries;
+creation copies bindings and initializes destination scratch; retirement protects
+result/code/storage and handles reentry. Those operations are evidence-backed
+optimization targets. Their individual avoidable fractions are not yet measured.
+Upstream's combined evaluator symbol prevents a direct flat-bucket subtraction.
+
+A historical82e coroutine profile is resolved more precisely: all 109 samples at
+libc offset0x19846d (4.3306% sampled period) unwind directly to
+`_PyFrame_CopyCreatedGenerator`. Matching libc/build IDs and retained native
+assembly identify its zero-filled destination scratch. This is real work, but
+not enough evidence to blame all slowdown on clearing or predict a 4.3% gain.
+Current883 also samples that libc address at 4.89%; its callchain has not been
+independently attributed. Keep historical and current identities separate.
+
+## Regression diagnostic
+
+A bounded three-pair PMU comparison against golden54 gives:
+
+| Benchmark | Instructions /golden54 | Cycles /golden54 |
 | --- | ---: | ---: |
-| deltablue |0.983547 |0.966438–0.995870 |
-| generators |0.942484 |0.925687–0.961010 |
-| coroutines |0.993560 |0.981109–1.014690 |
-| richards |0.718632 |0.716043–0.722528 |
-| comprehensions |0.959073 |0.868742–0.981809 |
-| logging_silent |0.898868 |0.860832–0.936960 |
-| raytrace |1.035032 |0.951701–1.059284 |
+| Raytrace | 1.020394 | 1.039664 |
+| spectral_norm | .972709 | 1.024014 |
+| nqueens | 1.015206 | 1.039182 |
 
-Evidence: E56/transport-await-confirm7-golden. This prices the complete
-composition, not the individual transport or cache increments.
+All 18 commands pass with stable identities. Six matching profiles also pass.
+Raytrace/nqueens execute more work; spectral_norm executes fewer instructions
+at higher average cycle cost. These observations reject one universal “extra
+clearing” or “extra dispatches” explanation, but do not isolate layout, spills,
+branch cost or instruction dependencies. spectral_norm's main loop has no indexed
+reads, so the stronger list/tuple guard cannot directly explain every loss.
 
-## Current broad upstream comparison
+Static/native review finds the new element projection keeps its known-object
+fact, yet its stronger preguard adds roughly four successful-path instructions
+and one conditional branch compared with golden's pointer-space guard. List
+getter spills remain. That is a plausible cost for indexing-heavy workloads,
+not a proven whole-program cause or permission to weaken semantic guards.
+Profile source and counters are retained under E56/regression-diagnostic.
 
-At the same 82e857 source/native identity, all 29 benchmarks complete two
-balanced pairs against upstream with stable identity and no command errors.
-The geometric mean is **1.151069**, with seven wins. This is a direct current
-comparison; it is not obtained by multiplying previous campaign ratios.
+## Qualification
 
-| Case | /upstream | Pair range |
-| --- | ---: | ---: |
-| richards |0.896864 |0.889290–0.904503 |
-| go |1.177112 |1.167363–1.186944 |
-| nbody |0.869881 |0.865196–0.874592 |
-| float |0.785703 |0.775221–0.796326 |
-| spectral_norm |0.821323 |0.812386–0.830357 |
-| raytrace |0.986409 |0.979418–0.993451 |
-| deltablue |1.155816 |1.153464–1.158174 |
-| chaos |0.982420 |0.980109–0.984736 |
-| nqueens |1.361104 |1.263257–1.466530 |
-| fannkuch |1.299044 |1.270645–1.328078 |
-| generators |1.426371 |1.355676–1.500752 |
-| comprehensions |1.337121 |1.303472–1.371640 |
-| coroutines |1.246663 |1.244788–1.248540 |
-| unpack_sequence |1.161511 |1.152529–1.170563 |
-| deepcopy |1.378339 |1.370445–1.386279 |
-| deepcopy_reduce |1.368204 |1.362243–1.374192 |
-| deepcopy_memo |1.291558 |1.271001–1.312448 |
-| json_dumps |1.360270 |1.355189–1.365370 |
-| json_loads |1.232169 |1.205426–1.259506 |
-| pickle |1.138317 |1.101790–1.176056 |
-| unpickle |1.182505 |1.138224–1.228508 |
-| regex_compile |1.201915 |1.200888–1.202944 |
-| logging_format |1.205000 |1.204241–1.205759 |
-| logging_silent |0.694034 |0.688199–0.699917 |
-| logging_simple |1.224118 |1.181750–1.268004 |
-| xml_etree_generate |1.310153 |1.300887–1.319484 |
-| xml_etree_iterparse |1.264914 |1.257881–1.271987 |
-| xml_etree_parse |1.154992 |1.144444–1.165638 |
-| xml_etree_process |1.410014 |1.403358–1.416702 |
+Coherent full release and debug at cb3f0b00ef2 each execute **55,023 tests**.
+Release reports588 modules OK; debug 587. Neither crashes. Release has only six
+`test_sys_settrace` debugger-jump errors; debug has those same six and one stale
+LLTrace assertion. Both sets of six are exact subsets of golden54's nine errors
+per role. They remain observation limitations, not newly quarantined tests.
 
-Generators and nqueens have wide ranges in this small broad screen. Hardware
-counters and confirmation must support narrower causal or small-change claims.
-The direct golden comparison follows. Evidence:
-E56/transport-await-all29-upstream.
+The final 883 commit changes only the LLTrace fixture: it checks actual discarded
+CALL_INTRINSIC_1 execution instead of stale POP_TOP text. Its runtime source tree
+is byte-identical to cb3. All three debug LLTrace methods now pass; release skips
+those debug-only methods. Final verbose484-method sys_settrace checks per role
+reproduce exactly the six baseline errors. No green full-suite claim is made;
+the entire suite was not rerun for the final fixture-only commit.
 
-## Current broad golden comparison
+Both final builds complete 117 modules/79 shared. The unchanged three admission/
+retirement regressions,53 core methods and70 final fixture/source methods pass
+per role at their recorded integration heads. Full regeneration leaves runtime
+products byte-identical. Five bootstrap images, 27 compile probes and the freezer
+build pass at 883. Only the existing GDB PrettyPrintTests class is quarantined.
+Qualification is GIL-only; free-threaded performance is not established.
 
-The direct all-29/golden campaign at 82e857 completes two balanced pairs with
-stable identity and no command errors. Geometric mean **.989410** means about
-1.1% less elapsed time overall; 12 cases improve. Richards improves about 29.5%,
-generators 6.7% and comprehensions 2.5%. Coroutines are flat. Raytrace regresses
-4.6% in both pairs, and several other cases regress 1–2%; these costs remain
-visible rather than hidden behind the mean. The six-pair confirmation above
-includes raytrace, DeltaBlue and the noisy logging result.
+The full gate found and fixed a real NO_HOME/SEM_NULL mismatch in five scalar
+consumers. It also closed stale magic/table, exact-call-role, frame-size, unknown-
+unary and generated-source fixtures; optional observer metadata now conservatively
+denies authority when absent. Negative controls remain. Failed attempts and their
+repairs are retained, rather than reported as passes.
 
-| Case | /golden54 | Pair range |
-| --- | ---: | ---: |
-| richards |0.705191 |0.695446–0.715073 |
-| go |0.992271 |0.987545–0.997019 |
-| nbody |1.017068 |1.009451–1.024742 |
-| float |0.993251 |0.966341–1.020910 |
-| spectral_norm |1.019316 |1.010191–1.028523 |
-| raytrace |1.046273 |1.044723–1.047825 |
-| deltablue |1.008931 |0.988984–1.029281 |
-| chaos |1.017170 |1.012512–1.021849 |
-| nqueens |1.021627 |1.018695–1.024569 |
-| fannkuch |1.019785 |1.012780–1.026838 |
-| generators |0.932627 |0.928299–0.936974 |
-| comprehensions |0.974993 |0.973435–0.976555 |
-| coroutines |0.998766 |0.997297–1.000237 |
-| unpack_sequence |0.992390 |0.984979–0.999857 |
-| deepcopy |1.011066 |1.010773–1.011358 |
-| deepcopy_reduce |1.015637 |1.015234–1.016040 |
-| deepcopy_memo |1.004093 |1.003663–1.004522 |
-| json_dumps |1.004954 |0.996084–1.013902 |
-| json_loads |1.002591 |0.996391–1.008831 |
-| pickle |0.994092 |0.973160–1.015473 |
-| unpickle |1.007651 |0.998526–1.016859 |
-| regex_compile |1.004233 |0.998206–1.010296 |
-| logging_format |0.981771 |0.977204–0.986359 |
-| logging_silent |0.956771 |0.898312–1.019035 |
-| logging_simple |1.004851 |0.957561–1.054476 |
-| xml_etree_generate |1.021530 |1.008064–1.035175 |
-| xml_etree_iterparse |1.013624 |1.001751–1.025637 |
-| xml_etree_parse |0.992645 |0.987386–0.997933 |
-| xml_etree_process |0.997083 |0.989859–1.004359 |
+Retained final native ELF: E55/perf56-final56-native/python, SHA256
+`2f46bcc126b8857095bd8b25a9256ad0f76fe65667e023e96edd4d7acd21f4cc`.
+E56/qualification56 owns source equivalence, debugger-baseline comparison and
+commands; E55/perf56-closure56-* holds the full logs. See [handoff](../../HANDOFF.md)
+for absolute roots and frozen worktrees.
 
-Evidence: E56/transport-await-all29-golden. No isolation claim follows from this
-composition comparison, and no promotion precedes coherent qualification.
+## Rejected experiment and next work
 
-### Native transport removal
+Inlining the list getter removes a call/six spills and shrinks its handler
+831→771 bytes, stack48→16, but repeated coroutines regress 10.73%. It is reverted;
+its branch/ELFs/evidence remain. Smaller generated/native code is not sufficient
+for selection. Native terminal entry splitting also grows combined text despite
+removing stack arguments; no isolated throughput gain is assigned to it.
 
-Retained f291→82e857 disassembly confirms canonical publication work disappears.
-List subscript text changes 899→831 bytes; tuple 1216→743; GET_ANEXT 927→732.
-Static _PyValue_Canonicalize callsites change 1→0, 3→0 and 2→0 respectively.
-Tuple local stack reservation falls 32→16 bytes; list 48 and GET_ANEXT 96 remain.
-GET_ANEXT retains its required FromNumberSteal constructor and numeric type
-tests: canonical publication does not erase result construction. These are
-native code changes, not executed call counts or attributed speedups. The
-hot6 tuple census is zero; no tuple speed claim follows from this removal.
-The list reader remains a native call and gains one pre-call spill plus stricter
-object-tag branches; not every instruction improves. Static old disassembly is
-retained under E56/transport-disasm-comparison.
+The [cold review](review-integration.md) ranks resume/delegated yield, exact calls,
+coroutine construction/retirement, guarded attribute hits and the next executed
+canonical producer. The [plan](plan.md) assigns evidence gates and keeps a parallel
+regression diagnosis lane. Count repeated operations before another broad ABI
+rewrite. No further implementation is part of this checkpoint closure.
 
-## Current matched hardware counters
+## Evidence and publication
 
-At 82e857, all 24 stat invocations pass with stable identity and 100% counter
-running. Three alternating pairs per case count only the warmed fixed kernel
-interval, normalized per completed kernel loop. Ratios are directly against
-upstream, independently of the timing table.
+BASE/E55/E56 and exact controls are defined in HANDOFF. Fixed CPU15/hash0,
+JIT disabled, matched GCC15.2/O3/devlibs; fork/golden use five-argument tailcall
+handlers and upstream computed goto. This measures the complete runtimes, not an
+isolated dispatch-convention experiment. All29 campaigns use116 commands each,
+confirmation 84, matched stat 24, profiles 8; every source/native identity remains
+stable. Diagnostics add 18 stat and 6 record commands. Results include observed
+pair ranges; they are not confidence intervals.
 
-| Case | Native instructions /upstream | User cycles /upstream |
-| --- | ---: | ---: |
-| deltablue |1.361387 |1.148821 |
-| generators |1.411737 |1.350387 |
-| coroutines |1.307831 |1.237332 |
-| logging_silent |0.967588 |0.675614 |
-
-Generators and coroutines still execute substantially more native instructions;
-aggregate throughput does not turn that into parity. DeltaBlue also executes
-36.1% more instructions despite its smaller cycle gap. Logging executes 3.2%
-fewer instructions and about 32.4% fewer cycles. These do not isolate frame
-clearing, dispatch or one ownership mechanism. Profiled physical-symbol work
-and source/native branch removal must choose the next experiment. Evidence:
-E56/transport-await-perf-stat (complete24/24 and paired-summary.json).
-
-### Current physical-symbol profiles
-
-All eight record invocations pass, with stable identity and no lost samples.
-Physical-symbol flat reports disable inline expansion and child attribution.
-In generators, SEND_GEN is 29.89% self, YIELD_DELEGATED 14.80% and monomorphic
-SHAPE_LOCAL_TEMP 9.90%. The changed terminal completion helper is only 1.66%:
-more terminal ABI tuning cannot plausibly erase the full resume gap.
-
-Coroutines show exact-call handler 11.28%, CompleteGeneratorReturn 6.29%,
-SEND_GEN 5.44%, generator deallocation 5.44%, ClearGenerator 4.78%, MakeCoro 4.63%,
-GET_AWAITABLE 4.29% and CopyCreatedGenerator 2.68%. Creation, execution and
-retirement all remain targets; the transfer patch does not redesign them.
-DeltaBlue shows exact-call 11.91%, PIC-local read 8.28%, method load 6.22%,
-monomorphic shape load 6.11% and TryClearExceptCode 5.43%. Logging spends time
-in its existing mono loads, call/binding paths and frame retirement, with no
-PIC selector execution. Upstream mostly attributes evaluator work to one
-EvalFrameDefault symbol; flat buckets cannot be subtracted or summed into a
-removable cycle budget. Evidence: E56/transport-await-perf-record and its
-flat-report-commands.json.
-
-## Cache execution and previous checkpoints
-
-A separate f291 diagnostic ELF counts only the warmed kernel interval. It is
-never timed. Actual managed SHAPE selector outcomes are:
-
-| Kernel | Attempts | Hits | Misses | Hits by row0/1/2/3 |
-| --- | ---: | ---: | ---: | --- |
-| DeltaBlue |1,709,700 |1,709,700 |0 |1,453,710 /255,990 /0 /0 |
-| Richards |1,253,922 |1,253,909 |13 |381,968 /448,386 /340,261 /83,294 |
-
-The other four hot cases execute no selector attempts. All temporary source
-paths were restored and baseline hashes checked before ordinary rebuilding.
-Patch, counters, ELF and outcomes remain under E56/pic-selector-diagnostic-f291.
-These actual counts supersede site-history applicability estimates. The first
-site census divided offsets incorrectly and is explicitly invalid; use
-site-counts-corrected-196284 rather than site-counts-6c192.
-
-| Earlier head | Result and disposition | Sealed evidence under E56 |
-| --- | --- | --- |
-|6a00c6a08d4 | All29/upstream1.161978, six wins; mixed golden screen, not selected |call-ex-* |
-|f6ef4a81a87 | Generator/golden.949424 but coroutine1.065409; not selected |recipient-hot6-golden |
-|f29106e4557 | Richards/golden.712132 and/upstream.892020; logging/golden1.206807 blocked selection |polymorphic-hot6-{golden,upstream} |
-
-These are distinct source/native campaigns. Their ratios must not be multiplied
-or transferred to the current source. Historical8232 and selected54 evidence
-remain in the [model55 report](../call-model55/report.md) and
-[selected54 report](../frame-state54/report.md). Earlier build/harness failures
-and corrections remain in their command manifests and logs; no failed result
-was overwritten.
-
-## Experiment decisions and remaining gates
-
-The exact-tuple CALL_EX shortcut removes acquisitions on its exact arm and
-passes semantic checks, but has zero executed hot-six sites. No broad speedup
-is assigned to that slice. Direct completion entries share the same body but
-add 1508 text bytes; they apply to exhaustion/terminal completion, not every
-yield or ordinary Python return. Further work there needs actual terminal
-counts. The generator-recipient fix instead removes the local/discard direct
-handoff rejection; the caller audit confirms return values were already
-canonical, with recipient and retirement work still necessary.
-
-The initial multi-use COPY-web slice closes at zero eligible candidates across
-21 files/426 CFGs. Of 3,092 fresh borrow roots, existing passes remove 1,798;
-204 cross callbacks, 1,068 require nonborrow terminals, 12 cross line/EH and 10
-have unsupported COPY provenance. No speculative pass is added. This rejects
-that morphology, not broader borrowing; frozen inputs/parser are under
-E56/multi-use-borrow-census. A new slice must first demonstrate surviving uses
-under a sound anchor/effect/materialization contract.
-
-The current container/coroutine/cache composition has source, product, focused
-native and performance evidence. Complete its coherent full qualification,
-classify failures against selected54, and select only after reviewing the
-regressions. The inline-list followup is rejected after repeated coroutine regression. Preserve
-logging gains and state the limitations of noisy small differences.
-
-Full static M4, arbitrary allocation, IRSC2 native qualification and bitmap
-monitor/profile/debug repairs remain independent unfinished gates. The bitmap
-candidate is unselected and has no current timing. Selected54 debugger-jump,
-LLTrace, GC-verifier and profiling limits remain explicit; only GDB pretty
-printing is quarantined. Startup RSS and zero-box counts are not throughput
-gates. The [plan](plan.md) owns followup work, and the [handoff](../../HANDOFF.md)
-owns exact active execution state.
+Canonical docs and the runtime/golden refs are pushed before guarded Loom
+publication. The goal → plan → architecture/status chain owns ongoing work;
+old staging pages and ten obsolete mirrors were retired with exports and git
+history preserved. Sealed native evidence is unchanged.

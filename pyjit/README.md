@@ -9,7 +9,9 @@ and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The [combined design](design/proposals/interpreter-performance56.md) and
 [critical audit](issues/interpreter-performance56/review.md) define the next
-increments; the coordinator integrates reviewed and measured changes. Selected54 remains golden. The
+increments; the coordinator integrates reviewed and measured changes. Selected56 is golden; its [report](issues/interpreter-performance56/report.md)
+and [benchmark tables](issues/interpreter-performance56/benchmark-tables.md)
+record gains, accepted regressions and remaining limits. The
 [model55 report](issues/call-model55/report.md) retains the preceding experiments
 and pending source components. Proposed contracts remain separate from the
 as-built designs below.

@@ -1,11 +1,21 @@
 # Extension API
 
-The preferred direction is an opaque, HPy-compatible extension API backed by canonical internal PyValue, plus a slower interpreter-specific bridge for rebuilt Python.h source. The opaque backend is unimplemented; the bridge has partially implemented, source-reviewed components and no qualified runtime. Universal-value restoration remains incomplete. Hard binary compatibility with old CPython extensions is not a goal.
+Canonical internal PyValue integration is complete in the RC runtime, including
+rebuilt bundled extensions. Rebuilt `Python.h` source uses the fork's private
+ABI and object bridges where needed. This does not establish compatibility
+with arbitrary third-party extensions or old CPython binaries.
+
+An opaque, HPy-compatible extension API remains the preferred public direction;
+its backend is unimplemented. The proposal below must not be read as an existing
+opaque backend or a prerequisite for completing the internal value runtime.
+[Status](../STATUS.md) and the [current performance report](../issues/interpreter-performance56/report.md)
+own runtime qualification and experiment results.
 
 The [value API](value-api.md) makes `PyValue` the internal API and the
 `PyObject *` API a compatibility layer of thunks over it. Rebuilt `Python.h`
-extensions are users of that layer and pay a box at each exit of an inline
-value. The opaque HPy-compatible API on this page is the future public value
+extensions using object-form entry points pay for boxing when an inline value
+must become a `PyObject *`; value-native entry points can retain PyValues.
+The opaque HPy-compatible API on this page is the future public value
 API. The value API fixes its conventions (borrowed arguments, owned results,
 Dup and Close, NULL on error) so that a handle can be a `PyValue` word, as a
 `JSValueRef` is a `JSValue` in JavaScriptCore on 64-bit platforms.
@@ -120,14 +130,13 @@ Stage 1 names the actual route: `_CALL_NON_PY_GENERAL` and specialized `_CALL_BU
 
 The first checks exercise canonical scalar/object results, displaced owners, callbacks during boxing, OOM, abort, pending exceptions and exact-once cleanup through both cold and warmed real dispatch. Later slices add field cycles, globals/subinterpreters, buffer leases and ABI rejection. Completing HPy ecosystem coverage is not a prerequisite for completing and measuring the internal universal-value interpreter checkpoint.
 
-Current implementation and evidence belong to the
-[selected native caller experiment](../issues/pyvalue-rc-restoration/native-callers/status.md),
+Restoration implementation records include the
+[native caller experiment](../issues/pyvalue-rc-restoration/native-callers/status.md),
 [owned dictionary bridge](../issues/pyvalue-rc-restoration/owned-dict-entry/status.md)
 and [parser/registration work](../issues/pyvalue-rc-restoration/native-parsers/status.md).
-Their source reviews do not establish a complete extension backend or runtime
-conformance. The existing 660-path consumer census remains the migration inventory.
-The [original proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md)
-retains wrapper classification and research provenance.
+These records retain component evidence; they do not establish an opaque
+extension backend or arbitrary third-party conformance. The existing 660-path
+consumer census remains the migration inventory.
 
 Deallocators preserve the entry exception and report their own failures as
 unraisable. Earlier invalid test injections and their correction remain in the

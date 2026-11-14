@@ -3,8 +3,8 @@
 Current work is [stage2 interpreter performance](issues/interpreter-performance56/plan.md):
 one combined architecture for value transport, borrowing, calls/returns and
 specialization. Astra completed its [combined design](design/proposals/interpreter-performance56.md)
-and [audit](issues/interpreter-performance56/review.md); Sol source peer review
-and foundation qualification are active.
+and [audit](issues/interpreter-performance56/review.md); implementation and peer review are complete for the current composition;
+root full qualification and selection are active.
 The [goal](GOAL.md) and [architecture](design/runtime-architecture.md) define
 the project; [HANDOFF](HANDOFF.md) owns exact execution state.
 
@@ -14,27 +14,49 @@ Selected54 remains golden: `61015a9452d9069646fb5fede9ff963896833b89`, branch
 `pyjit/round54-golden`, tag `pyjit-golden-20261112-frame-state`. No model55
 performance candidate has earned promotion.
 
-Latest measured integration is **f6ef4a81a87**, not selected. Both builds
-complete 117 modules/79 shared; nine completion/observer modules pass 84 methods
-per role. Two balanced pairs against golden54 give these elapsed ratios.
+Current integration is **ac4c7019f9b**, with logical-vacancy and qualification
+fixture fixes. Both builds pass 117 modules/79 shared, and the three unchanged
+admission/retirement regression methods pass per role. Broader focused verification is active. Full release at
+7a21 completed55,023 tests with116 failures across13 modules; debug was
+interrupted after5,310 tests to fix a confirmed consumed-slot admission and
+retirement-proof bug. The shared predicate repair grants no readability or
+physical NULL fact. Generated-case closure remains active; no new golden is
+selected. The [handoff](HANDOFF.md) owns exact paths and executed counts.
 
-| Benchmark | Candidate/golden54 | Pair range |
+The inline-list experiment passed focused semantics but regressed coroutines
+10.7% in six pairs and was reverted. Its native call/spill reduction did not
+pass the performance gate.
+
+At measured **82e857384f8**, formats and generated products pass review, both
+builds complete 117/79, all 154 focused methods pass per role, and five bootstrap
+plus 27 compile probes pass. Independent cold source and conditional design
+reviews found no blocker.
+
+Six balanced golden54 pairs confirm these elapsed ratios; lower is better.
+
+| Benchmark | /golden54 | Pair range |
 | --- | ---: | ---: |
-| DeltaBlue |1.022672 |1.003553–1.042155 |
-| Generators |0.949424 |0.948526–0.950322 |
-| Coroutines |1.065409 |1.026978–1.105277 |
-| Richards |0.968734 |0.967106–0.970366 |
-| Comprehensions |1.027499 |1.022269–1.032757 |
-| Silent logging |1.017075 |0.956376–1.081626 |
+| DeltaBlue |.983547 |.966438–.995870 |
+| Generators |.942484 |.925687–.961010 |
+| Coroutines |.993560 |.981109–1.014690 |
+| Richards |.718632 |.716043–.722528 |
+| Comprehensions |.959073 |.868742–.981809 |
+| Silent logging |.898868 |.860832–.936960 |
+| Raytrace |1.035032 |.951701–1.059284 |
 
-Identities are stable and all commands succeed. Generators improve in both
-pairs; the overall result remains mixed and is not promoted. There is no
-same-head upstream/broad/PMU result. The earlier **6a00c6a08d4** broad screen
-has all 29/upstream geometric mean 1.161978, six wins. Matched PMU native
-instruction ratios are 1.366815 DeltaBlue, 1.492557 generators and 1.353759
-coroutines. Those results do not transfer to newer source. The
+Separate direct all-29 campaigns give .989410/golden (12 wins) and
+1.151069/upstream (seven wins). Raytrace and several smaller regressions remain
+visible. Matched native instruction ratios against upstream are 1.361387 for
+DeltaBlue, 1.411737 for generators and 1.307831 for coroutines. Extra executed
+work remains the main performance gap; frame clearing is not established as
+its cause. All campaigns have stable identities and no command errors.
+
+Earlier f291's logging regression is not reproduced by 82e857 confirmation.
+Actual PIC counts establish use in DeltaBlue/Richards and no selector attempts
+in logging; they do not explain that earlier regression. The
 [current report](issues/interpreter-performance56/report.md) owns exact-head
-tables, profiles and pair ranges. Historical evidence stays in model55's report.
+tables, native costs, profiles and rejected experiments. Do not multiply
+separate campaign ratios or transfer results without an identity check.
 
 Golden54's full comparison is all 29/upstream 1.156543, six wins. Its
 [report](issues/frame-state54/report.md) retains benchmark tables, rejected
@@ -61,7 +83,7 @@ These remain experimental components, not selected replacements:
 
 | Component | Actual state |
 | --- | --- |
-| Scalar facts | Native8232 qualifies the first GET_ANEXT/UNARY_NOT error snapshots. VALUE/error-copy plus isolated repair pass 33 host checks and full emission. The new chained runtime proof fails in both initial native roles. Second replay repair469b and generator recipient0888 are integrated at If6ef4 with regenerated products and 117/79 builds. The chained proof now passes; a synthetic debugger target must supply an integer line to reach its intended check. Completion/observer checks pass 84 methods per native role. Full static scratch authority is unfinished. |
+| Scalar facts | Actual scalar normal/error graphs and current publication receipts pass the core gate within 82e857's 154 focused methods per role. Missing proof retains initialized-NULL control. Full static scratch authority remains unfinished. |
 | Bitmap execution readers | B0e918 builds 117/79 in both roles. All34 focused cases pass release. Debug aborts in a constructed HomeRead image at LOAD_COMMON_CONSTANT; its other four selected modules pass. Earlier release lifecycle diagnostics pass seven modules but fail monitoring/profiling with absent-input errors. No complete bitmap timing or qualification. |
 | Explicit exceptional transfers | Compiler071d, readers4c646 and runtime/container9c297 are source-reviewed with Clinic/AST checks only. IRSC2 names retained homes and protocol destinations explicitly. Full generation and native qualification remain pending; the allocator is still canonical. |
 

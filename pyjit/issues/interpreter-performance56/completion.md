@@ -262,6 +262,9 @@ load is an observation, not an execution claim. Custom awaitables, rejected
 states, inline inputs and errors retain the original helper/close/error/result
 sequence. The accepted arm has no callback or borrowed escape before TAKE.
 
+The following records the worker source freeze, before root integration and
+native qualification described at the end of this section.
+
 The first source attempt emitted both record variants, but exposed a format
 regression: `iter = TAKE(iterable)` marks the output as a value alias, removing
 STORE_DST and adding NO_FOLD. That loses existing destination folding and may
@@ -316,3 +319,21 @@ no changed fields; GET_AWAITABLE keeps STORE_DST, input borrow mask 1 and no
 NO_FOLD. Runtime fixtures are AST-checked only. Root still owns complete
 generation, allocated-slot/word comparison, runtime qualification and native
 cost inspection. No performance claim follows from these source checks.
+
+
+Root integration82e857384f8 has unchanged-format comparison, full regeneration,
+two product approvals, both 117/79 builds,154 focused methods per role and5+27
+bootstrap/compile probes passing. One new fixture initially expected the wrong
+executing-coroutine exception: a frozen upstream/golden/candidate probe gives
+ValueError in all three; its corrected assertion preserves state and cleanup.
+
+Retained native review confirms the exact scratch-input arm bypasses
+_PyEval_GetAwaitable and its nested INCREF plus the old scratch DECREF. Folded
+local inputs retain their necessary duplicate. GET_AWAITABLE text grows1170 to
+1408 bytes (+238), and stack reservation112 to128 bytes (+16); generic bridge
+setup, stack canary and recipient checks remain. This is actual pair/helper
+removal, not prologue removal. First hot6/golden composition gives coroutines
+1.010237 (range.993797–1.026950), so no isolated coroutine throughput gain is
+claimed. Evidence: E55/perf56-transport-await-native and
+E56/transport-await-hot6-golden. Broad comparison and six-pair confirmation are complete at82e857; coherent
+qualification and selection remain pending. The report owns the later results.

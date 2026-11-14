@@ -15,31 +15,75 @@ workers own generator-recipient/call, shared-value, and polymorphic-shape lanes.
 Root owns products, native execution, evidence, publication and selection.
 Do not call Astra in the inner loop.
 
-Measured early checkpoint 6a00c6a08d4 has complete all 29/upstream, hot six/golden,
-18 stat and 6 record invocations at stable identities. See E56/call-ex-* and the
-[current report](issues/interpreter-performance56/report.md). Transaction 12
-methods pass each role. Initial COPY-web census has zero candidates across 21
-corpus files/426 CFGs; frozen parser/metadata/input hashes reproduce the result.
-No compiler pass is justified for that slice.
+Current I source head is **ac4c7019f9b**, with logical-vacancy repair
+0dccdf84069→dab1ffaed3d and eight qualification-fixture updates. Both builds
+pass 117/79 under E55/perf56-vacancy-qualification. The three unchanged
+admission/retirement regression methods pass per role under
+E55/perf56-vacancy-smoke; five-module core verification is active. The unchanged-template
+inline-list experiment remains rejected/reverted; its branch/evidence is retained.
 
-I now f6ef4a81a87 includes second replay469b→aa952, recipient0888→99f,
-products31a3 and fixture maintenance d531→f6ef. Full host37 and actual-recipient
-source checks pass; full regeneration and both 117/79 builds pass. The native
-proof assertions now pass; the chained witness fails later because its synthetic image has f_lineno=None,
-so assignment raises "lineno must be an integer" before the intended active-call
-check. Actual denial is retained under E56/redirect-denial-diagnostic; IR owns a
-valid target fixture. Nine completion/observer modules pass all 84 methods per
-native role. Core selector omitted ReachedPhaseTests, covered by that second
-completion run. E56/recipient-hot6-golden completes two balanced pairs with
-stable identities/no errors: generator .949424, coroutine1.065409,
-DeltaBlue1.022672, Richards .968734, comprehension1.027499, logging1.017075
-(wide range). No current upstream/full qualification or promotion is claimed.
+Full release at7a21 completed55,023 tests:116 failures across13 modules,
+576 modules OK. Debug was deliberately interrupted after128/675 files and5,310
+tests when a real admission/proof mismatch was identified; it is not qualified.
+Consumed scratch reads were accepted on three public routes, and16 full-extent
+retirement checks lost EXACT. Source repair uses one logical-absence predicate
+in five consumers without granting NULL/INIT/readability or weakening MAY_OWNER/
+completeness. Existing semantic assertions remain unchanged. Targeted verbose
+reproducer is E55/perf56-admission-diagnostic; complete source/unit diagnostics
+are E55/perf56-qualification-verbose. Both runs remain sealed.
 
-The earlier root source diagnosis was confirmed in actual code: legacy transfer
-erased untouched scratch facts after a complete normal graph. The reviewed
-repair makes that graph authoritative, with conservative fallback for unknown
-source. E56/scalar-normal-legacy-gdb* records unsuccessful debugger attempts;
-the second timed out during startup and supplies no native confirmation.
+Magic/table pins, exact call-route names, unknown-producer controls and frame
+sizeof formulas are corrected in ac4c7019f9b. Remaining generated-case failures
+are in IR's source-review lane: three stale expectations, two mutations now
+failing earlier and two minimal-analysis optional-observer lookups. Do not
+paper over the source defects. Root owns generation/native reruns. Six known
+sys_settrace jump errors remain explicit; no new quarantine is authorized.
+
+Last complete timing/PMU belongs to
+**82e857384f899fbf5f9d2c5f68852250de84c31e**; it is not a qualification result.
+Restored7a21 source tree equals82e857, and retained .text/.data.rel.ro match.
+The new cold admission fix changes source again, so final timing must use its
+new native identity after qualification.
+It includes the scalar replay repairs, exact-tuple call preparation, direct
+completion entries, generator-recipient admission, managed SHAPE PIC, canonical
+list/tuple transport and exact-coroutine owner transfer. Products are committed;
+both native builds complete 117 modules/79 shared. All 154 focused methods pass
+per role, plus five bootstrap and 27 compile probes. Formats are unchanged.
+Actual merged-source/product reviews and an independent cold source review
+found no blocker. Full lifecycle qualification remains pending.
+
+The latest two-pair hot6/golden screen is stable and error-free:
+DeltaBlue .960183, generators .934380, coroutines 1.010237, Richards .720826,
+comprehensions .975365, logging .951952. Coroutine/logging ranges cross parity.
+All29/upstream mean1.151069 (seven wins); direct all29/golden mean.989410
+(12 wins). Six-pair confirmation includes raytrace regression1.035032, with
+one faster pair. Both controls/counters/profile campaigns are complete and
+stable under E56/transport-await-*. Golden54 is unchanged. The [report](issues/interpreter-performance56/report.md) owns the
+exact-head tables, prior screens, native costs and failures.
+
+Native ELF/disassembly is retained under E55/perf56-transport-await-native,
+SHA256 e9d36ff85b79b03eeeb3d75e86dd59320f78965e1407f3696cee2b16e4555725.
+The coroutine scratch arm bypasses its helper and reference-count pair, but
+adds 238 text bytes and 16 stack bytes. Do not call this a prologue removal.
+
+At earlier f291, Richards .712132/golden and .892020/upstream, but logging
+1.206807/golden blocked promotion. Actual warmed PIC counts are DeltaBlue
+1,709,700 hits/0 misses, Richards 1,253,909 hits/13 misses; other hot cases,
+including logging, execute no PIC selection. E56/pic-selector-diagnostic-f291
+retains the separate diagnostic ELF, patch and outcomes. All diagnostic source
+paths were restored, hashes verified and ordinary rebuilding passed 117/79.
+No counters remain in current source; never time the diagnostic ELF.
+
+The early 6a00 checkpoint has complete all29/upstream and matched PMU evidence
+under E56/call-ex-*. Those measurements do not transfer to current source.
+The initial COPY-web census closes at zero candidates across 21 files/426 CFGs;
+its frozen inputs/parser reproduce the result. No compiler pass was added.
+
+Next: qualify the logical-vacancy fix and fixtures, resolve generated-case
+failures, then repeat full coherent qualification and final measurements. Preserve failed harness/fixture attempts and
+source identities in evidence; the report records their corrections. If
+logging regresses again, diagnose the current compiled call/transport paths;
+its zero PIC count excludes extra selector-loop execution as the cause.
 
 Source-only next packets use existing isolated worktrees. Full static M4,
 IRSC2 and bitmap qualification remain separate. Root's common native wrapper
@@ -66,11 +110,11 @@ and `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstr
 
 | Source under BASE/worktrees | Branch / head | Native state and next gate |
 | --- | --- | --- |
-| call55-integrated | pyjit/call55-integrated /f6ef4a81a87 | Both 117/79 builds; proof passes, synthetic line-target fixture pending. Completion84 passes per role; hot6/golden mixed, generator .949424. |
+| call55-integrated | pyjit/call55-integrated /ac4c7019f9b | Vacancy/fixture fixes integrated; both builds117/79 and three regression methods pass per role. Final full gate and new timing pending. |
 | call55-bitmap | pyjit/call55-bitmap /0e918ddc25b | Both 117/79 builds. Release 34 focused pass; debug HomeRead and monitor/profile failures remain. No timing. |
-| call55-ir | pyjit/perf56-value-replay /469b5682289 | Second replay integrated; shared tuple/list fact migration in progress. Frozen IRSC2 packet remains on pyjit/call55-ir at3cfc808. |
-| call55-pins | pyjit/perf56-generator-recipient /d531d993d30 | Recipient and fixture packets integrated; exact awaitable transfer proposed. Retained-EH80b preserved on pyjit/call55-frames-retained. |
-| call55-gc | pyjit/perf56-polymorphic-shape /323cb4da34a | Reviewed PIC frozen; no products/native. Prior monitor/EH branches preserved. |
+| call55-ir | pyjit/perf56-absence-facts /0dccdf84069 | Vacancy fix source reviewed/integrated; generated-case closure active. Prior value-replay e61a and IRSC2 branch3cfc retained. |
+| call55-pins | pyjit/perf56-coro-await-transfer /a852d11faf6 | Recipient, fixture and await packets integrated; focused native checks pass in I. Retained-EH80b preserved on pyjit/call55-frames-retained. |
+| call55-gc | pyjit/perf56-inline-list-borrow /4a591c4b168 | Getter experiment rejected/reverted in I after repeated coroutine regression; prior PIC5976 and monitor/EH branches preserved. |
 
 Historical measured I8232: E55/scalar-storage-hot-screen-{golden,upstream}; stable
 identities/no errors. E55/scalar-storage-{release,debug}-build.log has117/79;

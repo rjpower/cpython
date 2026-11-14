@@ -1,7 +1,10 @@
 # Canonical element transport and multi-use borrowing
 
 Status: the scalar VALUE foundation is qualified at integrated `8d0e3a8f22d`;
-the list/tuple migration is source work awaiting its own freeze and native gate.
+the list/tuple migration is frozen at worker e61a0229cb6 and integrated as
+source in cfb91380cff. Products113a4ded473 pass review; native82e857384f8
+builds both roles117/79 and passes154 focused methods per role, plus5+27
+bootstrap/compile checks. Retained disassembly confirms removal; broad/control qualification is active.
 The foundation passes both native builds, the 52-case core in each role and
 the 5+27 bootstrap/compile matrix. Its complete scalar normal graph now supplies
 the transfer directly; an uncovered graph still uses the conservative transfer.
@@ -193,14 +196,16 @@ removed by single-use folding. Count actual terminal acquisition too: a folded
 nonzero source-operation count alone would still not establish a net pair or
 native work saving.
 
-Next, extend the same facts across acyclic CFG joins. An anchor is usable only
+Only after identifying a surviving, measurable borrow family, extend the same
+facts across acyclic CFG joins. An anchor is usable only
 when all predecessors prove the same local definition and value. Otherwise
 materialize the already evaluated snapshot on incoming edges before the
 invalidating effect and merge an owning value. Never reload a changed local.
 Backward demand includes explicit retained EH identities and observer state.
 Keep backedges/polls and cross-line events materialized until their separate
-observer/loop proof exists. This is the next borrowing packet, not a dependency
-on complete M4, IRSC2 qualification or arbitrary allocation.
+observer/loop proof exists. This remains a possible borrowing packet: the first census found zero
+eligible COPY webs, so no pass was implemented. It does not depend on complete
+M4, IRSC2 qualification or arbitrary allocation.
 
 ## Architecture peer conclusion
 
@@ -215,3 +220,41 @@ and a pre-effect materialization/miss contract.
 Keep the tuple/list slice and multi-use pass separately measurable. Neither
 claims complete static readability maps, non-stack allocation, new refcount
 semantics or a speedup before native and dynamic evidence exists.
+
+
+## Native work-removal gate
+
+At integrated82e857384f8, retained f291→current disassembly shows list
+subscript899→831 text bytes, tuple 1216→743 and GET_ANEXT 927→732. Static
+_PyValue_Canonicalize callsites change1→0,3→0 and2→0. Tuple local stack
+reservation falls 32→16 bytes; list 48 and GET_ANEXT 96 remain. GET_ANEXT's
+required numeric result constructor remains. This confirms work removal in
+optimized code, not runtime counts or an isolated throughput win. The changed
+literal stores in five other handlers may already optimize away; they are not
+credited with a native gain. Root's current evidence lives under
+E55/perf56-transport-await-native and the [checkpoint report](report.md).
+
+
+## Internal accessor exposure
+
+Retained native code still calls PyList_GET_VALUE for an unchecked borrowed
+read, while the equivalent tuple accessor is static inline. The list function
+body is only a cast, element load and PyValue_Borrow; it hides no callback,
+allocation, lock, atomic operation or reference acquisition. A bounded followup
+moves that same body to pycore_list.h and removes its out-of-line declaration
+and definition. Keep its name, cast macro, lifetime contract and all callers.
+It does not confer new free-threaded safety or remove required duplication.
+
+Frames peers the source proposal before GC implements in an isolated branch.
+Root compares optimized call/spill removal and code size against82e857, builds
+all consumers, exercises existing container/ownership checks, and repeats
+unchanged benchmarks. Keep only a measured winner. No fallback symbol or
+second accessor family is needed for this rebuilt private API.
+
+
+Disposition: root integrated 4a591 as 5e3ac28ca03. Both 117/79 builds and117 targeted
+container/runtime methods per role pass. Native list call plus six fast-path
+spills disappear; handler 831→771B, stack 48→16B, whole .text+384B. However,
+six-pair confirmation regresses coroutines 1.107292/golden and leaves raytrace
+1.035096. Rejected and reverted at 7a21d4c5027; no semantic issue or causal
+performance mechanism is established. Keep the existing out-of-line list getter.

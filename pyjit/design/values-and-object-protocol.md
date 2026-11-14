@@ -1,11 +1,15 @@
 # Values and object protocol
 
 The selected core uses one canonical eight-byte PyValue in frames, containers,
-cells, attribute fields and operation arguments/results. Restoration under RC
-is incomplete; the qualified interim images still have boxed heap fields.
-[Current restoration](../issues/pyvalue-rc-restoration/status.md) owns progress.
+cells, attribute fields and operation arguments/results. Integration under RC
+is complete, including rebuilt bundled extensions. The [representation](pyvalue.md)
+defines the encoding; [status](../STATUS.md) and the
+[current performance report](../issues/interpreter-performance56/report.md) own
+qualification and measurements. Integrated56 transport experiments do not
+change which runtime is selected.
 
-Exact int32 and non-NaN double values are inline. None/bools retain immortal
+In the selected 64-bit GIL profile, exact int51-range integers and non-NaN double
+values are inline. None/bools retain immortal
 singleton identity; NaNs, large integers, subclasses and other objects retain
 object form. Internal NULL/error/index sentinels are not language values.
 Canonical producers and boundaries keep representations consistent. Raw bits,
@@ -42,8 +46,10 @@ the whole operation. Guard type/version, shape and descriptor precedence before
 using a specialized access; keep generic Python behavior when guards fail.
 
 Native boundaries capture roots → prepare arguments → invoke → stage → publish
-caller state → clean up → refresh. Scope-owned object arrays can support ordinary
-rebuilt parser bodies; borrowed scalar boxes cannot escape a local arena.
+caller state → clean up → refresh. Owned object views and arrays support ordinary
+rebuilt parser bodies under the [native boundary contract](native-boundary.md);
+borrowed scalar boxes cannot escape their scopes. Object bridges remain where
+an object-form API requires them; the opaque HPy-compatible backend is unimplemented.
 The same semantic/ownership contract applies to interpreter and JIT paths.
 
 The [restoration design](../issues/pyvalue-rc-restoration/design.md) records

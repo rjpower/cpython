@@ -19515,10 +19515,11 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE_READ
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
+                uint32_t shape = fb->shape;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -19531,10 +19532,6 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-            }
-            // _GUARD_SHAPE
-            {
-                uint32_t shape = fb->shape;
                 if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -19544,11 +19541,7 @@
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-                assert(!PyValue_IsNull(found));
-                attr = IR_CANONICAL_HOME_DUP(found);
+                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -19608,10 +19601,11 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_SHAPE_READ
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
+                uint32_t shape = fb->shape;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -19624,10 +19618,6 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-            }
-            // _GUARD_SHAPE
-            {
-                uint32_t shape = fb->shape;
                 if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -19637,11 +19627,172 @@
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-                assert(!PyValue_IsNull(found));
-                attr = IR_CANONICAL_HOME_DUP(found);
+                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                STAT_INC(LOAD_ATTR, hit);
+                ir_own_B = PyValue_NULL;
+                PyValue receiver = ir_own_B;
+                frame->phase_state = 0;
+                assert(PyValue_IsNull(IR_SLOT(IR_A(ir_word))) || PyValue_Is(IR_SLOT(IR_A(ir_word)), attr));
+                IR_SLOT(IR_A(ir_word)) = attr;
+                _PyValue_CheckTemp(IR_SLOT(IR_A(ir_word)));
+                {
+                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    if (!retire_needed) {
+                        PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
+                    }
+                    if (retire_needed) {
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                    }
+                }
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
+                if (oparg & 1) {
+                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
+                }
+            }
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(LOAD_ATTR_SHAPE_POLY) {
+            int opcode = LOAD_ATTR_SHAPE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *null;
+            uint32_t ir_shape_offset;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_SHAPE_READ
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                uint32_t type_version = fb->type_version;
+                uint32_t shape = fb->shape;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                (void)type_version; (void)shape;
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, PyValue_AsKnownObjectBorrow(owner));
+                if (ir_selected_offset < 0) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                ir_shape_offset = (uint32_t)ir_selected_offset;
+            }
+            // _LOAD_ATTR_SHAPE
+            {
+                uint32_t offset = ir_shape_offset;
+                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                STAT_INC(LOAD_ATTR, hit);
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
+                PyValue receiver = ir_own_B;
+                frame->phase_state = 0;
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
+                {
+                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    if (!retire_needed) {
+                        PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
+                    }
+                    if (retire_needed) {
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL));
+                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                    }
+                }
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
+                if (oparg & 1) {
+                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
+                }
+            }
+            if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
+            DISPATCH();
+        }
+
+        TARGET(LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP) {
+            int opcode = LOAD_ATTR_SHAPE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *null;
+            uint32_t ir_shape_offset;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_SHAPE_READ
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                uint32_t type_version = fb->type_version;
+                uint32_t shape = fb->shape;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                (void)type_version; (void)shape;
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, PyValue_AsKnownObjectBorrow(owner));
+                if (ir_selected_offset < 0) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                ir_shape_offset = (uint32_t)ir_selected_offset;
+            }
+            // _LOAD_ATTR_SHAPE
+            {
+                uint32_t offset = ir_shape_offset;
+                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
                 PyValue receiver = ir_own_B;

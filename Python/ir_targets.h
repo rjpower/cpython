@@ -2,7 +2,7 @@
 // from:
 //   Python/bytecodes.c
 // Do not edit!
-static py_tail_call_funcptr instruction_funcptr_handler_table[365];
+static py_tail_call_funcptr instruction_funcptr_handler_table[367];
 
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
@@ -236,6 +236,8 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUE
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_PROPERTY(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE_LOCAL_TEMP(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE_POLY(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SLOT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_WITH_HINT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_BUILD_CLASS(TAIL_CALL_PARAMS);
@@ -350,7 +352,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
 PROCESS_ERROR_AT(RAISE, 0, next_instr);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[365] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[367] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -716,4 +718,6 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[365] = {
     [362] = _TAIL_CALL_INSTRUMENTED_YIELD_DELEGATED,
     [363] = _TAIL_CALL_RETURN_VALUE_EMPTY,
     [364] = _TAIL_CALL_INSTRUMENTED_RETURN_VALUE_EMPTY,
+    [365] = _TAIL_CALL_LOAD_ATTR_SHAPE_POLY,
+    [366] = _TAIL_CALL_LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP,
 };

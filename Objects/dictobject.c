@@ -1398,7 +1398,8 @@ int
      * value before releasing our query pin, which can itself reenter. */
     PyValue query = PyValue_XDUP(key);
     PyValue owned = PyValue_NULL;
-    int status = dict_lookup_value((PyDictObject *)op, query, hash, &owned);
+    int status = dict_lookup_value((PyDictObject *)op, PyValue_Borrow(query),
+                                   hash, &owned);
     PyValue_XCLOSE(query);
     *result = owned;
     return status;
@@ -2080,7 +2081,7 @@ dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
     }
     int status = -1;
     if (hash != -1) {
-        status = dict_lookup_value(mp, query, hash, &value);
+        status = dict_lookup_value(mp, PyValue_Borrow(query), hash, &value);
     }
     else if (PyValue_IsObject(query)) {
         dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(query));

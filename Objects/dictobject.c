@@ -2048,18 +2048,29 @@ cached_str_hash(PyValueBorrow key)
     return PyUnstable_Unicode_GET_CACHED_HASH(object);
 }
 
+static inline int
+can_use_cached_str_lookup(PyDictObject *mp, Py_hash_t cached)
+{
+#ifndef Py_GIL_DISABLED
+    /* A Unicode-only table compares exact strings without callbacks.
+     * Mixed tables may call a stored key's Python equality method. */
+    return cached != -1 && mp->ma_keys->dk_kind != DICT_KEYS_GENERAL;
+#else
+    /* Do not classify a mutable keys table without its synchronization. */
+    (void)mp;
+    (void)cached;
+    return 0;
+#endif
+}
+
 static int
 dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
 {
     *result = PyValue_NULL;
     Py_hash_t cached = cached_str_hash(key);
-#ifndef Py_GIL_DISABLED
-    if (cached != -1 && mp->ma_keys->dk_kind != DICT_KEYS_GENERAL) {
-        /* A Unicode-only table compares exact strings without callbacks.
-         * Mixed tables may call a stored key's Python equality method. */
+    if (can_use_cached_str_lookup(mp, cached)) {
         return _PyDict_GetValue_KnownHash((PyObject *)mp, key, cached, result);
     }
-#endif
     PyObject *dict_owner = Py_NewRef(mp);
     PyValue query = PyValue_XDUP(key);
     PyValue value = PyValue_NULL;
@@ -2122,7 +2133,7 @@ int
         return -1;
     }
     Py_hash_t cached = cached_str_hash(key);
-    if (cached != -1) {
+    if (can_use_cached_str_lookup((PyDictObject *)op, cached)) {
         /* As dict_contains(): no result copy, no extra owners. */
         return _PyDict_Contains_KnownHash(op, PyValue_AsKnownObjectBorrow(key),
                                           cached);

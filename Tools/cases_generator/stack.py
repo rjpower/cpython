@@ -169,6 +169,8 @@ class Local:
     # A checked terminal result acquired its own owner on this path. This
     # weaker join fact grants only its first publication, not token identity.
     owns_value: bool = False
+    # Representation of this C value; it grants neither a count nor a home.
+    known_canonical: bool = False
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -199,9 +201,14 @@ class Local:
     def kill(self) -> None:
         self.in_local = False
         self.memory_offset = None
-        self.nonnull = False
+        self.invalidate_value()
+
+    def invalidate_value(self, *, keep_nonnull: bool = False) -> None:
+        if not keep_nonnull:
+            self.nonnull = False
         self.ir_value = None
         self.owns_value = False
+        self.known_canonical = False
 
     def in_memory(self) -> bool:
         return self.memory_offset is not None or self.is_array()
@@ -221,6 +228,7 @@ class Local:
             self.nonnull,
             self.ir_value,
             self.owns_value,
+            self.known_canonical,
         )
 
     @property
@@ -298,9 +306,7 @@ class Stack:
             else:
                 rename = ""
             if not popped.in_local:
-                popped.nonnull = False
-                popped.ir_value = None
-                popped.owns_value = False
+                popped.invalidate_value()
                 if popped.memory_offset is None:
                     popped.memory_offset = self.logical_sp
                 assert popped.memory_offset == self.logical_sp, (popped, self.as_comment())
@@ -494,6 +500,8 @@ class Stack:
             self_var.known_object = other_var.known_object = known
             self_var.nonnull = other_var.nonnull = self_var.nonnull and other_var.nonnull
             self_var.owns_value = other_var.owns_value = self_var.owns_value and other_var.owns_value
+            self_var.known_canonical = other_var.known_canonical = (
+                self_var.known_canonical and other_var.known_canonical)
             if self_var.ir_value != other_var.ir_value:
                 self_var.ir_value = other_var.ir_value = None
             check_inplace_merge(self_var, other_var)
@@ -746,6 +754,8 @@ class Storage:
             var.known_object = other_var.known_object = known
             var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
             var.owns_value = other_var.owns_value = var.owns_value and other_var.owns_value
+            var.known_canonical = other_var.known_canonical = (
+                var.known_canonical and other_var.known_canonical)
             if var.ir_value != other_var.ir_value:
                 var.ir_value = other_var.ir_value = None
             check_inplace_merge(var, other_var)
@@ -764,6 +774,8 @@ class Storage:
             var.known_object = other_var.known_object = known
             var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
             var.owns_value = other_var.owns_value = var.owns_value and other_var.owns_value
+            var.known_canonical = other_var.known_canonical = (
+                var.known_canonical and other_var.known_canonical)
             if var.ir_value != other_var.ir_value:
                 var.ir_value = other_var.ir_value = None
             check_inplace_merge(var, other_var)

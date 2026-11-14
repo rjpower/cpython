@@ -3870,9 +3870,9 @@ dummy_func(
         }
 
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
-            PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(PyList_CheckExact(list_o));
-            next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+            IR_GUARD_ELEMENT_TYPE(iter, LIST);
+            IR_GUARD_ELEMENT_INDEX(iter, null_or_index, index, TAGGED);
+            next = IR_DUP_CANONICAL_ELEMENT(iter, index);
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 

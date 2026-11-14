@@ -2445,7 +2445,59 @@ ELEMENT_NATIVE_SYMBOLS = frozenset((
     "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyList_CheckExact",
     "PyTuple_CheckExact", "PyList_GET_SIZE", "PyTuple_GET_SIZE",
     "PyList_GET_VALUE", "PyTuple_GET_VALUE",
+    "PyValue_IsTaggedIndex", "PyValue_UntagIndex", "PyValue_Borrow", "_PyList_ITEMS",
 ))
+
+
+def validate_element_native_bindings(inst: Instruction) -> None:
+    """Reserve lowering names while allowing ordinary parsed native calls.
+
+    Earlier uops may call these operations, but cannot bind their names.
+    Only an assignment RHS, a condition, or a complete call statement can
+    contain a direct callee; a C declarator is never such an expression.
+    """
+    calls = set()
+
+    def expression(tokens):
+        tokens = [token for token in tokens if token.kind != "COMMENT"]
+        if any(token.text in {"{", "}", ";"} for token in tokens):
+            return
+        for at, token in enumerate(tokens):
+            if (token.text in ELEMENT_NATIVE_SYMBOLS and
+                    at + 1 < len(tokens) and tokens[at + 1].text == "("):
+                try:
+                    instruction_macro_args(token, TokenIterator(tokens[at + 1:]))
+                except (SyntaxError, StopIteration):
+                    continue
+                calls.add(id(token))
+
+    def statement(stmt):
+        if isinstance(stmt, SimpleStmt):
+            tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+            if tokens and tokens[-1].text == ";":
+                tokens = tokens[:-1]
+            equals = next((at for at, token in enumerate(tokens) if token.text == "="), None)
+            if equals is not None:
+                expression(tokens[equals + 1:])
+            elif len(tokens) > 1 and tokens[0].kind == "IDENTIFIER" and tokens[1].text == "(":
+                _, end = instruction_macro_args(tokens[0], TokenIterator(tokens[1:]))
+                if end is tokens[-1]:
+                    expression(tokens)
+        elif isinstance(stmt, (IfStmt, WhileStmt)):
+            expression(stmt.condition)
+
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        part.body.accept(statement)
+        names = (item.name for item in (*part.stack.inputs, *part.stack.outputs, *part.caches))
+        if (ELEMENT_NATIVE_SYMBOLS.intersection(names) or
+                any(token.text in ELEMENT_NATIVE_SYMBOLS and id(token) not in calls
+                    or token.kind.startswith("CMACRO") and
+                    (re.match(r"\s*#\s*(?:define|undef)\b", token.text) or
+                     any(name in token.text for name in ELEMENT_NATIVE_SYMBOLS))
+                    for token in part.body.tokens())):
+            raise analysis_error("element lowering requires unshadowed native operations", inst.where)
 
 
 class ScalarStorageGraph:
@@ -2669,9 +2721,9 @@ class IRStack(Stack):
         # receiver. It is metadata, not a value or an owning Storage token.
         self.shape_read_binding: tuple[str, str] | None = None
         self.shape_read_complete = False
-        self.element_guards: dict[tuple[str, int], str] = {}
+        self.element_guards: dict[tuple[str, tuple[str, int]], str] = {}
         # A lexical C index, its actual value/anchor identities and scope.
-        self.element_indices: dict[str, tuple[int, int, str, int]] = {}
+        self.element_indices: dict[str, tuple[tuple[str, int], tuple[str, int], str, int, str]] = {}
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2714,6 +2766,8 @@ class IRStack(Stack):
     def canonical_native(self, var: Local) -> bool:
         """Representation of this live token, independently of ownership."""
         value = var.ir_value
+        if value is None:
+            return var.known_canonical
         while value is not None and value not in self.expired_values:
             event = self.home_graph.nodes[value - 1]
             if event.kind == "_PyIR_OWNER_STORAGE_LITERAL":
@@ -2828,6 +2882,8 @@ class IRStack(Stack):
         self.home_action("_PyIR_OWNER_STORAGE_CALLBACK", flags=2 if current_identity else 0)
         self.element_guards.clear()
         self.element_indices.clear()
+        for var in self.variables + list(self.native_values.values()):
+            var.known_canonical = False
         for names in self.views.values():
             self.stale.update(names)
         self.stale.update(self.view_objects)
@@ -3026,7 +3082,9 @@ class IRStack(Stack):
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
-            out.emit(f"IR_PUBLISH_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            macro = ("IR_PUBLISH_CANONICAL_TEMP" if var.name == canonical_result
+                     else "IR_PUBLISH_TEMP")
+            out.emit(f"{macro}({self.window_slot(memory_offset)}, {var.name});\n")
             if role is not None:
                 out.emit("}\n")
             return True
@@ -3269,6 +3327,8 @@ class IRStack(Stack):
             if mine.ir_value != theirs.ir_value:
                 mine.ir_value = theirs.ir_value = None
             mine.owns_value = theirs.owns_value = mine.owns_value and theirs.owns_value
+            mine.known_canonical = theirs.known_canonical = (
+                mine.known_canonical and theirs.known_canonical)
         if self.home_graph is not other.home_graph:
             raise StackError("scalar storage branches have different graphs")
         self.home_node = other.home_node = self.home_graph.join(self.home_node, other.home_node)
@@ -3919,10 +3979,14 @@ class IREmitter(Emitter):
 
         def current(name):
             var = next((var for var in self.current_value_locals(storage) if var.name == name), None)
-            if (var is None or not var.in_local or var.ir_value is None or
+            if (var is None or not var.in_local or
                     var.ir_value in stack.expired_values):
                 raise analysis_error("element capability requires a live scalar value", tkn)
-            return var.ir_value
+            # A window has no scalar home graph. Within this uninterrupted
+            # guard/read interval its current Local is still an identity;
+            # callbacks, source statements and control entries expire it.
+            return (("value", var.ir_value) if var.ir_value is not None
+                    else ("local", id(var)))
 
         def miss(condition):
             self.check_exit_inputs(tkn, storage)
@@ -3955,8 +4019,10 @@ class IREmitter(Emitter):
             container, subscript, index, mode = names
             kind = stack.element_guards.get(("TYPE", owner))
             subvalue = current(subscript)
-            if (kind is None or ("INT", subvalue) not in stack.element_guards or
-                    mode != ("FROM_END" if kind == "LIST" else "NONNEGATIVE")):
+            if (kind is None or
+                    (mode != "TAGGED" and
+                     (("INT", subvalue) not in stack.element_guards or
+                      mode != ("FROM_END" if kind == "LIST" else "NONNEGATIVE")))):
                 raise analysis_error("element index lacks matching type/integer guards", tkn)
             if (index in HANDLER_LOCALS or index in HANDLER_POINTERS or
                     index in stack.element_indices or
@@ -3964,14 +4030,20 @@ class IREmitter(Emitter):
                 raise analysis_error("checked element index shadows a live identity", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
             size = f"{prefix}_GET_SIZE(PyValue_AsKnownObjectBorrow({container}))"
-            self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
-            if kind == "LIST":
+            if mode == "TAGGED":
+                miss(f"!PyValue_IsTaggedIndex({subscript})")
+                self.emit(f"Py_ssize_t {index} = PyValue_UntagIndex({subscript});\n")
+                miss(f"(size_t){index} >= (size_t){size}")
+            elif kind == "LIST":
+                self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
                 self.emit(f"if ({index} < 0) {{ {index} += {size}; }}\n")
                 miss(f"{index} < 0 || {index} >= {size}")
             else:
+                self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
                 miss(f"{index} < 0")
                 miss(f"{index} >= {size}")
-            stack.element_indices[index] = (owner, subvalue, kind, id(self.native_scopes[-1]))
+            stack.element_indices[index] = (owner, subvalue, kind,
+                                            id(self.native_scopes[-1]), mode)
         else:
             container, index = names
             capability = stack.element_indices.get(index)
@@ -3980,7 +4052,13 @@ class IREmitter(Emitter):
                     capability[3] != id(self.native_scopes[-1])):
                 raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(PyValue_AsKnownObjectBorrow({container}), {index}))")
+            if kind == "LIST" and capability[4] == "TAGGED":
+                # Only this checked, callback-free iteration interval uses
+                # the inline read. Keep the general borrowed getter's ABI.
+                self.emit(f"PyValue_XDUP(PyValue_Borrow(_PyList_ITEMS("
+                          f"PyValue_AsKnownObjectBorrow({container}))[{index}]))")
+            else:
+                self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(PyValue_AsKnownObjectBorrow({container}), {index}))")
             self.element_result = HELPERS[tkn.text]
         return True
 
@@ -4763,9 +4841,7 @@ class IREmitter(Emitter):
         changed = value_nonnull_changes(stmt.condition, set(), {var.name for var in locals})
         for var in locals:
             if var.name in changed:
-                var.ir_value = None
-                var.owns_value = False
-                var.nonnull = False
+                var.invalidate_value()
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         # A condition may assign/address an output through C syntax. Such
@@ -4795,28 +4871,30 @@ class IREmitter(Emitter):
             self.refine_current_value(storage, name, not truth)
         return storage
 
-    def emit_WhileStmt(self, stmt, uop, storage, inst):
+    def invalidate_loop_values(self, storage):
+        # The body can execute zero times. Neither its native assignments
+        # nor its guard receipts establish a fact on the loop's exit.
         storage.stack.shape_read_binding = None
         storage.stack.element_guards.clear()
         storage.stack.element_indices.clear()
         for var in self.current_value_locals(storage):
-            var.ir_value = None
-            var.owns_value = False
+            var.invalidate_value()
+        storage.stack.home_node = None
+
+    def emit_WhileStmt(self, stmt, uop, storage, inst):
+        self.invalidate_loop_values(storage)
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
-        storage.stack.home_node = None
-        return super().emit_WhileStmt(stmt, uop, storage, inst)
+        reachable, end, storage = super().emit_WhileStmt(stmt, uop, storage, inst)
+        self.invalidate_loop_values(storage)
+        return reachable, end, storage
 
     def emit_ForStmt(self, stmt, uop, storage, inst):
-        storage.stack.shape_read_binding = None
-        storage.stack.element_guards.clear()
-        storage.stack.element_indices.clear()
-        for var in self.current_value_locals(storage):
-            var.ir_value = None
-            var.owns_value = False
-        storage.stack.home_node = None
-        return super().emit_ForStmt(stmt, uop, storage, inst)
+        self.invalidate_loop_values(storage)
+        reachable, end, storage = super().emit_ForStmt(stmt, uop, storage, inst)
+        self.invalidate_loop_values(storage)
+        return reachable, end, storage
 
     def emit_BlockStmt(self, stmt, uop, storage, inst, emit_braces=True):
         # A nested declaration has a new C identity. Its proof cannot leak
@@ -4919,7 +4997,7 @@ class IREmitter(Emitter):
         return retired
 
     def apply_value_transport(self, storage, assignment, transport, sources, changes,
-                              result=None):
+                              result=None, canonical_sources=frozenset()):
         stack = storage.stack
         assert isinstance(stack, IRStack)
         targets = self.current_value_locals(storage)
@@ -4930,21 +5008,23 @@ class IREmitter(Emitter):
             identities_changed.add(transport[1])
         for var in targets:
             if var.name in identities_changed:
-                var.ir_value = None
-                var.owns_value = False
+                var.invalidate_value(keep_nonnull=True)
         if assignment is None:
             return
         name = assignment[0]
         value = None
+        canonical = False
         if transport is not None:
             mode, source = transport
             if mode == "literal":
+                canonical = True
                 flags = int(source != "PyValue_NULL")
                 value = stack.home_action("_PyIR_OWNER_STORAGE_LITERAL", flags=flags)
                 if value is not None:
                     stack.native_owners.add(value)
                     stack.possible_native_owners.add(value)
             else:
+                canonical = source in canonical_sources
                 value, _ = sources.get(source, (None, None))
                 if value in stack.expired_values:
                     stack.home_node = None
@@ -4960,6 +5040,7 @@ class IREmitter(Emitter):
                         stack.native_owners.add(value)
                         stack.possible_native_owners.add(value)
         elif result is not None and result.result_owned is True:
+            canonical = result.result_canonical
             flags = int(result.result_canonical) | (int(result.result_nonnull) << 1)
             value = stack.home_action("_PyIR_OWNER_STORAGE_RESULT", flags=flags)
             if value is not None:
@@ -4972,6 +5053,10 @@ class IREmitter(Emitter):
         for var in targets:
             if var.name == name:
                 var.ir_value = value
+                # A scalar token remains the sole authority for its value.
+                # Do not leave a second bit that could revive an expired
+                # token when differing branch identities merge to None.
+                var.known_canonical = canonical and value is None
                 if name == stack.layout.owning_result:
                     var.owns_value = (value is not None and value in stack.native_owners)
                     if transport is None and result is not None:
@@ -5002,6 +5087,9 @@ class IREmitter(Emitter):
         current = {var.name for var in locals
                    if var.in_local and var.nonnull and not var.is_array()}
         declaration = value_declaration(stmt.contents)
+        canonical_sources = {var.name for var in locals
+                             if var.name != declaration and var.in_local
+                             and storage.stack.canonical_native(var)}
         fresh = set()
         if declaration is not None:
             name = declaration
@@ -5075,8 +5163,7 @@ class IREmitter(Emitter):
                 # their non-NULL fact. A prior canonical token is then stale.
                 if ((assignment is None or var.name in addressed) and not intrinsic and
                         var.name != guarded and not nonnull_changes[var.name]):
-                    var.ir_value = None
-                    var.owns_value = False
+                    var.invalidate_value()
         for var in self.current_value_locals(storage):
             if var.name == guarded:
                 var.nonnull = var.in_local
@@ -5089,7 +5176,7 @@ class IREmitter(Emitter):
         owning_receipt = (dict(self.owning_output_source.value_results).get(id(stmt))
                           if self.owning_output_source is not None else None)
         self.apply_value_transport(storage, assignment, transport, sources,
-                                   nonnull_changes, result)
+                                   nonnull_changes, result, canonical_sources)
         if assignment is not None and assignment[0] == stack.layout.owning_result:
             for var in storage.outputs:
                 if var.name == assignment[0]:
@@ -5112,6 +5199,10 @@ class IREmitter(Emitter):
             stack.note_null_statement(stmt, self.null_outputs)
         if not leaf_marker and (escape is not None or transaction_marker):
             stack.code_ran(current_identity=self.callback_current_identity)
+            for var in self.current_value_locals(storage):
+                if not (assignment is not None and var.name == assignment[0]
+                        and result is not None and result.result_canonical):
+                    var.known_canonical = False
         if reachable:
             self.consume_killed(storage)
             for value in retired:
@@ -6519,15 +6610,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     if any(token.text in ELEMENT_INTRINSICS
            for part in parts for token in part.body.tokens()):
-        # These native identifiers belong to the checked lowering. A source
-        # alias or preprocessor definition must not replace its operations.
-        for part in parts:
-            body = canonical_body_tokens(part)
-            names = (item.name for item in
-                     (*part.stack.inputs, *part.stack.outputs, *part.caches))
-            if (not body or ELEMENT_NATIVE_SYMBOLS.intersection(names) or
-                    any(text in ELEMENT_NATIVE_SYMBOLS or text.startswith("#") for text in body)):
-                raise analysis_error("element lowering requires unshadowed native operations", inst.where)
+        validate_element_native_bindings(inst)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)

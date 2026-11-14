@@ -5015,8 +5015,10 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyValue result = _PyValue_VectorcallTstate(
-                tstate, callable, arguments, total_args, NULL);
+            PyMethodDescrObject *method = (PyMethodDescrObject *)
+                PyValue_AsKnownObjectBorrow(callable);
+            PyValue result = _PyMethodDescr_CallFast(
+                tstate, method, arguments, total_args);
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }

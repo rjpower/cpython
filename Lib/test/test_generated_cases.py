@@ -297,6 +297,39 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
+    def test_checked_method_descriptor_call_keeps_ordinary_escape(self):
+        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        part = analysis.uops["_CALL_METHOD_DESCRIPTOR_FAST"]
+        self.assertIn("_PyMethodDescr_CallFast", {
+            escape.call.text for escape in
+            part.properties.escaping_calls.values()})
+        self.assertNotIn("_PyMethodDescr_CallFast", analyzer.IR_MARKER_EFFECTS)
+        for record in (False, True):
+            for name in ("CALL_METHOD_DESCRIPTOR_FAST",
+                         "CALL_NO_SELF_METHOD_DESCRIPTOR_FAST"):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    out = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(out, analysis, formats)
+                    ir_generator.generate_handler(
+                        name, instructions[name], formats[name], emitter, out,
+                        record)
+                    body = output.getvalue()
+                    guard = body.index("Py_IS_TYPE(method, &PyMethodDescr_Type)")
+                    invoke = body.index("_PyMethodDescr_CallFast(")
+                    failure = body.index("if (PyValue_IsNull(result))", invoke)
+                    publish = body.index("callable = result;", failure)
+                    drain = body.index("_PyFrame_CloseHomeRange(", publish)
+                    self.assertLess(guard, invoke)
+                    self.assertLess(invoke, failure)
+                    self.assertLess(failure, publish)
+                    self.assertLess(publish, drain)
+                    self.assertIn("check_periodics_at_end", body[drain:])
+                    self.assertNotIn("_PyValue_VectorcallTstate(", body)
+
     def test_error_ingress_keeps_native_bridge_owners(self):
         output = self.ir_output("""
         inst(OP, (value -- result)) {

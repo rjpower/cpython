@@ -22,6 +22,12 @@ typedef propertyobject _PyPropertyObject;
 
 extern PyTypeObject _PyMethodWrapper_Type;
 
+/* Positional CALL_METHOD_DESCRIPTOR_FAST after its exact descriptor,
+   convention and self-type guards. args includes self; the call borrows the
+   initialized window and returns an independent owner. */
+extern PyValue _PyMethodDescr_CallFast(PyThreadState *, PyMethodDescrObject *,
+                                      const PyValue *args, Py_ssize_t nargs);
+
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(void *) _PyMember_GetOffset(PyObject *, PyMemberDef *);
 

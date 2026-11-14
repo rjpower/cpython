@@ -668,6 +668,24 @@ method_value_vectorcall_descr_METHOD(PyThreadState *tstate, PyObject *func,
 /* METH_VALUE | METH_NOARGS and METH_VALUE | METH_O: the trampolines of
    method_vectorcall_NOARGS and _O, which check the self, the keywords and
    the number of arguments before the call, with the same messages. */
+static int
+method_check_value_nargs(PyObject *func, Py_ssize_t nargs, Py_ssize_t expected)
+{
+    if (nargs == expected + 1) {
+        return 0;
+    }
+    PyObject *funcstr = _PyObject_FunctionStr(func);
+    if (funcstr != NULL) {
+        PyErr_Format(PyExc_TypeError,
+                     expected == 0
+                     ? "%U takes no arguments (%zd given)"
+                     : "%U takes exactly one argument (%zd given)",
+                     funcstr, nargs - 1);
+        Py_DECREF(funcstr);
+    }
+    return -1;
+}
+
 static PyValue
 method_value_vectorcall_descr_checked(PyThreadState *tstate, PyObject *func,
                                       const PyValue *args, size_t nargsf,
@@ -680,16 +698,7 @@ method_value_vectorcall_descr_checked(PyThreadState *tstate, PyObject *func,
     if (method_check_value_kwnames(func, kwnames) < 0) {
         return PyValue_NULL;
     }
-    if (nargs != expected + 1) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                         expected == 0
-                         ? "%U takes no arguments (%zd given)"
-                         : "%U takes exactly one argument (%zd given)",
-                         funcstr, nargs - 1);
-            Py_DECREF(funcstr);
-        }
+    if (method_check_value_nargs(func, nargs, expected) < 0) {
         return PyValue_NULL;
     }
     return method_value_invoke(tstate, func, args, nargs, kwnames);
@@ -711,6 +720,34 @@ method_value_vectorcall_descr_O(PyThreadState *tstate, PyObject *func,
 {
     return method_value_vectorcall_descr_checked(tstate, func, args, nargsf,
                                                  kwnames, 1);
+}
+
+PyValue
+_PyMethodDescr_CallFast(PyThreadState *tstate, PyMethodDescrObject *method,
+                        const PyValue *args, Py_ssize_t nargs)
+{
+    assert(Py_IS_TYPE(method, &PyMethodDescr_Type));
+    assert(nargs >= 1);
+    assert(PyValue_TYPE(args[0]) == method->d_common.d_type);
+    int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+    if (flags == METH_FASTCALL) {
+        /* Object methods retain the adapter's boxes and borrow scope. */
+        return _PyValue_CallAdapter(tstate, (PyObject *)method,
+                                   method->vectorcall, args, nargs, NULL);
+    }
+    assert((flags & ~(METH_NOARGS | METH_O)) == METH_VALUE);
+    if (flags & (METH_NOARGS | METH_O)) {
+        Py_ssize_t expected = (flags & METH_O) ? 1 : 0;
+        if (method_check_value_nargs((PyObject *)method, nargs, expected) < 0) {
+            return PyValue_NULL;
+        }
+    }
+    /* The opcode already checked self and excluded keywords. Recursion and
+       the method's own argument validation still belong to this call. */
+    PyValue result = method_value_invoke(tstate, (PyObject *)method,
+                                        args, nargs, NULL);
+    _PyValue_ASSERT_RESULT(tstate, result);
+    return result;
 }
 
 

@@ -1,6 +1,7 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_descrobject.h"    // _PyMethodDescr_CallFast()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
 #include "pycore_list.h"          // PyList_AppendValue()

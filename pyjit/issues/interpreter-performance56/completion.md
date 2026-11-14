@@ -1,7 +1,9 @@
 # Direct native completion entries
 
-Status: source implementation committed at `40b2858cf50` with GC actual
-four-file source review GO; no native or performance result.
+Status: source implementation `40b2858cf50` is integrated and regenerated in
+native checkpoint `f6ef4a81a87`, with both builds at 117 modules/79 shared and
+84 completion/observer methods passing per role. Optimized entry costs are
+recorded below; there is no isolated throughput result.
 Root owns full generation, builds, diagnostics and measurements. This is a
 bounded follow-up to [exact-tuple preparation](call-ex-tuple.md), using the
 [combined design](../../design/proposals/interpreter-performance56.md).
@@ -68,9 +70,10 @@ proof. Helper spelling establishes no new canonicality or ownership fact.
 GC and IR give design agreement with the unchanged-body/receipt boundary.
 GC additionally reviewed the retained disassembly evidence and gives actual
 source post-review GO. Static comparisons confirm that the common completion
-body and GeneratorReturn remain byte-identical. Generated products remain
-unchanged until root regenerates the combined source; this commit alone is
-not a buildable generated checkpoint.
+body and GeneratorReturn remain byte-identical. The isolated source commit
+contains no generated products; root regenerated the combined source. The
+actual completion product change replaces the 11 generic helper calls with
+their literal entries without changing adjacent origin/dispatch handling.
 
 The existing source test
 `test_generated_cases.TestIRCases.test_completion_result_local_does_not_capture_held_value`
@@ -118,7 +121,38 @@ eliminates this work, the mechanism has no cost result. If terminal hit counts
 are negligible, make no broad claim. Parent/hot6 confirmation and all29 gates
 still decide selection; nominal argument count alone cannot admit it.
 
+## Optimized native cost
+
+Root retained the baseline generic entry under
+`E55/scalar-results-baseline-native` and the candidate ELF, symbol sizes and
+disassembly under `E55/perf56-recipient-native`. The latter manifest pins source
+and native `f6ef4a81a87`. The measured x86-64 entries are:
+
+| Entry | Symbol text bytes | Local stack reservation | Incoming stack arguments |
+| --- | ---: | ---: | --- |
+| Baseline generic CompleteStep | 1573 (`0x625`) | 72 (`0x48`) | value and kind |
+| CompleteForIter | 889 (`0x379`) | 40 (`0x28`) | none |
+| CompleteSend | 1301 (`0x515`) | 56 (`0x38`) | value |
+| CompleteSendThrow | 891 (`0x37b`) | 56 (`0x38`) | value |
+
+All retain five saved general-purpose registers plus the frame pointer. The
+three direct entries total 3081 bytes, **1508 bytes more** than the former
+generic entry. This prices these helper symbols, not the whole interpreter or
+instruction-cache effect. The reduced incoming argument traffic and stack
+reservations are observed native changes; cleanup and observation remain.
+
+The separate f6ef/golden54 composition screen gives generators 0.949424 elapsed
+time and coroutines 1.065409, with two balanced pairs and stable identities.
+It includes scalar replay and generator-recipient changes as well as these
+entries, so it cannot attribute either ratio to completion specialization.
+There is no overall selection; see [the checkpoint report](report.md).
+
 ## Frequent generator handoff
+
+The recipient correction `0888` is integrated in f6ef. Its generated change
+removes only the five-line local/discard deoptimization from FOR_ITER_GEN;
+SEND and the metadata programs are unchanged. The following diagnosis describes
+the earlier 6a00 baseline.
 
 The next independent slice is based on I `6a00c6a08d4`, compared with pinned
 upstream `3a440b65695615e9fd9912342b79cdd54fced0d2`. Both already enter

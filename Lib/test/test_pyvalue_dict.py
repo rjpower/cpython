@@ -470,6 +470,164 @@ class DictValueMutationTests(unittest.TestCase):
 
 
 class DictValueReaderTests(unittest.TestCase):
+    def test_get_preserves_values_defaults_and_subclass_semantics(self):
+        class Mapping(dict):
+            def __missing__(self, key):
+                raise AssertionError("get must not call __missing__")
+
+        marker = object()
+        values = (None, 2147483647, -2147483648, 2.5, marker, [])
+        for mapping_type in (dict, Mapping):
+            for key in (17, 3.25, "present", marker):
+                for value in values:
+                    with self.subTest(mapping=mapping_type, key=key, value=value):
+                        mapping = mapping_type({key: value})
+                        self.assertEqual(mapping.get(key), value)
+                        self.assertEqual(dict.get(mapping, key), value)
+                        if value is marker or type(value) is list:
+                            self.assertIs(mapping.get(key), value)
+                            self.assertIs(dict.get(mapping, key), value)
+                        self.assertIs(mapping.get("missing", marker), marker)
+                        self.assertIsNone(mapping.get("missing"))
+
+    def test_get_hash_mutation_keeps_dictionary_and_query_alive(self):
+        events = []
+        owners = []
+
+        class Mapping(dict):
+            def __del__(self):
+                events.append("mapping retired")
+                self.clear()
+
+        class Query:
+            def __hash__(self):
+                mapping = owners.pop()
+                mapping.clear()
+                mapping[23] = "after hash"
+                gc.collect()
+                return 23
+
+            def __eq__(self, other):
+                return other == 23
+
+            def __del__(self):
+                events.append("query retired")
+
+        owners.append(Mapping({"before": object()}))
+        self.assertEqual(owners[0].get(Query()), "after hash")
+        self.assertEqual(owners, [])
+        gc.collect()
+        self.assertCountEqual(events, ["mapping retired", "query retired"])
+
+    def test_get_equality_mutation_restarts_and_allows_reentry(self):
+        mapping = {}
+        events = []
+
+        class Stored:
+            def __hash__(self):
+                return 23
+
+            def __eq__(self, other):
+                mapping.clear()
+                mapping[23] = "replacement"
+                events.append("compare")
+                gc.collect()
+                return False
+
+            def __del__(self):
+                events.append(mapping.get(23))
+
+        mapping[Stored()] = object()
+        self.assertEqual(mapping.get(23), "replacement")
+        self.assertCountEqual(events, ["compare", "replacement"])
+        self.assertEqual(mapping, {23: "replacement"})
+
+    def test_get_result_survives_input_owner_cleanup(self):
+        events = []
+        owners = []
+
+        class Value:
+            pass
+
+        class Mapping(dict):
+            def __del__(self):
+                self.clear()
+                events.append("mapping retired")
+                gc.collect()
+
+        class Query:
+            def __hash__(self):
+                owners.clear()
+                return 17
+
+            def __eq__(self, other):
+                return other == 17
+
+            def __del__(self):
+                events.append("query retired")
+
+        value = Value()
+        reference = weakref.ref(value)
+        owners.append(Mapping({17: value}))
+        del value
+        result = owners[0].get(Query())
+        self.assertIs(result, reference())
+        self.assertIsNotNone(result)
+        gc.collect()
+        self.assertCountEqual(events, ["mapping retired", "query retired"])
+        del result
+        gc.collect()
+        self.assertIsNone(reference())
+
+    def test_get_default_survives_hash_callback(self):
+        class Default:
+            pass
+
+        defaults = [Default()]
+        reference = weakref.ref(defaults[0])
+
+        class Query:
+            def __hash__(self):
+                defaults.clear()
+                gc.collect()
+                return 17
+
+        result = {}.get(Query(), defaults[0])
+        self.assertIs(result, reference())
+        self.assertIsNotNone(result)
+        del result
+        gc.collect()
+        self.assertIsNone(reference())
+
+    def test_get_preserves_hash_and_equality_errors(self):
+        events = []
+
+        class Query:
+            def __hash__(self):
+                raise LookupError("hash marker")
+
+            def __del__(self):
+                events.append({17: "reentered"}.get(17))
+
+        with self.assertRaisesRegex(LookupError, "hash marker"):
+            {}.get(Query())
+        gc.collect()
+        self.assertEqual(events, ["reentered"])
+
+        class Stored:
+            def __hash__(self):
+                return 17
+
+            def __eq__(self, other):
+                raise LookupError("equality marker")
+
+        mapping = {Stored(): object()}
+        with self.assertRaisesRegex(LookupError, "equality marker"):
+            mapping.get(17)
+        self.assertEqual(len(mapping), 1)
+        with self.assertRaises(TypeError):
+            mapping.get([])
+
     def test_owned_reader_keeps_entry_error(self):
         capi = import_helper.import_module("_testinternalcapi")
         marker = object()

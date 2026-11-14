@@ -2137,6 +2137,14 @@ enum {
     SEM_NULL, SEM_INITIALIZED, SEM_MAY_OWNER, SEM_NONNULL, SEM_NO_HOME, SEM_FACTS
 };
 
+/* Logical vacancy can outlive a physical NULL proof. It permits omitting an
+ * ownerless home, not reading that home or treating it as initialized. */
+static int
+semantic_absent(unsigned int facts)
+{
+    return (facts & ((1u << SEM_NULL) | (1u << SEM_NO_HOME))) != 0;
+}
+
 static void
 semantic_enqueue(semantic_worklist *work, int block, const uint64_t *state,
                  int complete)
@@ -2281,7 +2289,7 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
                 flags |= _PyIR_PHASE_RANGE_CONTROL;
             }
             else {
-                if (!(facts & (1u << SEM_NULL))) {
+                if (!semantic_absent(facts)) {
                     return 0;
                 }
                 if (facts & (1u << SEM_INITIALIZED)) {
@@ -2727,7 +2735,7 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         {
             *complete = 0;
         }
-        if (inspect && (old & (1u << SEM_NULL)) &&
+        if (inspect && semantic_absent(old) &&
             _PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
             !_PyIR_NullableHome(word, arg, home))
         {
@@ -2836,10 +2844,9 @@ semantic_empty_scratch(const semantic_image *image,
                        const semantic_worklist *work, const uint64_t *state)
 {
     for (int bit = 0; bit < image->scratch; bit++) {
-        uint64_t mask = UINT64_C(1) << (bit % 64);
-        if (!(state[SEM_NULL * work->nwords + bit / 64] & mask) ||
-            ((state[SEM_INITIALIZED * work->nwords + bit / 64] |
-              state[SEM_MAY_OWNER * work->nwords + bit / 64]) & mask))
+        unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
+        if (!semantic_absent(facts) ||
+            (facts & ((1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER))))
         {
             return 0;
         }
@@ -2969,7 +2976,7 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                 if (!(old & (1u << SEM_INITIALIZED))) {
                     exact = 0;
                 }
-                if (inspect && (old & (1u << SEM_NULL))) {
+                if (inspect && semantic_absent(old)) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d reads unavailable scratch home %d", pc, home);
                     return -1;
@@ -3315,6 +3322,8 @@ flag_only_plan(uint32_t flags)
     }
 }
 
+/* This certificate omits ownerless scratch; the cold shadow comparison still
+ * checks actual physical NULL and reports a dirty cell as a mismatch. */
 static int
 semantic_exact_return(const semantic_image *image, const semantic_worklist *work,
                       const uint64_t *state, int site, int complete)
@@ -3325,9 +3334,8 @@ semantic_exact_return(const semantic_image *image, const semantic_worklist *work
         return 0;
     }
     for (int bit = 0; bit < image->scratch; bit++) {
-        uint64_t mask = UINT64_C(1) << (bit % 64);
-        if (!(state[bit / 64] & mask) ||
-            (state[SEM_MAY_OWNER * work->nwords + bit / 64] & mask))
+        unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
+        if (!semantic_absent(facts) || (facts & (1u << SEM_MAY_OWNER)))
         {
             return 0;
         }

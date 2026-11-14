@@ -250,6 +250,12 @@ valid_index(Py_ssize_t i, Py_ssize_t limit)
     return (size_t) i < (size_t) limit;
 }
 
+PyValueBorrow
+(PyList_GET_VALUE)(PyObject *op, Py_ssize_t index)
+{
+    return PyValue_Borrow(_PyList_CAST(op)->ob_item[index]);
+}
+
 PyValue
 _PyList_GetValue(PyListObject *self, Py_ssize_t index)
 {

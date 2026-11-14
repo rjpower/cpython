@@ -106,14 +106,14 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(function(value), value)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_BUILTIN_O", executing_handlers(function))
+            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(function))
 
     def test_cold_and_warmed_o(self):
         def call(value):
             return _testinternalcapi.native_scope_echo(value)
 
         # The initial general route still uses the existing bridge. Only the
-        # specialised CALL_BUILTIN_O route adopts the new scope in Stage 1.
+        # specialised CALL_NO_SELF_BUILTIN_O route adopts the new scope in Stage 1.
         self.assertEqual(call(1234567), 1234567)
         self.warm(call, 1234567)
         for value in (-7654321, 3.25, None, object(), []):
@@ -146,7 +146,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(invoke(ordinary), 2147483647)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_BUILTIN_O", executing_handlers(invoke))
+            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(invoke))
         ledger = []
 
         def make_argument():
@@ -176,7 +176,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(outer(callback), 1234567)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_BUILTIN_O", executing_handlers(outer))
+            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(outer))
 
         def fail(value):
             return _testinternalcapi.native_scope_raise(value)
@@ -185,7 +185,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "expected failure"):
                 fail("expected failure")
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_BUILTIN_O", executing_handlers(fail))
+            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(fail))
 
     def test_temporary_argument_before_local_replacement(self):
         events = []
@@ -241,7 +241,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         if not support.Py_GIL_DISABLED:
             call_handlers = [name for name in executing_handlers(replace)
                              if name.startswith("CALL")]
-            self.assertEqual(call_handlers[-1], "CALL_BUILTIN_O")
+            self.assertEqual(call_handlers[-1], "CALL_NO_SELF_BUILTIN_O")
         events.clear()
         calls = []
         reenter = True
@@ -308,8 +308,8 @@ class NativeGenericVMTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(noargs(), 2147483647)
             self.assertEqual(keyword(4), 8)
-        self.assertIn('CALL_NON_PY_GENERAL', executing_handlers(noargs))
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(keyword))
+        self.assertIn('CALL_NO_SELF_NON_PY_GENERAL', executing_handlers(noargs))
+        self.assertIn('CALL_KW_NO_SELF_NON_PY', executing_handlers(keyword))
         with self.assertRaises(TypeError):
             _testinternalcapi.native_scope_flat_noargs(1)
         with self.assertRaises(TypeError):
@@ -340,7 +340,7 @@ class NativeGenericVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             invoke(lambda: 4)
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(invoke))
+        self.assertIn('CALL_KW_NO_SELF_NON_PY', executing_handlers(invoke))
         ledger.clear()
         try:
             self.assertEqual(invoke(Value), 2147483647)
@@ -376,7 +376,8 @@ class NativeGenericVMTests(unittest.TestCase):
                     target = _testinternalcapi.native_scope_vector_method()
                     for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
                         call(target)
-                    expected = 'CALL_KW_NON_PY' if call is keyword else 'CALL_NON_PY_GENERAL'
+                    expected = ('CALL_KW_NO_SELF_NON_PY' if call is keyword
+                                else 'CALL_NO_SELF_NON_PY_GENERAL')
                     self.assertIn(expected, executing_handlers(call))
                 for target, typename in ((2147483647, 'int'), (3.25, 'float')):
                     with self.subTest(call=call.__name__, warm=warm, target=target):
@@ -486,18 +487,18 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
             site(target, first, None)
 
     def test_generic_handlers(self):
-        self.check_site(positional_site, 'CALL', cold=True)
-        self.check_site(star_site, 'CALL_FUNCTION_EX', cold=True)
+        self.check_site(positional_site, 'CALL_NO_SELF', cold=True)
+        self.check_site(star_site, 'CALL_EX_NO_SELF_NO_KW', cold=True)
 
     def test_specialized_handlers(self):
         native = functools.partial(python_callee)
         for site, target, first, handler in (
-                (positional_site, native, None, 'CALL_NON_PY_GENERAL'),
-                (keyword_site, native, None, 'CALL_KW_NON_PY'),
-                (star_site, native, None, 'CALL_EX_NON_PY_GENERAL'),
+                (positional_site, native, None, 'CALL_NO_SELF_NON_PY_GENERAL'),
+                (keyword_site, native, None, 'CALL_KW_NO_SELF_NON_PY'),
+                (star_site, native, None, 'CALL_EX_NO_SELF_NO_KW_NON_PY_GENERAL'),
                 # The warm-up's pending calls to int() do nothing visible.
                 (single_site, _testinternalcapi.simple_pending_call, int,
-                 'CALL_BUILTIN_O')):
+                 'CALL_NO_SELF_BUILTIN_O')):
             self.warm(site, target, first)
             self.assertIn(handler, executing_handlers(site))
             self.check_site(site, handler)
@@ -527,9 +528,9 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
             tool, monitoring.events.RAISE,
             lambda code, offset, exc: ledger.append(('raise', code.co_name)))
         native = functools.partial(callee)
-        for handler in ('CALL', 'CALL_NON_PY_GENERAL'):
+        for handler in ('CALL_NO_SELF', 'CALL_NO_SELF_NON_PY_GENERAL'):
             with self.subTest(handler=handler):
-                if handler == 'CALL':
+                if handler == 'CALL_NO_SELF':
                     support.reset_code(positional_site)
                 else:
                     self.warm(positional_site, functools.partial(python_callee))
@@ -553,8 +554,8 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         self.addCleanup(monitoring.free_tool_id, tool)
         monitoring.register_callback(tool, monitoring.events.CALL,
                                      lambda *args: None)
-        for site, handler in ((positional_site, 'INSTRUMENTED_CALL'),
-                              (star_site, 'INSTRUMENTED_CALL_FUNCTION_EX')):
+        for site, handler in ((positional_site, 'INSTRUMENTED_CALL_NO_SELF'),
+                              (star_site, 'INSTRUMENTED_CALL_EX_NO_SELF_NO_KW')):
             support.reset_code(site)
             monitoring.set_local_events(tool, site.__code__,
                                         monitoring.events.CALL)

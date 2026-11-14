@@ -56,7 +56,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         self.rejected(code, co_code=encoded(live))
         # Normal input retirement does not certify an exceptional footprint.
         unknown = words.copy()
-        unknown[3] = ("UNARY_NOT", 4, 4)
+        unknown[3] = ("UNARY_NEGATIVE", 4, 4)
         self.rejected(code, co_code=encoded(unknown))
         # An in-bounds resume recipient can itself clobber the held hole.
         aliases = words.copy()
@@ -78,11 +78,11 @@ class ExceptionAbsenceTests(unittest.TestCase):
         code, words = self.image()
         # Keep the normal path balanced while adding a genuinely uncovered
         # protected producer. Its absence of a route census remains unknown.
-        words[4] = ("UNARY_NOT", 4, 4)
+        words[4] = ("UNARY_NEGATIVE", 4, 4)
         words[5] = ("POP_TOP", 4)
         unknown = code.replace(co_code=encoded(words), co_linetable=b"")
         self.assertFalse(_opcode.get_ir_contract()[
-            opcode.opmap["UNARY_NOT"]].error_routes & _opcode.IR_ERROR_COMPLETE)
+            opcode.opmap["UNARY_NEGATIVE"]].error_routes & _opcode.IR_ERROR_COMPLETE)
         self.rejected(unknown,
                       co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
 

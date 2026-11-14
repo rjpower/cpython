@@ -106,14 +106,15 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(function(value), value)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(function))
+            # These module-attribute sites retain the runtime self-or-NULL slot.
+            self.assertIn("CALL_BUILTIN_O", executing_handlers(function))
 
     def test_cold_and_warmed_o(self):
         def call(value):
             return _testinternalcapi.native_scope_echo(value)
 
         # The initial general route still uses the existing bridge. Only the
-        # specialised CALL_NO_SELF_BUILTIN_O route adopts the new scope in Stage 1.
+        # specialised CALL_BUILTIN_O route adopts the new scope in Stage 1.
         self.assertEqual(call(1234567), 1234567)
         self.warm(call, 1234567)
         for value in (-7654321, 3.25, None, object(), []):
@@ -146,7 +147,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(invoke(ordinary), 2147483647)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(invoke))
+            self.assertIn("CALL_BUILTIN_O", executing_handlers(invoke))
         ledger = []
 
         def make_argument():
@@ -176,7 +177,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(outer(callback), 1234567)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(outer))
+            self.assertIn("CALL_BUILTIN_O", executing_handlers(outer))
 
         def fail(value):
             return _testinternalcapi.native_scope_raise(value)
@@ -185,7 +186,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "expected failure"):
                 fail("expected failure")
         if not support.Py_GIL_DISABLED:
-            self.assertIn("CALL_NO_SELF_BUILTIN_O", executing_handlers(fail))
+            self.assertIn("CALL_BUILTIN_O", executing_handlers(fail))
 
     def test_temporary_argument_before_local_replacement(self):
         events = []
@@ -308,8 +309,8 @@ class NativeGenericVMTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(noargs(), 2147483647)
             self.assertEqual(keyword(4), 8)
-        self.assertIn('CALL_NO_SELF_NON_PY_GENERAL', executing_handlers(noargs))
-        self.assertIn('CALL_KW_NO_SELF_NON_PY', executing_handlers(keyword))
+        self.assertIn('CALL_NON_PY_GENERAL', executing_handlers(noargs))
+        self.assertIn('CALL_KW_NON_PY', executing_handlers(keyword))
         with self.assertRaises(TypeError):
             _testinternalcapi.native_scope_flat_noargs(1)
         with self.assertRaises(TypeError):
@@ -340,7 +341,7 @@ class NativeGenericVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             invoke(lambda: 4)
-        self.assertIn('CALL_KW_NO_SELF_NON_PY', executing_handlers(invoke))
+        self.assertIn('CALL_KW_NON_PY', executing_handlers(invoke))
         ledger.clear()
         try:
             self.assertEqual(invoke(Value), 2147483647)

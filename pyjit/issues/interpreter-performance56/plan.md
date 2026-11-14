@@ -131,3 +131,14 @@ hypothesis. Cross-CFG borrowing needs real eligible surviving opportunities.
 Only the existing GDB PrettyPrintTests class is quarantined. Six debugger-jump
 errors remain explicit. Do not call the complete suite green or convert cold
 profile samples into an additive savings budget.
+
+## New comprehension evidence
+
+The [focused diagnosis](comprehensions-analysis.md) adds a concrete ordinary-path
+lane: specialized native methods currently re-enter generic value dispatch;
+list iteration loses canonical result facts; list append always calls out.
+The workload executes fewer inner-loop opcode words than upstream but 46.44%
+more native instructions overall. Prioritize checked method entry and canonical
+FOR_ITER_LIST transport alongside the resume/call lanes, then measure append
+fast-path placement. Avoid assuming any one item closes the 33.7% gap or restoring
+the rejected getter-inline patch without a new broad result.

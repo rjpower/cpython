@@ -108,6 +108,19 @@ not enough evidence to blame all slowdown on clearing or predict a 4.3% gain.
 Current883 also samples that libc address at 4.89%; its callchain has not been
 independently attributed. Keep historical and current identities separate.
 
+## Focused comprehension diagnosis
+
+A subsequent exact-head profile/counter comparison finds comprehensions executes
+46.44% more native instructions and 33.33% more cycles than upstream. Its inner
+`dict.get` loop executes six opcode words versus upstream's eight: the loss is
+cost inside handlers and native boundaries, rather than simply more dispatches.
+The confirmed targets are repeated specialized-method redispatch/checks,
+dictionary lookup/owner layers, out-of-line list iteration plus generic result
+publication, and out-of-line append even with spare capacity. Generators are a
+smaller contributor in this workload. No exclusive savings fraction is assigned.
+See the [opcode-level diagnosis](comprehensions-analysis.md) for source/native
+anchors, operation counts and limits.
+
 ## Regression diagnostic
 
 A bounded three-pair PMU comparison against golden54 gives:

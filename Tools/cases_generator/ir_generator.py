@@ -4763,6 +4763,7 @@ class IREmitter(Emitter):
         for var in locals:
             if var.name in changed:
                 var.ir_value = None
+                var.owns_value = False
                 var.nonnull = False
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
@@ -4799,6 +4800,7 @@ class IREmitter(Emitter):
         storage.stack.element_indices.clear()
         for var in self.current_value_locals(storage):
             var.ir_value = None
+            var.owns_value = False
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
@@ -4811,6 +4813,7 @@ class IREmitter(Emitter):
         storage.stack.element_indices.clear()
         for var in self.current_value_locals(storage):
             var.ir_value = None
+            var.owns_value = False
         storage.stack.home_node = None
         return super().emit_ForStmt(stmt, uop, storage, inst)
 
@@ -5072,6 +5075,7 @@ class IREmitter(Emitter):
                 if ((assignment is None or var.name in addressed) and not intrinsic and
                         var.name != guarded and not nonnull_changes[var.name]):
                     var.ir_value = None
+                    var.owns_value = False
         for var in self.current_value_locals(storage):
             if var.name == guarded:
                 var.nonnull = var.in_local

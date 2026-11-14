@@ -51,7 +51,25 @@ PyAPI_FUNC(int) PyList_InsertValue(PyObject *list, Py_ssize_t where,
 /* These consume their input on success and failure. */
 Py_VALUE_COMPAT(_PyList_AppendTakeValue)
 PyAPI_FUNC(int) _PyList_AppendTakeRef(PyListObject *self, PyObject *newitem);
-PyAPI_FUNC(int) _PyList_AppendTakeValue(PyListObject *self, PyValue value);
+PyAPI_FUNC(int) _PyList_AppendTakeValueResize(PyListObject *self, PyValue value);
+
+/* As with the existing take API, the caller supplies any required list lock.
+   Capacity already allocated needs no callback or new input reference. */
+static inline int
+_PyList_AppendTakeValue(PyListObject *self, PyValue value)
+{
+    assert(PyValue_IsLanguageValue(value));
+    Py_ssize_t n = Py_SIZE(self);
+    assert((size_t)n + 1 < PY_SSIZE_T_MAX);
+    if (self->allocated > n) {
+        self->ob_item[n] = value;
+        _PyValue_CheckHome(value);
+        Py_SET_SIZE(self, n + 1);
+        return 0;
+    }
+    return _PyList_AppendTakeValueResize(self, value);
+}
+
 PyAPI_FUNC(PyValue) _PyList_GetValue(PyListObject *self, Py_ssize_t index);
 /* Consumes a strong HeapSafe value on success and failure. NULL is permitted
    only for internal construction/clearing, not as a Python list element. */

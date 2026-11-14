@@ -166,6 +166,9 @@ class Local:
     # Identity of the canonical C value in the IR's scalar storage graph.
     # This is distinct from a name, a physical home and a non-NULL check.
     ir_value: int | None = None
+    # A checked terminal result acquired its own owner on this path. This
+    # weaker join fact grants only its first publication, not token identity.
+    owns_value: bool = False
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -198,6 +201,7 @@ class Local:
         self.memory_offset = None
         self.nonnull = False
         self.ir_value = None
+        self.owns_value = False
 
     def in_memory(self) -> bool:
         return self.memory_offset is not None or self.is_array()
@@ -216,6 +220,7 @@ class Local:
             self.ir_box,
             self.nonnull,
             self.ir_value,
+            self.owns_value,
         )
 
     @property
@@ -295,6 +300,7 @@ class Stack:
             if not popped.in_local:
                 popped.nonnull = False
                 popped.ir_value = None
+                popped.owns_value = False
                 if popped.memory_offset is None:
                     popped.memory_offset = self.logical_sp
                 assert popped.memory_offset == self.logical_sp, (popped, self.as_comment())
@@ -487,6 +493,7 @@ class Stack:
             known = self_var.known_object and other_var.known_object
             self_var.known_object = other_var.known_object = known
             self_var.nonnull = other_var.nonnull = self_var.nonnull and other_var.nonnull
+            self_var.owns_value = other_var.owns_value = self_var.owns_value and other_var.owns_value
             if self_var.ir_value != other_var.ir_value:
                 self_var.ir_value = other_var.ir_value = None
             check_inplace_merge(self_var, other_var)
@@ -738,6 +745,7 @@ class Storage:
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
             var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
+            var.owns_value = other_var.owns_value = var.owns_value and other_var.owns_value
             if var.ir_value != other_var.ir_value:
                 var.ir_value = other_var.ir_value = None
             check_inplace_merge(var, other_var)
@@ -755,6 +763,7 @@ class Storage:
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
             var.nonnull = other_var.nonnull = var.nonnull and other_var.nonnull
+            var.owns_value = other_var.owns_value = var.owns_value and other_var.owns_value
             if var.ir_value != other_var.ir_value:
                 var.ir_value = other_var.ir_value = None
             check_inplace_merge(var, other_var)

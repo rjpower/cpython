@@ -594,6 +594,7 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
 
 
 NON_ESCAPING_FUNCTIONS = (
+    "coro_awaitable_can_transfer",
     "native_vector_capture",
     "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",

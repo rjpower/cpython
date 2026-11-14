@@ -78,7 +78,7 @@ from ir_read_effects import (
     value_nonnull_changes, value_transport_expression,
 )
 from ir_error_effects import (
-    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects,
+    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects, owning_output_source,
 )
 import re
 from dataclasses import dataclass, fields, replace
@@ -687,6 +687,7 @@ INPLACE_READERS = {
     "IR_DUP_SHAPE_READ",
     "IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE", "IR_GUARD_ELEMENT_INDEX",
     "IR_DUP_CANONICAL_ELEMENT",
+    "coro_awaitable_can_transfer",
     # The structured provider TAKEs evaluated snapshots before any callback.
     "IR_BINARY_READER",
     "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
@@ -1584,7 +1585,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     else:
         imm_kind = "narrow"
     no_fold = any(m.properties.no_fold for m in members) or any(
-        e.aliased for m in members for e in io[m.name][1])
+        e.aliased and e.item.name != owned_alias_result(m, io[m.name][1])
+        for m in members for e in io[m.name][1])
 
     placed = None
     if metadata_inputs:
@@ -2230,6 +2232,16 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
     return GeneratorEntryRecipe(entry, tokens[2].text, kind)
 
 
+def owned_alias_result(inst: Instruction, outputs: list[Entry]) -> str | None:
+    "An alias whose final publication has a separate owning-result proof."
+    if (len(outputs) != 1 or not outputs[0].aliased
+            or outputs[0].external >= 0 or outputs[0].item.is_array()):
+        return None
+    source = owning_output_source(inst)
+    name = outputs[0].item.name
+    return name if source is not None and name in source.owning_outputs else None
+
+
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
@@ -2264,7 +2276,8 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     if inst.properties.no_fold:
         return None
     j = result_offset(inst, outputs)
-    if j is None or outputs[j].aliased:
+    if j is None or (outputs[j].aliased
+                     and outputs[j].item.name != owned_alias_result(inst, outputs)):
         return None
     if all(e.item.is_array() and not e.item.size.isdigit()
            for e in outputs[j + 1:]):
@@ -2398,6 +2411,7 @@ class SlotLayout:
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
     canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
+    owning_result: str | None = None  # first publication of a checked owning alias
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
 
@@ -3049,6 +3063,12 @@ class IRStack(Stack):
                                 for edge, names in self.null_paths.items()}
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
+            if var.name == lay.owning_result:
+                if not var.owns_value or var.ir_inplace is not None:
+                    raise StackError(f"'{var.name}' lacks its final owning-result receipt")
+                # TEMP_DST may publish only on the scratch arm. No subsequent
+                # use may treat this as an unconditional native owner.
+                var.owns_value = False
             if lay.dst in lay.temp_fields:
                 if self.final and self.published_temporary_result:
                     return True
@@ -3248,6 +3268,7 @@ class IRStack(Stack):
             mine.nonnull = theirs.nonnull = mine.nonnull and theirs.nonnull
             if mine.ir_value != theirs.ir_value:
                 mine.ir_value = theirs.ir_value = None
+            mine.owns_value = theirs.owns_value = mine.owns_value and theirs.owns_value
         if self.home_graph is not other.home_graph:
             raise StackError("scalar storage branches have different graphs")
         self.home_node = other.home_node = self.home_graph.join(self.home_node, other.home_node)
@@ -4484,6 +4505,11 @@ class IREmitter(Emitter):
             text = owner_name(field)
         self.out.emit_at(text, tkn)
         self.out.last_token = rparen
+        if (tkn.text == "TAKE" and self.statement is not None
+                and _statement_text(self.statement) == [
+                    storage.stack.layout.owning_result, "=", "TAKE", "(",
+                    name.text, ")", ";"]):
+            self.owning_take_output = storage.stack.layout.owning_result
         return self.value_kill(name, storage, False)
 
     def object_of(self, tkn, tkn_iter, uop, storage, inst):
@@ -4901,6 +4927,7 @@ class IREmitter(Emitter):
         for var in targets:
             if var.name in identities_changed:
                 var.ir_value = None
+                var.owns_value = False
         if assignment is None:
             return
         name = assignment[0]
@@ -4941,6 +4968,10 @@ class IREmitter(Emitter):
         for var in targets:
             if var.name == name:
                 var.ir_value = value
+                if name == stack.layout.owning_result:
+                    var.owns_value = (value is not None and value in stack.native_owners)
+                    if transport is None and result is not None:
+                        var.owns_value = result.result_owned is True
 
     def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
                         storage: Storage, inst: Instruction | None
@@ -4960,6 +4991,7 @@ class IREmitter(Emitter):
         previous = self.cannot_escape
         self.statement = stmt
         self.element_result = None
+        self.owning_take_output = None
         # Capture RHS facts before TAKE/DEAD or an escaping release kills
         # its source. Apply them to the surviving identities after emission.
         locals = self.current_value_locals(storage)
@@ -5047,8 +5079,18 @@ class IREmitter(Emitter):
                   if self.error_source is not None else None)
         if self.element_result is not None:
             result = self.element_result
+        # Ownership-only source receipts cannot certify the scalar home graph
+        # or any ordinary error/normal route. They serve this terminal result.
+        owning_receipt = (dict(self.owning_output_source.value_results).get(id(stmt))
+                          if self.owning_output_source is not None else None)
         self.apply_value_transport(storage, assignment, transport, sources,
                                    nonnull_changes, result)
+        if assignment is not None and assignment[0] == stack.layout.owning_result:
+            for var in storage.outputs:
+                if var.name == assignment[0]:
+                    var.owns_value = (self.owning_take_output == var.name
+                        or transport is None and owning_receipt is not None
+                        and owning_receipt.result_owned is True)
         if guarded is not None and reachable:
             self.refine_current_value(storage, guarded, True)
         if self.observer_source is not None:
@@ -7008,6 +7050,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.abrupt_prefix = False
     emitter.send_source_parts = send_source_contract(inst, fmt)
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
+    emitter.owning_output_source = (owning_output_source(inst)
+                                  if owned_alias_result(inst, external_io(inst)[1]) else None)
     if emitter.error_source is None and emitter.send_source_parts is not None:
         emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
     source = emitter.error_source
@@ -7193,6 +7237,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                      native_entry=native_entry_input_contract(inst),
                      canonical_result=canonical.result if canonical else None,
                      canonical_outputs=canonical_output_sources(inst, fmt),
+                     owning_result=owned_alias_result(inst, external_io(inst)[1]),
                      call_kind=emitter.call_kind if call_window else None)
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,

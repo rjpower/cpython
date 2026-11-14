@@ -1070,6 +1070,124 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
             emitted("FOR_ITER", False)
 
+    def test_exact_coroutine_await_transfers_existing_owner(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instruction = analysis.instructions["GET_AWAITABLE"]
+        self.assertEqual(formats["GET_AWAITABLE"].borrow_mask, 1)
+        self.assertTrue(formats["GET_AWAITABLE"].store_dst)
+        self.assertFalse(formats["GET_AWAITABLE"].no_fold)
+        self.assertEqual(instruction.parts[0].aliased_outputs, ("iter",))
+        predicate = "coro_awaitable_can_transfer"
+        self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
+        self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
+        effect = ir_generator.analyze_error_effects(self.analyze(
+            "\ninst(OP, (value --)) { if (coro_awaitable_can_transfer(value)) { assert(true); } }\n"
+        ).instructions["OP"])
+        self.assertIsNotNone(effect)
+        self.assertFalse(effect.callback)
+        self.assertFalse(effect.may_fail)
+        self.assertEqual(effect.homes, ir_generator.HomeEffect.NO_ARENA_WRITE)
+        for record in (False, True):
+            with self.subTest(record=record):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                ir_generator.generate_handler("GET_AWAITABLE", instruction,
+                    formats["GET_AWAITABLE"], ir_generator.IREmitter(out, analysis, formats),
+                    out, record)
+                handler = output.getvalue()
+                start = handler.index("if (coro_awaitable_can_transfer(iterable))")
+                end = handler.index("}\n", start)
+                arm = handler[start:end]
+                self.assertIn("IR_CONSUME_INPUT(IR_B(ir_word), iterable)", arm)
+                self.assertIn("iter = IR_TAKE(iterable, ir_own_B)", arm)
+                self.assertNotIn("_PyEval_GetAwaitable", arm)
+                self.assertNotIn("PyValue_FromObjectSteal", arm)
+                self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
+                self.assertIn("IR_STORE_DST(IR_A(ir_word), iter);", handler)
+        body = instruction.parts[0].body.body[0]
+        self.assertIsInstance(body, ir_generator.IfStmt)
+        fallback = [ir_generator._statement_text(stmt) for stmt in body.else_body.body]
+        expected = ir_generator.Parser("""{
+            PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
+            PyValue_CLOSE(iterable);
+            ERROR_IF(iter_o == NULL);
+            iter = PyValue_FromObjectSteal(iter_o);
+        }""", "<unchanged await fallback>").block()
+        self.assertEqual(fallback, [ir_generator._statement_text(stmt) for stmt in expected.body])
+
+    def test_owning_alias_result_meets_all_normal_arms(self):
+        source = """
+        inst(OP, (value -- result)) {
+            if (coro_awaitable_can_transfer(value)) {
+                result = TAKE(value);
+            }
+            else {
+                PyObject *pointer = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(value), 0);
+                PyValue_CLOSE(value);
+                ERROR_IF(pointer == NULL);
+                result = PyValue_FromObjectSteal(pointer);
+            }
+        }
+        """
+        analysis = self.analyze(source)
+        instruction = analysis.instructions["OP"]
+        formats = ir_generator.compute_formats(analysis)
+        self.assertTrue(formats["OP"].store_dst)
+        self.assertFalse(formats["OP"].no_fold)
+        self.assertEqual(instruction.parts[0].aliased_outputs, ("result",))
+        effect = ir_generator.analyze_error_effects(instruction)
+        self.assertEqual(effect.homes, ir_generator.HomeEffect.UNKNOWN)
+        self.assertTrue(effect.callback)
+        self.assertTrue(effect.may_fail)
+        owning = ir_generator.owning_output_source(instruction)
+        self.assertEqual(owning.owning_outputs, frozenset({"result"}))
+        for record in (False, True):
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            ir_generator.generate_handler("OP", instruction, formats["OP"],
+                ir_generator.IREmitter(out, analysis, formats), out, record)
+            self.assertIn("IR_STORE_DST(IR_A(ir_word), result);", output.getvalue())
+        mutations = (
+            ("result = PyValue_FromObjectSteal(pointer);", "result = PyValue_NULL;"),
+            ("result = PyValue_FromObjectSteal(pointer);", "result = value;"),
+            ("ERROR_IF(pointer == NULL);", "assert(true);"),
+            ("result = TAKE(value);", "value = PyValue_NULL; result = TAKE(value);"),
+            ("result = TAKE(value);", "result = TAKE(value); PyValue alias = result;"),
+            ("result = TAKE(value);", "result = TAKE(value); opaque(&result);"),
+            ("result = TAKE(value);", "result = TAKE(value); PyValue_CLOSE(result);"),
+            ("result = TAKE(value);", "result = TAKE(value); result = PyValue_FromInlineInt(1);"),
+            ("result = TAKE(value);", "PyValue held = TAKE(value); result = PyValue_FromInlineInt(1);"),
+            ("result = TAKE(value);", "PyValue held = PyValue_FromInlineInt(1); result = TAKE(value);"),
+            ("result = TAKE(value);", "DECREF_INPUTS(); result = TAKE(value);"),
+            ("result = TAKE(value);", "INPUTS_DEAD(); result = TAKE(value);"),
+            ("result = TAKE(value);", "PyValue held = PyValue_FromInlineInt(1); ERROR_IF(oparg); PyValue_CLOSE(held); result = TAKE(value);"),
+        )
+        for old, new in mutations:
+            with self.subTest(mutation=new):
+                changed = self.analyze(source.replace(old, new))
+                self.assertIsNone(ir_generator.owning_output_source(changed.instructions["OP"]))
+                fmt = ir_generator.compute_formats(changed)["OP"]
+                if changed.instructions["OP"].parts[0].aliased_outputs:
+                    self.assertFalse(fmt.store_dst)
+                    self.assertTrue(fmt.no_fold)
+        # The source projection alone cannot excuse a missing actual owner
+        # acquisition at the generated join.
+        from unittest import mock
+        original = ir_generator.IREmitter.apply_value_transport
+        def revoke(emitter, storage, *args, **kwargs):
+            original(emitter, storage, *args, **kwargs)
+            emitter.owning_take_output = None
+        with mock.patch.object(ir_generator.IREmitter, "apply_value_transport", revoke):
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            with self.assertRaisesRegex(ir_generator.StackError, "final owning-result receipt"):
+                ir_generator.generate_handler("OP", instruction, formats["OP"],
+                    ir_generator.IREmitter(out, analysis, formats), out, False)
+
     def test_generator_entry_recipient_uses_actual_terminal(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

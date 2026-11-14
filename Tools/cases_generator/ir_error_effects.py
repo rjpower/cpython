@@ -77,6 +77,11 @@ def native_helper(inputs, result, may_fail=False, callback=False, *,
 # old-PC shape after an accepted redirect. Generated operand writes remain a
 # separate emitter obligation. A returned failure is not a goto.
 HELPERS = {
+    "coro_awaitable_can_transfer": native_helper((Kind.VALUE,), Kind.SCALAR),
+    # The returned native count is known, but this contract grants no arena
+    # effect or callback-shape authority for arbitrary __await__ execution.
+    "_PyEval_GetAwaitable": HelperEffect((Kind.OBJECT, Kind.SCALAR), Kind.OBJECT,
+        HomeEffect.UNKNOWN, may_fail=True, callback=True, result_owned=True),
     "IS_PEP523_HOOKED": native_helper((Kind.TSTATE,), Kind.SCALAR),
     "PyValue_DUP": native_helper((Kind.VALUE,), Kind.VALUE),
     "PyValue_XDUP": native_helper((Kind.VALUE,), Kind.VALUE),
@@ -170,11 +175,14 @@ class _Origin:
     native_bindings: dict[str, int] = field(default_factory=dict)
     native_valid: bool = True
     native_nonnull: set[int] = field(default_factory=set)
+    owning_values: set[str] = field(default_factory=set)
+    input_values: set[str] = field(default_factory=set)
 
     def copy(self):
         return _Origin(self.reachable, self.changed, self.native_pending.copy(),
                        self.native_bindings.copy(), self.native_valid,
-                       self.native_nonnull.copy())
+                       self.native_nonnull.copy(), self.owning_values.copy(),
+                       self.input_values.copy())
 
     def native_closed(self):
         return self.native_valid and not self.native_pending
@@ -191,17 +199,21 @@ class _Expression:
     null_guard: tuple[int, bool] | None = None
     value_result: HelperEffect | None = None
     nonnull: bool = False
+    ended_values: frozenset[str] = frozenset()
 
 
 def _expression(kind, *operands, owner=None, created=(), consumed=(), valid=True,
-                null_guard=None, value_result=None, nonnull=False):
+                null_guard=None, value_result=None, nonnull=False, ended_values=()):
     made, taken = set(created), set(consumed)
+    ended = set(ended_values)
     for operand in operands:
         valid &= operand.valid and not (taken & operand.consumed)
         made.update(operand.created)
         taken.update(operand.consumed)
+        valid &= not (ended & operand.ended_values)
+        ended.update(operand.ended_values)
     return _Expression(kind, owner, frozenset(made), frozenset(taken), valid,
-                       null_guard, value_result, nonnull)
+                       null_guard, value_result, nonnull, frozenset(ended))
 
 
 def _apply_native(value, origin):
@@ -209,6 +221,8 @@ def _apply_native(value, origin):
     origin.native_valid &= value.valid and value.consumed <= available
     origin.native_pending = available - value.consumed
     origin.native_nonnull.difference_update(value.consumed)
+    origin.owning_values.difference_update(value.ended_values)
+    origin.input_values.difference_update(value.ended_values)
     if value.owner is not None and value.nonnull:
         origin.native_nonnull.add(value.owner)
 
@@ -244,6 +258,8 @@ class SourceErrorEffects:
     # The callback itself opens no observer context for its current frame.
     # A caller/adapter context must still independently exclude redirection.
     callbacks_without_current_observer: bool = False
+    # Final owning C results, not value identities or a readable home shape.
+    owning_outputs: frozenset[str] = frozenset()
 
 
 def checked_native_step_effects(parts: tuple[Uop, ...]) -> SourceErrorEffects | None:
@@ -286,7 +302,8 @@ def _call(tokens: list[Token]) -> list[list[Token]] | None:
 
 def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                           observer_wrapper=False,
-                          guard_prefix=False) -> SourceErrorEffects | None:
+                          guard_prefix=False,
+                          _ownership_projection=False) -> SourceErrorEffects | None:
     """Summarize complete typed source, including an empty error-source set.
 
     Token identities are meaningful only for this analysis object. No summary
@@ -459,6 +476,16 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         valid &= not any(value.kind == Kind.VALUE and value.consumed for value in values)
         owner = id(tokens[0]) if contract.result == Kind.OBJECT and contract.result_owned else None
         result = contract if contract.result == Kind.VALUE else None
+        ended = ()
+        if _ownership_projection and texts[0] in {"DECREF_INPUTS", "INPUTS_DEAD"}:
+            ended = tuple(origin.input_values)
+        if (_ownership_projection and texts[0] in {
+                "TAKE", "PyValue_CLOSE", "PyValue_XCLOSE", "DEAD"}
+                and len(arguments) == 1 and len(arguments[0]) == 1):
+            name = arguments[0][0].text
+            ended = (name,)
+            if texts[0] == "TAKE" and name in origin.input_values:
+                result = replace(contract, result_owned=True)
         if result is not None and any(not values[index].nonnull for index in contract.steals):
             # FromObjectSteal's non-NULL assertion is a precondition. An
             # owning pointer may still be NULL before its actual guard.
@@ -467,7 +494,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                            created=() if owner is None else (owner,),
                            consumed=(token for token in stolen if token is not None),
                            valid=valid, value_result=result,
-                           nonnull=contract.result_nonnull)
+                           nonnull=contract.result_nonnull, ended_values=ended)
 
     def statement(stmt, variables, origin):
         nonlocal changes_origin
@@ -583,6 +610,10 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             if name in {"ERROR_IF", "ERROR_NO_POP"}:
                 if origin.changed and not observer_wrapper:
                     return False
+                if _ownership_projection and origin.owning_values:
+                    # The error edge does not publish C results. This bounded
+                    # certificate has no native VALUE unwind adapter.
+                    origin.native_valid = False
                 errors.add(id(tokens[0]))
                 error_origin = origin.copy()
                 if values:
@@ -646,6 +677,12 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         # existing source census, but do not certify ambiguous native aliases
         # or overwrite an unretired native owner.
         previous = origin.native_bindings.pop(name, None)
+        if _ownership_projection and name in origin.owning_values:
+            # A later assignment cannot silently replace an acquired VALUE
+            # count; its actual close/transfer must precede the overwrite.
+            origin.native_valid = False
+        origin.owning_values.discard(name)
+        origin.input_values.discard(name)
         if previous in origin.native_pending:
             origin.native_valid = False
         if value.owner is not None and value.owner not in value.created:
@@ -653,6 +690,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         _apply_native(value, origin)
         if value.owner is not None:
             origin.native_bindings[name] = value.owner
+        if (_ownership_projection and value.valid and value.value_result is not None
+                and value.value_result.result_owned is True):
+            origin.owning_values.add(name)
 
     def merge_native(origin, arms):
         reached = [arm for arm in arms if arm.reachable]
@@ -661,6 +701,13 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         origin.native_pending = set().union(*(arm.native_pending for arm in reached))
         origin.native_valid = all(arm.native_valid for arm in reached)
         origin.native_nonnull = set.intersection(*(arm.native_nonnull for arm in reached))
+        origin.owning_values = set.intersection(*(arm.owning_values for arm in reached))
+        if any(arm.owning_values != origin.owning_values for arm in reached):
+            # A branch-only extra owner cannot disappear in the meet. The
+            # final result may vary in identity, but every arm must close
+            # the same complete set of other VALUE acquisitions.
+            origin.native_valid = False
+        origin.input_values = set.intersection(*(arm.input_values for arm in reached))
         common = reached[0].native_bindings
         origin.native_bindings = {name: owner for name, owner in common.items()
             if all(arm.native_bindings.get(name) == owner for arm in reached[1:])}
@@ -681,6 +728,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
         if any(name in reserved for name in names):
             return None
         variables = {name: Kind.VALUE for name in names}
+        origin.input_values = {item.name for item in part.stack.inputs
+                               if not item.peek}
         variables["oparg"] = Kind.SCALAR
         if origin.reachable and origin.native_closed():
             native_closed_entries.add(id(part))
@@ -702,4 +751,49 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                               frozenset(native_closed_errors), frozenset(native_closed_entries),
                               origin.reachable and origin.native_closed(),
                               tuple(value_results.items()),
-                              all(not h.opens_current_observer for h in used if h.callback))
+                              all(not h.opens_current_observer for h in used if h.callback),
+                              frozenset(origin.owning_values)
+                              if origin.reachable and origin.native_closed() else frozenset())
+
+
+def owning_output_source(inst: Instruction) -> SourceErrorEffects | None:
+    """An unaliased final C result, using the existing typed source walk.
+
+    Value aliases stay in the instruction's IO. This projection permits only
+    final publication of an independently acquired owner, not scalar replay,
+    normal completion or error-home authority.
+    """
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if (len(parts) != 1 or len(inst.parts) != 1 or parts[0].caches
+            or inst.properties.window
+            or len(parts[0].stack.outputs) != 1):
+        return None
+    part = parts[0]
+    output = part.stack.outputs[0]
+    if (output.is_array() or output.peek
+            or any(item.is_array() or item.peek or item.name == output.name
+                   for item in part.stack.inputs)):
+        return None
+    # No native alias of the result may outlive its one publication. Declared
+    # output writes must be whole scalar assignments; all other uses reject.
+    def assignments(stmt):
+        if isinstance(stmt, BlockStmt):
+            return all(assignments(child) for child in stmt.body)
+        if isinstance(stmt, IfStmt):
+            return (not any(token.text == output.name for token in stmt.condition)
+                    and assignments(stmt.body)
+                    and (stmt.else_body is None or assignments(stmt.else_body)))
+        if isinstance(stmt, MacroIfStmt):
+            return False
+        if not isinstance(stmt, SimpleStmt):
+            return False
+        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+        uses = [at for at, token in enumerate(tokens) if token.text == output.name]
+        return not uses or (uses == [0] and len(tokens) > 2
+                            and tokens[1].text == "=")
+    if not assignments(part.body):
+        return None
+    source = analyze_error_effects(inst, _ownership_projection=True)
+    if source is None or source.owning_outputs != frozenset({output.name}):
+        return None
+    return source

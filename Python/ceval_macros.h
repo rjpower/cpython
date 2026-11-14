@@ -766,6 +766,24 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
     assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
            frame->ir_feedback == _PyFrame_Exec(frame)->entries)
 
+/* This is the callback-free identity arm of _PyEval_GetAwaitable. The other
+ * states and custom __await__ implementations keep its ordinary error path. */
+static inline bool
+coro_awaitable_can_transfer(PyValueBorrow value)
+{
+    if (!PyValue_IsObject(value)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(value);
+    if (!PyCoro_CheckExact(object)) {
+        return false;
+    }
+    int8_t state = FT_ATOMIC_LOAD_INT8_RELAXED(
+        ((PyCoroObject *)object)->cr_frame_state);
+    return state != FRAME_SUSPENDED_YIELD_FROM &&
+           state != FRAME_SUSPENDED_YIELD_FROM_LOCKED;
+}
+
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 

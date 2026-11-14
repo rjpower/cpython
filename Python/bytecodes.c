@@ -1570,10 +1570,15 @@ dummy_func(
         }
 
         inst(GET_AWAITABLE, (iterable -- iter)) {
-            PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
-            PyValue_CLOSE(iterable);
-            ERROR_IF(iter_o == NULL);
-            iter = PyValue_FromObjectSteal(iter_o);
+            if (coro_awaitable_can_transfer(iterable)) {
+                iter = TAKE(iterable);
+            }
+            else {
+                PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
+                PyValue_CLOSE(iterable);
+                ERROR_IF(iter_o == NULL);
+                iter = PyValue_FromObjectSteal(iter_o);
+            }
         }
 
         family(SEND, INLINE_CACHE_ENTRIES_SEND) = {

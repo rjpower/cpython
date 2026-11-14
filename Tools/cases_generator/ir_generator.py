@@ -3373,6 +3373,7 @@ class IREmitter(Emitter):
         # They have no certifying source contract or per-handler receipts.
         self.null_outputs: frozenset[str] | None = None
         self.error_source = None
+        self.owning_output_source = None
         self.callback_current_identity = False
         self.error_unwind_sources = set()
         self.error_terminal_sources = set()

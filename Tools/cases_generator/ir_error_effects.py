@@ -89,6 +89,10 @@ HELPERS = {
                                      canonical_clear=True, opens_current_observer=False),
     "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE,
         result_owned=True, result_canonical=True, result_nonnull=True),
+    # The emitter requires current exact-container/bounds/anchor receipts
+    # before lowering this intrinsic to an element read and owning XDUP.
+    "IR_DUP_CANONICAL_ELEMENT": native_helper((Kind.VALUE, Kind.SCALAR), Kind.VALUE,
+        result_owned=True, result_canonical=True, result_nonnull=True),
     "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT,
                                                  result_owned=False),
     "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),

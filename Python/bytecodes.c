@@ -1050,19 +1050,24 @@ dummy_func(
 
         macro(STORE_SLICE) = _SPECIALIZE_STORE_SLICE + _STORE_SLICE;
 
+        inline_ok op(_GUARD_ELEMENT_INT, (value -- value)) {
+            IR_GUARD_INLINE_INT(value);
+        }
+
+        inline_ok op(_GUARD_ELEMENT_LIST, (container, unused -- container, unused)) {
+            IR_GUARD_ELEMENT_TYPE(container, LIST);
+        }
+
+        inline_ok op(_GUARD_ELEMENT_TUPLE, (container, unused -- container, unused)) {
+            IR_GUARD_ELEMENT_TYPE(container, TUPLE);
+        }
+
         macro(BINARY_OP_SUBSCR_LIST_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
+            _GUARD_ELEMENT_INT + _GUARD_ELEMENT_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
 
         inline_ok op(_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)) {
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-            assert(PyList_CheckExact(list));
-
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            if (index < 0) {
-                index += PyList_GET_SIZE(list);
-            }
-            EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
-            res = PyValue_XDUP(PyList_GET_VALUE(list, index));
+            IR_GUARD_ELEMENT_INDEX(list_st, sub_st, index, FROM_END);
+            res = IR_DUP_CANONICAL_ELEMENT(list_st, index);
             assert(!PyValue_IsNull(res));
             STAT_INC(BINARY_OP, hit);
             ls = list_st;
@@ -1143,33 +1148,17 @@ dummy_func(
         }
 
         macro(BINARY_OP_SUBSCR_TUPLE_INT) =
-            _GUARD_TOS_INT +
-            _GUARD_NOS_TUPLE +
-            _GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS +
+            _GUARD_ELEMENT_INT +
+            _GUARD_ELEMENT_TUPLE +
             unused/5 +
             _BINARY_OP_SUBSCR_TUPLE_INT +
             _POP_TOP_INT +
             POP_TOP;
 
-        // A guard that checks that the tuple subscript is within bounds
-        inline_ok op(_GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS, (tuple_st, sub_st -- tuple_st, sub_st)) {
-            PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
-            assert(PyTuple_CheckExact(tuple));
-
-            // Deopt unless 0 <= sub < PyTuple_Size(list)
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0);
-            EXIT_IF(index >= PyTuple_GET_SIZE(tuple));
-        }
-
         inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT, (tuple_st, sub_st -- res, ts, ss)) {
-            PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
-            assert(PyTuple_CheckExact(tuple));
-
+            IR_GUARD_ELEMENT_INDEX(tuple_st, sub_st, index, NONNEGATIVE);
+            res = IR_DUP_CANONICAL_ELEMENT(tuple_st, index);
             STAT_INC(BINARY_OP, hit);
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-            res = PyValue_XDUP(PyTuple_GET_VALUE(tuple, index));
             assert(!PyValue_IsNull(res));
             ts = tuple_st;
             ss = sub_st;

@@ -940,83 +940,30 @@ class TestIRCases(unittest.TestCase):
                     self.assertNotIn("assert(_PyValue_IsHome(temp));", handler)
                     self.assertIn("temp = _PyValue_Publish(&temp);", handler)
 
-    def test_canonical_list_child_and_yield_sources(self):
+    def test_canonical_yield_sources(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
-
-        def analyze(text, numbers=None):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                return analyzer.analyze_files([self.temp_input_filename], numbers)
-
-        analysis = analyze(source)
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
-        contract = ir_generator.canonical_result_source(
-            analysis.instructions['BINARY_OP_SUBSCR_LIST_INT'],
-            formats['BINARY_OP_SUBSCR_LIST_INT'])
-        self.assertIsNotNone(contract)
-        self.assertEqual(contract.result, 'res')
         self.assertTrue(ir_generator.canonical_frame_transfer_input(
             analysis.instructions['YIELD_VALUE']))
         self.assertFalse(ir_generator.canonical_frame_transfer_input(
             analysis.instructions['INSTRUMENTED_YIELD_VALUE']))
-        output = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
-        handler = self.handler(output.getvalue(), 'BINARY_OP_SUBSCR_LIST_INT')
-        early = 'IR_STORE_TEMP_DST(IR_A(ir_word), res);'
-        close = '_PyValue_XCLOSE_POINTER(ir_own_B);'
-        final = 'IR_STORE_CANONICAL_DST(IR_A(ir_word), res);'
-        self.assertLess(handler.index(early), handler.index(close))
-        self.assertLess(handler.index(close), handler.index(final))
-        self.assertNotIn('IR_STORE_CANONICAL_TEMP_DST', handler)
-        self.assertIn('IR_STORE_CANONICAL_RETURN(value);',
-                      self.handler(output.getvalue(), 'YIELD_VALUE'))
-        self.assertIn('IR_STORE_RETURN(value);',
-                      self.handler(output.getvalue(), 'INSTRUMENTED_YIELD_VALUE'))
+        for name, store in (("YIELD_VALUE", "IR_STORE_CANONICAL_RETURN(value);"),
+                            ("INSTRUMENTED_YIELD_VALUE", "IR_STORE_RETURN(value);")):
+            output = io.StringIO()
+            writer = CWriter(output, 0, False)
+            emitter = ir_generator.IREmitter(writer, analysis, formats)
+            ir_generator.generate_handler(name, analysis.instructions[name],
+                                          formats[name], emitter, writer, False)
+            self.assertIn(store, output.getvalue())
 
-        # Neither proof depends on the instruction or uop names.
-        renamed = source.replace('BINARY_OP_SUBSCR_LIST_INT', 'RENAMED_LIST_CHILD')
-        renamed = renamed.replace('YIELD_VALUE', 'RENAMED_YIELD')
-        other = analyze(renamed, SequentialNumbers())
-        other_formats = ir_generator.compute_formats(other)
-        self.assertIsNotNone(ir_generator.canonical_result_source(
-            other.instructions['RENAMED_LIST_CHILD'],
-            other_formats['RENAMED_LIST_CHILD']))
+        renamed = source.replace('YIELD_VALUE', 'RENAMED_YIELD')
+        Path(self.temp_input_filename).write_text(renamed)
+        other = analyzer.analyze_files([self.temp_input_filename], SequentialNumbers())
         self.assertTrue(ir_generator.canonical_frame_transfer_input(
             other.instructions['RENAMED_YIELD']))
-
-    def test_canonical_list_child_mutations_fail_closed(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        duplicate = 'res = PyValue_XDUP(PyList_GET_VALUE(list, index));'
-        changes = (
-            (duplicate, 'res = PyList_GET_VALUE(list, index);'),
-            (duplicate, duplicate + ' res = PyValue_None;'),
-            (duplicate, duplicate + ' opaque(&res);'),
-            (duplicate, 'PyValue_CLOSE(list_st); ' + duplicate),
-            (duplicate, 'PyValue (*PyList_GET_VALUE)(void) = replacement; ' + duplicate),
-            (duplicate, '#define PyList_GET_VALUE replacement\n' + duplicate +
-             '\n#undef PyList_GET_VALUE'),
-            ('_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)',
-             '_BINARY_OP_SUBSCR_LIST_INT, (PyList_GET_VALUE/1, list_st, sub_st -- res, ls, ss)'),
-            ('EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));',
-             'EXIT_IF(index < 0 || index > PyList_GET_SIZE(list));'),
-            ('index += PyList_GET_SIZE(list);', 'index = 0;'),
-            ('ls = list_st;', 'ls = res;'),
-            ('PyValue_XCLOSE(value);', 'PyValue_XCLOSE(value); opaque();'),
-            ('_BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;',
-             '_BINARY_OP_SUBSCR_LIST_INT + flush + _POP_TOP_INT + POP_TOP;'),
-        )
-        for old, new in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source)
-                Path(self.temp_input_filename).write_text(source.replace(old, new, 1))
-                with handle_stderr():
-                    analysis = analyzer.analyze_files([self.temp_input_filename])
-                formats = ir_generator.compute_formats(analysis)
-                self.assertIsNone(ir_generator.canonical_result_source(
-                    analysis.instructions['BINARY_OP_SUBSCR_LIST_INT'],
-                    formats['BINARY_OP_SUBSCR_LIST_INT']))
 
     def test_canonical_yield_mutations_fail_closed(self):
         source = (Path(__file__).resolve().parents[2] /

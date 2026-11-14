@@ -560,6 +560,8 @@ IR_HELPER_EFFECTS = {
     "IR_WRITE_OUTPUT": frozenset(),
     "IR_TAKE_INPUT": frozenset(),
     "IR_CLOSE_INPUTS": frozenset(("escapes",)),
+    **dict.fromkeys(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
+                     "IR_GUARD_ELEMENT_INDEX", "IR_DUP_CANONICAL_ELEMENT"), frozenset()),
 }
 
 
@@ -1041,8 +1043,9 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")
-    exits_if = (variable_used(op, "EXIT_IF") or
-                variable_used(op, "IR_GUARD_SHAPE_READ"))
+    exits_if = variable_used(op, "EXIT_IF") or any(variable_used(op, marker) for marker in (
+        "IR_GUARD_SHAPE_READ", "IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
+        "IR_GUARD_ELEMENT_INDEX"))
     if deopts_if and exits_if:
         tkn = op.tokens[0]
         raise lexer.make_syntax_error(

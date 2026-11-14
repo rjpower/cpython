@@ -78,7 +78,7 @@ from ir_read_effects import (
     value_nonnull_changes, value_transport_expression,
 )
 from ir_error_effects import (
-    HomeEffect, analyze_error_effects, checked_native_step_effects,
+    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects,
 )
 import re
 from dataclasses import dataclass, fields, replace
@@ -685,6 +685,8 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
     "IR_DUP_SHAPE_READ",
+    "IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE", "IR_GUARD_ELEMENT_INDEX",
+    "IR_DUP_CANONICAL_ELEMENT",
     # The structured provider TAKEs evaluated snapshots before any callback.
     "IR_BINARY_READER",
     "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
@@ -2421,6 +2423,17 @@ class ErrorCheckpoint:
     actions: tuple[OwnershipEvent, ...] = ()
 
 
+ELEMENT_GUARDS = frozenset(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
+                            "IR_GUARD_ELEMENT_INDEX"))
+ELEMENT_INTRINSICS = ELEMENT_GUARDS | {"IR_DUP_CANONICAL_ELEMENT"}
+ELEMENT_NATIVE_SYMBOLS = frozenset((
+    "PyValue_IsInlineInt", "PyValue_InlineInt64", "PyValue_IsObject",
+    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyList_CheckExact",
+    "PyTuple_CheckExact", "PyList_GET_SIZE", "PyTuple_GET_SIZE",
+    "PyList_GET_VALUE", "PyTuple_GET_VALUE",
+))
+
+
 class ScalarStorageGraph:
     """Persistent source actions shared by the actual IRStack branches.
 
@@ -2642,6 +2655,9 @@ class IRStack(Stack):
         # receiver. It is metadata, not a value or an owning Storage token.
         self.shape_read_binding: tuple[str, str] | None = None
         self.shape_read_complete = False
+        self.element_guards: dict[tuple[str, int], str] = {}
+        # A lexical C index, its actual value/anchor identities and scope.
+        self.element_indices: dict[str, tuple[int, int, str, int]] = {}
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -2670,6 +2686,8 @@ class IRStack(Stack):
         other.loaded_value = None
         other.shape_read_binding = self.shape_read_binding
         other.shape_read_complete = self.shape_read_complete
+        other.element_guards = dict(self.element_guards)
+        other.element_indices = dict(self.element_indices)
         return other
 
     def home_action(self, kind: str, field: int = 0,
@@ -2678,6 +2696,20 @@ class IRStack(Stack):
             return None
         self.home_node = self.home_graph.action(kind, self.home_node, field, value, flags)
         return self.home_node
+
+    def canonical_native(self, var: Local) -> bool:
+        """Representation of this live token, independently of ownership."""
+        value = var.ir_value
+        while value is not None and value not in self.expired_values:
+            event = self.home_graph.nodes[value - 1]
+            if event.kind == "_PyIR_OWNER_STORAGE_LITERAL":
+                return True
+            if event.kind == "_PyIR_OWNER_STORAGE_RESULT":
+                return bool(event.flags & 1)
+            if event.kind not in {"_PyIR_OWNER_STORAGE_COPY", "_PyIR_OWNER_STORAGE_GUARD"}:
+                return False
+            value = event.extent
+        return False
 
     def take_field(self, field: str) -> None:
         self.home_write_receipts += 1
@@ -2780,6 +2812,8 @@ class IRStack(Stack):
         "Code that can rebind a local may have run: each view may dangle"
         self.shape_read_binding = None
         self.home_action("_PyIR_OWNER_STORAGE_CALLBACK", flags=2 if current_identity else 0)
+        self.element_guards.clear()
+        self.element_indices.clear()
         for names in self.views.values():
             self.stale.update(names)
         self.stale.update(self.view_objects)
@@ -2956,6 +2990,8 @@ class IRStack(Stack):
         """Write var, which the stack holds at memory_offset; whether the
         frame then holds it there"""
         self.home_writes += 1
+        if self.canonical_native(var):
+            canonical_result = var.name
         out.start_line()
         p = memory_offset.as_int()
         if self.reloaded:
@@ -3032,7 +3068,7 @@ class IRStack(Stack):
                     field = FIELD_VARS[lay.dst]
                     out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
                 macro = ("IR_STORE_CANONICAL_DST"
-                         if (var.name == lay.canonical_result
+                         if (var.name == canonical_result or var.name == lay.canonical_result
                              or var.name in lay.canonical_outputs) else "IR_STORE_DST")
                 if self.observer_deferred is not None:
                     macro = "IR_COMMIT_OBSERVED_DST"
@@ -3056,10 +3092,10 @@ class IRStack(Stack):
             return False
         if previous == "out":
             macro = ("IR_PUBLISH_CANONICAL_TEMP"
-                     if var.name in lay.canonical_outputs else "IR_PUBLISH_TEMP")
+                     if var.name == canonical_result or var.name in lay.canonical_outputs else "IR_PUBLISH_TEMP")
         else:
             macro = ("IR_STORE_CANONICAL_TEMP"
-                     if var.name in lay.canonical_outputs else "IR_STORE_TEMP")
+                     if var.name == canonical_result or var.name in lay.canonical_outputs else "IR_STORE_TEMP")
         out.emit(f"{macro}({slot}, {var.name});\n")
         if p == lay.dst_offset and lay.dst is not None:
             self.publish_field(lay.dst, var, canonical="CANONICAL" in macro)
@@ -3224,6 +3260,11 @@ class IRStack(Stack):
         self.home_values = {field: value for field, value in self.home_values.items()
                             if other.home_values.get(field) == value}
         other.home_values = dict(self.home_values)
+        for attribute in ("element_guards", "element_indices"):
+            common = {key: value for key, value in getattr(self, attribute).items()
+                      if getattr(other, attribute).get(key) == value}
+            setattr(self, attribute, dict(common))
+            setattr(other, attribute, common)
         self.home_writes = other.home_writes = max(self.home_writes, other.home_writes)
         self.home_write_receipts = other.home_write_receipts = max(
             self.home_write_receipts, other.home_write_receipts)
@@ -3362,6 +3403,8 @@ class IREmitter(Emitter):
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
         self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
+        for marker in ELEMENT_INTRINSICS:
+            self._replacers[marker] = self.element_operation
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
@@ -3377,6 +3420,7 @@ class IREmitter(Emitter):
         self.native_scopes: list[dict[str, Local | None]] = []
         self.native_condition_depth = 0
         self.statement: SimpleStmt | None = None
+        self.element_result = None
         # The input, and its field, that the statement's escaping release
         # killed, if it is a view
         self.killed_inplace: tuple[str, str] | None = None
@@ -3828,6 +3872,94 @@ class IREmitter(Emitter):
         storage.stack.shape_read_complete = True
         self.shape_read_uses += 1
         self.emit(f" shape_read_dup(PyValue_AsKnownObjectBorrow({name}), {offset})")
+        return True
+
+    def element_operation(self, tkn, tkn_iter, uop, storage, inst):
+        """Checked guards and anchored reads; none accepts a raw pointer."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        count = {"IR_GUARD_INLINE_INT": 1, "IR_GUARD_ELEMENT_TYPE": 2,
+                 "IR_GUARD_ELEMENT_INDEX": 4, "IR_DUP_CANONICAL_ELEMENT": 2}[tkn.text]
+        if tkn.text == "IR_DUP_CANONICAL_ELEMENT":
+            args, _ = instruction_macro_args(tkn, tkn_iter)
+            if len(args) != count or any(len(arg) != 1 or arg[0].kind != "IDENTIFIER" for arg in args):
+                raise analysis_error("element read requires a value and checked index", tkn)
+            names = [arg[0].text for arg in args]
+            assignment = value_assignment(self.statement.contents)
+            if (assignment is None or [token.text for token in assignment[2]] !=
+                    [tkn.text, "(", names[0], ",", names[1], ")"]):
+                raise analysis_error("element duplicate must directly assign one scalar", tkn)
+        else:
+            names = self.macro_args(tkn, tkn_iter, count)
+            if _statement_text(self.statement) != [tkn.text, "(", *sum(
+                    ([name, ","] for name in names[:-1]), []), names[-1], ")", ";"]:
+                raise analysis_error("element guard must be a standalone statement", tkn)
+
+        def current(name):
+            var = next((var for var in self.current_value_locals(storage) if var.name == name), None)
+            if (var is None or not var.in_local or var.ir_value is None or
+                    var.ir_value in stack.expired_values):
+                raise analysis_error("element capability requires a live scalar value", tkn)
+            return var.ir_value
+
+        def miss(condition):
+            self.check_exit_inputs(tkn, storage)
+            if stack.possible_native_owners:
+                raise analysis_error("element guard must precede owning acquisitions", tkn)
+            self.out.start_line()
+            self.emit(f"if ({condition}) {{\n")
+            self.emit_jump_to_predicted(inst)
+            self.emit("}\n")
+
+        owner = current(names[0])
+        if tkn.text == "IR_GUARD_INLINE_INT":
+            miss(f"!PyValue_IsInlineInt({names[0]})")
+            stack.element_guards[("INT", owner)] = "INT"
+        elif tkn.text == "IR_GUARD_ELEMENT_TYPE":
+            value, kind = names
+            if kind not in {"LIST", "TUPLE"}:
+                raise analysis_error("element type must be LIST or TUPLE", tkn)
+            if kind == "LIST":
+                # The indexed list borrow/acquisition interval currently
+                # relies on the GIL. Keep FT on its existing generic path.
+                self.emit("#ifdef Py_GIL_DISABLED\n")
+                self.emit_jump_to_predicted(inst)
+                self.emit("#endif\n")
+            prefix = "PyList" if kind == "LIST" else "PyTuple"
+            miss(f"!PyValue_IsObject({value}) || !{prefix}_CheckExact(PyValue_AsKnownObjectBorrow({value}))")
+            stack.element_guards[("TYPE", owner)] = kind
+            find_local(value, storage).known_object = True
+        elif tkn.text == "IR_GUARD_ELEMENT_INDEX":
+            container, subscript, index, mode = names
+            kind = stack.element_guards.get(("TYPE", owner))
+            subvalue = current(subscript)
+            if (kind is None or ("INT", subvalue) not in stack.element_guards or
+                    mode != ("FROM_END" if kind == "LIST" else "NONNEGATIVE")):
+                raise analysis_error("element index lacks matching type/integer guards", tkn)
+            if (index in HANDLER_LOCALS or index in HANDLER_POINTERS or
+                    index in stack.element_indices or
+                    index in {var.name for var in self.current_value_locals(storage)}):
+                raise analysis_error("checked element index shadows a live identity", tkn)
+            prefix = "PyList" if kind == "LIST" else "PyTuple"
+            size = f"{prefix}_GET_SIZE(PyValue_AsKnownObjectBorrow({container}))"
+            self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
+            if kind == "LIST":
+                self.emit(f"if ({index} < 0) {{ {index} += {size}; }}\n")
+                miss(f"{index} < 0 || {index} >= {size}")
+            else:
+                miss(f"{index} < 0")
+                miss(f"{index} >= {size}")
+            stack.element_indices[index] = (owner, subvalue, kind, id(self.native_scopes[-1]))
+        else:
+            container, index = names
+            capability = stack.element_indices.get(index)
+            kind = stack.element_guards.get(("TYPE", owner))
+            if (capability is None or capability[0] != owner or capability[2] != kind or
+                    capability[3] != id(self.native_scopes[-1])):
+                raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
+            prefix = "PyList" if kind == "LIST" else "PyTuple"
+            self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(PyValue_AsKnownObjectBorrow({container}), {index}))")
+            self.element_result = HELPERS[tkn.text]
         return True
 
     def canonical_outputs(self, tkn, tkn_iter, uop, storage, inst):
@@ -4598,6 +4730,14 @@ class IREmitter(Emitter):
 
     def emit_IfStmt(self, stmt, uop, storage, inst):
         storage.stack.shape_read_binding = None
+        storage.stack.element_guards.clear()
+        storage.stack.element_indices.clear()
+        locals = self.current_value_locals(storage)
+        changed = value_nonnull_changes(stmt.condition, set(), {var.name for var in locals})
+        for var in locals:
+            if var.name in changed:
+                var.ir_value = None
+                var.nonnull = False
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         # A condition may assign/address an output through C syntax. Such
@@ -4629,6 +4769,10 @@ class IREmitter(Emitter):
 
     def emit_WhileStmt(self, stmt, uop, storage, inst):
         storage.stack.shape_read_binding = None
+        storage.stack.element_guards.clear()
+        storage.stack.element_indices.clear()
+        for var in self.current_value_locals(storage):
+            var.ir_value = None
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
         stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
@@ -4637,6 +4781,10 @@ class IREmitter(Emitter):
 
     def emit_ForStmt(self, stmt, uop, storage, inst):
         storage.stack.shape_read_binding = None
+        storage.stack.element_guards.clear()
+        storage.stack.element_indices.clear()
+        for var in self.current_value_locals(storage):
+            var.ir_value = None
         storage.stack.home_node = None
         return super().emit_ForStmt(stmt, uop, storage, inst)
 
@@ -4648,6 +4796,9 @@ class IREmitter(Emitter):
         try:
             reachable, end, storage = super().emit_BlockStmt(
                 stmt, uop, storage, inst, emit_braces)
+            storage.stack.element_indices = {
+                name: value for name, value in storage.stack.element_indices.items()
+                if value[3] != id(scope)}
             for name, previous in scope.items():
                 if previous is None:
                     storage.stack.native_values.pop(name, None)
@@ -4659,6 +4810,8 @@ class IREmitter(Emitter):
 
     def emit_MacroIfStmt(self, stmt, uop, storage, inst):
         storage.stack.shape_read_binding = None
+        storage.stack.element_guards.clear()
+        storage.stack.element_indices.clear()
         self.native_condition_depth += 1
         try:
             return super().emit_MacroIfStmt(stmt, uop, storage, inst)
@@ -4670,6 +4823,9 @@ class IREmitter(Emitter):
         """Take each input whose owner the statement reads, so that the
         statement can read it; check OWNER's and S7's rules"""
         tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        if not any(token.text in ELEMENT_INTRINSICS for token in tokens):
+            storage.stack.element_guards.clear()
+            storage.stack.element_indices.clear()
         self.check_stale_views(tokens, storage, inst)
         self.check_spent_views(tokens, storage)
         texts = [t.text for t in tokens]
@@ -4803,6 +4959,7 @@ class IREmitter(Emitter):
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
         previous = self.cannot_escape
         self.statement = stmt
+        self.element_result = None
         # Capture RHS facts before TAKE/DEAD or an escaping release kills
         # its source. Apply them to the surviving identities after emission.
         locals = self.current_value_locals(storage)
@@ -4868,15 +5025,28 @@ class IREmitter(Emitter):
             self.killed_inplace = None
         stack = storage.stack
         assert isinstance(stack, IRStack)
+        if self.element_result is not None and assignment is not None:
+            nonnull_changes[assignment[0]] = self.element_result.result_nonnull
+        guarded = error_nonnull_value(stmt.contents)
+        intrinsic = any(token.text in ELEMENT_INTRINSICS for token in stmt.contents)
+        addressed = {token.text for _, token in addressed_locals(
+            inst.name if inst is not None else "", stmt.contents,
+            {var.name: var.is_array() for var in self.current_value_locals(storage)})}
         for var in self.current_value_locals(storage):
             if var.name in nonnull_changes:
                 var.nonnull = nonnull_changes[var.name] and var.in_local
-        guarded = error_nonnull_value(stmt.contents)
+                # An opaque lvalue/address use can replace C bits as well as
+                # their non-NULL fact. A prior canonical token is then stale.
+                if ((assignment is None or var.name in addressed) and not intrinsic and
+                        var.name != guarded and not nonnull_changes[var.name]):
+                    var.ir_value = None
         for var in self.current_value_locals(storage):
             if var.name == guarded:
                 var.nonnull = var.in_local
         result = (dict(self.error_source.value_results).get(id(stmt))
                   if self.error_source is not None else None)
+        if self.element_result is not None:
+            result = self.element_result
         self.apply_value_transport(storage, assignment, transport, sources,
                                    nonnull_changes, result)
         if guarded is not None and reachable:
@@ -6299,6 +6469,18 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if any(token.text in ELEMENT_INTRINSICS
+           for part in parts for token in part.body.tokens()):
+        # These native identifiers belong to the checked lowering. A source
+        # alias or preprocessor definition must not replace its operations.
+        for part in parts:
+            body = canonical_body_tokens(part)
+            names = (item.name for item in
+                     (*part.stack.inputs, *part.stack.outputs, *part.caches))
+            if (not body or ELEMENT_NATIVE_SYMBOLS.intersection(names) or
+                    any(text in ELEMENT_NATIVE_SYMBOLS or text.startswith("#") for text in body)):
+                raise analysis_error("element lowering requires unshadowed native operations", inst.where)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -6487,54 +6669,6 @@ def canonical_body_tokens(part: Uop) -> list[str]:
             if token.kind != "COMMENT"]
 
 
-def canonical_list_child_source(parts: list[Uop]) -> CanonicalResult | None:
-    "Prove one guarded list-child duplicate and both owner retirements."
-    shapes = (
-        (("value",), ("value",)),
-        (("nos", "unused"), ("nos", "unused")),
-        (("list_st", "sub_st"), ("res", "ls", "ss")),
-        (("value",), ()),
-        (("value",), ()),
-    )
-    if len(parts) != len(shapes):
-        return None
-    bodies = (
-        "{ EXIT_IF(!PyValue_IsInlineInt(value)); }",
-        """{
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            EXIT_IF(!PyList_CheckExact(o));
-        }""",
-        """{
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-            assert(PyList_CheckExact(list));
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            if (index < 0) { index += PyList_GET_SIZE(list); }
-            EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
-            res = PyValue_XDUP(PyList_GET_VALUE(list, index));
-            assert(!PyValue_IsNull(res));
-            STAT_INC(BINARY_OP, hit);
-            ls = list_st;
-            ss = sub_st;
-            INPUTS_DEAD();
-        }""",
-        """{
-            assert(PyValue_LongCheckExact(value));
-            PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
-        }""",
-        "{ PyValue_XCLOSE(value); }",
-    )
-    for part, (inputs, outputs), body in zip(parts, shapes, bodies):
-        if (tuple(item.name for item in part.stack.inputs) != inputs
-                or tuple(item.name for item in part.stack.outputs) != outputs
-                or any(item.is_array() for item in
-                       (*part.stack.inputs, *part.stack.outputs))
-                or any(cache.name != "unused" for cache in part.caches)
-                or canonical_body_tokens(part)
-                    != [token.text for token in tokenize(body)]):
-            return None
-    return CanonicalResult(parts[2], "res")
-
-
 def canonical_inline_int_source(parts: list[Uop]) -> CanonicalResult | None:
     "Prove guarded ADD/SUB's overflow join and unchanged input retirement."
     shapes = (
@@ -6611,10 +6745,6 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
             or outputs[0].external >= 0
             or fmt.field_of(ROLE_DST) is None):
         return None
-    list_child = canonical_list_child_source(parts)
-    if (list_child is not None and len(inputs) == 2 and fmt.n_inputs == 2
-            and outputs[0].item.name == list_child.result):
-        return list_child
     inline_int = canonical_inline_int_source(parts)
     if (inline_int is not None and len(inputs) == 2 and fmt.n_inputs == 2
             and outputs[0].item.name == inline_int.result):

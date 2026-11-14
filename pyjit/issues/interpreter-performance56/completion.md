@@ -243,3 +243,76 @@ Root also observes recurring `FillConstSlots` attribution in coroutine exact
 calls. This is follow-up inventory only: count existing constant-slot folding
 and entry stores before proposing pool/rematerialization changes, and charge
 any added per-read decoding. No constant or frame-encoding change is included.
+
+## Exact-coroutine awaitable transfer: unselected source experiment
+
+The next source experiment starts from P `d531d993d30`, after the recipient
+and discard-fixture packets. At an accepted exact coroutine, GET_AWAITABLE
+currently obtains a new reference to the same object, closes its input owner,
+then reconstructs a PyValue. Upstream has the same reference round trip.
+A callback-free type/state predicate followed by TAKE can instead transfer a
+scratch owner. A folded binding still needs TAKE's duplicate, so it saves no
+reference pair. Root's retained GET_AWAITABLE self attribution of 7.40% selects
+the investigation; it is not an estimate of removable time.
+
+The predicate must reject exactly SUSPENDED_YIELD_FROM and its LOCKED variant,
+matching the existing helper. EXECUTING and closed coroutines remain accepted
+here and fail later through their existing SEND behavior. The relaxed FT state
+load is an observation, not an execution claim. Custom awaitables, rejected
+states, inline inputs and errors retain the original helper/close/error/result
+sequence. The accepted arm has no callback or borrowed escape before TAKE.
+
+The first source attempt emitted both record variants, but exposed a format
+regression: `iter = TAKE(iterable)` marks the output as a value alias, removing
+STORE_DST and adding NO_FOLD. That loses existing destination folding and may
+add a surviving STORE_FAST. The current bounded prototype restores those
+format fields while preserving the alias metadata. It is committed at
+`a852d11faf6`, with GC and IR actual eight-file source review GO. It is
+**not selected or native-qualified**.
+Do not disguise the alias with an opaque helper or expression spelling.
+Keep value identity separate from an owning-result certificate. Both TAKE
+and the fallback's guarded FromObjectSteal must prove an owning result on
+every normal arm before store selection; actual Storage capture/publication
+must remain a backstop. Reuse the shared typed source/fact walk rather than a
+GET_AWAITABLE exception or another C parser. If that distinction needs a broad
+framework, close this bounded experiment with the folding loss recorded.
+
+The hot-code gate includes unchanged STORE_DST, NO_FOLD, input borrowing,
+allocated slots and surviving IR words. The generic fallback still requires
+boxing preparation and the value-temporary reservation; this packet cannot
+claim their removal. Native inspection must establish whether the exact arm
+actually removes helper and reference traffic after those costs. Required
+controls include same-input/destination and discarded results, displacement
+with finalizer mutation/GC, already-awaited/closed/executing coroutines, custom
+__await__ mutation/errors, and a poisoned branch that revokes owning-result
+certification. No native execution or full generation has run in this lane.
+
+The bounded join prototype has two independent checks. First, the existing
+typed source walk exports the final owning output names, intersecting actual
+reachable normal arms. TAKE needs a current declared owning scalar input;
+FromObjectSteal needs the existing native-pointer owner and non-NULL proof.
+This projection does not certify normal, abrupt or error home transport.
+Second, a Python-only `Local.owns_value` fact records actual acquisition for
+the sole final output. The first slice permits only direct assignments to
+that output: reading, aliasing or addressing it before publication rejects the
+certificate. Writes and kill revoke the fact, branch clones preserve it, and
+existing structured joins intersect it. First publication checks and consumes
+the fact and rejects an inplace borrow. Thus distinct branch token identities
+can each supply the same owning C result variable without pretending to be
+one logical value. Acquired extra VALUE owners, overwrite without retirement,
+and pending VALUE owners on an explicit error edge reject the source proof.
+
+The existing scalar-home graph remains uncovered when its token identities
+cannot meet. This join grants no readable home shape, new replay operation,
+runtime field or descriptor. Unproved branches retain the old alias/folding
+restriction. The callback-capable GetAwaitable helper has one descriptor in
+the shared table: owned native OBJECT result, possible failure/callback and
+UNKNOWN home effects. Its ownership does not upgrade ordinary home authority.
+
+Two narrow host methods pass, covering the actual GET_AWAITABLE handler in
+both record modes, source poison cases and removal of an actual acquisition
+receipt. An all-format comparison against the prior source/alias policy has
+no changed fields; GET_AWAITABLE keeps STORE_DST, input borrow mask 1 and no
+NO_FOLD. Runtime fixtures are AST-checked only. Root still owns complete
+generation, allocated-slot/word comparison, runtime qualification and native
+cost inspection. No performance claim follows from these source checks.

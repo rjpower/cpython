@@ -1,4 +1,5 @@
 import contextlib
+from dataclasses import replace
 import io
 import os
 from pathlib import Path
@@ -467,7 +468,7 @@ class TestIRCases(unittest.TestCase):
         body = self.handler(output, "CALL_KW_PY")
         success, fallback = body.split("call_transaction_fallback_CALL_KW_PY:;")
         self.assertIn("call_bind_known_python(", success)
-        self.assertIn("CALL_TRANSACTION_KEYWORDS, fb)", success)
+        self.assertIn("CALL_TRANSACTION_KEYWORDS, fb, call_state)", success)
         self.assertIn("if (call_result.status > 0)", success)
         self.assertIn("call_transaction_run_keywords(", success)
         self.assertNotIn("call_transaction_run_vector(", body)
@@ -1881,6 +1882,7 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("PyValue ir_own_A = PyValue_NULL;", close)
         self.assertIn("value = IR_VIEW(IR_A(ir_word));", close)
         self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);\n"
+                      "            frame->phase_state = 0;\n"
                       "            PyValue_XCLOSE(ir_own_A);", close)
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
@@ -2888,9 +2890,21 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         with mock.patch.object(ir_generator, "OBJECT_READERS_SEEN", set()):
-            ir_generator.compute_formats(analysis)
+            formats = ir_generator.compute_formats(analysis)
             seen = ir_generator.OBJECT_READERS_SEEN
-        self.assertEqual(seen | {"SPAM", "spam_call"},
+            # Checked element intrinsics emit their object reads after the
+            # source-use analysis. Include their actual native calls rather
+            # than exempting a fixed list of now-hidden reader names.
+            lowered = set()
+            for name in ("BINARY_OP_SUBSCR_LIST_INT", "BINARY_OP_SUBSCR_TUPLE_INT"):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                ir_generator.generate_handler(name, analysis.instructions[name], formats[name],
+                    ir_generator.IREmitter(out, analysis, formats), out, False)
+                tokens = list(lexer.tokenize(output.getvalue()))
+                lowered.update(token.text for token, following in zip(tokens, tokens[1:])
+                    if token.text in ir_generator.OBJECT_READERS and following.kind == "LPAREN")
+        self.assertEqual(seen | lowered | {"SPAM", "spam_call"},
                          ir_generator.OBJECT_READERS)
 
     def test_frame_switch_needs_window(self):
@@ -3186,6 +3200,7 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
+        self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
         # The shared handler bound is emitted in opcode_ids.h, not metadata.
         self.assertEqual(ir_generator.num_handlers(analysis), 258)
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
@@ -3199,7 +3214,8 @@ class TestIRCases(unittest.TestCase):
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-                ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
+                ".owner_program = 0, .owner_events = 1, .call_input_holes = 0, "
+                ".error_routes = _PyIR_ERROR_COMPLETE | _PyIR_ERROR_LOCAL_DST, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -3221,7 +3237,7 @@ class TestIRCases(unittest.TestCase):
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-            ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, "
+            ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, .error_routes = 0, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -3387,16 +3403,21 @@ class TestIRCases(unittest.TestCase):
                 producer.body.body = original
         # The twin's observer ingress must also be covered; a missing
         # sibling revokes the canonical family's permission.
-        observer = analysis.instructions["INSTRUMENTED_YIELD_VALUE"].parts[0]
-        old = observer.body.body
+        twin = analysis.instructions["INSTRUMENTED_YIELD_VALUE"]
+        observer = twin.parts[0]
         extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-        observer.body.body = old + extra.instructions["OP"].parts[0].body.body
+        # This observer uop is also used by delegated suspension, whose
+        # metadata cursor has a stricter source contract. Mutate only the
+        # ordinary twin whose family permission is under test.
+        body = replace(observer.body, body=observer.body.body +
+                       extra.instructions["OP"].parts[0].body.body)
+        twin.parts[0] = replace(observer, body=body)
         try:
             changed = ir_generator.handler_contracts(analysis, formats)
             for name in names:
                 self.assertFalse(changed[name].abrupt_prefix)
         finally:
-            observer.body.body = old
+            twin.parts[0] = observer
 
     def test_normal_vacate_observer_frame_footprint(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -3960,8 +3981,13 @@ class TestIRCases(unittest.TestCase):
         changed = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
         body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
         try:
-            changed_contract = ir_generator.handler_contracts(analysis, formats)["BUILD_TUPLE"]
-            self.assertEqual(changed_contract.ownership_events, ())
+            self.assertFalse(ir_generator.normal_vacate_capability(
+                analysis.instructions["BUILD_TUPLE"], formats["BUILD_TUPLE"]))
+            # The opaque prefix also violates the mandatory success handoff;
+            # emission must reject it before any metadata grant is possible.
+            with self.assertRaisesRegex(SyntaxError,
+                    "steal-success helper needs its checked success handoff"):
+                ir_generator.handler_contracts(analysis, formats)
         finally:
             body.body.pop(0)
 
@@ -4188,6 +4214,7 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
+        self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
         self.assertIn("#define _PyIR_BINARY_OP_FIRST" + " " * 26
                       + "BINARY_OP_ADD", lines)
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '

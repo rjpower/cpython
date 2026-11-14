@@ -185,6 +185,20 @@ class CanonicalElementTests(unittest.TestCase):
             with self.subTest(declaration=declaration), self.assertRaises(SyntaxError):
                 self.emit(source.replace(prefix, prefix + declaration, 1), "FOR_ITER_LIST")
 
+    def test_only_append_bodies_select_the_direct_fast_boundary(self):
+        source = self.source()
+        for name in ("LIST_APPEND", "CALL_LIST_APPEND", "CALL_NO_SELF_LIST_APPEND"):
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    body = self.emit(source, name, record)
+                    call = body.index("int err = _PyList_AppendTakeValueFast(")
+                    self.assertNotIn("_PyList_AppendTakeValue(", body)
+                    self.assertLess(body.index("PyValue item = "), call)
+                    self.assertIn("PROCESS_ERROR_AT(", body[call:])
+                    if name != "LIST_APPEND":
+                        self.assertLess(body.index("LOCK_OBJECT("), call)
+                        self.assertLess(call, body.index("UNLOCK_OBJECT("))
+
 
 class CanonicalElementRuntimeTests(unittest.TestCase):
     def test_specialized_bounds_values_and_generic_misses(self):

@@ -415,6 +415,12 @@ PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
     return PyList_InsertValue(op, where, PyValue_FromObjectBorrow(newitem));
 }
 
+int
+_PyList_AppendTakeValue(PyListObject *self, PyValue value)
+{
+    return _PyList_AppendTakeValueFast(self, value);
+}
+
 /* The input owner is consumed on both outcomes. */
 int
 _PyList_AppendTakeValueResize(PyListObject *self, PyValue value)

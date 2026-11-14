@@ -2053,15 +2053,20 @@ dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
 {
     *result = PyValue_NULL;
     Py_hash_t cached = cached_str_hash(key);
-    if (cached != -1) {
-        /* No Python code can run: the hash is cached and str equality is
-         * native, so the key and the dict need no extra owner. */
+#ifndef Py_GIL_DISABLED
+    if (cached != -1 && mp->ma_keys->dk_kind != DICT_KEYS_GENERAL) {
+        /* A Unicode-only table compares exact strings without callbacks.
+         * Mixed tables may call a stored key's Python equality method. */
         return _PyDict_GetValue_KnownHash((PyObject *)mp, key, cached, result);
     }
+#endif
     PyObject *dict_owner = Py_NewRef(mp);
     PyValue query = PyValue_XDUP(key);
     PyValue value = PyValue_NULL;
-    Py_hash_t hash = _PyValue_Hash(query);
+    Py_hash_t hash = cached;
+    if (hash == -1) {
+        hash = _PyValue_Hash(query);
+    }
     int status = -1;
     if (hash != -1) {
         status = dict_lookup_value(mp, query, hash, &value);

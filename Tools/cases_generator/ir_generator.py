@@ -3784,7 +3784,7 @@ class IREmitter(Emitter):
         variant = self.execution_variant
         if variant is not None and variant.shape_cases:
             self.emit(f"(void){version}; (void){shape};\n")
-            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, {pointer});\n")
+            self.emit(f"int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, {pointer});\n")
             self.emit("if (ir_selected_offset < 0) {\n")
             self.emit_jump_to_predicted(inst)
             self.emit("}\n")

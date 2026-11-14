@@ -39,6 +39,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
     import stack
     import ir_metadata_generator
+    import opcode_metadata_generator
     import ir_numbers
     import lexer
     import parser
@@ -4170,6 +4171,9 @@ class TestShapeReadMetadata(unittest.TestCase):
                     with self.subTest(name=name, record=record):
                         handler, effects = self.shape_read_handler(source, name, record)
                         self.assertEqual("shape_read_offset(" in handler, poly)
+                        if poly:
+                            self.assertIn("shape_read_offset(_PyFrame_Exec(frame)->feedback, fb,", handler)
+                            self.assertNotIn("shape_read_offset(frame->ir_feedback", handler)
                         self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                         self.assertIn("uint32_t offset = " +
                                       ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
@@ -4230,6 +4234,33 @@ class TestShapeReadMetadata(unittest.TestCase):
                     with self.subTest(name=name, declaration=declaration, record=record):
                         with self.assertRaisesRegex(SyntaxError, "shape read reserved native name"):
                             self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY", record)
+
+    def test_zero_width_second_cache_has_no_encoded_operand(self):
+        source = """
+        // BEGIN BYTECODES //
+        op(_SECOND_ZERO, (first/2, second/0 --)) {
+            (void)first; (void)second;
+        }
+        op(_BOTH_ENCODED, (first/2, second/1 --)) {
+            (void)first; (void)second;
+        }
+        op(_FIRST_ZERO, (first/0, second/1 --)) {
+            (void)first; (void)second;
+        }
+        macro(SECOND_ZERO) = unused/1 + _SECOND_ZERO;
+        macro(BOTH_ENCODED) = unused/1 + _BOTH_ENCODED;
+        macro(FIRST_ZERO) = unused/1 + _FIRST_ZERO;
+        // END BYTECODES //
+        """
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename], numbers=SequentialNumbers())
+        output = io.StringIO()
+        opcode_metadata_generator.generate_expansion_table(analysis, CWriter(output, 0, False))
+        table = output.getvalue()
+        self.assertNotIn("OPERAND1_0", table)
+        self.assertIn("[SECOND_ZERO] = { .nuops = 1, .uops = { { _SECOND_ZERO, 2, 1 } } }", table)
+        self.assertIn("[BOTH_ENCODED] = { .nuops = 2, .uops = { { _BOTH_ENCODED, 2, 1 }, { _BOTH_ENCODED, OPERAND1_1, 3 } } }", table)
+        self.assertIn("[FIRST_ZERO] = { .nuops = 2, .uops = { { _FIRST_ZERO, 0, 1 }, { _FIRST_ZERO, OPERAND1_1, 1 } } }", table)
 
 
 class TestCallTransactionMarkers(unittest.TestCase):

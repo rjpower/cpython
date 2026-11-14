@@ -313,8 +313,8 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
                     if "replaced" in part.annotations:
                         fmt = "OPARG_REPLACED"
                     expansions.append((part.name, fmt, offset))
-                    if len(part.caches) > 1:
-                        # Add expansion for the second operand
+                    if len(part.caches) > 1 and part.caches[-1].size:
+                        # Zero-width metadata has no encoded second operand.
                         internal_offset = 0
                         for cache in part.caches[:-1]:
                             internal_offset += cache.size

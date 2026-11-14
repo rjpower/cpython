@@ -2,12 +2,14 @@
 
 import io
 import gc
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
 import types
 import unittest
 import weakref
+from unittest import mock
 
 from test import support, test_tools
 
@@ -100,7 +102,9 @@ class CanonicalElementTests(unittest.TestCase):
                        " if ((res = unknown_value)) {}",
                        " while ((res = unknown_value, 0)) {}",
                        " for (; (res = unknown_value, 0);) {}",
-                       " PyValue *alias = &(res); opaque(alias);"):
+                       " PyValue *alias = &(res); opaque(alias);",
+                       " PyValue alias = res; PyValue_CLOSE(res);"
+                       " if (oparg) { alias = PyValue_None; } res = alias;"):
             with self.subTest(suffix=suffix):
                 try:
                     body = self.emit(source.replace(read, read + suffix, 1),
@@ -108,6 +112,76 @@ class CanonicalElementTests(unittest.TestCase):
                 except SyntaxError:
                     continue
                 self.assertNotIn("IR_STORE_CANONICAL_DST(", body)
+
+    def test_list_iteration_publishes_the_checked_element_without_reclassification(self):
+        source = self.source()
+        for record in (False, True):
+            with self.subTest(record=record):
+                body = self.emit(source, "FOR_ITER_LIST", record)
+                self.assertIn("PyValue_XDUP(PyValue_Borrow(_PyList_ITEMS(", body)
+                self.assertNotIn("PyList_GET_VALUE(", body)
+                self.assertIn("IR_PUBLISH_CANONICAL_TEMP(window[2], next);", body)
+                self.assertIn("IR_PUBLISH_TEMP(window[1], null_or_index);", body)
+                self.assertIn("IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[2]);", body)
+                acquire = body.index("PyValue_XDUP(PyValue_Borrow(_PyList_ITEMS(")
+                self.assertLess(body.index("_PyEval_CompleteForIter("), acquire)
+                self.assertLess(body.index("if (!PyValue_IsTaggedIndex("), acquire)
+                self.assertLess(body.index("if ((size_t)index >="), acquire)
+        helper = ir_generator.HELPERS["IR_DUP_CANONICAL_ELEMENT"]
+        with mock.patch.dict(ir_generator.HELPERS, {
+                "IR_DUP_CANONICAL_ELEMENT": replace(helper, result_owned=False)}):
+            body = self.emit(source, "FOR_ITER_LIST")
+            self.assertNotIn("IR_PUBLISH_CANONICAL_TEMP(window[2]", body)
+
+    def test_iteration_guards_and_current_result_facts_expire(self):
+        source = self.source()
+        guard = "IR_GUARD_ELEMENT_INDEX(iter, null_or_index, index, TAGGED);"
+        read = "next = IR_DUP_CANONICAL_ELEMENT(iter, index);"
+        for mutation in (
+                "index++; " + read,
+                "if (++index) {} " + read,
+                "if ((iter = null_or_index, 0)) {} " + read,
+                "opaque(&iter); " + read,
+                "opaque(); " + read):
+            with self.subTest(mutation=mutation), self.assertRaises(SyntaxError):
+                self.emit(source.replace(read, mutation, 1), "FOR_ITER_LIST")
+        for mutation in (
+                read + " next = unknown_value;",
+                read + " if ((next = unknown_value, 0)) {}",
+                read + " if (oparg) { next = unknown_value; }",
+                read + " while ((next = unknown_value, 0)) {}",
+                read + " next = unknown_value; while (0) { next = PyValue_None; }",
+                read + " next = unknown_value; for (int j = 0; j < 0; j++) { next = PyValue_None; }"):
+            with self.subTest(mutation=mutation):
+                body = self.emit(source.replace(read, mutation, 1), "FOR_ITER_LIST")
+                self.assertNotIn("IR_PUBLISH_CANONICAL_TEMP(window[2]", body)
+        for callback in ("opaque(&next);", "opaque();"):
+            body = self.emit(source.replace(read, read + " " + callback, 1), "FOR_ITER_LIST")
+            # The normal callback spill can publish the checked value before
+            # calling out. It cannot certify a later use of changed C bits.
+            self.assertLess(body.index("IR_PUBLISH_CANONICAL_TEMP(window[2]"),
+                            body.index(callback))
+            self.assertNotIn("IR_PUBLISH_CANONICAL_TEMP(window[2]",
+                             body[body.index(callback):])
+        for replacement in (guard.replace("TAGGED", "FROM_END"), "(void)iter;"):
+            with self.subTest(replacement=replacement), self.assertRaises(SyntaxError):
+                self.emit(source.replace(guard, replacement, 1), "FOR_ITER_LIST")
+        type_guard = "IR_GUARD_ELEMENT_TYPE(iter, LIST);"
+        for loop in ("while (0)", "for (int j = 0; j < 0; j++)"):
+            with self.subTest(loop=loop), self.assertRaises(SyntaxError):
+                self.emit(source.replace(type_guard, loop + " " + type_guard, 1), "FOR_ITER_LIST")
+
+    def test_iteration_prefix_cannot_shadow_a_native_lowering_operation(self):
+        source = self.source()
+        prefix = "op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {"
+        for declaration in (
+                "PyObject *(PyValue_AsKnownObjectBorrow)(PyValueBorrow);",
+                "PyObject * const PyValue_AsKnownObjectBorrow = replacement;",
+                "PyObject *(*PyValue_AsKnownObjectBorrow)(PyValueBorrow) = replacement;",
+                "volatile Py_ssize_t (*PyList_GET_SIZE)(PyObject *) = replacement;",
+                "#define PyValue_AsKnownObjectBorrow replacement\n"):
+            with self.subTest(declaration=declaration), self.assertRaises(SyntaxError):
+                self.emit(source.replace(prefix, prefix + declaration, 1), "FOR_ITER_LIST")
 
 
 class CanonicalElementRuntimeTests(unittest.TestCase):

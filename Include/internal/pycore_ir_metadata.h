@@ -44,7 +44,7 @@ const _PyIROwnershipEvent _PyIR_OwnerPrograms[75] = {
     { _PyIR_OWNER_STORAGE_SAVE, 0, 0, 1, 0 },
     { _PyIR_OWNER_STORAGE_CALLBACK, 0, 1, 0, 0 },
     { _PyIR_OWNER_STORAGE_RESULT, 3, 2, 0, 0 },
-    { _PyIR_OWNER_STORAGE_PUBLISH, 0, 3, 0, 3 },
+    { _PyIR_OWNER_STORAGE_PUBLISH, 4, 3, 0, 3 },
     { _PyIR_OWNER_STORAGE_CALLBACK, 1, 4, 0, 0 },
     { _PyIR_OWNER_ERROR_CHECKPOINT, 1, 1, 1, 0 },
     { _PyIR_OWNER_ERROR_CHECKPOINT, 1, 2, 2, 0 },

@@ -3442,7 +3442,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValueBorrow value;
-            PyValueBorrow nos;
+            PyValueBorrow container;
             PyValueBorrow list_st;
             PyValueBorrow sub_st;
             PyValue res;
@@ -3452,7 +3452,7 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            // _GUARD_TOS_INT
+            // _GUARD_ELEMENT_INT
             {
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
@@ -3460,15 +3460,14 @@
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
             }
-            // _GUARD_NOS_LIST
+            // _GUARD_ELEMENT_LIST
             {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-                if (!PyList_CheckExact(o)) {
+                container = IR_VIEW(IR_B(ir_word));
+                #ifdef Py_GIL_DISABLED
+                UPDATE_MISS_STATS(BINARY_OP);
+                IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                #endif
+                if (!PyValue_IsObject(container) || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -3477,19 +3476,15 @@
             {
                 sub_st = value;
                 (void)sub_st;
-                list_st = nos;
+                list_st = container;
                 (void)list_st;
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-                assert(PyList_CheckExact(list));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
-                if (index < 0) {
-                    index += PyList_GET_SIZE(list);
-                }
-                if (index < 0 || index >= PyList_GET_SIZE(list)) {
+                if (index < 0) { index += PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(list_st)); }
+                if (index < 0 || index >= PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(list_st))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res = PyValue_XDUP(PyList_GET_VALUE(list, index));
+                res =PyValue_XDUP(PyList_GET_VALUE(PyValue_AsKnownObjectBorrow(list_st), index));
                 assert(!PyValue_IsNull(res));
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
@@ -3510,7 +3505,7 @@
                 (void)value;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_STORE_TEMP_DST(IR_A(ir_word), res);
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), res);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_CANONICAL_DST(IR_A(ir_word), res);
@@ -3740,7 +3735,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValueBorrow value;
-            PyValueBorrow nos;
+            PyValueBorrow container;
             PyValueBorrow tuple_st;
             PyValueBorrow sub_st;
             PyValue res;
@@ -3750,7 +3745,7 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            // _GUARD_TOS_INT
+            // _GUARD_ELEMENT_INT
             {
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
@@ -3758,45 +3753,31 @@
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
             }
-            // _GUARD_NOS_TUPLE
+            // _GUARD_ELEMENT_TUPLE
             {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-                if (!PyTuple_CheckExact(o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS
-            {
-                sub_st = value;
-                (void)sub_st;
-                tuple_st = nos;
-                (void)tuple_st;
-                PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
-                assert(PyTuple_CheckExact(tuple));
-                Py_ssize_t index = PyValue_InlineInt64(sub_st);
-                if (index < 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                if (index >= PyTuple_GET_SIZE(tuple)) {
+                container = IR_VIEW(IR_B(ir_word));
+                if (!PyValue_IsObject(container) || !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_TUPLE_INT
             {
-                PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
-                assert(PyTuple_CheckExact(tuple));
-                STAT_INC(BINARY_OP, hit);
+                sub_st = value;
+                (void)sub_st;
+                tuple_st = container;
+                (void)tuple_st;
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
-                assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-                res = PyValue_XDUP(PyTuple_GET_VALUE(tuple, index));
+                if (index < 0) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
+                if (index >= PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(tuple_st))) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
+                res =PyValue_XDUP(PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(tuple_st), index));
+                STAT_INC(BINARY_OP, hit);
                 assert(!PyValue_IsNull(res));
                 ts = tuple_st;
                 ss = sub_st;
@@ -3816,10 +3797,10 @@
                 (void)value;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_STORE_TEMP_DST(IR_A(ir_word), res);
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), res);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
-            IR_STORE_DST(IR_A(ir_word), res);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -15212,7 +15193,7 @@
                 PROCESS_ERROR_AT(RAISE, 2, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
-            IR_STORE_DST(IR_A(ir_word), awaitable);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), awaitable);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -15256,18 +15237,24 @@
             else {
                 ir_obj_iterable = PyValue_AsKnownObjectBorrow(iterable);
             }
-            frame->phase_state = 0;
-            frame->phase_state = 0;
-            PyObject *iter_o = _PyEval_GetAwaitable(ir_obj_iterable, oparg);
-            frame->phase_state = 0;
-            ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), iterable);
-            frame->phase_state = 0;
-            PyValue_XCLOSE(ir_own_B);
-            if (iter_o == NULL) {
-                frame->phase_state = 0;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            if (coro_awaitable_can_transfer(iterable)) {
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), iterable);
+                iter = IR_TAKE(iterable, ir_own_B);
             }
-            iter = PyValue_FromObjectSteal(iter_o);
+            else {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                PyObject *iter_o = _PyEval_GetAwaitable(ir_obj_iterable, oparg);
+                frame->phase_state = 0;
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), iterable);
+                frame->phase_state = 0;
+                PyValue_XCLOSE(ir_own_B);
+                if (iter_o == NULL) {
+                    frame->phase_state = 0;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                iter = PyValue_FromObjectSteal(iter_o);
+            }
             IR_STORE_DST(IR_A(ir_word), iter);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
@@ -15361,7 +15348,7 @@
             {
                 res = PyValue_NULL;
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), res);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word) + 1), res);
             DISPATCH();
         }
 
@@ -16878,7 +16865,7 @@
                 frame->phase_state = 0;
                 {
                     PyValue ir_observer_deferred = PyValue_NULL;
-                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), res);
                     _PyInstr *ir_observer_next = next_instr;
                     frame->return_pc = ir_observer_next;
                     _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
@@ -16962,7 +16949,7 @@
                 frame->phase_state = 0;
                 {
                     PyValue ir_observer_deferred = PyValue_NULL;
-                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), res);
                     _PyInstr *ir_observer_next = next_instr;
                     frame->return_pc = ir_observer_next;
                     _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
@@ -24742,7 +24729,7 @@
                 value = v;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), res);
                 _PyValue_XCLOSE_POINTER(value);
             }
             DISPATCH();
@@ -24886,7 +24873,7 @@
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             STAT_INC(TO_BOOL, hit);
             res = PyValue_False;
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+            IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
 

@@ -3,7 +3,12 @@
 Canonical documentation is this checkout. Its C source is stale; do not build
 it. Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md),
 [architecture](design/runtime-architecture.md) and [status](STATUS.md). The
-[parity workstream](issues/interpreter-parity58/README.md) owns the next work;
+[IR-semantics workstream](issues/register-semantics59/README.md) owns active work.
+Astra's [semantic/physical review](design/proposals/register-semantics59.md) is
+complete; an independent peer admitted the first explicit result-binding change
+with VACATE_SOURCE. Its implementation is active. Root owns serialized native
+jobs. No round59 runtime candidate is integrated. The preceding
+[parity workstream](issues/interpreter-parity58/README.md) retains its review;
 its [design](design/proposals/interpreter-parity58.md),
 [research](issues/interpreter-parity58/research.md) and
 [peer review](issues/interpreter-parity58/review.md) are complete. No round58
@@ -11,6 +16,17 @@ runtime implementation or native campaign has begun. The completed
 [comprehension plan](issues/comprehensions57/plan.md) retains round57 evidence.
 Follow [process](PROCESS.md). The coordinator owns integration,
 qualification, measurement and selection.
+
+Round59 candidate source is `BASE/worktrees/call55-gc`, branch
+`pyjit/reg59-results`, initially selected57. Builds are
+`BASE/reg59-results-{release,debug}`, configured with the respective exact
+selected57 flags. Evidence is `BASE/pyjit-link-wave1/register-semantics59`.
+**Keep call55-integrated and both existing builds frozen at selected57**;
+do not advance them for this cycle. Use the explicit source/build/evidence
+arguments documented in [measurement](issues/register-semantics59/measurement.md),
+not the check helper's default integrated path. The separate allocator proposal
+uses `BASE/worktrees/call55-ir`, branch `pyjit/reg59-edge-results`, initially
+selected57; prior worker branches remain preserved.
 
 ## Selected checkpoint and controls
 

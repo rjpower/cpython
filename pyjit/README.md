@@ -7,12 +7,15 @@ and tracing JIT. Extensions are rebuilt and ported.
 Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md)
 and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
-stage unifies value transport, borrowing, calls and specialization. The reviewed
+stage unifies value transport, borrowing, calls and specialization. The active
+[IR-semantics workstream](issues/register-semantics59/README.md) implements the
+reviewed [semantic/physical design](design/proposals/register-semantics59.md)
+toward upstream parity. The preceding
 [parity design](design/proposals/interpreter-parity58.md),
 [research ledger](issues/interpreter-parity58/research.md) and
-[workstream](issues/interpreter-parity58/README.md) define the next increments;
-the coordinator integrates reviewed and measured changes. These are proposals,
-not implemented round58 improvements. The
+[workstream](issues/interpreter-parity58/README.md) retain the earlier diagnosis;
+the coordinator integrates reviewed and measured changes. Proposed contracts
+remain separate from selected implementation. The
 [current report](issues/comprehensions57/report.md) and
 [benchmark tables](issues/comprehensions57/benchmark-tables.md) record the
 comprehension experiments, their rejection and the isolated dictionary repair.

@@ -24,9 +24,17 @@ def main():
     parser.add_argument('--role', choices=['release', 'debug'])
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--match', action='append', default=[])
+    parser.add_argument('--source', type=Path,
+                        help='explicit candidate checkout; leaves the selected control untouched')
+    parser.add_argument('--build-prefix', type=Path,
+                        help='candidate build prefix, followed by -release or -debug')
+    parser.add_argument('--evidence-root', type=Path, default=EVIDENCE)
     args = parser.parse_args()
-    source = BASE / f'worktrees/call55-{args.variant}'
-    manifest = EVIDENCE / f'{args.tag}-{args.stage}-commands.json'
+    if (args.source is None) != (args.build_prefix is None):
+        parser.error('--source and --build-prefix must be supplied together')
+    source = args.source or BASE / f'worktrees/call55-{args.variant}'
+    build_prefix = args.build_prefix or BASE / f'call55-{args.variant}'
+    manifest = args.evidence_root / f'{args.tag}-{args.stage}-commands.json'
     if manifest.exists():
         raise FileExistsError(manifest)
     env = {k: v for k, v in os.environ.items()
@@ -36,7 +44,7 @@ def main():
     roles = ['release'] if args.stage == 'regen' else (
         [args.role] if args.role else ['release', 'debug'])
     for role in roles:
-        build = BASE / f'call55-{args.variant}-{role}'
+        build = Path(f'{build_prefix}-{role}')
         if args.stage == 'build':
             command = ['make', '-s', '-j10', '-W', str(source / 'Modules/getbuildinfo.c')]
         elif args.stage == 'regen':
@@ -55,7 +63,7 @@ def main():
                 if not args.tests:
                     parser.error('focus requires test modules')
                 command += args.tests
-        log = EVIDENCE / f'{args.tag}-{role}-{args.stage}.log'
+        log = args.evidence_root / f'{args.tag}-{role}-{args.stage}.log'
         row = dict(role=role, command=command, cwd=str(build), log=str(log),
                    source_head=subprocess.check_output(
                        ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),

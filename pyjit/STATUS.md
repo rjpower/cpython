@@ -7,7 +7,11 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 [architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
 direction, selected contracts and exact execution paths.
 
-The next [parity workstream](issues/interpreter-parity58/README.md) has a completed
+The active [IR-semantics workstream](issues/register-semantics59/README.md) is
+revisiting semantic operations and their ownership/storage contracts with Astra,
+followed by peer-reviewed implementations and direct native comparisons. No
+round59 runtime candidate is integrated yet. The preceding
+[parity workstream](issues/interpreter-parity58/README.md) has a completed
 Astra [architectural review](design/proposals/interpreter-parity58.md), a
 [source/native ledger](issues/interpreter-parity58/research.md) and
 [coordinator peer review](issues/interpreter-parity58/review.md). The design

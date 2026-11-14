@@ -23,11 +23,16 @@ def main():
     parser.add_argument('symbols', nargs='+')
     parser.add_argument('--variant', choices=['integrated', 'bitmap'],
                         default='integrated')
+    parser.add_argument('--source', type=Path)
+    parser.add_argument('--build', type=Path)
+    parser.add_argument('--evidence-root', type=Path, default=EVIDENCE)
     args = parser.parse_args()
-    source = BASE / f'worktrees/call55-{args.variant}'
+    if (args.source is None) != (args.build is None):
+        parser.error('--source and --build must be supplied together')
+    source = args.source or BASE / f'worktrees/call55-{args.variant}'
     if subprocess.check_output(['git', '-C', str(source), 'status', '--porcelain']):
         raise RuntimeError('native capture requires a clean source')
-    build = BASE / f'call55-{args.variant}-release'
+    build = args.build or BASE / f'call55-{args.variant}-release'
     head = subprocess.check_output(
         ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     native_head = subprocess.check_output(
@@ -35,7 +40,7 @@ def main():
          'import sys; print(sys._git[2])'], cwd=build, text=True).strip()
     if not head.startswith(native_head):
         raise RuntimeError(f'source/native mismatch: {head}, {native_head}')
-    destination = EVIDENCE / args.tag
+    destination = args.evidence_root / args.tag
     destination.mkdir()
     executable = destination / 'python'
     shutil.copy2(build / 'python', executable)

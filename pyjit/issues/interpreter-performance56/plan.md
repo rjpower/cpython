@@ -9,7 +9,10 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
-The next workstream is [interpreter parity58](../interpreter-parity58/README.md).
+The active workstream is [IR semantics59](../register-semantics59/README.md):
+revisit operation and ownership/storage contracts, implement ordered trials,
+integrate winners and repeat the broad review against the remaining gap. The
+preceding workstream is [interpreter parity58](../interpreter-parity58/README.md).
 Its [reviewed design](../../design/proposals/interpreter-parity58.md) and
 [research ledger](../interpreter-parity58/research.md) replace the isolated
 followup ordering below with a coherent ownership/effect/lowering strategy.

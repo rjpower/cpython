@@ -8438,7 +8438,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_PUBLISH_TEMP(window[0], none);
+                IR_PUBLISH_CANONICAL_TEMP(window[0], none);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
                 }
@@ -10639,7 +10639,7 @@
                 value = s;
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                IR_PUBLISH_TEMP(window[0], none);
+                IR_PUBLISH_CANONICAL_TEMP(window[0], none);
                 if (call_state & CALL_SELF_PRESENT) {
                     IR_PUBLISH_TEMP(window[1], c);
                 }
@@ -14829,13 +14829,32 @@
             }
             // _ITER_NEXT_LIST
             {
-                PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-                assert(PyList_CheckExact(list_o));
-                next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+                #ifdef Py_GIL_DISABLED
+                UPDATE_MISS_STATS(FOR_ITER);
+                assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                JUMP_TO_PREDICTED(FOR_ITER);
+                #endif
+                if (!PyValue_IsObject(iter) || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(iter))) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                if (!PyValue_IsTaggedIndex(null_or_index)) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                if ((size_t)index >= (size_t)PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(iter))) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                next =PyValue_XDUP(PyValue_Borrow(_PyList_ITEMS(PyValue_AsKnownObjectBorrow(iter))[index]));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_PUBLISH_TEMP(window[1], null_or_index);
-            IR_PUBLISH_TEMP(window[2], next);
+            IR_PUBLISH_CANONICAL_TEMP(window[2], next);
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[2]);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;

@@ -6,6 +6,7 @@ import struct
 import sys
 import threading
 import unittest
+import weakref
 
 from test import support
 from test.support import import_helper
@@ -296,6 +297,191 @@ class NativeScopeDispatchTests(unittest.TestCase):
         finally:
             sys.setprofile(None)
         self.assertEqual(events, [(True, True)])
+
+
+@support.requires_specialization
+class CheckedMethodDescriptorTests(unittest.TestCase):
+    def warm(self, function, *args):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            function(*args)
+
+    def test_value_method_bound_and_unbound_results(self):
+        def bound(receiver, key, default):
+            return receiver.get(key, default)
+
+        def unbound(method, receiver, key, default):
+            return method(receiver, key, default)
+
+        self.warm(bound, {}, 17, None)
+        self.warm(unbound, dict.get, {}, 17, None)
+        self.assertIn("CALL_METHOD_DESCRIPTOR_FAST", executing_handlers(bound))
+        self.assertIn("CALL_NO_SELF_METHOD_DESCRIPTOR_FAST",
+                      executing_handlers(unbound))
+        for value in (2147483647, -0.0, True, None, object(), []):
+            with self.subTest(value=value):
+                mapping = {17: value}
+                for result in (bound(mapping, 17, object()),
+                               unbound(dict.get, mapping, 17, object()),
+                               bound({}, 17, value),
+                               unbound(dict.get, {}, 17, value)):
+                    self.assertEqual(result, value)
+                    if type(value) not in (int, float):
+                        self.assertIs(result, value)
+
+    def test_value_method_fixed_arity_and_guard_fallback(self):
+        def copy(receiver):
+            return receiver.copy()
+
+        def count(receiver, value):
+            return receiver.count(value)
+
+        def extra(receiver):
+            return receiver.copy(1)
+
+        def missing(receiver):
+            return receiver.count()
+
+        self.warm(copy, [17])
+        self.warm(count, [17], 17)
+        self.assertEqual(copy([17]), [17])
+        self.assertEqual(count([17], 17), 1)
+        for function, message in (
+                (extra, "takes no arguments (1 given)"),
+                (missing, "takes exactly one argument (0 given)")):
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+                with self.assertRaises(TypeError) as caught:
+                    function([])
+                self.assertIn(message, str(caught.exception))
+        for function in (copy, count, extra, missing):
+            self.assertIn("CALL_METHOD_DESCRIPTOR_FAST",
+                          executing_handlers(function))
+
+        def unbound(method, receiver):
+            return method(receiver, 17)
+
+        self.warm(unbound, dict.get, {})
+        self.assertIn("CALL_NO_SELF_METHOD_DESCRIPTOR_FAST",
+                      executing_handlers(unbound))
+        with self.assertRaisesRegex(TypeError, "descriptor 'get'"):
+            unbound(dict.get, [])
+        self.assertIsNone(unbound(dict.get, {}))
+        with self.assertRaisesRegex(TypeError, "keyword"):
+            {}.get(key=17)
+
+    def test_object_fastcall_descriptor_adapter(self):
+        capi = import_helper.import_module("_testcapi")
+        receiver = capi.MethInstance()
+
+        def invoke(receiver, value):
+            return receiver.meth_fastcall(value)
+
+        self.warm(invoke, receiver, 17)
+        self.assertIn("CALL_METHOD_DESCRIPTOR_FAST", executing_handlers(invoke))
+        marker = object()
+        for value in (2147483647, -0.0, True, None, marker):
+            with self.subTest(value=value):
+                actual_self, arguments = invoke(receiver, value)
+                self.assertIs(actual_self, receiver)
+                self.assertEqual(arguments, (value,))
+                if value is marker:
+                    self.assertIs(arguments[0], marker)
+
+    def test_method_callback_inputs_error_and_recursion(self):
+        def invoke(receiver, key, default):
+            return receiver.get(key, default)
+
+        self.warm(invoke, {}, 17, None)
+        self.assertIn("CALL_METHOD_DESCRIPTOR_FAST", executing_handlers(invoke))
+        events = []
+        pending = []
+        error = LookupError("checked method callback")
+
+        class Default:
+            pass
+
+        class Key:
+            def __hash__(self):
+                frame = sys._getframe(1)
+                self_test.assertIs(frame.f_code, invoke.__code__)
+                frame.f_locals["receiver"] = None
+                frame.f_locals["key"] = None
+                frame.f_locals["default"] = None
+                pending.clear()
+                gc.collect()
+                state = _testinternalcapi.native_scope_call_state(invoke.__code__)
+                self_test.assertEqual(state[7] & ~state[8], 0)
+                events.append("hash")
+                if failing:
+                    raise error
+                return 17
+
+        self_test = self
+        failing = False
+        pending.extend(({}, Default()))
+        reference = weakref.ref(pending[1])
+        result = invoke(pending[0], Key(), pending[1])
+        self.assertIs(result, reference())
+        self.assertEqual(events, ["hash"])
+        del result
+        gc.collect()
+        self.assertIsNone(reference())
+        failing = True
+        with self.assertRaises(LookupError) as caught:
+            invoke({}, Key(), None)
+        self.assertIs(caught.exception, error)
+        self.assertEqual(events, ["hash", "hash"])
+        error.__traceback__ = None
+
+        class RecursiveKey:
+            def __hash__(self):
+                return invoke({}, self, 0)
+
+        with self.assertRaises(RecursionError):
+            invoke({}, RecursiveKey(), 0)
+        self.assertEqual(invoke({17: 23}, 17, None), 23)
+
+    def test_monitored_method_keeps_evaluated_inputs_once(self):
+        def invoke(receiver, key):
+            return receiver.get(key)
+
+        self.warm(invoke, {}, 17)
+        self.assertIn("CALL_METHOD_DESCRIPTOR_FAST", executing_handlers(invoke))
+        events = []
+        value = object()
+
+        class Key:
+            def __hash__(self):
+                events.append("hash")
+                return 17
+
+            def __eq__(self, other):
+                return other == 17
+
+        def monitor(code, offset, function, first):
+            self.assertIs(code, invoke.__code__)
+            self.assertIs(function, dict.get)
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            frame.f_locals["receiver"] = None
+            frame.f_locals["key"] = None
+            sys.monitoring.set_local_events(tool, code, 0)
+            gc.collect()
+            events.append("call")
+
+        tool = sys.monitoring.DEBUGGER_ID
+        sys.monitoring.use_tool_id(tool, "checked-method-descriptor")
+        try:
+            sys.monitoring.register_callback(tool, sys.monitoring.events.CALL,
+                                             monitor)
+            sys.monitoring.set_local_events(tool, invoke.__code__,
+                                             sys.monitoring.events.CALL)
+            self.assertIs(invoke({17: value}, Key()), value)
+            self.assertEqual(events, ["call", "hash"])
+        finally:
+            sys.monitoring.set_local_events(tool, invoke.__code__, 0)
+            sys.monitoring.register_callback(tool, sys.monitoring.events.CALL,
+                                             None)
+            sys.monitoring.free_tool_id(tool)
 
 
 class NativeGenericVMTests(unittest.TestCase):

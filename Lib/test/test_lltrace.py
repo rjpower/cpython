@@ -55,7 +55,10 @@ class TestLLTrace(unittest.TestCase):
         self.assertIn("GET_ITER", stdout)
         self.assertIn("FOR_ITER", stdout)
         self.assertIn("CALL_INTRINSIC_1", stdout)
-        self.assertIn("POP_TOP", stdout)
+        # Register IR discards the result directly through IR_NO_DST.
+        self.assertRegex(
+            stdout,
+            r"(?m)^    ir CALL_INTRINSIC_1 4095 [0-9]+ [0-9]+ [0-9]+$")
         self.assertNotIn("BINARY_OP", stdout)
         self.assertNotIn("UNARY_NEGATIVE", stdout)
 

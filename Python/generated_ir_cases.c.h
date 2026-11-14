@@ -8554,10 +8554,12 @@
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)
+                PyValue_AsKnownObjectBorrow(callable);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                PyValue result = _PyValue_VectorcallTstate(
-                    tstate, callable, arguments, total_args, NULL);
+                PyValue result = _PyMethodDescr_CallFast(
+                    tstate, method, arguments, total_args);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -10753,10 +10755,12 @@
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)
+                PyValue_AsKnownObjectBorrow(callable);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                PyValue result = _PyValue_VectorcallTstate(
-                    tstate, callable, arguments, total_args, NULL);
+                PyValue result = _PyMethodDescr_CallFast(
+                    tstate, method, arguments, total_args);
                 if (PyValue_IsNull(result)) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);

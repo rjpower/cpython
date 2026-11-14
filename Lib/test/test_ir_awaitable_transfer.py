@@ -144,7 +144,7 @@ class AwaitableTransferTests(unittest.TestCase):
 
         active = executing()
         try:
-            with self.assertRaisesRegex(RuntimeError, "already executing"):
+            with self.assertRaisesRegex(ValueError, "already executing"):
                 finish(active)
         finally:
             active.close()

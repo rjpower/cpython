@@ -7,6 +7,13 @@ direct creation, are rejected by their broad screens. The
 retained evidence and limits. These are ordered implementation proposals, not
 selected runtime contracts.
 
+Component contracts: [allocation-only creation](../../issues/register-semantics59/creation-allocation62.md),
+[prepared CALL](../../issues/register-semantics59/prepared-call62.md),
+[method-to-exact CALL](../../issues/register-semantics59/method-call62.md), and
+[delegated resume](../../issues/register-semantics59/delegated-resume62.md).
+The [trial report](../../issues/register-semantics59/report.md) owns actual
+qualification and measured dispositions.
+
 ## Decision
 
 Make physical execution units express complete input preparation and semantic

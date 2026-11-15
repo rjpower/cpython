@@ -114,6 +114,9 @@ UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B "$MEASURE" \
 
 Those eight cases are four hot workloads plus four sentinels, not an all-29
 result. Two pairs produce 32 workload rows; six confirmation pairs produce 96.
+For all29, pass all kernel names explicitly in `--cases`; omitting that option
+selects only `logging_silent`. Require 29 summary entries and 116 rows before
+calling a two-pair campaign all29.
 Do not alter fixed kernel loop counts or warmup/timing bodies. For upstream,
 replace control path/log with the table's upstream entries, use role `upstream`
 and omit `--control-head`. Golden56 is a separate golden-role campaign with its

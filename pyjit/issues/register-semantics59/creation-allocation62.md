@@ -1,11 +1,18 @@
 # Direct creation with callback-free allocation
 
-Proposal for [parity62 section 0](../../design/proposals/interpreter-parity62.md).
-Root and independent source-direction peer approve implementation after the
-grouped design freeze. No native measurement is claimed. Start a new W branch from the complete
-round61 creation source and fixture corrections (`7bf6812d5aac`), preserving
-`pyjit/parity61-created-generator`. Do not add the rejected producer, TEMP or
-ascent packets. Root owns generation, native qualification and selection.
+Reviewed component of [parity62 section 0](../../design/proposals/interpreter-parity62.md),
+implemented after root GO in W branch `pyjit/parity62-created-allocation` from
+the complete round61 source and fixture corrections (`7bf6812d5aac`). The
+round61 branch is preserved; no rejected producer, TEMP or ascent dependency
+is added. Four focused host source methods pass (2.931 seconds), eleven runtime
+methods parse, and diffcheck passes. Root and independent actual-diff review GO
+cover the seven source paths, frozen as `4a732f4d7c1af9e8a56bf2b04f9107a1ad14faf7`
+in a clean W tree. Root integrated at `15edce610d09`, both builds completed
+117/79 and 526 focused methods passed per role. Coroutines improves 4.4% in
+confirmation, but all29 is 0.49% slower; root rejects the standalone packet.
+The [trial report](report.md) owns exact identities, native evidence and ratios.
+Root owns generation, native qualification and selection. Source checks, command and patch are retained in
+`E59/creation-allocation62-source-host`.
 
 ## Established boundary
 
@@ -152,12 +159,21 @@ claim that every creation error preserves input homes.
 ## Files and gates
 
 Production scope: `Python/ceval.c`, `Objects/genobject.c`,
-`Include/internal/pycore_genobject.h`, `Include/internal/pycore_value_api.h`.
+`Include/internal/pycore_genobject.h`, `Include/internal/pycore_value_api.h` and
+`Include/internal/pycore_interpframe.h`.
 Update affected source checks and `Lib/test/test_ir_created_generator.py`.
 Keep marker effects and generic RETURN/SEND/YIELD bodies unchanged; no public
 format, handler ID, feedback payload, header, allocator ABI or benchmark edit.
 If source receipt tests need the known-object constructor, add only its actual
 precondition/ownership test, not a global creation-helper effect assertion.
+
+The initializer uses one always-inline body with a literal code-ownership
+mode from its two wrappers. Ordinary acquisition occurs at the original
+`f_executable` store after the function binding, rather than in a wrapper
+argument before the header stores. The owning wrapper consumes its existing
+pin at that same point. This preserves one implementation and selected source
+ordering; actual constant folding and ordinary-call native code remain a root
+gate. `_Py_MakeCoro` and `pycore_genobject.h` are restored exactly to selected57.
 
 Minimum checks:
 
@@ -167,7 +183,9 @@ Minimum checks:
 - Keep allocation failure injection, and verify that the ordinary error path
   releases the untouched inputs with the correct source traceback and clean
   reachability. Cover zero and heap-buffer-sized arities even though the
-  provider no longer allocates that buffer.
+  provider no longer allocates that buffer. Zero arity checks creation failure
+  itself; arities one and twelve check argument-owner cleanup, including
+  repeated aliases and finalizer reachability.
 - Keep explicit collection **after** completed creation, code/argument pinning,
   origin unchanged on the already-created child, and eventual release.
   `gc_verify` runs after collection returns. Do not force an unsupported

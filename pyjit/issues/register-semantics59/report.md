@@ -533,3 +533,198 @@ retain their previous work. These observations do not establish a cause for
 the broad regression or justify a padding/compiler search. Preserve raw
 disassembly in `E59/created-generator-diagnostic/native-review.md` and PMU
 commands/results in `E59/parity61-created4-counter-diagnostic`.
+
+## Allocation-only creation62: rejected after broad comparison
+
+Source `4a732f4d7c1af9e8a56bf2b04f9107a1ad14faf7` has root and independent
+actual-diff GO. Root integrates at `15edce610d09ffcc37f7b7ed3465852101397b49`
+on `pyjit/parity62-allocation-integrated`. Generation passes with no product
+diff. Both builds complete 117/79; 526 focused methods across twelve modules
+pass per role. This is focused qualification, not full-system qualification.
+
+Inputs remain in their original owning CALL homes through allocation, then
+move once into the complete heap frame. Allocation failure retains the ordinary
+CALL prestate. The result-only EXTERNAL root survives real redirect cleanup
+and transfers at the existing consuming writer. The shared initializer uses a
+compile-time ownership mode to retain ordinary code acquisition at its original
+header store; no runtime ownership branch is intended. The
+[component proposal](creation-allocation62.md) owns the precise source contract.
+
+Native capture `E59/parity62-allocation1` has ELF SHA256
+`c51546d9df97d8397d8e511eae4d77f5ce5afd2f18498b0db217cef6ae879685`.
+The helper shrinks 2,475→1,382 bytes; explicit stack adjustment including its
+saved-register pushes shrinks 328→168 bytes. No owner buffer, input prefix,
+second argument move or known-code/generator numeric classifier remains. One
+postpublication refresh and final-home NULL initialization remain. NO_SELF
+GENERAL returns to 1,378 bytes; supplied-self GENERAL stays 1,461 bytes.
+These static facts do not establish an elapsed improvement.
+
+The stable two-pair screen shows a repeatable coroutine gain with sentinel
+losses. Root keeps the candidate **provisional**, advancing to confirmation
+to assess the tradeoff rather than calling it a winner from fewer stores.
+Golden remains unchanged. Evidence uses `parity62-allocation1` build/focus
+manifests and `E59/parity62-allocation1-eight-selected57`.
+
+| Workload | Allocation62 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | .983374 | .958832–1.008544 |
+| deltablue | 1.009277 | 1.004707–1.013868 |
+| coroutines | .957328 | .954150–.960517 |
+| generators | 1.000100 | .991305–1.008973 |
+| logging_silent | 1.021175 | 1.016053–1.026323 |
+| raytrace | .991176 | .989330–.993025 |
+| spectral_norm | 1.044129 | 1.043082–1.045177 |
+| nqueens | 1.008648 | 1.002679–1.014652 |
+
+Six-pair confirmation has stable source/native identity and no failure. The
+coroutine improvement and DeltaBlue/logging/spectral losses persist in every
+pair. Evidence: `E59/parity62-allocation1-confirm-selected57`.
+
+| Workload | Confirmation / selected57 | Six-pair range |
+| --- | ---: | ---: |
+| comprehensions | .995230 | .965291–1.004610 |
+| deltablue | 1.005235 | 1.001161–1.007419 |
+| coroutines | .955934 | .952305–.964509 |
+| generators | 1.005605 | .996386–1.015946 |
+| logging_silent | 1.033865 | 1.011046–1.055721 |
+| raytrace | .986471 | .977594–.990449 |
+| spectral_norm | 1.049700 | 1.043736–1.053897 |
+| nqueens | .999857 | .996094–1.003659 |
+
+Root advances to the broad set to decide whether the actual coroutine gain
+and cleaner creation contract justify these measured tradeoffs. The directory
+`parity62-allocation1-all29-selected57` is **misnamed**: the coordinator omitted
+`--cases`, so it contains only two logging pairs, not an all29 campaign. Its
+commands/results remain unchanged and are excluded from broad qualification.
+The explicit-roster retry uses a new output directory. No upstream comparison
+or full-system qualification is yet claimed for allocation62.
+
+### Broad decision: allocation62 is not selected
+
+The explicit 29-case retry completes two balanced pairs (116 workload rows),
+with stable source/native identity and no failure. Its observed geometric mean
+is **1.004907/selected57**, with 12 wins out of 29. Coroutines still improves,
+but logging, spectral_norm and deepcopy_memo lose in both pairs. Root rejects
+the standalone packet: the measured broad result does not justify those losses.
+No direct-upstream/PMU/full-system campaign follows. Preserve its branch and
+native evidence; the coroutine gain is evidence for the design, not a selected
+dependency. Timing: `E59/parity62-allocation2-all29-selected57`. Independent
+cold native review: `E59/parity62-allocation1/native-review.md`.
+
+| Workload | Allocation62 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| richards | 0.996216 | 0.995507–0.996924 |
+| go | 0.993276 | 0.989002–0.997569 |
+| nbody | 0.956744 | 0.924647–0.989955 |
+| float | 0.996076 | 0.995562–0.996590 |
+| spectral_norm | 1.053241 | 1.051913–1.054571 |
+| raytrace | 0.982213 | 0.980913–0.983515 |
+| deltablue | 1.007473 | 1.004705–1.010248 |
+| chaos | 0.994621 | 0.990428–0.998832 |
+| nqueens | 0.996371 | 0.994562–0.998183 |
+| fannkuch | 1.021605 | 1.013282–1.029996 |
+| generators | 1.004635 | 1.003703–1.005567 |
+| comprehensions | 0.995968 | 0.994229–0.997711 |
+| coroutines | 0.957226 | 0.953193–0.961276 |
+| unpack_sequence | 1.004298 | 1.002000–1.006601 |
+| deepcopy | 1.010824 | 1.010536–1.011113 |
+| deepcopy_reduce | 1.001750 | 0.996778–1.006748 |
+| deepcopy_memo | 1.079159 | 1.078662–1.079656 |
+| json_dumps | 1.011768 | 1.010221–1.013318 |
+| json_loads | 1.007427 | 0.997115–1.017845 |
+| pickle | 1.002672 | 0.999430–1.005924 |
+| unpickle | 1.015601 | 1.011764–1.019452 |
+| regex_compile | 1.014558 | 1.012866–1.016253 |
+| logging_format | 1.013480 | 1.005394–1.021631 |
+| logging_silent | 1.020099 | 1.019242–1.020956 |
+| logging_simple | 0.988310 | 0.963631–1.013620 |
+| xml_etree_generate | 0.990827 | 0.990470–0.991184 |
+| xml_etree_iterparse | 1.020280 | 1.001211–1.039711 |
+| xml_etree_parse | 1.015717 | 1.006164–1.025361 |
+| xml_etree_process | 0.997386 | 0.994905–0.999874 |
+
+## Delegated resume62: rejected
+
+Source `8697fe15235f5a91c1bc188ff0c94d6e03a5326a` starts from selected57.
+Root integrates generated products at `c80deebb7a9`, then correction
+`d43f88d0402d11321aaefb8e1ecce895751b6c29` at final
+`17139aa0166e18158765b4bccc11408ecbfe1759`. The correction changes source
+analysis/fixtures; generated runtime products remain byte-identical.
+
+The first release integration covered 397 methods and found two failures.
+The exact monitoring fixture expects a LINE event absent on both candidate and
+selected57; matched read-only probes retain identical instruction/resume events
+and stable source/ELF identities. The correction checks actual instruction
+and resume events plus LINE wrapper restoration. Separately, the new optional
+source contract rejected a valid altered-source analysis globally. Unsupported
+contracts now omit the variant; existing mandatory delegated-cursor rejection
+remains. Neither correction weakens ownership or semantic image admission.
+Evidence: `parity62-resume1-release-focus.log`,
+`resume62-exact-observation-*` and the correction host log under E59.
+
+Both corrected builds complete 117/79; all 397 focused methods in eight
+suspension/observer modules pass per role. Capture `E59/parity62-resume2-native`
+has ELF SHA256
+`ddb5b6dd027091a1863575182a5ca020900037669c943feaab13baf0da66cacb`.
+Its independent `native-review.md` confirms the fixed continuation and ordinary
+entry protocols. The counted SEND continuation is 29→28 executed instructions,
+conditional branches 2→4 and indirect transfers 2→1. This is a manual static
+successful-path count, not PMU attribution. Ordinary RESUME success adds no
+spill/helper; exact CALL still reserves 0x40 bytes, SEND gains no stack frame.
+Reviewed symbols grow 604 bytes and whole ELF text 2,496 bytes. Removing the
+38-byte jump handler transfer does not remove 38 bytes of dynamic work.
+
+The stable two-pair screen improves generators 4.3% but loses DeltaBlue,
+logging and spectral_norm in both pairs. Root rejects the standalone packet;
+no confirmation, all29, direct-upstream/PMU or full-system campaign follows.
+Preserve source `pyjit/parity62-resume-integrated` and its evidence, without
+making this losing native layout a dependency of prepared CALL. Timing:
+`E59/parity62-resume2-eight-selected57`.
+
+| Workload | Resume62 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.980435 | 0.958321–1.003058 |
+| deltablue | 1.065177 | 1.063197–1.067161 |
+| coroutines | 0.995901 | 0.987009–1.004874 |
+| generators | 0.956959 | 0.950052–0.963915 |
+| logging_silent | 1.203048 | 1.190222–1.216012 |
+| raytrace | 0.998169 | 0.997124–0.999215 |
+| spectral_norm | 1.092709 | 1.089842–1.095584 |
+| nqueens | 0.992462 | 0.986017–0.998950 |
+
+## Prepared CALL62: native qualification in progress
+
+Source `8d418b47f669dfa5c7c6db8434bdfbf31c8e22e8` has root and independent
+actual-diff approval after the active-only `runs_code` correction. Four host
+source methods pass. Root generation found a CWriter compound-brace error;
+source correction `49105087f2bb25bb1c32622c0995cdb075af388a` fixes it and
+adds actual metadata-header emission to the focused source control.
+
+Generated integration `c5f03fe81d7` completes both 117/79 builds under
+`parity62-prepared2`. The first release fixture invocation discovers eight
+new methods plus eight unintentionally imported admission methods. Seven new
+methods pass, exercising all four active heads, public image routes, misses,
+result ownership and observation invalidation. One synthetic negative fails
+before execution: its GET_ITER two-home output exceeds the declared frame.
+Fixture correction `ae579492c5d` fixes geometry, removes accidental imported
+TestCase discovery and tests a real cold exceptional-entry UNKNOWN negative
+through all public image routes without entering that handler. The unrelated
+GET_ITER work legitimately preserves the argument home's positive vacancy.
+Release then passes all 227 methods across ten modules. Debug passes the
+other nine modules but aborts in the synthetic iterator fixture: its second
+cursor home was not retired. Exact selected57 debug reproduces that abort.
+Correction `6e07c1a8953` uses the existing POP_ITER protocol for both outputs;
+matched corrected probes pass all public routes on both debug interpreters.
+Raw commands, identities and both original aborts remain under
+`E59/prepared-vacancy-debug-probe`.
+
+Root integrates the fixture corrections at
+`a3cbad0637efe6498533d31abf074c0e544fa964`. Both refreshed builds complete
+117/79 under `parity62-prepared4`. The corrected eight methods pass per role;
+the other 219 remain qualified under `parity62-prepared3`, for 227 focused
+methods per role. Only the corrected module was repeated. Capture
+`E59/parity62-prepared4-native` has ELF SHA256
+`017551836bf38f5a614d19d91d0d47294174989847c55c69060f5a212e44a619`.
+Independent native review, actual admission/execution counts and the eight-case
+screen remain pending. No performance claim or selection follows from source
+or static native reduction.

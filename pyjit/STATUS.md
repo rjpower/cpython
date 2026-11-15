@@ -15,25 +15,24 @@ physical execution remain targets. Parity is not achieved.
 
 | Packet | Current result |
 | --- | --- |
-| Producer and TEMP destination | Both corrected builds complete 117/79; 161 focused methods pass per role. Actual TEMP handler is 69 bytes, but logging loses 14.4% and spectral_norm 5.8% in both screen pairs. Rejected; preserve source/evidence. |
-| Direct final-heap-frame creation | Both builds complete 117/79; 525 focused methods pass per role after fixture corrections, with no production repair. Screen improves coroutines 3.6% but loses DeltaBlue 8.9% and logging 30.2%; rejected. |
-| Checked delegated ascent | Root integrates source and generated handler at 410bea36190. Both builds complete 117/79; focused 397-method coverage passes per role, with a targeted release fixture retry. Actual native probes confirm eight-frame composition, 16-frame bound, profiling fallback and custom-iterator split. Screen improves coroutines 4.8% but loses generators 7.9% in both pairs; not selected. |
+| Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
+| Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role, including corrected synthetic cursor retirement. Native capture is retained; actual admission/execution probes and the benchmark screen are next. |
+| Method-to-exact CALL62 | Root and source peer approve the one-clear contract. Implementation passes the acquired method owner directly to the shared initializer; actual admission coverage and fallback publication remain gates. |
+| Delegated resume62 | Integration 17139aa0166 completes both 117/79 builds and 397 focused methods per role. Generators improves 4.3%, but DeltaBlue loses 6.5%, logging 20.3% and spectral_norm 9.3% in both screen pairs. Rejected as a standalone packet. |
 
-The producer-only increment also lost its screen. Earlier round59's five
-executable trials and round60's computed-goto engine are rejected; scalar
-plans are deferred. The [trial report](issues/register-semantics59/report.md)
-owns every ratio, exact identity, failure and selection decision. The
+Every round59–61 runtime packet remains unselected. The
+[trial report](issues/register-semantics59/report.md) owns every ratio, exact
+identity, failure and selection decision. The round60
 [engine native review](issues/register-semantics59/engine-post-review.md)
-records its stack-backed state and merged dispatch; no compiler or alignment
-search follows. Losing packets are not prerequisites for independent lanes.
+records its stack-backed state and merged dispatch. Losing packets are not
+prerequisites for independent lanes.
 
-Round62 removes unnecessary input staging under the actual callback-free
-allocation contract, composes register preparation with CALL execution, and
-bypasses the delegated suspension backedge under existing observation guards.
-Source peers must close ownership, recovery and mutable-writer invalidation
-before coding. The staged creation diagnostic finds logging instructions
-+0.25% but cycles +24.15% in a whole-process PMU interval; the cause remains
-unresolved. No source-level copy saving explains that unrelated loss.
+The corrected allocator effect model removes unjustified input staging: the
+admitted allocation-only interval cannot execute Python, while real publication
+and redirect cleanup still require roots. The new prepared spans publish into
+proved-vacant homes without reading stale bits or requiring physical NULL.
+Delegated resume preserves suspended semantic state and bypasses the backedge
+under existing observation guards. No source-position equality grants a proof.
 
 Astra reviews the architecture after coherent measured cycles. Sol workers
 implement and peer-review bounded packets; root owns generation, native jobs,

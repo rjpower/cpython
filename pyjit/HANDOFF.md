@@ -16,25 +16,54 @@ are unselected. Golden remains selected57. PyValue integration is complete.
 Do not revive rejected providers, scalar descriptors, continuation actions,
 alignment sweeps or a second compiler without a new reviewed consumer.
 
-G is on `pyjit/parity61-created-integrated`, at
-`4ac529577e2f16bcc4fae76e30c7bd61d04216cb`. Both builds complete 117/79;
-525 focused methods pass per role after fixture corrections. No production
-repair was needed. The two new learned-only handlers reuse the existing-size
-feedback payload. Screen `E59/parity61-created4-eight-selected57` rejects it:
-DeltaBlue +8.9%, logging +30.2%, despite coroutines −3.6%. Native capture
-`parity61-created4-native` has ELF SHA256
-`e03950221a03b6b875ae05b5d6a6c6b9616f1a93f7605f4a2be135a842b833ec`.
-The short whole-process PMU diagnostic finds near-identical instructions but
-more cycles; ordinary GENERAL initializer scheduling changes are concrete but
-do not establish the cause. Keep `created-generator-diagnostic/native-review.md`
-and `parity61-created4-counter-diagnostic`. No all29/full/upstream follows.
+G is on `pyjit/parity62-prepared-integrated`, at `a3cbad0637e`, after root
+generation from source `49105087f2b` and two fixture corrections, directly on
+selected57. Both builds complete 117/79 under `parity62-prepared4`; all 227
+focused methods pass per role across the prepared module and nine protocol/
+observation modules. The synthetic cursor retirement abort also reproduced
+on selected57; the fixture now uses its complete POP_ITER protocol. Native
+capture `parity62-prepared4-native` has ELF SHA256
+`017551836bf38f5a614d19d91d0d47294174989847c55c69060f5a212e44a619`.
+The generator worker owns serialized read-only admission/execution probes.
+Hold G and its builds until that worker releases the probe window. No
+prepared-call timing exists yet.
 
-Round62 implements allocation-only creation independently, prepared CALL spans
-and a delegated RESUME→SEND continuation. The grouped design owns order and
-the component proposals own exact source contracts. Ordinary initialization
-should retain its original acquisition order while sharing an owned-code body.
-No ordinary-path callback gate may be removed merely because allocation itself
-cannot execute Python.
+Delegated resume is preserved on `pyjit/parity62-resume-integrated`, at
+`17139aa0166`. Both corrected builds complete 117/79 and all 397 focused
+methods pass per role. The original failures were a LINE expectation also
+failing on selected57 and an overbroad optional source-analysis rejection;
+exact matched probes are `E59/resume62-exact-observation-*`. Native capture
+`parity62-resume2-native` has ELF SHA256
+`ddb5b6dd027091a1863575182a5ca020900037669c943feaab13baf0da66cacb`.
+The screen improves generators 4.3% but loses DeltaBlue 6.5%, logging 20.3%
+and spectral_norm 9.3% in both pairs. Root rejects the standalone packet.
+Do not execute its old build against G's changed Lib.
+
+Delegated resume uses private ID 375. Prepared CALL reserves IDs 370–374;
+creation uses 368/369. Reserved gaps are not
+executable or publicly admitted, and do not imply a source dependency.
+
+Allocation62 is preserved on `pyjit/parity62-allocation-integrated`, at
+`15edce610d09ffcc37f7b7ed3465852101397b49`. Both builds completed 117/79 and
+526 focused methods passed per role. Six-pair confirmation shows coroutines
+.955934, but logging 1.033865 and spectral 1.049700. Explicit all29 has stable
+identity, 116 rows, mean 1.004907 and 12 wins/29; deepcopy_memo also loses 7.9%.
+Root rejects the standalone candidate. Evidence is
+`E59/parity62-allocation1-{confirm,eight}-selected57`,
+`parity62-allocation2-all29-selected57` and capture/review
+`parity62-allocation1` (ELF SHA256
+`c51546d9df97d8397d8e511eae4d77f5ce5afd2f18498b0db217cef6ae879685`).
+The misnamed `parity62-allocation1-all29-selected57` contains only logging
+because --cases was omitted; it is not broad evidence. Do not execute its
+old build against G's changed Lib.
+
+Staged creation61 is retained at `4ac529577e2`, on
+`pyjit/parity61-created-integrated`: both builds 117/79, 525 focused methods
+per role, screen loses DeltaBlue 8.9% and logging 30.2%. The short whole-process
+PMU diagnostic finds near-identical instructions but more cycles. Ordinary
+GENERAL initializer scheduling changes are concrete but do not establish the
+cause. Keep `created-generator-diagnostic/native-review.md` and
+`parity61-created4-counter-diagnostic`. No full/upstream campaign follows.
 
 TEMP source `8db82c67bd4` added one executing-only scratch variant. Native
 checks found a constructor rejection regression; root's comparison is
@@ -81,11 +110,11 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity61-common-constant-temp`, at `65c99464e0b` | Prepared CALL proposal and independent allocation62 actual-diff peer |
-| Frames | W / `pyjit/parity62-created-allocation`, from complete61 `7bf6812d5aac` | Implement callback-free allocation consumer; native gates root-owned |
-| Ascent | A / `pyjit/parity61-ascent`, at `53df1c14deb` | Rejected source preserved; available for delegated-resume consumer |
-| Coordinator | G / `pyjit/parity61-created-integrated` | Generation, focused/native evidence, serialized screens and winner selection |
-| Astra | Round62 design/review only | Broad architecture review using all61 outcomes; outside patch loop |
+| Generator | P / `pyjit/parity62-prepared-call`, at `6e07c1a8953` | Prepared fixture repairs frozen; read-only actual admission/execution probes |
+| Frames | W / `pyjit/parity62-method-call`, from selected57 plus prepared infrastructure | Approved method-to-exact CALL implementation; allocation source branch preserved |
+| Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
+| Coordinator | G / `pyjit/parity62-prepared-integrated` | Generation, focused/native evidence, serialized screens and winner selection |
+| Astra | Round62 design/review frozen | Broad reviews only; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)
 uses input EXTERNAL roots and moves each argument twice. The

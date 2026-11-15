@@ -1,16 +1,16 @@
 # Semantic IR trial results
 
-Round66 is adopted under [design66](../../design/proposals/interpreter-parity66.md)
-and [review66](review66.md), with independent final-design GO. Root is finishing
-qualification of frozen B before one unchanged hot8 screen. No round66
-performance result exists; selected57 remains unchanged. This is a new
-experiment with explicit prospective gates, not a revision of round65's result.
+Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
+was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`
+qualifies without source changes and completes the unchanged hot8 screen, but
+selection rejects it. Unit2 stops; selected57 remains unchanged. Full
+qualification, screen and diagnostic evidence follows below.
 
 Round65 is closed with no selected runtime. A passes source, runtime and native
 qualification but loses its standalone hot8 screen: coroutine time falls 39.3%,
 while logging loses 16.2% and generators 5.5% in both pairs. B passes source,
 products and focused runtime checks, then fails its native cap, including after
-one reviewed correction. B has no performance screen. Selected57 remains
+one reviewed correction. B was not timed in round65. Selected57 remains
 unchanged. The [design65](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain the contracts. Review66 reassesses architecture
 and admission gates without inventing a performance loss for unmeasured B.
@@ -30,52 +30,63 @@ under the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
-## Round66 frozen continuation: qualification in progress
+## Round66 frozen continuation: qualified, screen rejected
 
-Astra source `945afac1e2546555da9c41cda708952af254db73` is integrated in canonical
-documentation as `fd42900d565`. Independent
-`auxiliary66-source-host/grouped66-final-peer.md` approves the committed design. Root adopts unit1 in
-`continuation66-source-host/root-unit1-contract.json`, before target execution.
-Runtime source remains exactly `64348dd5c182af27c058e60f1e3f849f00d7ef81`; the
-actual release build matches the continuation4 ELF hash recorded below. No
-runtime source, generated product or build is changed for this experiment.
+Astra's final design `945afac1e2546555da9c41cda708952af254db73` is integrated
+at `fd42900d565`; independent grouped review approved it. Frozen runtime
+`64348dd5c182af27c058e60f1e3f849f00d7ef81` receives no source, generated-product
+or build changes. Both 117/79 builds and fresh 48-method runs per role are
+reused by exact identities. The independent
+`continuation66-source-host/unit1-final-qualification-peer.md` confirms actual
+natural return, terminal suspension, armed error and armed normal controls.
 
-The two 117/79 builds and fresh 48-method runs per role are reused by their
-exact source/native identities. Remaining source/native and transaction
-obligations must close before a screen. Representative whole-boundary costs
-are reported tradeoffs under the new contract; the old six predictive gates
-and their prospective dispositions are explicit in design66. Behavior, owners,
-callback-safe control, aliases, ABI and bounded resource/scope requirements
-remain mandatory. Round65's native NO-GO stays sealed.
+The stable 32-row hot8 screen completes with no errors. It rejects selection:
+generator mean 1.0144569295 exceeds the 1.01 gate, and logging loses in both
+pairs (1.0731164899, 1.0798281655). The geometric mean is 0.9368713684.
 
-Current control preparation is `continuation66-native-controls`: a private
-commit/matching identity-free retirement, then actual private SEND-yield target
-resolution and terminal suffix movement. The static source/native review and
-controller ABI receive independent GO. Current `natural1` records private commit
-through matching identity-free retirement; `terminal2` records the actual target,
-disarmed real SEND, yielded owner and successful terminal suffix move, followed
-by Python chain/GC/resume checks. Independent
-`continuation66-source-host/unit1-runtime-receipts-peer.md` verifies the
-source/ELF/controller/anchor/output linkage and both receipts.
-`terminal1` stopped on the controller's 32-frame C-stack walk limit; the
-diagnostic captures 38 frames and passes the same semantic assertions with a
-64-frame diagnostic limit. This was a checker limit, not a runtime correction.
-Fresh continuation4 tests already exercise identity/promotion OOM, redirects,
-observer completion and the actual retained native alias. Static review
-identifies a missing actual case: object-backed GENERATOR return/error under
-an armed AWAIT parent, exercising post-clear Take/cancel. Its bounded probe is
-being prepared. No screen starts before that receipt and independent closure;
-old receipts are not credited to a different executable.
+| Workload | Frozen B / selected57 |
+| --- | ---: |
+| comprehensions | 0.9747244492 |
+| deltablue | 0.9791755373 |
+| coroutines | 0.6260262279 |
+| generators | 1.0144569295 |
+| logging_silent | 1.0764670969 |
+| raytrace | 0.9553110279 |
+| spectral_norm | 0.9697604717 |
+| nqueens | 0.9818861826 |
 
-Unit2 remains unimplemented. It may proceed only after unit1 qualifies and
-either passes its screen, or passes every non-generator screen requirement
-while both generator pairs are at most 1.03. Any other loss stops the union
-attempt this round. Its source proposal and peer are under
-`auxiliary66-source-host`; a storage saving supplies no throughput result.
-The broader native-callout/result-consumer ABI is the leading deferred option,
-with the existing B0 result root retained and no false move saving on comp's
-A=B=17 call. Comp/Delta parity remains open. See design66 for exact screen,
-selection and bounded diagnostic rules.
+Root's decision and independent screen review are
+`continuation66-source-host/root-screen-decision.json` and
+`continuation66-source-host/unit1-screen-peer.md`; timing rows are in
+`E59/parity66-continuation-eight-selected57`. No confirmation, all29, fresh
+upstream comparison or full-system campaign followed. Do not multiply these
+selected57 ratios by an older upstream result.
+
+The finite logging FIFO PMU diagnostic completes at
+`E59/parity66-logging-diagnostic`. It uses eight stable intervals: three paired
+stat-counter samples and one cycles sample per role, with the same hot workload
+and 60,000 warmup iterations. Candidate/selected57 instruction ratio is
+0.992588295967 (-0.74%); cycles ratio is 1.085426304460 (+8.54%). Both roles
+report 100% running, with 2,421 golden and 2,510 candidate samples and no lost
+or throttled samples. Independent
+`continuation66-source-host/logging-diagnostic-receipts-peer.md` gives GO.
+These counters reject an equal-CPI, proportional-instruction-count explanation
+for the full logging loss only. They establish no frontend, cache or other
+mechanism. Offline first-IP physical-leaf attribution matches all 2,421/2,510
+samples and weights each period once. Changed terminals account for 8.31%/8.45%
+of self-periods (all RETURN_VALUE_EMPTY); proved-equal ordinary clearing accounts
+for 13.42%/13.52%. Most remaining samples are ordinary attribute, Python-call,
+branch and dictionary work, whose native equality is not assumed. These separate
+profiles cannot allocate the 8.54% cycle gap to individual functions or establish
+a cause. The script, hashes, disjoint categories and complete symbol table are
+`continuation66-source-host/logging-leaf-attribution.{py,json,md}`. No further
+profiling or source repair follows this diagnostic. The controller collection
+fix changes no runtime.
+
+Unit2 stops because the non-generator logging gate fails; its union proposal
+remains unimplemented. The broader native-callout/result-consumer ABI is the
+leading deferred option for the next grouped architecture review. Unit2 has no
+runtime implementation authorization.
 
 ## Round65 SEND-yield continuation: runtime checks pass, native reject
 

@@ -12,28 +12,33 @@ outcomes, failures and selection decisions; this file owns execution logistics.
 ## Current work
 
 Selected57 remains unchanged. Round65's A screen loss and B native rejection
-remain closed historical outcomes; B has no timing result. Root adopts unit1 on
-frozen B without source changes or build repetition. Close residual semantic,
-native and transaction obligations before one hot8 screen. Runtime controls
-remain frozen. Unit2 has no implementation authorization; its proposal
-correction peer is pending. The unit1 receipt and prepared native controls are
-at `E59/continuation66-source-host/root-unit1-contract.json` and
-`E59/continuation66-native-controls`. Static and controller review pass. Current
-`natural1` and `terminal2` controls and their independent receipt peer pass. The
-remaining actual check is object-backed child return/error cancellation under
-an armed private parent. No screen starts before that closure.
+remain closed historical outcomes. Round66 freezes runtime head
+`64348dd5c182af27c058e60f1e3f849f00d7ef81`; unit1 reuses both qualified builds
+and fresh 48-method runs per role, then passes actual natural-return,
+terminal-suspension, armed-error and armed-normal controls. The independent
+receipt peer passes. Its unchanged 32-row hot8 screen rejects selection:
+generator mean exceeds 1.01 and logging loses in both pairs. Unit2 stops because
+the logging gate fails; the union proposal remains unimplemented. Qualification
+receipts are under `E59/continuation66-source-host` and
+`E59/continuation66-native-controls`; the screen is
+`E59/parity66-continuation-eight-selected57`.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Root, G | Frozen B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; residual qualification only, then one hot8 screen if all gates pass |
+| Root, G | Frozen B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; qualification and screen complete, selection rejected |
 | P | Final source `50adc6d3927` on `pyjit/parity65-yield-continuation`; no further B source changes |
 | W | Source `8ed034598b3` on `pyjit/parity65-residence-boundaries`; earlier branches retained |
 | Astra | Review66 final `945afac1e2546555da9c41cda708952af254db73`, canonical commit `fd42900d565` |
 
-Unit2 source proposal correction peer is pending. Rank1 broader native-callout
-work remains deferred and must keep B0 rooting; comp's A=B=17 path earns no
-additional move credit. Anchored ABI and delegation spine remain deferred. Root
-owns qualification, the eventual screen and performance decisions.
+Unit2 has no implementation authorization; the union proposal remains
+unimplemented. Rank1 broader native-callout work remains deferred and must keep
+B0 rooting; comp's A=B=17 path earns no additional move credit. Anchored ABI and delegation spine remain deferred. Root
+owns integration, future architectural review and performance decisions.
 
 The [compact proposal](design/proposals/interpreter-parity64.md#1-compact-domain-a-bounded-change-to-physical-execution)
 requires one ordinary-C finite domain under one NCSR adapter, with ordinary CALL
@@ -205,12 +210,13 @@ return/yield/observer recipes. Remote frame/async graph readers use real
 `instr_ptr` and `ir_words`, not `return_pc`; retain invariants/controls without
 an unrelated layout port. Census alone does not prove support.
 
-Unit B's initial and final native rejections are preserved in the report; B has
-no performance result. Unit1 reuses final G head `64348dd5c18`, with no source
-changes or repeated builds. Root closes residual contracts, native aliases,
-observer/error/OOM transactions, and lifecycle/reader obligations before one
-hot8 screen. Round65 source repair is closed; unit1 follows design66 without
-edits to frozen B. Do not repeat source repairs or run unrequested target jobs.
+Unit B's initial and final native rejections remain round65 outcomes. Round66
+unit1 reuses final G head `64348dd5c18` without source or build changes, completes
+qualification and loses its hot8 screen. The single logging diagnostic is also
+complete. Retain `continuation66-source-host/unit1-final-qualification-peer.md`,
+`unit1-screen-peer.md`, `logging-diagnostic-receipts-peer.md` and
+`logging-leaf-attribution.md`. No target job is running. Unit2 stops; no further
+source repairs or profiling are authorized within this round.
 
 Root reviews source/products, refreshes both reused builds, runs minimal
 controls/native gates and measures the changed candidate. Keep all immutable

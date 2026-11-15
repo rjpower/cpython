@@ -10,17 +10,22 @@ implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The
 [IR-semantics workstream](issues/register-semantics59/README.md) follows the
 adopted [round66 design](design/proposals/interpreter-parity66.md) and
-[review](issues/register-semantics59/review66.md). Unit1 qualifies frozen B
-without source changes; semantic, native and transaction closure precedes one
-hot8 screen. Unit2 remains conditional, and no round66 performance result exists.
+[review](issues/register-semantics59/review66.md). Frozen B qualifies without
+runtime source changes and completes the hot8 screen, but is rejected for
+generator and logging regressions. Unit2 stops; selected57 remains unchanged.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism.
 The bounded compact execution domain failed its native net-work gate. Complete deferred
 await passes lifecycle/native gates and cuts coroutine time 42.9%, but loses
 logging 27.7% and generators 5.2%; it is rejected as a standalone executable.
 Round65 closed without a selected runtime: A loses its hot8 screen; B fails
-native review after one correction and has no timing result. Selected57 remains
+native review after one correction and was not timed in that round. Selected57 remains
 unchanged.
 The [trial report](issues/register-semantics59/report.md) records rejected
-round59–65 candidates; selected57 remains unchanged. The preceding
+round59–66 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),
 [research ledger](issues/interpreter-parity58/research.md) and
 [workstream](issues/interpreter-parity58/README.md) retain the earlier diagnosis;

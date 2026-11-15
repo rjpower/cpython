@@ -9,13 +9,19 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [closed round65 design](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity66.md) and
-[review66](review66.md) govern active work. Root adopts unit1 to qualify frozen B
-without source changes; residual semantic/native/transaction closure precedes
-one screen. Unit2 is conditional on B screen PASS or all non-generator screen
-requirements passing with both generator ratios at most 1.03. Its correction
-peer is pending. No round66 performance result exists. Both fixed storage-role
-trials are qualified and rejected. The compact execution domain passes focused
-runtime checks but stops at its native net-work gate, without timing. The complete
+[review66](review66.md) govern active work. Unit1 qualifies frozen B without
+runtime source changes; residual semantic/native/transaction closure and the
+hot8 screen are complete. Selection rejects B: generator mean is
+1.014457 and logging loses in both pairs (1.073116, 1.079828). Unit2 stops
+because the non-generator gate fails; its union proposal remains unimplemented.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism.
+Both fixed storage-role trials are qualified and rejected. The compact execution
+domain passes focused runtime checks but stops at its native net-work gate,
+without timing. The complete
 deferred immediate-await unit passes lifecycle/native qualification and cuts
 coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
 as a standalone executable. Round65 is closed: A loses its hot8 screen; B fails
@@ -44,9 +50,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Qualify unit1 on frozen B; screen only after closure | No source update or build repetition; controls remain frozen |
-| Unit2 source | Auxiliary identity/origin union proposal | Conditional; source correction peer pending, no implementation |
-| Astra | [Review66](review66.md) and [design66](../../design/proposals/interpreter-parity66.md) adopted | Grouped peer GO; root owns qualification and later disposition |
+| Root | Publish round66 qualification, rejection and diagnostic | Complete; frozen B and golden remain unchanged |
+| Unit2 source | Auxiliary identity/origin union proposal | STOP: logging gate fails; unimplemented |
+| Astra | [Review66](review66.md) and [design66](../../design/proposals/interpreter-parity66.md) | Closed measured cycle; next grouped review pending |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

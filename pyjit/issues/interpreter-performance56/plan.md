@@ -10,7 +10,7 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
 The active workstream is [IR semantics59](../register-semantics59/README.md);
-round65 is its latest closed experiment.
+round66 is its latest closed experiment.
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
 The closed [round65 design](../../design/proposals/interpreter-parity65.md) and
@@ -26,13 +26,18 @@ stable-frame deferred-await unit passes both builds, lifecycle and native gates.
 Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
 generators 5.2%; reject the standalone executable. Round65 is closed: A loses
 its hot8 screen; B fails native review after one correction, with no timing
-result. Unit1 qualifies frozen B without source changes or build repetition.
-Close semantic, native and transaction obligations before one hot8 screen.
-Former predictive caps are reported tradeoffs; behavior, ownership, ABI and
-resource closure remain hard gates. Unit2 is conditional on B screen PASS or
-all non-generator screen requirements passing with both generator ratios at
-most 1.03. Its proposal correction peer is pending. No round66 result exists;
-selected57 remains unchanged.
+result. Unit1 qualifies frozen B without runtime source changes or build
+repetition; the semantic, native and transaction obligations and hot8 screen
+are complete. Selection rejects the executable: generator mean is 1.014457 and
+logging loses in both pairs (1.073116, 1.079828). Unit2 stops because the
+logging gate fails; the union proposal remains unimplemented. Selected57 remains
+unchanged.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism.
+
 Delegation spine, result continuation and anchored self have separate admission
 and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -126,17 +131,17 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Qualify unit1 on frozen B, then screen if all closure gates pass | No source change or build repetition; owns semantic/native/transaction qualification and performance decision |
-| Unit2 source | Auxiliary identity/origin union proposal | No implementation before unit1 disposition; proposal correction peer pending |
-| Astra | [Review66](../register-semantics59/review66.md) and [design66](../../design/proposals/interpreter-parity66.md) adopted | Unit1 qualification begins; unit2 remains conditional |
+| Root | Close round66 and publish evidence for the next grouped review | Qualification, screen and bounded logging diagnostic complete; selection rejected |
+| Unit2 source | Auxiliary identity/origin union proposal | STOP: logging fails the non-generator gate; unimplemented |
+| Astra | [Review66](../register-semantics59/review66.md) and [design66](../../design/proposals/interpreter-parity66.md) | Closed measured cycle; next grouped architecture review remains to be commissioned |
 
 The compact unit is closed; no roster, mirror, provider, layout or flag
 expansion rescues it. Round65 is closed. A's mechanism loses its screen; B
-fails native review and has no timing result. Do not reopen either through
-source tweaks. Unit1 follows design66's prospective tradeoff policy; semantic
-and resource hard gates remain. Unit2's generator exception permits only a
-separate representation experiment and does not select B. Rank1 broader native
-callout, anchored ABI and delegation spine remain deferred. Preserve B0 rooting
+fails native review and was not timed in that round. Round66 qualifies frozen
+B, then rejects its screen; its bounded logging diagnostic is complete. Unit2
+stops because logging fails a non-generator gate. No source tweak or additional
+profile reopens this round. Broader native callout, anchored ABI and delegation
+spine remain future options. Preserve B0 rooting
 and claim no additional comp A=B=17 move.
 
 No larger ABI, anchored argument or delegation-spine implementation is active.

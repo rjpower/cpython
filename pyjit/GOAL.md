@@ -16,10 +16,15 @@ combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
 executes the adopted [round66 design](design/proposals/interpreter-parity66.md)
 under [review66](issues/register-semantics59/review66.md). Unit1 qualifies frozen
-B without source changes; semantic, native and transaction closure precedes one
-hot8 screen. Unit2 is conditional on B's disposition. No round66 performance
-result exists, and selected57 remains unchanged. Round65's A screen loss and B
-native rejection remain closed historical outcomes.
+B without runtime source changes and completes the hot8 screen, but is rejected
+for failing the generator and logging gates. Unit2 stops; selected57 remains
+unchanged.
+Round65's A screen loss and B native rejection remain closed historical outcomes.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism.
 Stable-frame deferred await passes lifecycle and native mechanism qualification,
 and cuts coroutine elapsed time 42.9% against selected57, but loses logging
 27.7% and generators 5.2%; the standalone executable is rejected. Future work
@@ -29,12 +34,12 @@ ordinary-C domain passed correctness controls but failed its native net-work
 gate and is closed. Both fixed-role trials
 are qualified and rejected. All round59–62 executables remain rejected. Their
 source branches and sealed evidence are retained without becoming prerequisites.
-The [review ledger](issues/register-semantics59/review65.md) separates source/native
+The [review ledger](issues/register-semantics59/review66.md) separates source/native
 facts, measured costs and unresolved cycle regressions. No evidence-backed
 combined parity budget has yet been established.
 Logical values, uses, edge results and continuations precede storage and
 execution lowering. Adopted design66 reassesses the remaining architecture and
-admission gates; unit1 qualifies frozen B before any screen. Sol workers
+admission gates; unit1 is qualified and rejected after its screen. Sol workers
 implement and cross-review bounded changes, and the coordinator owns integration, qualification and
 measured selection. Repeat until the unchanged hot set reaches upstream parity
 while retaining broad gains. A completed proposal does not complete this stage.

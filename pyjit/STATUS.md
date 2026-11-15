@@ -9,14 +9,20 @@ direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
 follows the adopted [round66 proposal](design/proposals/interpreter-parity66.md)
-and [review](issues/register-semantics59/review66.md). Root adopts unit1:
-qualify frozen B without source changes, close semantic/native/transaction
-obligations, then run one hot8 screen. Its former predictive caps are reported
-as tradeoffs; behavior, ownership, ABI and resource closure remain hard gates.
-Unit2 is conditional on B passing its screen or meeting the proposal's narrow
-generator exception; its source-proposal corrections still need peer review.
-No round66 performance result exists. Round65's A screen loss and B native
-rejection remain closed; selected57 is unchanged. PyValue rollout is complete;
+and [review](issues/register-semantics59/review66.md). Frozen B
+`64348dd5c182af27c058e60f1e3f849f00d7ef81` qualifies without runtime edits:
+both 117/79 builds, fresh 48-method runs per role, and actual natural-return,
+terminal-suspension, armed-error and armed-normal controls pass. Its stable
+32-row hot8 screen rejects selection. Generator mean is 1.014457, logging
+pair ratios are 1.073116 and 1.079828, and geometric mean is 0.936871. Unit2 stops because the
+non-generator gate fails; the union proposal remains unimplemented.
+
+A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
+1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
+instruction-count explanation for the full logging loss; it identifies no
+frontend, cache or other mechanism. Round65's A
+screen loss and B native rejection remain closed; selected57 is unchanged.
+PyValue rollout is complete;
 transport, effects, ownership and physical execution remain targets. Parity is
 not achieved.
 
@@ -36,6 +42,7 @@ there is no measured B performance result. Selected57 remains unchanged.
 
 | Packet | Current result |
 | --- | --- |
+| Round66 frozen continuation | Frozen runtime qualifies (117/79 builds, fresh 48-method runs per role, four actual controls); stable 32-row screen rejects selection. Generator mean 1.014457, logging pair ratios 1.073116/1.079828, geometric mean 0.936871. Unit2 stops; no runtime change selected. |
 | Compact domain64 | Integrated at 9de7005b670. Both refreshed builds pass 117/79 and all eight new plus 21 control methods pass per role. Native stack/text caps pass, but complete nominal segments add instructions (227 versus 173; 280 versus 234). Stopped at the net-work gate; no benchmark or target coverage campaign. |
 | Deferred await63/64 | Final `0bbb42ef46a`: both await9 builds 117/79 and all 16 new methods pass per role. Cold source/ELF reviews and actual private entry, identity-free retirement, terminal suffix move and arena-OOM recovery pass. Coroutines time falls 42.9%, but logging loses 27.7%, generators 5.2% and nqueens 2.5% in both screen pairs. Qualified mechanism; rejected standalone executable. Record 72B plus header 112B and ordinary-path costs are charged. |
 | List/FOR and append roles63 | Both 117/79 builds and 49 focused methods per role pass; native review and actual comp hits pass. Comp improves 4.1%, coroutines 3.6%, spectral_norm 4.5%, but logging loses 8.3%. Rejected. |
@@ -96,9 +103,9 @@ reviewed and integrated separately. Generation and generated-code review pass;
 both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
 a 42.9% coroutine gain but unacceptable logging and generator regressions.
 Round64 and round65 are closed with no selected runtime. Adopted design66
-reconsiders the architecture and admission gates. Unit1 qualifies frozen B;
-residual semantic, native and transaction closure precedes one hot8 screen. No
-all29/full-system campaign follows the rejected screens.
+reconsiders the architecture and admission gates. Round66 unit1 qualifies frozen
+B and its hot8 screen rejects selection. No all29/full-system campaign follows
+the rejected screens.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

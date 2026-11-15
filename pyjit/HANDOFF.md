@@ -4,29 +4,37 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Read [GOAL](GOAL.md), the [active plan](issues/interpreter-performance56/plan.md),
 [STATUS](STATUS.md), [architecture](design/runtime-architecture.md) and
 [process](PROCESS.md). The current grouped design is
-[interpreter-parity61](design/proposals/interpreter-parity61.md), supported by
-[review61](issues/register-semantics59/review61.md). The
+[interpreter-parity62](design/proposals/interpreter-parity62.md), supported by
+[review62](issues/register-semantics59/review62.md). The
 [trial report](issues/register-semantics59/report.md) owns measured decisions;
 this file owns current execution paths.
 
 ## Current execution
 
-All five round59 screens, the round60 engine and the round61 producer-only
-screen are unselected. Golden remains selected57. PyValue integration is
-complete. Do not revive rejected providers, scalar descriptors, continuation
-actions, alignment sweeps or a second compiler without a new reviewed consumer.
+All five round59 screens, the round60 engine and every round61 runtime packet
+are unselected. Golden remains selected57. PyValue integration is complete.
+Do not revive rejected providers, scalar descriptors, continuation actions,
+alignment sweeps or a second compiler without a new reviewed consumer.
 
-G is on `pyjit/parity61-created-integrated`, at `f8ecd806cdb` after generation.
-Its source packet is `b10667203fe`: root and independent actual source GO,
-three host source checks pass. Two new generated learned-only CALL handlers
-use the existing-size feedback payload; ordinary handler bodies are unchanged.
-Both native builds pass 117/79 under tag `parity61-created1`. First release
-new-fixture module runs ten methods and fails three assertions: two expect
-creator nomination after code/default mutation and one expects immediate
-weakref death during a displaced-local callback. Frame worker owns serialized
-read-only native diagnosis; root holds further native jobs. No debug or timing
-result yet. The former constant composition is preserved on
-`pyjit/parity61-common-constant` at `53e9a57cfa2` and is rejected.
+G is on `pyjit/parity61-created-integrated`, at
+`4ac529577e2f16bcc4fae76e30c7bd61d04216cb`. Both builds complete 117/79;
+525 focused methods pass per role after fixture corrections. No production
+repair was needed. The two new learned-only handlers reuse the existing-size
+feedback payload. Screen `E59/parity61-created4-eight-selected57` rejects it:
+DeltaBlue +8.9%, logging +30.2%, despite coroutines −3.6%. Native capture
+`parity61-created4-native` has ELF SHA256
+`e03950221a03b6b875ae05b5d6a6c6b9616f1a93f7605f4a2be135a842b833ec`.
+The short whole-process PMU diagnostic finds near-identical instructions but
+more cycles; ordinary GENERAL initializer scheduling changes are concrete but
+do not establish the cause. Keep `created-generator-diagnostic/native-review.md`
+and `parity61-created4-counter-diagnostic`. No all29/full/upstream follows.
+
+Round62 implements allocation-only creation independently, prepared CALL spans
+and a delegated RESUME→SEND continuation. The grouped design owns order and
+the component proposals own exact source contracts. Ordinary initialization
+should retain its original acquisition order while sharing an owned-code body.
+No ordinary-path callback gate may be removed merely because allocation itself
+cannot execute Python.
 
 TEMP source `8db82c67bd4` added one executing-only scratch variant. Native
 checks found a constructor rejection regression; root's comparison is
@@ -73,18 +81,19 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity61-common-constant-temp`, at `65c99464e0b` | TEMP correction qualified but composition loses; independent creation post-review |
-| Frames | W / `pyjit/parity61-created-generator`, at `b10667203fe` | Frozen source actual peer GO; native gates root-owned |
-| Ascent | A / `pyjit/parity61-ascent`, at `53df1c14deb` | Native qualification/hop diagnostics complete; screen loses generators, preserve source |
-| Coordinator | G / `pyjit/parity61-created-integrated` | Creation build/focused qualification, native capture and quiet screen; select measured winners |
-| Astra | New round62 documents only | Broad review underway with rejected61 native evidence; freeze after creation outcome |
+| Generator | P / `pyjit/parity61-common-constant-temp`, at `65c99464e0b` | Prepared CALL proposal and independent allocation62 actual-diff peer |
+| Frames | W / `pyjit/parity62-created-allocation`, from complete61 `7bf6812d5aac` | Implement callback-free allocation consumer; native gates root-owned |
+| Ascent | A / `pyjit/parity61-ascent`, at `53df1c14deb` | Rejected source preserved; available for delegated-resume consumer |
+| Coordinator | G / `pyjit/parity61-created-integrated` | Generation, focused/native evidence, serialized screens and winner selection |
+| Astra | Round62 design/review only | Broad architecture review using all61 outcomes; outside patch loop |
 
-Creation's [proposal](issues/register-semantics59/created-generator-proposal.md)
-uses existing EXTERNAL roots, takes scratch inputs before allocation, pins the
-bound function/code/arguments, initializes the final heap frame and shares the
-return writer. A separate snapshot still moves each argument twice; do not
-claim an argument-copy saving. Allocation callbacks can enable origin tracking,
-mutate function code or redirect: initial guards alone are insufficient.
+The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)
+uses input EXTERNAL roots and moves each argument twice. The
+[allocation62 proposal](issues/register-semantics59/creation-allocation62.md)
+removes that staging: supported allocator/reftracer hooks cannot execute Python,
+and GC allocation schedules a later collection. Existing owning CALL homes
+therefore retain inputs until one final transfer. Publication/redirect and
+unknown-owner release still require result roots and reached callback state.
 
 Ascent's [proposal](issues/register-semantics59/ascent-proposal.md) distinguishes
 cold admitted geometry from real per-hop guards. Preserve all exception,
@@ -140,7 +149,7 @@ quarantined. GIL-only qualification does not establish free-threaded support.
 No parity claim follows from focused tests or static instruction removal.
 
 The active Loom mirrors are `goal`, `plan`, `status`, `performance-report` and
-`performance-design`; the latter should point to round61. Seven selected-design/
+`performance-design`; the latter points to round62. Seven selected-design/
 benchmark mirrors remain unchanged. Push canonical documentation before pinning
 relative artifact links to its commit, then use guarded writes and read back.
 Origin SSH lacks an agent; the working authorized push is HTTPS with the GH

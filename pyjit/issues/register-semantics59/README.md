@@ -6,11 +6,11 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[next grouped design](../../design/proposals/interpreter-parity61.md) and
-[review ledger](review61.md) now drive implementation: producer/role contracts,
-direct exact creation and delegated ascent. The engine is rejected and scalar
-plans are deferred. Coverage and abort gates are
-explicit; no parity result is implied. The
+[next grouped design](../../design/proposals/interpreter-parity62.md) and
+[review ledger](review62.md) drive implementation: precise allocation effects,
+prepared CALL spans and direct delegated-resume continuations. Every round61
+runtime packet lost its broad screen; none is a selected prerequisite. The
+engine is rejected and scalar plans remain deferred. The
 [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
 
@@ -32,10 +32,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Round61 frozen: producer/role facts, direct creation, delegated ascent |
+| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Round62: allocation-only creation, prepared CALL, delegated resume |
 | Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Producer/TEMP/ascent screens lose; creation frozen source peer GO, native integration underway |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Round59 five screens, round60 engine and producer-only complete; no winner selected |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Every61 screen loses; allocation62 implementation and prepared CALL proposal active |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Round59–61 screens complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 
 ## Reviewed trial order

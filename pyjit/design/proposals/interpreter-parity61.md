@@ -1,6 +1,10 @@
 # Interpreter parity61: specialize execution contracts, compose real transitions
 
-Status: grouped review, 2026-11-14. The selected runtime remains
+Status: closed cycle, 2026-11-14. Producer-only, producer/TEMP, staged creation
+and checked ascent all lost their broad screens. The
+[trial report](../../issues/register-semantics59/report.md) owns final
+qualification and ratios; [round62](interpreter-parity62.md) drives new work.
+The selected runtime remains
 `0dcba75bb3df40c32137db453b001f7e8f101de0`. All five round59 executable
 trials and the round60 computed-goto engine lost their broad screens. The
 cross-word scalar proposal is deferred, not a measured saving. This document
@@ -184,8 +188,13 @@ Protect the bound code, function and every argument snapshot before allocation.
 The existing evaluated call-window owners cannot be treated as callback-current
 locals, and a local source must be acquired before a callback can rebind it.
 Reuse `_PyTransitionRoots` and the current call-transition refresh/redirect
-machinery; do not add a second root list. The allocation can trigger GC, callbacks
-or function/code mutation. Snapshot binding identity once and retain it. Source
+machinery; do not add a second root list. Native qualification corrected the
+original effect premise: successful GC_NewVar/make_gen schedules collection
+rather than running it, and allocator/reference-tracer contracts forbid Python
+reentry. The first implementation still stages inputs conservatively; that is
+a cost to remove in the next precise-allocation consumer, not a required
+callback boundary. Publication and error cleanup can still finalize.
+Snapshot binding identity once and retain it. Source
 ownership commitment and final heap-frame publication are separate decisions:
 selected already moves scratch arguments into the arena child before allocation.
 The direct path may instead move them into an existing external staged-root
@@ -248,7 +257,8 @@ reconstructs the same temporary frame or costs more than the eliminated path.
 
 Minimal checks: plain exact generators and coroutines from thread and generator
 callers; unused/discarded objects; first send, completion, throw/close, recursion
-boundary, GC/finalizer reentry during allocation, function/code mutation,
+boundary, scheduled collection after commit, publication finalizer reentry,
+function/code mutation,
 f_locals changes and redirect, origins/hooks fallback, allocation failure and
 constructed noninitial RETURN_GENERATOR. Broad screens must include coroutine,
 generator, comprehensions and logging. Do not infer an elapsed gain from a
@@ -258,8 +268,8 @@ smaller header-copy count.
 
 The [source proposal](../../issues/register-semantics59/ascent-proposal.md)
 separates dynamic eligibility from cold image/runtime invariants and has root
-proposal GO. The actual source diff has root peer GO; native qualification
-remains pending.
+proposal GO. The actual source diff has root peer GO and focused native
+qualification passed; its screen loses generators 7.9% and it is rejected.
 
 First consumer is the existing `YIELD_DELEGATED` outcome when its parent
 continuation is another ordinary YIELD_DELEGATED consuming exactly the saved

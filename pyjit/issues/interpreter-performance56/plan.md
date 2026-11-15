@@ -12,12 +12,12 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity61.md) and
-[grouped ledger](../register-semantics59/review61.md) select producer/role
-contracts, direct suspendable creation and checked delegated ascent. The
-resident engine is rejected; scalar plans are deferred. Selected57 remains
-the control. Earlier designs and rejected packets are
-references and evidence, not selected implementation or independent mandates.
+The reviewed [next design](../../design/proposals/interpreter-parity62.md) and
+[grouped ledger](../register-semantics59/review62.md) select precise allocation
+effects, prepared CALL spans and direct delegated-resume continuations.
+Round61 producer/TEMP, staged creation and checked ascent all lost their
+screens; no packet is selected. Selected57 remains the control. Earlier designs
+and rejected packets retain evidence, without becoming prerequisites.
 
 ## Outcome
 
@@ -98,34 +98,32 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity61.md)
+The workstream's [next design](../../design/proposals/interpreter-parity62.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. All five round59 executable
+source-reviewed, qualified and selected changes. All round59–61 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Review creation's generator/result and learned-cache contracts | TEMP correction passes both roles; composition loses screen |
-| Sol frame worker | Direct exact creation into final heap frame, existing transition roots and shared final initializer | Frozen actual source peer GO; both builds pass, three new release assertions under diagnosis |
-| Sol ascent worker | Compose eligible delegated yields without repeated parent result transport | Focused native and actual-hop gates pass; generators lose 7.9%, unselected |
+| Sol generator worker | Prepared CALL prefix/exit and writer-invalidation proposal; allocation62 peer | Common admission proof, actual generated ownership/effects and complete mutable-writer closure |
+| Sol frame worker | Remove unnecessary allocation staging; restore ordinary initializer acquisition order | One input transfer, callback-free reached interval, real result-publication roots |
+| Sol continuation worker | Delegated RESUME→SEND consumer after source proposal/peer | Original suspended semantic state, observer fallback and existing SEND protocol |
 | Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
-| Astra | Grouped round62 architecture review with actual61 native evidence | Freeze after creation result; outside the patch loop |
+| Astra | Grouped round62 architecture review with all61 native outcomes | Broad review outside the patch loop |
 
-The same-GCC resident engine passes both builds and 465 methods/role but loses
-every hot-eight case, by 18.6–60.0%; preserve it without selection. Its actual
-state spills and single merged dispatch defeat the source residency premise.
-The scalar [proposal](../register-semantics59/scalar-proposal.md) and
-[peer](../register-semantics59/scalar-peer.md) reject its allocated descriptor
-framework and defer the fixed two-word rival. Implement the independently
-reviewed [common-constant producer](../register-semantics59/common-constant-proposal.md)
-first, leaving TEMP destination refinement as a separate packet. Producer-only
-passes focused qualification but loses logging/DeltaBlue, so is not selected;
-the complete TEMP contract also loses its broad screen after its admission
-correction passes both roles. Astra's round61 review is now
-frozen: direct exact creation and checked delegated ascent proceed independently
-from selected57. Neither requires a losing producer or scalar packet.
-Other provider, continuation, borrowed-argument, cache and encoding rivals have
-explicit reopening gates in the design; they are not scheduled investigations.
+Allocation-only creation has independent root/peer direction approval. The
+prepared CALL component begins with the final local argument plus exact/value
+descriptor CALL, then method-selection and GENERAL consumers. These generated
+spans reuse actual CALL bodies and owning windows; they do not invent borrowed
+callee cells. Direct delegated resume reuses the existing observation gate to
+remove the intervening backedge entry. Each consumer starts from selected57 or
+a separately qualified winner, without inheriting a losing packet.
+
+The same-GCC resident engine and allocated scalar plans remain closed/deferred.
+A later fixed arithmetic span needs its own economical source receipt and
+measured coverage. A delegation outcome may reopen ascent only after pricing
+its whole downward/upward activation cycle and removing repeated immutable
+geometry reconstruction. No uniform action tag is a prerequisite.
 
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol

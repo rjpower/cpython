@@ -8,16 +8,16 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes Astra's [round61 design](design/proposals/interpreter-parity61.md) and
-[review ledger](issues/register-semantics59/review61.md). Selected57 remains
+executes Astra's [round62 design](design/proposals/interpreter-parity62.md) and
+[review ledger](issues/register-semantics59/review62.md). Selected57 remains
 unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
 | Packet | Current result |
 | --- | --- |
 | Producer and TEMP destination | Both corrected builds complete 117/79; 161 focused methods pass per role. Actual TEMP handler is 69 bytes, but logging loses 14.4% and spectral_norm 5.8% in both screen pairs. Rejected; preserve source/evidence. |
-| Direct final-heap-frame creation | Frozen b10667203fe has root and independent actual source GO; three host source checks pass. Root generation and both117/79 builds pass at f8ecd806cdb. First release fixture module fails three assertions; worker diagnosis is active, no timing. |
-| Checked delegated ascent | Root integrates source and generated handler at 410bea36190. Both builds complete 117/79; focused397-method coverage passes per role, with a targeted release fixture retry. Actual native probes confirm eight-frame composition, 16-frame bound, profiling fallback and custom-iterator split. Screen improves coroutines 4.8% but loses generators 7.9% in both pairs; not selected. |
+| Direct final-heap-frame creation | Both builds complete 117/79; 525 focused methods pass per role after fixture corrections, with no production repair. Screen improves coroutines 3.6% but loses DeltaBlue 8.9% and logging 30.2%; rejected. |
+| Checked delegated ascent | Root integrates source and generated handler at 410bea36190. Both builds complete 117/79; focused 397-method coverage passes per role, with a targeted release fixture retry. Actual native probes confirm eight-frame composition, 16-frame bound, profiling fallback and custom-iterator split. Screen improves coroutines 4.8% but loses generators 7.9% in both pairs; not selected. |
 
 The producer-only increment also lost its screen. Earlier round59's five
 executable trials and round60's computed-goto engine are rejected; scalar
@@ -26,6 +26,14 @@ owns every ratio, exact identity, failure and selection decision. The
 [engine native review](issues/register-semantics59/engine-post-review.md)
 records its stack-backed state and merged dispatch; no compiler or alignment
 search follows. Losing packets are not prerequisites for independent lanes.
+
+Round62 removes unnecessary input staging under the actual callback-free
+allocation contract, composes register preparation with CALL execution, and
+bypasses the delegated suspension backedge under existing observation guards.
+Source peers must close ownership, recovery and mutable-writer invalidation
+before coding. The staged creation diagnostic finds logging instructions
++0.25% but cycles +24.15% in a whole-process PMU interval; the cause remains
+unresolved. No source-level copy saving explains that unrelated loss.
 
 Astra reviews the architecture after coherent measured cycles. Sol workers
 implement and peer-review bounded packets; root owns generation, native jobs,

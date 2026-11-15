@@ -14,22 +14,14 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes the reviewed [next design](design/proposals/interpreter-parity61.md):
-producer/role contracts, direct suspendable creation and checked delegated
-ascent. The preceding same-GCC resident engine is rejected by all eight screens. The
-[scalar proposal](issues/register-semantics59/scalar-proposal.md) is deferred
-after its [peer review](issues/register-semantics59/scalar-peer.md); do not build
-an allocated descriptor framework for a two-word trial. The
-[common-constant producer](issues/register-semantics59/common-constant-proposal.md)
-and corrected TEMP refinement both lost their broad screens. Creation and
-ascent proceed independently from
-selected57. Astra's grouped review is
-complete; source peers close each call and delegation packet before coding. The
-[native review](issues/register-semantics59/engine-post-review.md) records the
-compiled engine's stack-backed state and shared dispatch. The
-[review ledger](issues/register-semantics59/review61.md)
-incorporates the rejected engine, all five rejected round59 executable screens and their
-[semantic/physical design](design/proposals/register-semantics59.md).
+executes the reviewed [next design](design/proposals/interpreter-parity62.md):
+precise allocation effects, prepared call execution spans and direct delegated
+resume continuations. The preceding round61 producer/TEMP, staged creation and
+checked ascent all lost their broad screens. The same-GCC resident engine and
+round59 packets also remain rejected. These source branches and sealed evidence
+are retained, without making them prerequisites for new consumers. The
+[review ledger](issues/register-semantics59/review62.md) separates source/native
+facts, measured costs and unresolved cycle regressions.
 Logical values, uses, edge results and continuations precede storage and
 execution lowering. Astra reviews the remaining architecture after coherent
 cycles; Sol workers implement and cross-review bounded changes, and the

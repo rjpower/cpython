@@ -451,7 +451,7 @@ system rerun is claimed. Evidence uses `parity61-ascent{1,2}` build/focus tags,
 | spectral_norm | .955606 | .955289–.955922 |
 | nqueens | .990123 | .986422–.993837 |
 
-## Direct final-frame creation: qualification in progress
+## Direct final-frame creation: rejected
 
 Frozen source `b10667203fee0e2ef31ad366e201b9eb678564b1` has root and independent
 actual-diff approval. Root integrates the source and five generated products at
@@ -459,13 +459,14 @@ actual-diff approval. Root integrates the source and five generated products at
 learned-only CALL handlers reuse the existing-size feedback payload and shared
 frame initializer/return writer. Ordinary generated bodies are unchanged.
 Both native builds complete 117 modules/79 shared extensions; three focused
-host source methods pass. No performance screen has run.
+host source methods pass. Final fixture-only corrections bring the integrated
+head to `4ac529577e2f16bcc4fae76e30c7bd61d04216cb`.
 
 The first release runtime module runs ten methods and fails three assertions.
 Two expect creator nomination after a prewarm function mutation; a read-only
 probe shows these functions no longer have a usable specialization version.
-The allocation callback must mutate a pristine, already nominated function
-instead. The third expects immediate weakref death after a callback writes
+The corrected nomination controls use pristine MAKE_FUNCTION targets. The
+third expects immediate weakref death after a callback writes
 through f_locals. That setter deliberately retains the old binding in
 f_overwritten_fast_locals to protect borrowed local reads. The probe confirms
 that edge and eventual release after closing the parent and releasing its
@@ -474,8 +475,61 @@ is a separate ownership proof. A clean gc_verify checks reachability, not
 exact owning counts.
 
 Evidence is `E59/parity61-created1-release-focus.log` and
-`E59/created-generator-diagnostic/probe.log`. Debug qualification and timing
-await the focused correction; no production repair is indicated by these
-three assertions. The initial native capture stopped at a compiler-renamed
+`E59/created-generator-diagnostic/probe.log`. No production repair was needed
+for those assertions. The initial native capture stopped at a compiler-renamed
 helper; `parity61-created1-native2` retains the successful capture using the
 actual `.constprop.0` symbol. Neither failure is hidden or counted as a pass.
+
+The allocation-callback fixture exposed a design error: the selected GIL
+allocator/reftracer contract explicitly forbids running Python or changing
+exceptions. GC allocation links the object and schedules collection through
+the eval breaker; it does not collect. Thus no GC callback can change function
+code, origin tracking or caller locals during this admitted allocation-only
+interval. The fixture now collects and mutates **after** complete creation;
+`gc_verify` runs after collection returns. Publication/redirect cleanup and
+unknown-owner release remain real callback boundaries. The
+[allocation62 proposal](creation-allocation62.md) removes staging based on this
+reached-path proof, rather than weakening ownership at actual callbacks.
+
+All ten new runtime methods now pass in release and debug. Eleven existing
+call/completion/suspension/observer/GC modules pass 515 methods per role, giving
+525 focused methods per role in total. Build/focus records use
+`parity61-created4` and `parity61-created4-protocol`. No full-system run is
+claimed. Final native capture is `E59/parity61-created4-native`, ELF SHA256
+`e03950221a03b6b875ae05b5d6a6c6b9616f1a93f7605f4a2be135a842b833ec`.
+
+The stable two-pair screen rejects this packet. Logging does not execute the
+new constructor, so its regression cannot be assigned to argument staging.
+There is no confirmation, all29 or direct upstream campaign for this loser.
+Evidence: `E59/parity61-created4-eight-selected57`.
+
+| Workload | Creation / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | .960055 | .938534–.982070 |
+| deltablue | 1.088650 | 1.078661–1.098731 |
+| coroutines | .964122 | .955505–.972817 |
+| generators | .999804 | .997300–1.002314 |
+| logging_silent | 1.301688 | 1.300362–1.303015 |
+| raytrace | .994576 | .989606–.999572 |
+| spectral_norm | .961952 | .961006–.962899 |
+| nqueens | 1.018826 | 1.013089–1.024596 |
+
+A short matched diagnostic uses two balanced pairs of whole-process user PMU
+counts: imports, warmup and seven unchanged timed kernel calls. Source, workload
+and ELF identities remain stable. This is not the kernel-only upstream interval.
+
+| Workload | Instructions / selected57 | Cycles / selected57 |
+| --- | ---: | ---: |
+| deltablue | 1.001867 | 1.086420 |
+| logging_silent | 1.002486 | 1.241474 |
+
+Near-identical instruction totals do not explain the cycle loss. Actual
+GENERAL handler comparison finds two additional static instructions in each
+inline initializer, with changed SIMD/scalar scheduling; the binder adds one
+instruction at each of two initializer sites. No extra call, guard, stack slot
+or larger stack frame appears. `initialize_locals` is unchanged. RETURN/SEND
+changes are cold-tail sharing; ordinary exact-call and delegated-yield paths
+retain their previous work. These observations do not establish a cause for
+the broad regression or justify a padding/compiler search. Preserve raw
+disassembly in `E59/created-generator-diagnostic/native-review.md` and PMU
+commands/results in `E59/parity61-created4-counter-diagnostic`.

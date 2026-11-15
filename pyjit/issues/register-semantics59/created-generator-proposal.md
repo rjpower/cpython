@@ -6,7 +6,9 @@ source is `b10667203fee0e2ef31ad366e201b9eb678564b1` in isolated W branch
 Three focused host source checks pass. Root has generated and reviewed the two
 new handlers at integrated `f8ecd806cdb`; the first release run passed seven
 runtime methods and exposed three fixture assumptions, diagnosed below.
-Corrected runtime qualification remains pending. Preserve the selected NCSR
+The second run passed nine methods; the remaining test incorrectly expected
+collection during allocation. Its deterministic later-collection replacement
+awaits qualification. Preserve the selected NCSR
 backend and generic creation path. This is the bounded implementation of
 [parity61 packet 2](../../design/proposals/interpreter-parity61.md), not a new
 call framework. No native qualification or performance result is claimed yet.
@@ -38,10 +40,9 @@ or altered constructed-entry shapes fall back.
 
 Decline PEP523, active creation observation/tracing/profiling/LLTrace/DTrace,
 pending instrumentation refresh and nonzero coroutine-origin tracking before
-ownership commitment. Retain the recursion-space check and the temporary
-recursion decrement/increment around allocation: its GC callbacks otherwise
-get a different remaining-depth budget. Free-threaded builds retain ordinary
-creation. Misses before commitment preserve original inputs and execute the
+ownership commitment. Retain the recursion-space check and the balanced
+recursion decrement/increment of the ordinary route. Free-threaded builds retain
+ordinary creation. Misses before commitment preserve original inputs and execute the
 existing call route. There is no post-allocation restart.
 
 ## Exact source interfaces
@@ -85,9 +86,12 @@ normal/error home map. An opaque allocating provider remains on the existing
 initialized NULL-control error path until actual receipts justify more.
 
 Keep the common `_Py_MakeCoro` constructor body for allocation and metadata setup.
-Its direct-frame entry supplies the actual caller for origin capture: allocation
-can enable origin tracking after initial admission. The ordinary wrapper retains
-its existing incomplete-child origin derivation. Add a
+Its direct-frame entry supplies the actual caller for origin capture; the
+ordinary wrapper retains its existing incomplete-child derivation. With origin
+tracking initially zero, the admitted allocation cannot enable it: allocator
+hooks and reference tracers cannot run Python, and GC allocation only schedules
+collection. The explicit caller parameter remains conservative in this packet.
+Add a
 small final-frame initializer that reuses the existing `_PyFrame_Initialize`
 body and constant-slot filling. If necessary, factor an owned-code inner
 initializer so the snapshot code owner transfers into `f_executable`; ordinary
@@ -97,18 +101,27 @@ header layout or add a frame/exec field.
 ## Commitment, snapshots and roots
 
 The selected exact path transfers evaluated inputs into an arena child before
-`_Py_MakeCoro` can run GC. The direct path should commit at the same boundary,
+`_Py_MakeCoro`. The direct path commits at the same boundary,
 not DUP every scratch argument while leaving a second owner in its old home.
+
+The implemented staging below is conservative, not required by reentrant
+allocation. `pycore_object.h:111` forbids Python execution or exception changes
+in allocator hooks and reference tracers. `gc.c:_PyObject_GC_Link` sets the GC
+eval-breaker bit; `gc_alloc` and `_PyObject_GC_NewVar` do not collect, and tracking
+only links the object. The admitted zero-origin constructor's successful
+allocation is callback-free. Later refresh, redirect and displaced-owner
+cleanup still require their actual rooted publication contracts. A separately
+reviewed followup can use this effect proof to remove the staging cost.
 
 1. Complete guards and reserve a small native PyValue buffer with an existing
    checked heap-buffer fallback for larger arities. Buffer reservation precedes
-   commitment; if it can reenter, refresh and rerun the guards before taking
-   any input. Allocation failure here leaves ordinary inputs for error cleanup.
+   commitment. Its allocator obeys the same callback-free release contract.
+   Allocation failure here leaves ordinary inputs for error cleanup.
 2. Independently acquire the bound code once. Move the callable and each actual
    supplied scratch argument into initialized staging entries, clearing its
    source home without callbacks. CALL's argument window is materialized
    scratch storage today. A future named-local argument mode would need one
-   DUP before reentry; it is not silently included here.
+   DUP for its owner transfer; it is not silently included here.
 3. Link an existing `_PyTransitionRoots` EXTERNAL node with
    `_PyTransitionPrefix`, referring to the real caller and the initialized
    native entries. Mark the actual CALL window taken and its continuation
@@ -116,8 +129,8 @@ not DUP every scratch argument while leaving a second owner in its old home.
    The node owns function, code and all arguments; code alone is insufficient.
 4. Allocate using the pinned function/code. No original argument/home pointer,
    mutable `func_code`, or unowned callable projection is consulted afterward.
-   The function object may have changed code/defaults during GC: this call's
-   binding is already committed. Do not select a second callee after allocation.
+   This call's binding is committed before later collection or cleanup can
+   change the function's code/defaults. Do not select a second callee afterward.
 
 Arrange staging consumption so failure retires argument owners in reverse
 parameter order, then function and code, matching the existing child clear
@@ -208,13 +221,14 @@ No general transaction redesign, new root list, public encoding or backend.
 Minimum checks: zero, one and large exact arities; heap and excluded thread
 callers; coroutine and generator lifecycle/first send/completion/throw/close;
 scratch/local/discard call results and mortal aliases; allocation failure
-before/after commitment; allocation-triggered GC that mutates caller locals,
-drops external function/argument owners and mutates function code/defaults;
+before/after commitment; explicit collection after completed creation that
+mutates caller locals, drops external function/argument owners and mutates
+function code/defaults while the created frame retains its original binding;
 name/qualname mutation, last-owner cleanup and traceback attribution; recursion
 boundary; all public image routes and wrong/noninitial/altered RETURN_GENERATOR
-or missing created proof; hooks/origin/monitoring fallbacks and observation
-enabled during allocation. Use actual GC/failure hooks rather than count-only
-mocks for the lifetime controls.
+or missing created proof; hooks/origin/monitoring fallbacks and origin enabled
+after creation without retroactively changing `cr_origin`. Use actual GC/failure
+hooks rather than count-only mocks for the lifetime controls.
 
 Root's native falsifier is the whole call→created-object path: no arena child,
 RETURN_GENERATOR entry, header copy, arena clear/pop or transient child result
@@ -228,13 +242,20 @@ independently source-reviewed. Three focused source methods pass in both record
 modes. Initial release failures were fixture assumptions: prewarm code/default
 mutation permanently disables function specialization, and proxy overwrites
 retain old fast locals to protect borrowed loads. The allocation control now
-starts with an untouched MAKE_FUNCTION target, while retaining code mutation
-during allocation. The defaults/reset negative route remains separate from a
-fresh positive observer control. The displaced-local fixture observes the
+starts with an untouched MAKE_FUNCTION target, creates the child, then explicitly
+collects while its callback changes code/locals/origin. It checks bound code and
+arguments, unchanged absent origin, reachable GC and eventual release. It makes
+no claim of a callback inside the constructor. The defaults/reset negative route
+remains separate from a fresh positive observer control. The displaced-local fixture observes the
 published child, closes it, mutates another binding and checks reachable GC
 during reentry; it requires weakref release after the parent and captured frame
 are dropped. That runtime witness does not count owners. The consuming writer's
 source-slot NULL handoff establishes ownership transfer separately. The retained
 diagnostic is `register-semantics59/created-generator-diagnostic` under the
-evidence root. Corrected qualification, native shape and performance remain
-pending; selected57 is unchanged.
+evidence root. Final integrated `4ac529577e2` passes both 117/79 builds and
+525 focused runtime methods per role. Its broad screen loses logging 30.2%
+and DeltaBlue 8.9%; it is rejected. The [trial report](report.md) owns the
+native findings, exact identities and whole-process PMU diagnostic. The
+[allocation62 proposal](creation-allocation62.md) removes the unnecessary
+input staging under the corrected allocator effect contract. Selected57 is
+unchanged.

@@ -8,17 +8,14 @@ candidate is selected. All five first-cycle executable screens lose; the
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [closed round65 design](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
-[current grouped design](../../design/proposals/interpreter-parity67.md) and
-[review67](review67.md) have independent adoption/interface GO. Two Sol-high
-workers implement separate units from selected57: complete native CALL
-through rooted retirement/poll/append, and one caller-anchored exact-method self.
-A qualifies but loses its balanced screen: hot8 1.026137, logging 1.210653,
-DeltaBlue 1.022085 and spectral_norm 1.053213. It is rejected. Root integrates B
-independently and qualifies with actual loan/promotion controls. Its one frozen
-balanced hot8 screen loses all eight aggregate means (hot8 1.114220, DeltaBlue
-1.141350, logging 1.430373), so B is rejected too. Both round67 source branches
-and their evidence remain preserved; the next grouped review chooses new work.
-Selected57 is unchanged.
+[current grouped design](../../design/proposals/interpreter-parity68.md) and
+[review68](review68.md) recommend one retained-generator-delegation unit.
+Independent architecture adoption passes. Sol prepares its exact source
+contract; a separate peer must approve layout, lifecycle, recursion and reader
+closure before runtime edits. No implementation or new performance result is
+claimed. Both round67 candidates qualify but lose their screens: A hot8
+1.026137/logging 1.210653; B hot8 1.114220/logging 1.430373. Both remain rejected;
+selected57 is unchanged.
 
 Round66 is closed. Its qualified frozen continuation loses logging/generator
 protection; its finite logging diagnostic reports fewer instructions and more
@@ -45,10 +42,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Close round67 and commission the next grouped review | G, `pyjit/parity67-anchored-self-integrated`; qualified B loses its screen, selected57 unchanged |
-| Sol-high A | Complete native callout/result consumer | Qualified and rejected; preserve `pyjit/parity67-callout-integrated` at `ba4ea9dd9a9` |
-| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; source repairs have independent GO |
-| Astra | [Review67](review67.md) complete | Independent adoption GO; source implementation delegated |
+| Root | Contract adoption, integration and measured selection | Selected57 immutable; G still holds rejected B67 until integration |
+| Sol-high source | Exact retained-delegation source contract | W, `pyjit/parity68-retained-delegation`, selected57 base; edits await GO |
+| Independent Sol peer | Source contract and actual-diff review | Architecture GO; exact implementation contract pending |
+| Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

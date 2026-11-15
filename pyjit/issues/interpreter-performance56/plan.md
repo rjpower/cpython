@@ -10,19 +10,21 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
 The active workstream is [IR semantics59](../register-semantics59/README.md).
-The adopted [round67 design](../../design/proposals/interpreter-parity67.md) and
-[review67](../register-semantics59/review67.md) select two independent source
-units from selected57 after peer adoption of their shared owner/effect contract.
-A generates one complete native provider/retirement/poll/result-consumer boundary.
-B removes one method-self acquire/retire through a caller anchor, with promotion
-and all clear/traverse/take/copy/writer consumers ported. Both implementations
-have source review. A qualifies but loses its balanced screen and is rejected;
-logging slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B is integrated
-independently and qualifies with actual loan/promotion controls, but its frozen
-screen loses all eight aggregate means: hot8 1.114220, DeltaBlue 1.141350 and
-logging 1.430373. Both round67 units are rejected. The next grouped architecture
-review must account for complete ordinary-path costs before choosing new source
-units. Root combines only independently qualified winners.
+The [round68 proposal](../../design/proposals/interpreter-parity68.md) and
+[review68](../register-semantics59/review68.md) recommend one retained-generator-
+delegation unit from selected57. Independent architecture adoption passes;
+Sol prepares the exact source contract and a separate peer must approve it
+before runtime edits. Retain real owning frames and ancestor prefixes, enter
+the current leaf directly, and update only changed delegation suffixes.
+Price the common membership pointer, ordinary generator costs, materialization,
+recursion and all observation/teardown consumers. No ordinary THREAD call or
+return checks are added. This targets generators, without claiming a combined
+parity budget or a second source lane.
+
+Both round67 units qualified their mechanisms but lost their screens. A loses
+logging 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B loses all eight aggregate
+means: hot8 1.114220, DeltaBlue 1.141350 and logging 1.430373. Both are rejected.
+Root combines only independently qualified broad winners; selected57 is unchanged.
 
 Round66's earlier qualified frozen
 continuation has hot8 ratio .936871 but fails logging/generator protections.
@@ -112,27 +114,24 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [round67 design](../../design/proposals/interpreter-parity67.md),
-[review](../register-semantics59/review67.md), and
+The [round68 design](../../design/proposals/interpreter-parity68.md),
+[review](../register-semantics59/review68.md), and
 [trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. All round59–62 executable
-screens are closed and losing; no current runtime change is selected.
+source-reviewed, qualified and selected changes. Round59–67 attempts remain
+closed and unselected; preserved evidence is not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Integrate A first, B independently; generate/build/qualify/measure | Both start selected57; source and generated/native evidence precede one hot8 screen |
-| Sol-high A | Complete native callout/result-consumer source | P branch `pyjit/parity67-native-callout`; shared parsed lowering and common transfer admission |
-| Sol-high B | One caller-anchored exact-method self source | W branch `pyjit/parity67-anchored-self`; complete typed auxiliary and promotion/owner ports |
-| Astra | [Review67](../register-semantics59/review67.md) complete | Independent adoption GO; no inner-loop review or runtime work |
+| Root | Adopt exact source contract, integrate, generate/build/qualify/measure | Selected57 base; complete source/native gates before one hot8 screen |
+| Sol-high source | Retained real generator-delegation prefix | W branch `pyjit/parity68-retained-delegation`; exact contract before edits |
+| Independent Sol peer | Review contract, actual changes and qualification | Close recursion, effective readers, any-member teardown and remote lifetime |
+| Astra | Grouped review68 delivered | Architecture overview complete; no inner-loop or runtime work |
 
-The compact domain and all round59–66 standalone runtime attempts remain closed
-and unselected. No frame-union/continuation rescue is active. The independent67
-lanes preserve B0 rooting and claim no comp A=B=17 result move. Their natural
-mechanisms must be reached; structural counts are not saved-owner frequencies.
-No new profile/counter or compiler/flags/layout search is authorized. Exact
-screen, finite confirmation, all29 and direct-upstream rules are in design67.
+No second lane, new profile/counter or compiler/flags/layout search is active.
+Design68 carries design67's exact screen, finite confirmation, all29 and
+upstream rules. A losing screen stops the unit. The remaining hot-set gaps
+stay active even if this generator-specific unit wins.
 
-No additional provider/parameter roster or delegation-spine lane is active.
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol
 or final composition gates. Retain stable exact source/native identities and

@@ -12,9 +12,11 @@ in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
 The selected runtime remains selected57. Round67's two independently qualified
-source candidates both lost their screens and were rejected. Astra's grouped
-round68 architecture review is active; it has not delivered a proposal or
-selected another source unit. The [trial report](issues/register-semantics59/report.md)
+source candidates both lost their screens and were rejected. The grouped
+[round68 proposal](design/proposals/interpreter-parity68.md) advances retained
+generator delegation to an exact source contract. Architecture adoption passes;
+independent source-contract approval is required before implementation.
+The [trial report](issues/register-semantics59/report.md)
 owns exact round67 results and retained evidence.
 
 ## Architecture and evidence

@@ -14,19 +14,16 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes the adopted [round67 design](design/proposals/interpreter-parity67.md)
-under [review67](issues/register-semantics59/review67.md). Independent source peer
-and shared-interface readback pass. Sol-high workers implement two lanes from
-selected57: complete native callout through rooted retirement/poll and a real
-result consumer; caller-anchored read-only exact-method self with complete
-promotion and owner-consumer closure. A qualifies but fails its balanced screen
-(logging +21.1%, DeltaBlue +2.2%, spectral_norm +5.3%) and is rejected. B is
-qualified independently, including actual unpromoted-loan and promotion controls,
-but loses every hot8 aggregate: DeltaBlue +14.1%, logging +43.0%, hot8 +11.4%.
-Both round67 runtimes are rejected. The next grouped architecture review must
-price the complete work added to ordinary execution before choosing new source
-units. Root combines only independently qualified broad winners; selected57 is
-unchanged.
+advances the [round68 proposal](design/proposals/interpreter-parity68.md) under
+[review68](issues/register-semantics59/review68.md). Independent architecture
+adoption passes for retained real generator-delegation prefixes. Sol prepares
+the exact layout, lifecycle, recursion and reader contract; an independent peer
+must approve it before runtime edits. Keep owning frames and existing execution
+semantics, resume the retained leaf directly, and update only changed suffixes.
+Charge storage and ordinary-generator costs without adding checks to ordinary
+function calls. This unit targets generators; no comprehension, DeltaBlue or
+coroutine parity budget is claimed. Root selects only independently qualified
+broad winners. Both round67 runtimes are rejected; selected57 is unchanged.
 
 Round66 is closed: frozen B qualified but failed logging/generator protection;
 its auxiliary union was not implemented. The logging diagnostic showed
@@ -34,9 +31,8 @@ instruction ratio .992588 and cycle ratio 1.085426, without establishing a mecha
 Rejected branches and evidence remain inputs, not prerequisites. No demonstrated
 combined parity budget exists; selected57 remains the runtime baseline.
 Logical values, uses, edge results and continuations precede storage and
-execution lowering. Adopted design67 extends the shared owner/effect contract
-through native consumption and one inter-frame parameter loan. Sol workers
-implement and cross-review bounded changes, and the coordinator owns integration, qualification and
+execution lowering. Sol workers implement and cross-review bounded changes
+after source-contract approval, and the coordinator owns integration, qualification and
 measured selection. Repeat until the unchanged hot set reaches upstream parity
 while retaining broad gains. A completed proposal does not complete this stage.
 Selected57 remains the

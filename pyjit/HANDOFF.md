@@ -4,37 +4,41 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-Current design is [parity67](design/proposals/interpreter-parity67.md),
-adopted under [review67](issues/register-semantics59/review67.md). The
-[trial report](issues/register-semantics59/report.md) owns all measured
-outcomes, failures and selection decisions; this file owns execution logistics.
+Current proposal is [parity68](design/proposals/interpreter-parity68.md),
+under [review68](issues/register-semantics59/review68.md). The
+[trial report](issues/register-semantics59/report.md) owns measured outcomes;
+this file owns execution logistics.
 
 ## Current work
 
-Round67 is closed under adopted
-[design67](design/proposals/interpreter-parity67.md) and
-[review67](issues/register-semantics59/review67.md). Independent final adoption
-and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
-Both source lanes start from selected57. A qualifies but loses its screen and
-is preserved on its branch. G contains independent B; source and product
-repairs pass peer review. The seven-method release-only diagnostic passes.
-Sentinel publication repair has independent source GO and is integrated;
-anchor3 passed 117/79 and 738 focused methods per role. Anchor4 has independent
-hard-qualification GO, passing 117/79 and eight focused methods per role. The
-natural/promotion receipts and both fallback controls pass; the independent
-native peer confirms anchor4 capture identity. Its frozen two-pair hot8 screen
-completes with 32 successful rows and stable identities; root rejects B with no
-follow-ups. Independent screen readback confirms rejection. Astra will
-receive the next holistic review; no next source unit is selected. Root owns generation, build/native
-jobs, integration and selection. Workers run only bounded host source/generator
-checks and write discoverable runtime tests for root.
+Round67 is closed: A and B qualify their mechanisms and lose their screens.
+Selected57 remains unchanged. The grouped round68 proposal is delivered and
+independent architecture adoption passes. One retained-generator-delegation
+source contract is under independent review; no runtime edits or implementation
+GO yet. Preserve actual owning frames and retained ancestors, enter the current
+leaf directly, and change only the suffix. No second unit is active.
 
-| Owner | Active checkout / branch |
+Source-contract obligations include effective state/PC/home readers, all-member
+materialization before teardown callbacks, numeric recursion accounting per
+ingress, and remote committed-snapshot/lifetime safety. Nonblocking sampling
+must remain nonblocking: bounded retry or explicit refusal without dereferencing
+a nonowned record. Blocking snapshots require transition validation even after
+all threads stop. The source peer must approve actual remote frames.c and
+asyncio.c consumers, not only a schema description.
+
+Root owns generation, builds, target/native jobs and selection. Workers run
+bounded host checks and write discoverable runtime tests for root.
+
+| Owner / retained state | Checkout / branch |
 | --- | --- |
-| A source | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; source/products and fixture repairs have independent GO |
-| B source | W, `pyjit/parity67-anchored-self`; nomination repair `f5c8463ea1b` has independent source GO and is integrated by root |
-| Root | G, `pyjit/parity67-anchored-self-integrated`, `65fa10014885d139a47099ed384aefe59d26b943`; anchor4 qualification/native peer GO, screen rejects B (32 stable successful rows); no follow-up campaign |
-| Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
+| Sol-high source | W, `pyjit/parity68-retained-delegation`, selected57 `0dcba75bb3d`; contract before edits |
+| Independent Sol peer | Evidence `E59/retained-delegation68-source-host`; architecture GO in `grouped68-adoption-peer.md`, exact contract pending |
+| Root runtime | G, `pyjit/parity67-anchored-self-integrated`, `65fa10014885d139a47099ed384aefe59d26b943`; rejected B67 frozen, no target job running |
+| Retained A67 | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; rejected integration `ba4ea9dd9a9` preserved |
+| Retained B67 source | W's old branch `pyjit/parity67-anchored-self`, `f5c8463ea1b`; do not execute old captures against switched W |
+| Astra | Grouped review68 source `183447221537190a4ac1003026f554dbaf428a3d`, integrated in C `29a016e656d`; no runtime work |
+
+## Retained round67 qualification
 
 The old G continuation branch remains preserved at `64348dd5c18`.
 `parity67-callout1` regeneration passed, but its first release build failed:
@@ -92,17 +96,17 @@ no cause. Capture `parity67-anchor4-native` pins ELF
 stable-identity two-pair hot8 screen completes 32 rows without errors and
 rejects B: all eight aggregate means are slower, with no improvement predicate.
 Root closes B without confirmation, all29, PMU, full suite or repair; the
-independent screen peer confirms rejection. Astra will receive the next
-holistic review, and no next source unit is selected. No performance cause or
-parity claim is made. The older exact-CALL payload reader remains unclaimed as
+independent screen peer confirms rejection. The delivered round68 proposal now
+advances only to source-contract review. No performance cause or parity claim
+is made. The older exact-CALL payload reader remains unclaimed as
 fixed. Selected57 and A's rejection remain unchanged.
-P/W prior65 source branches remain preserved; their active source is now the
-independent67 lanes. Do not execute an old captured ELF against their changed
-Lib trees. Selected57 I and both builds remain immutable. The first source
+P/W prior source branches remain preserved; W now starts round68 from selected57.
+Do not execute an old captured ELF against their changed Lib trees. Selected57
+I and both builds remain immutable. The first source
 checkpoint goes through peer, root regeneration/build, focused runtime checks,
-complete native mechanism/ABI review and one balanced hot8 screen. Qualify A
-first, B independently second; only promising winners advance to confirmation,
-all29, upstream and full supported diagnostics under design67's exact rules.
+complete native mechanism/ABI review and one balanced hot8 screen. Only promising
+winners advance to confirmation, all29, upstream and full supported diagnostics
+under the exact rules carried into design68.
 
 Round66 is closed: qualified frozen B loses its screen, and the single logging
 diagnostic is complete. Retain `E59/parity66-continuation-eight-selected57`,

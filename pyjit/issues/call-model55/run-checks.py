@@ -75,8 +75,11 @@ def main():
         if args.stage in ('focus', 'full'):
             probe = subprocess.check_output(
                 [command[0], '-S', '-B', '-c',
-                 'import _imp,json,sys; print(json.dumps(dict(git=sys._git,paths=sys.path,'
-                 'magic=_imp.pyc_magic_number_token & 65535)))'],
+                 'import _imp,json,sys,sysconfig; print(json.dumps(dict('
+                 'git=sys._git,paths=sys.path,magic=_imp.pyc_magic_number_token & 65535,'
+                 'config={key:sysconfig.get_config_var(key) for key in '
+                 '("PY_INTERPRETER_BACKEND","PY_TAIL_CALL_CC","Py_IR_INTERP",'
+                 '"HAVE_COMPUTED_GOTOS")})))'],
                 cwd=build, env=env, text=True)
             row['native_preflight'] = json.loads(probe)
             header = (source / 'Include/internal/pycore_magic_number.h').read_text()

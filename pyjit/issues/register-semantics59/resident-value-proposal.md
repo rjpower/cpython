@@ -127,8 +127,10 @@ One small template is an architecture test, not a parity proposal by itself.
 Selected57 comprehension counters are about 278,517 instructions/tray versus
 193,897 upstream, an excess of 84,620. Even 20 instructions saved at each of
 18 runs gives 360, or 0.43% of that excess. The already documented hypothetical
-20 × 270 native-call saving gives 5,400, only 6.38% of the excess. Neither is
-a measured instruction saving.
+20 × 270 boundary worksheet gives 5,400, only 6.38% of the excess. These are
+108 dict.get method-provider calls and 162 direct LIST_APPEND helper operations,
+not 270 generic vectorcalls. Neither worksheet is a measured saving or a bound
+on the complete provider/helper costs.
 
 The same resident-state and exit machinery must next cover these finite
 families, conditional on the full-row probe rather than assumed frequency:

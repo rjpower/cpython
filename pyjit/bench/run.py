@@ -645,22 +645,39 @@ def machine() -> dict:
     return info
 
 
+def backend_info(config: dict) -> dict:
+    backend = config["PY_INTERPRETER_BACKEND"]
+    convention = config["PY_TAIL_CALL_CC"]
+    if backend == "computed_goto":
+        if (convention is not None or config["Py_IR_INTERP"] != 1
+                or config["HAVE_COMPUTED_GOTOS"] != 1):
+            raise MeasurementError("inconsistent computed-goto build identity")
+    elif backend is not None:
+        raise MeasurementError(f"unsupported interpreter backend: {backend!r}")
+    elif convention == "none":
+        raise MeasurementError("PY_TAIL_CALL_CC=none (plain musttail) is not measured")
+    elif convention not in (None, "preserve_none", "no_callee_saved_registers"):
+        raise MeasurementError(f"unsupported tail-call convention: {convention!r}")
+    elif convention is None and config["Py_IR_INTERP"] == 1:
+        raise MeasurementError("register interpreter has no backend identity")
+    return {"interpreter_backend": backend, "tail_call_cc": convention}
+
+
 def build_info(python: Path, label: str) -> dict:
     probe = ("import json, sys, sysconfig; "
              "print(json.dumps([sys.version, list(sys._git), sys.flags.hash_randomization, "
-             "sysconfig.get_config_var('PY_TAIL_CALL_CC')]))")
+             "{key: sysconfig.get_config_var(key) for key in "
+             "('PY_INTERPRETER_BACKEND', 'PY_TAIL_CALL_CC', 'Py_IR_INTERP', "
+             "'HAVE_COMPUTED_GOTOS')}]))")
     proc = run_checked([str(python), "-S", "-c", probe], "build version probe")
-    version, git_info, randomized, tail_call_cc = json.loads(proc.stdout)
+    version, git_info, randomized, config = json.loads(proc.stdout)
     if randomized:
         raise MeasurementError("PYTHONHASHSEED=0 did not reach the child interpreter")
-    # A tail-calling build without a calling-convention attribute (plain
-    # musttail) is not qualified (register-ir-v2-a3.md, 2.4).  Builds that
-    # predate the variable, such as upstream's, report None.
-    if tail_call_cc == "none":
-        raise MeasurementError(f"{python} was built with PY_TAIL_CALL_CC=none "
-                               "(plain musttail), which is not measured")
+    # Immutable controls predate explicit backend identity. Retain their raw
+    # convention rather than assigning the candidate's backend to them.
+    backend = backend_info(config)
     return {"label": label, "path": str(python), "version": version, "git": git_info,
-            "hash_seed": 0, "tail_call_cc": tail_call_cc}
+            "hash_seed": 0, **backend}
 
 
 def resolve_build(build: str) -> Path:

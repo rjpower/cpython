@@ -1,11 +1,11 @@
 # Register semantics and physical execution
 
-Status: reviewed ordered trials, 2026-11-14. Trial 1 passes focused qualification
-but loses its performance screen and is rejected. Trial 2 and the composed
-trial 2+3 executable pass focused qualification but lose their screens. Trial 3
-is being isolated from builders. Trial 4 source is frozen and source-reviewed;
-its native gates remain pending. Trials 5/6 are conditional proposals. The [trial report](../../issues/register-semantics59/report.md)
-owns measured outcomes; this design does not imply selection.
+Status: closed first-cycle experiment design, 2026-11-14. All five executable
+screens lose important workloads; no candidate is selected. The
+[trial report](../../issues/register-semantics59/report.md) records qualification
+and measurements. The reviewed [next design](interpreter-parity60.md) now drives
+implementation. Keep this document as the contracts and rationale for rejected
+packets, not an active instruction to retry them.
 Selected57 (`0dcba75bb3df40c32137db453b001f7e8f101de0`) is the runtime baseline.
 The [review ledger](../../issues/register-semantics59/review-astra.md) separates
 source facts, retained measurements and hypotheses. The coordinator owns
@@ -581,11 +581,13 @@ The retained selected57 interval is the starting debt:
 | Coroutines | 1.307831 | 1.267788 | 23.54% | 21.12% |
 
 Comprehensions retire about 278,517 versus 193,897 instructions per tray:
-approximately 84,620 must disappear for equal count. There are 108 dict.get and
-162 append calls per tray. Even a hypothetical 20-instruction removal from
-each of those 270 calls saves only 5,400 instructions, 1.94% of the candidate
-or 6.38% of the excess. That is an illustrative upper-accounting exercise,
-not an estimate or a measured saving. Saving 20 per exact predicate call adds
+approximately 84,620 must disappear for equal count. Per tray, 108 dict.get
+operations use CALL_METHOD_DESCRIPTOR_FAST, while 162 LIST_APPEND operations
+invoke the direct consuming helper. The append operations are not generic
+value-vectorcalls. A hypothetical 20-instruction removal at each of these 270
+distinct boundaries totals 5,400 instructions, 1.94% of the candidate or 6.38%
+of the excess. This worksheet is neither a measured saving nor an upper bound
+on the full method-provider and append-helper costs. Saving 20 per exact predicate call adds
 only 840 across 42 calls. Do not add either figure to a region estimate that
 includes the same executions. Eighteen generator creations do not imply only
 eighteen resumes; resume frequency needs its own count.

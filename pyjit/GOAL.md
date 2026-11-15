@@ -14,18 +14,18 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-implements the reviewed [semantic/physical design](design/proposals/register-semantics59.md):
-logical values, uses, edge results and continuations precede storage and
-execution lowering. Astra reviews each remaining architectural gap
-after a coherent cycle; workers implement and peer-review bounded changes, and
-the coordinator accepts measured winners. Repeat until the hot set reaches
-upstream parity while retaining broad gains; a completed proposal is not the
-stage outcome. The [review ledger](issues/register-semantics59/review-astra.md)
-extends the preceding [parity design](design/proposals/interpreter-parity58.md)
-and [source/native ledger](issues/interpreter-parity58/research.md), with explicit
-coverage gates before claiming the remaining gap is removable. Sol workers peer
-and implement admitted increments; the coordinator owns integration,
-qualification and selection. Selected57 remains the runtime baseline.
+executes the reviewed [next design](design/proposals/interpreter-parity60.md):
+first compare a same-GCC resident engine, then test cross-word scalar value/fact
+lowering at concrete sites. The [review ledger](issues/register-semantics59/review-next.md)
+incorporates all five rejected round59 executable screens and their
+[semantic/physical design](design/proposals/register-semantics59.md).
+Logical values, uses, edge results and continuations precede storage and
+execution lowering. Astra reviews the remaining architecture after coherent
+cycles; Sol workers implement and cross-review bounded changes, and the
+coordinator owns integration, qualification and measured selection. Repeat
+until the unchanged hot set reaches upstream parity while retaining broad gains;
+a completed proposal does not complete this stage. Selected57 remains the
+runtime baseline. Keep rejected packets separate and preserve their evidence.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while preserving logging performance. Frame clearing is

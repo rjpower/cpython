@@ -1,7 +1,8 @@
 # Continuation recipient action
 
-Source implemented and peer-reviewed; native qualification is underway. No
-performance result yet. This is trial 4 of
+Rejected executable: generation, both 117/79 builds and 112 methods per role
+pass at 14bf4eb, but its eight-case screen loses important workloads. See the
+[trial report](report.md). This is trial 4 of
 the [semantic design](../../design/proposals/register-semantics59.md#4-encode-the-recipient-action-in-the-continuation),
 reviewed against selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0` in
 `R/call55-integrated`. The independent builder candidate is a separate gate.
@@ -210,11 +211,12 @@ The complete source closure is implemented in `R/call55-ir`, branch
 publication and redirect readers, ABI2 remote decoding, source matchers and
 fixtures. The only binder emitted directly by the DSL is explicitly classified
 callback-free; a binder call alone still supplies no typed home/error grant.
-Six focused host source methods pass in 6.351 seconds, with runtime fixture AST
-checks, at `E59/recipient-source-host/callback-classification.log`. Independent
-actual source review is GO. Root integrated the source in G and full generation
-passes, changing only 15 generated binding sites. Commit `c1da955989e` includes
-those products; both 117/79 builds pass. The first release focus finds the
-new local-case fixture actually yields to scratch, and four route subtests fail
-the intended local assertion. Its correction must exercise a genuine local
-recipient; the other 111 methods pass. Debug focus and performance remain open.
+Six focused host source methods pass at
+`E59/recipient-source-host/callback-classification.log`; independent actual
+source/native review is GO. Root's final generated candidate is
+`14bf4eb1784a8312fd2a6d89f2f63d191547bfe5`. Both 117/79 builds and 112 focused
+methods per role pass, including a corrected actual-local constructed YIELD
+across all four public image routes. The first misidentified scratch witness
+and encoder-name-shadow correction remain documented in the report. Three
+remote descriptor/corruption methods pass per role on the same implementation.
+The eight-case screen rejects the executable; this contract is unselected.

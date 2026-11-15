@@ -9,16 +9,14 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
-The active workstream is [IR semantics59](../register-semantics59/README.md):
-revisit operation and ownership/storage contracts, implement ordered trials,
-integrate winners and repeat the broad review against the remaining gap. The
-preceding workstream is [interpreter parity58](../interpreter-parity58/README.md).
-Its [reviewed design](../../design/proposals/interpreter-parity58.md) and
-[research ledger](../interpreter-parity58/research.md) replace the isolated
-followup ordering below with a coherent ownership/effect/lowering strategy.
-Round58 is design-complete; implementation and native qualification have not
-started. Selected57 remains the baseline. Preserve the earlier designs and
-rejected experiments as evidence, not as selected implementation.
+The active workstream is [IR semantics59](../register-semantics59/README.md).
+All five first-cycle executables lose their screens; the
+[trial report](../register-semantics59/report.md) owns those decisions.
+The reviewed [next design](../../design/proposals/interpreter-parity60.md) and
+[grouped ledger](../register-semantics59/review-next.md) select two concrete
+experiments: same-GCC resident execution, then cross-word inline-scalar lowering.
+Selected57 remains the control. Earlier designs and rejected packets are
+references and evidence, not selected implementation or independent mandates.
 
 ## Outcome
 
@@ -99,24 +97,24 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The [IR-semantics workstream](../register-semantics59/README.md) owns the single
-ordered trial list. Its [design](../../design/proposals/register-semantics59.md),
-[peer review](../register-semantics59/peer.md) and
-[trial report](../register-semantics59/report.md) distinguish proposals, source
-packets, qualified executables and measured selections. The first loop-binding
-executable, standalone builders and builder+Invoke composition all lose their
-performance screens. Invoke is being isolated from builders. The continuation
-action source packet is complete with actual peer GO; root owns generation and
-native gates. Resident-value/backend alternatives require all-word coverage
-and a nonoverlapping native budget.
+The workstream's [next design](../../design/proposals/interpreter-parity60.md)
+and [trial report](../register-semantics59/report.md) distinguish proposed,
+source-reviewed, qualified and selected changes. All five round59 executable
+screens are closed and losing; no current runtime change is selected.
 
-Root owns integration, generation, serialized native jobs and quiet timing.
-Sol workers implement and cross-review bounded components in separate worktrees.
-Astra reviews the combined residual architecture after coherent measured cycles,
-not individual patches. Close conditional edge/borrow lanes without a new
-representation if the actual surviving census provides no consumer. Resident
-value/region proposals must state their reachable coverage and remaining native
-budget; a small pilot alone does not establish a path to parity.
+| Owner | Current task | Integration boundary |
+| --- | --- | --- |
+| Sol engine worker | Convert generated handler functions to one computed-goto engine; preserve semantic bodies, lexical temporary roots, error and redispatch contracts | Root generation/build; independent actual source/native review |
+| Sol identity worker | Truthful backend configuration and native/preflight/tooling identity, without changing the frozen controls | Interface/source peer before merge; root configured build and probes |
+| Independent peer | Check actual scopes, bridge cleanup, START/THROW/EXIT, prediction and metadata equality | No source-name-only ownership grants |
+| Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
+| Astra | Grouped architecture review after measured cycles | Broad design, outside the patch loop |
+
+After the engine screen, admit the concrete cross-word integer add→multiply
+consumer, then float multiply→add with separate rounding and complete slow-exit
+materialization. Use a winning engine or unchanged selected57 if it loses.
+Other provider, continuation, borrowed-argument, cache and encoding rivals have
+explicit reopening gates in the design; they are not scheduled investigations.
 
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol

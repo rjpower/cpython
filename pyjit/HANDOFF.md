@@ -4,54 +4,58 @@ Canonical documentation is this checkout. Its C source is stale; do not build
 it. Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md),
 [architecture](design/runtime-architecture.md) and [status](STATUS.md). The
 [IR-semantics workstream](issues/register-semantics59/README.md) owns active work.
-Astra's [semantic/physical review](design/proposals/register-semantics59.md) is
-complete; an independent peer admitted the first explicit result-binding change
-with VACATE_SOURCE. The first executable passes focused checks but is rejected
-by the eight-case screen; see the [trial report](issues/register-semantics59/report.md).
-Root owns serialized native jobs. No round59 runtime candidate is selected. The preceding
-[parity workstream](issues/interpreter-parity58/README.md) retains its review;
-its [design](design/proposals/interpreter-parity58.md),
-[research](issues/interpreter-parity58/research.md) and
-[peer review](issues/interpreter-parity58/review.md) are complete. No round58
-runtime implementation or native campaign has begun. The completed
-[comprehension plan](issues/comprehensions57/plan.md) retains round57 evidence.
-Follow [process](PROCESS.md). The coordinator owns integration,
-qualification, measurement and selection.
+All five round59 executable screens are closed without a selected winner; see
+the [trial report](issues/register-semantics59/report.md). Astra's
+[next design](design/proposals/interpreter-parity60.md) and
+[review ledger](issues/register-semantics59/review-next.md) drive the next cycle:
+same-GCC computed-goto engine, then concrete cross-word scalar lowering.
+The independent [backend peer](issues/register-semantics59/backend-peer.md)
+and [identity proposal](issues/register-semantics59/backend-identity-proposal.md)
+own implementation contracts. Root owns integration, serialized native jobs,
+qualification, measurement and selection. Follow [process](PROCESS.md).
 
-Round59 candidate source G is `BASE/worktrees/call55-gc`, branch
-`pyjit/reg59-recipient` at `c1da955989e`. Generation and both 117/79 builds pass.
-The first release focus executes 112 methods: 111 pass and the new recipient
-fixture fails four local-route subtests because its yield actually targets
-scratch. Root retains the failure; the worker must construct a genuine local
-recipient rather than weaken its assertion. Debug focus has not yet run. The losing builder+Invoke composition remains preserved at
-`582e61c2b28445cadbf219df23f708d6e5988e40` on `pyjit/reg59-builder-invoke`.
-The separate `pyjit/reg59-results` and `pyjit/reg59-builders` branches preserve
-rejected `f61edc21a4e` and standalone builder `d4584f8e45a`. Both builder alone
-and builder+Invoke lose their eight-case screens; neither is selected. The
-composition passes generation, both 117/79 builds and 66 focused methods per
-role. Its screen is `E59/combined3-eight-selected57`; both identities are stable.
-Root will test Invoke independently before deciding its disposition.
-Builds are `BASE/reg59-results-{release,debug}`, configured with the respective
-exact selected57 flags. Evidence is `BASE/pyjit-link-wave1/register-semantics59`.
-**Keep call55-integrated and both existing builds frozen at selected57**;
-do not advance them for this cycle. Use the explicit source/build/evidence
-arguments documented in [measurement](issues/register-semantics59/measurement.md),
-not the check helper's default integrated path.
+G `BASE/worktrees/call55-gc` is on `pyjit/parity60-integrated`, source commit
+`ec230e55641`, with engine, configuration and all generated products committed.
+Full engine generation passes and changes only the local target table and
+appended UNKNOWN block; semantic metadata is unchanged. The official cached
+Autoconf image regenerates configure successfully. Both fresh configurations
+match selected57's core/module flags and byte-identical pyconfig.h. Both native
+builds are running; no engine test/performance result exists yet.
+P `R/call55-pins` is frozen on `pyjit/parity60-engine` at `1ae2fb035277`, based
+on selected57. W's `pyjit/parity60-backend-identity` config packet is
+`47653c3bb4c3`; shared C probe/ELF diagnostic consumers also have actual peer GO
+and six mocked/synthetic host checks pass.
 
-The complete continuation-action source packet uses `BASE/worktrees/call55-ir`,
-branch `pyjit/reg59-recipient-action`, based on selected57. Actual source peer
-is GO and six host source methods pass. Source commit is
-`7b295bf6caf74a03414f9995f0f6e4523223d49b`; root generation passes, native gates
-remain pending.
-Native Invoke's source component is `ff3d5b23171007c8c195a12ce8b7475d3bca8eee`
-in `BASE/worktrees/call55-pins`, branch `pyjit/reg59-native-invoke`; G also has
-root effect/tier1/owner-replacement and fixture corrections. The worker is
-preparing those corrections independently of builders. The
-[resident-value proposal](issues/register-semantics59/resident-value-proposal.md)
-requires all-word coverage and a nonoverlapping native budget. Its census
-adapter has source-peer GO; all eight root diagnostic runs pass identity and
-complete successfully. Frequency analysis remains conditional evidence.
-Prior worker branches remain preserved.
+Fresh builds are `BASE/parity60-engine-{release,debug}`. Their setup and exact
+comparison ledger is `E59/parity60-configure-commands.json`, with the retained
+`configure-parity60.py` driver. The official Autoconf container was already
+cached; G's `Tools/build/regen-configure.sh` produced the reviewed configure. Do not copy
+canonical C's stale configure logic or add computed-goto tuning flags. Preserve
+empty CFLAGS_CEVAL and GCC15.2. Evidence remains
+`E59=BASE/pyjit-link-wave1/register-semantics59`. Use explicit source/build/evidence
+arguments in [measurement](issues/register-semantics59/measurement.md), not
+helper defaults. Existing `reg59-results-*` still contain the losing Invoke
+native build and may generate products with host Python, but are not engine
+qualification builds.
+
+Preserve all five losing branches: `pyjit/reg59-results` f61edc21a4e,
+`pyjit/reg59-builders` d4584f8e45a, `pyjit/reg59-builder-invoke` 582e61c2b284,
+`pyjit/reg59-recipient` 14bf4eb1784, and `pyjit/reg59-invoke-only` 5c60e9664fa.
+The last passes both 117/79 builds and 66 methods per role but loses coroutines
+8.1%, logging 12.6% and spectral_norm 14.2%. Continuation passes 112 methods per
+role plus three remote methods per role on the same production implementation,
+but loses DeltaBlue 15.5%, generators 5.5%, logging 11.5% and spectral_norm 10.1%.
+Their exact source/native identities, complete screens and native captures
+remain in E59. No rejected packet belongs in the next engine control.
+
+**Keep call55-integrated and both existing builds frozen at selected57.**
+The [all-word coverage](issues/register-semantics59/resident-coverage.md) uses
+pre-monitor adaptive label weights, not natural specialized hits. Finite scalar
+motifs have limited hot-set coverage; their same-line filter is a pilot
+restriction, not a semantic requirement. Original IR/outcome/frame/value
+contracts remain selected; round60 changes physical execution first. Future
+cross-word lowering has its own explicit ownership, effect, observer and
+materialization gates.
 
 ## Selected checkpoint and controls
 
@@ -155,9 +159,9 @@ Existing component worktrees and branches are retained:
 
 | Worktree | Branch | Head |
 | --- | --- | --- |
-| `R/call55-ir` | `pyjit/reg59-recipient-action` | Selected57 plus frozen source packet; see active work above |
-| `R/call55-pins` | `pyjit/reg59-native-invoke` | `ff3d5b231710` plus isolated source corrections in progress |
-| `R/call55-gc` | `pyjit/reg59-recipient` | `c1da955989e` |
+| `R/call55-ir` | `pyjit/parity60-backend-identity` | `47653c3bb4c3` |
+| `R/call55-pins` | `pyjit/parity60-engine` | `1ae2fb035277` |
+| `R/call55-gc` | `pyjit/parity60-integrated` | `ec230e55641` |
 
 G is the round59 integration tree; I remains the immutable selected control.
 Worker packets require root generation and qualification. Preserve all prior

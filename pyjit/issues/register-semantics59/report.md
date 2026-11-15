@@ -2,7 +2,9 @@
 
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
-Invoke is being isolated from builders; continuation-action native gates follow. These are incremental
+Continuation encoding and isolated Invoke also lose. All five first-cycle
+executable screens are closed; golden is unchanged. The next grouped design
+starts a broader engine experiment. These are incremental
 results, not a completed parity cycle. See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
@@ -145,22 +147,106 @@ component does not determine Invoke's disposition. Evidence is E59
 `reg59-combined3-{build,focus}-commands.json` and the retained selected57
 FAST/NO_SELF disassembly. No full-system/upstream campaign is claimed here.
 
+### Isolated Invoke: reject
+
+Candidate `5c60e9664faa87c7f6cf1909609554755d83d5ee` is preserved on
+`pyjit/reg59-invoke-only`. It contains source packets ff3+6b978 and three
+generated products, without any builder/recipient change. Generation, both
+117/79 builds and **66 focused methods per role** pass. Actual source and
+native review is GO; handler sizes remain 1,553/1,473 bytes and both native
+stack frames are 48 bytes. The repeated clear and NO_SELF memset are absent.
+The generic value provider, normalization and delayed recipient commit remain.
+
+| Workload | Invoke / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.968664 | 0.949679–0.988028 |
+| deltablue | 1.008872 | 1.008846–1.008898 |
+| coroutines | 1.081475 | 1.076103–1.086874 |
+| generators | 0.992578 | 0.991518–0.993638 |
+| logging_silent | 1.125967 | 1.106542–1.145733 |
+| raytrace | 0.992047 | 0.989399–0.994702 |
+| spectral_norm | 1.141652 | 1.111479–1.172645 |
+| nqueens | 1.006120 | 1.004160–1.008085 |
+
+Reject the standalone executable: coroutine, logging and spectral_norm losses
+repeat in both pairs despite comprehension improvement. This isolates Invoke
+from the losing builder component; it does not establish a cause for unrelated
+workload regressions or a cache/layout explanation. Evidence:
+`invoke-only1-eight-selected57` with stable identities, `invoke-only1-native`
+and `reg59-invoke-only1-{regen,build,focus}-commands.json`. No new full-system
+or upstream campaign is claimed for this loser.
+
+## Continuation recipient encoding: reject
+
 Continuation source `7b295bf6caf74a03414f9995f0f6e4523223d49b` is integrated
-in G with generated products at `c1da955989e`. Generation and both 117/79
-builds pass. The first release focus runs 112 methods: only the new fixture
-fails, in four local-route subtests. Its simple `incoming = yield ...` form
-actually has scratch YIELD A followed by a local store; it does not exercise
-the claimed local recipient. The worker is preparing a genuine local witness,
-retaining the exact local assertion. The failed logs remain in E59
-`reg59-recipient1-release-focus.log` and
-`reg59-recipient1-diagnose-release-focus.log`; debug focus has not yet run.
-This is not a native qualification pass or performance result. Edge-allocation trial 5 is demoted without a concrete
-new consumer beyond the closed zero-COPY census. Trial 6's
-[resident-value proposal](resident-value-proposal.md) requires current all-word
-coverage and a nonoverlapping native budget before implementation. Its census
-adapter has actual source-peer GO. All eight serialized root diagnostics pass
-with exact before/after identities; `resident-allword-commands.json` retains the
-commands and the case-specific `resident-selected57-*.json` files retain every
-word. Frequencies weight pre-monitor warmed labels, not natural guard-hit
-counts, because monitoring deoptimizes many entries. No proposal or small pilot
+with products and corrected fixtures at
+`14bf4eb1784a8312fd2a6d89f2f63d191547bfe5`, preserved on
+`pyjit/reg59-recipient`. Generation, both 117/79 builds and **112 focused methods
+per role** pass. Three remote metadata/corruption/delegated-discard methods
+also pass per role on the same production implementation at c1da.
+
+The first release focus failed only the new local witness: ordinary lowering
+yields to scratch then STORE_FAST. The corrected witness constructs a valid
+direct-local YIELD, preserves RESUME, jumps over the later store and exercises
+all four public image routes with strict LOCAL and sent-object identity checks.
+Independent peer caught and corrected an encoder-name shadow before the final
+gate. Both the failed fixture/setup logs and final passing gates remain in E59.
+
+The [source/native post-review](recipient-post-review.md) is GO. It charges
+generic call binding growing from three to twelve instructions, including a
+caller code/nlocals query. Publication removes the old partition lookup but
+adds action decoding: scratch takes three action branches and local four.
+Checked SEND binds its already-proved scratch action without that query.
+The four sampled handlers grow by 85 bytes in total; stack reservations are
+unchanged. Native mechanism evidence is not selection evidence.
+
+| Workload | Recipient / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.972637 | 0.948980–0.996885 |
+| deltablue | 1.154853 | 1.149621–1.160109 |
+| coroutines | 0.996981 | 0.996942–0.997020 |
+| generators | 1.054556 | 1.049383–1.059755 |
+| logging_silent | 1.115302 | 1.111971–1.118644 |
+| raytrace | 1.004561 | 0.994257–1.014971 |
+| spectral_norm | 1.101446 | 1.080222–1.123088 |
+| nqueens | 1.019988 | 1.018720–1.021258 |
+
+Reject this executable: DeltaBlue, generator, logging and spectral_norm losses
+repeat across both pairs. Do not rescue it with another tag/layout search.
+Evidence: `recipient3-eight-selected57` (stable identities), `recipient3-native`,
+`recipient1-native-review`, `reg59-recipient3-{build,focus}-commands.json` and
+`reg59-recipient1-remote-focus-commands.json`. No fresh full-system/upstream
+campaign was run for this rejected increment.
+
+## Remaining coverage and next grouped review
+
+Edge-allocation trial 5 is demoted without a new real consumer beyond the
+closed zero-COPY census. All eight root all-word diagnostics complete with
+stable identities; `resident-allword-commands.json` and case-specific
+`resident-selected57-*.json` retain the commands and every word. The
+[coverage ledger](resident-coverage.md) weights pre-monitor adaptive labels,
+not natural guard hits: monitoring deoptimizes many entries. Its finite motifs
+cover at most 1.58% of comprehension and .88% of DeltaBlue semantic dispatches,
+and none for coroutine/generator/logging. These are pilot packing ceilings,
+not bounds for every possible region. Their same-line restriction is
+conservative, not a load-bearing debug requirement.
+
+The [resident/backend proposal](resident-value-proposal.md) and independent
+[backend peer](backend-peer.md) support a broader same-GCC engine experiment.
+Measured upstream uses computed goto; selected57 uses separate tail-called
+handlers with path-specific state repacking. Astra's [next grouped review](review-next.md) and
+[ordered design](../../design/proposals/interpreter-parity60.md) are complete.
+Root admits a same-GCC resident-engine trial, then the concrete cross-word
+inline-scalar consumer. Root composes the engine and identity/config packets at ec230e55641. Generation
+and the official-container configure regeneration pass. Only the target table,
+UNKNOWN block and generated configure change; semantic metadata is unchanged.
+Both fresh configurations match all compared compiler/core/module flags and
+byte-identical selected57 pyconfig.h. Native builds are running; no engine
+qualification/performance result exists yet. Setup is retained in E59
+`parity60-configure-commands.json` and `configure-parity60.py`.
+The four shared tool consumers and bounded ELF target mapper have actual source
+peer GO; six host mocked/synthetic methods pass. Unsupported ELF/relocation or
+outside-engine targets fail; no stale tail-call object check is reported as an
+engine pass.
+No proposal or small pilot
 is a parity result; the broader cycle remains active.

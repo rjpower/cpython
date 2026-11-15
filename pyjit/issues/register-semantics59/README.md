@@ -3,9 +3,13 @@
 Status: active on 2026-11-14. Selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0` remains the runtime baseline.
 The coordinator owns native jobs, integration and measurement. No round59
-candidate is selected. The first executable is rejected; the
+candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
-and [Astra review ledger](review-astra.md) are frozen. The
+and [Astra review ledger](review-astra.md) are frozen historical inputs. The
+[next grouped design](../../design/proposals/interpreter-parity60.md) and
+[review ledger](review-next.md) now drive implementation: computed-goto engine,
+then a concrete cross-word scalar consumer. Their coverage and abort gates are
+explicit; no parity result is implied. The
 [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
 
@@ -27,20 +31,11 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Complete; six ordered trials frozen |
-| Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | First actual-diff review GO; builder cleanup source GO |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Builder and composed Invoke screens lose; isolated Invoke preparation and continuation source packet ready |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Three hot-eight screens complete; no winner selected |
+| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Next grouped cycle frozen: engine then concrete scalar consumer |
+| Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Five executable screens lose; next engine and backend-identity lanes active |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | All five hot-eight screens complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
-
-First rejected candidate: explicit BODY-edge result placement for admitted local
-FOR_ITER_LIST destinations. Semantic outcomes already define the body result;
-the missing binding is in generator storage lowering. Remove the intermediate
-window publication/move only, preserving current acquisition, canonicalization,
-guards and exhausted-path completion. The peer found no positive incoming NULL
-proof for constructed images, so the first direct arm keeps an explicit source
-vacate before retirement. It removes intermediate publication, not the vacate.
-The binding must be reusable and must not be an opcode-specific generator bypass.
 
 ## Reviewed trial order
 
@@ -48,10 +43,10 @@ The binding must be reusable and must not be an opcode-specific generator bypass
 | --- | --- | --- |
 | 1 | Bind a BODY result at final publication, independent of its staging cell | f61edc21 passes generation, both builds and 37 focused methods/role; rejected by hot-eight screen |
 | 2 | Separate builder input-span geometry from result allocation; FOR family follows only with complete fallback support | d4584f8e45a passes generation, both builds and 207 methods/role; standalone loses logging/DeltaBlue, not selected |
-| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582e61c passes generation, both builds and 66 methods/role; screen loses, isolate Invoke |
-| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | Generation and both builds pass; first native fixture misidentifies local/scratch, correction pending |
+| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582 and isolated 5c60 pass focused gates but both screens lose |
+| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | 14bf4eb passes both builds and 112 methods/role; screen loses, closed |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Concrete resident/backend proposal; all eight root census diagnostics complete; coverage analysis active |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Eight-case coverage complete; next grouped review selects broad engine then concrete scalar consumer |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

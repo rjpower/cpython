@@ -106,7 +106,9 @@ except ImportError:
     pass
 config = {key: sysconfig.get_config_var(key) for key in (
     "ABIFLAGS", "CC", "CFLAGS", "CONFIG_ARGS", "OPT", "Py_DEBUG",
-    "Py_TRACE_REFS", "SOABI", "WITH_MIMALLOC", "WITH_PYMALLOC")}
+    "Py_TRACE_REFS", "SOABI", "WITH_MIMALLOC", "WITH_PYMALLOC",
+    "PY_INTERPRETER_BACKEND", "PY_TAIL_CALL_CC", "Py_IR_INTERP",
+    "HAVE_COMPUTED_GOTOS", "CFLAGS_CEVAL")}
 print(json.dumps({"version": sys.version, "git": list(getattr(sys, "_git", ())),
                   "debug_flag": sys.flags.debug, "config": config,
                   "jit": {"available": jit_method("is_available"),

@@ -7,37 +7,35 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 [architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
 direction, selected contracts and exact execution paths.
 
-The active [IR-semantics workstream](issues/register-semantics59/README.md) is
-revisiting semantic operations and their ownership/storage contracts with Astra,
-followed by peer-reviewed implementations and direct native comparisons. No
-round59 candidate is selected. The first executable result-binding trial passes
-focused qualification but is rejected: its two-pair screen loses coroutines
-8.7% and spectral_norm 31.5%, with comprehensions near flat. The
-[trial report](issues/register-semantics59/report.md) records exact evidence;
-the independent builder candidate passes generation, both 117/79 builds and
-207 focused methods per role, but its screen loses logging 8.9% and DeltaBlue
-3.4%, so the standalone executable is not selected. Its
-fresh-result contract writes a positively vacant scratch home without reading
-old bits; the smaller empty-builder witness drops from two scratch cells to one.
-The builder+Invoke composition also loses: DeltaBlue 5.8%, logging 12.8% and
-spectral_norm 11.2% slower in its stable-identity two-pair screen. Both 117/79
-builds and 66 focused methods per role pass. Actual native review confirms one
-input-retirement traversal and FAST native stack reduction from 64 to 48 bytes,
-but these do not earn selection. Invoke is being isolated from builders.
-The continuation-action source packet is frozen with actual peer GO and six
-host methods passing. Generation and both builds pass; its first release focus
-finds that the new local witness actually yields to scratch. The fixture is
-being corrected without weakening its required action; native qualification
-remains open. The preceding
-[parity workstream](issues/interpreter-parity58/README.md) has a completed
-Astra [architectural review](design/proposals/interpreter-parity58.md), a
-[source/native ledger](issues/interpreter-parity58/research.md) and
-[coordinator peer review](issues/interpreter-parity58/review.md). The design
-connects demanded materialization, typed effect-bounded lowering, short physical
-regions and call/resume completion. Its remaining-work budget is conditional:
-comprehension instruction parity requires removing 30.38% of selected57's
-instructions, not another small getter improvement. No round58 implementation,
-build or measurement has occurred; selected57 below remains unchanged.
+The active [IR-semantics workstream](issues/register-semantics59/README.md)
+has closed all five round59 executable screens without a selected winner.
+Final loop binding, independent builders, builder+Invoke, continuation action
+encoding and isolated Invoke all lose important workloads despite focused
+qualification. Isolated Invoke passes both builds and 66 methods per role,
+but loses coroutines 8.1%, logging 12.6% and spectral_norm 14.2% while improving
+comprehensions 3.1%. Continuation encoding passes 112 methods per role but
+loses DeltaBlue 15.5%, generators 5.5% and logging 11.5%. The
+[trial report](issues/register-semantics59/report.md) retains every ratio,
+qualification limit, rejected branch and native mechanism. Golden is unchanged.
+
+Astra's [next grouped design](design/proposals/interpreter-parity60.md) and
+[review ledger](issues/register-semantics59/review-next.md) prioritize a same-GCC
+computed-goto engine, followed by actual cross-word inline-scalar lowering.
+Upstream's measured build already uses computed goto; selected57 uses separate
+tail-called handlers with path-specific state repacking. The independent
+[backend peer](issues/register-semantics59/backend-peer.md) admits that experiment
+with explicit lexical-owner, error, redispatch and identity contracts. Engine
+source and identity/config/preflight packets are integrated in G at ec230e55641.
+Generation passes with unchanged semantic metadata. Both fresh configurations
+match selected57's core/module flags and byte-identical pyconfig.h; native builds
+are running. No round60 native test or performance result exists yet.
+
+The [all-word census](issues/register-semantics59/resident-coverage.md) limits
+the finite scalar-pair pilot, without bounding all possible regions. Its
+pre-monitor label weights are not natural specialized-hit counts. The new
+trials do not close a parity budget: comprehensions still needs about 30.38%
+of selected57's instructions removed for equal upstream count. PyValue rollout
+is complete; transport, effects, ownership and physical execution remain targets.
 
 ## Selected checkpoint and performance
 

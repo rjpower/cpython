@@ -2,8 +2,8 @@
 
 Bounded source implementation, with actual production source GO from root and
 frames. The composed executable passes both builds and 66 focused methods per
-role but loses its screen. Invoke is being isolated from the losing builders;
-see the [trial report](report.md). Baseline: selected57
+role but loses its screen. Isolated Invoke 5c60 also passes those gates and
+loses its screen; neither executable is selected. See the [trial report](report.md). Baseline: selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0`.
 Source checkout: `call55-pins`, branch `pyjit/reg59-native-invoke`. Three focused
 host source methods pass; `E59/native-invoke-host1.log` retains the initial

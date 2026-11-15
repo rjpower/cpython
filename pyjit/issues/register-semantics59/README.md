@@ -10,10 +10,12 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity67.md) and
 [review67](review67.md) have independent adoption/interface GO. Two Sol-high
-workers implement separate source units from selected57: complete native CALL
+workers implement separate units from selected57: complete native CALL
 through rooted retirement/poll/append, and one caller-anchored exact-method self.
-No round67 runtime qualification or performance result exists. Root integrates and
-screens A first, B independently; B does not delay A.
+A qualifies but loses its balanced screen: hot8 1.026137, logging 1.210653,
+DeltaBlue 1.022085 and spectral_norm 1.053213. It is rejected. Root integrates B
+independently; release-operand and conditional-entry certificate repairs must
+close before a fresh build and runtime qualification. Selected57 is unchanged.
 
 Round66 is closed. Its qualified frozen continuation loses logging/generator
 protection; its finite logging diagnostic reports fewer instructions and more
@@ -40,9 +42,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate, qualify and measure A first, B independently | No round67 runtime jobs yet; selected57 remains unchanged |
-| Sol-high A | Complete native callout/result consumer | P, `pyjit/parity67-native-callout`; source in progress |
-| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; source in progress |
+| Root | Qualify and measure B independently | G, `pyjit/parity67-anchored-self-integrated`; first compile/product repairs active |
+| Sol-high A | Complete native callout/result consumer | Qualified and rejected; preserve `pyjit/parity67-callout-integrated` at `ba4ea9dd9a9` |
+| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; release/certificate/D0 source repairs and independent readback |
 | Astra | [Review67](review67.md) complete | Independent adoption GO; source implementation delegated |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

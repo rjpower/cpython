@@ -1,7 +1,11 @@
 # Select a managed-values method and invoke it
 
-Status: root and source peer approve this bounded contract; implementation is
-under way. No native qualification or performance result is claimed. Start independently from
+Status: qualified, measured and rejected. Both 117/79 builds and all 227
+focused methods pass per role after baseline-checked fixture corrections.
+Independent native review and actual Delta/ray first-hit probes pass. The
+stable hot-eight screen improves comprehensions 3.5% but loses DeltaBlue 3.2%
+and logging 22.9%. No all29/upstream/full campaign follows; see the
+[trial report](report.md). The source packet starts independently from
 selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0`; reuse the reviewed
 [prepared-call machinery](prepared-call62.md) where it supplies this contract,
 without making a losing executable a prerequisite.
@@ -249,3 +253,10 @@ text growth and changes to ordinary CALL/ATTR handlers. There must be no hidden
 lookup/descriptor/helper hop, duplicate provider or cleanup. Record actual
 unmonitored admitted hits separately from census counts. Root decides selection;
 native work removal alone is not a performance result.
+
+The source packet enables only the method family. Final-local prepared handlers
+are not emitted, their private numbers 370–374 remain reserved UNKNOWN entries,
+and their cold nomination and candidate-specific fixtures are absent. Generic
+composition infrastructure is reused without inheriting those native bodies.
+Focused evidence is retained under `register-semantics59/method-call-source-host`;
+the first CWriter scope assertion and its correction remain in separate logs.

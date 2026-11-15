@@ -4,19 +4,43 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Read [GOAL](GOAL.md), the [active plan](issues/interpreter-performance56/plan.md),
 [STATUS](STATUS.md), [architecture](design/runtime-architecture.md) and
 [process](PROCESS.md). The current grouped design is
-[interpreter-parity62](design/proposals/interpreter-parity62.md), supported by
-[review62](issues/register-semantics59/review62.md). The
+[interpreter-parity63](design/proposals/interpreter-parity63.md), supported by
+[review63](issues/register-semantics59/review63.md). The
 [trial report](issues/register-semantics59/report.md) owns measured decisions;
 this file owns current execution paths.
 
 ## Current execution
+
+G is on `pyjit/parity62-method-integrated`, at `ab4cb5f49fb`, after root and
+independent review of W packet `a67bdfc0b1d`. Generation required only the
+registry's removed-reservation spelling for unused IDs 370–374, corrected in
+`2e7c277dde5`. Generated products are committed at `665fee2062d`; a subsequent
+fixture-only correction builds synthetic images with fresh source maps and
+checks cold non-nomination rather than a rejection absent on selected57.
+Matched candidate/selected release and debug probes are retained under
+`E59/method-fixture-diagnostic`. The malformed images are never executed.
+
+Both method3 builds complete 117/79. All 227 focused methods pass per role:
+new eight under method3, other 219 release under method2 and debug under
+`parity62-method3-debug-protocol`. Native capture and independent review pass
+at `E59/parity62-method3-native`, ELF SHA256
+`a39e077632782a8d7538fa7134305b241f63ef150691db58c53d01bbba556624`.
+Actual coverage is retained in `E59/method-coverage`; kernel first-hit probes
+confirm native entry on Delta and ray. The stable hot-eight screen rejects:
+Delta 1.032009 and logging 1.228535 despite comp .965035. No all29/upstream/full
+campaign follows. All four round62 candidates are rejected.
+
+No native job currently runs. G/builds still hold this rejected method trial;
+do not mistake them for golden. The next reviewed cycle begins from selected57,
+with P's fixed-role unit and W's deferred-await design. Preserve all old branches
+and captures; their standalone ELFs must not execute against G's changed Lib.
 
 All five round59 screens, the round60 engine and every round61 runtime packet
 are unselected. Golden remains selected57. PyValue integration is complete.
 Do not revive rejected providers, scalar descriptors, continuation actions,
 alignment sweeps or a second compiler without a new reviewed consumer.
 
-G is on `pyjit/parity62-prepared-integrated`, at `a3cbad0637e`, after root
+Prepared source is preserved on `pyjit/parity62-prepared-integrated`, at `a3cbad0637e`, after root
 generation from source `49105087f2b` and two fixture corrections, directly on
 selected57. Both builds complete 117/79 under `parity62-prepared4`; all 227
 focused methods pass per role across the prepared module and nine protocol/
@@ -116,11 +140,11 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity62-prepared-call`, at `6e07c1a8953` | Rejected prepared source and actual probes frozen; available for method actual-diff peer |
-| Frames | W / `pyjit/parity62-method-call`, from selected57 plus prepared infrastructure | Approved method-to-exact CALL implementation; allocation source branch preserved |
+| Generator | P / `pyjit/parity63-role-lowering`, from selected57 | Root/peer-approved list/FOR and append implementation; prepared branch preserved |
+| Frames | W, preserved method branch `pyjit/parity62-method-call` at `882309dd897` | Deferred-await63 unit design and independent role peer; new source branch starts from selected57 |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
-| Coordinator | G / `pyjit/parity62-prepared-integrated` | Generation, focused/native evidence, serialized screens and winner selection |
-| Astra | Next grouped architecture review under way | Broad reviews only; root and Sol peers own component loop |
+| Coordinator | G / `pyjit/parity62-method-integrated`, at `ab4cb5f49fb` | Rejected method trial frozen; next source integration starts from selected57 |
+| Astra | Final grouped63 architecture review | Complete; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)
 uses input EXTERNAL roots and moves each argument twice. The
@@ -184,7 +208,7 @@ quarantined. GIL-only qualification does not establish free-threaded support.
 No parity claim follows from focused tests or static instruction removal.
 
 The active Loom mirrors are `goal`, `plan`, `status`, `performance-report` and
-`performance-design`; the latter points to round62. Seven selected-design/
+`performance-design`; the latter points to round63 after publication. Seven selected-design/
 benchmark mirrors remain unchanged. Push canonical documentation before pinning
 relative artifact links to its commit, then use guarded writes and read back.
 Origin SSH lacks an agent; the working authorized push is HTTPS with the GH

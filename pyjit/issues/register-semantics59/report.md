@@ -6,7 +6,9 @@ Continuation encoding and isolated Invoke also lose. All five first-cycle
 executable screens are closed; golden is unchanged. The round60 engine also
 loses every screen. [Round61](../../design/proposals/interpreter-parity61.md)
 tests producer/role contracts and complete creation/delegation transitions. These are incremental
-results, not a completed parity cycle. See the [workstream](README.md) and
+results, not a completed parity cycle. All four round62 candidates are now
+rejected; the [round63 design](../../design/proposals/interpreter-parity63.md)
+and [review](review63.md) drive the next source units. See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
 ## Final loop-output binding: reject
@@ -788,3 +790,62 @@ an exclusive instruction-cache or fetch-stall cause and are exploratory only.
 No compiler, padding or alignment search follows. The next grouped architecture
 review must account for recurrent broad cycle losses as well as known repeated
 transport and dispatch work.
+
+## Method-to-exact CALL62: rejected after focused qualification
+
+Root integration `ab4cb5f49fb0210a80bcdb94b597ad6ed94db9ac` starts from
+selected57 and source packet `a67bdfc0b1da80607d1915840affb4f4a911574b`.
+Registry correction `2e7c277dde5` uses removed reservations for unused IDs
+370–374; generated products are committed at `665fee2062d`. Fixture correction
+`882309dd897` supplies fresh source maps for complete synthetic bodies and
+checks cold non-nomination instead of an admission rejection absent on selected57.
+Matched release/debug probes in `E59/method-fixture-diagnostic` establish the
+baseline behavior. The malformed images are never executed; no production
+admission rule was weakened to satisfy these fixtures.
+
+Four host source methods pass. Both final native builds complete 117/79 and
+all 227 focused methods pass per role: eight new methods under method3, the
+other 219 release under method2 and debug under method3-debug-protocol. Root
+saves the native artifact at `E59/parity62-method3-native`, ELF SHA256
+`a39e077632782a8d7538fa7134305b241f63ef150691db58c53d01bbba556624`.
+
+Independent `native-review.md` confirms the actual acquired method owner enters
+`f_funcobj` directly. Success has no callable-home store/load/final clear or
+intermediate dispatch. One write-only B=NULL and the owning receiver store
+remain. A miss materializes the method once before ordinary interior CALL;
+heap callers leave before acquisition. The active head is 1,151 bytes with
+64 bytes of stack reservation; ELF text grows 3,264 bytes. Eight inspected
+ordinary handlers retain address-normalized instructions, sizes and stacks;
+corresponding rodata bytes match. Generic prefix role classification,
+next-word/feedback decode and an early heap test remain. This establishes the
+mechanism, not its throughput.
+
+Unobserved coverage in `E59/method-coverage` records Delta 43 pending sites
+becoming 42 active plus one pending. Ray has two active and eight pending sites
+after setup, then ten active after workload warmup. Kernel-filtered native
+first-hit probes confirm entry on both kernels. These are static site counts
+and bounded first-hit evidence, not dynamic frequencies. No zero-admission
+claim is made for unprobed comp or logging sites.
+
+The balanced hot-eight screen has 32 rows, stable pre/post identity and no
+failure. Root rejects the standalone executable: both Delta and logging pairs
+lose. No confirmation, all29, upstream or full-system campaign follows.
+Preserve branch `pyjit/parity62-method-integrated`, source and evidence;
+selected57 is unchanged. Timing: `E59/parity62-method3-eight-selected57`.
+
+| Workload | Method62 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | .965035 | .942478–.988132 |
+| deltablue | 1.032009 | 1.030685–1.033335 |
+| coroutines | .998281 | .996426–1.000140 |
+| generators | .998863 | .997176–1.000554 |
+| logging_silent | 1.228535 | 1.226871–1.230202 |
+| raytrace | .996699 | .990930–1.002502 |
+| spectral_norm | 1.003543 | 1.002691–1.004395 |
+| nqueens | 1.008903 | 1.008064–1.009742 |
+
+Round62 closes with no selected packet. Native work removal is real in all
+four candidates; their broad elapsed results do not earn selection. Round63
+uses their ownership and writer lessons as source inputs, without inheriting
+losing binaries. The repeated cycles/instructions divergence remains unexplained;
+no exclusive cache, branch-target or compiler cause is asserted.

@@ -8,8 +8,8 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes Astra's [round62 design](design/proposals/interpreter-parity62.md) and
-[review ledger](issues/register-semantics59/review62.md). Selected57 remains
+executes Astra's [round63 design](design/proposals/interpreter-parity63.md) and
+[review ledger](issues/register-semantics59/review63.md). Selected57 remains
 unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
@@ -17,7 +17,7 @@ physical execution remain targets. Parity is not achieved.
 | --- | --- |
 | Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
 | Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role. Actual native entries are confirmed; comprehensions improves 5.2% and coroutines 3.6%, but logging loses 18.3% in both screen pairs. Rejected as a standalone packet. |
-| Method-to-exact CALL62 | Root and source peer approve the one-clear contract. Implementation passes the acquired method owner directly to the shared initializer; actual admission coverage and fallback publication remain gates. |
+| Method-to-exact CALL62 | Both 117/79 builds and 227 focused methods per role pass. Native handoff and actual Delta/ray entry are confirmed. Comprehensions improves 3.5%, but DeltaBlue loses 3.2% and logging 22.9%. Rejected as a standalone packet. |
 | Delegated resume62 | Integration 17139aa0166 completes both 117/79 builds and 397 focused methods per role. Generators improves 4.3%, but DeltaBlue loses 6.5%, logging 20.3% and spectral_norm 9.3% in both screen pairs. Rejected as a standalone packet. |
 
 Every round59–61 runtime packet remains unselected. The
@@ -43,7 +43,14 @@ retaining broad gains. Comprehensions still needs about 30.38% of selected57's
 instructions removed merely to equal upstream's measured instruction count;
 small native removals do not establish that budget or a throughput result.
 
-The next grouped Astra review is under way alongside the method-call trial.
+Round62 is closed with no selected packet. The finalized round63 review ranks
+five options: fixed-role lowering, deferred immediate-await activation, a
+conditional compact CFG interpreter, a retained delegation spine and anchored
+read-only self. The fixed-role unit has root and independent source approval; its list
+iteration and consumed-append implementation is under way; attribute consumers follow the same lowering.
+The await design must settle stable active frame addresses and complete reader
+support before implementation. No new runtime result is claimed.
+
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer
 branch misses. An exclusive cause is not established; smaller native paths and

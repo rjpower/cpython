@@ -6,12 +6,12 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[next grouped design](../../design/proposals/interpreter-parity62.md) and
-[review ledger](review62.md) drive implementation: precise allocation effects,
-prepared CALL spans and direct delegated-resume continuations. Every round61
-runtime packet lost its broad screen; none is a selected prerequisite. The
-engine is rejected and scalar plans remain deferred. The
-[first-lane source peer](peer.md) and [execution logistics](measurement.md)
+[next grouped design](../../design/proposals/interpreter-parity63.md) and
+[review ledger](review63.md) drive implementation: fixed storage-role lowering
+first, with deferred immediate-await activation as an independent design lane.
+Every round59–62 runtime packet lost its broad comparison. The compact engine,
+retained delegation spine and anchored-self ABI remain conditional options.
+The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
 
 The user requests repeated architecture → ordered implementation → measured
@@ -32,11 +32,16 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Round62: allocation-only creation, prepared CALL, delegated resume |
-| Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Every61 screen loses; allocation62 implementation and prepared CALL proposal active |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Round59–61 screens complete; no winner selected |
-| Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
+| Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped63 final; no runtime changes |
+| Independent peer | Check unit ownership, recovery and reader closure before implementation | Fixed-role unit approved by root and source peer; await unit in design |
+| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | Phase-one list/FOR and append implementation under way |
+| Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
+| Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
+
+The [fixed-role unit](role-lowering63.md) defines the first bounded source
+packet. It carries reached ownership and canonical facts through lowering;
+it does not add a new runtime proof table. The await unit must resolve stable
+active frame identity before implementation. No round63 native claim exists.
 
 ## Reviewed trial order
 
@@ -47,7 +52,7 @@ remain evidence; they are not proposed anew.
 | 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582 and isolated 5c60 pass focused gates but both screens lose |
 | 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | 14bf4eb passes both builds and 112 methods/role; screen loses, closed |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; scalar plans deferred; round61 producer/role and creation/delegation packets active |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; scalar plans deferred; round63 source units under review |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

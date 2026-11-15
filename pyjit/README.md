@@ -9,10 +9,10 @@ and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The active
 [IR-semantics workstream](issues/register-semantics59/README.md) implements the
-reviewed [round62 design](design/proposals/interpreter-parity62.md): precise
-allocation effects, prepared CALL spans and delegated resume continuations.
+reviewed [round63 design](design/proposals/interpreter-parity63.md): fixed storage-role
+lowering and deferred immediate-await activation.
 The [trial report](issues/register-semantics59/report.md) records rejected
-round59–61 candidates and current round62 outcomes; selected57 remains unchanged. The preceding
+round59–62 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),
 [research ledger](issues/interpreter-parity58/research.md) and
 [workstream](issues/interpreter-parity58/README.md) retain the earlier diagnosis;

@@ -14,14 +14,13 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes the reviewed [next design](design/proposals/interpreter-parity62.md):
-precise allocation effects, prepared call execution spans and direct delegated
-resume continuations. The preceding round61 producer/TEMP, staged creation and
-checked ascent all lost their broad screens. The same-GCC resident engine and
-round59 packets also remain rejected. These source branches and sealed evidence
-are retained, without making them prerequisites for new consumers. The
-[review ledger](issues/register-semantics59/review62.md) separates source/native
-facts, measured costs and unresolved cycle regressions.
+executes the reviewed [next design](design/proposals/interpreter-parity63.md):
+fixed storage-role lowering first, with deferred immediate-await activation as
+an independent design lane. All round59–62 executables remain rejected. Their
+source branches and sealed evidence are retained without becoming prerequisites.
+The [review ledger](issues/register-semantics59/review63.md) separates source/native
+facts, measured costs and unresolved cycle regressions. No evidence-backed
+combined parity budget has yet been established.
 Logical values, uses, edge results and continuations precede storage and
 execution lowering. Astra reviews the remaining architecture after coherent
 cycles; Sol workers implement and cross-review bounded changes, and the

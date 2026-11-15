@@ -12,12 +12,13 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity62.md) and
-[grouped ledger](../register-semantics59/review62.md) select precise allocation
-effects, prepared CALL spans and direct delegated-resume continuations.
-Round61 producer/TEMP, staged creation and checked ascent all lost their
-screens; no packet is selected. Selected57 remains the control. Earlier designs
-and rejected packets retain evidence, without becoming prerequisites.
+The reviewed [next design](../../design/proposals/interpreter-parity63.md) and
+[grouped ledger](../register-semantics59/review63.md) rank five architectural
+options. Begin fixed storage-role lowering and independently complete the
+stable-frame design for deferred immediate-await activation. The compact CFG
+engine, delegation spine and anchored self borrow have separate admission and
+cost gates. All round59–62 executables remain rejected; selected57 is unchanged.
+Earlier source and evidence remain inputs, not prerequisites.
 
 ## Outcome
 
@@ -98,36 +99,28 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity62.md)
+The workstream's [next design](../../design/proposals/interpreter-parity63.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. All round59–61 executable
+source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Prepared CALL trial closed; method actual-diff peer next | Common per-home admission, actual generated ownership/effects and complete mutable-writer closure |
-| Sol frame worker | Approved method-to-exact CALL source implementation | One owning callable handoff through the shared initializer; measured useful coverage and complete fallback |
-| Sol continuation worker | Delegated RESUME→SEND trial closed | Qualified but rejected; preserve source and generator gain as evidence |
-| Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
-| Astra | Next grouped review using actual round62 outcomes | Broad review outside the patch loop; method evidence arrives before final design freeze |
+| Sol generator worker | [Fixed-role unit](../register-semantics59/role-lowering63.md), then list/FOR and append before attribute consumers | Reached owner receipts, body-edge publication, common admission and central writer closure |
+| Sol frame worker | Deferred immediate-await unit design, plus independent role peer | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before implementation |
+| Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
+| Astra | Completed grouped63 review | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 
-Allocation-only creation passes focused/native contracts but loses its broad
-comparison and is not selected. Delegated resume also qualifies, improves its
-generator target and loses important sentinels; it is not selected. Prepared
-final-local CALL improves comprehensions 5.2% and coroutines 3.6%, but loses
-logging 18.3% and is rejected. The
-prepared CALL component begins with the final local argument plus exact/value
-descriptor CALL, then method-selection and GENERAL consumers. These generated
-spans reuse actual CALL bodies and owning windows; they do not invent borrowed
-callee cells. Direct delegated resume reuses the existing observation gate to
-remove the intervening backedge entry. Each consumer starts from selected57 or
-a separately qualified winner, without inheriting a losing packet.
+The role unit may reuse central-writer source infrastructure without importing
+losing heads or binaries. Its first packet is an incremental opportunity, not
+a parity budget. The await unit targets allocation, copying, creation return
+and reentry together; ordinary nested calls must not force materialization.
+An unsafe relocation design is rejected before runtime work.
 
-The same-GCC resident engine and allocated scalar plans remain closed/deferred.
-A later fixed arithmetic span needs its own economical source receipt and
-measured coverage. A delegation outcome may reopen ascent only after pricing
-its whole downward/upward activation cycle and removing repeated immutable
-geometry reconstruction. No uniform action tag is a prerequisite.
+Rank 3 remains conditional on a concrete execution-domain coverage and cost
+proposal. Ranks 4 and 5 require complete reader and invalidation ports, rather
+than shortcuts in SEND/YIELD or borrowed bits in owning cells. No universal
+frame field, per-word descriptor or compiler change is a prerequisite.
 
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol

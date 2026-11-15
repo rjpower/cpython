@@ -139,6 +139,18 @@ unchanged or copying a second handwritten owner engine is excluded. This
 correction strengthens the source contract; it is not implementation approval
 or a native saving claim.
 
+The independent [Python-call comparison][python-contract] supplies a useful
+physical contrast, not a new selected direction. U RETURN restores the caller's
+stack recipient after clearing; I `_PyFrame_SetReturnValue` handles a register
+recipient, displaced local owner/discard and pending redirect. Those obligations
+survive existing overlap, frontier and inline completion. Source reads at U
+`bytecodes.c:1574`, I `pycore_interpframe.h:238` and I `ceval.c:3999` confirm the
+contrast and fallback intermediate storage. Direct binding from stable owning
+transaction inputs into staged final child homes could remove that vector, but
+must retain both parent/child ownership populations and callback/error closure.
+Its coverage remains unknown and direct plans bypass it. It stays deferred; the
+memo is not evidence that binding causes the measured gap or that Unit B wins.
+
 ## Coverage used to rank the options
 
 [Resident coverage](resident-coverage.md) and the retained
@@ -212,3 +224,4 @@ unit here claims to solve generator or coroutine parity by itself.
 [fast-listing]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/compact64-baseline-static/_TAIL_CALL_CALL_METHOD_DESCRIPTOR_FAST.txt
 [general-listing]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/parity64-await9-native/selected57-static/_TAIL_CALL_CALL_PY_GENERAL.txt
 [b-review]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/boundary65-source-host/unit-b-corrected-native-cold-review.md
+[python-contract]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/python-call-contract.md

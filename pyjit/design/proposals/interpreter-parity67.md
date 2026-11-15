@@ -70,6 +70,19 @@ be assumed. Upstream general CALL uses its consuming binder; its exact CALL
 also transfers argument owners. Neither runtime makes all argument ownership
 free. [Selected binder][i-bind], [version semantics][i-version], [upstream CALL][u-call].
 
+Upstream's contiguous stack extent also carries the initialized frontier and a
+vacant result recipient. Selected return must distinguish scratch, local and
+discard recipients: a local needs publication before the displaced owner dies;
+discard may finalize the result; cleanup can publish newer control. These are
+real ownership/control dependencies, not redundant stack POPs. The independent
+[I/U call comparison][python-contract] finds no universal discarded fact that
+justifies another Python-call fast path. Its conditional fallback-only binder
+would acquire from stable transaction inputs directly into final staged child
+homes, avoiding the consuming intermediate vector. Parent and child ownership
+populations, callback refresh and partial-child retirement remain necessary.
+Adaptive direct plans bypass this path and its coverage is unknown. Keep this
+alternative deferred; it neither replaces Unit A nor proves Unit B's benefit.
+
 Retained monitored visits assigned to warmed labels distinguish opportunities:
 Delta has 1,523,940 exact method CALL visits and no PY_GENERAL visits; logging
 has 600,000 each exact and general. These are not specialized-hit frequencies.
@@ -386,3 +399,4 @@ delegation source work needs the next grouped decision, not a third lane here.
 [i-bind]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Python/ceval.c#L4243
 [i-version]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Objects/funcobject.c#L280
 [u-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/upstream-3a440b6/Python/bytecodes.c#L4418
+[python-contract]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/python-call-contract.md

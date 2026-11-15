@@ -21,14 +21,15 @@ struct _PyAwaitRecord {
     struct _PyAwaitRecord *previous_await;  // nonowning active-record chain
     _PyInterpreterFrame *parent;            // nonowning, reserved below us
     _PyInterpreterFrame *eval_boundary;     // this evaluator's entry sentinel
-    _PyInstr *call_pc, *await_pc, *send_pc, *complete_pc;
+    PyObject *name, *qualname;              // owning logical-creation snapshots
+    uint32_t call_index, await_index, send_index, complete_index;
     uint16_t receiver_home, input_home, complete_dst, entry_recipient;
     uint16_t saved_parent_phase;
     uint8_t state, identity_state;
 };
 ```
 
-This layout is 96 bytes under the proposed 64-bit GIL layout; verify with a static assertion rather than relying on that arithmetic. The combined header reservation is then 208 bytes, plus disjoint ordinary value homes. Add one active-record pointer to the thread implementation, not to every frame. No raw record byte is a PyValue slot. `saved_top` retains its existing value-top meaning; the residence-specific header extent governs pop, first-header/chunk assertions and initialized-frontier invalidation. No middle allocation is freed.
+This layout is 96 bytes under the proposed 64-bit GIL layout; verify with a static assertion rather than relying on that arithmetic. Semantic word indices are bounded by the existing image size and resolved against the pinned parent's current executing base, rather than retaining four PC pointers. The saved name/qualname owners preserve creation semantics if the function is mutated before observation. Transfer them into an identity when materializing; an unexposed completion releases both, so their two acquisitions/releases are charged. The combined header reservation is then 208 bytes, plus disjoint ordinary value homes. Add one active-record pointer to the thread implementation, not to every frame. No raw record byte is a PyValue slot. `saved_top` retains its existing value-top meaning; the residence-specific header extent governs pop, first-header/chunk assertions and initialized-frontier invalidation. No middle allocation is freed.
 
 For stable identity views add one explicit nullable `active_frame` pointer to the shared generator/coroutine object header. NULL means the existing embedded frame; non-NULL means a stable active await frame. This costs one pointer per generator/coroutine/async-generator object and shifts debug offsets. It is deliberately not an overload of `base`, `f_executable`, flags or `gi_iframe`. All direct runtime `gi_iframe`/`cr_iframe` readers must use `_PyGen_Frame(gen)`; embedded construction/copy destinations are separately named so they cannot accidentally select the view. The ordinary accessor must compile to a pointer test/select, whose cost is charged to all affected ordinary generator operations.
 
@@ -54,7 +55,7 @@ After nonfallible initialization, transfer function and argument owners once int
 
 The parent has not published an ordinary coroutine receiver or None input. Introduce a named `AWAIT_WAIT` lifecycle phase for that interval. It selects the initialized NULL-control frame scan and suppresses ordinary SEND-prestate/shadow assertions that require a receiver object. It does not grant any stronger logical home fact. The record carries the semantic PCs/geometry and the normal body still publishes its own ordinary phases. On completion the parent resumes the original complete edge; on materialization install the real receiver and input owners and switch to the existing ordinary SEND phase before observer publication.
 
-The thread's active-record chain is a private root source, alongside actual frame and exception roots. Frame traversal visits ordinary header/homes once, plus the record's owning identity if present. The existing `exc_info` chain visits the record's exception owner; do not report that same owning edge twice. During retirement or partial preparation, existing transition-root receipts cover owners no longer reachable through those chains. A view object's traversal visits its own metadata only; it must not also traverse borrowed active-frame owners. Its embedded empty frame is not traversed. Once detached, existing embedded-frame traversal resumes. GC and verification never allocate, promote, take owners or call `_PyGen_GetGeneratorFromFrame` on a private record. Locals/proxy mutation still obeys the existing overwritten-local retention policy.
+The thread's active-record chain is a private root source, alongside actual frame and exception roots. Frame traversal visits ordinary header/homes once; the record walk visits the owning identity and any untransferred name/qualname owners. The existing `exc_info` chain visits the record's exception owner; do not report that same owning edge twice. During retirement or partial preparation, existing transition-root receipts cover owners no longer reachable through those chains. A view object's traversal visits its own metadata only; it must not also traverse borrowed active-frame owners. Its embedded empty frame is not traversed. Once detached, existing embedded-frame traversal resumes. GC and verification never allocate, promote, take owners or call `_PyGen_GetGeneratorFromFrame` on a private record. Locals/proxy mutation still obeys the existing overwritten-local retention policy.
 
 ## Completion, exposure and first suspension
 
@@ -83,7 +84,7 @@ Errors in the body use its actual instruction and handler, not CALL's error map.
 
 ### Observation: identity only, no relocation
 
-Before publishing a frame/proxy/generator relation or invoking a newly enabled observer, materialize affected identities and missing parent receiver owners. Walk records, allocate while their owners remain rooted, then install views/receivers with nonfallible pointer/owner writes. A failure before publication leaves valid private state and raises at the requesting API/event, preserving its exception contract. No arbitrary C callback or remote query can request storage relocation. PyThreadState_GetFrame may retain its documented error-clearing behavior; failure cannot expose a partially ordinary relation.
+Generic PyFrameObject/proxy publication can retain a stable private frame without allocating a coroutine, including traceback capture. The actual `f_generator`/PyFrame_GetGenerator getter or another coroutine-identity reader requests identity when needed. Before invoking a newly enabled observer that requires ordinary SEND relations, materialize affected identities and missing parent receiver owners. Walk records, allocate while their owners remain rooted, then install views/receivers with nonfallible pointer/owner writes. A failure before publication leaves valid private state and raises at the requesting API/event, preserving its exception contract. No arbitrary C callback or remote query can request storage relocation. PyThreadState_GetFrame retains its documented error-clearing behavior.
 
 Observation covers `sys._getframe`, `sys._current_frames`, PyThreadState_GetFrame, f_back construction, `frame.f_generator`, PyFrame_GetGenerator, coroutine frame/code/state/await attributes, locals/proxy creation, tracing/profile/monitor start, and debugger frame mutation. A frame clear of an active private/view frame is rejected as executing. Enabling observation denies new deferred entries, but running private activations keep stable addresses and dispatch ordinary bodies with materialized relations. A native provider or Python callback alone is not an observation trigger.
 
@@ -100,7 +101,7 @@ Promotion allocation can fail. Do not turn the existing YIELD intrinsic into a r
 | State/exit | Owners and authority | Required transition |
 | --- | --- | --- |
 | Head miss / reservation failure | Original CALL homes; no private object | Ordinary fallback/error once at CALL |
-| Private execution | Child code/function/homes; record exception; parent absent receiver physically NULL | Nested calls and GC preserve addresses; ordinary body effects remain real |
+| Private execution | Child code/function/homes; record exception and name/qualname owners; parent absent receiver physically NULL | Nested calls and GC preserve addresses; ordinary body effects remain real |
 | Active identity view | Same owners plus record's actual object owner; views borrow frame | No movement; receiver publication is a separate actual owner |
 | Synchronous return | One owned result rooted through retirement; actual locals may finalize | Clear/pop correct extended extent, publish original SEND result, resolve redirect |
 | Body error | Raised exception + traceback/frame owners; record exception chain still valid | Existing body handler first, then await unwind; no replayed CALL |
@@ -118,7 +119,7 @@ Promotion allocation can fail. Do not turn the existing YIELD intrinsic into a r
 | `pycore_interpframe_structs.h`, `pycore_interpframe.h`, `Python/pystate.c` | Explicit record, residence predicates, extended push/pop/chunk/initialized-frontier accounting and thread active-record root |
 | `Python/{ceval,frame}.c`, bytecodes | Entry, exception/recursion links, private completion/error retirement, stable identity views, terminal-only chain detachment |
 | `Objects/genobject.c`, `pycore_genobject.h` | Port direct iframe/exception access in send, throw, close, finalizer, clear, code/frame/await attributes, size and constructors; ordinary embedded objects remain default |
-| `Objects/frameobject.c` | Materialize identity before frame/proxy publication; stable active views; clear rejection; terminal copy/capture and f_generator semantics |
+| `Objects/frameobject.c` | Stable frame/proxy views need no coroutine allocation; materialize at actual f_generator getter; clear rejection and terminal copy/capture |
 | `Python/{gc,gc_trace,gc_free_threading}.c` | Real record roots, no double-counted borrowed traversal; FT execution denied but shared readers/layout remain valid |
 | `pycore_debug_offsets.h`, remote frame/profiler readers, tests/CAPI/extensions | Update actual layout/representation discriminator; remote tools cannot blindly embedded-cast a view; rebuilt private users use checked accessor |
 

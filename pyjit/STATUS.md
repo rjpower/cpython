@@ -15,6 +15,7 @@ physical execution remain targets. Parity is not achieved.
 
 | Packet | Current result |
 | --- | --- |
+| List/FOR and append roles63 | Both 117/79 builds and 49 focused methods per role pass; native review and actual comp hits pass. Comp improves 4.1%, coroutines 3.6%, spectral_norm 4.5%, but logging loses 8.3%. Rejected. |
 | Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
 | Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role. Actual native entries are confirmed; comprehensions improves 5.2% and coroutines 3.6%, but logging loses 18.3% in both screen pairs. Rejected as a standalone packet. |
 | Method-to-exact CALL62 | Both 117/79 builds and 227 focused methods per role pass. Native handoff and actual Delta/ray entry are confirmed. Comprehensions improves 3.5%, but DeltaBlue loses 3.2% and logging 22.9%. Rejected as a standalone packet. |
@@ -46,13 +47,14 @@ small native removals do not establish that budget or a throughput result.
 Round62 is closed with no selected packet. The finalized round63 review ranks
 five options: fixed-role lowering, deferred immediate-await activation, a
 conditional compact CFG interpreter, a retained delegation spine and anchored
-read-only self. The fixed-role unit has root and independent source approval; its list
-iteration and consumed-append implementation is under way; attribute consumers follow the same lowering.
-The [await unit](issues/register-semantics59/deferred-await63.md) also has root
-and independent source approval: materialized identity views keep active frame
-addresses stable; terminal storage movement is bounded by the evaluator entry.
-Both source implementations are under way. Complete reader and transition
-closure remains a runtime gate; no new native result is claimed.
+read-only self. The first fixed-role packet is qualified and rejected. The reviewed
+[attribute-role refinement](issues/register-semantics59/role-lowering63.md#phase-two-source-refinement)
+now starts independently from selected57, excluding the losing list handlers.
+The [await unit](issues/register-semantics59/deferred-await63.md) has root and
+independent source approval: object views preserve active frame addresses and
+terminal storage movement is bounded by the evaluator entry. Its source reader,
+retirement and suspension closure is under way; no await head is enabled or
+native qualification claimed. Golden remains unchanged.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

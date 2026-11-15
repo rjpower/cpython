@@ -11,10 +11,20 @@ this file owns current execution paths.
 
 ## Current execution
 
-G is now on `pyjit/parity63-role-integrated`, clean at selected57
-`0dcba75bb3df40c32137db453b001f7e8f101de0`, awaiting the reviewed P source packet.
-**The reused reg59-results builds still contain method62 and must not execute
-against G's changed Lib.** Root will generate and rebuild before target use.
+G is frozen on `pyjit/parity63-role-integrated`, at
+`034f2b22f87bb4e9e54e689bb5ead8a252e60a97`. Source `90cd71b4874e` integrates at
+`519205b2d57`, generated products at `c7fecde25a4`, and fixture-only correction
+`a0e1cea9da2` supplies valid ordinary geometry to private-ID rejection tests.
+Both `parity63-role2` builds complete 117/79; all 49 focused methods pass per
+role across the new six and prior 43. Native capture/review is
+`E59/parity63-role2-native`, ELF SHA256
+`e8d3f5aa293aa030978b60822a77d63450e771adb1f5818dc14cca26edd0761a`.
+Actual native hits for both bodies occur in comp. The stable hot-eight screen
+rejects: comp .958819, coroutines .963592 and spectral .954570 improve, but
+logging 1.083074 loses both pairs. Preserve the branch/evidence; no all29,
+confirmation, direct upstream, PMU or full campaign follows this loser.
+Builds are coherent with this frozen G until its next source switch.
+
 The method trial is preserved on `pyjit/parity62-method-integrated`, at
 `ab4cb5f49fb0210a80bcdb94b597ad6ed94db9ac`. Its registry-only correction is
 `2e7c277dde5`, generated products `665fee2062d`, and final fixture-only
@@ -32,10 +42,10 @@ confirm native entry on Delta and ray. The stable hot-eight screen rejects:
 Delta 1.032009 and logging 1.228535 despite comp .965035. No all29/upstream/full
 campaign follows. All four round62 candidates are rejected.
 
-No native job currently runs. G is prepared for source integration; builds are
-not coherent until rebuilt. The next reviewed cycle begins from selected57,
-with P's approved fixed-role unit and W's approved deferred-await unit. Preserve all old branches
-and captures; their standalone ELFs must not execute against G's changed Lib.
+No native job runs. P begins isolated phase-two attributes from selected57,
+excluding FOR/append bodies and their source recipe. W continues complete
+deferred-await source with no active entry. Preserve all rejected branches
+and captures; captured standalone ELFs must not execute against changed Lib.
 
 All five round59 screens, the round60 engine and every round61 runtime packet
 are unselected. Golden remains selected57. PyValue integration is complete.
@@ -142,10 +152,10 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity63-role-lowering`, from selected57 | Root/peer-approved list/FOR and append implementation; prepared branch preserved |
+| Generator | P / `pyjit/parity63-attributes`, from selected57; role a0e branch preserved | Reviewed attribute-role source implementation; no FOR/append heads or body-edge recipe |
 | Frames | W / `pyjit/parity63-deferred-await`, from selected57; method882 branch preserved | Reviewed deferred-await complete source implementation; no active head/native use before full reader/transition closure |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
-| Coordinator | G / `pyjit/parity63-role-integrated`, clean at selected57 | Await P phase-one source; existing method builds are incoherent until regeneration/build |
+| Coordinator | G / `pyjit/parity63-role-integrated`, at `034f2b22f87` | Rejected phase-one list roles frozen; await reviewed attribute source before next integration |
 | Astra | Final grouped63 architecture review | Complete; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)

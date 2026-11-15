@@ -849,3 +849,74 @@ four candidates; their broad elapsed results do not earn selection. Round63
 uses their ownership and writer lessons as source inputs, without inheriting
 losing binaries. The repeated cycles/instructions divergence remains unexplained;
 no exclusive cache, branch-target or compiler cause is asserted.
+
+## Fixed list roles63, phase one: rejected
+
+Source `90cd71b4874e6229940ef7593f3f32624c52486a` starts independently from
+selected57. Root integrates source at `519205b2d57`, completes generation and
+commits products at `c7fecde25a4`. Only FOR_ITER_LIST_LOCAL and LIST_APPEND_TEMP
+bodies are added; pending FOR aliases the existing ordinary handler. Source
+owner receipts and conditional FOR authority have independent actual-diff
+approval. Four focused host source methods pass in both record modes.
+
+The first release run covers 49 methods with one fixture failure: private-ID
+rejection inserted a FOR window below the scratch partition, so geometry
+validation rejected before the intended execution-only check. The other 48
+methods pass. Fixture-only source correction `a0e1cea9da2` replaces actual
+ordinary FOR/append words while preserving their operand geometry; strict
+private-ID rejection remains. Root integrates it at final
+`034f2b22f87bb4e9e54e689bb5ead8a252e60a97`. Both refreshed builds complete
+117/79, and the corrected six methods pass per role. The other 43 pass release
+under role1 and debug under role1-debug-protocol: 49 focused methods per role.
+No production admission rule changes to accommodate the test.
+
+Native capture `E59/parity63-role2-native` has ELF SHA256
+`e8d3f5aa293aa030978b60822a77d63450e771adb1f5818dc14cca26edd0761a`.
+Independent `native-review.md` confirms FOR shrinks 1,153→658 bytes with the
+same 32-byte stack reservation and getter spill/reload traffic. Item
+normalization, staging store and destination-role choices disappear; cursor
+normalization, one B+2 clear, required item owner and local retirement remain.
+The compiler already kept the ordinary item in a register, so no native reload
+saving is credited. Append is 249→217 bytes; its reviewed scratch success
+path is 38→35 caller instructions and 3→2 conditional branches, retaining the
+same consuming provider/error protocol. Ten ordinary controls retain their
+normalized instructions and sizes; differing SEND literal annotations resolve
+to byte-identical strings. Whole text grows 2,496 bytes, rodata 608. This is
+mechanism GO, not a throughput result.
+
+Unobserved code nomination and kernel-filtered GDB first hits are retained in
+`E59/role63-coverage`. Comp has eight pending FOR plus one already active after
+setup, and four static append sites; after warmup there are eight active FOR
+and four append sites. Both native bodies record a kernel first hit. Delta
+13 pending→six pending and logging 16→15 pending have no active-body first hit
+in the bounded runs. The logging scope includes its benchmark and imported
+standard-library logging module. Static counts are not invocation counts, and
+setup can already specialize a site. The first logging driver incorrectly
+looked for logging_silent.py; its failed log is retained. The corrected driver
+uses logging.py with the proper variant and separate output; no runtime
+failure is inferred from that driver error.
+
+The balanced hot-eight screen has 32 rows, stable source/native/controller
+identity and no error. Comp improves 4.1%, coroutines 3.6% and spectral_norm
+4.5%, but logging loses 8.3% in both pairs; Delta/nqueens also lose. Root rejects
+the standalone executable. No confirmation, all29, direct upstream, PMU or
+full-system campaign follows. Preserve `pyjit/parity63-role-integrated` and all
+evidence; selected57 remains unchanged. Timing:
+`E59/parity63-role2-eight-selected57`.
+
+| Workload | Role63 phase one / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.958819 | 0.947011–0.970774 |
+| deltablue | 1.009161 | 1.008785–1.009538 |
+| coroutines | 0.963592 | 0.959279–0.967925 |
+| generators | 1.004905 | 0.999091–1.010752 |
+| logging_silent | 1.083074 | 1.077502–1.088675 |
+| raytrace | 1.002200 | 0.994760–1.009694 |
+| spectral_norm | 0.954570 | 0.950743–0.958413 |
+| nqueens | 1.005140 | 1.001092–1.009205 |
+
+The logging loss occurs without a new-body hit in its bounded coverage run and
+with unchanged inspected ordinary native bodies. Those facts do not identify
+an exclusive cause. No layout/flag sweep or further counter fishing follows.
+Phase two is an independent attribute-role packet from selected57, excluding
+these losing FOR/append bodies; deferred await remains a separate source lane.

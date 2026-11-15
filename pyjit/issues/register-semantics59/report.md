@@ -6,6 +6,14 @@ A is the complete native callout/result consumer; B is one caller-anchored
 exact-method self. Both start selected57 and will be integrated independently.
 Neither has a runtime qualification or performance result.
 
+A source `e93e934e971` and correction `3f02ac24599` are prepared in G at
+`039814d92d8`. The independent source peer required cold refusal of site-specific
+native authority when another word shares its feedback entry, plus fixture
+repairs; correction readback is pending. B source `7bc2b2bfbe6` has independent
+REVISE for invalidating the checked canonical-return recipe; repair is active.
+Host source checks passed seven methods for A and four for B before that peer
+found the omitted return-provenance check. Target tests remain unexecuted.
+
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`
 qualifies without source changes and completes the unchanged hot8 screen, but

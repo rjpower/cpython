@@ -22,10 +22,19 @@ real-source line-redirection control also passes both builds. Its stable 32-row
 screen rejects selection: hot8 ratio 1.026137, logging 1.210653, DeltaBlue
 1.022085 and spectral_norm 1.053213. No larger A campaign follows.
 B source `77d3d78ec99` integrates independently at `a0bf313f305`, products
-`c358f39f481`. Its first release compile fails on a generated annotations-release
-guard testing a result wrapper instead of `.value`; repair and metadata
-readback are active. B has no runtime or timing result. PyValue rollout is
-complete; parity is not achieved.
+`c358f39f481`. Three subsequent source repairs are integrated at
+`2469611c358`; fresh products restore all selected57 resolved owners, including
+19 LOAD_ATTR and four EXIT entries, with only the three intended method-effect
+columns changed. Independent source/product reviews pass. Anchor2 release
+build passes 117/79, but debug bootstrap asserts when return-slot publication
+routes the interpreter-entry sentinel through ordinary code-frame bounds.
+The seven-method release-only diagnostic passes. Sentinel publication repair
+`b99b5537c646c904d8fc20e43f74230f345835fa` has independent source GO and is
+integrated at `b9ce559755f`. Both anchor3 builds pass 117/79, with successful
+738-method focused runs per role
+(10 release skips, nine debug skips). Actual native-loan receipts, complete
+native cost review and the performance screen remain pending. PyValue rollout
+is complete; parity is not achieved.
 
 Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable
 32-row screen has hot8 ratio .936871, but logging 1.076467 and generators 1.014457

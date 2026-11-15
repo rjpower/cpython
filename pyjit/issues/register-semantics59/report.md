@@ -4,8 +4,8 @@ Round67 source implementation is active under [design67](../../design/proposals/
 and [review67](review67.md), after independent adoption and shared-interface GO.
 A is the complete native callout/result consumer; B is one caller-anchored
 exact-method self. Both start selected57 independently. A qualifies and is
-rejected by its screen; B is integrated, with first compile/product repairs
-active before runtime qualification. Selected57 remains unchanged.
+rejected by its screen; corrected B builds and focused runtime checks pass,
+with actual native mechanism/cost qualification pending. Selected57 remains unchanged.
 
 A source `e93e934e971` and shared-feedback correction `3f02ac24599` have
 independent source GO. Initial products `b8e2ce95f28` preserve every existing
@@ -79,14 +79,42 @@ B source `7bc2b2bfbe6` initially invalidated the checked canonical-return
 recipe. Repair `8a84d17c29d` restores all four canonical/EXIT proofs and adds
 post-detach MayDealloc-guarded promotion at synthetic input releases. Five
 focused host checks pass. Independent readback then finds bare B/C identifiers
-in an emitted release guard. Final correction `77d3d78ec99` decodes the fields
-and adds actual IS_OP output assertions; independent final source GO closes
-the raised source findings. Independent integration is `a0bf313f305`, with
-products `c358f39f481` after passing regeneration. The first release compile
-fails: SETUP_ANNOTATIONS emits `_PyValue_MayDealloc(found)` for a result wrapper,
-while its release uses `found.value`. Shared release-operand repair is active.
-Product readback is also resolving changed attribute-owner certificates.
-Retain `parity67-anchor1` failed logs; B has no target or performance result.
+in an emitted release guard. Correction `77d3d78ec99` decodes the fields and
+adds actual IS_OP output assertions; independent source GO closes those
+findings. Integration `a0bf313f305`, products `c358f39f481`, then expose the
+release-wrapper operand error. Preserve those first-attempt logs and repairs.
+
+Three further source repairs are integrated on
+`pyjit/parity67-anchored-self-integrated` at `2469611c358`: structured release
+operand `bac8699e278`, conditional terminal-hit/fallthrough `730fa6693df`, and
+D0 early refusal `34f17bfcaa2`. Independent source and product reviews pass.
+Fresh products restore all selected57 resolved-owner programs, including 19
+LOAD_ATTR and four EXIT entries; only the three intended method effect columns
+differ. Anchor2 release build passes 117 modules/79 extensions. Its debug build
+fails during bootstrap: `PublishReturnSlot` sends the interpreter-entry
+sentinel through ordinary `WriteHome` code-frame bounds, where `f_executable` is
+NULL. The root reproducer and GDB stack are retained in
+`anchored-self67-source-host/root-bootstrap-assert2.log` and its commands file.
+Anchor2's builds are not qualified as a pair; do not execute its old debug
+binary. The public D0
+construction regression does not execute the older exact-CALL payload reader,
+so that reader is not claimed fixed. B has no qualified runtime, actual loan
+receipt or performance result. The new seven-method release-only diagnostic
+passes at `2469611c358` (`E59/parity67-anchor2-new-release-focus.log`). Sentinel
+publication repair `b99b5537c646c904d8fc20e43f74230f345835fa` has independent
+source GO (`unit-b-sentinel-publication-peer.md`) and is integrated at
+`b9ce559755f`; this header-only change needs no regeneration. Fresh anchor3
+release/debug builds pass 117 modules/79 extensions. All 738 focused methods
+across fourteen affected modules pass per role, with ten release skips and nine
+debug skips. Coverage includes the seven new methods, direct/keyword frame
+calls and virtual kwargs, operand ownership, completion, Python/C frame APIs,
+GC, monitoring, ordinary calls, generators, coroutines and frame arenas.
+This closes the bootstrap regression and focused runtime gate; it is not a
+full supported-suite run. Actual natural unpromoted-loan and promotion receipts,
+complete native costs and the screen remain pending. Final capture
+`parity67-anchor3-native` pins release ELF
+`e3b392ae74cd8da2db164fca6e103e8fecc982aa9eee615ff2fdc174812ec35d`.
+Selected57 remains unchanged.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

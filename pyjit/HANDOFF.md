@@ -16,16 +16,19 @@ Round67 source implementation is active under adopted
 [review67](issues/register-semantics59/review67.md). Independent final adoption
 and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
 Both source lanes start from selected57. A qualifies but loses its screen and
-is preserved on its branch. G now contains independent B; its first compile
-fails, with source/product repairs under review. Root owns generation,
-build/native jobs, integration and selection. Workers run only bounded host
-source/generator checks and write discoverable runtime tests for root.
+is preserved on its branch. G contains independent B; source and product
+repairs pass peer review. The seven-method release-only diagnostic passes.
+Sentinel publication repair has independent source GO and is integrated;
+both anchor3 builds pass 117/79 and the focused runs cover 738 methods per role.
+Root owns generation, build/native
+jobs, integration and selection. Workers run only bounded host source/generator
+checks and write discoverable runtime tests for root.
 
 | Owner | Active checkout / branch |
 | --- | --- |
 | A source | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; source/products and fixture repairs have independent GO |
-| B source | W, `pyjit/parity67-anchored-self`, `77d3d78ec99`; checked release-operand repair active after first root compile |
-| Root | G, `pyjit/parity67-anchored-self-integrated`, `c358f39f481`; B source `a0bf313f305`, regeneration passes, first `parity67-anchor1` release compile fails. Both builds are stale; do not execute |
+| B source | W, `pyjit/parity67-anchored-self`; source through `b99b5537c646c904d8fc20e43f74230f345835fa` has independent GO and is integrated by root |
+| Root | G, `pyjit/parity67-anchored-self-integrated`, `b9ce559755f`; both anchor3 builds pass 117/79 and 738 focused methods per role pass; native mechanism/cost gates pending |
 | Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
 
 The old G continuation branch remains preserved at `64348dd5c18`.
@@ -55,11 +58,32 @@ or further A repair follows. The old captured executable is static evidence.
 The static nominal boundary costs 370 versus 228 instructions and 216 versus
 72 bytes stack before shared callees; these are modeled path costs, not a
 dynamic instruction ratio or a causal explanation for the screen losses.
-B is generated independently from selected57 at `c358f39f481`. First compile
-fails in SETUP_ANNOTATIONS: the promotion guard uses `found`, while the released
-value is `found.value`. Repair the shared operand handling and add its actual
-handler regression; retain `parity67-anchor1` failed log. Product peer is also
-resolving changed attribute-owner certificates before the next source freeze.
+B source `7bc2b2bfbe6` and the first integration `a0bf313f305` remain preserved;
+their first generated products `c358f39f481` fail the release compile because
+SETUP_ANNOTATIONS tests a result wrapper instead of `.value`. Later source
+repairs are structured operand `bac8699e278`, conditional terminal-hit and
+fallthrough `730fa6693df`, and D0 early refusal `34f17bfcaa2`, integrated with
+products at `2469611c358`. Independent peers pass; products restore every
+selected57 resolved owner program including 19 LOAD_ATTR and four EXIT entries,
+with only three intended method effect columns different. Anchor2 release
+passes 117/79. Debug bootstrap fails because `PublishReturnSlot` sends the
+interpreter-entry sentinel through ordinary `WriteHome` code-frame bounds
+(`f_executable=NULL`). See
+`E59/anchored-self67-source-host/root-bootstrap-assert2.log` and the matching
+commands file. The publication repair
+`b99b5537c646c904d8fc20e43f74230f345835fa` has independent source GO and is
+integrated at `b9ce559755f`; it changes only the header and needs no
+regeneration. The release-only seven-method diagnostic passes at anchor2
+(`E59/parity67-anchor2-new-release-focus.log`). Fresh anchor3 release/debug
+builds pass 117/79, and all 738 focused methods pass in each role (10 release,
+nine debug skips). Final capture `E59/parity67-anchor3-native` pins ELF
+`e3b392ae74cd8da2db164fca6e103e8fecc982aa9eee615ff2fdc174812ec35d`.
+The public D0
+construction regression does not run the older exact-CALL payload reader, so
+the reader is not claimed fixed. Actual loan/promotion receipts, complete
+native costs and the screen remain pending. Keep G and both builds frozen for
+these gates. Retain the earlier compile/bootstrap failures; do not execute an
+old capture against the changed source tree.
 P/W prior65 source branches remain preserved; their active source is now the
 independent67 lanes. Do not execute an old captured ELF against their changed
 Lib trees. Selected57 I and both builds remain immutable. The first source

@@ -21,7 +21,8 @@ selected57: complete native callout through rooted retirement/poll and a real
 result consumer; caller-anchored read-only exact-method self with complete
 promotion and owner-consumer closure. A qualifies but fails its balanced screen
 (logging +21.1%, DeltaBlue +2.2%, spectral_norm +5.3%) and is rejected. B is
-integrated independently and needs generator repairs before runtime qualification.
+integrated independently; corrected builds and focused runtime checks pass,
+with actual native-loan/cost qualification pending.
 Root combines only independently qualified broad winners; selected57 is unchanged.
 
 Round66 is closed: frozen B qualified but failed logging/generator protection;

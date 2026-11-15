@@ -14,8 +14,9 @@ workers implement separate units from selected57: complete native CALL
 through rooted retirement/poll/append, and one caller-anchored exact-method self.
 A qualifies but loses its balanced screen: hot8 1.026137, logging 1.210653,
 DeltaBlue 1.022085 and spectral_norm 1.053213. It is rejected. Root integrates B
-independently; release-operand and conditional-entry certificate repairs must
-close before a fresh build and runtime qualification. Selected57 is unchanged.
+independently; repaired source/products, both builds and 738 focused methods per
+role pass. Actual native-loan/cost qualification remains before the screen.
+Selected57 is unchanged.
 
 Round66 is closed. Its qualified frozen continuation loses logging/generator
 protection; its finite logging diagnostic reports fewer instructions and more
@@ -42,9 +43,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Qualify and measure B independently | G, `pyjit/parity67-anchored-self-integrated`; first compile/product repairs active |
+| Root | Qualify and measure B independently | G, `pyjit/parity67-anchored-self-integrated`; builds/focused methods pass, native gates pending |
 | Sol-high A | Complete native callout/result consumer | Qualified and rejected; preserve `pyjit/parity67-callout-integrated` at `ba4ea9dd9a9` |
-| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; release/certificate/D0 source repairs and independent readback |
+| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; source repairs have independent GO |
 | Astra | [Review67](review67.md) complete | Independent adoption GO; source implementation delegated |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

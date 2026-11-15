@@ -18,7 +18,8 @@ B removes one method-self acquire/retire through a caller anchor, with promotion
 and all clear/traverse/take/copy/writer consumers ported. Both implementations
 have source review. A qualifies but loses its balanced screen and is rejected;
 logging slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B is integrated
-independently and needs generator repairs before qualification. Root combines
+independently; corrected builds and focused runtime checks pass, with native
+mechanism/cost qualification pending. Root combines
 only independently qualified winners.
 
 Round66 is the latest closed measured experiment. Its qualified frozen

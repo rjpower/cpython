@@ -360,6 +360,15 @@ use ordinary method selection/CALL before effects. Retain semantic method and
 CALL PCs/events; monitoring uses the ordinary path. This fused preparation is
 only the producer of a new lifetime contract, not a retry of method62 alone.
 
+The checked child-entry hit terminates the producer; ordinary owning
+fallthrough still needs its existing input-vacate proof. The shared validator
+must prove both outcomes and canonical fallthrough outputs before exempting
+this marker from the ordinary no-frame-switch rule. Keep all other frame/home
+restrictions and every LOAD_ATTR-family ownership recipe. A changed marker,
+guard/acquisition chain or output publication must fail closed. A public pinned
+exact-CALL successor may use feedback index zero, whose entry is header-only;
+decline before constructing or reading the anchored feedback payload.
+
 The exact ownership ledger is: selected method `TAKE(local_receiver)` acquires
 the window's self owner; exact CALL **moves** it into the overlapping child;
 child retirement closes it. B removes the first acquisition and matching close.

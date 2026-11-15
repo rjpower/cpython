@@ -224,9 +224,10 @@ fallback, but cannot be reused unchanged as evidence that the specialized B0
 protocol is preserved. Do not introduce a second handwritten ownership engine
 or a compact-domain loop to bridge this difference.
 
-Use a sparse `_PyIRNativeAppendEdge {call, append, list_home}` suffix in the
+Use a sparse `_PyIRNativeAppendEdge {call, list_home, reserved}` suffix in the
 existing immutable `_PyIRCodePlan`, constructed after the common ownership
-fixed point. Audit its allocation/offset/size/free consumers. Admission requires
+fixed point; APPEND is implicitly the next word. The entry is eight bytes.
+Audit its allocation/offset/size/free consumers. Admission requires
 scratch A=B, next-word APPEND consuming precisely that owner, a distinct owning
 scratch list home outside the CALL window, and no independent normal/EH/recovery ingress
 into APPEND. A fresh logical result owner may hold the same object as an input;
@@ -240,6 +241,12 @@ rewrite and native↔Python transitions clear or reconstruct the arm from the
 immutable certificate. Current CALL history rows do not carry the binding
 payload: do not restore a native arm from version/type history alone. If that
 lifecycle needs another registry, stop rather than add one.
+
+Public images can share a nonzero feedback entry between words. Before caching
+site-specific native authority, cold specialization must reject any other use
+of that entry, including unreachable words and other CALL forms. The hot path
+does no proof search. Feedback index zero has only a shared header: short-circuit
+on a nonzero index before reading the binding payload in either FAST form.
 
 The hot interface is `native_value_append(tstate, frame, call_site, list_home)`;
 there is no second edge lookup. It returns compact

@@ -13,10 +13,13 @@ follows adopted [design67](design/proposals/interpreter-parity67.md) and
 and shared-interface readback pass. Two Sol-high source lanes start from
 selected57: A, complete native callout through B0-rooted retirement/poll and
 append; B, one caller-anchored read-only exact-method self binding. A is not
-blocked on B. A source `3f02ac24599` corrects a peer-found shared-feedback
-authority bug and fixture errors; its G integration is `039814d92d8`, awaiting
-correction readback. B source `7bc2b2bfbe6` needs a checked canonical-return
-recipe repair. No source checkpoint is yet runtime-qualified, and no round67
+blocked on B. A source and generated-product repairs are integrated at
+`060e7be12e5`; both builds are running. The first release build failed on
+capability declaration order, now corrected. Product review also required a
+nonzero feedback index before reading the native payload; its header-only
+public-image regression awaits target execution. B repair `8a84d17c29d`
+restores checked RETURN proofs and guards synthetic input releases; independent
+repair readback is pending. No source checkpoint is yet runtime-qualified, and no round67
 performance result exists. PyValue rollout is complete; parity is not achieved.
 
 Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable

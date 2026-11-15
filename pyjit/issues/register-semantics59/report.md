@@ -6,13 +6,23 @@ A is the complete native callout/result consumer; B is one caller-anchored
 exact-method self. Both start selected57 and will be integrated independently.
 Neither has a runtime qualification or performance result.
 
-A source `e93e934e971` and correction `3f02ac24599` are prepared in G at
-`039814d92d8`. The independent source peer required cold refusal of site-specific
-native authority when another word shares its feedback entry, plus fixture
-repairs; correction readback is pending. B source `7bc2b2bfbe6` has independent
-REVISE for invalidating the checked canonical-return recipe; repair is active.
-Host source checks passed seven methods for A and four for B before that peer
-found the omitted return-provenance check. Target tests remain unexecuted.
+A source `e93e934e971` and shared-feedback correction `3f02ac24599` have
+independent source GO. Initial products `b8e2ce95f28` preserve every existing
+metadata field. The first release build failed because new capability constants
+followed the generated metadata include; root corrected this at `47f7340b65b`.
+Independent product review also found that feedback D0 has only a shared header:
+both FAST entry branches must test D before reading the native payload.
+Source correction `1ab6937f70d` integrates as `cf165ef0072`, with pinned FAST/D0,
+header-only regressions for both forms through all four public-image routes.
+Regeneration passes; products `060e7be12e5` change only those two guards.
+Fresh `parity67-callout2` release/debug builds are running; target tests remain
+unexecuted. Failed `parity67-callout1` logs remain retained.
+
+B source `7bc2b2bfbe6` initially invalidated the checked canonical-return
+recipe. Repair `8a84d17c29d` restores all four canonical/EXIT proofs and adds
+post-detach MayDealloc-guarded promotion at synthetic input releases. Five
+focused host checks pass; independent repair readback is pending. B is not
+integrated or runtime-qualified.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

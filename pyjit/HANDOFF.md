@@ -15,19 +15,26 @@ Round67 source implementation is active under adopted
 [design67](design/proposals/interpreter-parity67.md) and
 [review67](issues/register-semantics59/review67.md). Independent final adoption
 and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
-Both source lanes start from selected57. A's corrected source is prepared in G;
-no runtime build or timing exists. Root owns generation, build/native jobs, independent integration and
+Both source lanes start from selected57. A's corrected source and products are
+integrated in G; fresh release/debug builds are running. Root owns generation,
+build/native jobs, independent integration and
 selection. A proceeds without waiting for B. Workers run only bounded host
 source/generator checks and write discoverable runtime tests for root.
 
 | Owner | Active checkout / branch |
 | --- | --- |
-| A source | P, `pyjit/parity67-native-callout`, corrected `3f02ac24599`; cold refusal for shared feedback plus fixture repairs await peer readback |
-| B source | W, `pyjit/parity67-anchored-self`, `7bc2b2bfbe6`; peer requires checked return-recipe repair, now in progress |
-| Root | G, `pyjit/parity67-callout-integrated`, `039814d92d8`; A source prepared, awaiting correction GO before generation/build. Existing builds still belong to rejected `64348dd5c18` and are stale |
+| A source | P, `pyjit/parity67-native-callout`, `1ab6937f70d`; shared-feedback source repair has GO, D0 guard and pinned public-image regression await product readback/target execution |
+| B source | W, `pyjit/parity67-anchored-self`, `8a84d17c29d`; RETURN and synthetic-close repairs pass five focused host checks, independent readback pending |
+| Root | G, `pyjit/parity67-callout-integrated`, `060e7be12e5`; both `parity67-callout2` builds running after regeneration. Do not execute either binary until both builds pass |
 | Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
 
 The old G continuation branch remains preserved at `64348dd5c18`.
+`parity67-callout1` regeneration passed, but its first release build failed:
+capability constants followed the generated metadata include. Root correction
+`47f7340b65b` moves them before it. Product review separately found a D0
+header-only feedback payload read; `cf165ef0072` adds short-circuit admission
+and both-form public-image tests. Fresh products `060e7be12e5` change only the
+two entry guards. Retain the failed logs; use fresh `parity67-callout2` evidence.
 P/W prior65 source branches remain preserved; their active source is now the
 independent67 lanes. Do not execute an old captured ELF against their changed
 Lib trees. Selected57 I and both builds remain immutable. The first source

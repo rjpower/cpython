@@ -1,242 +1,103 @@
 # Project status
 
-Current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
-The [comprehension workstream](issues/comprehensions57/plan.md) is complete:
-select the dictionary-only cleanup and lifetime repair; reject the larger
-method/list composition and its losing revisions. The [goal](GOAL.md),
-[architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
-direction, selected contracts and exact execution paths.
+## Live state
 
-The active [IR-semantics workstream](issues/register-semantics59/README.md)
-closed round67 under adopted [design67](design/proposals/interpreter-parity67.md)
-and [review67](issues/register-semantics59/review67.md). Independent source adoption
-and shared-interface readback passed. Two Sol-high source lanes started from
-selected57: A, complete native callout through B0-rooted retirement/poll and
-append; B, one caller-anchored read-only exact-method self binding. A is not
-blocked on B. A source and generated-product repairs are integrated at
-`ba4ea9dd9a9`; both builds pass 117/79 and 103 focused methods per role pass.
-Five actual native transactions cover natural comprehension entry, normal
-completion, provider error, late-observer defusion and append OOM. Three further
-behavior controls pass per role, each covering both self forms; a separate
-real-source line-redirection control also passes both builds. Its stable 32-row
-screen rejects selection: hot8 ratio 1.026137, logging 1.210653, DeltaBlue
-1.022085 and spectral_norm 1.053213. No larger A campaign follows.
-B source `77d3d78ec99` integrates independently at `a0bf313f305`, products
-`c358f39f481`. Three source repairs integrate at `2469611c358`; fresh products
-restore selected57 resolved owners, including 19 LOAD_ATTR and four EXIT
-entries, with only the three intended method-effect columns changed. Anchor2's
-debug bootstrap failure and the anchor3 driver/qualification evidence remain
-preserved. The sentinel publication repair
-`b99b5537c646c904d8fc20e43f74230f345835fa` has independent source GO and is
-integrated at `b9ce559755f`; anchor3 then passes 117/79 and 738 focused methods
-per role. A promotion follow-up exposed a nomination bug, repaired in
-`specialize.c` at `65fa10014885d139a47099ed384aefe59d26b943`; the generator was
-unchanged, so no regeneration was needed. Final anchor4 has independent
-hard-qualification GO: both builds pass 117/79 and eight focused methods per
-role. Actual natural and promotion receipts pass, as do both two-method fallback
-controls per role. The natural receipt preserves mortal refcount 11, count
-0→1→0, tag 0x1000→NONE and self NULL. Promotion confirms same-child refcount
-3→4, tag NONE, count 1→0, helper return before exact saved caller-slot
-replacement, preserved child self and weakref release. Native review confirms
-20 symbols match anchor3 in VMA, size and raw bytes; `.text` differs by eight
-bytes in cold specialization and literal references only. Static review records
-+149,568 bytes of text, 136-byte method NCSR versus 8 bytes, and ordinary-effect
-costs; no cause is inferred. The stable-identity 32-row hot8 screen rejects B:
-all eight aggregate means are slower, including comprehensions 1.020893,
-DeltaBlue 1.141350, coroutines 1.027999, generators 1.032565, logging 1.430373,
-raytrace 1.061317, spectral_norm 1.149823 and nqueens 1.100358. No improvement
-subpredicate passes; root closes B with no confirmation, all29, PMU, full suite
-or repair. A and B are both rejected; selected57 remains unchanged. Astra's
-next holistic review is pending; no next source unit is selected. Parity is not
-achieved.
+The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
+The active runtime is selected57 at
+`0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
+tag `pyjit-golden-20261114-dictionary-readers`. No round67 candidate replaced
+it.
 
-Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable
-32-row screen has hot8 ratio .936871, but logging 1.076467 and generators 1.014457
-fail protection. The auxiliary union stops unimplemented. Its single matched
-logging diagnostic has instruction ratio .992588 and cycle ratio 1.085426 with full counter
-coverage and no recorded sample loss; no cause is established. Selected57 stays
-unchanged. The [report](issues/register-semantics59/report.md) owns exact results,
-source identities and qualification limits. The following round65 outcomes are
-historical, before the separately admitted round66 screen.
+Astra's grouped round68 architecture review is active from committed checkpoint
+`10533`, which records round67 closure. The review has not delivered a proposal;
+no new source unit is selected. Root owns source selection, integration,
+qualification and measured results. The [round67 report](issues/register-semantics59/report.md)
+retains exact evidence and limits for both rejected candidates.
 
-Unit A is qualified at `a6695887e94` but rejected as a standalone executable.
-Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
-Independent source/native/ABI and a fresh actual private-retirement receipt pass.
-Its stable hot8 screen cuts coroutine elapsed time 39.3%, comprehensions 2.7%
-and DeltaBlue 1.0%, but logging loses 16.2% and generators 5.5% in both pairs.
-No cause is established. Final B source `50adc6d3927` integrates at
-`64348dd5c18` on `pyjit/parity65-continuation-integrated`; initial B remains
-preserved at `980baf6bbf3`. Source, product, build and fresh focused checks pass.
-One reviewed correction carries the reached retirement fact into common
-completion, but round65's final native review rejects B: instrumented EMPTY adds
-five instructions against the four-instruction allowance. Remaining native and
-transaction gates stopped unqualified in that round. No B screen was run in
-round65; round66's later qualification and result are recorded above.
+The register interpreter and canonical eight-byte PyValues are implemented.
+Reference counting with cyclic collection is selected; extensions are rebuilt
+and ported. Native method and tracing JIT tiers remain unfinished. The selected
+runtime uses one owning frame stack, explicit recipients and continuations,
+overlapping argument homes, and an initialized frontier. Source positions do
+not prove ownership or initialization.
 
-| Packet | Current result |
-| --- | --- |
-| Round66 frozen continuation | Frozen runtime qualifies (117/79 builds, fresh 48-method runs per role, four actual controls); stable 32-row screen rejects selection. Generator mean 1.014457, logging pair ratios 1.073116/1.079828, geometric mean 0.936871. Unit2 stops; no runtime change selected. |
-| Compact domain64 | Integrated at 9de7005b670. Both refreshed builds pass 117/79 and all eight new plus 21 control methods pass per role. Native stack/text caps pass, but complete nominal segments add instructions (227 versus 173; 280 versus 234). Stopped at the net-work gate; no benchmark or target coverage campaign. |
-| Deferred await63/64 | Final `0bbb42ef46a`: both await9 builds 117/79 and all 16 new methods pass per role. Cold source/ELF reviews and actual private entry, identity-free retirement, terminal suffix move and arena-OOM recovery pass. Coroutines time falls 42.9%, but logging loses 27.7%, generators 5.2% and nqueens 2.5% in both screen pairs. Qualified mechanism; rejected standalone executable. Record 72B plus header 112B and ordinary-path costs are charged. |
-| List/FOR and append roles63 | Both 117/79 builds and 49 focused methods per role pass; native review and actual comp hits pass. Comp improves 4.1%, coroutines 3.6%, spectral_norm 4.5%, but logging loses 8.3%. Rejected. |
-| Isolated attribute roles63 | Both 117/79 builds and 54 focused methods per role pass at 581c018a34a; native review and all four actual first hits pass. Comp improves 3.5% and Delta 3.1%, but logging loses 22.3%, spectral_norm 6.3% and generators 1.8%. Rejected. |
-| Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
-| Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role. Actual native entries are confirmed; comprehensions improves 5.2% and coroutines 3.6%, but logging loses 18.3% in both screen pairs. Rejected as a standalone packet. |
-| Method-to-exact CALL62 | Both 117/79 builds and 227 focused methods per role pass. Native handoff and actual Delta/ray entry are confirmed. Comprehensions improves 3.5%, but DeltaBlue loses 3.2% and logging 22.9%. Rejected as a standalone packet. |
-| Delegated resume62 | Integration 17139aa0166 completes both 117/79 builds and 397 focused methods per role. Generators improves 4.3%, but DeltaBlue loses 6.5%, logging 20.3% and spectral_norm 9.3% in both screen pairs. Rejected as a standalone packet. |
+This checkout is the canonical documentation authority. Its C source is stale;
+do not build it. Use [handoff](HANDOFF.md) for runtime paths and evidence, and
+[process](PROCESS.md) for contribution steps.
 
-Every round59–61 runtime packet remains unselected. The
-[trial report](issues/register-semantics59/report.md) owns every ratio, exact
-identity, failure and selection decision. The round60
-[engine native review](issues/register-semantics59/engine-post-review.md)
-records its stack-backed state and merged dispatch. Losing packets are not
-prerequisites for independent lanes.
+## Selected57 performance and qualification
 
-The corrected allocator effect model removes unjustified input staging: the
-admitted allocation-only interval cannot execute Python, while real publication
-and redirect cleanup still require roots. The new prepared spans publish into
-proved-vacant homes without reading stale bits or requiring physical NULL.
-Delegated resume preserves suspended semantic state and bypasses the backedge
-under existing observation guards. No source-position equality grants a proof.
+The selected change unifies dictionary lookup and result acquisition below
+public validation and typed `dict.get`. Arbitrary callbacks retain dictionary
+and query pins; results are acquired before input cleanup. Cached exact-string
+shortcuts require a Unicode-only table under the GIL because mixed-table
+equality can run Python. Both `GetValue` and `ContainsValue` use that rule.
 
-Astra reviews the architecture after coherent measured cycles. Sol workers
-implement and peer-review bounded packets; root owns generation, native jobs,
-merged qualification and measured selection. At a winning checkpoint compare
-all29 and upstream directly and run full supported diagnostics. Repeat the
-review/implementation cycle until the unchanged hot set reaches parity while
-retaining broad gains. Comprehensions still needs about 30.38% of selected57's
-instructions removed merely to equal upstream's measured instruction count;
-small native removals do not establish that budget or a throughput result.
+The observed all-29 means are **0.995586/golden56** (16 wins) and
+**1.127137/upstream** (six wins). These are two-pair aggregates, not statistically
+established speedups; upstream XML iterparse pairs have large opposing outliers.
+There is no fresh upstream performance claim for the current checkpoint.
 
-Round62 is closed with no selected packet. The finalized round63 review ranks
-five options: fixed-role lowering, deferred immediate-await activation, a
-conditional compact CFG interpreter, a retained delegation spine and anchored
-read-only self. The first fixed-role packet is qualified and rejected. The reviewed
-[attribute-role refinement](issues/register-semantics59/role-lowering63.md#phase-two-source-refinement)
-was integrated independently from selected57, excluding the losing list
-handlers; its qualified executable also loses the broad screen and is rejected.
-The [await unit](issues/register-semantics59/deferred-await63.md) has root and
-independent source approval: object views preserve active frame addresses and
-terminal storage movement is bounded by the evaluator entry. The complete
-reader/retirement/suspension/head/writer source packet is frozen with independent
-GO. All sixteen lifecycle methods pass in both builds; native entry, identity-free
-retirement, terminal suspension and arena-OOM recovery are receipt-reviewed.
-The broad screen rejects this executable despite its large coroutine gain.
-Golden remains unchanged.
+In separate six-pair confirmation versus golden56, comprehensions **0.997484**, DeltaBlue
+**1.000239** and logging **0.992049** are near flat with mixed pairs. Richards
+**0.991167**, spectral_norm **0.931732** and nqueens **0.987729** improve in
+every pair. Root accepts coroutines **1.019635** and raytrace **1.020117** losses
+in every pair. Generators **1.024797** remains debt, with a wide
+**0.992243–1.119177** range. Matched upstream counters show 36.14% extra native
+instructions in DeltaBlue, 43.64% in comprehensions and 30.78% in coroutines;
+these counts do not identify a cause or predict throughput.
 
-The grouped [review64](issues/register-semantics59/review64.md) is integrated.
-The finite ordinary-C domain retained generic CALL cuts, owning homes and real
-provider/retirement work. Its native gate requires at most 128 bytes
-simultaneous adapter/domain stack,
-16 KiB hot text and positive whole-path work removal. No framework expansion
-precedes that result. The [compact unit](issues/register-semantics59/compact-domain64.md)
-has root and [independent source approval](issues/register-semantics59/compact-domain64-peer.md)
-and is rejected at its native net-work gate. Complete await source is independently
-reviewed and integrated separately. Generation and generated-code review pass;
-both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
-a 42.9% coroutine gain but unacceptable logging and generator regressions.
-Round64 and round65 are closed with no selected runtime. Design66 revisited
-the architecture and admission gates. Round66 unit1 qualifies frozen
-B and its hot8 screen rejects selection. No all29/full-system campaign follows
-the rejected screens.
+Both final selected57 builds complete 117 modules and 79 shared extensions;
+all 203 methods across three dictionary modules pass per role. The 28 focused
+reader methods overlap that coverage. Selected56 supplies the inherited coherent
+full-system checkpoint; no fresh full 55k run is claimed for this successor.
+Qualification is GIL-only. Six debugger-jump errors remain in the exact
+golden54 baseline; GDB PrettyPrintTests remain quarantined. No free-threaded or
+arbitrary third-party extension qualification is claimed. The
+[selected57 report](issues/comprehensions57/report.md) and
+[benchmark tables](issues/comprehensions57/benchmark-tables.md) retain details.
 
-Prepared-call's short whole-process PMU diagnostic shows logging instructions
-1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer
-branch misses. An exclusive cause is not established; smaller native paths and
-unchanged ordinary handler bodies have not guaranteed broad gains.
+## Round67 closure
 
-## Selected checkpoint and performance
+Both independent candidates qualified their mechanisms and lost their balanced
+screens. A's stable 32-row screen rejects selection: hot8 geometric mean
+**1.026137293**, logging **1.210653142**, DeltaBlue **1.022084868** and
+spectral_norm **1.053212755**. B's anchor4 builds pass 117/79 and eight focused
+methods per role; natural and promotion receipts and two fallback controls
+pass. Static native review and an independent comparison pass, but those
+structural results do not establish performance cause.
 
-Selected57: **0dcba75bb3df40c32137db453b001f7e8f101de0**, branch
-`pyjit/round57-golden`, tag `pyjit-golden-20261114-dictionary-readers`.
-Golden56 `883524c180e4486b47df77ee2276c9276c0ec32c` and golden54
-`61015a9452d9069646fb5fede9ff963896833b89` remain immutable.
+B's stable-identity 32-row screen rejects selection. Its geometric mean is
+**1.114220219841174**, and every design67 screen predicate is false:
 
-Dictionary lookup/result acquisition share one implementation below public
-validation and typed `dict.get`. Arbitrary callbacks retain dictionary/query
-pins; results are acquired before input cleanup. Cached exact-string shortcuts
-also require a Unicode-only table under the GIL: mixed-table equality can run
-Python. Both GetValue and ContainsValue use that admission rule. No method,
-list, generator, frame or IR changes from the rejected composition are selected.
+| Workload | Anchor4 / selected57 |
+| --- | ---: |
+| comprehensions | 1.0208926125877458 |
+| deltablue | 1.141349549410481 |
+| coroutines | 1.0279987865402465 |
+| generators | 1.0325652873804605 |
+| logging_silent | 1.4303733131817118 |
+| raytrace | 1.0613165681229204 |
+| spectral_norm | 1.149823408700587 |
+| nqueens | 1.1003578304681976 |
 
-The direct all-29 observed means are **.995586/golden56** (16 wins) and
-**1.127137/upstream** (six wins). These are two-pair aggregates, not precise or
-statistically established speedups; the upstream XML iterparse pairs have
-large opposing outliers. In separate six-pair confirmation, comprehensions
-.997484, DeltaBlue 1.000239 and logging .992049 are near flat with mixed pairs.
-Richards .991167, spectral_norm .931732 and nqueens .987729 improve in every pair.
-Root explicitly accepts coroutines 1.019635 and raytrace 1.020117 losses in every
-pair. Generators 1.024797 has a wide .992243–1.119177 range and remains debt too.
-This is a correctness/abstraction checkpoint with a small broad benefit, not
-parity. The [report](issues/comprehensions57/report.md),
-[complete tables](issues/comprehensions57/benchmark-tables.md) and
-[cold review](issues/comprehensions57/review.md) own evidence and selection.
-Matched upstream counters still show 36.14% extra native instructions in
-DeltaBlue, 43.64% in comprehensions and 30.78% in coroutines. More common-path
-work remains; frame clearing alone does not explain those instruction gaps.
+Root closes round67 without confirmation, all29, PMU, full suite or repair.
+Independent screen-peer readback confirms rejection. A and B are rejected;
+selected57 remains unchanged. The full account, including earlier failures and
+native evidence, is in the [trial report](issues/register-semantics59/report.md).
 
-Both final builds complete 117 modules/79 shared extensions; all 203 methods
-across three dictionary modules pass per role. The 28 focused reader methods
-also pass and overlap that coverage. No generated protocol changed. Selected56
-supplies the inherited coherent full-system checkpoint; no fresh full 55k run
-is claimed for this two-file successor. The rejected four-lane composition ran
-55,045 tests per role, retaining six baseline debugger errors and closing one
-release assertion-lint finding. Only GDB PrettyPrintTests remains quarantined;
-qualification is GIL-only. See the report for exact heads and limits.
+## Direction and evidence
 
-The rejected composition reduced comprehension instructions 4.8% but lost
-logging 13.2% and coroutines 4.6% in confirmation. Uniform handler alignment and
-interpreter-local append also lost. The minimal lifetime-only repair retained
-6.9% DeltaBlue and about 3% comprehension regressions in its last diagnostic despite
-near-identical instruction counts. All source, native captures and results are
-preserved; no further layout or padding sweep is planned.
+The [goal](GOAL.md) and [active plan](issues/interpreter-performance56/plan.md)
+define the objective and current increment. The [runtime architecture](design/runtime-architecture.md),
+[register IR](design/register-ir.md), [interpreter](design/interpreter.md),
+[calls and frames](design/call-and-frame-lifetimes.md), and
+[activation transfers](design/activation-transfers.md) describe selected
+contracts. The [roadmap](ROADMAP.md) records stage outcomes.
 
-The [selected56 report](issues/interpreter-performance56/report.md) retains
-its earlier 1.53% aggregate gain over golden54 and accepted regression debt.
-Bitmap, IRSC2 and full static scratch authority remain independent unfinished
-gates. Native method and tracing JIT tiers remain unfinished.
-
-## Implemented architecture
-
-Canonical eight-byte PyValues span frames, containers, object storage and
-rebuilt bundled extensions. C-local typed borrows and owning bridges are
-implemented. Native results may still use private numeric boxes until actual
-home publication; improving that transport is distinct from value integration.
-
-The register interpreter is implemented. Existing frontend borrow selection
-and register copy propagation eliminate many local-read instructions. Exact
-calls already overlap arguments in one frame arena and return inline. Warm
-selected storage uses an initialized frontier. Source positions are separate
-from semantic exception/recovery state. Native method and tracing JIT tiers
-remain unfinished.
-
-## Model55 component dispositions
-
-The scalar subset is selected; bitmap and exceptional-transfer branches remain
-experimental components:
-
-| Component | Actual state |
-| --- | --- |
-| Scalar facts | Actual scalar normal/error graphs and current publication receipts pass the core gate within selected56; logical-vacancy consumers are repaired and full diagnostics complete. Missing proof retains initialized-NULL control. Full static scratch authority remains unfinished. |
-| Bitmap execution readers | B0e918 builds 117/79 in both roles. All34 focused cases pass release. Debug aborts in a constructed HomeRead image at LOAD_COMMON_CONSTANT; its other four selected modules pass. Earlier release lifecycle diagnostics pass seven modules but fail monitoring/profiling with absent-input errors. No complete bitmap timing or qualification. |
-| Explicit exceptional transfers | Compiler071d, readers4c646 and runtime/container9c297 are source-reviewed with Clinic/AST checks only. IRSC2 names retained homes and protocol destinations explicitly. Full generation and native qualification remain pending; the allocator is still canonical. |
-
-The [model55 ledger](issues/call-model55/implementation.md),
-[report](issues/call-model55/report.md) and frozen
-[design](design/proposals/register-call-model55.md) retain component history.
-The active plan decides which pieces are needed by each performance increment;
-completing all old experiments is not an automatic gate for unrelated gains.
-
-## Qualification limits
-
-The selected56 coherent full runs close the earlier admission, retirement,
-generated-source and fixture failures. Six debugger-jump errors remain per role,
-all present in golden54's exact baseline. The final LLTrace-only repair has
-focused verification over the byte-identical runtime; the full suite was not
-repeated for that fixture. Only existing GDB PrettyPrintTests is quarantined.
-No free-threaded qualification or arbitrary third-party extension conformance
-is claimed. Bitmap/IRSC2/M4 remain independent unfinished gates.
-
-Canonical documentation is this checkout. Its C source is stale; do not build
-it. Preserve immutable controls and evidence; use the handoff before building
-or measuring a runtime.
+The [selected56 report](issues/interpreter-performance56/report.md),
+[model55 ledger](issues/call-model55/implementation.md), and linked trial
+reports retain historical experiments and unfinished independent gates. They
+are evidence, not an automatic dependency list for round68.
+Bitmap execution readers, IRSC2 exceptional transfers and full static scratch
+authority (M4) remain unfinished independent gates, outside selected57.

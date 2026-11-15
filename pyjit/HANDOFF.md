@@ -13,9 +13,10 @@ this file owns execution logistics.
 
 Round67 is closed: A and B qualify their mechanisms and lose their screens.
 Selected57 remains unchanged. The grouped round68 proposal is delivered and
-independent architecture adoption passes. One retained-generator-delegation
-source contract is under independent review; no runtime edits or implementation
-GO yet. Preserve actual owning frames and retained ancestors, enter the current
+independent architecture and exact source-contract approval pass. Sol implements
+one retained-generator-delegation unit, starting with an inert foundation;
+activation waits for complete lifecycle and reader closure. Preserve actual
+owning frames and retained ancestors, enter the current
 leaf directly, and change only the suffix. No second unit is active.
 
 Source-contract obligations include effective state/PC/home readers, all-member
@@ -31,12 +32,22 @@ bounded host checks and write discoverable runtime tests for root.
 
 | Owner / retained state | Checkout / branch |
 | --- | --- |
-| Sol-high source | W, `pyjit/parity68-retained-delegation`, selected57 `0dcba75bb3d`; contract before edits |
-| Independent Sol peer | Evidence `E59/retained-delegation68-source-host`; architecture GO in `grouped68-adoption-peer.md`, exact contract pending |
-| Root runtime | G, `pyjit/parity67-anchored-self-integrated`, `65fa10014885d139a47099ed384aefe59d26b943`; rejected B67 frozen, no target job running |
+| Sol-high source | W, `pyjit/parity68-retained-delegation`, selected57 `0dcba75bb3d`; approved inert foundation first |
+| Independent Sol peer | Evidence `E59/retained-delegation68-source-host`; architecture and exact source GO, actual-diff reviews next |
+| Root runtime | G, `pyjit/parity68-retained-delegation-integrated`, selected57 `0dcba75bb3d`; reused builds stale, no target job running |
 | Retained A67 | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; rejected integration `ba4ea9dd9a9` preserved |
 | Retained B67 source | W's old branch `pyjit/parity67-anchored-self`, `f5c8463ea1b`; do not execute old captures against switched W |
 | Astra | Grouped review68 source `183447221537190a4ac1003026f554dbaf428a3d`, integrated in C `29a016e656d`; no runtime work |
+
+Rejected B67 integration remains preserved on
+`pyjit/parity67-anchored-self-integrated` at `65fa10014885d139a47099ed384aefe59d26b943`.
+The [implementation contract](issues/register-semantics59/retained-delegation68.md)
+and [source peer](issues/register-semantics59/retained-delegation68-peer.md)
+integrate frozen contract `836d0a93bc6406392153f7c7233fc1f197dea703c424cf1b25d4344ca594a30a`
+and its independently approved ENTERING noncalling addendum.
+Materialization never calls the recipient setter: a successful entry continuation
+publishes None exactly once after valid links/debt; early C-entry failure clears
+without publishing unused input. No extra universal frame field is introduced.
 
 ## Retained round67 qualification
 

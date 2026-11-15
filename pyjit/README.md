@@ -14,8 +14,9 @@ and [handoff](HANDOFF.md) explain development and runtime coordination.
 The selected runtime remains selected57. Round67's two independently qualified
 source candidates both lost their screens and were rejected. The grouped
 [round68 proposal](design/proposals/interpreter-parity68.md) advances retained
-generator delegation to an exact source contract. Architecture adoption passes;
-independent source-contract approval is required before implementation.
+generator delegation through independent architecture and source-contract
+approval. The inert foundation is being implemented; retained execution remains
+disabled until lifecycle and reader closure.
 The [trial report](issues/register-semantics59/report.md)
 owns exact round67 results and retained evidence.
 

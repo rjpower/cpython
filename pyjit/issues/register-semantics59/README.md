@@ -10,10 +10,12 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity68.md) and
 [review68](review68.md) recommend one retained-generator-delegation unit.
-Independent architecture adoption passes. Sol prepares its exact source
-contract; a separate peer must approve layout, lifecycle, recursion and reader
-closure before runtime edits. No implementation or new performance result is
-claimed. Both round67 candidates qualify but lose their screens: A hot8
+Independent architecture and exact source-contract approval pass. Sol implements
+the inert foundation, then complete lifecycle and reader closure before
+activation. No runtime qualification or new performance result is claimed.
+The [implementation contract](retained-delegation68.md) and
+[source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
+Both round67 candidates qualify but lose their screens: A hot8
 1.026137/logging 1.210653; B hot8 1.114220/logging 1.430373. Both remain rejected;
 selected57 is unchanged.
 
@@ -42,9 +44,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Contract adoption, integration and measured selection | Selected57 immutable; G still holds rejected B67 until integration |
-| Sol-high source | Exact retained-delegation source contract | W, `pyjit/parity68-retained-delegation`, selected57 base; edits await GO |
-| Independent Sol peer | Source contract and actual-diff review | Architecture GO; exact implementation contract pending |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, selected57 base; reused builds stale |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`, selected57 base; inert foundation first |
+| Independent Sol peer | Actual-diff review | Architecture and source contract GO; no runtime qualification |
 | Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

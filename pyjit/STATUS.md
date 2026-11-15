@@ -10,10 +10,11 @@ it.
 
 The grouped [round68 proposal](design/proposals/interpreter-parity68.md) and
 [review](issues/register-semantics59/review68.md) are delivered. Independent
-architecture adoption passes for one retained-generator-delegation unit;
-its exact source contract remains under independent review. No runtime edits
-or implementation approval are claimed. Root owns integration, qualification
-and measured selection. The [round67 report](issues/register-semantics59/report.md)
+architecture and exact source-contract approval pass for one retained-generator-
+delegation unit. Sol is implementing the inert foundation; activation waits for
+complete lifecycle and reader closure. No runtime qualification or new performance
+result is claimed. Root owns integration, qualification and measured selection.
+The [round67 report](issues/register-semantics59/report.md)
 retains exact evidence and limits for both rejected candidates.
 
 The register interpreter and canonical eight-byte PyValues are implemented.

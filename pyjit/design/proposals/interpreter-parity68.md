@@ -1,7 +1,9 @@
 # Interpreter parity68: retain delegation, preserve ordinary ownership
 
-Status: proposed for independent adoption; no new source unit or runtime is
-selected. Base: canonical `10533a2b2d411a62c26c409438733c6862827333`.
+Status: architecture and [exact source contract](../../issues/register-semantics59/retained-delegation68.md)
+approved after [independent peer review](../../issues/register-semantics59/retained-delegation68-peer.md).
+The inert foundation is being implemented; no runtime qualification or selection
+is claimed. Base: canonical `10533a2b2d411a62c26c409438733c6862827333`.
 [Review68](../../issues/register-semantics59/review68.md) records the source
 contrasts. The [report](../../issues/register-semantics59/report.md) closes 67.
 Selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0` remains the runtime base.

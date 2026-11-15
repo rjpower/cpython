@@ -132,9 +132,11 @@ per-workload aggregates are:
 | nqueens | 1.1003578304681976 |
 
 Root closes B without confirmation, all29, PMU, full suite or repair. No cause
-is inferred. A and B are both rejected; selected57 remains unchanged. The delivered [round68 proposal](../../design/proposals/interpreter-parity68.md)
-advances retained generator delegation to exact source-contract review after
-architecture adoption. No runtime implementation or new parity claim is made.
+is inferred. A and B are both rejected; selected57 remains unchanged. The
+delivered [round68 proposal](../../design/proposals/interpreter-parity68.md)
+has independent architecture and source-contract approval for retained generator
+delegation. The inert foundation is being implemented; no runtime qualification
+or new performance claim is made.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

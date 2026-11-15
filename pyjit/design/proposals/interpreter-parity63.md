@@ -42,6 +42,16 @@ as the independent activation lane. Rank 3 is conditional on the cost gate
 below, not a prerequisite for either. Do not integrate a losing round62 binary
 to obtain its source machinery.
 
+The component source review has now refined rank 2's unresolved relocation
+proposal: the [deferred-await unit](../../issues/register-semantics59/deferred-await63.md)
+is authoritative for implementation. Observation materializes an object view
+without moving the active frame. Storage moves only at a terminal suspension
+within the owning evaluator segment. This replaces the mid-activation
+promotion wording below; complete reader ports remain an implementation gate.
+The [fixed-role unit](../../issues/register-semantics59/role-lowering63.md)
+specifies rank 1's phase-one source packet. Both units have root and independent
+source approval; neither has native qualification or measured results yet.
+
 ## Shared logical and physical model
 
 The selected register CFG already has fresh single-definition temporaries,

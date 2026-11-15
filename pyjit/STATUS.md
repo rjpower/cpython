@@ -48,8 +48,11 @@ five options: fixed-role lowering, deferred immediate-await activation, a
 conditional compact CFG interpreter, a retained delegation spine and anchored
 read-only self. The fixed-role unit has root and independent source approval; its list
 iteration and consumed-append implementation is under way; attribute consumers follow the same lowering.
-The await design must settle stable active frame addresses and complete reader
-support before implementation. No new runtime result is claimed.
+The [await unit](issues/register-semantics59/deferred-await63.md) also has root
+and independent source approval: materialized identity views keep active frame
+addresses stable; terminal storage movement is bounded by the evaluator entry.
+Both source implementations are under way. Complete reader and transition
+closure remains a runtime gate; no new native result is claimed.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

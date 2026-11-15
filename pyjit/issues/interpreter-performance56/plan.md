@@ -107,7 +107,7 @@ screens are closed and losing; no current runtime change is selected.
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Sol generator worker | [Fixed-role unit](../register-semantics59/role-lowering63.md), then list/FOR and append before attribute consumers | Reached owner receipts, body-edge publication, common admission and central writer closure |
-| Sol frame worker | Deferred immediate-await unit design, plus independent role peer | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before implementation |
+| Sol frame worker | [Deferred immediate-await unit](../register-semantics59/deferred-await63.md) source implementation after root/peer approval | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before implementation |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
 | Astra | Completed grouped63 review | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 

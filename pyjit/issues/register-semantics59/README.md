@@ -33,15 +33,16 @@ remain evidence; they are not proposed anew.
 | Owner | Deliverable | State |
 | --- | --- | --- |
 | Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped63 final; no runtime changes |
-| Independent peer | Check unit ownership, recovery and reader closure before implementation | Fixed-role unit approved by root and source peer; await unit in design |
-| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | Phase-one list/FOR and append implementation under way |
+| Independent peer | Check unit ownership, recovery and reader closure before implementation | Both units approved by root and source peer |
+| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | Phase-one roles and complete deferred-await source implementation under way |
 | Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 
 The [fixed-role unit](role-lowering63.md) defines the first bounded source
 packet. It carries reached ownership and canonical facts through lowering;
-it does not add a new runtime proof table. The await unit must resolve stable
-active frame identity before implementation. No round63 native claim exists.
+it does not add a new runtime proof table. The [await unit](deferred-await63.md) separates stable active identity views
+from terminal storage movement. Its complete reader and lifecycle closure is
+a source integration gate. No round63 native claim exists.
 
 ## Reviewed trial order
 

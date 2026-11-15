@@ -224,6 +224,19 @@ early-entry-error callback that resumes its alias first materializes, then
 uses the ordinary suspended ingress. It must not raise already-executing merely
 because its record root is ENTERING.
 
+Native count1 entry has no intermediate delegation to omit, but it can preserve
+the root record for later descent. Its ordinary root resume setter precedes
+PEP523 selection. Preserve that order if the setter can run Python: before
+ENTERING, decline count1 with a pending redirect or a potentially reentrant
+displaced local owner, then use the original ordinary ingress once. The
+eligibility test is nonmutating under the GIL: discard of None, vacant scratch,
+NULL/inline/immortal locals, and counted locals with more than one reference
+are noncalling. Never consume an owner to probe eligibility. Keep noncalling
+count1 retained across parent yield and right descent. Count>1 still supports
+every valid leaf resume recipient under the complete RUNNING-before-setter
+contract below. A finalizer installing an evaluator hook is a required
+count1 ordering witness; no additional mode or input-publication field is added.
+
 Use a stable ENTERING state for the claim-to-first-handler interval, not an
 unmodeled suspended/running blend. Effective root state is EXECUTING at its
 real resume PC; nonroot members remain suspended; recursion_debt=0. Root's

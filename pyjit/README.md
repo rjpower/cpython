@@ -9,9 +9,10 @@ and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The active
 [IR-semantics workstream](issues/register-semantics59/README.md) implements the
-reviewed [round64 design](design/proposals/interpreter-parity64.md): one bounded
-compact execution domain alongside complete deferred immediate-await activation.
-Both fixed-role trials are qualified and rejected; no round64 runtime is selected.
+reviewed [round64 design](design/proposals/interpreter-parity64.md). The bounded
+compact execution domain failed its native net-work gate; complete deferred
+immediate-await activation is in isolated integration. Both fixed-role trials
+are qualified and rejected; no round64 runtime is selected.
 The [trial report](issues/register-semantics59/report.md) records rejected
 round59–63 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),

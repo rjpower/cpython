@@ -14,11 +14,13 @@ All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
 The reviewed [next design](../../design/proposals/interpreter-parity64.md) and
 [grouped ledger](../register-semantics59/review64.md) rank five architectural
-options. Both fixed storage-role trials are qualified and rejected. Execute
-one finite ordinary-C compact domain under an NCSR adapter, alongside the
-complete stable-frame deferred immediate-await unit. Its first native gate is
-128 bytes simultaneous adapter/domain stack, 16 KiB hot text and net whole-path
-work removal before generalization. Delegation spine, result continuation and
+options. Both fixed storage-role trials are qualified and rejected. The finite
+ordinary-C compact domain passes both builds and 29 focused methods per role,
+then stops at its native whole-path work gate: 47 internal instructions saved
+against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
+the size caps; no timing or target coverage follows. The independent complete
+stable-frame deferred-await source proceeds to root qualification. Delegation
+spine, result continuation and
 anchored self have separate admission and cost gates. All round59–62 executables
 and both round63 role trials remain
 rejected; selected57 is unchanged.
@@ -110,14 +112,14 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Implement the [reviewed compact-domain64 unit](../register-semantics59/compact-domain64.md) from selected57; cross-peer await slices | One ordinary-C finite executor, NCSR adapter, finite entry aliases, current homes and explicit ordinary/effect exits; actual source peer then root native cap before expansion |
-| Sol frame worker | [Deferred immediate-await unit](../register-semantics59/deferred-await63.md) source implementation after root/peer approval | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before enabling a head |
+| Sol generator worker | Close [compact-domain64](../register-semantics59/compact-domain64.md); independent complete await source peer | Compact native NO-GO, source/evidence preserved; no timing/target coverage |
+| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md), frozen source `f98decf1109` | Root integration `47151110b00` needs generation/window-adapter and reservation-OOM exception corrections before native qualification |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
 | Astra | Completed [grouped64 review](../register-semantics59/review64.md) | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 
-The compact unit may reuse source receipts without importing losing heads or
-binaries. Its first packet has a bounded whole-path cost gate, not a parity
-budget. The await unit targets allocation, copying, creation return
+The compact unit's bounded whole-path cost gate fails; no roster, mirror,
+provider, layout or flag expansion rescues this packet. The await unit targets
+allocation, copying, creation return
 and reentry together; ordinary nested calls must not force materialization.
 An unsafe relocation design is rejected before runtime work.
 

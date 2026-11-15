@@ -15,8 +15,9 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
 executes the reviewed [next design](design/proposals/interpreter-parity64.md):
-one compact ordinary-C execution domain under an NCSR adapter, alongside the
-complete stable-frame deferred immediate-await unit. Both fixed-role trials
+the complete stable-frame deferred immediate-await unit. The bounded compact
+ordinary-C domain passed correctness controls but failed its native net-work
+gate and is closed. Both fixed-role trials
 are qualified and rejected. All round59–62 executables remain rejected. Their
 source branches and sealed evidence are retained without becoming prerequisites.
 The [review ledger](issues/register-semantics59/review64.md) separates source/native

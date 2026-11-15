@@ -6,9 +6,11 @@ Continuation encoding and isolated Invoke also lose. All five first-cycle
 executable screens are closed; golden is unchanged. The round60 engine also
 loses every screen. [Round61](../../design/proposals/interpreter-parity61.md)
 tests producer/role contracts and complete creation/delegation transitions. These are incremental
-results, not a completed parity cycle. All four round62 candidates are now
-rejected; the [round63 design](../../design/proposals/interpreter-parity63.md)
-and [review](review63.md) drive the next source units. See the [workstream](README.md) and
+results, not a completed parity cycle. All four round62 candidates and both
+round63 fixed-role trials are rejected. The compact64 executor stops at its
+native net-work gate; complete deferred await is in isolated integration under
+the [round64 design](../../design/proposals/interpreter-parity64.md) and
+[review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
 ## Final loop-output binding: reject
@@ -990,3 +992,46 @@ must account for these results before another execution design is implemented.
 | raytrace | 1.000004 | 0.998176–1.001836 |
 | spectral_norm | 1.063393 | 1.062747–1.064039 |
 | nqueens | 1.010458 | 1.010310–1.010607 |
+
+## Compact domain64: stopped at the native work gate
+
+Source `6a889e40ba1ba3ca4e22ef922a3117f76493d9bb` starts independently from
+selected57 and has root plus independent actual-source approval. Final
+integration `9de7005b670b1acc0350c22f53f43dc91ccc9f14` contains generated
+products and a fixture-only correction. Both refreshed builds pass 117/79;
+eight new methods and 21 existing controls pass per release/debug role. The
+first release run passes seven new methods and fails one because it divides
+the semantic-word `tb_lasti` by eight. The correction compares raw indices
+and reproves the changed synthetic OOM image with fresh empty source/exception
+maps. Production remains unchanged. No new full-system qualification is claimed.
+
+The [unit](compact-domain64.md#native-gate-stop), [source peer](compact-domain64-peer.md)
+and independent [native review](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/parity64-compact2-native/native-review.md)
+close this packet. Captured ELF SHA256 is
+`d3246e84e58f812cc30241d36db6365708d5372af7a512942c62331e991906b7`.
+Stack/text caps pass: 112 simultaneous bytes, including both return addresses,
+and 1,665 hot bytes. The required complete-path instruction reduction fails:
+
+| Explicit static path to the ordinary boundary | Selected57 | Compact64 |
+| --- | ---: | ---: |
+| FOR-local → NO_DICT method → ARG → CALL | 173 | 227 |
+| APPEND → BACK → FOR-local → NO_DICT method → ARG → CALL | 234 | 280 |
+| Singleton APPEND → unsupported word | 38 | 128 |
+
+The five internal words fall 234→187, saving 47 instructions, but admission
+and entry add 59 and exit adds 34. Inline-ID paths also grow, 169→219 and
+230→272. Counts include executed envelopes, dispatches and provider calls;
+provider internals and the ordinary CALL body are excluded equally. These
+are static paths with explicit branch assumptions, not measured frequencies
+or elapsed-time results. Thirteen ordinary handlers/providers normalize
+equivalently; differing rodata annotations resolve to identical bytes. Whole
+`.text` grows 4,800 bytes, without an exclusive performance-cause claim.
+
+Root accepts native NO-GO and stops before timing or target coverage. Preserve
+the packet and `E59/parity64-compact2-native/{native-review.md,static-path-counts-final.json,static-path-counts.py,native-static-facts.json}`,
+`compact64-source-host` and `parity64-compact{1,2}` qualification logs/commands.
+Partial `E59/compact64-coverage` scripts are unused and unqualified; they prove
+no natural entry, completed segment or absence. There is no rescue through
+expanded operations, mirrors, providers, flags or layout searches. Selected57
+remains unchanged. The independently reviewed complete await source
+`f98decf1109` proceeds separately to root generation/native qualification.

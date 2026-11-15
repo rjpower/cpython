@@ -1,6 +1,6 @@
 # Register semantics and interpreter parity
 
-Status: active on 2026-11-14. Selected57
+Status: active on 2026-11-15. Selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0` remains the runtime baseline.
 The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
@@ -8,10 +8,12 @@ candidate is selected. All five first-cycle executable screens lose; the
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [next grouped design](../../design/proposals/interpreter-parity64.md) and
 [review ledger](review64.md) drive implementation: both fixed storage-role
-trials are qualified and rejected. One bounded compact execution domain and the
-complete deferred immediate-await source unit proceed independently.
-Every round59–62 runtime packet lost its broad comparison. The compact engine,
-retained delegation spine and anchored-self ABI remain conditional options.
+trials are qualified and rejected. The compact execution domain passes focused
+runtime checks but stops at its native net-work gate, without timing. The complete
+deferred immediate-await source unit has independent source approval and
+proceeds separately to root qualification.
+Every round59–62 runtime packet lost its broad comparison. The retained
+delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
 
@@ -34,16 +36,18 @@ remain evidence; they are not proposed anew.
 | Owner | Deliverable | State |
 | --- | --- | --- |
 | Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped64 final; no runtime changes |
-| Independent peer | Check unit ownership, recovery and reader closure before implementation | Both units approved by root and source peer |
-| Implementation workers | Compact-domain64 unit plus complete deferred await; independent cross-peer | Both unit architectures approved; actual source peer precedes native gate; await head/admission/writer closure incomplete |
-| Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
+| Independent peer | Actual source and whole-path native closure | Both complete source packets approved; compact native NO-GO accepted |
+| Sol IR | Compact documentation closure and independent await review | Compact closed; full await source GO |
+| Sol frames | Independent await generation/source corrections | Frozen source `f98decf1109`, 34 paths; root integration at `47151110b00` needs a window-adapter correction and reservation-OOM exception fix before native qualification |
+| Measurement | Reuse exact-identity harness and immutable selected57 | Compact coverage unused/unqualified; no timing or target coverage campaign |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
-define the next bounded execution attempt. The [fixed-role unit](role-lowering63.md)
+record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)
 retains the source contracts and rejected measurements. The [await unit](deferred-await63.md) separates stable active identity views
 from terminal storage movement. Its complete reader and lifecycle closure is
-a source integration gate. Both role packets are qualified and rejected; await has no native result.
+covered by the completed source review. Both role packets are qualified and
+rejected; await has no native result.
 
 ## Reviewed trial order
 
@@ -54,7 +58,7 @@ a source integration gate. Both role packets are qualified and rejected; await h
 | 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582 and isolated 5c60 pass focused gates but both screens lose |
 | 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | 14bf4eb passes both builds and 112 methods/role; screen loses, closed |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; compact64 unit proposal and complete await source proceed |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; compact64 stops at native work gate; complete await source independently approved |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

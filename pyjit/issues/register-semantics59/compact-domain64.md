@@ -1,7 +1,9 @@
 # Compact execution domain64
 
-Root and frames source-reviewed architecture, 2026-11-14. Bounded implementation
-authorized and underway; no native qualification. Implements only option 1 of
+Root and independent source-reviewed implementation, 2026-11-15. Source
+`6a889e40ba1` is integrated in G with generated products and fixture correction
+at `9de7005b670`. Both builds and focused runtime checks pass. **Closed at the
+native cost gate: NO-GO, without coverage or timing.** Implements only option 1 of
 [parity64](../../design/proposals/interpreter-parity64.md), subject to its
 128-byte simultaneous native-stack and 16-KiB hot-text stop gates. The
 [review64](review64.md) history and rejected Invoke/role/engine results apply.
@@ -10,15 +12,17 @@ P's `pyjit/parity64-compact-domain` began directly from selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0`; the attribute branch and its
 `035aa32e16cd833ef0470b934475750a87117f93` fixture remain preserved. No losing
 runtime packet is a dependency. Proposal preparation ran no test, generation,
-build, target execution or native analysis. Runtime source work is confined to P.
+build, target execution or native analysis. Root owns current G qualification.
 
 ## Physical boundary and source ownership
 
 Generate one ordinary-C `compact_domain_run(tstate, frame, word_index)` in
 ceval's translation unit and one NCSR `_TAIL_CALL_COMPACT_DOMAIN` adapter.
-All active aliases point to that same adapter in `generate_ir_targets`;
-they retain distinct ordinary formats and semantic mappings. Pending aliases
-point directly to the existing ordinary FOR/LOAD_ATTR handlers. Do not emit
+Only active FOR and APPEND aliases point to that adapter in `generate_ir_targets`.
+METHOD, ARG and jump aliases are internal cases but target their unchanged
+ordinary functions on external entry. Every alias retains its distinct ordinary
+format and semantic mapping. Pending aliases point directly to the existing
+ordinary FOR/LOAD_ATTR handlers. Do not emit
 one adapter or body per path, and do not replace the selected backend.
 
 The executor holds frame, slots and current word/index in native locals.
@@ -91,6 +95,12 @@ MAY_OWNER; there is no global-complete or incoming physical-NULL requirement.
 Original operand admission remains in force. Unsupported source contracts
 omit nomination, preserving ordinary valid synthetic analyses.
 
+Generator/coroutine/async-generator code receives no cold domain nomination:
+it cannot enter this THREAD-only executor. Its ordinary semantic plan is still
+built. Py_STATS builds likewise omit nomination and compile only the adapter's
+ordinary-unwrapping path. Domain statistics execution is outside this first
+native gate; ordinary counters remain exact.
+
 Cold pending FOR and METHOD aliases carry these single-word facts through
 adaptive specialization. The source recipe and ordinary base handler, rather
 than the alias spelling, authorize the eventual domain case. No adjacency,
@@ -162,10 +172,9 @@ typedef struct { uintptr_t word_index; uintptr_t exit_kind; } CompactExit;
 ```
 
 No owner, frame pointer, word pointer or address-taken state is returned.
-In Py_STATS builds pack the final semantic lastopcode into unused bits of
-exit_kind and restore it in the adapter; do not add a third word or count the
-adapter as another semantic instruction. Count/miss controls must distinguish
-an unexecuted fallback word from a completed internal instruction.
+Py_STATS builds use ordinary execution, without adding packed statistics state.
+Count/miss controls must distinguish an unexecuted fallback word from a
+completed internal instruction.
 
 DISPATCH_CURRENT resolves the semantic index against the pinned frame's
 current executing base, reloads slots/word, and uses the finite generated
@@ -297,3 +306,62 @@ and native owner effects; no automatic broad call-suite expansion.
 Peer the actual source and whole generated path before root's tiny native
 build. Passing those gates permits the unchanged hot8 screen, not selection.
 Stop on repeated sentinel loss and preserve the complete artifact.
+
+## Source and focused qualification
+
+Root and independent actual-source reviews approve packet2 SHA256
+`b9a049953d36d087f429612fc783bd7ce2f21954621edbee44c2b7219c49fde8`.
+Source commit `6a889e40ba1` contains twelve paths, including four focused
+source methods and eight runtime methods. The host source controls pass in
+both record modes and compare the ordinary emitted bodies with selected57.
+The shared final replay retains its executing-copy output; only compact
+nomination excludes generator-family code. Evidence is
+`E59/compact64-source-host/{freeze2.json,source3.log,frames-peer.md}`.
+
+Root integrates source and products independently from selected57. Final
+`9de7005b670b1acc0350c22f53f43dc91ccc9f14` includes the fixture correction;
+production is unchanged. Both refreshed release/debug builds complete
+117 modules/79 extensions. Eight new runtime methods and 21 existing controls
+pass per role. The first release fixture run passes seven and fails one:
+`tb_lasti` is already a semantic word index, so dividing it by eight asserts
+the wrong append site. The successor compares raw indices and explicitly
+reproves the changed synthetic image with empty source/exception maps. Exact
+OOM origin, consumed-last-owner finalization and observation checks remain.
+The failed log and corrected gates are retained in
+`E59/parity64-compact1-release-focus.log`,
+`parity64-compact2-{build,focus,controls-focus}-commands.json` and the
+corresponding release/debug logs. This is focused qualification, not a fresh
+full-system run or a performance result.
+
+## Native gate: stop
+
+The independent [native review](/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/parity64-compact2-native/native-review.md)
+and root agree NO-GO. Captured ELF SHA256 is
+`d3246e84e58f812cc30241d36db6365708d5372af7a512942c62331e991906b7`.
+Adapter plus executor use 112 bytes of simultaneous stack, including both
+return addresses, and 1,665 bytes of hot text; the size caps pass. The required
+complete-path instruction reduction fails:
+
+| Static successful path | Selected57 | Compact64 |
+| --- | ---: | ---: |
+| First FOR-local → NO_DICT method → ARG → ordinary CALL entry | 173 | 227 |
+| APPEND → BACK → FOR-local → NO_DICT method → ARG → ordinary CALL entry | 234 | 280 |
+| APPEND singleton → unsupported ordinary word | 38 | 128 |
+
+The five internal words save 47 instructions (234→187), but entry/admission
+adds 59 and exit adds 34: 187+59+34=280. Inline-ID paths also lose, 169→219 and
+230→272. Counts include executed dispatch/envelope instructions and provider
+calls; provider internals and the ordinary CALL body are excluded equally.
+These are explicit static branch paths, not dynamic frequencies or timings.
+All thirteen captured ordinary handlers/providers have equivalent normalized
+instructions; remaining rodata annotations resolve to identical bytes.
+Whole `.text` grows 4,800 bytes, which is not an attribution of cycle cost.
+
+Exact address traces and counting code are retained in
+`E59/parity64-compact2-native/{static-path-counts-final.json,static-path-counts.py,native-static-facts.json}`.
+Stop this packet without roster, mirror, provider, layout or flag expansion.
+Partial `E59/compact64-coverage` scripts are unused, unexecuted and unqualified;
+they establish no natural entry, successful case, segment length or absence.
+No timing or target coverage campaign follows. Selected57 is unchanged.
+The independent complete await source `f98decf1109` proceeds to root
+generation/native qualification; this rejection is not its prerequisite.

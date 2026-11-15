@@ -14,8 +14,10 @@ workers implement separate units from selected57: complete native CALL
 through rooted retirement/poll/append, and one caller-anchored exact-method self.
 A qualifies but loses its balanced screen: hot8 1.026137, logging 1.210653,
 DeltaBlue 1.022085 and spectral_norm 1.053213. It is rejected. Root integrates B
-independently; repaired source/products, both builds and 738 focused methods per
-role pass. Actual native-loan/cost qualification remains before the screen.
+independently and qualifies with actual loan/promotion controls. Its one frozen
+balanced hot8 screen loses all eight aggregate means (hot8 1.114220, DeltaBlue
+1.141350, logging 1.430373), so B is rejected too. Both round67 source branches
+and their evidence remain preserved; the next grouped review chooses new work.
 Selected57 is unchanged.
 
 Round66 is closed. Its qualified frozen continuation loses logging/generator
@@ -43,7 +45,7 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Qualify and measure B independently | G, `pyjit/parity67-anchored-self-integrated`; builds/focused methods pass, native gates pending |
+| Root | Close round67 and commission the next grouped review | G, `pyjit/parity67-anchored-self-integrated`; qualified B loses its screen, selected57 unchanged |
 | Sol-high A | Complete native callout/result consumer | Qualified and rejected; preserve `pyjit/parity67-callout-integrated` at `ba4ea9dd9a9` |
 | Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; source repairs have independent GO |
 | Astra | [Review67](review67.md) complete | Independent adoption GO; source implementation delegated |

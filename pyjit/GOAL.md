@@ -21,9 +21,12 @@ selected57: complete native callout through rooted retirement/poll and a real
 result consumer; caller-anchored read-only exact-method self with complete
 promotion and owner-consumer closure. A qualifies but fails its balanced screen
 (logging +21.1%, DeltaBlue +2.2%, spectral_norm +5.3%) and is rejected. B is
-integrated independently; corrected builds and focused runtime checks pass,
-with actual native-loan/cost qualification pending.
-Root combines only independently qualified broad winners; selected57 is unchanged.
+qualified independently, including actual unpromoted-loan and promotion controls,
+but loses every hot8 aggregate: DeltaBlue +14.1%, logging +43.0%, hot8 +11.4%.
+Both round67 runtimes are rejected. The next grouped architecture review must
+price the complete work added to ordinary execution before choosing new source
+units. Root combines only independently qualified broad winners; selected57 is
+unchanged.
 
 Round66 is closed: frozen B qualified but failed logging/generator protection;
 its auxiliary union was not implemented. The logging diagnostic showed

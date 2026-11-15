@@ -15,8 +15,9 @@ start from selected57: a complete native callout/result-consumer boundary, and
 one caller-anchored exact-method self binding. Shared ownership/effect interfaces
 have independent peer GO. A qualifies but loses its balanced screen: logging
 slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. It is rejected. B is integrated
-independently; corrected builds and 738 focused methods per role pass, with
-actual native-loan/cost qualification pending.
+independently and qualifies, but its screen loses: hot8 +11.4%, DeltaBlue +14.1%
+and logging +43.0%. Both round67 runtimes are rejected; the next grouped
+architecture review precedes any new source units.
 Selected57 remains unchanged.
 
 Round66's frozen continuation qualified but lost its logging/generator gates.

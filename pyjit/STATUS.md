@@ -8,9 +8,9 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-follows adopted [design67](design/proposals/interpreter-parity67.md) and
-[review67](issues/register-semantics59/review67.md). Independent source adoption
-and shared-interface readback pass. Two Sol-high source lanes start from
+closed round67 under adopted [design67](design/proposals/interpreter-parity67.md)
+and [review67](issues/register-semantics59/review67.md). Independent source adoption
+and shared-interface readback passed. Two Sol-high source lanes started from
 selected57: A, complete native callout through B0-rooted retirement/poll and
 append; B, one caller-anchored read-only exact-method self binding. A is not
 blocked on B. A source and generated-product repairs are integrated at
@@ -22,19 +22,33 @@ real-source line-redirection control also passes both builds. Its stable 32-row
 screen rejects selection: hot8 ratio 1.026137, logging 1.210653, DeltaBlue
 1.022085 and spectral_norm 1.053213. No larger A campaign follows.
 B source `77d3d78ec99` integrates independently at `a0bf313f305`, products
-`c358f39f481`. Three subsequent source repairs are integrated at
-`2469611c358`; fresh products restore all selected57 resolved owners, including
-19 LOAD_ATTR and four EXIT entries, with only the three intended method-effect
-columns changed. Independent source/product reviews pass. Anchor2 release
-build passes 117/79, but debug bootstrap asserts when return-slot publication
-routes the interpreter-entry sentinel through ordinary code-frame bounds.
-The seven-method release-only diagnostic passes. Sentinel publication repair
+`c358f39f481`. Three source repairs integrate at `2469611c358`; fresh products
+restore selected57 resolved owners, including 19 LOAD_ATTR and four EXIT
+entries, with only the three intended method-effect columns changed. Anchor2's
+debug bootstrap failure and the anchor3 driver/qualification evidence remain
+preserved. The sentinel publication repair
 `b99b5537c646c904d8fc20e43f74230f345835fa` has independent source GO and is
-integrated at `b9ce559755f`. Both anchor3 builds pass 117/79, with successful
-738-method focused runs per role
-(10 release skips, nine debug skips). Actual native-loan receipts, complete
-native cost review and the performance screen remain pending. PyValue rollout
-is complete; parity is not achieved.
+integrated at `b9ce559755f`; anchor3 then passes 117/79 and 738 focused methods
+per role. A promotion follow-up exposed a nomination bug, repaired in
+`specialize.c` at `65fa10014885d139a47099ed384aefe59d26b943`; the generator was
+unchanged, so no regeneration was needed. Final anchor4 has independent
+hard-qualification GO: both builds pass 117/79 and eight focused methods per
+role. Actual natural and promotion receipts pass, as do both two-method fallback
+controls per role. The natural receipt preserves mortal refcount 11, count
+0→1→0, tag 0x1000→NONE and self NULL. Promotion confirms same-child refcount
+3→4, tag NONE, count 1→0, helper return before exact saved caller-slot
+replacement, preserved child self and weakref release. Native review confirms
+20 symbols match anchor3 in VMA, size and raw bytes; `.text` differs by eight
+bytes in cold specialization and literal references only. Static review records
++149,568 bytes of text, 136-byte method NCSR versus 8 bytes, and ordinary-effect
+costs; no cause is inferred. The stable-identity 32-row hot8 screen rejects B:
+all eight aggregate means are slower, including comprehensions 1.020893,
+DeltaBlue 1.141350, coroutines 1.027999, generators 1.032565, logging 1.430373,
+raytrace 1.061317, spectral_norm 1.149823 and nqueens 1.100358. No improvement
+subpredicate passes; root closes B with no confirmation, all29, PMU, full suite
+or repair. A and B are both rejected; selected57 remains unchanged. Astra's
+next holistic review is pending; no next source unit is selected. Parity is not
+achieved.
 
 Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable
 32-row screen has hot8 ratio .936871, but logging 1.076467 and generators 1.014457

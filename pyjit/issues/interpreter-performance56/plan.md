@@ -18,11 +18,13 @@ B removes one method-self acquire/retire through a caller anchor, with promotion
 and all clear/traverse/take/copy/writer consumers ported. Both implementations
 have source review. A qualifies but loses its balanced screen and is rejected;
 logging slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B is integrated
-independently; corrected builds and focused runtime checks pass, with native
-mechanism/cost qualification pending. Root combines
-only independently qualified winners.
+independently and qualifies with actual loan/promotion controls, but its frozen
+screen loses all eight aggregate means: hot8 1.114220, DeltaBlue 1.141350 and
+logging 1.430373. Both round67 units are rejected. The next grouped architecture
+review must account for complete ordinary-path costs before choosing new source
+units. Root combines only independently qualified winners.
 
-Round66 is the latest closed measured experiment. Its qualified frozen
+Round66's earlier qualified frozen
 continuation has hot8 ratio .936871 but fails logging/generator protections.
 The auxiliary union stopped unimplemented. The single matched logging diagnostic
 has instruction ratio .992588 and cycle ratio 1.085426; it establishes no cache/frontend

@@ -12,13 +12,15 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity63.md) and
-[grouped ledger](../register-semantics59/review63.md) rank five architectural
-options. Both fixed storage-role trials are qualified and rejected; complete
-the independent stable-frame deferred immediate-await unit and obtain the
-next grouped architecture review against those measured losses. The compact CFG
-engine, delegation spine and anchored self borrow have separate admission and
-cost gates. All round59–62 executables and both round63 role trials remain
+The reviewed [next design](../../design/proposals/interpreter-parity64.md) and
+[grouped ledger](../register-semantics59/review64.md) rank five architectural
+options. Both fixed storage-role trials are qualified and rejected. Execute
+one finite ordinary-C compact domain under an NCSR adapter, alongside the
+complete stable-frame deferred immediate-await unit. Its first native gate is
+128 bytes simultaneous adapter/domain stack, 16 KiB hot text and net whole-path
+work removal before generalization. Delegation spine, result continuation and
+anchored self have separate admission and cost gates. All round59–62 executables
+and both round63 role trials remain
 rejected; selected57 is unchanged.
 Earlier source and evidence remain inputs, not prerequisites.
 
@@ -101,21 +103,21 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity63.md)
+The workstream's [next design](../../design/proposals/interpreter-parity64.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | [Attribute-role refinement](../register-semantics59/role-lowering63.md#phase-two-source-refinement) frozen at c1066265668 and integrated; now peers await source | Reached owner receipts, canonical pair publication, common admission and central writer closure; root owns native gates |
+| Sol generator worker | Implement the [reviewed compact-domain64 unit](../register-semantics59/compact-domain64.md) from selected57; cross-peer await slices | One ordinary-C finite executor, NCSR adapter, finite entry aliases, current homes and explicit ordinary/effect exits; actual source peer then root native cap before expansion |
 | Sol frame worker | [Deferred immediate-await unit](../register-semantics59/deferred-await63.md) source implementation after root/peer approval | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before enabling a head |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
-| Astra | Completed grouped63 review | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
+| Astra | Completed [grouped64 review](../register-semantics59/review64.md) | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 
-The role unit may reuse central-writer source infrastructure without importing
-losing heads or binaries. Its first packet is an incremental opportunity, not
-a parity budget. The await unit targets allocation, copying, creation return
+The compact unit may reuse source receipts without importing losing heads or
+binaries. Its first packet has a bounded whole-path cost gate, not a parity
+budget. The await unit targets allocation, copying, creation return
 and reentry together; ordinary nested calls must not force materialization.
 An unsafe relocation design is rejected before runtime work.
 

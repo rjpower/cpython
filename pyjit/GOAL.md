@@ -14,13 +14,12 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes the reviewed [next design](design/proposals/interpreter-parity63.md):
-fixed storage-role lowering has completed with two rejected trials; deferred
-immediate-await activation remains the independent source lane. The next grouped
-review must use those results before another execution design proceeds.
-All round59–62 executables remain rejected. Their
+executes the reviewed [next design](design/proposals/interpreter-parity64.md):
+one compact ordinary-C execution domain under an NCSR adapter, alongside the
+complete stable-frame deferred immediate-await unit. Both fixed-role trials
+are qualified and rejected. All round59–62 executables remain rejected. Their
 source branches and sealed evidence are retained without becoming prerequisites.
-The [review ledger](issues/register-semantics59/review63.md) separates source/native
+The [review ledger](issues/register-semantics59/review64.md) separates source/native
 facts, measured costs and unresolved cycle regressions. No evidence-backed
 combined parity budget has yet been established.
 Logical values, uses, edge results and continuations precede storage and

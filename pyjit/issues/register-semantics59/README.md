@@ -6,10 +6,10 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[next grouped design](../../design/proposals/interpreter-parity63.md) and
-[review ledger](review63.md) drive implementation: both fixed storage-role
-trials are qualified and rejected, while the independent deferred immediate-await
-source unit continues. The next grouped review must account for both results.
+[next grouped design](../../design/proposals/interpreter-parity64.md) and
+[review ledger](review64.md) drive implementation: both fixed storage-role
+trials are qualified and rejected. One bounded compact execution domain and the
+complete deferred immediate-await source unit proceed independently.
 Every round59–62 runtime packet lost its broad comparison. The compact engine,
 retained delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -33,15 +33,15 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped63 final; no runtime changes |
+| Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped64 final; no runtime changes |
 | Independent peer | Check unit ownership, recovery and reader closure before implementation | Both units approved by root and source peer |
-| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | Both role trials qualified and rejected; complete deferred-await source under way |
+| Implementation workers | Compact-domain64 unit plus complete deferred await; independent cross-peer | Both unit architectures approved; actual source peer precedes native gate; await head/admission/writer closure incomplete |
 | Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 
-The [fixed-role unit](role-lowering63.md) defines the first bounded source
-packet. It carries reached ownership and canonical facts through lowering;
-it does not add a new runtime proof table. The [await unit](deferred-await63.md) separates stable active identity views
+The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
+define the next bounded execution attempt. The [fixed-role unit](role-lowering63.md)
+retains the source contracts and rejected measurements. The [await unit](deferred-await63.md) separates stable active identity views
 from terminal storage movement. Its complete reader and lifecycle closure is
 a source integration gate. Both role packets are qualified and rejected; await has no native result.
 
@@ -54,7 +54,7 @@ a source integration gate. Both role packets are qualified and rejected; await h
 | 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582 and isolated 5c60 pass focused gates but both screens lose |
 | 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | 14bf4eb passes both builds and 112 methods/role; screen loses, closed |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; scalar plans deferred; round63 source units under review |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; compact64 unit proposal and complete await source proceed |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

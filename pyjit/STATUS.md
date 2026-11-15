@@ -8,8 +8,8 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes Astra's [round63 design](design/proposals/interpreter-parity63.md) and
-[review ledger](issues/register-semantics59/review63.md). Selected57 remains
+executes Astra's [round64 design](design/proposals/interpreter-parity64.md) and
+[review ledger](issues/register-semantics59/review64.md). Selected57 remains
 unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
@@ -58,12 +58,16 @@ terminal storage movement is bounded by the evaluator entry. Its source reader,
 retirement and suspension closure is under way; no await head is enabled or
 native qualification claimed. Golden remains unchanged.
 
-The next grouped Astra review is active in Loom channel `zfr7ow1e`, on
-`weaver/interpreter-parity64-astra`. It assesses selected/upstream source,
-both qualified role63 losses and the complete deferred-await design before
-ranking the next concrete units. No review64 recommendation or runtime result
-is claimed yet. The two Sol workers continue await implementation and actual
-slice review; no private await entry is enabled.
+The grouped [review64](issues/register-semantics59/review64.md) is integrated:
+one finite ordinary-C domain under an NCSR adapter is the next bounded attempt,
+alongside the changed/continued complete await unit. Generic CALL stays outside
+the domain; owning homes and the real provider/retirement work remain. Its first
+native gate requires at most 128 bytes simultaneous adapter/domain stack,
+16 KiB hot text and positive whole-path work removal. No framework expansion
+precedes that result. The [compact unit](issues/register-semantics59/compact-domain64.md)
+has root and [independent architecture approval](issues/register-semantics59/compact-domain64-peer.md);
+Sol IR implements it while Sol frames closes await admission and live writers. No await entry is enabled,
+and neither round64 source lane has a native result.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

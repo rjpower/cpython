@@ -4,9 +4,11 @@ Latest completed unit: round65 A passes source, runtime and native qualification
 but loses its standalone hot8 screen: coroutine time falls 39.3%, while logging
 loses 16.2% and generators 5.5% in both pairs. Reject the executable; selected57
 remains unchanged. The already reviewed private SEND-yield continuation B is
-now active under [design65](../../design/proposals/interpreter-parity65.md) and
-[review65](review65.md). It must earn complete ownership/control closure, native
-gates and its own screen. No cause of the broad regressions is established.
+integrated under [design65](../../design/proposals/interpreter-parity65.md) and
+[review65](review65.md). Source, products and focused runtime checks pass;
+native review has found private-completion work above the reviewed cap.
+It still needs native qualification and its own screen. No cause of the broad
+regressions is established.
 No confirmation, all29, direct-upstream, PMU or full diagnostics follows this
 losing screen. Earlier completed attempts and sealed evidence remain below.
 
@@ -22,6 +24,61 @@ native net-work gate; complete deferred await qualifies and loses its screen
 under the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
+
+## Round65 SEND-yield continuation: integrated, native gate unresolved
+
+Current trial `980baf6bbf3aa1d8182c35f8c7166c662c4ad1f0` preserves semantic
+SEND words and moves private suspension preparation into one dispatch-only
+continuation, ID385. Ordinary YIELD no longer classifies its parent or prepares
+private suspension. Cold logical-PC readers, writers, error completion and
+copy/detach paths resolve or cancel the executable target. The header remains
+112 B; the private record grows from 72 to 80 B. This is an unselected trial.
+
+Source `8373e9d5fd61` integrates at `e7f61a81b69`; root-generated products are
+`09124a5c05a`. Independent full-source review first rejects a missing pinned-
+number checker consumer; the shared explicit target reservation repairs it,
+retaining disabled-source and unknown-entry rejection. An unused emitted
+selector is removed. Full regeneration passes. Independent product review finds
+308 old handlers byte-equal, fourteen debug-assert-only changes and eight
+intended SEND/YIELD release changes. All 76 ownership entries and existing
+semantic format rows are byte-equal. Three affected source consumers pass.
+
+Both `parity65-continuation3` builds pass 117/79. The initial focused runs pass
+47 of 48 methods per role; the new mortal-input fixture retains position rows
+while wrongly emptying its semantic recovery table. Explicitly supplying the
+original matching table repairs public construction. The next isolated run
+then correctly rejects the unversioned FunctionType leaf before private
+nomination. The fixture now uses the existing MAKE_FUNCTION factory pattern;
+its private-head, callback-count and real-SEND assertions remain intact.
+`parity65-continuation3-input` passes the corrected method in both roles,
+completing the 48-method set. Runtime code/products never changed during these
+fixture corrections. Initial failures and source/peer evidence remain under
+`boundary65-source-host` and the corresponding continuation1/2 logs.
+
+The native-alias test passes in both original focused runs: a real C pointer
+survives foreign observation of an unobserved armed private frame, followed by
+actual yield, identity detach and completion. `root-b-capi-modules.json` pins
+the shared modules. The static capture is **`parity65-continuation2/python`**,
+SHA256 `99ffb00af89bcc4cc0701cd6971d7128eaeb2cc4a01aa7a1e4ea67f61bc46d38`.
+The fixture-only refreshed binary has byte-identical .text and unchanged C API
+modules, documented by `root-b-fixture-native-text-equivalence.json`.
+
+Independent native review gives **NO-GO**. Complete EMPTY private return costs
+158+K instructions versus await9's 153+K and A's 152+K; K is the same actual
+private clear path. Warm reservation remains 44 instructions. The changed
+consumer is generic completion's unarmed WAIT path, 93→99: a target comparison
+and additional decode work, without new spills, calls or owner moves. Text
+adds 1,600 B and rodata 96 B against await9, within their caps. Remaining native
+gates stop unqualified at this failure. Preserve
+`pyjit/parity65-continuation-initial` at this head.
+
+Root authorizes one bounded producer/consumer correction proposal: carry the
+existing retirement branch's semantic-continuation fact into common completion,
+using live control after callbacks. It requires independent peer review and
+the same complete native gates; no cap waiver or new mode/header/engine is
+authorized. No GDB transaction probes, broader runtime campaign or timing
+starts on the failed artifact. No performance result or causal logging claim
+is made. `unit-b-native-cold-review.md` and `native-b65` retain the exact paths.
 
 ## Round65 return/accessor boundary: qualified mechanism, rejected executable
 
@@ -92,8 +149,8 @@ No confirmation/all29/direct-upstream/PMU/full-system campaign follows. Preserve
 `pyjit/parity65-residence-integrated` at the final head. No new upstream result
 is inferred by multiplying historical ratios. The optional B continuation is a
 separate reviewed attempt, not evidence that its proposed mechanism caused or
-will repair these regressions. P and G start that attempt from the qualified A
-head; B still needs complete source, runtime and native qualification.
+will repair these regressions. P and G developed that attempt from the qualified
+A head; the current B integration and remaining gates are recorded above.
 
 ## Final loop-output binding: reject
 

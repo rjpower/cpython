@@ -25,8 +25,10 @@ generators 5.2%; reject the standalone executable. The completed round65 review
 orders a bounded return/accessor refactor, then a conditional private SEND-yield
 continuation. A passes native qualification but loses its own hot8 decision:
 coroutines .606811/selected57, logging 1.161661 and generators 1.055271. Reject
-the standalone executable; B now implements the already reviewed isolation
-hypothesis with complete reader/writer/control closure and its own gates.
+the standalone executable. B's source/products and focused runtime checks are
+integrated; native review has found excess synchronous completion work, so no
+B timing starts before that gate is resolved. The reviewed isolation hypothesis
+retains complete reader/writer/control closure and its own gates.
 Delegation spine, result continuation and anchored self have separate admission
 and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -119,9 +121,9 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol A, returns | Existing complete RETURN recipes partition THREAD versus one owned-result resumable helper; state-proved embedded accessors | Implementing in W after root/Astra proposal GO; no new opcode, mode, image mirror or classification pass |
-| Sol B, continuation | Private SEND-yield target and complete semantic-PC/reader/writer contract; independent A source peer | Proposal in P; shared generator interfaces freeze after A. No B implementation before source GO and A native gate |
-| Coordinator | Peer interfaces, integrate, generate, qualify and measure | A gets its own hot8 and may advance without B. B integration receives separate native/performance decisions |
+| Sol A | Completed A and independent B source/product peers; review the bounded completion-fact correction | A native qualification passes and its standalone screen loses; preserve its branch and evidence |
+| Sol B, continuation | Complete B is integrated; propose one bounded completion-fact correction | Initial native completion cap fails. No implementation before independent proposal GO; no new mode, header or engine |
+| Coordinator | Integrate, generate, qualify and measure | Both B builds and focused checks pass; hold broader tests, transaction probes and timing until corrected native gates pass |
 | Astra | Completed [grouped65 review](../register-semantics59/review65.md) | Source `374f8e3eadb` plus clarification `ceb46447bb0` integrated; next broad review only after coherent measured outcomes |
 
 The compact unit is closed; no roster, mirror, provider, layout or flag

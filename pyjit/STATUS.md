@@ -11,9 +11,9 @@ The active [IR-semantics workstream](issues/register-semantics59/README.md)
 executes Astra's [round65 design](design/proposals/interpreter-parity65.md) and
 [review ledger](issues/register-semantics59/review65.md). Unit A changes existing
 RETURN recipes to THREAD-first retirement plus proved embedded accessors; no
-new opcode, mode, classification pass or image mirror. Unit B proposes one
+new opcode, mode, classification pass or image mirror. Unit B adds one
 private SEND-yield target with complete semantic-PC/reader/writer closure. A
-gets its own native gate and hot8 screen and may advance without B. Selected57
+had its own native gate and losing hot8 screen. Selected57
 remains unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
@@ -22,9 +22,21 @@ Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
 Independent source/native/ABI and a fresh actual private-retirement receipt pass.
 Its stable hot8 screen cuts coroutine elapsed time 39.3%, comprehensions 2.7%
 and DeltaBlue 1.0%, but logging loses 16.2% and generators 5.5% in both pairs.
-No cause is established. B's already reviewed continuation is now in source
-implementation; it has no new runtime or performance result. Selected57 remains
-unchanged; no larger campaign follows the losing A screen.
+No cause is established. B source `8373e9d5fd61` and root-generated products
+`09124a5c05a8aebc6f7b761e1da065e6290b6c9c` are integrated on
+`pyjit/parity65-continuation-integrated`, now at `980baf6bbf3` after two
+fixture-only corrections. Independent source
+and product reviews pass after a bounded number-checker correction; full
+regeneration and three affected source consumers pass. Both release and debug
+builds pass 117/79. The 48 focused methods per role pass after preserving the
+fixture's matching recovery map and constructing its rewritten leaf through
+MAKE_FUNCTION so private admission is actually exercised. Native review gives
+NO-GO: synchronous private completion adds six instructions against A, five
+against await9, exceeding the four-instruction cap. One bounded proposal will
+carry the existing retirement fact into common completion; independent review
+and unchanged native gates remain required.
+No B timing or broader campaign has started. Selected57 remains unchanged; no
+larger campaign follows the losing A screen.
 
 | Packet | Current result |
 | --- | --- |

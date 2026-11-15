@@ -313,11 +313,19 @@ more consumers/providers merely to rescue a losing screen.
 
 ## Unit B — one caller-anchored exact-method parameter
 
+**Representation decision: CHANGE the ownership contract, not the read path.**
+Keep canonical object bits in self with explicit non-owning frame authority;
+reject self=NULL plus conditional storage/read routing. No source claim yet
+establishes that the complete closure costs less. GO only for the bounded source
+proposal/independent ownership peer, then the qualification below; stop B if
+that proposal cannot meet these contracts. A proceeds independently.
+
 **Admission and producer.** Extend the shared IR owner relation with
 `ANCHOR_CALLER_LOCAL(parent_slot, child_parameter0)`; it is not a special PyValue
 bit pattern. Initial shape is a local-receiver method selection immediately
 feeding a zero-explicit-argument exact Python call. The exact callable/version
 must certify ordinary optimized non-resumable code, one parameter, no self cell,
+no varargs/varkwargs and no keyword-only parameters,
 and no instruction that rebinds/deletes parameter0. Public IR gets the same
 def/use proof. Instrumented, external or already exposed parent frames use the
 owning path. PEP523, stack and recursion guards precede any ownership change.
@@ -332,12 +340,27 @@ use ordinary method selection/CALL before effects. Retain semantic method and
 CALL PCs/events; monitoring uses the ordinary path. This fused preparation is
 only the producer of a new lifetime contract, not a retry of method62 alone.
 
+The exact ownership ledger is: selected method `TAKE(local_receiver)` acquires
+the window's self owner; exact CALL **moves** it into the overlapping child;
+child retirement closes it. B removes the first acquisition and matching close.
+There is no entry-time acquisition to skip and no argument-move credit. A scratch
+receiver that already owns its value does not qualify for this claimed removal.
+Callable/code acquisitions, any owned result acquisition and every other input
+remain. Promotion restores self ownership and therefore forfeits the owner-pair
+saving for that activation, even if some producer dispatch work was also removed.
+
 **Representation.** Keep a canonical self value in child slot0 so read-only
 uses need no load indirection or tag branch. It is explicitly non-owning while
 anchored. Replace the raw `pending_kwargs` field interface by a typed 16-bit
 binding-auxiliary interface: NONE, EMPTY_KWARGS(slot), or ANCHORED_SELF(slot).
 Actual slots use 12 bits (0..4094); upper bits distinguish the mode. Existing
 NONE is 0x0fff. Anchored frames cannot simultaneously have pending kwargs.
+This is a new tagged-union interpretation of a live field, not a claim that
+`pending_kwargs`, `phase_state` or a pointer slot is spare. Phase publication
+is untouched. The restricted signature plus the constructor/transition proof
+must establish mutual exclusion, and ordinary kwargs keep their existing state.
+If a supported transition requires both live payloads before promotion, reject
+this representation rather than silently grow the header or overwrite state.
 Keep the 112 B header and all frame addresses. Update every constructor, copy,
 materialization and clear reader of this field; do not reinterpret a tagged
 value as a kwargs slot. This storage choice is part of the unit, not the stopped
@@ -347,6 +370,9 @@ Track active anchored frames in a thread counter, incrementing only after the
 complete child is published. No new owning anchor, per-call allocation or
 ordinary-frame linked-list field. `previous` identifies the immediate suspended
 owner, whose local must remain strongly owning until promotion or retirement.
+The anchor address is `child->previous->base + admitted_parent_slot`; the
+auxiliary payload records that static slot index, not another pointer. Parent
+base/address changes require promotion first, even if the slot number survives.
 Nested anchored calls are allowed only when their source local is itself an
 owner; parameter0 in an anchored parent cannot anchor another loan. An ordinary
 owning argument acquired from it can. No chained borrowed root is admitted.
@@ -380,6 +406,25 @@ the borrowed slot as a second owning edge; the parent local is the root. Pure
 reads may borrow it, but stores to other homes acquire ownership as today.
 Error cleanup, transition roots and frame-object takeover must use this same
 owner classification. No owner kind based solely on a helper name or annotation.
+
+The all-non-NULL-homes-own invariant changes only for this explicit frame state.
+`PyValueBorrow` has the same canonical bits; pointer validity/canonicality does
+not establish ownership. The following consumers must agree before B can run:
+
+| Consumer | Required contract |
+| --- | --- |
+| Ordinary local read | Keep direct `IR_VIEW`; no self-specific load, NULL sentinel or per-read routing. |
+| Owning use or return of self | Existing local `IR_CONSUME_INPUT` returns no transferred owner and `IR_TAKE` duplicates the borrow. Retain that one acquisition; do not add a second or adopt the borrowed bits as an owner. |
+| Known-home take, range close, replace/delete | They cannot silently adopt/close slot0 while anchored. Prove it outside their owning domain or promote before the operation; source guards/debug assertions enforce the boundary. No general hot-read check is implied. |
+| Clear, GC, home/transition-root views | Classify anchored slot0 as readable but non-owning. Skip its close/owning visit, while tracing the actual parent owner. Pop/count changes occur before reentrant cleanup. |
+| Copy, detach, observer, writable locals/native exposure | Promote before exporting an owning view or changing the anchor; no raw header/slot copy can create or lose a loan. |
+| Constructors, kwargs materialization, unwind | Initialize/read the typed auxiliary mode, preserve existing kwargs behavior, and discharge the loan exactly once on all exits. |
+
+In particular `_PyFrame_TakeKnownHome` currently adopts bits without an acquire;
+it is not safe for an anchored self merely because the bits are canonical.
+`_PyGC_VisitFrameStack` and generated home/outcome readers must receive the same
+authority as frame clear. This is a focused port of every owner consumer of the
+new state, not permission to leave one consumer on the old invariant.
 
 **Exact files and closure.** Producer/validator: `regcfg_passes.c`, `regcfg.c`,
 `Objects/codeobject.c`, `ir.c`, `specialize.c`, bytecode/generator sources.

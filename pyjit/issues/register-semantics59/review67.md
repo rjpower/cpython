@@ -180,6 +180,34 @@ the live reached semantic word. None is discharged by this source memo. The
 grouped screen/confirmation thresholds remain authoritative over its looser
 screen suggestion. B is independently conditional and must not delay A.
 
+### B representation and ownership decision
+
+Settle B on canonical self bits plus explicit anchored non-owning authority,
+not NULL-self/read indirection. Actual I `bytecodes.c:4079` uses `TAKE(owner)`
+for method self; with a local receiver, `ceval_macros.h:538`/`:551` acquire the
+owning snapshot. Exact CALL at4353 moves it. Thus only the producer acquisition
+and eventual child close can be removed. An entry-only skip earns nothing.
+RETURN_VALUE_EMPTY at22942 already uses the local-borrow/TAKE acquisition for
+returning self; B must keep that acquisition, not duplicate it again.
+
+The112 B header contains no spare pointer. The proposed auxiliary encoding is
+an explicit tagged replacement of live `pending_kwargs`, justified only by
+12-bit slot indices and mutually exclusive admitted signatures/states. It does
+not reuse live phase publication. Caller frame plus recorded static local index
+derives the anchor, with promotion before address/base changes. If a supported
+transition needs both pending kwargs and the anchor, the representation fails
+unless promotion first restores the ordinary contract; no hidden header growth.
+
+Canonical bits are not owner evidence: I `_PyFrame_TakeKnownHome` at
+`pycore_interpframe.h:210` adopts without acquiring, while frame traversal calls
+`_PyGC_VisitFrameStack`. Design67 now names the take/close/replace, GC/root-view,
+copy/observer/writer, constructor/kwargs and unwind consumers that must share
+the changed invariant. Ordinary reads remain direct. Counter/authority checks,
+promotion, ordinary-path costs and guard work remain charged. Source alone does
+not establish net savings; B is a bounded source/peer attempt, with stop rules
+for surviving snapshots, absent unpromoted mortal hits or incomplete ownership
+closure. No additional lane or runtime work is authorized by this clarification.
+
 ## Coverage used to rank the options
 
 [Resident coverage](resident-coverage.md) and the retained

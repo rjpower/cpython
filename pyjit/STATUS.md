@@ -8,23 +8,22 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-follows the adopted [round66 proposal](design/proposals/interpreter-parity66.md)
-and [review](issues/register-semantics59/review66.md). Frozen B
-`64348dd5c182af27c058e60f1e3f849f00d7ef81` qualifies without runtime edits:
-both 117/79 builds, fresh 48-method runs per role, and actual natural-return,
-terminal-suspension, armed-error and armed-normal controls pass. Its stable
-32-row hot8 screen rejects selection. Generator mean is 1.014457, logging
-pair ratios are 1.073116 and 1.079828, and geometric mean is 0.936871. Unit2 stops because the
-non-generator gate fails; the union proposal remains unimplemented.
+follows adopted [design67](design/proposals/interpreter-parity67.md) and
+[review67](issues/register-semantics59/review67.md). Independent source adoption
+and shared-interface readback pass. Two Sol-high source lanes start from
+selected57: A, complete native callout through B0-rooted retirement/poll and
+append; B, one caller-anchored read-only exact-method self binding. A is not
+blocked on B. No source checkpoint is yet qualified, and no round67 runtime or
+performance result exists. PyValue rollout is complete; parity is not achieved.
 
-A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
-1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
-instruction-count explanation for the full logging loss; it identifies no
-frontend, cache or other mechanism. Round65's A
-screen loss and B native rejection remain closed; selected57 is unchanged.
-PyValue rollout is complete;
-transport, effects, ownership and physical execution remain targets. Parity is
-not achieved.
+Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable
+32-row screen has hot8 ratio .936871, but logging 1.076467 and generators 1.014457
+fail protection. The auxiliary union stops unimplemented. Its single matched
+logging diagnostic has instruction ratio .992588 and cycle ratio 1.085426 with full counter
+coverage and no recorded sample loss; no cause is established. Selected57 stays
+unchanged. The [report](issues/register-semantics59/report.md) owns exact results,
+source identities and qualification limits. The following round65 outcomes are
+historical, before the separately admitted round66 screen.
 
 Unit A is qualified at `a6695887e94` but rejected as a standalone executable.
 Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
@@ -37,8 +36,8 @@ preserved at `980baf6bbf3`. Source, product, build and fresh focused checks pass
 One reviewed correction carries the reached retirement fact into common
 completion, but round65's final native review rejects B: instrumented EMPTY adds
 five instructions against the four-instruction allowance. Remaining native and
-transaction gates stopped unqualified in that round. No B screen was run, so
-there is no measured B performance result. Selected57 remains unchanged.
+transaction gates stopped unqualified in that round. No B screen was run in
+round65; round66's later qualification and result are recorded above.
 
 | Packet | Current result |
 | --- | --- |
@@ -102,8 +101,8 @@ and is rejected at its native net-work gate. Complete await source is independen
 reviewed and integrated separately. Generation and generated-code review pass;
 both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
 a 42.9% coroutine gain but unacceptable logging and generator regressions.
-Round64 and round65 are closed with no selected runtime. Adopted design66
-reconsiders the architecture and admission gates. Round66 unit1 qualifies frozen
+Round64 and round65 are closed with no selected runtime. Design66 revisited
+the architecture and admission gates. Round66 unit1 qualifies frozen
 B and its hot8 screen rejects selection. No all29/full-system campaign follows
 the rejected screens.
 

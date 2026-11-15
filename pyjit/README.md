@@ -9,15 +9,17 @@ and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The
 [IR-semantics workstream](issues/register-semantics59/README.md) follows the
-adopted [round66 design](design/proposals/interpreter-parity66.md) and
-[review](issues/register-semantics59/review66.md). Frozen B qualifies without
-runtime source changes and completes the hot8 screen, but is rejected for
-generator and logging regressions. Unit2 stops; selected57 remains unchanged.
+adopted [round67 design](design/proposals/interpreter-parity67.md) and
+[review](issues/register-semantics59/review67.md). Two independent source lanes
+start from selected57: a complete native callout/result-consumer boundary, and
+one caller-anchored exact-method self binding. Shared ownership/effect interfaces
+have independent peer GO. Source implementation is active; neither lane has a
+runtime qualification or performance result. Selected57 remains unchanged.
 
-A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
-1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
-instruction-count explanation for the full logging loss; it identifies no
-frontend, cache or other mechanism.
+Round66's frozen continuation qualified but lost its logging/generator gates.
+Its finite logging diagnostic measured fewer instructions and more cycles;
+no cache/frontend cause was established. The [trial report](issues/register-semantics59/report.md)
+owns that closed result and the active source state.
 The bounded compact execution domain failed its native net-work gate. Complete deferred
 await passes lifecycle/native gates and cuts coroutine time 42.9%, but loses
 logging 27.7% and generators 5.2%; it is rejected as a standalone executable.

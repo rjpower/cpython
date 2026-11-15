@@ -9,40 +9,24 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
-The active workstream is [IR semantics59](../register-semantics59/README.md);
-round66 is its latest closed experiment.
-All five first-cycle executables lose their screens; the
-[trial report](../register-semantics59/report.md) owns those decisions.
-The closed [round65 design](../../design/proposals/interpreter-parity65.md) and
-[review65](../register-semantics59/review65.md) retain rejected outcomes. The
-adopted [round66 design](../../design/proposals/interpreter-parity66.md) and
-[review66](../register-semantics59/review66.md) govern current work. Both fixed
-storage-role trials are qualified and rejected. The finite
-ordinary-C compact domain passes both builds and 29 focused methods per role,
-then stops at its native whole-path work gate: 47 internal instructions saved
-against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
-the size caps; no timing or target coverage follows. The independent complete
-stable-frame deferred-await unit passes both builds, lifecycle and native gates.
-Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
-generators 5.2%; reject the standalone executable. Round65 is closed: A loses
-its hot8 screen; B fails native review after one correction, with no timing
-result. Unit1 qualifies frozen B without runtime source changes or build
-repetition; the semantic, native and transaction obligations and hot8 screen
-are complete. Selection rejects the executable: generator mean is 1.014457 and
-logging loses in both pairs (1.073116, 1.079828). Unit2 stops because the
-logging gate fails; the union proposal remains unimplemented. Selected57 remains
-unchanged.
+The active workstream is [IR semantics59](../register-semantics59/README.md).
+The adopted [round67 design](../../design/proposals/interpreter-parity67.md) and
+[review67](../register-semantics59/review67.md) select two independent source
+units from selected57 after peer adoption of their shared owner/effect contract.
+A generates one complete native provider/retirement/poll/result-consumer boundary.
+B removes one method-self acquire/retire through a caller anchor, with promotion
+and all clear/traverse/take/copy/writer consumers ported. Both implementations
+are active; neither has runtime qualification or timing. Root integrates A first
+and B independently; B cannot delay A.
 
-A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
-1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
-instruction-count explanation for the full logging loss; it identifies no
-frontend, cache or other mechanism.
-
-Delegation spine, result continuation and anchored self have separate admission
-and cost gates. All round59–62 executables
-and both round63 role trials remain
-rejected; selected57 is unchanged.
-Earlier source and evidence remain inputs, not prerequisites.
+Round66 is the latest closed measured experiment. Its qualified frozen
+continuation has hot8 ratio .936871 but fails logging/generator protections.
+The auxiliary union stopped unimplemented. The single matched logging diagnostic
+has instruction ratio .992588 and cycle ratio 1.085426; it establishes no cache/frontend
+cause. Earlier losing packets remain evidence, not prerequisites. Selected57
+is unchanged; the [trial report](../register-semantics59/report.md) owns all
+measurements and exact identities. No new upstream result or parity budget is
+inferred from these experiments.
 
 ## Outcome
 
@@ -123,28 +107,27 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [round66 design](../../design/proposals/interpreter-parity66.md),
-[review](../register-semantics59/review66.md), and
+The workstream's [round67 design](../../design/proposals/interpreter-parity67.md),
+[review](../register-semantics59/review67.md), and
 [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Close round66 and publish evidence for the next grouped review | Qualification, screen and bounded logging diagnostic complete; selection rejected |
-| Unit2 source | Auxiliary identity/origin union proposal | STOP: logging fails the non-generator gate; unimplemented |
-| Astra | [Review66](../register-semantics59/review66.md) and [design66](../../design/proposals/interpreter-parity66.md) | Closed measured cycle; next grouped architecture review remains to be commissioned |
+| Root | Integrate A first, B independently; generate/build/qualify/measure | Both start selected57; source and generated/native evidence precede one hot8 screen |
+| Sol-high A | Complete native callout/result-consumer source | P branch `pyjit/parity67-native-callout`; shared parsed lowering and common transfer admission |
+| Sol-high B | One caller-anchored exact-method self source | W branch `pyjit/parity67-anchored-self`; complete typed auxiliary and promotion/owner ports |
+| Astra | [Review67](../register-semantics59/review67.md) complete | Independent adoption GO; no inner-loop review or runtime work |
 
-The compact unit is closed; no roster, mirror, provider, layout or flag
-expansion rescues it. Round65 is closed. A's mechanism loses its screen; B
-fails native review and was not timed in that round. Round66 qualifies frozen
-B, then rejects its screen; its bounded logging diagnostic is complete. Unit2
-stops because logging fails a non-generator gate. No source tweak or additional
-profile reopens this round. Broader native callout, anchored ABI and delegation
-spine remain future options. Preserve B0 rooting
-and claim no additional comp A=B=17 move.
+The compact domain and all round59–66 standalone runtime attempts remain closed
+and unselected. No frame-union/continuation rescue is active. The independent67
+lanes preserve B0 rooting and claim no comp A=B=17 result move. Their natural
+mechanisms must be reached; structural counts are not saved-owner frequencies.
+No new profile/counter or compiler/flags/layout search is authorized. Exact
+screen, finite confirmation, all29 and direct-upstream rules are in design67.
 
-No larger ABI, anchored argument or delegation-spine implementation is active.
+No additional provider/parameter roster or delegation-spine lane is active.
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol
 or final composition gates. Retain stable exact source/native identities and

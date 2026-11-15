@@ -1,5 +1,11 @@
 # Semantic IR trial results
 
+Round67 source implementation is active under [design67](../../design/proposals/interpreter-parity67.md)
+and [review67](review67.md), after independent adoption and shared-interface GO.
+A is the complete native callout/result consumer; B is one caller-anchored
+exact-method self. Both start selected57 and will be integrated independently.
+Neither has a runtime qualification or performance result.
+
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`
 qualifies without source changes and completes the unchanged hot8 screen, but

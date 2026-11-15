@@ -32,8 +32,9 @@ clauses resolve the peer's implementation requirements before source edits:
   Fully checked non-callback exact transfer/entry may retain loans; a generic
   ESCAPES/PUSHES_FRAME label does not revoke that exemption. Any miss that
   reaches callback-capable binding, observation or error publication promotes
-  before those effects. Unit A invokes the shared effect boundary once before
-  its complete callback-capable activation, not before every internal helper.
+  before those effects. When A and B are composed, A invokes the shared effect
+  boundary once before its complete callback-capable activation. Standalone A
+  adds no empty promotion stub or loan counter.
 - Promotion walks reachable active frames across evaluator sentinels. A loan
   may not occupy an unreachable staged/unlinked state across an escaping call.
   Entry publishes the complete child and counts it within one non-calling
@@ -56,8 +57,8 @@ clarifications; a genuine design contradiction returns to root.
 
 The final [Sol native source proposal][native-proposal], SHA256
 `9fec5b4efd39949b65ff37ccea50cf1997cf1437e572b6e76cb9fc9edcf10ee3`, supplies
-Unit A's concrete first implementation below. **Recommend adoption of A's
-narrowed source contract, followed by independent source peer GO before edits.**
+Unit A's concrete first implementation below. Root adopted its narrowed
+source contract after independent source peer GO, before implementation.
 It does not qualify the mechanism or change the five-option ranking. B's source
 adoption can proceed separately; its unresolved ownership/cost risks must not
 delay A or silently become prerequisites for A on selected57.

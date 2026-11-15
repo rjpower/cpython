@@ -8,29 +8,19 @@ candidate is selected. All five first-cycle executable screens lose; the
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [closed round65 design](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
-[current grouped design](../../design/proposals/interpreter-parity66.md) and
-[review66](review66.md) govern active work. Unit1 qualifies frozen B without
-runtime source changes; residual semantic/native/transaction closure and the
-hot8 screen are complete. Selection rejects B: generator mean is
-1.014457 and logging loses in both pairs (1.073116, 1.079828). Unit2 stops
-because the non-generator gate fails; its union proposal remains unimplemented.
+[current grouped design](../../design/proposals/interpreter-parity67.md) and
+[review67](review67.md) have independent adoption/interface GO. Two Sol-high
+workers implement separate source units from selected57: complete native CALL
+through rooted retirement/poll/append, and one caller-anchored exact-method self.
+No round67 runtime qualification or performance result exists. Root integrates and
+screens A first, B independently; B does not delay A.
 
-A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
-1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
-instruction-count explanation for the full logging loss; it identifies no
-frontend, cache or other mechanism.
-Both fixed storage-role trials are qualified and rejected. The compact execution
-domain passes focused runtime checks but stops at its native net-work gate,
-without timing. The complete
-deferred immediate-await unit passes lifecycle/native qualification and cuts
-coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
-as a standalone executable. Round65 is closed: A loses its hot8 screen; B fails
-its native cap after one reviewed correction and has no performance screen.
-Selected57 remains unchanged.
-Every round59–62 runtime packet lost its broad comparison. The retained
-delegation spine and anchored-self ABI remain conditional options.
-The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
-record admission and exact paths.
+Round66 is closed. Its qualified frozen continuation loses logging/generator
+protection; its finite logging diagnostic reports fewer instructions and more
+cycles without identifying a cause. The union remains unimplemented. Earlier
+qualified losses and native rejections remain evidence, not prerequisites.
+The [trial report](report.md) owns exact measurements; [execution logistics](measurement.md)
+and the [handoff](../../HANDOFF.md) own immutable controls and target jobs.
 
 The user requests repeated architecture → ordered implementation → measured
 selection cycles until upstream parity. The hot set is comprehensions,
@@ -50,9 +40,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Publish round66 qualification, rejection and diagnostic | Complete; frozen B and golden remain unchanged |
-| Unit2 source | Auxiliary identity/origin union proposal | STOP: logging gate fails; unimplemented |
-| Astra | [Review66](review66.md) and [design66](../../design/proposals/interpreter-parity66.md) | Closed measured cycle; next grouped review pending |
+| Root | Integrate, qualify and measure A first, B independently | No round67 runtime jobs yet; selected57 remains unchanged |
+| Sol-high A | Complete native callout/result consumer | P, `pyjit/parity67-native-callout`; source in progress |
+| Sol-high B | One caller-anchored exact-method self | W, `pyjit/parity67-anchored-self`; source in progress |
+| Astra | [Review67](review67.md) complete | Independent adoption GO; source implementation delegated |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

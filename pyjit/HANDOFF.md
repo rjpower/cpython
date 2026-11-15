@@ -4,41 +4,42 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-Current design is [parity66](design/proposals/interpreter-parity66.md),
-adopted under [review66](issues/register-semantics59/review66.md). The
+Current design is [parity67](design/proposals/interpreter-parity67.md),
+adopted under [review67](issues/register-semantics59/review67.md). The
 [trial report](issues/register-semantics59/report.md) owns all measured
 outcomes, failures and selection decisions; this file owns execution logistics.
 
 ## Current work
 
-Selected57 remains unchanged. Round65's A screen loss and B native rejection
-remain closed historical outcomes. Round66 freezes runtime head
-`64348dd5c182af27c058e60f1e3f849f00d7ef81`; unit1 reuses both qualified builds
-and fresh 48-method runs per role, then passes actual natural-return,
-terminal-suspension, armed-error and armed-normal controls. The independent
-receipt peer passes. Its unchanged 32-row hot8 screen rejects selection:
-generator mean exceeds 1.01 and logging loses in both pairs. Unit2 stops because
-the logging gate fails; the union proposal remains unimplemented. Qualification
-receipts are under `E59/continuation66-source-host` and
-`E59/continuation66-native-controls`; the screen is
-`E59/parity66-continuation-eight-selected57`.
+Round67 source implementation is active under adopted
+[design67](design/proposals/interpreter-parity67.md) and
+[review67](issues/register-semantics59/review67.md). Independent final adoption
+and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
+Both source lanes start from selected57; no runtime build or timing of either
+exists. Root owns generation, build/native jobs, independent integration and
+selection. A proceeds without waiting for B. Workers run only bounded host
+source/generator checks and write discoverable runtime tests for root.
 
-A finite logging FIFO PMU diagnostic completes at 0.992588 instructions and
-1.085426 cycles versus selected57. It rejects an equal-CPI, proportional-
-instruction-count explanation for the full logging loss; it identifies no
-frontend, cache or other mechanism.
-
-| Owner | Current source boundary |
+| Owner | Active checkout / branch |
 | --- | --- |
-| Root, G | Frozen B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; qualification and screen complete, selection rejected |
-| P | Final source `50adc6d3927` on `pyjit/parity65-yield-continuation`; no further B source changes |
-| W | Source `8ed034598b3` on `pyjit/parity65-residence-boundaries`; earlier branches retained |
-| Astra | Review66 final `945afac1e2546555da9c41cda708952af254db73`, canonical commit `fd42900d565` |
+| A worker | P, `pyjit/parity67-native-callout`; complete METH_VALUE CALL through rooted retirement/poll/append |
+| B worker | W, `pyjit/parity67-anchored-self`; one caller-anchored self and complete typed auxiliary/promotion/owner ports |
+| Root | G remains frozen at `64348dd5c18` on `pyjit/parity65-continuation-integrated`; current builds still belong to this rejected candidate |
+| Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
 
-Unit2 has no implementation authorization; the union proposal remains
-unimplemented. Rank1 broader native-callout work remains deferred and must keep
-B0 rooting; comp's A=B=17 path earns no additional move credit. Anchored ABI and delegation spine remain deferred. Root
-owns integration, future architectural review and performance decisions.
+P/W prior65 source branches remain preserved; their active source is now the
+independent67 lanes. Do not execute an old captured ELF against their changed
+Lib trees. Selected57 I and both builds remain immutable. The first source
+checkpoint goes through peer, root regeneration/build, focused runtime checks,
+complete native mechanism/ABI review and one balanced hot8 screen. Qualify A
+first, B independently second; only promising winners advance to confirmation,
+all29, upstream and full supported diagnostics under design67's exact rules.
+
+Round66 is closed: qualified frozen B loses its screen, and the single logging
+diagnostic is complete. Retain `E59/parity66-continuation-eight-selected57`,
+`E59/parity66-logging-diagnostic` and the independent receipts under
+`E59/continuation66-source-host`. No source repair, repeated timing or additional
+profile of that frozen packet is active. Its union was never implemented.
 
 The [compact proposal](design/proposals/interpreter-parity64.md#1-compact-domain-a-bounded-change-to-physical-execution)
 requires one ordinary-C finite domain under one NCSR adapter, with ordinary CALL

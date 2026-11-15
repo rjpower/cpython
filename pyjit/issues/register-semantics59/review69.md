@@ -177,6 +177,28 @@ do not attribute the cycle difference. No extra counters, compiler, alignment,
 padding or flags search is ordered. New candidates must pass broad protection
 even if their mechanism succeeds and their local instruction totals fall.
 
+The subsequent lazy-aggregate suggestion was checked against actual I/U and
+screened out as existing selected work. I `Python/regcfg.c:81` inserts kwargs
+materialization before read folding and declines rebinding/cell operations;
+`Objects/codeobject.c:819` independently proves barriers over normal/EH entries
+and rejects write/delete/move/cell roles. I `Python/specialize.c:2319` sets the
+virtual flag; `Python/ceval.c:4376–4405` omits `PyDict_New` on that direct-plan
+hit, installs the empty-tuple singleton and records `pending_kwargs` instead.
+`Python/frame.c:245,280` materializes before frame-object exposure, installing
+the fresh dict before clearing pending state; `pycore_interpframe.h:399` copies
+the pending index. This is canonical NULL plus explicit binding authority, not
+a new noncanonical owner. These reads establish the existing mechanism, not a
+fresh exhaustive audit of every native/observer consumer.
+
+U `Python/ceval.c:1817` eagerly allocates kwargs, while its empty varargs at1854
+already uses the immutable singleton. The retained selected logging JSON has
+600,000 `Logger.debug` false-path entries and zero visits to its word11
+`MATERIALIZE_KWARGS`; it does not count direct-plan successes or constructor
+calls. No new dynamic claim follows. Generalizing to fallback or nonempty
+aggregates could retain argument owners until materialization and must close
+STORE/DELETE/copy/native-alias/observer semantics; no remaining hot coverage or
+net cost is proved. This does not change the five-way ranking or add a lane.
+
 ## Handoff and limits
 
 One Sol-high unit implements the common proof plus complete generated CALL

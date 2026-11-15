@@ -85,6 +85,18 @@ opportunities, **not summary hits or an additive performance budget**. The first
 unit does not directly solve long generator/coroutine lifetimes. That gap is
 preferable to adding a second speculative framework to make the plan look broad.
 
+**Additional option screened out as already selected: lazy empty kwargs.** I
+already has compiler-inserted `MATERIALIZE_KWARGS`, common read-barrier admission,
+guarded direct binding with `pending_kwargs`, and materialization before frame
+exposure. Empty `*args` uses the immutable singleton in both I and U. Retained
+logging IR has its kwargs barrier only on the unvisited enabled branch; these
+semantic visits are not allocation or direct-binder hit counts. Therefore the
+suggested never-read empty-dict removal is not a new sixth mechanism or a reason
+to displace rank 1. Extending lazy binding to fallback calls, nonempty aggregates
+or mutable/cell bindings would need a distinct complete owner/materialization
+contract and demonstrated remaining reach; none is established here. Do not
+add a universal read check or claim an eager dict on every Logger.debug call.
+
 ```mermaid
 flowchart TD
     Src[Python source or public code image] --> Admit[Common semantic and ownership admission]

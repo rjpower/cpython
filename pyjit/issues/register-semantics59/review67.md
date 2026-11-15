@@ -151,6 +151,35 @@ must retain both parent/child ownership populations and callback/error closure.
 Its coverage remains unknown and direct plans bypass it. It stays deferred; the
 memo is not evidence that binding causes the measured gap or that Unit B wins.
 
+### Final native proposal assessment
+
+Read and hash-verified [Sol's final native proposal][native-proposal], SHA256
+`9fec5b4efd39949b65ff37ccea50cf1997cf1437e572b6e76cb9fc9edcf10ee3`.
+**Recommend Unit A for independent source adoption in its narrowed METH_VALUE
+scope.** It supplies a distinct consumer, sparse common-admission edge and
+cached append-home ABI, rather than another helper wrapper. Both debug/release
+admit GIL THREAD execution; generation must share parsed-local lifetimes,
+callback publication/refresh, error checkpoints and poll exits as well as bodies.
+Keep the existing checked value provider and consuming append primitive.
+
+Checks against actual I source/retained data support the concrete interface:
+the comp edge is CALL46 A=B17 and APPEND47 item17/list14, nlocals8. Its list home
+is scratch and outside the call window. This confirms register geometry only,
+not the missing transfer proof or a dynamic fused hit. The selected APPEND
+at `generated_ir_cases.c.h:18227` takes its item before the consuming helper and
+attributes failure to APPEND. In `specialize.c`, FB_CALL reset clears the payload,
+but history capture stores version/type without the binding arm. The native arm
+must therefore be cleared/reconstructed, never inferred from a history hit.
+
+Residual risks are explicit: common transfer admission is real generator work;
+partial cleanup cannot be certified from a normal endpoint; late observation
+can invalidate the consumer after an irreversible provider effect; cached frame/
+home/PC aliases must refresh; the normal-C envelope can add spills and text;
+both nonparticipating FAST forms pay an entry test. ERROR `next-1` must refer to
+the live reached semantic word. None is discharged by this source memo. The
+grouped screen/confirmation thresholds remain authoritative over its looser
+screen suggestion. B is independently conditional and must not delay A.
+
 ## Coverage used to rank the options
 
 [Resident coverage](resident-coverage.md) and the retained
@@ -225,3 +254,4 @@ unit here claims to solve generator or coroutine parity by itself.
 [general-listing]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/parity64-await9-native/selected57-static/_TAIL_CALL_CALL_PY_GENERAL.txt
 [b-review]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/boundary65-source-host/unit-b-corrected-native-cold-review.md
 [python-contract]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/python-call-contract.md
+[native-proposal]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/unit-proposal.md

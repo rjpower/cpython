@@ -54,6 +54,14 @@ must acknowledge these interfaces and agree on overlapping effect/owner files
 before implementation. No further Astra review is needed for these explicit
 clarifications; a genuine design contradiction returns to root.
 
+The final [Sol native source proposal][native-proposal], SHA256
+`9fec5b4efd39949b65ff37ccea50cf1997cf1437e572b6e76cb9fc9edcf10ee3`, supplies
+Unit A's concrete first implementation below. **Recommend adoption of A's
+narrowed source contract, followed by independent source peer GO before edits.**
+It does not qualify the mechanism or change the five-option ranking. B's source
+adoption can proceed separately; its unresolved ownership/cost risks must not
+delay A or silently become prerequisites for A on selected57.
+
 ## What changed the decision
 
 Qualified, unchanged continuation66 improves coroutines 37.4%, comp 2.5%, Delta
@@ -140,7 +148,7 @@ a ranking of measured gains. All five have a producer and a distinct consumer.
 
 | Rank | Change and actual consumer | Work removed; retained and added costs | Decision |
 | --- | --- | --- | --- |
-| 1 | Native CALL emits an owned-result edge; one ordinary-C activation consumes provider, retirement, poll and that edge | Remove a complete return-to-handler/consumer-dispatch boundary and repeated VM/operand setup. Retain B0, snapshots, recursion, canonicalization when needed and callbacks. Add one entry/exit receipt and edge validation. Comp has real dict.get→append traffic; Delta has 107,040 warmed descriptor-call visits, but its append-edge eligibility is unknown. | **Unit A.** Ordinary publication remains supported; append is the only first consuming edge. No provider roster expansion. |
+| 1 | Native CALL emits an owned-result edge; one ordinary-C activation consumes provider, retirement, poll and that edge | Remove a complete return-to-handler/consumer-dispatch boundary and repeated VM/operand setup. Retain B0, snapshots, recursion, canonicalization when needed and callbacks. Add one entry/exit receipt and edge validation. Comp has real dict.get→append traffic; Delta has 107,040 warmed descriptor-call visits, but its append-edge eligibility is unknown. | **Unit A.** METH_VALUE descriptors only, supplied-self and NO_SELF; append is the only consuming edge. Nonparticipating calls remain ordinary. No provider roster expansion. |
 | 2 | Guarded local method selection enters an exact child with parameter0 anchored to the suspended caller's local; retirement skips that non-owner, exposure promotes it | Remove receiver acquire/retire across a real activation, not already-removed argument movement. Retain callable/code owners, lookup, frame setup and result publication. Add tagged binding state, active-loan count, promotion and one clear/traverse distinction. Structural zero-explicit-argument pairs: Delta 1,280,190, ray 1,026,471; actual read-only, mortal, unpromoted hits are unknown. | **Unit B.** One parameter, one immediate caller, no suspension and no arbitrary borrowed homes. |
 | 3 | A call-shape certificate becomes the complete input to the direct/keyword binder | Producer validates destinations and default coverage; consumer guards code/version, current default count, self/arity and exact immutable keyword shape once, then transfers. Removes repeated keyword proof loops; retains actual default acquisitions and frame setup. Adds feedback data/guards; no general-call coverage in retained Delta. | **DEFER.** Keep scalar-only feedback: use a caller-code-owned constant tuple identity when proved, otherwise existing binder. Do not alter global function-version meaning or cache an unowned tuple pointer. |
 | 4 | CALL records an owned-result consumer for Python return as well as native completion | A returned exact bool can feed a reached branch without generic publication plus dispatch/decode. Keep real semantic PC, retirement callbacks and slow truth conversion. Adds physical continuation transport and ordinary-return selection; discard is already represented by IR_NO_DST. | **DEFER.** An extra all-return lookup/field is not justified by current coverage. Native A tests the consumer contract without imposing that universal return tax. |
@@ -177,7 +185,9 @@ flowchart TD
 effect generators lower the boundary. Shared declarations belong with
 `Include/internal/pycore_ir.h`; execution belongs in `Python/ceval.c` and the
 existing value/descriptor call helpers. Generated cases are products, not the
-source of a second owner program. Do not change frame layout or all-handler ABI.
+source of a second owner program. Generate the helper at file scope in the
+existing generated-cases preamble; no new generated product/build rule or
+provider implementation is required. Do not change frame layout or all-handler ABI.
 
 **Required admission repair.** Selected FAST CALL and LIST_APPEND currently
 report `_PyIR_TRANSFER_UNKNOWN`; specialized CALL also has a manual intermediate
@@ -201,26 +211,51 @@ fallback, but cannot be reused unchanged as evidence that the specialized B0
 protocol is preserved. Do not introduce a second handwritten ownership engine
 or a compact-domain loop to bridge this difference.
 
-Use a scalar `NativeResultEdge` containing consumer kind, semantic successor
-index, result home and append receiver home; no retained PyObject pointers.
-`_PyEval_RunNativeCallout(tstate, frame, call_site, edge)` returns a compact
-`NativeCallExit {status, semantic_next}`. Status is MISS, COMPLETE or ERROR; MISS
+Use a sparse `_PyIRNativeAppendEdge {call, append, list_home}` suffix in the
+existing immutable `_PyIRCodePlan`, constructed after the common ownership
+fixed point. Audit its allocation/offset/size/free consumers. Admission requires
+scratch A=B, next-word APPEND consuming precisely that owner, a distinct owning
+scratch list home outside the CALL window, and no independent normal/EH/recovery ingress
+into APPEND. A fresh logical result owner may hold the same object as an input;
+pointer non-aliasing is not an extra eligibility condition. Invalid edge geometry
+omits nomination; it must not reject an otherwise valid ordinary image.
+
+Existing CALL specialization caches only the append home and an edge-present
+flag in a mutually exclusive native arm of `_PyFbCall.binding`/`binding_flags`.
+No feedback/frame growth or retained PyObject pointer. Reset, reinstrumentation,
+rewrite and native↔Python transitions clear or reconstruct the arm from the
+immutable certificate. Current CALL history rows do not carry the binding
+payload: do not restore a native arm from version/type history alone. If that
+lifecycle needs another registry, stop rather than add one.
+
+The hot interface is `native_value_append(tstate, frame, call_site, list_home)`;
+there is no second edge lookup. It returns compact
+`NativeEdgeResult {next, disposition}`. Disposition is MISS, DISPATCH or ERROR; MISS
 is legal only before effects, with the original homes/control intact, and
 returns to the ordinary CALL fallback without repeating an effect. A
-completed CALL with an invalidated edge returns COMPLETE at the ordinary
+completed CALL with an invalidated edge returns DISPATCH at the ordinary
 successor with its result published. The caller reloads frame/slots from live
-state. No private pointer is placed in semantic `instr_ptr` or `return_pc`.
+state. ERROR's `next-1` must identify the reached CALL or APPEND in the live
+image after refresh; never compute it from a stale pre-callback instruction
+pointer. No private pointer is placed in semantic `instr_ptr` or `return_pc`.
 The API consumes no owner merely by being entered.
 
-**Producer/consumer.** Initial provider family is the existing checked
-CALL_METHOD_DESCRIPTOR_FAST path, including METH_VALUE and its existing
-compatible FASTCALL provider. Execute its guards inside the complete activation;
-a failed guard returns MISS before effects. The hit hands checked facts to the
+**Producer/consumer.** Initial scope is positional METH_VALUE descriptors in the
+two existing FAST forms, with GIL THREAD frames and no active observation at
+entry. Release and debug admit the same feature; debug retains ownership
+assertions. Object-adapter, keyword, instrumented and Python-call routes stay
+ordinary. Retain `_PyValue_VectorcallTstate` and the same checked descriptor,
+provider and recursion contract: no direct dict.get entry. Execute its guards
+inside the complete activation; a failed guard returns MISS before effects.
+The hit hands checked facts to the
 existing invocation primitive once; do not run both vectorcall and another
 direct call. Scalar/object conversion remains provider-specific. Admission of
 append requires actual result dependence, exact list operation semantics and
 no independent ingress into the consumed edge. Same source line is neither
-necessary nor sufficient. Ordinary publication/discard is always an exit.
+necessary nor sufficient. Ordinary publication remains the defusion exit.
+Local/discard/non-B0 calls do not enter this helper; their ordinary paths retain
+the current delayed commit/displacement behavior. A defused eligible call
+finishes its B0 publication before dispatching the accepted live continuation.
 No generalized region executor, heap activation or per-operation dispatch loop.
 
 **Ownership/effects.** Provider borrows independently owned argument snapshots.
@@ -258,6 +293,11 @@ mortal receiver/query/result values and check error words, owners and no replay.
 Root generates both products, builds both roles and peers source plus native
 complete paths from provider guards through next dispatch. Include misses and
 callback exits, not just the provider body. Record stack/text/rodata and spills.
+Charge the tested entry branch on both nonparticipating FAST forms, code-plan
+storage and generated text as well as the fused hit. No cost is declared zero
+because the cached arm is small. The retained comp edge is CALL46 A=B17 →
+APPEND47 item17/list14 with nlocals8; this passes the proposed register geometry,
+but only the new admission proof and actual execution can establish qualification.
 Focused admission checks must reject an unrelated adjacent append, interior
 entry and incomplete transfer description; reached normal and abrupt controls
 must confirm the shared description matches actual B0/argument ownership.
@@ -412,6 +452,9 @@ flowchart TD
    logging mean ≤1.005; and each individual pair for every case ≤1.03. No pair
    exception or coroutine offset pays for a logging loss. A result missing this
    predicate stops; no all29, full suite, PMU or repeat rescue on that loser.
+   These grouped thresholds govern A too; the Sol proposal's GM≤1.00 and
+   logging≤1.01 suggestion does not replace them. Static counts remain predictive,
+   while behavioral/ownership gates remain hard.
 4. For passing units, root integrates only winners, runs focused cross-unit
    controls, then all29 and the full required suite. Balanced confirmation uses
    a fresh hot8 pair: each case ≤1.02 and logging ≤1.01, while pooled three-pair
@@ -441,3 +484,4 @@ delegation source work needs the next grouped decision, not a third lane here.
 [i-version]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Objects/funcobject.c#L280
 [u-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/upstream-3a440b6/Python/bytecodes.c#L4418
 [python-contract]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/python-call-contract.md
+[native-proposal]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/callout67-source-host/unit-proposal.md

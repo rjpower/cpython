@@ -10,9 +10,10 @@ implemented; native method and tracing JIT tiers remain unfinished. The active
 stage unifies value transport, borrowing, calls and specialization. The active
 [IR-semantics workstream](issues/register-semantics59/README.md) implements the
 reviewed [round63 design](design/proposals/interpreter-parity63.md): fixed storage-role
-lowering and deferred immediate-await activation.
+lowering and deferred immediate-await activation. Both role trials are now
+qualified and rejected; the await source unit and next grouped review continue.
 The [trial report](issues/register-semantics59/report.md) records rejected
-round59–62 candidates; selected57 remains unchanged. The preceding
+round59–63 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),
 [research ledger](issues/interpreter-parity58/research.md) and
 [workstream](issues/interpreter-parity58/README.md) retain the earlier diagnosis;

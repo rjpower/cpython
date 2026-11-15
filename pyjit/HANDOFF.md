@@ -19,9 +19,12 @@ generated products at `18445aa21d5`, and fixture-only successor at
 new seven under attributes2 and other 47 under attributes1 (debug-controls
 for debug). Native capture is `E59/parity63-attributes2-native`, ELF SHA256
 `0b827d770ba806326b82565bb916e8e19f2b5af7d5ead7e4e81cc71c714349a0`.
-Independent native mechanism review passes; timing remains pending. Both reused builds
-are coherent with this G. Actual first hits for all four new bodies occur in
-comp/Delta; logging also hits method/store in `E59/attribute63-coverage`.
+Independent native mechanism review passes. The stable 32-row screen rejects:
+comp .964506 and Delta .968592 improve, but logging 1.222917, spectral
+1.063393 and generators 1.017802 lose both pairs. No confirmation/all29/
+upstream/PMU/full campaign follows. Both reused builds are coherent with this
+frozen G. Actual first hits for all four new bodies occur in comp/Delta;
+logging also hits method/store in `E59/attribute63-coverage`. No native job runs.
 The rejected list source is preserved on `pyjit/parity63-role-integrated`, at
 `034f2b22f87bb4e9e54e689bb5ead8a252e60a97`. Source `90cd71b4874e` integrates at
 `519205b2d57`, generated products at `c7fecde25a4`, and fixture-only correction
@@ -166,7 +169,7 @@ execution. The two role builds run serially under the shared root helper.
 | Generator | P / `pyjit/parity63-attributes`, at `035aa32e16c`; role a0e branch preserved | Attribute source frozen; independent peer for the next await slice |
 | Frames | W / `pyjit/parity63-deferred-await`, from selected57; method882 branch preserved | Reviewed deferred-await complete source implementation; no active head/native use before full reader/transition closure |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
-| Coordinator | G / `pyjit/parity63-attributes-integrated`, at `581c018a34a` | Both builds/focused/native gates pass; balanced screen next |
+| Coordinator | G / `pyjit/parity63-attributes-integrated`, at `581c018a34a` | Qualified attribute loser frozen; next grouped review and deferred-await source continue |
 | Astra | Final grouped63 architecture review | Complete; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)

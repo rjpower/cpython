@@ -7,8 +7,9 @@ candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [next grouped design](../../design/proposals/interpreter-parity63.md) and
-[review ledger](review63.md) drive implementation: fixed storage-role lowering
-first, with deferred immediate-await activation as an independent design lane.
+[review ledger](review63.md) drive implementation: both fixed storage-role
+trials are qualified and rejected, while the independent deferred immediate-await
+source unit continues. The next grouped review must account for both results.
 Every round59–62 runtime packet lost its broad comparison. The compact engine,
 retained delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -34,7 +35,7 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped63 final; no runtime changes |
 | Independent peer | Check unit ownership, recovery and reader closure before implementation | Both units approved by root and source peer |
-| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | List roles rejected; attribute source integrated with native gates pending; complete deferred-await source under way |
+| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | Both role trials qualified and rejected; complete deferred-await source under way |
 | Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 
@@ -42,7 +43,7 @@ The [fixed-role unit](role-lowering63.md) defines the first bounded source
 packet. It carries reached ownership and canonical facts through lowering;
 it does not add a new runtime proof table. The [await unit](deferred-await63.md) separates stable active identity views
 from terminal storage movement. Its complete reader and lifecycle closure is
-a source integration gate. The list-role packet is qualified and rejected; attributes and await have no native result.
+a source integration gate. Both role packets are qualified and rejected; await has no native result.
 
 ## Reviewed trial order
 

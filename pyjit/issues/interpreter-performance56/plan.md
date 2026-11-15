@@ -14,10 +14,12 @@ All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
 The reviewed [next design](../../design/proposals/interpreter-parity63.md) and
 [grouped ledger](../register-semantics59/review63.md) rank five architectural
-options. Begin fixed storage-role lowering and independently complete the
-stable-frame design for deferred immediate-await activation. The compact CFG
+options. Both fixed storage-role trials are qualified and rejected; complete
+the independent stable-frame deferred immediate-await unit and obtain the
+next grouped architecture review against those measured losses. The compact CFG
 engine, delegation spine and anchored self borrow have separate admission and
-cost gates. All round59–62 executables remain rejected; selected57 is unchanged.
+cost gates. All round59–62 executables and both round63 role trials remain
+rejected; selected57 is unchanged.
 Earlier source and evidence remain inputs, not prerequisites.
 
 ## Outcome

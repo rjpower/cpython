@@ -50,8 +50,11 @@ an implementation gate.
 The [fixed-role unit](../../issues/register-semantics59/role-lowering63.md)
 specifies rank 1's source packets. Its list/FOR and append phase is qualified
 and rejected: comp .958819 improves, but logging 1.083074 loses both pairs.
-The isolated attribute phase and deferred await remain source work, with no
-native qualification or performance claim.
+The isolated attribute phase also qualifies and loses its broad screen:
+comp .964506/Delta .968592 gains accompany logging 1.222917, spectral 1.063393
+and generators 1.017802 losses. Both role trials are rejected. Deferred await
+remains an incomplete source unit with no native result. The next grouped
+review must account for these results before another execution design proceeds.
 
 ## Shared logical and physical model
 

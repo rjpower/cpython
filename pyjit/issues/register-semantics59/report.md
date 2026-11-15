@@ -921,7 +921,7 @@ an exclusive cause. No layout/flag sweep or further counter fishing follows.
 Phase two is an independent attribute-role packet from selected57, excluding
 these losing FOR/append bodies; deferred await remains a separate source lane.
 
-## Round63 isolated attribute roles: native qualification
+## Round63 isolated attribute roles: qualified, rejected
 
 Source `c1066265668d0256f78eaf04e3894f011485184e` starts directly from
 selected57, excluding the rejected list/FOR and append implementation. Root
@@ -966,3 +966,27 @@ at its final snapshot. These are static site counts and first-hit lower bounds,
 not invocation frequencies, steady-state store coverage or timing evidence.
 Setup can already specialize sites. No throughput or selection claim is made
 before the unchanged balanced screen.
+
+That screen completes 32 rows with stable identities and no errors in
+`E59/parity63-attributes2-eight-selected57`. Comp improves 3.5% and Delta 3.1%,
+but logging loses 22.3%, spectral 6.3% and generators 1.8%; every listed loss
+occurs in both pairs. Root rejects the standalone packet. Preserve
+`pyjit/parity63-attributes-integrated`, source branches and sealed evidence;
+selected57 remains unchanged. No confirmation, all29, direct upstream, PMU or
+full-system campaign follows. Natural handler entry and removed native work do
+not establish a net gain; an exclusive cause of broad cycle losses is still
+unproved. No compiler/layout/padding search or repeated counter diagnostic
+follows. Both fixed-role phases are now closed as losers. Deferred await
+remains an independent incomplete source unit, and the next grouped review
+must account for these results before another execution design is implemented.
+
+| Workload | Isolated attribute63 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.964506 | 0.942078–0.987467 |
+| deltablue | 0.968592 | 0.966129–0.971061 |
+| coroutines | 1.002732 | 1.000612–1.004856 |
+| generators | 1.017802 | 1.017655–1.017950 |
+| logging_silent | 1.222917 | 1.195991–1.250450 |
+| raytrace | 1.000004 | 0.998176–1.001836 |
+| spectral_norm | 1.063393 | 1.062747–1.064039 |
+| nqueens | 1.010458 | 1.010310–1.010607 |

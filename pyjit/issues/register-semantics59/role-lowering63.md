@@ -205,3 +205,14 @@ callback/locals mutation/GC case. Independent cold no-nomination images for
 each method output are not supplied; the two separate final-replay absence
 checks are source-reviewed, and no malformed live-output image is executed.
 Native and performance results are not yet claimed.
+
+Root's final integration is `581c018a34a2c4d521cec789e1261a4b331c7dc8`,
+including generated products and fixture-only correction `035aa32e16c`.
+Both builds complete 117/79; all 54 focused runtime methods pass per role.
+Independent native review and actual kernel first hits for all four bodies
+pass. The balanced screen rejects comp .964506/Delta .968592 gains against
+logging 1.222917, spectral 1.063393 and generators 1.017802 repeated losses.
+Phase two remains unselected. The [trial report](report.md) owns identities,
+fixture failures, native costs, all ratios and the decision. This closes rank
+one's two runtime trials; no losing packet becomes a dependency of deferred
+await or another execution design.

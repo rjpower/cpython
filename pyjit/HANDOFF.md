@@ -25,18 +25,43 @@ and peer `3cd3e4ed5fb2130abbc5957a5c791c433c16887027d7c048cab01f7cc3807b4a`.
 The applied/pending/same-PC callback contract is part of implementation, not an
 assumed property of raw B0 macros.
 
-Root releases two nonoverlapping edits within this one unit, both from selected57:
+Root integrated the two nonoverlapping source components from selected57:
 
 | Owner | Worktree and branch | Files / dependency |
 | --- | --- | --- |
 | Sol-high producer | P, `pyjit/parity69-summary-admission` | `Objects/codeobject.c`, `pycore_ir.h`, `Python/ir.c`, focused admission tests; publish header/API first |
 | Sol-high consumer | W, `pyjit/parity69-guarded-callee-summary` | Readers, specialization, bytecodes/ceval, parser/emitter and focused tests; consumes producer interface |
-| Root | G remains frozen rejected68 until complete source integration | Generated products, both builds, merged focused checks, native mechanism/pricing and protected screen |
+| Root | G, `pyjit/parity69-guarded-summary-integrated`, `f19b6629588` | Products committed; release/debug builds running under tag `parity69-summary4`; no candidate target pass yet |
+
+Producer `0e1cf75c0d6` and consumer `065f294e691` received independent actual-source
+review; correction `912aea3fa10` preserves existing canonical method-output
+checks after extracting the shared type guard. Six initial host tests and that
+focused correction pass. Root's first full generation stopped on the guard
+registry; its second generated cases but stopped on the new release marker's
+effect registry. Logs are `E59/parity69-summary{1,2}-release-regen.log`.
+Generated-code review then found a real recipient gap: scratch A need not equal
+B0, and a virtual self hole may receive the result. Reviewed correction
+`f9a45132ac4` adds the real owner move and complete release/output metadata.
+Regeneration 3 passes but its table comparison detects lost LOAD_ATTR ownership
+facts. Reviewed `a18747af84c` ports the actual disjoint-child guard proof.
+Regeneration 4 passes; root's `E59/guarded-summary69-products4.json` confirms all 331
+existing format rows unchanged,329 → 340 concrete handlers and only shared
+guard/raw-read substitutions in 20 existing bodies. Five generated products are
+committed. Independent product review and both builds are in progress. No
+candidate target pass, native hit or timing is claimed for round69.
+
+The immutable selected57 recipient control passes 100 calls into each of a
+fresh scratch home and a virtual self hole; it is not candidate execution.
+Receipt: `E59/guarded-summary69-recipient-selected57.json`. Producer is preparing
+bounded native controls without launching targets; consumer owns independent
+product review. Root owns all builds and runtime jobs.
 
 Workers cross-review actual changes. Progress is in
 `E59/guarded-summary69-{producer,consumer}-progress.md`. They run only necessary
 host checks; root owns target execution. Old68 W/P branches are preserved;
-I/U remain immutable. Astra's grouped review is complete; do not use it in the
+I/U remain immutable. Preserve rejected68's branch and evidence; reused G and
+its stale builds are no longer an executable round68 checkpoint. Astra's grouped
+review is complete; do not use it in the
 inner loop. No source-only increment is selectable.
 
 ## Closed round68 checkpoint

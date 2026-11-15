@@ -9,7 +9,7 @@ tag `pyjit-golden-20261114-dictionary-readers`. No round67 or round68 candidate 
 it.
 
 The grouped [round68 proposal](design/proposals/interpreter-parity68.md) is
-implemented, qualified and rejected by its protected hot8 screen. Current G is
+implemented, qualified and rejected by its protected hot8 screen. Its qualified G was
 `c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Independent source, generated-product
 and native/control reviews pass. Final15 release/debug builds each pass 117/79,
 and all 50 focused methods pass per role (one debug-only skip in release).
@@ -38,10 +38,15 @@ upstream result or parity claim. The completed
 one guarded-callee-summary unit. The exact
 [source contract](issues/register-semantics59/guarded-summary69.md) has independent
 [peer approval](issues/register-semantics59/guarded-summary69-peer.md), and
-producer/consumer implementation is released in parallel. The complete unit would
+producer/consumer source and generated products are integrated at G `f19b6629588`.
+Review closed a real scratch-recipient transfer gap, including output into the
+virtual self hole, and preserved ordinary proofs after extracting shared guards.
+Full generation passes; all 331 existing format rows are unchanged, with 11 new
+summary handlers. Both builds are running; no candidate runtime pass or native
+hit is claimed. The complete unit would
 remove the entire child execution boundary for admitted small callback-free
 callees. Existing generated atomic completion owns results and retirement;
-ordinary nonparticipating handlers remain unchanged at source. No runtime
+ordinary CALL heads retain their existing paths. No runtime
 qualification or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
 owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
 Selected57 remains unchanged.

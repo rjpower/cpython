@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round69: source contract approved; implementation released
+## Round69: integrated source; generator qualification
 
 The grouped [design69](../../design/proposals/interpreter-parity69.md) and
 [review69](review69.md) rank five alternatives and order one complete
@@ -19,8 +19,36 @@ validated constant/binding maps and optional plan-tail lifetime remain required.
 Cold specialization nominates eligible calls; ordinary heads do not probe the
 feature. The source contract captures original owners once and classifies cold
 callbacks before PC-restoring refresh, preserving pending, applied and same-PC
-redirects. No runtime qualification, native hit, performance result or parity
-claim exists yet.
+redirects. Producer `0e1cf75c0d6` and consumer `065f294e691` received independent
+source review. Root integrates them and the narrowly reviewed canonical-output
+correction `912aea3fa10`. Reviewed `f9a45132ac4` closes the release/output metadata
+and actual scratch-result transfer; `a18747af84c` preserves disjoint-child guard
+proofs. Complete G source/products are `f19b6629588`, with magic 64423.
+
+The first full generation stopped on recognition of the shared type guard in
+an existing method-output proof. The correction preserves that proof and
+rejects unknown guards. The second generated cases, then stopped on the new
+summary-close marker's release-effect registry. During product review root
+also found a real missing transfer for legal scratch recipients A≠B0. The
+corrected unit moves the sole result owner, including into an absent self hole,
+without reading the old destination or restricting CALL layout. A selected57
+native control verifies both legal layouts, 100 calls each. Preserve both failed
+logs under `E59/parity69-summary{1,2}-release-regen.log`. Regeneration 3 succeeds,
+but a complete metadata comparison exposes lost LOAD_ATTR ownership facts from
+one stale disjoint-child guard-body check; the reviewed correction restores it.
+
+Regeneration 4 passes. All 331 existing format rows are byte-for-byte unchanged;
+the candidate adds 11 formats and grows concrete handlers329 → 340. Existing body
+changes are only shared type-guard/raw-read substitutions in 20 handlers. Root
+reviews and commits all five products before launching release/debug builds.
+The exact comparison is `E59/guarded-summary69-products4.json`; it supersedes the
+zero-row initial parser receipt and the earlier metadata-loss comparison. Both
+builds and independent product review are in progress.
+
+No successful C build, runtime qualification, native hit, performance result or
+parity claim exists yet. Prior source GOs missed the generated recipient gap;
+the separate recipient/metadata peer addendum records that correction. Root
+must execute the corrected complete unit.
 
 Source-only inputs are `E59/guarded-summary69-source-peer-note.md`,
 `guarded-summary69-design-peer.md` and the exact unit proposal/peer (canonical

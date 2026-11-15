@@ -31,6 +31,17 @@ The earlier finite logging diagnostic rejects only an equal-CPI, proportional
 retired-instruction explanation of the whole gap. Different instruction mixes,
 critical paths and unobserved work remain possible; cache/layout is not proved.
 
+The bounded ordinary-path source note adds concrete costs beyond generator
+ingress: native-entry bool normalization, semantic-plan header16→24B and sparse
+geometry/preparation changes, plus cold error/frame-publication checks and
+conditional generator GC/tool work. The shared THREAD clear-and-pop helper also
+changes emitted code to a tail jump despite unchanged THREAD source. None has
+an established timed frequency or causal share. Warm silent logging bypasses
+`_log`/`findCaller`; neither fixed logging nor Delta directly creates generators.
+The generated driver's test-module import is outside timing. These facts rule
+out charging every generator/observer change to every ordinary call; they do
+not establish that ordinary execution is unchanged or explain the losses.
+
 Repeated losses with some unchanged ordinary bodies are a **selection problem**:
 local qualification is insufficient evidence for a useful executable. The next
 unit must remove a complete, broadly recurring boundary, keep unrelated paths

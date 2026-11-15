@@ -60,6 +60,27 @@ test files, not runtime/products. This is not whole-ELF or whole-.text identity.
 | Release .text +13,120B, debug +20,096B | Main executable only, not extension text. No cache/front-end diagnosis. |
 | Sampled ordinary release exact/general/native CALL and slot attribute instructions unchanged; RETURN_EMPTY smaller | Limited inspected bodies, not all ordinary/core/native work. Debug slot attribute grows173B. Unchanged samples do not prove zero ordinary runtime cost. |
 
+The finalized source-only support note
+`E59/retained-delegation68-native-controls/ordinary-path-source-note.md`, SHA256
+`f71b1fcc7b42d45844bd2580e2b005935d0031d1710c640fb35986e9ed9aff9c`,
+adds important scope. G `pycore_ir.h:495` expands the common semantic-plan header
+16→24B and shifts sparse arrays; G `ceval.c:2733` uses bool native entry. Code
+preparation, cold error/frame publication and conditional generator GC/tool
+operations also change. Their timed frequencies and contribution are unknown.
+Fresh static readback of the retained I/G
+`static-active13b/*-_PyEval_FrameClearAndPopWithResult.txt` confirms the ordinary
+THREAD route changes from call/return to a tail jump to `clear_thread_frame`.
+Unchanged THREAD source therefore does not imply unchanged emitted operations.
+The note's full hunk inventory is source evidence, not a profile.
+
+Warm logging's cached False bypasses `_log`/`findCaller`; neither fixed logging
+nor Delta directly creates generators. Transitive heap/GC activity is not
+excluded. The actual generated `native-driver.py` imports `_testinternalcapi`
+before timing and performs its checks outside `t0`/elapsed collection; do not
+charge that import as timed repeated work. This sharpens the evidence ledger
+without diagnosing either regression, changing the ranking or authorizing a
+retained68 retry.
+
 The raw `E59/retained68-hot8-selected57-screen/selection.json` records stable
 identity,32 successful rows and REJECT. Means and pair ranges:
 

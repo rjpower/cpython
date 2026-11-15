@@ -241,8 +241,12 @@ inline-scalar consumer. Root composes the engine and identity/config packets at 
 and the official-container configure regeneration pass. Only the target table,
 UNKNOWN block and generated configure change; semantic metadata is unchanged.
 Both fresh configurations match all compared compiler/core/module flags and
-byte-identical selected57 pyconfig.h. Native builds are running; no engine
-qualification/performance result exists yet. Setup is retained in E59
+byte-identical selected57 pyconfig.h. Both builds complete 117 modules/79 shared
+extensions. Each role passes 465 methods across 17 focused modules. The hot-eight
+screen is running; no performance result exists yet. Native capture resolves all 367 table
+rows inside `run_handlers`; cold review finds stack-backed state, a 4,472-byte
+stack reservation and one shared indirect dispatch after GCC tail merging.
+These costs must be charged against removed ABI handoff. Setup is retained in E59
 `parity60-configure-commands.json` and `configure-parity60.py`.
 The four shared tool consumers and bounded ELF target mapper have actual source
 peer GO; six host mocked/synthetic methods pass. Unsupported ELF/relocation or

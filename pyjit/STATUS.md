@@ -27,8 +27,13 @@ tail-called handlers with path-specific state repacking. The independent
 with explicit lexical-owner, error, redispatch and identity contracts. Engine
 source and identity/config/preflight packets are integrated in G at ec230e55641.
 Generation passes with unchanged semantic metadata. Both fresh configurations
-match selected57's core/module flags and byte-identical pyconfig.h; native builds
-are running. No round60 native test or performance result exists yet.
+match selected57's core/module flags and byte-identical pyconfig.h. Both builds
+complete 117 modules/79 shared extensions. Release and debug each pass 465
+methods across 17 ownership, call, exception, observer and suspension modules.
+The native target map resolves all 367 rows inside the actual engine. Cold
+review finds a 4,472-byte stack reservation and one shared indirect dispatch
+after GCC tail merging; state remains stack-backed. The balanced eight-case
+performance screen is running; the candidate is not selected.
 
 The [all-word census](issues/register-semantics59/resident-coverage.md) limits
 the finite scalar-pair pilot, without bounding all possible regions. Its

@@ -125,6 +125,28 @@ effect generators lower the boundary. Shared declarations belong with
 existing value/descriptor call helpers. Generated cases are products, not the
 source of a second owner program. Do not change frame layout or all-handler ABI.
 
+**Required admission repair.** Selected FAST CALL and LIST_APPEND currently
+report `_PyIR_TRANSFER_UNKNOWN`; specialized CALL also has a manual intermediate
+publication/retirement protocol. Their adjacency and final operand relation do
+not certify the edge. Add a shared, source-checked transfer description for this
+bounded pair: input snapshots, provider failure, B0 publication, every retirement
+callback, poll failure, ordinary publication and append success/failure. The
+common validator must prove the actual use and normal/abrupt owner states from
+that description for compiler and public IR. Unknown coverage rejects fusion;
+it does not become a proof by setting a transfer-kind annotation. This is a
+prerequisite within Unit A, not a demand to finish universal IRSC2/bitmap work.
+
+Generate the straight-line ordinary-C body from the same specialized CALL
+retirement and APPEND source/emitter used for ordinary handlers, with explicit
+physical exits instead of NCSR dispatch between them. Factor the shared emission
+and ownership description rather than copying generated C into `ceval.c`.
+`call_transaction_native` is **not** the fused body: it detaches inputs into a
+retired array, uses `local_result` for local/discard destinations, and publishes
+temporary results on a different schedule. It may remain an existing ordinary
+fallback, but cannot be reused unchanged as evidence that the specialized B0
+protocol is preserved. Do not introduce a second handwritten ownership engine
+or a compact-domain loop to bridge this difference.
+
 Use a scalar `NativeResultEdge` containing consumer kind, semantic successor
 index, result home and append receiver home; no retained PyObject pointers.
 `_PyEval_RunNativeCallout(tstate, frame, call_site, edge)` returns a compact
@@ -182,6 +204,9 @@ mortal receiver/query/result values and check error words, owners and no replay.
 Root generates both products, builds both roles and peers source plus native
 complete paths from provider guards through next dispatch. Include misses and
 callback exits, not just the provider body. Record stack/text/rodata and spills.
+Focused admission checks must reject an unrelated adjacent append, interior
+entry and incomplete transfer description; reached normal and abrupt controls
+must confirm the shared description matches actual B0/argument ownership.
 An extra static instruction is not a throughput veto. A second ordinary-C
 activation around the same work, a new root or no removed complete consumer
 boundary is a mechanism failure and stops this unit before timing.

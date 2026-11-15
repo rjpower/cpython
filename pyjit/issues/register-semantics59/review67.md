@@ -96,6 +96,7 @@ inspection locations; functions and immutable revisions identify the authority.
 | [I general CALL][general], [I binder][binder] | Direct/keyword plans already exist. Keyword hit revalidates cached destinations/name identities/duplicates/default coverage. Direct hit validates default shape when needed, then initializes overlapping child. `start_frame` also already uses IR_SKIP_RESUME. |
 | [I producer][specialize], [I function versions][versions], [I feedback][feedback] | Function version can be shared by same-code closures. Critical mutations invalidate it. Cached binding data are scalar layout facts, not a function-identity ownership receipt. Replacing version semantics would affect other consumers. |
 | [I descriptor CALL][native-call], [I provider][provider], [I value dispatch][value-call] | Handler guards receiver/descriptor, then value-vectorcall selects provider. B0 roots the result through retirement. Canonicalization cannot be removed merely because a helper returns PyValue. METH_VALUE is not a boxing adapter. |
+| [I transfer metadata][transfer], [I generic native transaction][native-transaction] | FAST CALL and LIST_APPEND report UNKNOWN transfer coverage. Generic `call_transaction_native` detaches into retired arrays and uses `local_result` for local/discard publication; its schedule is not the specialized B0 protocol. |
 | [U general/exact CALL][upstream-call], [U checked helper][upstream-helper] | General path uses a consuming binder; exact entry moves StackRefs. Checked descriptor helper converts StackRefs. Argument lifetime and callback obligations do not disappear upstream. |
 | [I frame layout][layout], [I kwargs materialization][kwargs], [I clear][clear], [I locals writer][locals] | Header112; slot indices are12-bit, pending_kwargs is16-bit. Clear assumes owning homes; kwargs/copy/locals readers need explicit changes for Unit B, not an annotation. |
 | [G return helper][g-return], [G terminal][g-terminal] | THREAD-first ordinary retirement is separate from resumable completion; resumable path obtains live continuation after callbacks. This architecture is preserved as evidence, not patched in round67. |
@@ -128,6 +129,15 @@ method/exact-CALL optimization lost. Round60's4,472 B stack/+55 KiB monolith los
 all8. Unit A must remove an additional complete consumer boundary; Unit B must
 remove a receiver owner across the activation. A wrapper, another role head or
 the same work moved into a helper fails the respective mechanism claim.
+
+The parallel Sol source note correctly identifies an admission gap in A.
+CALL→APPEND adjacency does not prove intermediate normal/abrupt ownership.
+Design67 now requires the bounded shared transfer description and common
+admission repair before fusion, plus a generated straight-line ordinary-C body
+from specialized retirement and APPEND. Reusing `call_transaction_native`
+unchanged or copying a second handwritten owner engine is excluded. This
+correction strengthens the source contract; it is not implementation approval
+or a native saving claim.
 
 ## Coverage used to rank the options
 
@@ -189,6 +199,8 @@ unit here claims to solve generator or coroutine parity by itself.
 [native-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Python/generated_ir_cases.c.h#L8479
 [provider]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Objects/descrobject.c#L572
 [value-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Include/internal/pycore_value_call.h#L108
+[transfer]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Include/internal/pycore_ir_metadata.h#L1160
+[native-transaction]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Python/ceval.c#L1706
 [upstream-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/upstream-3a440b6/Python/bytecodes.c#L4418
 [upstream-helper]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/upstream-3a440b6/Python/ceval.c#L871
 [layout]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Include/internal/pycore_interpframe_structs.h#L29

@@ -466,6 +466,46 @@ check for valid tagged iteration indices. No generic membership branch is added.
 Thread execution's generic PC/home primitives remain exact selected source.
 Native remote parsing has its own explicit generator partition.
 
+## Publication ordering
+
+One GIL holder writes a record. Internal readers hold the GIL; no racing C
+reader may consume ordinary record payload. No callback, GIL release,
+configurable allocator or Python-owner close occurs inside a mutation interval.
+Only blocking remote inspection reads record storage, while all target threads
+remain stopped. Nonblocking inspection never dereferences a record.
+
+For existing members, store the next odd sequence with
+`_Py_atomic_store_uint64_relaxed`, then execute `_Py_atomic_fence_release()`
+before changing payload, links, PCs, state or membership. Publish the completed
+transaction with `_Py_atomic_store_uint64_release` of the next even sequence.
+This uses stores and a fence, not an atomic read-modify-write. A stop between
+stores can observe an incomplete transaction and must refuse it.
+
+Creation and append need an additional ordering edge. Initialize record/link
+storage before release-publishing new membership pointers, then execute one
+batched release fence **before the first ordinary-authority mutation of any new
+member**. A release membership store publishes earlier initialization; it does
+not order later member-field writes. Until publication and this fence, each new
+member's original ordinary state remains valid.
+
+When replacing links, install the complete new array and execute a release
+fence before freeing the old array. Materialization/retirement writes ordinary
+authority, clears every membership, then executes a release fence before direct
+link/record free. A release membership clear alone does not order subsequent
+allocator writes. No even store touches freed storage. These rules establish
+the lifetime boundary used by fresh stopped readers; they do not create an
+ABA-free nonblocking snapshot.
+
+Charge two aligned sequence stores and a begin fence per steady retained
+resume/yield, plus state/debt/link writes and the profile-anchor reset. Charge
+the additional membership fence at creation/append and lifetime fences at
+replacement/retirement. Native review must check emitted costs; other targets
+may require hardware ordering. This contract has independent source-design GO,
+not activation or emitted-code approval. The exact approved proposal is
+`E59/retained-delegation68-source-host/publication-protocol-proposal.md`, SHA256
+`7c32e31d78f12b7ab11893aaf3fe8f1db481cfa712d5ed0f9db37b88b5f7ef5c`;
+the independent readback is `publication-protocol-peer.md` beside it.
+
 ## Remote authority and lifetime
 
 Selected `_Py_Debug_OffsetsSchema` is 1. Bump it for this added layout and

@@ -14,12 +14,13 @@ this file owns execution logistics.
 Round67 is closed: A and B qualify their mechanisms and lose their screens.
 Selected57 remains unchanged. The grouped round68 proposal is delivered and
 independent architecture and exact source-contract approval pass. Common loop
-proof, inert materializer, and generator reader/teardown ports have independent
-approval and are integrated on G at `ff64c134db7`. Both current builds pass
-117/79 and all 17 focused methods per role; no root job is running. Engine
-lifecycle closure is in W. A separate Sol-medium worker ports cold frame
-publication/copy/native readers in P, branch
-`pyjit/parity68-delegation-frame-readers`, from `125c5570e8e`.
+proof, inert materializer, generator consumers, engine ingress/error ports and
+cold frame publication/copy/native readers have independent approval and are
+integrated on G at `7a068c60410`. Both current builds pass 117/79 and all 23
+focused methods per role; no root job is running. Sol-high owns hot lifecycle
+and observer closure in W. Another Sol-high worker owns remote inspection and
+debug offsets in P, branch `pyjit/parity68-delegation-remote-readers`, from
+`0dee7ab83a1`; its exact placement proposal has root GO.
 These changes do not allocate generator records or activate retained execution.
 Activation waits for complete lifecycle and reader
 closure. Preserve actual owning frames and retained ancestors, enter the current
@@ -36,10 +37,24 @@ and `E59/parity68-genobject4-{release,debug}-focus.log`; command manifests
 use the same tag and stage. Source reviews are
 `retained-delegation68-source-host/{materializer3,genobject4}-source-peer.md`.
 No runtime records exist yet, so these passes cover ordinary behavior, not
-retained mechanism. The proposed hot publication protocol remains under
-review; all-membership clearing must precede direct storage release with
-explicit ordering. Cold materializer source still uses its reviewed seq-cst
-begin marker.
+retained mechanism.
+
+Engine source `51a09a254de` integrates at `517fb2dcff2`; cold frame source
+`0dee7ab83a1` integrates at `79ee6079264`. Both new behavior methods were
+inserted at class head; root resolved the overlap and compared all ten method
+ASTs against both source heads. Products `7a068c60410` change only two SEND
+created-state reads. Both readers6 builds pass 117/79; all 23 methods pass per
+role: retained delegation (10), delegated yield (9), and four selected/created
+copy methods in `test_frame`. Logs/manifests use `parity68-readers6`; generation
+ran only in release. Independent `engine5-source-peer.md` and
+`frame6-source-peer.md` are in the source-host and frame-host evidence directories.
+
+The exact corrected hot publication protocol has independent GO; its ordering
+is incorporated in the [contract](issues/register-semantics59/retained-delegation68.md#publication-ordering).
+New memberships are fenced before new-member authority changes. All membership
+clears and replacement-link publication are fenced before direct free. Cold
+materialization retains its reviewed seq-cst begin marker and adds the lifetime
+fence. No hot source, activation or native cost is approved by that design GO.
 
 Proof2 source commits are `647652f293e230f2440e30bded3adbd11502cf10` and
 `0f0093208ecf05d67f7d42170584e985a8344b36`; root integrations are

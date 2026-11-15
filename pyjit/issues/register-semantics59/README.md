@@ -15,9 +15,9 @@ the inert foundation, then complete lifecycle and reader closure before
 activation. The inert foundation and optional common loop-proof/plan increment
 are integrated and pass both builds and focused runtime checks. The optional
 loop-proof increment is source- and product-approved. The inert materializer
-and generator reader/teardown ports also have independent source approval and
-pass both builds and 17 focused methods per role. Engine lifecycle and cold
-frame publication/copy ports are separate assignments within this same unit.
+and generator, engine ingress/error and cold frame ports also have independent
+source approval and pass both builds and 23 focused methods per role. Hot
+lifecycle and remote-reader closure are separate assignments within this unit.
 No retained execution, native mechanism, performance result or broad
 qualification is claimed. See the
 [trial report](report.md) for counts and the
@@ -53,10 +53,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `ff64c134db7`; genobject4 builds and focus pass |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; engine lifecycle closure, then reviewed hot lifecycle |
-| Sol-medium source | Cold frame readers and copies | P, `pyjit/parity68-delegation-frame-readers`; approved placement proposal, implementation active |
-| Independent Sol peer | Actual-diff review | Proof2 source/products, materializer3 and genobject4 GO; remaining actual diffs pending |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `7a068c60410`; readers6 builds and focus pass |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; hot lifecycle and observer closure |
+| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; placement proposal approved, implementation active |
+| Independent Sol peer | Actual-diff review | Inert ports and corrected publication protocol GO; complete hot/remote source pending |
 | Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

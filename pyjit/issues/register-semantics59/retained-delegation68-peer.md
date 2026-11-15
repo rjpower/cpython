@@ -86,3 +86,17 @@ rationale and limits remain in
 SHA256 `f57b8a9f4aa77c8c0032e8751dd9e977d2e5e9dca3148553426277bb3cea7ada`.
 These are source-contract approvals; actual implementation and runtime/native
 qualification remain separate gates.
+
+The corrected publication protocol has independent GO at exact proposal SHA256
+`7c32e31d78f12b7ab11893aaf3fe8f1db481cfa712d5ed0f9db37b88b5f7ef5c`.
+Its [canonical ordering section](retained-delegation68.md#publication-ordering)
+includes the reviewed correction: publish new memberships, then a release
+fence, then mutate new members' ordinary authority. Release publication alone
+does not order those later writes. Existing-member mutation uses odd store,
+release fence and final release-even store; membership clearing or link-array
+replacement is fenced before direct free. The independent report is
+`E59/retained-delegation68-source-host/publication-protocol-peer.md`, SHA256
+`3adf34f3a4947f2c93cfba73123bc6d921a744c067681dc557c51b27f5c49203`.
+Approval remains conditional on the single-GIL-writer, noncalling mutation and
+stopped-only record-reader contracts; actual source, native costs, transition
+refusal and complete activation still require qualification.

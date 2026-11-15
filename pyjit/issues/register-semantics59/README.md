@@ -6,17 +6,21 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[current grouped design](../../design/proposals/interpreter-parity65.md) and
-[review ledger](review65.md) retain the completed round65 contracts: both fixed storage-role
+[closed round65 design](../../design/proposals/interpreter-parity65.md) and
+[review65](review65.md) retain round65 contracts and rejected outcomes. The
+[current grouped design](../../design/proposals/interpreter-parity66.md) and
+[review66](review66.md) govern active work. Root adopts unit1 to qualify frozen B
+without source changes; residual semantic/native/transaction closure precedes
+one screen. Unit2 is conditional on B screen PASS or all non-generator screen
+requirements passing with both generator ratios at most 1.03. Its correction
+peer is pending. No round66 performance result exists. Both fixed storage-role
 trials are qualified and rejected. The compact execution domain passes focused
 runtime checks but stops at its native net-work gate, without timing. The complete
 deferred immediate-await unit passes lifecycle/native qualification and cuts
 coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
-as a standalone executable. Round65 is closed: the return/accessor unit qualifies
-but loses its hot8 screen; the SEND-yield continuation passes focused checks but
-fails its native cap after one reviewed correction. The continuation has no
-performance screen. The next grouped Astra review reassesses the architecture
-and performance gates; selected57 remains unchanged.
+as a standalone executable. Round65 is closed: A loses its hot8 screen; B fails
+its native cap after one reviewed correction and has no performance screen.
+Selected57 remains unchanged.
 Every round59–62 runtime packet lost its broad comparison. The retained
 delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -40,10 +44,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | Five ranked architectural options and calibrated performance gates | Grouped66 review commissioned from the completed round65 evidence |
-| Sol A | Complete return/accessor unit and independent B source/product peers | Completed; available for the next reviewed unit |
-| Sol B | Complete SEND-yield continuation and one completion-fact correction | Completed; native rejection retained, no further round65 source change |
-| Coordinator | Close round65, review grouped66, then delegate bounded units | Selected57 and controls stay immutable; no B screen or current native job |
+| Root | Qualify unit1 on frozen B; screen only after closure | No source update or build repetition; controls remain frozen |
+| Unit2 source | Auxiliary identity/origin union proposal | Conditional; source correction peer pending, no implementation |
+| Astra | [Review66](review66.md) and [design66](../../design/proposals/interpreter-parity66.md) adopted | Grouped peer GO; root owns qualification and later disposition |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

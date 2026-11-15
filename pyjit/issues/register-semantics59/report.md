@@ -1,15 +1,21 @@
 # Semantic IR trial results
 
+Round66 is adopted under [design66](../../design/proposals/interpreter-parity66.md)
+and [review66](review66.md), with independent final-design GO. Root is finishing
+qualification of frozen B before one unchanged hot8 screen. No round66
+performance result exists; selected57 remains unchanged. This is a new
+experiment with explicit prospective gates, not a revision of round65's result.
+
 Round65 is closed with no selected runtime. A passes source, runtime and native
 qualification but loses its standalone hot8 screen: coroutine time falls 39.3%,
 while logging loses 16.2% and generators 5.5% in both pairs. B passes source,
 products and focused runtime checks, then fails its native cap, including after
 one reviewed correction. B has no performance screen. Selected57 remains
 unchanged. The [design65](../../design/proposals/interpreter-parity65.md) and
-[review65](review65.md) retain the contracts; the next grouped review must
-reassess architecture and admission gates without inventing a performance loss
-for unmeasured B. No cause of A's broad regressions is established. No larger
-campaign follows these decisions. Earlier attempts and sealed evidence remain.
+[review65](review65.md) retain the contracts. Review66 reassesses architecture
+and admission gates without inventing a performance loss for unmeasured B.
+No cause of A's broad regressions is established. No larger campaign follows
+the round65 decisions. Earlier attempts and sealed evidence remain.
 
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
@@ -23,6 +29,53 @@ native net-work gate; complete deferred await qualifies and loses its screen
 under the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
+
+## Round66 frozen continuation: qualification in progress
+
+Astra source `945afac1e2546555da9c41cda708952af254db73` is integrated in canonical
+documentation as `fd42900d565`. Independent
+`auxiliary66-source-host/grouped66-final-peer.md` approves the committed design. Root adopts unit1 in
+`continuation66-source-host/root-unit1-contract.json`, before target execution.
+Runtime source remains exactly `64348dd5c182af27c058e60f1e3f849f00d7ef81`; the
+actual release build matches the continuation4 ELF hash recorded below. No
+runtime source, generated product or build is changed for this experiment.
+
+The two 117/79 builds and fresh 48-method runs per role are reused by their
+exact source/native identities. Remaining source/native and transaction
+obligations must close before a screen. Representative whole-boundary costs
+are reported tradeoffs under the new contract; the old six predictive gates
+and their prospective dispositions are explicit in design66. Behavior, owners,
+callback-safe control, aliases, ABI and bounded resource/scope requirements
+remain mandatory. Round65's native NO-GO stays sealed.
+
+Current control preparation is `continuation66-native-controls`: a private
+commit/matching identity-free retirement, then actual private SEND-yield target
+resolution and terminal suffix movement. The static source/native review and
+controller ABI receive independent GO. Current `natural1` records private commit
+through matching identity-free retirement; `terminal2` records the actual target,
+disarmed real SEND, yielded owner and successful terminal suffix move, followed
+by Python chain/GC/resume checks. Independent
+`continuation66-source-host/unit1-runtime-receipts-peer.md` verifies the
+source/ELF/controller/anchor/output linkage and both receipts.
+`terminal1` stopped on the controller's 32-frame C-stack walk limit; the
+diagnostic captures 38 frames and passes the same semantic assertions with a
+64-frame diagnostic limit. This was a checker limit, not a runtime correction.
+Fresh continuation4 tests already exercise identity/promotion OOM, redirects,
+observer completion and the actual retained native alias. Static review
+identifies a missing actual case: object-backed GENERATOR return/error under
+an armed AWAIT parent, exercising post-clear Take/cancel. Its bounded probe is
+being prepared. No screen starts before that receipt and independent closure;
+old receipts are not credited to a different executable.
+
+Unit2 remains unimplemented. It may proceed only after unit1 qualifies and
+either passes its screen, or passes every non-generator screen requirement
+while both generator pairs are at most 1.03. Any other loss stops the union
+attempt this round. Its source proposal and peer are under
+`auxiliary66-source-host`; a storage saving supplies no throughput result.
+The broader native-callout/result-consumer ABI is the leading deferred option,
+with the existing B0 result root retained and no false move saving on comp's
+A=B=17 call. Comp/Delta parity remains open. See design66 for exact screen,
+selection and bounded diagnostic rules.
 
 ## Round65 SEND-yield continuation: runtime checks pass, native reject
 

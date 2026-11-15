@@ -13,13 +13,13 @@ or initialization facts.
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
-under one architecture. The [IR-semantics workstream](issues/register-semantics59/README.md)
-closed round65 under the reviewed [design](design/proposals/interpreter-parity65.md).
-Unit A passes native qualification but loses its hot8 screen. Unit B passes
-source, product, build and focused checks, then fails the unchanged native cap
-after one reviewed correction; no B performance result exists. Neither unit
-changes selected57. Review66 is commissioned to reassess architecture and
-admission gates.
+under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
+executes the adopted [round66 design](design/proposals/interpreter-parity66.md)
+under [review66](issues/register-semantics59/review66.md). Unit1 qualifies frozen
+B without source changes; semantic, native and transaction closure precedes one
+hot8 screen. Unit2 is conditional on B's disposition. No round66 performance
+result exists, and selected57 remains unchanged. Round65's A screen loss and B
+native rejection remain closed historical outcomes.
 Stable-frame deferred await passes lifecycle and native mechanism qualification,
 and cuts coroutine elapsed time 42.9% against selected57, but loses logging
 27.7% and generators 5.2%; the standalone executable is rejected. Future work
@@ -33,12 +33,12 @@ The [review ledger](issues/register-semantics59/review65.md) separates source/na
 facts, measured costs and unresolved cycle regressions. No evidence-backed
 combined parity budget has yet been established.
 Logical values, uses, edge results and continuations precede storage and
-execution lowering. Review66 is commissioned to reassess the remaining
-architecture and admission gates. Sol workers implement and cross-review
-bounded changes, and the coordinator owns integration, qualification and
+execution lowering. Adopted design66 reassesses the remaining architecture and
+admission gates; unit1 qualifies frozen B before any screen. Sol workers
+implement and cross-review bounded changes, and the coordinator owns integration, qualification and
 measured selection. Repeat until the unchanged hot set reaches upstream parity
-while retaining broad gains;
-a completed proposal does not complete this stage. Selected57 remains the
+while retaining broad gains. A completed proposal does not complete this stage.
+Selected57 remains the
 runtime baseline. Keep rejected packets separate and preserve their evidence.
 
 Remove repeated work from ordinary execution and improve unchanged workloads

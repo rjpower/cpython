@@ -13,20 +13,26 @@ The active workstream is [IR semantics59](../register-semantics59/README.md);
 round65 is its latest closed experiment.
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The completed [round65 design](../../design/proposals/interpreter-parity65.md) and
-[grouped ledger](../register-semantics59/review65.md) rank five architectural
-options. Both fixed storage-role trials are qualified and rejected. The finite
+The closed [round65 design](../../design/proposals/interpreter-parity65.md) and
+[review65](../register-semantics59/review65.md) retain rejected outcomes. The
+adopted [round66 design](../../design/proposals/interpreter-parity66.md) and
+[review66](../register-semantics59/review66.md) govern current work. Both fixed
+storage-role trials are qualified and rejected. The finite
 ordinary-C compact domain passes both builds and 29 focused methods per role,
 then stops at its native whole-path work gate: 47 internal instructions saved
 against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
 the size caps; no timing or target coverage follows. The independent complete
 stable-frame deferred-await unit passes both builds, lifecycle and native gates.
 Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
-generators 5.2%; reject the standalone executable. Round65 is closed: A passes
-native qualification but loses its hot8 screen (coroutines .606811/selected57,
-logging 1.161661, generators 1.055271). B passes source, product, build and
-focused checks, then fails its native cap after one reviewed correction. No B
-timing screen ran, so no B performance result exists. Selected57 is unchanged.
+generators 5.2%; reject the standalone executable. Round65 is closed: A loses
+its hot8 screen; B fails native review after one correction, with no timing
+result. Unit1 qualifies frozen B without source changes or build repetition.
+Close semantic, native and transaction obligations before one hot8 screen.
+Former predictive caps are reported tradeoffs; behavior, ownership, ABI and
+resource closure remain hard gates. Unit2 is conditional on B screen PASS or
+all non-generator screen requirements passing with both generator ratios at
+most 1.03. Its proposal correction peer is pending. No round66 result exists;
+selected57 remains unchanged.
 Delegation spine, result continuation and anchored self have separate admission
 and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -112,28 +118,28 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [round65 design](../../design/proposals/interpreter-parity65.md)
-and [trial report](../register-semantics59/report.md) distinguish proposed,
+The workstream's [round66 design](../../design/proposals/interpreter-parity66.md),
+[review](../register-semantics59/review66.md), and
+[trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol A and B | Round65 source and peer work complete | No implementation work or target jobs remain active |
-| Coordinator | Integrate and preserve evidence | Round65 closed with no selected runtime; selected57 remains authoritative |
-| Astra | [Grouped65 review](../register-semantics59/review65.md) complete; review66 commissioned | Reassess architecture and prospective admission gates; no result or design yet |
+| Root | Qualify unit1 on frozen B, then screen if all closure gates pass | No source change or build repetition; owns semantic/native/transaction qualification and performance decision |
+| Unit2 source | Auxiliary identity/origin union proposal | No implementation before unit1 disposition; proposal correction peer pending |
+| Astra | [Review66](../register-semantics59/review66.md) and [design66](../../design/proposals/interpreter-parity66.md) adopted | Unit1 qualification begins; unit2 remains conditional |
 
 The compact unit is closed; no roster, mirror, provider, layout or flag
-expansion rescues it. Round65 is closed. A's qualified mechanism loses its
-screen; B's final native artifact exceeds the unchanged instrumented EMPTY cap
-by one instruction. Residual native and transaction gates remain unqualified,
-and no B timing result exists. Do not reopen either unit through source tweaks
-or target jobs. Review66 will reconsider architecture and whether hot-path and
-observation-path gates serve the performance goal.
+expansion rescues it. Round65 is closed. A's mechanism loses its screen; B
+fails native review and has no timing result. Do not reopen either through
+source tweaks. Unit1 follows design66's prospective tradeoff policy; semantic
+and resource hard gates remain. Unit2's generator exception permits only a
+separate representation experiment and does not select B. Rank1 broader native
+callout, anchored ABI and delegation spine remain deferred. Preserve B0 rooting
+and claim no additional comp A=B=17 move.
 
-The delegation spine,
-native-result ownership region and anchored argument view remain deferred
-under their separate complete-path gates; no implementation is concurrent.
+No larger ABI, anchored argument or delegation-spine implementation is active.
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol
 or final composition gates. Retain stable exact source/native identities and

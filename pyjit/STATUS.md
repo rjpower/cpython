@@ -7,15 +7,18 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 [architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
 direction, selected contracts and exact execution paths.
 
-The [IR-semantics workstream](issues/register-semantics59/README.md) closed
-round65 under Astra's [design](design/proposals/interpreter-parity65.md) and
-[review ledger](issues/register-semantics59/review65.md). A passes native
-qualification but loses its hot8 screen. B passes source, products, builds and
-focused checks, then fails its native cap after one reviewed correction; no B
-timing result exists. Neither runtime is selected. Selected57 remains unchanged.
-Review66 is commissioned to reassess architecture and admission gates. PyValue
-rollout is complete; transport, effects, ownership and physical execution remain
-targets. Parity is not achieved.
+The active [IR-semantics workstream](issues/register-semantics59/README.md)
+follows the adopted [round66 proposal](design/proposals/interpreter-parity66.md)
+and [review](issues/register-semantics59/review66.md). Root adopts unit1:
+qualify frozen B without source changes, close semantic/native/transaction
+obligations, then run one hot8 screen. Its former predictive caps are reported
+as tradeoffs; behavior, ownership, ABI and resource closure remain hard gates.
+Unit2 is conditional on B passing its screen or meeting the proposal's narrow
+generator exception; its source-proposal corrections still need peer review.
+No round66 performance result exists. Round65's A screen loss and B native
+rejection remain closed; selected57 is unchanged. PyValue rollout is complete;
+transport, effects, ownership and physical execution remain targets. Parity is
+not achieved.
 
 Unit A is qualified at `a6695887e94` but rejected as a standalone executable.
 Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
@@ -26,10 +29,10 @@ No cause is established. Final B source `50adc6d3927` integrates at
 `64348dd5c18` on `pyjit/parity65-continuation-integrated`; initial B remains
 preserved at `980baf6bbf3`. Source, product, build and fresh focused checks pass.
 One reviewed correction carries the reached retirement fact into common
-completion, but final native review still rejects B: instrumented EMPTY adds
+completion, but round65's final native review rejects B: instrumented EMPTY adds
 five instructions against the four-instruction allowance. Remaining native and
-transaction gates are unqualified. No B screen was run, so there is no measured
-B performance result. Selected57 remains unchanged.
+transaction gates stopped unqualified in that round. No B screen was run, so
+there is no measured B performance result. Selected57 remains unchanged.
 
 | Packet | Current result |
 | --- | --- |
@@ -92,9 +95,9 @@ and is rejected at its native net-work gate. Complete await source is independen
 reviewed and integrated separately. Generation and generated-code review pass;
 both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
 a 42.9% coroutine gain but unacceptable logging and generator regressions.
-Round64 and round65 are closed with no selected runtime. The next grouped Astra
-review will reconsider the architecture and whether hot-path and observation-
-path gates reflect the performance goal; review66 is commissioned. No
+Round64 and round65 are closed with no selected runtime. Adopted design66
+reconsiders the architecture and admission gates. Unit1 qualifies frozen B;
+residual semantic, native and transaction closure precedes one hot8 screen. No
 all29/full-system campaign follows the rejected screens.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions

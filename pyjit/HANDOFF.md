@@ -4,29 +4,36 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-Round65's closed design is [parity65](design/proposals/interpreter-parity65.md),
-with source contract in [review65](issues/register-semantics59/review65.md).
-The [trial report](issues/register-semantics59/report.md) owns all measured
+Current design is [parity66](design/proposals/interpreter-parity66.md),
+adopted under [review66](issues/register-semantics59/review66.md). The
+[trial report](issues/register-semantics59/report.md) owns all measured
 outcomes, failures and selection decisions; this file owns execution logistics.
 
 ## Current work
 
-Selected57 remains unchanged. Round64 and round65 are closed without a selected
-runtime. Round65 A passes native qualification but loses its hot8 screen; B
-passes source, product, build and focused checks, then fails its native cap
-after one reviewed correction. No B timing screen ran, and residual B native
-and transaction gates are unqualified. No implementation or target job is
-active. Review66 is commissioned to revisit architecture and admission gates.
-Preserve selected57 and all sealed evidence.
+Selected57 remains unchanged. Round65's A screen loss and B native rejection
+remain closed historical outcomes; B has no timing result. Root adopts unit1 on
+frozen B without source changes or build repetition. Close residual semantic,
+native and transaction obligations before one hot8 screen. Runtime controls
+remain frozen. Unit2 has no implementation authorization; its proposal
+correction peer is pending. The unit1 receipt and prepared native controls are
+at `E59/continuation66-source-host/root-unit1-contract.json` and
+`E59/continuation66-native-controls`. Static and controller review pass. Current
+`natural1` and `terminal2` controls and their independent receipt peer pass. The
+remaining actual check is object-backed child return/error cancellation under
+an armed private parent. No screen starts before that closure.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol A and B | Round65 source work complete; no implementation work or target jobs remain active |
-| Root, G | Final B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; initial B `980baf6bbf3` and A `a6695887e94` remain on preserved branches. Both continuation4 builds pass 117/79 and 48 focused methods per role pass. Final native cap fails; no B screen or broader campaign |
-| Astra | Review66 commissioned through the existing HIGH channel `zfr7ow1e`; no review result or design link yet |
+| Root, G | Frozen B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; residual qualification only, then one hot8 screen if all gates pass |
+| P | Final source `50adc6d3927` on `pyjit/parity65-yield-continuation`; no further B source changes |
+| W | Source `8ed034598b3` on `pyjit/parity65-residence-boundaries`; earlier branches retained |
+| Astra | Review66 final `945afac1e2546555da9c41cda708952af254db73`, canonical commit `fd42900d565` |
 
-Round65 workers are complete. Astra's grouped review will assess the architecture
-and prospective admission gates; root owns any follow-up work and integration.
+Unit2 source proposal correction peer is pending. Rank1 broader native-callout
+work remains deferred and must keep B0 rooting; comp's A=B=17 path earns no
+additional move credit. Anchored ABI and delegation spine remain deferred. Root
+owns qualification, the eventual screen and performance decisions.
 
 The [compact proposal](design/proposals/interpreter-parity64.md#1-compact-domain-a-bounded-change-to-physical-execution)
 requires one ordinary-C finite domain under one NCSR adapter, with ordinary CALL
@@ -198,16 +205,12 @@ return/yield/observer recipes. Remote frame/async graph readers use real
 `instr_ptr` and `ir_words`, not `return_pc`; retain invariants/controls without
 an unrelated layout port. Census alone does not prove support.
 
-Unit B's complete source/product integration, bounded completion correction,
-builds and 48 focused methods per role pass at final G head `64348dd5c18`.
-Final native review rejects it: instrumented EMPTY adds five instructions
-against a four-instruction allowance. Other native and transaction gates remain
-unqualified. No B performance screen ran, so no B timing result exists. The
-initial `980baf6bbf3` and final evidence remain preserved; see the
-[trial report](issues/register-semantics59/report.md#round65-send-yield-continuation-runtime-checks-pass-native-reject)
-for the sealed path reviews and exact limits. Do not continue B or run target
-jobs. Round65 is closed; selected57 remains unchanged while review66 reconsiders
-architecture and admission gates.
+Unit B's initial and final native rejections are preserved in the report; B has
+no performance result. Unit1 reuses final G head `64348dd5c18`, with no source
+changes or repeated builds. Root closes residual contracts, native aliases,
+observer/error/OOM transactions, and lifecycle/reader obligations before one
+hot8 screen. Round65 source repair is closed; unit1 follows design66 without
+edits to frozen B. Do not repeat source repairs or run unrequested target jobs.
 
 Root reviews source/products, refreshes both reused builds, runs minimal
 controls/native gates and measures the changed candidate. Keep all immutable

@@ -13,16 +13,33 @@ this file owns execution logistics.
 
 Round67 is closed: A and B qualify their mechanisms and lose their screens.
 Selected57 remains unchanged. The grouped round68 proposal is delivered and
-independent architecture and exact source-contract approval pass. The optional
-common loop-proof/plan increment has independent source and product approval,
-and is integrated on G. Builds reused from generated products are current; no
-root job is running. It adds immutable common loop rows, a 24-byte plan header,
-32-byte rows, a NULL_CONTROL proof, optional allocation/free/size, and
-public-route/refusal tests. It does not allocate generator records or activate
-retained execution. Sol's inert effective-state/materializer increment is ready
-for independent peer review. Activation waits for complete lifecycle and reader
+independent architecture and exact source-contract approval pass. Common loop
+proof, inert materializer, and generator reader/teardown ports have independent
+approval and are integrated on G at `ff64c134db7`. Both current builds pass
+117/79 and all 17 focused methods per role; no root job is running. Engine
+lifecycle closure is in W. A separate Sol-medium worker ports cold frame
+publication/copy/native readers in P, branch
+`pyjit/parity68-delegation-frame-readers`, from `125c5570e8e`.
+These changes do not allocate generator records or activate retained execution.
+Activation waits for complete lifecycle and reader
 closure. Preserve actual owning frames and retained ancestors, enter the current
 leaf directly, and change only the suffix. No second unit is active.
+
+Materializer source `41f68b9611a` plus actual-thread-owner correction
+`125c5570e8e` integrates as `6c713b18e7b` and `2244d12e313`. Both
+`parity68-materializer3` builds pass 117/79. Generator consumer source
+`d1eb8eeda58` integrates as `ff64c134db7`; both `parity68-genobject4`
+builds pass 117/79, and all 17 methods pass across
+`test_ir_retained_delegation` (8) and `test_ir_delegated_yield` (9).
+Logs use `E59/parity68-{materializer3,genobject4}-{release,debug}-build.log`
+and `E59/parity68-genobject4-{release,debug}-focus.log`; command manifests
+use the same tag and stage. Source reviews are
+`retained-delegation68-source-host/{materializer3,genobject4}-source-peer.md`.
+No runtime records exist yet, so these passes cover ordinary behavior, not
+retained mechanism. The proposed hot publication protocol remains under
+review; all-membership clearing must precede direct storage release with
+explicit ordering. Cold materializer source still uses its reviewed seq-cst
+begin marker.
 
 Proof2 source commits are `647652f293e230f2440e30bded3adbd11502cf10` and
 `0f0093208ecf05d67f7d42170584e985a8344b36`; root integrations are

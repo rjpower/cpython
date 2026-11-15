@@ -1,5 +1,29 @@
 # Semantic IR trial results
 
+## Round68 materializer and generator consumers
+
+The inert materializer has independent source GO after correcting thread-owner
+discovery: a foreign observer finds the thread that owns a linked root before
+invalidating its sampler cache; an unlinked ENTERING root has no retained
+ancestry to invalidate. Source `41f68b9611a` plus `125c5570e8e` integrates
+as `6c713b18e7b` and `2244d12e313`. Both materializer3 builds pass 117/79.
+
+Generator reader/teardown source `d1eb8eeda58` has independent source GO and
+integrates at `ff64c134db7`. Effective state feeds public state and GC readers;
+ordinary mutation, finalization and deallocation dissolve membership first,
+including before weakref callbacks. Pure yield-from inspection uses the
+certified receiver without dissolution. Both genobject4 builds pass 117/79
+and all 17 focused methods per role across `test_ir_retained_delegation` (8)
+and `test_ir_delegated_yield` (9). These overlap earlier focus counts.
+
+No record allocation or activation exists yet. These results establish ordinary
+behavior and compilation, not retained execution, native cost or performance.
+Cold frame publication/copy/native readers and engine lifecycle ports proceed
+in parallel before activation. The hot publication protocol remains under
+review, including explicit ordering between clearing every membership and
+freeing nonowned record storage. The [handoff](../../HANDOFF.md) records logs,
+manifests and independent source reviews.
+
 ## Round68 common loop proof and plan
 
 The optional common loop-proof/plan increment has independent source and product
@@ -16,8 +40,8 @@ This increment adds optional immutable common loop rows, a 24-byte plan header,
 32-byte rows, a NULL_CONTROL proof, optional allocation/free/size, and
 public-route/refusal tests. It allocates no generator records and activates no
 retained execution. It establishes no native mechanism, performance result, or
-broad qualification. Sol's inert effective-state/materializer increment is
-ready for independent peer review; full lifecycle and reader closure remain
+broad qualification. The later materializer and generator consumer results are
+above; full lifecycle and reader closure remain
 activation gates. Logs and
 manifests are listed in the [handoff](../../HANDOFF.md).
 
@@ -31,7 +55,7 @@ Foundation source `b213c8e73110e8035fe44c8f228538d08ee245b6` is integrated at
 across `test_ir_retained_delegation`, `test_ir_created_plan`, and
 `test_ir_delegated_yield`. This earlier foundation allocates no records and
 enables no retained execution. Its focus is superseded by the proof2 result
-below; it remains historical evidence. The
+above; it remains historical evidence. The
 [handoff](../../HANDOFF.md) identifies logs and command manifests.
 
 ## Round67: both qualified runtimes rejected

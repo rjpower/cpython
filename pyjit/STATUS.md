@@ -11,13 +11,14 @@ it.
 The grouped [round68 proposal](design/proposals/interpreter-parity68.md) and
 [review](issues/register-semantics59/review68.md) are delivered. Independent
 architecture and exact source-contract approval pass for one retained-generator-
-delegation unit. The optional common loop-proof/plan increment has independent
-source and product approval and is integrated in G. Release and debug builds
-each pass 117 modules/79 shared extensions, with all 30 focused methods passing
-per role. No generator record allocation or activation, native
+delegation unit. The common loop proof, inert materializer, and generator reader
+and teardown ports have independent approval and are integrated in G. Both
+current builds pass 117 modules/79 shared extensions and all 17 focused methods
+per role. Cold frame publication/copy ports and engine lifecycle closure are in
+parallel source work. No generator record allocation or activation, native
 mechanism, performance result or broad qualification is claimed. Activation
 waits for complete lifecycle and reader closure. Selected57 remains unchanged;
-proof2 builds are current and no root job is running. Root owns integration,
+genobject4 builds are current and no root job is running. Root owns integration,
 qualification and measured selection. Details are in the
 [trial report](issues/register-semantics59/report.md) and [handoff](HANDOFF.md).
 The report also retains both rejected round67 candidates.

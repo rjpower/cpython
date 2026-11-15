@@ -15,14 +15,50 @@ both FAST entry branches must test D before reading the native payload.
 Source correction `1ab6937f70d` integrates as `cf165ef0072`, with pinned FAST/D0,
 header-only regressions for both forms through all four public-image routes.
 Regeneration passes; products `060e7be12e5` change only those two guards.
-Fresh `parity67-callout2` release/debug builds are running; target tests remain
-unexecuted. Failed `parity67-callout1` logs remain retained.
+Fresh `parity67-callout2` release/debug builds pass 117/79. Initial target runs
+pass 95 existing controls per role but two new methods fail because the
+synthetic image lacks RESUME: ordinary incomplete-frame rules hide it from
+observation and tracebacks. Fixture-only `ffb371f56b7` integrates at
+`ba4ea9dd9a9`; both fresh `parity67-callout3` builds pass 117/79 and all eight
+new methods pass per role. Interpreter .text matches capture2 exactly; .rodata
+contains changed revision/build strings. The initial equivalence checker that
+also demanded .rodata equality remains a failed checker receipt, not a runtime
+failure. Failed build/test logs remain retained.
+
+`parity67-callout3-native` pins release ELF
+`ecf5d401b09dc86e701e9ffd7952c8bf0b929f5dcd50fa2d246096ca78b7c3fc`.
+Five actual `callout67-native-controls` transactions have independent ABI and
+receipt GO: natural comp CALL46→APPEND47→next48; synthetic normal completion;
+provider failure at CALL5; late-observer defusion to ordinary APPEND6; and append
+OOM at word6. Synthetic providers execute once with zero final result-refcount
+delta. Three extra controls pass per role, each covering both self forms:
+provider fallback, sole-query retirement with GC/local mutation, and pending
+poll enabling a reached APPEND instruction event. These are mechanism checks,
+not frequency or speed results. A separate real-source line-redirection control
+passes both roles, including observed APPEND, a successful jump that skips an
+assignment, provider-once and payload-release assertions. The existing warning
+about filling one unbound local remains visible. Independent final qualification
+approves one screen; `parity67-callout3-eight-selected57` is running with frozen
+source/builds, explicit hot8, two pairs/32 rows on CPU15.
+
+Independent native review confirms the removed intermediate NCSR dispatch,
+but its nominal offline supplied-self boundary grows from 228 to 370 native
+instructions, excluding the same provider/append callees on both sides.
+Simultaneous outer/helper stack is 216 bytes before shared callees versus 72;
+whole .text grows 11,584 bytes. Plan storage adds four header bytes and eight
+per nominated edge; feedback/frame sizes stay fixed. These costs do not predict
+dynamic frequency or speed, and design67 imposes no invented static veto.
+`unit-a-native-peer.md`, `unit-a-native-controls-peer.md` and
+`unit-a-final-qualification-peer.md` under `callout67-source-host` own the
+independent readbacks. No round67 timing result exists yet.
 
 B source `7bc2b2bfbe6` initially invalidated the checked canonical-return
 recipe. Repair `8a84d17c29d` restores all four canonical/EXIT proofs and adds
 post-detach MayDealloc-guarded promotion at synthetic input releases. Five
-focused host checks pass; independent repair readback is pending. B is not
-integrated or runtime-qualified.
+focused host checks pass. Independent readback then finds bare B/C identifiers
+in an emitted release guard. Final correction `77d3d78ec99` decodes the fields
+and adds actual IS_OP output assertions; independent final source GO closes
+all raised findings. B is not integrated or runtime-qualified.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

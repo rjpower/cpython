@@ -16,16 +16,16 @@ Round67 source implementation is active under adopted
 [review67](issues/register-semantics59/review67.md). Independent final adoption
 and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
 Both source lanes start from selected57. A's corrected source and products are
-integrated in G; fresh release/debug builds are running. Root owns generation,
+integrated in G; fresh release/debug builds and focused methods pass. Root owns generation,
 build/native jobs, independent integration and
 selection. A proceeds without waiting for B. Workers run only bounded host
 source/generator checks and write discoverable runtime tests for root.
 
 | Owner | Active checkout / branch |
 | --- | --- |
-| A source | P, `pyjit/parity67-native-callout`, `1ab6937f70d`; shared-feedback source repair has GO, D0 guard and pinned public-image regression await product readback/target execution |
-| B source | W, `pyjit/parity67-anchored-self`, `8a84d17c29d`; RETURN and synthetic-close repairs pass five focused host checks, independent readback pending |
-| Root | G, `pyjit/parity67-callout-integrated`, `060e7be12e5`; both `parity67-callout2` builds running after regeneration. Do not execute either binary until both builds pass |
+| A source | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; source/products and fixture repairs have independent GO |
+| B source | W, `pyjit/parity67-anchored-self`, `77d3d78ec99`; independent final source GO, no integration/products/build/runtime yet |
+| Root | G, `pyjit/parity67-callout-integrated`, `ba4ea9dd9a9`; both `parity67-callout3` builds pass 117/79; 103 focused methods and three extra behavior controls pass per role |
 | Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
 
 The old G continuation branch remains preserved at `64348dd5c18`.
@@ -35,6 +35,23 @@ capability constants followed the generated metadata include. Root correction
 header-only feedback payload read; `cf165ef0072` adds short-circuit admission
 and both-form public-image tests. Fresh products `060e7be12e5` change only the
 two entry guards. Retain the failed logs; use fresh `parity67-callout2` evidence.
+The first target runs passed 95 existing controls but two of eight new methods
+failed because the synthetic image lacked RESUME, hiding its incomplete frame
+from observation/tracebacks. Fixture-only `ffb371f56b7` integrates at
+`ba4ea9dd9a9`; fresh callout3 builds and all eight methods pass per role.
+Capture `parity67-callout3-native` pins ELF
+`ecf5d401b09dc86e701e9ffd7952c8bf0b929f5dcd50fa2d246096ca78b7c3fc`.
+Its .text equals capture2; .rodata includes changed revision/build strings and
+must not be called byte-equal. Five actual controls under
+`E59/callout67-native-controls` have independent receipt GO. Extra retirement,
+provider-miss and pending-poll controls pass both forms in both builds.
+Real-source line redirection also passes both roles. Native structural/cost and
+final qualification peers approve one screen: `parity67-callout3-eight-selected57`
+is running, explicit hot8, two pairs/32 rows, CPU15. Keep G/builds/controllers and
+benchmark sources frozen; do not run host-heavy work during its quiet window.
+The static nominal boundary costs 370 versus 228 instructions and 216 versus
+72 bytes stack before shared callees; these are modeled path costs, not a
+dynamic instruction ratio or throughput result. No performance result yet.
 P/W prior65 source branches remain preserved; their active source is now the
 independent67 lanes. Do not execute an old captured ELF against their changed
 Lib trees. Selected57 I and both builds remain immutable. The first source

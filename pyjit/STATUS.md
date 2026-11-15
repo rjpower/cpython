@@ -14,12 +14,15 @@ and shared-interface readback pass. Two Sol-high source lanes start from
 selected57: A, complete native callout through B0-rooted retirement/poll and
 append; B, one caller-anchored read-only exact-method self binding. A is not
 blocked on B. A source and generated-product repairs are integrated at
-`060e7be12e5`; both builds are running. The first release build failed on
-capability declaration order, now corrected. Product review also required a
-nonzero feedback index before reading the native payload; its header-only
-public-image regression awaits target execution. B repair `8a84d17c29d`
-restores checked RETURN proofs and guards synthetic input releases; independent
-repair readback is pending. No source checkpoint is yet runtime-qualified, and no round67
+`ba4ea9dd9a9`; both builds pass 117/79 and 103 focused methods per role pass.
+Five actual native transactions cover natural comprehension entry, normal
+completion, provider error, late-observer defusion and append OOM. Three further
+behavior controls pass per role, each covering both self forms; a separate
+real-source line-redirection control also passes both builds. Independent final
+qualification approves the single balanced hot8 screen, now running. Native
+review confirms the removed dispatch but finds adverse instruction/stack costs.
+B source `77d3d78ec99` has independent source GO after RETURN and synthetic-close
+repairs; it is not integrated or built. No round67
 performance result exists. PyValue rollout is complete; parity is not achieved.
 
 Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable

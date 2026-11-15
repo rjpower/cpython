@@ -104,9 +104,11 @@ ordered trial list. Its [design](../../design/proposals/register-semantics59.md)
 [peer review](../register-semantics59/peer.md) and
 [trial report](../register-semantics59/report.md) distinguish proposals, source
 packets, qualified executables and measured selections. The first loop-binding
-executable is rejected. Independent builder publication is qualified by focused
-checks and entering its performance screen; explicit native Invoke is source
-reviewed, and the continuation-action proposal is under review.
+executable, standalone builders and builder+Invoke composition all lose their
+performance screens. Invoke is being isolated from builders. The continuation
+action source packet is complete with actual peer GO; root owns generation and
+native gates. Resident-value/backend alternatives require all-word coverage
+and a nonoverlapping native budget.
 
 Root owns integration, generation, serialized native jobs and quiet timing.
 Sol workers implement and cross-review bounded components in separate worktrees.

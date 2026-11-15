@@ -1,7 +1,9 @@
 # Independent native Invoke result
 
-Bounded source implementation, reviewed by root; strengthened fixtures await
-root's review and native qualification. Baseline: selected57
+Bounded source implementation, with actual production source GO from root and
+frames. The composed executable passes both builds and 66 focused methods per
+role but loses its screen. Invoke is being isolated from the losing builders;
+see the [trial report](report.md). Baseline: selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0`.
 Source checkout: `call55-pins`, branch `pyjit/reg59-native-invoke`. Three focused
 host source methods pass; `E59/native-invoke-host1.log` retains the initial
@@ -97,13 +99,17 @@ allocated retired-input array or a general transaction-helper call:
 
 * NULL result: transfer to the existing error path while original input homes
   still own their inputs. No result owner exists and no drain is claimed.
-* Success: take the callable home into its own retiring token. Normalize and
-  publish the distinct result to B0 for **every** recipient mode before any
-  close, preserving the selected intermediate root/phase/error state. This
-  transfers the result owner, not the old callable token.
-* Close callable, take/close each argument descending, then take/close actual
-  self. Never read, clear or close the absent-self gap. Detach each owner before
-  its callback-capable close, retaining the existing close order.
+* Success: snapshot current B0 as `ir_native_callable` while its owner remains
+  rooted there. Normalize and publish the distinct result over B0 for
+  **every** recipient mode before any close. The write transfers the displaced
+  callable owner to the C token and installs the result's independently
+  acquired owner. Normalization is callback-free and reads no old B0 value;
+  no intermediate NULL store or callable take is needed. This preserves the
+  selected intermediate root/phase/error state.
+* Close the displaced callable, take/close each argument descending, then
+  take/close actual self. Never read, clear or close the absent-self gap. Each
+  old owner has left its home before its callback-capable close, retaining the
+  existing close order.
 * Run the existing periodic/continuation check with the result still in B0.
   Failure enters ProcessError with exactly the existing B0 result root. On
   success retain the existing final move to A: a local is committed only now,
@@ -117,7 +123,8 @@ callable or argument is still a distinct acquired count.
 
 ## The NULL receipt is the gate
 
-The terminal's actual take/close operations provide the detached-home receipts.
+The terminal's actual replacement and take/close operations provide the
+detached-home receipts.
 Only their completed, callback-safe plan can set the existing
 `window_taken`/`CALL_DRAIN` state. That state suppresses the later generic
 vacate, which is the current second clear pass. A source declaration or helper
@@ -174,14 +181,25 @@ finishes. Local/discard delay retains the existing B0 root until final commit.
 The current source packet is exactly `Python/bytecodes.c`,
 `Tools/cases_generator/analyzer.py`, `Tools/cases_generator/ir_generator.py`,
 `Lib/test/test_ir_native_invoke_source.py` and
-`Lib/test/test_ir_native_invoke.py`. Root reviewed the production delta;
-frames' independent actual review remains pending. Root owns generated
+`Lib/test/test_ir_native_invoke.py`. Root and frames reviewed the actual source.
+Root owns generated
 cases/metadata and native qualification. Scalar/error replay remains uncovered for this
 manual window operation. Inspect
 `pycore_ir_outcomes.h`, `Objects/codeobject.c`, ProcessError, frame/GC and
 instrumentation readers for the unchanged final geometry and changed
 intermediate result location. Update any affected reader in the same packet.
 No ABI field or new format enum is proposed without such a reader.
+
+The combined source now registers `IR_RETIRE_NATIVE_INPUTS` as a callback-capable
+release. Root's regeneration after that registration preserves the IR metadata
+byte-for-byte. The markers'
+error/escape/sync/PC effects retain conservative raise/allocation/Python-code
+flags, while the existing periodic uop retains polling. BOXES remains based on
+actual emitted C; this provider uses no handler value record. The new marker
+lowerers are interpreter-only; the producer now has an explicit tier1
+declaration rather than restoring an unsupported tier2 expansion. Source peer
+GO covers this effect closure and the current-B0 replacement sequence. Both
+composed builds and focused native gates pass; this is not a performance win.
 
 Source checks must reject missing invoke ownership, a borrowed/copy result,
 alias/address/shadow mutations, missing NULL arm, a second publication, wrong

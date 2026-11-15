@@ -15,10 +15,20 @@ focused qualification but is rejected: its two-pair screen loses coroutines
 8.7% and spectral_norm 31.5%, with comprehensions near flat. The
 [trial report](issues/register-semantics59/report.md) records exact evidence;
 the independent builder candidate passes generation, both 117/79 builds and
-207 focused methods per role and is entering its performance screen. Its
+207 focused methods per role, but its screen loses logging 8.9% and DeltaBlue
+3.4%, so the standalone executable is not selected. Its
 fresh-result contract writes a positively vacant scratch home without reading
 old bits; the smaller empty-builder witness drops from two scratch cells to one.
-Native Invoke is source-reviewed pending integration. The preceding
+The builder+Invoke composition also loses: DeltaBlue 5.8%, logging 12.8% and
+spectral_norm 11.2% slower in its stable-identity two-pair screen. Both 117/79
+builds and 66 focused methods per role pass. Actual native review confirms one
+input-retirement traversal and FAST native stack reduction from 64 to 48 bytes,
+but these do not earn selection. Invoke is being isolated from builders.
+The continuation-action source packet is frozen with actual peer GO and six
+host methods passing. Generation and both builds pass; its first release focus
+finds that the new local witness actually yields to scratch. The fixture is
+being corrected without weakening its required action; native qualification
+remains open. The preceding
 [parity workstream](issues/interpreter-parity58/README.md) has a completed
 Astra [architectural review](design/proposals/interpreter-parity58.md), a
 [source/native ledger](issues/interpreter-parity58/research.md) and

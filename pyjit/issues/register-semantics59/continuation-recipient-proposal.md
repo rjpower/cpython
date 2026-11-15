@@ -1,6 +1,7 @@
 # Continuation recipient action
 
-Proposal only; no implementation or performance result. This is trial 4 of
+Source implemented and peer-reviewed; native qualification is underway. No
+performance result yet. This is trial 4 of
 the [semantic design](../../design/proposals/register-semantics59.md#4-encode-the-recipient-action-in-the-continuation),
 reviewed against selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0` in
 `R/call55-integrated`. The independent builder candidate is a separate gate.
@@ -52,6 +53,23 @@ testing precedes bounds or home addressing. A separate external-entry binder
 accepts only the existing checked interpreter entry storage; it must not
 manufacture an ordinary code/bitmap provider for a native frame. Pure accessors
 return action and home; consumers do not repeat masks or nlocals comparisons.
+
+Also permit the same packing/store operation with an already proved action.
+Use `_PyFrame_BindScratchReturnRecipient(frame, home)` for the validated scratch
+producer, `_PyFrame_BindDiscardReturnRecipient(frame)` for a constant sink, and
+the external binder above for native entry. All use the same pure encoding
+operation; scratch bounds/partition assertions remain in debug builds. These
+are typed producer interfaces, not runtime action-table lookups.
+The existing checked SEND entry recipe supplies a scratch B+2 recipient: its
+validated input/protocol window is above locals. That producer may bind
+VACANT_SCRATCH directly, without classifying it again. The receipt is the
+actual window/entry recipe, not the SEND handler name. A source form without
+that receipt retains general binding; the setter's spelling cannot establish
+the proof. Public created-generator
+DISCARD and native EXTERNAL_ENTRY(1) are also constant actions. General call A,
+FOR body A and yield's next-input A can name a local, scratch or discard; they
+still need classification. Do not add new execution variants or a per-site
+action table to make this trial look cheaper.
 
 Bind at the existing callback-free handoff commit, after the last refresh and
 before the child becomes current. If binding preparation can run callbacks,
@@ -147,6 +165,32 @@ No release debug scan or new call overlap/direct return is a saving here. The
 rejected FOR result experiment demonstrates why fewer source stores are not a
 native or throughput result.
 
+### Retained native cost inventory
+
+The selected57 ELF is `E55/comp57-dictionary-native/python`; the following is
+static disassembly, not a candidate cost or execution-frequency measurement.
+
+| Existing path | Actual operations | Proposed replacement / installation cost |
+| --- | --- | --- |
+| RETURN_VALUE_EMPTY `0x3987a1–0x3987b1`; YIELD_VALUE `0x34e495–0x34e4a5` | Owner-byte compare and branch; recipient code-pointer load; nlocals memory comparison and branch. Five instructions, including the dependent code/nlocals reads. Discard testing and home-address calculation precede these. | Action decode/test replaces owner/partition inference; home masking is added. Discard, redirect, actual store and local retirement remain. Exact instruction/branch count awaits candidate code. |
+| CALL_NO_SELF_PY_EXACT_ARGS `0x387fa0–0x387fbd` | Decode/mask A and save its raw slot. There is no release caller-destination nlocals comparison to reuse. Earlier callee-code loads do not describe the caller's local partition. | General binding adds caller classification and action packing here. Charging only the removed return-side load would overstate the benefit. |
+| SEND_GEN `0x396bc4–0x396bcf`, then `0x396c42–0x396c59` | Save parent B+2 without partition classification; on resumed-child input publication, compare owner and load child code/nlocals. YIELD later classifies the parent again. | Bind the proved parent scratch action directly, with packing but no parent code/nlocals query. The generator's yield-A classification moves to suspension, so it is not independently eliminated. |
+| `call_transaction_native`, `ceval.c:1801,1845` | Existing `to_local` selects immediate scratch publication versus delayed local/discard. This classification runs on the native-result route. | It is not an already computed action on the disjoint Python-child handoff route. Keep it and its commit phases intact; do not compute/store an extra saved descriptor for native-only calls. |
+
+In a normal SEND/yield cycle the parent B+2 action is known scratch, whereas
+the generator's incoming A can be local or scratch. The first partition query
+can disappear; the second generally moves from the next resume to suspension.
+Both publications gain packed-action decoding. That is a concrete opportunity
+and a concrete charge, not two eliminated classifications. Similarly, a plain
+Python call normally installs one action and consumes it once: without reuse
+or cheaper instruction selection, classification has merely moved.
+
+`call_transaction_begin` does not already provide a usable release destination
+classification: its destination/local bounds checks are assertions. Current
+call role variants describe self/kwargs geometry, not A's local/scratch role.
+The only existing execution variants with `local_fields` are attribute-load
+variants. Do not claim those unrelated facts for calls.
+
 Acceptance requires unchanged header sizes/ownership/recovery and measurable
 ordinary call/resume benefit after charging installation. Use unchanged hot
 and broad workloads under the standing measurement gates; inspect DeltaBlue,
@@ -156,3 +200,21 @@ fake frame provider, or new spills/branches cancel the return-side reduction.
 Do not grow the descriptor, introduce a universal per-yield lookup, or search
 alignment/layout seeds to rescue a losing result. Root owns implementation
 authorization, native qualification and selection.
+
+## Source packet
+
+The complete source closure is implemented in `R/call55-ir`, branch
+`pyjit/reg59-recipient-action`, commit
+`7b295bf6caf74a03414f9995f0f6e4523223d49b`, based on selected57. It includes the shared
+16-bit action contract, all constructor/handoff/suspension/copy writers,
+publication and redirect readers, ABI2 remote decoding, source matchers and
+fixtures. The only binder emitted directly by the DSL is explicitly classified
+callback-free; a binder call alone still supplies no typed home/error grant.
+Six focused host source methods pass in 6.351 seconds, with runtime fixture AST
+checks, at `E59/recipient-source-host/callback-classification.log`. Independent
+actual source review is GO. Root integrated the source in G and full generation
+passes, changing only 15 generated binding sites. Commit `c1da955989e` includes
+those products; both 117/79 builds pass. The first release focus finds the
+new local-case fixture actually yields to scratch, and four route subtests fail
+the intended local assertion. Its correction must exercise a genuine local
+recipient; the other 111 methods pass. Debug focus and performance remain open.

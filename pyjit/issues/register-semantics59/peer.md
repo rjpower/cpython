@@ -69,8 +69,9 @@ independently reviewed the diagnostic path and the correction:
 Both actual source peers are GO. The four-method host gate passes after the
 associated fixture literals are ported; its first stale-literal failure is
 retained. Root's second full generation passes. Candidate `d4584f8e45a` is
-committed and both native builds are underway. No native test or performance
-pass is claimed yet. The [builder proposal](edge-results-proposal.md) owns the
+committed. Both 117/79 builds and 207 focused methods per role pass; the
+standalone performance screen loses and does not earn selection. See the
+[report](report.md) for exact evidence. The [builder proposal](edge-results-proposal.md) owns the
 complete revised contract.
 
 ## Explicit native Invoke source

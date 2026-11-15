@@ -29,8 +29,8 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Complete; six ordered trials frozen |
 | Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | First actual-diff review GO; builder cleanup source GO |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Builder source complete; native Invoke implementation active; continuation proposal active |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | First hot-eight screen complete; losing executable rejected |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Builder and composed Invoke screens lose; isolated Invoke preparation and continuation source packet ready |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Three hot-eight screens complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 
 First rejected candidate: explicit BODY-edge result placement for admitted local
@@ -47,11 +47,11 @@ The binding must be reusable and must not be an opcode-specific generator bypass
 | Trial | Adjustment | State |
 | --- | --- | --- |
 | 1 | Bind a BODY result at final publication, independent of its staging cell | f61edc21 passes generation, both builds and 37 focused methods/role; rejected by hot-eight screen |
-| 2 | Separate builder input-span geometry from result allocation; FOR family follows only with complete fallback support | d4584f8e45a passes generation, both builds and 207 focused methods/role; hot-eight screen running |
-| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Concrete proposal reviewed; source implementation active |
-| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | Concrete header/reader proposal complete; whole-path cost review active |
-| 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Frozen conditional trial; positive surviving opportunity required |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Frozen architecture; implementation not started |
+| 2 | Separate builder input-span geometry from result allocation; FOR family follows only with complete fallback support | d4584f8e45a passes generation, both builds and 207 methods/role; standalone loses logging/DeltaBlue, not selected |
+| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582e61c passes generation, both builds and 66 methods/role; screen loses, isolate Invoke |
+| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | Generation and both builds pass; first native fixture misidentifies local/scratch, correction pending |
+| 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Concrete resident/backend proposal; all eight root census diagnostics complete; coverage analysis active |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

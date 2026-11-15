@@ -1,10 +1,10 @@
 # Register semantics and physical execution
 
 Status: reviewed ordered trials, 2026-11-14. Trial 1 passes focused qualification
-but loses its performance screen and is rejected. Trial 2 is in native
-integration with the reviewed fresh-publication correction below; trial 3 is
-implemented in a separate source packet pending native integration. Later
-trials remain proposals. The [trial report](../../issues/register-semantics59/report.md)
+but loses its performance screen and is rejected. Trial 2 and the composed
+trial 2+3 executable pass focused qualification but lose their screens. Trial 3
+is being isolated from builders. Trial 4 source is frozen and source-reviewed;
+its native gates remain pending. Trials 5/6 are conditional proposals. The [trial report](../../issues/register-semantics59/report.md)
 owns measured outcomes; this design does not imply selection.
 Selected57 (`0dcba75bb3df40c32137db453b001f7e8f101de0`) is the runtime baseline.
 The [review ledger](../../issues/register-semantics59/review-astra.md) separates

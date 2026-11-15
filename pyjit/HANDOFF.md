@@ -18,25 +18,40 @@ runtime implementation or native campaign has begun. The completed
 Follow [process](PROCESS.md). The coordinator owns integration,
 qualification, measurement and selection.
 
-Round59 candidate source G is `BASE/worktrees/call55-gc`, currently branch
-`pyjit/reg59-builders` at `d4584f8e45abeafaf0e919111e7fb5b86d7ab7a9`.
-The separate `pyjit/reg59-results` branch preserves rejected `f61edc21a4e`.
-Builder full generation, both 117/79 builds and 207 focused methods per role
-pass; its eight-case screen is running under `E59/builders2-eight-selected57`.
-Builds are
-`BASE/reg59-results-{release,debug}`, configured with the respective exact
-selected57 flags. Evidence is `BASE/pyjit-link-wave1/register-semantics59`.
+Round59 candidate source G is `BASE/worktrees/call55-gc`, branch
+`pyjit/reg59-recipient` at `c1da955989e`. Generation and both 117/79 builds pass.
+The first release focus executes 112 methods: 111 pass and the new recipient
+fixture fails four local-route subtests because its yield actually targets
+scratch. Root retains the failure; the worker must construct a genuine local
+recipient rather than weaken its assertion. Debug focus has not yet run. The losing builder+Invoke composition remains preserved at
+`582e61c2b28445cadbf219df23f708d6e5988e40` on `pyjit/reg59-builder-invoke`.
+The separate `pyjit/reg59-results` and `pyjit/reg59-builders` branches preserve
+rejected `f61edc21a4e` and standalone builder `d4584f8e45a`. Both builder alone
+and builder+Invoke lose their eight-case screens; neither is selected. The
+composition passes generation, both 117/79 builds and 66 focused methods per
+role. Its screen is `E59/combined3-eight-selected57`; both identities are stable.
+Root will test Invoke independently before deciding its disposition.
+Builds are `BASE/reg59-results-{release,debug}`, configured with the respective
+exact selected57 flags. Evidence is `BASE/pyjit-link-wave1/register-semantics59`.
 **Keep call55-integrated and both existing builds frozen at selected57**;
 do not advance them for this cycle. Use the explicit source/build/evidence
 arguments documented in [measurement](issues/register-semantics59/measurement.md),
-not the check helper's default integrated path. The separate allocator proposal
-uses `BASE/worktrees/call55-ir`, branch `pyjit/reg59-edge-results`, initially
-selected57; its frozen source packet is `1b229867638`. Native Invoke's frozen
-five-path source is in `BASE/worktrees/call55-pins`, branch
-`pyjit/reg59-native-invoke`, pending integration into G. Its proposal and both
-actual source peers are GO; native products/tests/timing remain pending.
-The [continuation proposal](issues/register-semantics59/continuation-recipient-proposal.md)
-is under review. Prior worker branches remain preserved.
+not the check helper's default integrated path.
+
+The complete continuation-action source packet uses `BASE/worktrees/call55-ir`,
+branch `pyjit/reg59-recipient-action`, based on selected57. Actual source peer
+is GO and six host source methods pass. Source commit is
+`7b295bf6caf74a03414f9995f0f6e4523223d49b`; root generation passes, native gates
+remain pending.
+Native Invoke's source component is `ff3d5b23171007c8c195a12ce8b7475d3bca8eee`
+in `BASE/worktrees/call55-pins`, branch `pyjit/reg59-native-invoke`; G also has
+root effect/tier1/owner-replacement and fixture corrections. The worker is
+preparing those corrections independently of builders. The
+[resident-value proposal](issues/register-semantics59/resident-value-proposal.md)
+requires all-word coverage and a nonoverlapping native budget. Its census
+adapter has source-peer GO; all eight root diagnostic runs pass identity and
+complete successfully. Frequency analysis remains conditional evidence.
+Prior worker branches remain preserved.
 
 ## Selected checkpoint and controls
 
@@ -140,14 +155,14 @@ Existing component worktrees and branches are retained:
 
 | Worktree | Branch | Head |
 | --- | --- | --- |
-| `R/call55-ir` | `pyjit/comp57-local-append` | `20d149b1163` |
-| `R/call55-pins` | `pyjit/comp57-checked-method` | `6987a396f83` |
-| `R/call55-gc` | `pyjit/comp57-dict-only` | `0dcba75bb3d` |
+| `R/call55-ir` | `pyjit/reg59-recipient-action` | Selected57 plus frozen source packet; see active work above |
+| `R/call55-pins` | `pyjit/reg59-native-invoke` | `ff3d5b231710` plus isolated source corrections in progress |
+| `R/call55-gc` | `pyjit/reg59-recipient` | `c1da955989e` |
 
-Use I for integration; worker branches are component packets without every root
-compile correction. Preserve them, old golden controls and all retained outputs.
-Prior `pyjit/comp57-list-paths` at `c04e0503353` and `pyjit/comp57-dict-read`
-at `015e2e3bcc9` remain intact. Do not treat them as selected runtime code.
+G is the round59 integration tree; I remains the immutable selected control.
+Worker packets require root generation and qualification. Preserve all prior
+branches and controls. Prior `pyjit/comp57-list-paths` at `c04e0503353` and
+`pyjit/comp57-dict-read` at `015e2e3bcc9` remain intact and unselected.
 The bitmap `0e918`, IRSC2 and M4 experiments are independent and remain
 experimental; they are not requirements for this workstream. The
 [call-model55 report](issues/call-model55/report.md) and

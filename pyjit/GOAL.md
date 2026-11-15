@@ -37,8 +37,10 @@ Start here, then read the active plan, [architecture](design/runtime-architectur
 and [status](STATUS.md). Status distinguishes selected, measured and experimental
 source. Selected57 adds dictionary provider cleanup and lifetime repair;
 golden56 and golden54 remain immutable comparison points.
-The [current report](issues/comprehensions57/report.md) records the rejected
-comprehension optimizations, isolated dictionary repair and remaining upstream
+The [active trial report](issues/register-semantics59/report.md) records each
+current integration and performance decision. The
+[selected57 report](issues/comprehensions57/report.md) records the rejected
+comprehension optimizations, isolated dictionary repair and baseline upstream
 gap. The [selected56 report](issues/interpreter-performance56/report.md) retains
 its accepted broad regressions. The [model55 report](issues/call-model55/report.md)
 retains its measured results and unresolved qualification; its pending ownership

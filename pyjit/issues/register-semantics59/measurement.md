@@ -13,7 +13,7 @@ qualification and timing evidence. Root owns those jobs and selection. Read the
 | Role | Source | Release build | Exact head / module log |
 | --- | --- | --- | --- |
 | Selected57, timing role `golden` | `BASE/worktrees/call55-integrated` | `BASE/call55-integrated-release` | `0dcba75bb3df40c32137db453b001f7e8f101de0`; `BASE/pyjit-link-wave1/call-model55/comp57-dictionary-release-build.log` |
-| IR59 candidate | `BASE/worktrees/call55-gc`, branch `pyjit/reg59-results` | `BASE/reg59-results-release` | Use the actual committed, clean candidate head and its new build log |
+| IR59 candidate | `BASE/worktrees/call55-gc`, branch recorded in the current HANDOFF | `BASE/reg59-results-release` | Use the actual committed, clean candidate head and its new build log |
 | Golden56 | `BASE/worktrees/round56-golden` | `BASE/round56-golden-release` | `883524c180e4486b47df77ee2276c9276c0ec32c`; `BASE/pyjit-link-wave1/comprehensions57/control-retry-build.log` |
 | Upstream | `BASE/worktrees/upstream-3a440b6` | `BASE/upstream-release-devlibs-3a440b6` | `3a440b65695615e9fd9912342b79cdd54fced0d2`; `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log` |
 
@@ -87,6 +87,10 @@ small incremental dictionary changes, **not** estimates for fresh IR59 builds.
 No fresh-build time is known. The configured selected57 release tree is about
 194 MiB and its captured executable about 52 MiB; retaining the existing paths
 avoids a second copy.
+
+The shell examples below reproduce the rejected first trial. For a new trial,
+choose a new evidence tag/output and the actual new build log; never overwrite
+those retained outputs. The HANDOFF records the current candidate branch.
 
 ## Timing commands
 

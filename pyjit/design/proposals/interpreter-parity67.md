@@ -1,6 +1,7 @@
 # Interpreter parity67: complete call boundaries and anchored parameters
 
-Status: grouped source proposal, not implementation or runtime admission.
+Status: adopted for bounded source implementation after independent review;
+not runtime qualification or performance selection.
 Base: canonical `40add6e56c36d53363ec6b4b54cdfb6ace4fdcf9`.
 [Review67](../../issues/register-semantics59/review67.md) identifies the actual
 source and evidence. [Report](../../issues/register-semantics59/report.md)
@@ -12,6 +13,46 @@ union and standalone continuation rescue.** Work from selected57. At most two
 source lanes, with the shared ownership/effect interface agreed before either
 worker changes its consumers. These are complementary comp and exact-method
 attempts, not a forecast of parity or an instruction-count waiver for round65.
+
+## Adopted implementation interfaces
+
+Independent final-source adoption is
+`E59/callout67-source-host/grouped67-adoption-peer.md`, against Astra
+`4b484229fe62aa7b7030b72f7029687658484a66`. Root adopts A and B separately from
+selected57. Their source proposals are `callout67-source-host/unit-proposal.md`
+and `anchored-self67-source-host/unit-proposal.md` under E59. The following
+clauses resolve the peer's implementation requirements before source edits:
+
+- B reuses the complete exact-call SIMPLE_SIGNATURE proof: no varargs,
+  varkwargs or keyword-only parameters, one positional parameter, ordinary
+  optimized non-resumable code, and no self cell/rebind/delete. One argcount
+  check alone cannot establish that pending kwargs storage is vacant.
+- Shared `_PyFrame_PromoteAnchoredInputs(tstate)` acquires owners without
+  allocation before an actual external effect, exposure or supported writer.
+  Fully checked non-callback exact transfer/entry may retain loans; a generic
+  ESCAPES/PUSHES_FRAME label does not revoke that exemption. Any miss that
+  reaches callback-capable binding, observation or error publication promotes
+  before those effects. Unit A invokes the shared effect boundary once before
+  its complete callback-capable activation, not before every internal helper.
+- Promotion walks reachable active frames across evaluator sentinels. A loan
+  may not occupy an unreachable staged/unlinked state across an escaping call.
+  Entry publishes the complete child and counts it within one non-calling
+  interval; overflow declines before effects. Normal retirement clears the
+  non-owning self home/mode and decrements the counter before cleanup can reenter.
+  Promotion and retirement discharge each loan exactly once.
+- The binding auxiliary encoding is typed: existing NONE is `0x0fff`, ordinary
+  empty-kwargs slots are `0..4094`, and anchored slots use tag `0x1000` with the
+  same 12-bit payload. Unknown tags and invalid payloads are rejected. Every
+  existing field consumer uses the typed interface; no deprecated raw alias.
+- A's normal and abrupt transfer proof and shared generated straight-line body
+  are required even though its selected input operations have UNKNOWN transfer
+  metadata. Neither adjacency nor the generic transaction helper establishes
+  its B0 owner, completed drain, error state or safe reached append consumer.
+
+Root owns generated products, native jobs and measured selection. Each worker
+must acknowledge these interfaces and agree on overlapping effect/owner files
+before implementation. No further Astra review is needed for these explicit
+clarifications; a genuine design contradiction returns to root.
 
 ## What changed the decision
 

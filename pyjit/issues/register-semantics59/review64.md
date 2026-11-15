@@ -235,6 +235,9 @@ gate. A surviving raw-pointer reader requiring mid-C relocation blocks entry.
 
 1. Sol specifies/implements the finite compact executor and one NCSR adapter,
    with ordinary CALL cuts and the exact ownership/effect table in the proposal.
+   Finite entry aliases retain each ordinary field/base/shadow/error format;
+   a shared function is not a shared heterogeneous format. Ordinary exits
+   explicitly unwrap private aliases, avoiding adapter reentry on fallback.
    Independent peer precedes root's tiny actual native artifact. Reject above
    128 bytes simultaneous domain/adapter native stack or 16 KiB hot domain text,
    or if VM state remains stack-backed/whole-path savings disappear. No framework

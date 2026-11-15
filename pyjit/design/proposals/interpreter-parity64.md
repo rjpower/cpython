@@ -147,6 +147,15 @@ not recognition of a benchmark, a function name, source positions or a fixed
 six-word string. Other eligible CFGs use the same rules. Do not add arithmetic,
 Python CALL or shape stores to make the first result look broader.
 
+One adapter function does not imply one metadata format. Define a finite set of
+execution-only entry aliases for the admitted FOR local/window, method scratch
+pair (each method family), local-to-scratch argument, consuming append and jump
+signatures. Each retains its ordinary field layout, semantic base, shadow,
+error contract and observer mapping; their dispatch pointers may share the
+adapter function. Public images reject these aliases. Cold admission selects
+them; entry does not search for a proof. Exact IDs belong to the bounded Sol
+unit and registry peer, not to a new heterogeneous word format.
+
 The concrete path to price is append → backedge → list step → method selection
 → argument preparation → **ordinary descriptor CALL** → append. The first
 iteration may enter at the list step. Exhaustion branches to ordinary FOR
@@ -220,6 +229,15 @@ growth at an internal loop edge. Charge adapter saves, C entry/return and
 reentry at every CALL cut. No new public format, frame field, feedback owner or
 call action is required. Any carry certificate
 must be invalidated by every writer of a covered word before publication.
+
+The exit kind distinguishes ordinary dispatch at the returned index from the
+reached append error. For ordinary dispatch, the adapter explicitly unwraps
+any private entry alias to its corresponding ordinary handler using the finite
+generated mapping, then tail-transfers with the original fields. It must never
+look up the still-private word and recursively re-enter itself on a miss, poll
+or exhaustion exit. The index plus exit kind suffices; no hidden owner or
+address-taken state is added. Mutation/restore tests include this no-reentry
+property for every entry signature.
 
 Agree source APIs with the await worker first: an effect exit receives a real
 semantic word and existing owner receipts; it cannot assume all thread-resident

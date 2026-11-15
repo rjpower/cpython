@@ -244,8 +244,10 @@ new external exc link and (after evaluator setup) sentinel/parent link are
 real and must be preserved. The native claim sets ENTERING, then gen_send's
 existing root exception setup runs, then the evaluator links root's sentinel.
 The retained label commits RUNNING/full debt and switches current/exc to leaf
-without callbacks. A VM claim follows the same ENTERING phase with its real
-parent rather than a new sentinel.
+without callbacks. VM entry needs no observable ENTERING interval: its checks
+and optional raw allocation precede the noncalling odd transaction, which
+commits real parent links, RUNNING and full debt before the recipient setter.
+Native entry keeps ENTERING because evaluator setup can fail before that commit.
 
 If the existing `_Py_EnterRecursiveCallTstate` fails **before** sentinel
 construction, materialize ENTERING before the existing root close: root stays
@@ -260,7 +262,7 @@ the explicit ENTERING effective view or materializes it under this same rule.
 
 | Reached transition | Noncalling commit | Callback / recovery rule |
 | --- | --- | --- |
-| First eligible nested SEND | Ordinary child claim/entry/None consumption/recursion checks first; attach root+child to fully initialized record; parent row and child membership published together | Optional allocation happens before commit. On refusal, ordinary entry once. No unexecuted-child prewalk |
+| First eligible nested SEND | Intercept before ordinary child claim/debit; validate the reached row, child state and budget, allocate optionally, then commit root+child membership, links and debt under odd publication | On decline, the original claim/entry runs once. On success, commit RUNNING before the child's None setter; no unexecuted-child prewalk |
 | Current leaf reaches eligible SEND | Check exact PyGen_Type, no alias/hooks/tools, matching epoch, child ordinary state and NULL transfer; append tail row+child; perform its ordinary entry once | Already-member child or unsupported ingress materializes at this edge. Never cache a record across a callback |
 | Native root next/send(None) | Evaluator links root sentinel; retained start commits root external links, shared RUNNING and one count-sized Python-recursion debit; switch tstate current/exc to leaf | Publish None with existing `_PyFrame_SetReturnValue` only after full RUNNING commit; it can retire a local/call Python or honor pending_redirect. Reload state after setter and boundary poll before dispatch |
 | Evaluator SEND/FOR resumes retained root | Generator-only branch uses existing parent's recipient/continuation, links root once and commits the same count-sized debt before leaf entry | If tools/budget/provider refuse, materialize and use ordinary already reached root entry; no provider replay |

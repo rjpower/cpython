@@ -15,8 +15,9 @@ The selected runtime remains selected57. Round67's two independently qualified
 source candidates both lost their screens and were rejected. The grouped
 [round68 proposal](design/proposals/interpreter-parity68.md) advances retained
 generator delegation through independent architecture and source-contract
-approval. The inert foundation is being implemented; retained execution remains
-disabled until lifecycle and reader closure.
+approval. The inert foundation and reader ports are integrated; the hot entry
+and yield path is being implemented. Retained execution remains disabled until
+lifecycle and reader closure.
 The [trial report](issues/register-semantics59/report.md)
 owns exact round67 results and retained evidence.
 

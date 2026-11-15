@@ -12,14 +12,15 @@ The grouped [round68 proposal](design/proposals/interpreter-parity68.md) and
 [review](issues/register-semantics59/review68.md) are delivered. Independent
 architecture and exact source-contract approval pass for one retained-generator-
 delegation unit. The common loop proof, inert materializer, generator consumers,
-engine ingress/error ports and cold frame publication/copy/native readers have
-independent approval and are integrated in G. Both current builds pass 117
-modules/79 shared extensions and all 23 focused methods per role. The corrected
-publication protocol is approved; hot lifecycle and remote-reader source work
-continues. No generator record allocation or activation, native
-mechanism, performance result or broad qualification is claimed. Activation
+engine ingress/error ports, cold frame publication/copy/native readers,
+observer invalidation, return-suffix retirement and remote readers have
+independent source approval and are integrated in G. Corrected closure9c builds
+pass 117 modules/79 shared extensions and all 17 focused methods per role,
+including 27 stopped-snapshot cases within one remote method.
+Hot entry and yield implementation continues. No generator record activation,
+native mechanism, performance result or broad qualification is claimed. Activation
 waits for complete lifecycle and reader closure. Selected57 remains unchanged;
-readers6 builds are current and no root job is running. Root owns integration,
+closure9c builds are current and no root job is running. Root owns integration,
 qualification and measured selection. Details are in the
 [trial report](issues/register-semantics59/report.md) and [handoff](HANDOFF.md).
 The report also retains both rejected round67 candidates.

@@ -11,13 +11,16 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [current grouped design](../../design/proposals/interpreter-parity68.md) and
 [review68](review68.md) recommend one retained-generator-delegation unit.
 Independent architecture and exact source-contract approval pass. Sol implements
-the inert foundation, then complete lifecycle and reader closure before
-activation. The inert foundation and optional common loop-proof/plan increment
+hot entry and yield after the inert foundation and reader ports, with complete
+lifecycle and reader qualification before activation. The inert foundation and optional common loop-proof/plan increment
 are integrated and pass both builds and focused runtime checks. The optional
 loop-proof increment is source- and product-approved. The inert materializer
 and generator, engine ingress/error and cold frame ports also have independent
-source approval and pass both builds and 23 focused methods per role. Hot
-lifecycle and remote-reader closure are separate assignments within this unit.
+source approval and pass both builds and 23 focused methods per role. Observer,
+return-suffix and remote ports now have independent source approval and both
+corrected closure9c builds pass 117/79 and all 17 focused methods per role,
+including 27 stopped-snapshot cases within one method. Hot lifecycle
+and independent remote/entry reviews remain separate assignments within this unit.
 No retained execution, native mechanism, performance result or broad
 qualification is claimed. See the
 [trial report](report.md) for counts and the
@@ -53,10 +56,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `7a068c60410`; readers6 builds and focus pass |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; hot lifecycle and observer closure |
-| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; placement proposal approved, implementation active |
-| Independent Sol peer | Actual-diff review | Inert ports and corrected publication protocol GO; complete hot/remote source pending |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `5e0bf7b1bfc`; closure9c builds and focused checks pass |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; hot entry and yield |
+| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; fixture closure complete, independent hot-entry review |
+| Independent Sol peers | Actual-diff cross-review | Observer/suffix/remote ports GO; complete hot path pending |
 | Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

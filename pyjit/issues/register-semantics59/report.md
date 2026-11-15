@@ -1,5 +1,41 @@
 # Semantic IR trial results
 
+## Round68 observer, suffix and remote-reader integration
+
+Corrected observer7, incremental return-suffix8 and remote9 have independent
+source approval and are integrated in G. Root found a nested HEAD_LOCK
+acquisition when all-thread opcode tracing reached the local-events setter;
+the correction carries explicit caller-held-lock authority through that path.
+A timeout-bounded subprocess regression exercises actual opcode delivery.
+
+Remote inspection exports schema2 geometry, refuses nonblocking retained
+membership without dereferencing the record, and validates stopped snapshots
+before reading effective PCs or homes. Producer and reader share the preserving
+absolute-backedge predicate, including valid public replacement images.
+The stopped fixture has 27 cases: four valid and 23 refusals. These synthetic
+snapshots exercise reader behavior; they are not retained execution receipts.
+
+Regeneration leaves generated products unchanged. The first release compile
+failed because the debug-layout header included generator execution headers
+while runtime types were incomplete. The two-line correction moves that
+dependency to the runtime initializer header. Source correction
+`d6e2d37a8ff` integrates as `d99deaaf1ac`. The first release focus passes 15
+of 17 methods; two public-image fixture setups omitted explicit matching
+semantic-recovery metadata and were correctly rejected by code replacement.
+Their test-only corrections integrate as `9d49490e2b2` and `5e0bf7b1bfc`.
+The stopped-fixture failure cascaded into socket errors, not additional failed
+methods. Original failed logs are retained.
+
+Both closure9c builds at `5e0bf7b1bfc` pass 117 modules/79 shared extensions;
+all 17 focused methods pass per role: retained delegation (14) and remote
+metadata (3). The stopped fixture executes all 27 cases, including all three
+certified backedge forms. The tracing-lock, local-recipient evaluator ordering,
+poison-membership and layout-refusal witnesses pass. These counts overlap prior
+increments and do not add to them. Root's exact integration receipt is
+`E59/retained-delegation68-source-host/closure9-integration.json`.
+Hot entry/native resume/yield implementation and independent review continue.
+No record activation or performance result is claimed; selected57 is unchanged.
+
 ## Round68 merged engine and cold frame readers
 
 Independent source GO covers engine `51a09a254de` and cold frame port

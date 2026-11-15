@@ -58,6 +58,13 @@ terminal storage movement is bounded by the evaluator entry. Its source reader,
 retirement and suspension closure is under way; no await head is enabled or
 native qualification claimed. Golden remains unchanged.
 
+The next grouped Astra review is active in Loom channel `zfr7ow1e`, on
+`weaver/interpreter-parity64-astra`. It assesses selected/upstream source,
+both qualified role63 losses and the complete deferred-await design before
+ranking the next concrete units. No review64 recommendation or runtime result
+is claimed yet. The two Sol workers continue await implementation and actual
+slice review; no private await entry is enabled.
+
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer
 branch misses. An exclusive cause is not established; smaller native paths and

@@ -170,7 +170,7 @@ execution. The two role builds run serially under the shared root helper.
 | Frames | W / `pyjit/parity63-deferred-await`, from selected57; method882 branch preserved | Reviewed deferred-await complete source implementation; no active head/native use before full reader/transition closure |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
 | Coordinator | G / `pyjit/parity63-attributes-integrated`, at `581c018a34a` | Qualified attribute loser frozen; next grouped review and deferred-await source continue |
-| Astra | Final grouped63 architecture review | Complete; root and Sol peers own component loop |
+| Astra | `weaver/interpreter-parity64-astra`, `/home/power/code/cpython/.worktrees/interpreter-parity64-astra`, Loom channel `zfr7ow1e` | Grouped review64 active after both role63 losses; owns only proposal64/review64, no native work |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)
 uses input EXTERNAL roots and moves each argument twice. The

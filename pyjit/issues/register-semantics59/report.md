@@ -1,6 +1,27 @@
 # Semantic IR trial results
 
-## Round68 inert foundation
+## Round68 common loop proof and plan
+
+The optional common loop-proof/plan increment has independent source and product
+GO. Source commits `647652f293e230f2440e30bded3adbd11502cf10` and
+`0f0093208ecf05d67f7d42170584e985a8344b36` are integrated in G at
+`8ecefca2fa5` and `348a1911975`; generated products are `f4d7feb285b`. Release
+and debug builds each pass 117 modules/79 shared extensions, and all 30 focused
+methods per role pass across `test_ir_retained_delegation` (5),
+`test_ir_created_plan`, `test_ir_delegated_yield`, and
+`test_ir_transfer_admission`. The earlier foundation1 focus has 16 methods per
+role, overlaps proof2, and remains historical; do not add the counts.
+
+This increment adds optional immutable common loop rows, a 24-byte plan header,
+32-byte rows, a NULL_CONTROL proof, optional allocation/free/size, and
+public-route/refusal tests. It allocates no generator records and activates no
+retained execution. It establishes no native mechanism, performance result, or
+broad qualification. Sol's inert effective-state/materializer increment is
+ready for independent peer review; full lifecycle and reader closure remain
+activation gates. Logs and
+manifests are listed in the [handoff](../../HANDOFF.md).
+
+## Round68 inert foundation1 (historical)
 
 The [round68 design](../../design/proposals/interpreter-parity68.md) and
 [implementation contract](retained-delegation68.md) have independent approval.
@@ -8,10 +29,9 @@ Foundation source `b213c8e73110e8035fe44c8f228538d08ee245b6` is integrated at
 `9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`. Release and debug builds each pass
 117 modules/79 shared extensions, and all 16 focused methods pass per role
 across `test_ir_retained_delegation`, `test_ir_created_plan`, and
-`test_ir_delegated_yield`. The foundation allocates no records and enables no
-retained execution. It establishes no native mechanism, performance result or
-broad qualification. Sol is implementing the optional common loop proof;
-activation waits for complete lifecycle and reader closure. The
+`test_ir_delegated_yield`. This earlier foundation allocates no records and
+enables no retained execution. Its focus is superseded by the proof2 result
+below; it remains historical evidence. The
 [handoff](../../HANDOFF.md) identifies logs and command manifests.
 
 ## Round67: both qualified runtimes rejected

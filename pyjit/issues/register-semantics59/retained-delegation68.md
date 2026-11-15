@@ -69,24 +69,28 @@ no shrink on pop; free once on dissolution/final root completion. A one-member
 root record survives a popped child so parent-yield/right-descent does not
 allocate another record.
 
-Use the existing non-Python-error allocator interface (`PyMem_Malloc` /
-`PyMem_Free`) for this optional storage. Treat allocator hooks as exposure:
-publish a valid reached state before allocation and retain no raw record
-pointer across the hook. Re-read membership and sequence afterward. If an
-allocation callback materializes the record, abandon the tentative allocation
-and continue the already reached ordinary edge. NULL, growth failure or a
-65th member declines at that edge with original owners/PC intact and no new
-Python exception; it must not restart a provider. An allocator hook violating
-the allocator's exception contract is not an excuse to replay Python.
+Use exclusively the existing direct backend pair
+`_PyMem_RawMalloc(NULL, size)` / `_PyMem_RawFree(NULL, pointer)` for record and
+link storage, declared in `pycore_pymem_init.h`. These call the noncalling
+libc backend and address-limit check. Do not mix allocation families. In
+debug, apparently default Raw APIs can dispatch installed allocator callbacks;
+they do not satisfy this contract. Direct backend storage bypasses installed
+hooks and their debug guards; charge that choice explicitly. Optional semantic-
+proof scratch remains ordinary PyMem storage.
 
-After **every** creation/growth allocator callback, rerun the full reached-edge
-guard before commit: actual current frame and PC, exact receiver identity and
-owner home, transfer/cursor NULL state, child effective state, code/row identity,
-epoch, tracing/profile/DTrace/lltrace and frame_obj/native-alias exclusions.
-Membership and sequence equality alone are insufficient: a first-allocation
-callback can create frame_obj while membership stays NULL. A change abandons
-the optional record commit at the reached ordinary continuation; do not rerun
-already completed Python or discard a callback-selected redirect.
+Record/link allocation neither calls Python nor releases the GIL. Publish a
+valid reached state before it, but do not add post-allocation admission checks
+solely for hooks this backend bypasses. Any actual preceding callback still
+requires the full reached-edge guard: current frame/PC, receiver identity and
+owner, NULL transfer/cursor, child state, code/row, epochs/tools and aliases.
+Membership/sequence alone cannot establish those facts. Honor any callback-
+selected redirect and never replay completed Python.
+
+NULL, growth failure or a 65th member declines at the reached edge with
+original owners/PC intact and no new Python exception or provider restart.
+Root must fault the actual reached record/link backend for allocation/growth
+failure receipts. Generic PyMem failure injection does not cover it. Use
+bounded native fault controls without a permanent runtime fault counter.
 
 ## Common admission and loop proof
 
@@ -215,8 +219,8 @@ one-unit recursion entry. Thus a mandatory ordinary mutation materializer
 cannot accidentally dissolve every eligible root. RUNNING makes every member
 executing; ENTERING makes **only the root** executing. A RUNNING member or an
 ENTERING root rejects a second execution (materializing before the original
-rejection when needed). An ENTERING nonroot remains SUSPENDED: an allocator
-or early-entry-error callback that resumes its alias first materializes, then
+rejection when needed). An ENTERING nonroot remains SUSPENDED: an
+early-entry-error callback that resumes its alias first materializes, then
 uses the ordinary suspended ingress. It must not raise already-executing merely
 because its record root is ENTERING.
 
@@ -244,7 +248,7 @@ the explicit ENTERING effective view or materializes it under this same rule.
 | Reached transition | Noncalling commit | Callback / recovery rule |
 | --- | --- | --- |
 | First eligible nested SEND | Ordinary child claim/entry/None consumption/recursion checks first; attach root+child to fully initialized record; parent row and child membership published together | Optional allocation happens before commit. On refusal, ordinary entry once. No unexecuted-child prewalk |
-| Current leaf reaches eligible SEND | Check exact PyGen_Type, no alias/hooks/tools, matching epoch, child ordinary state and NULL transfer; append tail row+child; perform its ordinary entry once | Already-member child or unsupported ingress materializes at this edge. Never cache a record across allocation/callback |
+| Current leaf reaches eligible SEND | Check exact PyGen_Type, no alias/hooks/tools, matching epoch, child ordinary state and NULL transfer; append tail row+child; perform its ordinary entry once | Already-member child or unsupported ingress materializes at this edge. Never cache a record across a callback |
 | Native root next/send(None) | Evaluator links root sentinel; retained start commits root external links, shared RUNNING and one count-sized Python-recursion debit; switch tstate current/exc to leaf | Publish None with existing `_PyFrame_SetReturnValue` only after full RUNNING commit; it can retire a local/call Python or honor pending_redirect. Reload state after setter and boundary poll before dispatch |
 | Evaluator SEND/FOR resumes retained root | Generator-only branch uses existing parent's recipient/continuation, links root once and commits the same count-sized debt before leaf entry | If tools/budget/provider refuse, materialize and use ordinary already reached root entry; no provider replay |
 | Leaf yields | Take canonical value; publish leaf's real next PC/recipient/state; shared SUSPENDED; detach only root external frame/exception links; clear saved external pointers; credit count debt | Existing external `_PyFrame_SetReturnValue` publishes yielded result once **after** full SUSPENDED commit; it can retire a local/call Python or honor pending_redirect. No record use after setter. Recheck tools before skipping ancestors; mismatch materializes ACTIVE then ordinary yield propagation |
@@ -358,7 +362,7 @@ or selecting a debugger destination first dissolves the whole record. Existing
 frame aliases prevent initial admission and append. Frame addresses never move
 because of retention.
 
-## Observer, parked-thread and allocator closure
+## Observer, parked-thread and storage closure
 
 Add a uint64 interpreter delegation epoch (8 bytes/interpreter), initialized
 explicitly. Increment on successful monitoring global/local/restart/tool
@@ -380,9 +384,9 @@ version. Setter audit/allocation callbacks follow ordinary publication rules;
 they may materialize any member through its getter, and callers reload state.
 
 No generic allocation, native callout, attribute, thread-return or owner-close
-hook is added. New record/growth allocation calls publish their reached state
-and revalidate afterward. Existing frame/native-alias APIs materialize before
-returning a pointer. External rebuilt code that reads raw internal state must
+hook is added. Direct record/growth allocation is noncalling; actual callback
+boundaries still require revalidation. Existing frame/native-alias APIs
+materialize before returning a pointer. External rebuilt code that reads raw internal state must
 port to the explicit effective accessor; no ABI compatibility promise is made.
 
 Sampling cache authority is updated in O(1), without searching for a cached
@@ -453,10 +457,14 @@ membership resolution in `_PyFrame_GetHomeView`, LASTI or InstrOffset. Cold
 PyUnstable_InterpreterFrame_GetLasti/GetLine, and native alias/test ingress
 first test their cold generator-owned partition and resolve/materialize there.
 All public frame-object readers/writers then operate on already materialized
-ordinary frames. Materializer's ACTIVE child-WAIT phase uses existing generic
-published-phase table lookup with a new SEND phase row; it needs no generic
-membership branch. Thread execution's generic PC/home primitives remain exact
-selected source. Native remote parsing has its own explicit generator partition.
+ordinary frames. ACTIVE materialization uses an explicit unpublished CHILD_WAIT
+phase, value 8 with PUBLISHED clear, disjoint from existing lifecycle bits. Its actual
+SEND PC/continuation and links are current. Generic GetHomeView returns NONE;
+GC keeps the initialized NULL scan, and the cold copy adapter returns explicit
+NULL_CONTROL_READABLE. Do not publish a MUST map or relax the generic shadow
+check for valid tagged iteration indices. No generic membership branch is added.
+Thread execution's generic PC/home primitives remain exact selected source.
+Native remote parsing has its own explicit generator partition.
 
 ## Remote authority and lifetime
 
@@ -525,8 +533,8 @@ root's native review must verify actual emitted paths and simultaneous stack/tex
    and runs the smallest relevant two-role increments.
 3. Close every reader/alias/writer, trace/profile/evaluator/parked-thread setter,
    GC/interior teardown and remote path in the same unit. Add failure/observer
-   and owner tests before nomination, with allocation failure injected through
-   existing allocator test machinery rather than permanent runtime counters.
+   and owner tests before nomination. Fault the actual reached direct backend
+   for record/link allocation failures, without permanent runtime counters.
 4. Independent actual-diff postreview, then root merged generation/build/focused
    execution. Only a coherent complete checkpoint can seek natural/native
    mechanism receipts and the protected screen.

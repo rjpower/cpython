@@ -13,24 +13,31 @@ this file owns execution logistics.
 
 Round67 is closed: A and B qualify their mechanisms and lose their screens.
 Selected57 remains unchanged. The grouped round68 proposal is delivered and
-independent architecture and exact source-contract approval pass. The inert
-foundation at source commit `b213c8e73110e8035fe44c8f228538d08ee245b6` has
-source GO and is integrated in G at `9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`
-on `pyjit/parity68-retained-delegation-integrated`. Fresh release/debug builds
-pass 117 modules/79 shared extensions; the minimal focus passes 16 methods per
-role. Reused builds are current at G's integrated commit; no root job is running.
-This foundation allocates no records and activates no retained execution. Sol is
-working on an optional common loop-proof/plan increment. Activation waits for
-complete lifecycle and reader closure. Preserve actual owning frames and retained
-ancestors, enter the current leaf directly, and change only the suffix. No second
-unit is active.
+independent architecture and exact source-contract approval pass. The optional
+common loop-proof/plan increment has independent source and product approval,
+and is integrated on G. Builds reused from generated products are current; no
+root job is running. It adds immutable common loop rows, a 24-byte plan header,
+32-byte rows, a NULL_CONTROL proof, optional allocation/free/size, and
+public-route/refusal tests. It does not allocate generator records or activate
+retained execution. Sol's inert effective-state/materializer increment is ready
+for independent peer review. Activation waits for complete lifecycle and reader
+closure. Preserve actual owning frames and retained ancestors, enter the current
+leaf directly, and change only the suffix. No second unit is active.
 
-Foundation build and focus logs are under
-`E59/parity68-foundation1-{release,debug}-{build,focus}.log`; command manifests
-are `parity68-foundation1-{build,focus}-commands.json`. The focused methods cover
-`test_ir_retained_delegation`, `test_ir_created_plan`, and
-`test_ir_delegated_yield`. This checkpoint establishes no semantic plan geometry,
-generic THREAD changes, native mechanism, performance result, or broad
+Proof2 source commits are `647652f293e230f2440e30bded3adbd11502cf10` and
+`0f0093208ecf05d67f7d42170584e985a8344b36`; root integrations are
+`8ecefca2fa5` and `348a1911975`, with generated products at `f4d7feb285b`.
+Release/debug builds pass 117 modules/79 shared extensions and all 30 focused
+methods per role across `test_ir_retained_delegation` (5),
+`test_ir_created_plan`, `test_ir_delegated_yield`, and
+`test_ir_transfer_admission`. Foundation1's earlier 16-method focus overlaps
+and remains historical; do not add it to the proof2 count. Regeneration ran in
+release only. Logs are `E59/parity68-proof2-release-regen.log` and
+`E59/parity68-proof2-{release,debug}-{build,focus}.log`;
+command manifests are `parity68-proof2-{regen,build,focus}-commands.json`.
+Independent source and product reviews are in
+`E59/retained-delegation68-source-host`. This establishes no generator record
+allocation or activation, native mechanism, performance result, or broad
 qualification.
 
 Source-contract obligations include effective state/PC/home readers, all-member
@@ -46,9 +53,9 @@ bounded host checks and write discoverable runtime tests for root.
 
 | Owner / retained state | Checkout / branch |
 | --- | --- |
-| Sol-high source | W, `pyjit/parity68-retained-delegation`, selected57 base; optional common loop-proof/plan increment |
-| Independent Sol peer | Evidence `E59/retained-delegation68-source-host`; foundation source GO, next diff review pending |
-| Root runtime | G, `pyjit/parity68-retained-delegation-integrated`, `9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`; reused builds current, no job running |
+| Sol-high source | W, `pyjit/parity68-retained-delegation`, selected57 base; inert effective-state/materializer increment ready for peer review |
+| Independent Sol peer | Evidence `E59/retained-delegation68-source-host`; proof2 source and product GO |
+| Root runtime | G, `pyjit/parity68-retained-delegation-integrated`, generated proof2 at `f4d7feb285b`; reused builds current, no job running |
 | Retained A67 | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; rejected integration `ba4ea9dd9a9` preserved |
 | Retained B67 source | W's old branch `pyjit/parity67-anchored-self`, `f5c8463ea1b`; do not execute old captures against switched W |
 | Astra | Grouped review68 source `183447221537190a4ac1003026f554dbaf428a3d`, integrated in C `29a016e656d`; no runtime work |

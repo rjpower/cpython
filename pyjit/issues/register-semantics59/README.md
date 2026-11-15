@@ -12,11 +12,13 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review68](review68.md) recommend one retained-generator-delegation unit.
 Independent architecture and exact source-contract approval pass. Sol implements
 the inert foundation, then complete lifecycle and reader closure before
-activation. The inert foundation is integrated and passes both builds and
-focused runtime checks. Sol is implementing the optional common loop proof.
-No retained
-execution, native mechanism, performance result or broad qualification is
-claimed. See the [trial report](report.md) for counts and the
+activation. The inert foundation and optional common loop-proof/plan increment
+are integrated and pass both builds and focused runtime checks. The optional
+loop-proof increment is source- and product-approved. Sol's inert
+effective-state/materializer increment is ready for independent peer review.
+No retained execution, native mechanism, performance result or broad
+qualification is claimed. See the
+[trial report](report.md) for counts and the
 [handoff](../../HANDOFF.md) for paths and logs.
 The [implementation contract](retained-delegation68.md) and
 [source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
@@ -49,9 +51,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`; builds current |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; optional common loop-proof/plan increment |
-| Independent Sol peer | Actual-diff review | Foundation source GO; next diff review pending |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `f4d7feb285b`; builds current |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; inert effective-state/materializer and genobject consumer ports |
+| Independent Sol peer | Actual-diff review | Proof2 source/products GO; materializer review |
 | Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

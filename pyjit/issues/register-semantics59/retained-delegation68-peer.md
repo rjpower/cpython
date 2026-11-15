@@ -68,3 +68,21 @@ intermediate steady bodies/stores and exact suffix changes. Layout/native
 costs are forecasts until measured on the final ELF. Design67's numerical
 hot8/confirmation/all29 conjunction remains unchanged; no static speed cap or
 guaranteed benefit is inferred from this source-contract GO.
+
+## Reviewed implementation clarifications
+
+Root and the same independent peer subsequently approved the direct
+`_PyMem_RawMalloc/_PyMem_RawFree` backend and explicit unpublished CHILD_WAIT
+state. The canonical contract incorporates both. The original allocator-callback
+revalidation requirement applies at actual calling boundaries; direct record/link
+allocation has no Python callback or GIL release. Generic PyMem fault injection
+cannot claim to cover this backend. Root will fault the actual reached backend
+without a permanent runtime counter.
+
+The unpublished WAIT state carries initialized NULL control; it does not claim
+MUST readability or alter generic shadow/GC/thread paths. The detailed source
+rationale and limits remain in
+`E59/retained-delegation68-source-host/materializer-contract-addendum-peer.md`,
+SHA256 `f57b8a9f4aa77c8c0032e8751dd9e977d2e5e9dca3148553426277bb3cea7ada`.
+These are source-contract approvals; actual implementation and runtime/native
+qualification remain separate gates.

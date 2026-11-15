@@ -7,13 +7,16 @@ candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [current grouped design](../../design/proposals/interpreter-parity65.md) and
-[review ledger](review65.md) drive implementation: both fixed storage-role
+[review ledger](review65.md) retain the completed round65 contracts: both fixed storage-role
 trials are qualified and rejected. The compact execution domain passes focused
 runtime checks but stops at its native net-work gate, without timing. The complete
 deferred immediate-await unit passes lifecycle/native qualification and cuts
 coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
-as a standalone executable. Round65 now changes the return/accessor boundary
-and conditionally introduces one private SEND-yield continuation.
+as a standalone executable. Round65 is closed: the return/accessor unit qualifies
+but loses its hot8 screen; the SEND-yield continuation passes focused checks but
+fails its native cap after one reviewed correction. The continuation has no
+performance screen. The next grouped Astra review reassesses the architecture
+and performance gates; selected57 remains unchanged.
 Every round59–62 runtime packet lost its broad comparison. The retained
 delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -37,10 +40,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | Five ranked complete adjustments and numerical gates | Grouped65 final plus remote-reader clarification integrated |
-| Sol A | Complete THREAD-first RETURN and proved embedded accessors | Implementing reviewed proposal in W; root and B peer, no worker native jobs |
-| Sol B | One private SEND-yield continuation; complete reader/writer proposal and A peer | Proposing in P; no implementation until A interface/native gate and source GO |
-| Coordinator | Peer/integrate/generate/qualify/measure each unit | A gets its own hot8 and may advance without B; selected57 and controls stay immutable |
+| Astra | Five ranked architectural options and calibrated performance gates | Grouped66 review commissioned from the completed round65 evidence |
+| Sol A | Complete return/accessor unit and independent B source/product peers | Completed; available for the next reviewed unit |
+| Sol B | Complete SEND-yield continuation and one completion-fact correction | Completed; native rejection retained, no further round65 source change |
+| Coordinator | Close round65, review grouped66, then delegate bounded units | Selected57 and controls stay immutable; no B screen or current native job |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

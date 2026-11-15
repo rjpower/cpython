@@ -7,36 +7,29 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 [architecture](design/runtime-architecture.md) and [handoff](HANDOFF.md) own
 direction, selected contracts and exact execution paths.
 
-The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes Astra's [round65 design](design/proposals/interpreter-parity65.md) and
-[review ledger](issues/register-semantics59/review65.md). Unit A changes existing
-RETURN recipes to THREAD-first retirement plus proved embedded accessors; no
-new opcode, mode, classification pass or image mirror. Unit B adds one
-private SEND-yield target with complete semantic-PC/reader/writer closure. A
-had its own native gate and losing hot8 screen. Selected57
-remains unchanged. PyValue rollout is complete; transport, effects, ownership and
-physical execution remain targets. Parity is not achieved.
+The [IR-semantics workstream](issues/register-semantics59/README.md) closed
+round65 under Astra's [design](design/proposals/interpreter-parity65.md) and
+[review ledger](issues/register-semantics59/review65.md). A passes native
+qualification but loses its hot8 screen. B passes source, products, builds and
+focused checks, then fails its native cap after one reviewed correction; no B
+timing result exists. Neither runtime is selected. Selected57 remains unchanged.
+Review66 is commissioned to reassess architecture and admission gates. PyValue
+rollout is complete; transport, effects, ownership and physical execution remain
+targets. Parity is not achieved.
 
 Unit A is qualified at `a6695887e94` but rejected as a standalone executable.
 Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
 Independent source/native/ABI and a fresh actual private-retirement receipt pass.
 Its stable hot8 screen cuts coroutine elapsed time 39.3%, comprehensions 2.7%
 and DeltaBlue 1.0%, but logging loses 16.2% and generators 5.5% in both pairs.
-No cause is established. B source `8373e9d5fd61` and root-generated products
-`09124a5c05a8aebc6f7b761e1da065e6290b6c9c` are integrated on
-`pyjit/parity65-continuation-integrated`, now at `980baf6bbf3` after two
-fixture-only corrections. Independent source
-and product reviews pass after a bounded number-checker correction; full
-regeneration and three affected source consumers pass. Both release and debug
-builds pass 117/79. The 48 focused methods per role pass after preserving the
-fixture's matching recovery map and constructing its rewritten leaf through
-MAKE_FUNCTION so private admission is actually exercised. Native review gives
-NO-GO: synchronous private completion adds six instructions against A, five
-against await9, exceeding the four-instruction cap. One bounded proposal will
-carry the existing retirement fact into common completion; independent review
-and unchanged native gates remain required.
-No B timing or broader campaign has started. Selected57 remains unchanged; no
-larger campaign follows the losing A screen.
+No cause is established. Final B source `50adc6d3927` integrates at
+`64348dd5c18` on `pyjit/parity65-continuation-integrated`; initial B remains
+preserved at `980baf6bbf3`. Source, product, build and fresh focused checks pass.
+One reviewed correction carries the reached retirement fact into common
+completion, but final native review still rejects B: instrumented EMPTY adds
+five instructions against the four-instruction allowance. Remaining native and
+transaction gates are unqualified. No B screen was run, so there is no measured
+B performance result. Selected57 remains unchanged.
 
 | Packet | Current result |
 | --- | --- |
@@ -99,10 +92,10 @@ and is rejected at its native net-work gate. Complete await source is independen
 reviewed and integrated separately. Generation and generated-code review pass;
 both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
 a 42.9% coroutine gain but unacceptable logging and generator regressions.
-Round64 is closed with no selected runtime. The next grouped Astra review is
-complete with the compact and await outcomes. Sol A implements the reviewed
-return/accessor boundary; Sol B prepares its complete continuation contract and
-independent peer. No all29/full-system campaign follows the rejected await screen.
+Round64 and round65 are closed with no selected runtime. The next grouped Astra
+review will reconsider the architecture and whether hot-path and observation-
+path gates reflect the performance goal; review66 is commissioned. No
+all29/full-system campaign follows the rejected screens.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

@@ -7,19 +7,20 @@ and tracing JIT. Extensions are rebuilt and ported.
 Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md)
 and [status](STATUS.md). The register interpreter and universal PyValues are
 implemented; native method and tracing JIT tiers remain unfinished. The active
-stage unifies value transport, borrowing, calls and specialization. The active
-[IR-semantics workstream](issues/register-semantics59/README.md) implements the
-reviewed [round65 design](design/proposals/interpreter-parity65.md). The bounded
+stage unifies value transport, borrowing, calls and specialization. The
+[IR-semantics workstream](issues/register-semantics59/README.md) records
+completed round65 contracts and outcomes under its
+[design](design/proposals/interpreter-parity65.md). The bounded
 compact execution domain failed its native net-work gate. Complete deferred
 await passes lifecycle/native gates and cuts coroutine time 42.9%, but loses
 logging 27.7% and generators 5.2%; it is rejected as a standalone executable.
 Round65 first partitions return/retirement and uses proved embedded access;
 Unit A passes native qualification but loses logging 16.2% and generators 5.5%
 in its own screen. Unit B moves private SEND-yield handoff out of ordinary
-YIELD. Its source/products, both 117/79 builds and focused runtime checks pass.
-Native review has found a private-completion cost above the reviewed cap;
-qualification and performance selection remain pending. Selected57 remains
-unchanged; no round64 or round65 runtime is selected.
+YIELD, passes source/product/build/focused checks, and fails its unchanged native
+cap after one reviewed correction. B has no timing result. Round65 is closed
+without a selected runtime; selected57 remains unchanged. A new grouped review
+of architecture and admission gates is commissioned as review66.
 The [trial report](issues/register-semantics59/report.md) records rejected
 round59–65 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),

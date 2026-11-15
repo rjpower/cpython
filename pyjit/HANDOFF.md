@@ -4,37 +4,29 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The current grouped design is [parity65](design/proposals/interpreter-parity65.md),
-supported by [review65](issues/register-semantics59/review65.md).
+Round65's closed design is [parity65](design/proposals/interpreter-parity65.md),
+with source contract in [review65](issues/register-semantics59/review65.md).
 The [trial report](issues/register-semantics59/report.md) owns all measured
 outcomes, failures and selection decisions; this file owns execution logistics.
 
 ## Current work
 
-Selected57 remains unchanged. Every round59–62 runtime packet and both role63
-trials are rejected. PyValue integration is complete; parity is not achieved.
-Round64 is closed: compact fails its native net-work gate; complete await
-passes mechanism qualification but loses the broad screen. Execute the reviewed
-round65 return/accessor unit, followed conditionally by its private SEND-yield
-continuation. Preserve both round64 source branches and sealed evidence.
-Source approval, native mechanism approval and measured selection are separate
-gates. Unrelated rejected packets are not prerequisites.
+Selected57 remains unchanged. Round64 and round65 are closed without a selected
+runtime. Round65 A passes native qualification but loses its hot8 screen; B
+passes source, product, build and focused checks, then fails its native cap
+after one reviewed correction. No B timing screen ran, and residual B native
+and transaction gates are unqualified. No implementation or target job is
+active. Review66 is commissioned to revisit architecture and admission gates.
+Preserve selected57 and all sealed evidence.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol A | `/root/boundary65_returns`; complete B source, registry correction and generated-product peers pass. Available for independent correction peer |
-| Sol B, P | `/root/boundary65_continuation`; source `8373e9d5fd61` plus fixture corrections, current `bf51ac3a7ff` on `pyjit/parity65-yield-continuation`. Source patch SHA256 `258ae6bc123d6d713f50733f2216ed38eaf000d75ab9625bef43c89a4fb5b983`. Preparing one bounded completion-fact correction proposal; no implementation authorized before independent peer |
-| Cold native peer | `/root/boundary65_cold_review`; initial B native NO-GO, exact paths in `boundary65-source-host/unit-b-native-cold-review.md` and `native-b65` |
-| Root, G | Clean `980baf6bbf3aa1d8182c35f8c7166c662c4ad1f0` on `pyjit/parity65-continuation-integrated`; initial B preserved on `pyjit/parity65-continuation-initial`, standalone A on `pyjit/parity65-residence-integrated`. Both continuation3 builds pass 117/79 and all 48 focused methods per role pass after fixture-only corrections. Native gate fails; no B timing or broader campaign |
-| Astra | Source `374f8e3eadbac12be504f70885fe3a2a196f8fc0` plus `ceb46447bb0ef5a48f2478ba5f62f842d43e9550`, branch `weaver/interpreter-parity65-astra`, Loom `zfr7ow1e`; integrated C at `f18cefa4449` and `ba7316040e9`. Do not cherry-pick again |
+| Sol A and B | Round65 source work complete; no implementation work or target jobs remain active |
+| Root, G | Final B `64348dd5c18` on `pyjit/parity65-continuation-integrated`; initial B `980baf6bbf3` and A `a6695887e94` remain on preserved branches. Both continuation4 builds pass 117/79 and 48 focused methods per role pass. Final native cap fails; no B screen or broader campaign |
+| Astra | Review66 commissioned through the existing HIGH channel `zfr7ow1e`; no review result or design link yet |
 
-Use existing Sol workers for component cross-review. Sending a message to a
-completed collaboration agent does not trigger a turn; use followup_task when
-reactivating it. Astra is for grouped reviews, not the patch loop. Its Loom
-channel can carry the next grouped request after this measured cycle.
-The old collaboration node `parity62_astra` was interrupted; it may still appear
-pending_init and consume a slot. Current Astra authority is the completed Loom
-session above. Do not retry that stale node.
+Round65 workers are complete. Astra's grouped review will assess the architecture
+and prospective admission gates; root owns any follow-up work and integration.
 
 The [compact proposal](design/proposals/interpreter-parity64.md#1-compact-domain-a-bounded-change-to-physical-execution)
 requires one ordinary-C finite domain under one NCSR adapter, with ordinary CALL
@@ -206,41 +198,16 @@ return/yield/observer recipes. Remote frame/async graph readers use real
 `instr_ptr` and `ir_words`, not `return_pc`; retain invariants/controls without
 an unrelated layout port. Census alone does not prove support.
 
-Unit B source and generated products are integrated. The independent source
-peer caught a missing number-checker and unused selector; the bounded correction
-passes the actual CLI and peer review. The generated peer approves 308 equal
-handlers, 14 debug-assert-only differences and eight SEND-yield release
-changes; 385 is the only new dispatch target, with 76 owner entries and existing
-format rows byte-equal. Root's three affected generated-consumer checks pass.
-Full regeneration and both refreshed `parity65-continuation3` builds pass
-(117/79 each). Original focused runs pass 47 of 48 methods per role. The mortal
-input fixture first mismatches position/recovery tables, then constructs an
-unversioned FunctionType leaf that cannot specialize. Fixture-only corrections
-retain the matching map and use the existing MAKE_FUNCTION factory pattern.
-The corrected isolated method passes both roles, completing all 48 methods;
-the native alias and existing lifecycle/OOM checks already passed both roles.
-
-Static capture **`E59/parity65-continuation2/python`** is bound to `e97523ef302`,
-SHA256 `99ffb00af89bcc4cc0701cd6971d7128eaeb2cc4a01aa7a1e4ea67f61bc46d38`.
-`root-b-fixture-native-text-equivalence.json` proves identical .text at current
-`980baf6bbf3`; the current ELF hash is
-`074daef3a6a9fe2694bca5db7a784e0a0dcaca246de94cc2136b6f7b963f8ebd`.
-Shared C API module hashes are unchanged. The independent native report stops
-at synchronous completion: 158+K versus await9's 153+K, above the four-
-instruction allowance. Text/rodata caps pass; remaining native gates are
-unqualified. No new GDB transaction probe, 708-method broader gate or timing
-campaign runs on this failed artifact. One bounded correction proposal may
-transport the existing retirement fact into common completion, with independent
-peer and unchanged gates. Selected57 remains unchanged.
-
-Unit B's private executable SEND-yield target must never become a semantic
-instruction address or reach generic SAVE_STACK/debug/source attribution.
-Port every actual return-PC reader/writer, preserve newer callback redirects
-and observer-required terminal detach, and keep YIELD nonraising. No ordinary
-header field, universal descriptor or per-code word mirror. Its complete
-source contract and reader/writer closure are integrated. A passes its native
-gate and loses its own hot8 screen; B proceeds as the reviewed isolation
-attempt. No other lane is a prerequisite; no B performance result is claimed.
+Unit B's complete source/product integration, bounded completion correction,
+builds and 48 focused methods per role pass at final G head `64348dd5c18`.
+Final native review rejects it: instrumented EMPTY adds five instructions
+against a four-instruction allowance. Other native and transaction gates remain
+unqualified. No B performance screen ran, so no B timing result exists. The
+initial `980baf6bbf3` and final evidence remain preserved; see the
+[trial report](issues/register-semantics59/report.md#round65-send-yield-continuation-runtime-checks-pass-native-reject)
+for the sealed path reviews and exact limits. Do not continue B or run target
+jobs. Round65 is closed; selected57 remains unchanged while review66 reconsiders
+architecture and admission gates.
 
 Root reviews source/products, refreshes both reused builds, runs minimal
 controls/native gates and measures the changed candidate. Keep all immutable
@@ -277,8 +244,11 @@ actions, alignment searches or old binaries without a different reviewed consume
 Captured standalone ELFs are for static inspection. **Never execute them against
 a changed Lib tree.** After switching G, reused native directories are stale
 until rebuilt. No existing candidate build is an additional immutable control.
-A is frozen on `pyjit/parity62-delegated-resume`, at `d43f88d0402`, and has no job.
-P preserves prior source branches; W preserves method source `882309dd897`.
+A is preserved on `pyjit/parity65-residence-integrated` at `a6695887e94`; its
+earlier source branches remain sealed.
+P preserves prior source branches and final B source `50adc6d3927` on
+`pyjit/parity65-yield-continuation`; W preserves source `8ed034598b3` on
+`pyjit/parity65-residence-boundaries` plus earlier branches.
 
 ## Paths and immutable controls
 

@@ -1,8 +1,11 @@
 # Interpreter parity65: pay for activation kinds at their boundaries
 
-Status: grouped architecture proposal, not implementation or selection. Review
-against selected57 and completed await9; [review65](../../issues/register-semantics59/review65.md)
-records identities, evidence and limits. Read the canonical
+Status: completed experimental design, unselected. A qualifies but loses its
+screen; B passes focused runtime checks but fails the native cost gate after one
+reviewed correction. B has no performance screen. The
+[trial report](../../issues/register-semantics59/report.md) records the outcomes;
+[review65](../../issues/register-semantics59/review65.md) retains the architectural
+review against selected57 and await9. Read the canonical
 [goal](../../GOAL.md), [plan](../../issues/interpreter-performance56/plan.md) and
 [await contract](../../issues/register-semantics59/deferred-await63.md).
 
@@ -292,6 +295,29 @@ semantic PCs for readers without moving active frames or silently removing the
 execution target. First detach copies only semantic state into the heap frame
 and clears the armed record before the arena record disappears. A callback's
 newer target must never be overwritten by a saved target.
+
+**Completion consumes the reached retirement proof.** The shared
+`CompleteGeneratorReturn` algorithm needs the parent's semantic continuation
+after retirement callbacks. Keep `ReturnResumable`'s three-argument interface
+and the single completion algorithm. After clearing the dying frame, reload the
+live current parent: the AWAIT branch requires its existing disarmed proof and
+reads its raw `return_pc`; the GENERATOR branch performs the full
+`_PyFrame_TakeLogicalReturnPC`, including cancellation. Pass that real
+continuation as a fourth argument to the common consumer. Do not cache a
+pre-callback PC or mode, read the dying frame after clear, repeat Take in the
+consumer, or add a frame field, alias or completion engine. The consumer keeps
+its exact existing WAIT/SEND/FOR logic; its interpreter-sentinel arm publishes
+with `SetReturnValue` and then returns the live `return_pc`, since publication
+may run callbacks.
+
+This is a bounded source correction to B, not a new architecture or selection.
+The initial B executable remains native NO-GO. The correction passes both
+117/79 builds and 48 focused methods per role, but the final native review
+rejects its instrumented EMPTY completion cost under the unchanged cap.
+No B performance screen follows. See the
+[trial report](../../issues/register-semantics59/report.md#round65-send-yield-continuation-runtime-checks-pass-native-reject)
+for qualification evidence. B remains unselected, and selected57 remains the
+runtime baseline.
 
 **Owners/errors.** No PyValue points to the target or record. The yielded owner
 is in real B+2 before entry; it is not copied into a new C result buffer.

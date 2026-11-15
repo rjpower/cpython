@@ -9,10 +9,11 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 [architecture](../../design/runtime-architecture.md), [status](../../STATUS.md)
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
-The active workstream is [IR semantics59](../register-semantics59/README.md).
+The active workstream is [IR semantics59](../register-semantics59/README.md);
+round65 is its latest closed experiment.
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity65.md) and
+The completed [round65 design](../../design/proposals/interpreter-parity65.md) and
 [grouped ledger](../register-semantics59/review65.md) rank five architectural
 options. Both fixed storage-role trials are qualified and rejected. The finite
 ordinary-C compact domain passes both builds and 29 focused methods per role,
@@ -21,14 +22,11 @@ against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
 the size caps; no timing or target coverage follows. The independent complete
 stable-frame deferred-await unit passes both builds, lifecycle and native gates.
 Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
-generators 5.2%; reject the standalone executable. The completed round65 review
-orders a bounded return/accessor refactor, then a conditional private SEND-yield
-continuation. A passes native qualification but loses its own hot8 decision:
-coroutines .606811/selected57, logging 1.161661 and generators 1.055271. Reject
-the standalone executable. B's source/products and focused runtime checks are
-integrated; native review has found excess synchronous completion work, so no
-B timing starts before that gate is resolved. The reviewed isolation hypothesis
-retains complete reader/writer/control closure and its own gates.
+generators 5.2%; reject the standalone executable. Round65 is closed: A passes
+native qualification but loses its hot8 screen (coroutines .606811/selected57,
+logging 1.161661, generators 1.055271). B passes source, product, build and
+focused checks, then fails its native cap after one reviewed correction. No B
+timing screen ran, so no B performance result exists. Selected57 is unchanged.
 Delegation spine, result continuation and anchored self have separate admission
 and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -114,30 +112,26 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity65.md)
+The workstream's [round65 design](../../design/proposals/interpreter-parity65.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol A | Completed A and independent B source/product peers; review the bounded completion-fact correction | A native qualification passes and its standalone screen loses; preserve its branch and evidence |
-| Sol B, continuation | Complete B is integrated; propose one bounded completion-fact correction | Initial native completion cap fails. No implementation before independent proposal GO; no new mode, header or engine |
-| Coordinator | Integrate, generate, qualify and measure | Both B builds and focused checks pass; hold broader tests, transaction probes and timing until corrected native gates pass |
-| Astra | Completed [grouped65 review](../register-semantics59/review65.md) | Source `374f8e3eadb` plus clarification `ceb46447bb0` integrated; next broad review only after coherent measured outcomes |
+| Sol A and B | Round65 source and peer work complete | No implementation work or target jobs remain active |
+| Coordinator | Integrate and preserve evidence | Round65 closed with no selected runtime; selected57 remains authoritative |
+| Astra | [Grouped65 review](../register-semantics59/review65.md) complete; review66 commissioned | Reassess architecture and prospective admission gates; no result or design yet |
 
 The compact unit is closed; no roster, mirror, provider, layout or flag
-expansion rescues it. Round65 retains the qualified await mechanism while
-removing ordinary-path work at actual boundaries. GENERAL already has a
-THREAD fast clear; EMPTY and complete return classification are priced
-separately. Unit A ports all existing RETURN/YIELD source certificates with
-the actual recipes. Unit B must port every actual return-PC consumer and writer,
-keep semantic PCs real, preserve newer redirects and price private arm/cancel
-and terminal work. It adds no ordinary frame field or universal resolver.
+expansion rescues it. Round65 is closed. A's qualified mechanism loses its
+screen; B's final native artifact exceeds the unchanged instrumented EMPTY cap
+by one instruction. Residual native and transaction gates remain unqualified,
+and no B timing result exists. Do not reopen either unit through source tweaks
+or target jobs. Review66 will reconsider architecture and whether hot-path and
+observation-path gates serve the performance goal.
 
-An A native failure stops A; a broad loss permits only the already reviewed B
-isolation attempt. A passing screen can advance without B. The combined A+B
-screen is a changed executable, not a repeat of a loser. The delegation spine,
+The delegation spine,
 native-result ownership region and anchored argument view remain deferred
 under their separate complete-path gates; no implementation is concurrent.
 For each increment: propose → peer → implement → focused tests → actual-diff

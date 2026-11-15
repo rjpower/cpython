@@ -1,16 +1,15 @@
 # Semantic IR trial results
 
-Latest completed unit: round65 A passes source, runtime and native qualification,
-but loses its standalone hot8 screen: coroutine time falls 39.3%, while logging
-loses 16.2% and generators 5.5% in both pairs. Reject the executable; selected57
-remains unchanged. The already reviewed private SEND-yield continuation B is
-integrated under [design65](../../design/proposals/interpreter-parity65.md) and
-[review65](review65.md). Source, products and focused runtime checks pass;
-native review has found private-completion work above the reviewed cap.
-It still needs native qualification and its own screen. No cause of the broad
-regressions is established.
-No confirmation, all29, direct-upstream, PMU or full diagnostics follows this
-losing screen. Earlier completed attempts and sealed evidence remain below.
+Round65 is closed with no selected runtime. A passes source, runtime and native
+qualification but loses its standalone hot8 screen: coroutine time falls 39.3%,
+while logging loses 16.2% and generators 5.5% in both pairs. B passes source,
+products and focused runtime checks, then fails its native cap, including after
+one reviewed correction. B has no performance screen. Selected57 remains
+unchanged. The [design65](../../design/proposals/interpreter-parity65.md) and
+[review65](review65.md) retain the contracts; the next grouped review must
+reassess architecture and admission gates without inventing a performance loss
+for unmeasured B. No cause of A's broad regressions is established. No larger
+campaign follows these decisions. Earlier attempts and sealed evidence remain.
 
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
@@ -25,9 +24,9 @@ under the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
-## Round65 SEND-yield continuation: integrated, native gate unresolved
+## Round65 SEND-yield continuation: runtime checks pass, native reject
 
-Current trial `980baf6bbf3aa1d8182c35f8c7166c662c4ad1f0` preserves semantic
+Initial trial `980baf6bbf3aa1d8182c35f8c7166c662c4ad1f0` preserves semantic
 SEND words and moves private suspension preparation into one dispatch-only
 continuation, ID385. Ordinary YIELD no longer classifies its parent or prepares
 private suspension. Cold logical-PC readers, writers, error completion and
@@ -72,13 +71,41 @@ adds 1,600 B and rodata 96 B against await9, within their caps. Remaining native
 gates stop unqualified at this failure. Preserve
 `pyjit/parity65-continuation-initial` at this head.
 
-Root authorizes one bounded producer/consumer correction proposal: carry the
-existing retirement branch's semantic-continuation fact into common completion,
-using live control after callbacks. It requires independent peer review and
-the same complete native gates; no cap waiver or new mode/header/engine is
-authorized. No GDB transaction probes, broader runtime campaign or timing
-starts on the failed artifact. No performance result or causal logging claim
-is made. `unit-b-native-cold-review.md` and `native-b65` retain the exact paths.
+The one bounded correction passes independent proposal and actual-source
+review. Source `50adc6d3927` integrates as final
+`64348dd5c182af27c058e60f1e3f849f00d7ef81`. Each existing retirement branch
+selects the live semantic continuation after clear callbacks: AWAIT uses its
+disarmed proof; GENERATOR retains full Take/cancel. The single shared completion
+consumer takes that continuation explicitly. ReturnResumable's interface and
+the terminal recipes stay unchanged. No mode, header or alternate engine is
+added. Full regeneration changes no products; both continuation4 builds pass
+117/79 and all 48 focused methods pass afresh in each role.
+
+Final `parity65-continuation4-native/python` SHA256 is
+`79bd05e06af44d730c343d8e34a41ae1538041e4f1e27655bd853e587c7d9fc4`.
+The common completion returns to 93 instructions, but fourth-argument transport
+adds five instructions in ReturnResumable against A. Complete uninstrumented
+EMPTY costs 157+K versus await9's 153+K, reaching the four-instruction cap.
+INSTRUMENTED EMPTY costs **171+K+M versus 166+K+M** in both await9 and A,
+exceeding that same cap. M is the unchanged actual observer interior. The final
+review gives **NO-GO**; no further source correction or performance run follows.
+This is a native-contract rejection, not a measured throughput regression.
+
+The checked ordinary SEND_GEN→YIELD_VALUE→exit cycle does shrink: 157 instructions
+versus selected57's 160 and await9's 176. Generic SEND's direct-generator cycle
+is 185 versus 187 and 201. All four YIELD forms have no private-parent checks
+and no added local stack slots in the inspected listings. Text adds 1,664 B
+and rodata 96 B against await9, within their caps. Complete cleanup/reentry
+coverage, first-suspension and aggregate resolver budgets remain unqualified
+after the mandatory stop. Smaller ordinary paths do not supply a B speedup.
+
+`unit-b-native-cold-review.md`/`native-b65` preserve the initial failure;
+`unit-b-corrected-native-cold-review.md`/`native-b65-corrected` preserve the final
+counts and residual gates. G remains on `pyjit/parity65-continuation-integrated`
+at the final head; the initial branch is retained separately. No GDB transaction
+probes, broader runtime campaign or timing ran for B. A grouped review will
+consider both the architecture and whether hot and observation-path gates
+reflect the performance goal. Selected57 remains unchanged.
 
 ## Round65 return/accessor boundary: qualified mechanism, rejected executable
 
@@ -150,7 +177,8 @@ No confirmation/all29/direct-upstream/PMU/full-system campaign follows. Preserve
 is inferred by multiplying historical ratios. The optional B continuation is a
 separate reviewed attempt, not evidence that its proposed mechanism caused or
 will repair these regressions. P and G developed that attempt from the qualified
-A head; the current B integration and remaining gates are recorded above.
+A head; its final native rejection and unqualified residual gates are recorded
+above.
 
 ## Final loop-output binding: reject
 
@@ -1270,4 +1298,6 @@ source `374f8e3eadb` plus `ceb46447bb0`, orders two bounded units under the
 existing complete returns and proved embedded access; B is an optional private
 SEND-yield continuation with complete reader/writer closure. A gets an
 independent native/hot8 decision before B, and may advance on its own. Source
-work is active; no new native or performance result follows from that proposal.
+work is now closed: A loses its standalone screen, and B fails the native cap
+after one reviewed correction. The current results are recorded above; B has no
+performance screen.

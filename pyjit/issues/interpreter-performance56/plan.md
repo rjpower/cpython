@@ -19,7 +19,10 @@ ordinary-C compact domain passes both builds and 29 focused methods per role,
 then stops at its native whole-path work gate: 47 internal instructions saved
 against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
 the size caps; no timing or target coverage follows. The independent complete
-stable-frame deferred-await source proceeds to root qualification. Delegation
+stable-frame deferred-await unit passes both builds, lifecycle and native gates.
+Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
+generators 5.2%; reject the standalone executable. The next grouped Astra review
+must turn that structural success into a broadly acceptable design. Delegation
 spine, result continuation and
 anchored self have separate admission and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -113,9 +116,9 @@ screens are closed and losing; no current runtime change is selected.
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Sol generator worker | Close [compact-domain64](../register-semantics59/compact-domain64.md); independent complete await source peer | Compact native NO-GO, source/evidence preserved; no timing/target coverage |
-| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md) and reviewed [normal-result receipt](../register-semantics59/normal-result64.md) | Normal-result source/metadata integrated at `791c48d0df5`; full generation passes, execution products unchanged. Both await7 builds pass. Cold admission succeeds; compatible quickening currently revokes the private head before use. Fixture correction ready, writer contract under design/peer |
+| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md), including reviewed admission/writer/terminal corrections | Final `0bbb42ef46a`, both 117/79 and lifecycle 16 per role; source/native/receipt peers GO. Preserve the qualified mechanism, reject the broad executable |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
-| Astra | Completed [grouped64 review](../register-semantics59/review64.md) | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
+| Astra | Next grouped review after [round64](../register-semantics59/review64.md) | Requested with complete compact native loss and await mechanism success/broad loss; specify ordered concrete changes, outside the patch loop |
 
 The compact unit's bounded whole-path cost gate fails; no roster, mirror,
 provider, layout or flag expansion rescues this packet. The await unit targets

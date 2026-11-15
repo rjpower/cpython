@@ -10,8 +10,9 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review ledger](review64.md) drive implementation: both fixed storage-role
 trials are qualified and rejected. The compact execution domain passes focused
 runtime checks but stops at its native net-work gate, without timing. The complete
-deferred immediate-await source unit has independent source approval and
-proceeds separately to root qualification.
+deferred immediate-await unit passes lifecycle/native qualification and cuts
+coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
+as a standalone executable. The next grouped review is requested.
 Every round59–62 runtime packet lost its broad comparison. The retained
 delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -35,11 +36,11 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped64 final; no runtime changes |
+| Astra | Next grouped IR/interpreter design with concrete ordered changes | Requested with closed compact and qualified-but-losing await outcomes |
 | Independent peer | Actual source and whole-path native closure | Both complete source packets approved; compact native NO-GO accepted |
 | Sol IR | Compact documentation closure and independent await review | Compact closed; full await source GO |
-| Sol frames | Await normal-result receipt, then lifecycle qualification | Source `cf9310fbd23e` integrates with metadata at `791c48d0df5`; full generation passes with execution products unchanged. Both await7 builds pass. Cold pending admission succeeds, but SEND quickening revokes the installed head. Reviewed fixture ready; certificate-lifetime correction under design/peer |
-| Measurement | Reuse exact-identity harness and immutable selected57 | Compact coverage unused/unqualified; no timing or target coverage campaign |
+| Sol frames | Complete await source and lifecycle corrections | Final integration `0bbb42ef46a`, source/native GO and lifecycle 16 per role; qualified mechanism, rejected broad executable |
+| Measurement | Reuse exact-identity harness and immutable selected57 | Await hot8 stable 32 rows, large coroutine gain with logging/generator losses; no all29/full follows |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
@@ -47,7 +48,7 @@ record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)
 retains the source contracts and rejected measurements. The [await unit](deferred-await63.md) separates stable active identity views
 from terminal storage movement. Its complete reader and lifecycle closure is
 covered by the completed source review. Both role packets are qualified and
-rejected; await has no native result.
+rejected; await has a qualified native mechanism and a rejected performance screen.
 
 ## Reviewed trial order
 

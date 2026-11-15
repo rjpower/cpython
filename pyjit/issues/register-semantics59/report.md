@@ -1,5 +1,13 @@
 # Semantic IR trial results
 
+Latest completed cycle: [round64 await](#deferred-await64-qualified-mechanism-rejected-executable)
+passes lifecycle/native gates and cuts coroutine elapsed time 42.9% against
+selected57, but loses logging 27.7% and generators 5.2%. Reject the standalone
+executable; selected57 remains unchanged. Compact64 failed its native work gate.
+The next grouped Astra review is requested. No new upstream or full-system
+result is claimed for this rejected cycle. The sections below retain each
+attempt's evidence and decision.
+
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
 Continuation encoding and isolated Invoke also lose. All five first-cycle
@@ -1037,54 +1045,93 @@ remains unchanged. The independently reviewed complete await source
 `f98decf1109` proceeds separately to root generation/native qualification.
 
 
-## Deferred await64: activation qualification in progress
+## Deferred await64: qualified mechanism, rejected executable
 
-Isolated integration `35c4a38fc660e48e2d8eecab7f8a7a38910baa40`
-contains the complete stable-frame source, generated products `045a09e4c65`
-and independently reviewed integration corrections. Both await6 builds pass
-117 modules/79 shared extensions; twelve host source methods pass. All 331
-ordinary format rows and the ownership table still match selected57. The
-[unit](deferred-await63.md) and [handoff](../../HANDOFF.md) own its reader/cost
-contract and exact source chain.
+Final integration `0bbb42ef46ab9c55996e9b507a528a12705eedf0` implements the
+complete stable-frame immediate-await unit, independently of every rejected
+creation, role, prepared-call and compact packet. Both await9 builds complete
+117 modules/79 extensions, and all sixteen new lifecycle/admission methods pass
+per role. Fourteen host methods cover the final terminal correction. The twelve
+runtime control modules run 1,066 methods per role with only the same six
+inherited sys_settrace debugger-jump errors; C API frames, remote inspection and
+async graph controls run another 140 per role (three skipped). These are focused
+integration checks, not a fresh full-system qualification. The
+[unit](deferred-await63.md) defines the ownership/reader contracts; the
+[handoff](../../HANDOFF.md) owns the exact integration chain and build paths.
 
-Native runtime14 has not passed activation. The first release run at await5
-passes two methods and fails eleven activation checks: requiring SEND to share
-the preceding three words' block excludes the ordinary resume backedge.
-The reviewed correction retains a linear CALL/GET_AWAITABLE/None prefix and
-admits SEND as its separately validated continuation. Await6 adds an interior
-entry fixture but still fails cold nomination; debug is not run after that
-release failure.
+Root's earlier native diagnostics exposed real admission and lifecycle defects:
+SEND's ordinary resume backedge must be separate from the linear CALL prefix;
+LOAD_GLOBAL needed a reached normal-result fact after unknown-effect
+invalidation; compatible SEND specialization must preserve an existing checked
+certificate; and automatic terminal emission must stop invalidating the parent
+once the departing-frame alias switches. The last correction fixes both lost
+late completion observation and a debug suspension abort by removing sixteen
+parent phase clears across four RETURN and two YIELD variants. It changes no
+other generated product and relaxes no runtime assertion. Fixture corrections
+create the executing copy explicitly, use valid source/exception maps, capture
+tracebacks before unittest clears them, and make allocator failure one-shot.
+All failed attempts and source/generated peers remain sealed in E59.
 
-Root's actual cold replay (`E59/deferred-await-native-controls/admission2.*`)
-then locates the missing proof: argument home3 is initialized, nonNULL and
-may-own, while callable home1 has none of those facts after LOAD_GLOBAL.
-CALL admission must keep rejecting that prestate. The reviewed
-[normal-result receipt](normal-result64.md) restores only an actually published
-scratch result after UNKNOWN invalidation; it does not preserve unrelated
-facts across callbacks or grant error/phase/complete-map authority. Its actual
-source peer, body-equivalence check, refreshed builds and activation tests
-precede the remaining native gates. No private-entry hit, lifecycle pass,
-throughput result or selection is claimed. Selected57 remains unchanged.
+Independent cold source and actual native post-reviews find no must-fix defect.
+The retained ELF in `E59/parity64-await9-native` hashes
+`1c8f91ebf882e01250dd2c8a32a96039b76a4eff129d6b45208085412cbc68f8`.
+The actual private path removes coroutine construction/copy/initial reentry,
+but pays a 184-byte fixed arena reservation (112-byte header plus 72-byte record),
+disjoint argument moves, two name snapshots, exception/record linking and
+rooted retirement. Ordinary generic CALL bodies normalize exactly equal;
+ordinary exact CALL broadens residence predicates without extra instructions.
+RETURN/SEND/YIELD and generator accessors have real additional paths and text:
+RETURN_VALUE 596→650 bytes, CompleteGeneratorReturn 1856→1962 (local stack 40→56),
+SEND_GEN 776→808, SEND 2388→2594, YIELD_VALUE 525→732 and
+YIELD_DELEGATED 556→756. Complete symbol sizes are not dynamic counts or an
+exclusive explanation of measured losses.
 
+Actual native controls, independently receipt-reviewed, establish:
 
-The normal-result correction has root and independent source approval. Source
-`cf9310fbd23e` integrates at `ba603b73c1a`, followed by root-generated metadata
-`791c48d0df5`. Four host methods pass, including source mutations, family
-intersection, fresh global labels and in-memory metadata/body equality. Root
-full generation passes; only the metadata header changes. The 75→76 event
-insertion changes exactly three contracts across all 333 normalized rows;
-all other fields and all generated execution products are byte-identical.
-`E59/deferred-await-native-controls/root-normal-result-products.json` records
-that comparison. Both await7 builds pass 117/79. Runtime14 release still fails its cold setup;
-get_ir(adaptive=True) does not itself create the executing copy. The reviewed
-fixture-only `90da5f9d471` uses get_feedback(code,0) before inspection and adds
-valid bare-YIELD callee negatives, with no target pass yet.
+- `natural9b.native.json`: unchanged coroutine kernel `run(4)` enters a private
+  leaf and retires that same child with no identity object.
+- `terminal9b.native.json`: first true suspension transfers two private frames
+  in the same evaluator suffix; Python verifies the chain, resume and GC.
+- `arena-oom9d.native.json`: one actual private VirtualAlloc is forced to NULL.
+  CALL homes/refcounts/PC/arena/exception state remain unchanged through the
+  child-NULL edge; the helper returns error, Python records the exact CALL word,
+  runs finally, retries successfully and eventually releases its payload.
 
-Actual root replay confirms the global-result facts and cold pending entry.
-Native `specialize3.log` proves CanDeferAwait admits, and `specialize4.log`
-records private head383→384 followed by SEND104→SEND_GEN223. That covered-word
-rewrite invalidates the head before first private use: the current generic
-CALL marks CALL_EFFECTS and finishes through its generic fallback even after
-specialization. A source-checked compatible-quickening certificate correction
-is under design/peer review. Original semantic/observer invalidation must
-remain; no private lifecycle, throughput or selection claim follows.
+Those are matched transactions, not frequencies. Logs, commands, ABI manifests,
+controller/probe hashes and the receipt peer are in
+`E59/deferred-await-native-controls`. The initial GDB driver needed quoted clone
+symbols and then an exact relocated helper-PC range because DWARF omits the
+ELF clone suffix. Both driver failures and corrected copies remain retained;
+no runtime workaround or fallback fault injection was used.
+
+The balanced unchanged hot8 screen completes 32 rows with stable identity and
+no errors in `E59/parity64-await9-eight-selected57`:
+
+| Workload | Await9 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.987018 | 0.964970–1.009570 |
+| deltablue | 1.003049 | 1.000341–1.005765 |
+| coroutines | 0.571378 | 0.570239–0.572518 |
+| generators | 1.051852 | 1.049759–1.053949 |
+| logging_silent | 1.276929 | 1.272406–1.281468 |
+| raytrace | 0.983750 | 0.977447–0.990093 |
+| spectral_norm | 0.924742 | 0.922693–0.926795 |
+| nqueens | 1.024620 | 1.024589–1.024650 |
+
+Coroutines elapsed time falls 42.9% in both pairs: the complete activation change
+has a genuine measured benefit on its target. Logging loses 27.7%, generators
+5.2% and nqueens 2.5%, also in both pairs. Root rejects this standalone executable
+because those broad regressions are unacceptable. Comprehension pairs disagree;
+DeltaBlue is close to flat. Preserve the complete source, native artifacts and
+mechanism success, but do not select it or import it automatically into another
+lane. Selected57 remains unchanged. No confirmation/all29/direct-upstream/PMU
+or full-system campaign follows this rejected screen. Old upstream ratios must
+not be multiplied into a claimed new upstream measurement.
+
+Round64 is closed: compact failed its native net-work gate and await passed
+mechanism qualification but lost the broad screen. Astra's next grouped review
+must use these distinct outcomes to specify concrete IR/interpreter changes,
+including how to preserve structural activation savings without ordinary-path
+regressions. No causal claim about code layout, compiler behavior or one branch
+is established by this screen. The next review is requested on Loom channel
+`zfr7ow1e`; root continues integration after the ordered design is reviewed.

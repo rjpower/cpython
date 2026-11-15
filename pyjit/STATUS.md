@@ -8,7 +8,7 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes Astra's [round64 design](design/proposals/interpreter-parity64.md) and
+has closed Astra's [round64 design](design/proposals/interpreter-parity64.md) and
 [review ledger](issues/register-semantics59/review64.md). Selected57 remains
 unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
@@ -16,7 +16,7 @@ physical execution remain targets. Parity is not achieved.
 | Packet | Current result |
 | --- | --- |
 | Compact domain64 | Integrated at 9de7005b670. Both refreshed builds pass 117/79 and all eight new plus 21 control methods pass per role. Native stack/text caps pass, but complete nominal segments add instructions (227 versus 173; 280 versus 234). Stopped at the net-work gate; no benchmark or target coverage campaign. |
-| Deferred await63/64 | Integration `791c48d0df5` passes both await7 builds (117/79). Reviewed normal-result metadata restores cold CALL_AWAIT_PENDING admission without changing generated execution bodies. Actual native specialization installs the private head, then ordinary SEND→SEND_GEN quickening revokes it before first use. A reviewed certificate-lifetime correction is being proposed. Runtime14 also exposed lazy-exec fixture setup; its source-only correction and bare-YIELD negatives are ready. No private lifecycle or performance pass. Record is 72 bytes plus the unchanged 112-byte header. |
+| Deferred await63/64 | Final `0bbb42ef46a`: both await9 builds 117/79 and all 16 new methods pass per role. Cold source/ELF reviews and actual private entry, identity-free retirement, terminal suffix move and arena-OOM recovery pass. Coroutines time falls 42.9%, but logging loses 27.7%, generators 5.2% and nqueens 2.5% in both screen pairs. Qualified mechanism; rejected standalone executable. Record 72B plus header 112B and ordinary-path costs are charged. |
 | List/FOR and append roles63 | Both 117/79 builds and 49 focused methods per role pass; native review and actual comp hits pass. Comp improves 4.1%, coroutines 3.6%, spectral_norm 4.5%, but logging loses 8.3%. Rejected. |
 | Isolated attribute roles63 | Both 117/79 builds and 54 focused methods per role pass at 581c018a34a; native review and all four actual first hits pass. Comp improves 3.5% and Delta 3.1%, but logging loses 22.3%, spectral_norm 6.3% and generators 1.8%. Rejected. |
 | Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
@@ -58,7 +58,10 @@ The [await unit](issues/register-semantics59/deferred-await63.md) has root and
 independent source approval: object views preserve active frame addresses and
 terminal storage movement is bounded by the evaluator entry. The complete
 reader/retirement/suspension/head/writer source packet is frozen with independent
-GO. Target tests have run but private activation is still blocked; no native mechanism qualification is claimed. Golden remains unchanged.
+GO. All sixteen lifecycle methods pass in both builds; native entry, identity-free
+retirement, terminal suspension and arena-OOM recovery are receipt-reviewed.
+The broad screen rejects this executable despite its large coroutine gain.
+Golden remains unchanged.
 
 The grouped [review64](issues/register-semantics59/review64.md) is integrated.
 The finite ordinary-C domain retained generic CALL cuts, owning homes and real
@@ -69,8 +72,11 @@ precedes that result. The [compact unit](issues/register-semantics59/compact-dom
 has root and [independent source approval](issues/register-semantics59/compact-domain64-peer.md)
 and is rejected at its native net-work gate. Complete await source is independently
 reviewed and integrated separately. Generation and generated-code review pass;
-both builds pass and the lifecycle gates remain open. Neither unit has a measured
-performance result.
+both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
+a 42.9% coroutine gain but unacceptable logging and generator regressions.
+Round64 is closed with no selected runtime. The next grouped Astra review is
+requested with the complete compact and await outcomes; no all29/full-system
+campaign follows the rejected await screen.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

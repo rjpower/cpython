@@ -1,7 +1,15 @@
 # Interpreter parity64: change the execution boundary
 
-Status: grouped architectural review, 2026-11-14. Proposed, not implemented or
-selected. Selected57 remains `0dcba75bb3df40c32137db453b001f7e8f101de0`.
+Execution outcome, 2026-11-15: compact64 passes size/correctness gates but fails
+whole-path native work; stop. Complete await at `0bbb42ef46a` passes both builds,
+lifecycle, actual entry/retirement, suspension and arena-OOM recovery. Its
+balanced screen cuts coroutine elapsed time 42.9% but loses logging 27.7% and
+generators 5.2%; reject the standalone executable. The [trial report](../../issues/register-semantics59/report.md#deferred-await64-qualified-mechanism-rejected-executable)
+owns measurements and limits. The next grouped review is requested. The design
+below records review64's original reasoning; selected57 remains unchanged.
+
+Original review: 2026-11-14; implementation and rejection are recorded above.
+Selected57 remains `0dcba75bb3df40c32137db453b001f7e8f101de0`.
 The [review ledger](../../issues/register-semantics59/review64.md) records actual
 source/native reads, retained measurements and their limits. Root owns source
 integration, generation, native qualification, measurement and selection.
@@ -286,9 +294,10 @@ on a repeated sentinel loss. No bulk suite or all29 is owed to a loser.
 The [deferred-await63 unit](../../issues/register-semantics59/deferred-await63.md)
 is authoritative. Continue its corrected representation for one complete
 attempt because it can remove an operation cycle rather than a few checks.
-The frozen terminal2 patch has useful source-only lifecycle work, but no active
-head, complete admission/writer closure or native qualification. Its existence
-does not establish object elimination. Do not reintroduce observation-time
+At review time the frozen terminal2 patch had source-only lifecycle work,
+without an active head, complete writer closure or native qualification. Those
+mechanism gates are now closed by the complete unit; its broad screen still
+rejects the executable. Do not reintroduce observation-time
 relocation or a middle-reservation tombstone design.
 
 **Required change to the work order:** freeze a common-path ledger and ordinary
@@ -346,7 +355,8 @@ entry, regardless of host test success.
 **Budget.** Remove `_Py_MakeCoro`, created-frame copy/pop, object return,
 GET_AWAITABLE and immediate heap reentry on truly synchronous admitted awaits.
 Retain normal body, guards, code/function owners, recursion, exception linking,
-local clearing and result retirement. Add 96 bytes per live private await,
+local clearing and result retirement. The reviewed record budget was 96 bytes;
+the implemented complete-reader census reduces it to 72 bytes per private await,
 disjoint argument moves, two name-owner acquisitions/releases, four-word entry
 decode and ordinary generator active-frame selection; an exposed identity
 reserves full eventual embedded capacity too. Suspension copies and observer

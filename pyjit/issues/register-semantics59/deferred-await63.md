@@ -1,16 +1,14 @@
 # Deferred immediate await: complete activation unit
 
-Complete source and generated-code reviewed unit, 2026-11-15. Source
-`cf9310fbd23e` is integrated at `791c48d0df5`, including new metadata products.
-Full generation, twelve original host methods and both await6 117/79 builds pass.
-Correcting the CALL-prefix/SEND-continuation rule exposed a missing LOAD_GLOBAL
-normal-result fact; the reviewed
-[receipt correction](normal-result64.md) is source-reviewed and regenerated.
-Only its three global normal-result contracts change; all generated execution
-products are byte-identical. Both await7 builds pass 117/79. Actual cold admission now succeeds, but
-SEND quickening revokes the installed private head before its first use.
-A compatible-quickening certificate rule is under design/peer review. No private native
-mechanism or performance pass is claimed. Read with
+Integrated unit at `0bbb42ef46ab9c55996e9b507a528a12705eedf0`, 2026-11-15.
+Both await9 builds pass 117/79 and all sixteen lifecycle/admission methods.
+Cold source and actual native reviews find no must-fix defect. Native controls
+prove an unchanged-kernel private entry and matching identity-free retirement,
+same-evaluator terminal suspension, and actual arena-allocation failure with
+untouched CALL prestate, error attribution, successful retry and owner release.
+Those are matched transactions, not invocation counts or performance results.
+The balanced hot8 screen cuts coroutine time 42.9% but loses logging 27.7%
+and generators 5.2%; the standalone executable is rejected. Selected57 is unchanged. Read with
 [round64](../../design/proposals/interpreter-parity64.md) and [review64](review64.md).
 Source authority is selected57, `BASE/worktrees/call55-integrated` at
 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Rejected creation, prepared-call,
@@ -59,6 +57,16 @@ The CALL window and eventual SEND receiver/input homes need positive readable/co
 
 One private cold pending CALL alias dispatches to the ordinary CALL body. It carries the image certificate through supported exact specialization; the active head is a distinct execution-only CALL member. Extend the existing bounded central writer to cover all four words: replacement of any covered word restores the head and each pending state's actual ordinary prefix. Nomination is never reconstructed from a live handler name. Close specialization, deopt, instruction/line wrappers, monitor disable/restore, LLTrace and execution-copy rebuilding. Keep semantic base CALL byte-sized for instrumentation and use wide IR IDs internally. Reject all private IDs through public image admission. Active source summaries remain UNKNOWN unless the actual expanded recipe proves them; no ordinary four-word owner/map certificate is exported for private state.
 
+Compatible SEND quickening is a bounded exception to revocation. The central
+writer preserves an existing certificate only for a specialization rewrite of
+the fourth word whose old and new handlers both have source-checked complete
+normal/yield/error ownership and identical continuation geometry. Operands stay
+unchanged. The current checked endpoints are SEND, SEND_GEN, SEND_ASYNC_GEN and
+SEND_VIRTUAL. Instrumentation, restoration and other covered writes still revoke;
+the writer neither searches for a proof on hits nor recreates a lost nomination.
+This matters on the first generic CALL: it can install the private head yet
+finish through the generic fallback, which then quickens its SEND continuation.
+
 At a hit retain exact function-version/arity and Python recursion checks, with checked extended arena reservation, PEP523/value hooks, origin-depth-zero, no trace/profile/monitoring/LLTrace, and instrumentation-version freshness. Immutable function/code/entry-plan qualification belongs in cold specialization; genuinely mutable gates stay hot. Reserve extended header space including overflow/chunk growth. Before commitment, guard or allocation failure falls back/errors with original CALL homes and CALL PC intact. Reject a noninitial/altered RETURN_GENERATOR prefix. Use its actual first-send scratch/discard recipient and resume PC, not assumed slot zero; the first body entry supplies None exactly as the ordinary creation/SEND protocol would.
 
 After nonfallible initialization, transfer function and argument owners once into disjoint child homes, install its independent code owner, constants and exception item, clear consumed parent homes, and enter after the creation prefix. No second argument snapshot or synthetic child frame is built. The parent waits internally at the real SEND semantic PC and continuation while its coroutine state remains EXECUTING. Charge the fixed decoding of the other admitted words and extended reservation; there is no per-hit descriptor lookup or global map.
@@ -91,6 +99,15 @@ stateDiagram-v2
 RETURN takes its result before retiring owners, restores `exc_info`, leaves one Python recursion level, unlinks the child, and clears/pops through the residence-specific protocol. A private completion adapter uses the saved SEND recipient/edge directly and consumes the private await relation. It shares the existing ordered canonical result publication/local displacement and redirect handling; it must not manufacture a receiver to call a helper which immediately closes it. If identity was exposed, close/clear that real object coherently and consume any actual materialized parent receiver owner. Preserve ordinary fallback completion for already detached objects.
 
 The exact `AWAIT_WAIT` phase carries the unexposed completion receipt through retirement. `AWAIT_SEND_CHILD` is a different phase for an ordinary object-backed SEND inside a private body. If a retirement finalizer enables monitoring, the shared completion observer uses the reached coroutine receipt to report STOP_ITERATION without allocating a closed identity. Keep initialized private control authority through PRE observation; consume WAIT after the complete edge publishes its homes and before POST observation. If earlier observation already materialized the receiver and consumed WAIT, use the ordinary receiver path. Ordinary RETURN uses the expanded owner classification described in the cost ledger.
+
+Generated terminal recipes invalidate the departing frame's instruction state.
+After their checked switch to the parent, automatic emitter invalidation must
+stop: that parent carries WAIT or SEND_CHILD, and a retirement callback may
+publish newer observation state. The generator derives this control boundary
+from complete RETURN/YIELD source recipes and the reached alias switch. It does
+not save and restore a stale phase across callbacks. Explicit semantic/error
+writes remain unchanged. The correction removes sixteen generated parent-phase
+clears across four RETURN and two YIELD variants; no runtime operation is added.
 
 For a surviving frame view, terminal retirement transfers frame ownership at the existing safe retirement boundary, using the current frame-copy/home-authority protocol. Surviving coroutine views become cleared objects with their code/name identity intact. Repair `frame_obj->f_frame` before releasing the arena reservation. Finalizer callbacks during clearing see a published retiring/result root state; they cannot find a live object pointing into reclaimed arena storage. Restore parent executable/PC after callback-capable cleanup as existing redirect protocols require.
 
@@ -155,16 +172,35 @@ Native falsifiers: zero useful natural hits; an object allocated on every synchr
 
 ## Source census and cost ledger before private entry
 
-The complete source includes record/view, SEND handoff, suspension coverage, entry/completion, nomination, private heads and central writer closure. Independent `E59/deferred-await-source-host/whole1-peer.md` approves the original 34-path packet. Root integration exposed and corrected an unclassified output, a private contract weakening the ordinary CALL cohort, a missing arena-failure exception, feedback-union alignment growth and the remote descriptor-size tripwire. Every correction has actual-source peer approval. Twelve host methods and both await6 builds pass. The CALL-prefix/SEND-continuation correction is integrated, but runtime14 still fails cold activation. Native cold replay proves the callable lacks LOAD_GLOBAL result facts; the reviewed normal-only receipt is integrated and regenerated at `791c48d0df5`, with both await7 builds passing. Native diagnostics confirm pending nomination and private-head installation, then ordinary SEND quickening invalidates it before use. `E59/deferred-await-native-controls/generated-peer.md` approves the products: all 331 ordinary metadata rows and the 75-event ownership table match selected57 exactly; 312 of 329 ordinary bodies are unchanged and seventeen contain the reviewed residence/completion/handoff hooks. This ledger records source costs, not native qualification. Raw-reader snapshots remain under `E59/deferred-await-source-host/raw-{readers-current,generators-all}.txt`.
+The complete unit includes record/view, SEND handoff, suspension coverage,
+entry/completion, nomination, private heads and central writer closure. The
+original 34-path packet has independent source GO; later corrections have
+source and generated-product peer review. The normal-only global-result
+[receipt](normal-result64.md) changes exactly three normalized metadata
+contracts and adds one ownership event (75→76), without changing execution
+bodies. SEND quickening preservation adds only a checked metadata selector;
+the terminal phase correction removes sixteen generated clears. Fourteen host
+source controls pass for the final correction. Failed admission, fixture,
+quickening and terminal-phase attempts remain sealed in E59. The handoff owns
+the exact integration chain. Raw-reader snapshots remain under
+`E59/deferred-await-source-host/raw-{readers-current,generators-all}.txt`.
+
+Both await9 builds complete 117/79 and all sixteen new methods pass per role.
+The twelve-module runtime control group runs 1,066 methods per role, with only
+the six inherited debugger-jump errors. C API frames, remote inspection and
+async graph controls run another 140 per role (three skipped). The fresh cold
+review and ELF review are `deferred-await-native-controls/cold-review9.md` and
+`parity64-await9-native/native-review.md`; they find no must-fix defect. Neither
+review establishes a throughput benefit.
 
 | Reader family | Current closure / remaining gate |
 | --- | --- |
 | Generator metadata, frame and exception getters | Select the active view or embedded representation. Active views stay EXECUTING; ordinary send/throw/close state admission rejects recursive entry. A raw frame borrowed by a native provider remains stable across that provider. |
 | Embedded constructors, clear and deallocation | Initialize `active_frame=NULL`; clear/deallocation require NULL. Terminal detachment alone transfers the active owners into embedded storage. Fixed-size/sizeof offsets include the new pointer. |
-| SEND entry and YIELD templates | Raw embedded frame/exception access is reached only after successful ordinary generator-state admission. An active view is EXECUTING and cannot pass that admission. Delegated YIELD requires an already detached GENERATOR frame. These retained raw accesses need explicit source assertions/fixture coverage before head enablement. |
+| SEND entry and YIELD templates | Raw embedded frame/exception access is reached only after successful ordinary generator-state admission. An active view is EXECUTING and cannot pass that admission. Delegated YIELD requires an already detached GENERATOR frame. Reached embedded-state assertions and the passing real-suspension/ordinary-generator controls cover these accesses. |
 | Frame/proxy/debugger readers | Generic frame exposure keeps the arena address. Only an identity getter allocates the object view. Active `frame.clear` rejects; internal WAIT is not suspended. Captured/retired frames use existing FRAME_OBJECT ownership. |
 | GC and retirement | Frame/header/homes, record metadata and exception chain report their actual owning edges once. A CLEARED record reports the exception edge after unlink. Traversal never allocates or changes residence. |
-| Remote reader and test C API | ABI 2 supplies the explicit active-frame offset and validates the pointed-to frame. EXECUTING AWAIT views have no public awaited child. Embedded-only synthetic copy fixtures remain embedded; active-view corruption and terminal handoff controls remain to be added. |
+| Remote reader and test C API | ABI 2 supplies the explicit active-frame offset and validates the pointed-to frame. EXECUTING AWAIT views have no public awaited child. Embedded-only synthetic copies remain embedded. Remote inspection passes in both roles; the native terminal control proves a two-frame same-evaluator move. Arbitrary retained private C aliases are not a new supported ABI. |
 
 The unchanged 112-byte header gains a separate 72-byte record per private activation, plus the existing disjoint value extent. Entry zeroes that record, acquires name and qualname once each, links one exception item and one thread record, and moves the function and each argument once. It clears their original homes, the virtual self hole and three SEND control homes; aliasing may make some stores redundant, but no native elimination is claimed. The existing initializer owns code and fills constant slots. Reservation can still allocate an arena chunk. The first embedded caller discovers its evaluator sentinel; recursive private entries inherit it in constant time. The normal unexposed path releases both metadata owners and retires the extended reservation; it does not allocate a generator object.
 
@@ -184,10 +220,17 @@ Ordinary source costs also count: one pointer field in every generator/coroutine
 
 The original complete packet and its path/hash manifest remain sealed as
 `E59/deferred-await-source-host/whole1.patch` and `whole1-freeze.json`; later
-corrections and executed failures are recorded in the handoff. Entry chunk OOM
-still requires actual VirtualAlloc injection; Python allocator hooks do not
-cover that edge. Identity and terminal-preparation fixtures use the actual GC
-allocator. Source and build passes do not qualify private activation.
+corrections and executed failures are recorded in the handoff. Actual entry chunk OOM is now covered by `arena-oom9d.native.json`: one
+VirtualAlloc failure, unchanged input owners/PC/arena/exception chain, reached
+child-NULL/error return and exact Python error site, followed by successful
+retry and payload release. `natural9b.native.json` joins actual private entry
+to that child's identity-free retirement in the unchanged coroutine kernel;
+`terminal9b.native.json` proves terminal transfer of two private frames. These
+are bounded mechanism receipts, not frequencies. The first OOM driver used an
+ELF clone name as a DWARF frame name and missed real allocations; its reviewed
+successor matches the exact relocated helper PC range. Old logs and scripts
+remain sealed. The balanced screen rejects the standalone executable despite
+its 42.9% coroutine gain; mechanism qualification is distinct from selection.
 
 WAIT traversal currently relies on selected57's independent physical
 owner-or-NULL initialized-home invariant, as ordinary GC does. NO_HOME alone

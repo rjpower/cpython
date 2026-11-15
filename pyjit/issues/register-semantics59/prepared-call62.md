@@ -10,9 +10,12 @@ actual metadata-header emission. Generated integration `c5f03fe81d7` completes
 both 117/79 builds. Fixture corrections `ae579492c5d` and `6e07c1a8953` fix
 the cursor window and complete retirement; the latter abort also reproduced
 on selected57 debug. Final integration `a3cbad0637e` passes all 227 focused
-methods per role. Native capture is retained; actual admission/execution
-probes, independent native review and timing remain pending. No round59–61
-rejected packet is a prerequisite.
+methods per role. Independent native review passes and kernel entry probes
+confirm three active comprehension sites and 41 DeltaBlue sites. The stable
+screen improves comprehensions 5.2% and coroutines 3.6%, but loses logging
+18.3%; root rejects the standalone packet. The [trial report](report.md#prepared-call62-rejected-after-focused-qualification)
+owns exact native accounting, all eight ratios and the bounded PMU diagnostic.
+No round59–61 rejected packet is a prerequisite.
 
 ## First packet
 

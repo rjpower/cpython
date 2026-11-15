@@ -24,9 +24,15 @@ observation modules. The synthetic cursor retirement abort also reproduced
 on selected57; the fixture now uses its complete POP_ITER protocol. Native
 capture `parity62-prepared4-native` has ELF SHA256
 `017551836bf38f5a614d19d91d0d47294174989847c55c69060f5a212e44a619`.
-The generator worker owns serialized read-only admission/execution probes.
-Hold G and its builds until that worker releases the probe window. No
-prepared-call timing exists yet.
+Independent native review passes. Actual probes in `E59/prepared-coverage`
+show three active comprehension sites and 41 DeltaBlue sites, with bounded
+kernel first hits. Screen `parity62-prepared4-eight-selected57` rejects the
+packet: comprehensions .948255 and coroutines .964114 improve, but logging
+1.182918 and DeltaBlue 1.021921 lose in both pairs. Probe and quiet windows
+are released. The short whole-process branch diagnostic has logging
+instructions 1.000317/cycles 1.147451, with flat branches/slightly fewer misses;
+no exclusive cause is established. The fetch diagnostic is exploratory with
+83% multiplexed counters. No more native jobs are running.
 
 Delegated resume is preserved on `pyjit/parity62-resume-integrated`, at
 `17139aa0166`. Both corrected builds complete 117/79 and all 397 focused
@@ -40,7 +46,7 @@ and spectral_norm 9.3% in both pairs. Root rejects the standalone packet.
 Do not execute its old build against G's changed Lib.
 
 Delegated resume uses private ID 375. Prepared CALL reserves IDs 370–374;
-creation uses 368/369. Reserved gaps are not
+method CALL reserves 376–378 and creation uses 368/369. Reserved gaps are not
 executable or publicly admitted, and do not imply a source dependency.
 
 Allocation62 is preserved on `pyjit/parity62-allocation-integrated`, at
@@ -110,11 +116,11 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity62-prepared-call`, at `6e07c1a8953` | Prepared fixture repairs frozen; read-only actual admission/execution probes |
+| Generator | P / `pyjit/parity62-prepared-call`, at `6e07c1a8953` | Rejected prepared source and actual probes frozen; available for method actual-diff peer |
 | Frames | W / `pyjit/parity62-method-call`, from selected57 plus prepared infrastructure | Approved method-to-exact CALL implementation; allocation source branch preserved |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
 | Coordinator | G / `pyjit/parity62-prepared-integrated` | Generation, focused/native evidence, serialized screens and winner selection |
-| Astra | Round62 design/review frozen | Broad reviews only; root and Sol peers own component loop |
+| Astra | Next grouped architecture review under way | Broad reviews only; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)
 uses input EXTERNAL roots and moves each argument twice. The

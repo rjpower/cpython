@@ -692,7 +692,7 @@ making this losing native layout a dependency of prepared CALL. Timing:
 | spectral_norm | 1.092709 | 1.089842–1.095584 |
 | nqueens | 0.992462 | 0.986017–0.998950 |
 
-## Prepared CALL62: native qualification in progress
+## Prepared CALL62: rejected after focused qualification
 
 Source `8d418b47f669dfa5c7c6db8434bdfbf31c8e22e8` has root and independent
 actual-diff approval after the active-only `runs_code` correction. Four host
@@ -725,6 +725,66 @@ the other 219 remain qualified under `parity62-prepared3`, for 227 focused
 methods per role. Only the corrected module was repeated. Capture
 `E59/parity62-prepared4-native` has ELF SHA256
 `017551836bf38f5a614d19d91d0d47294174989847c55c69060f5a212e44a619`.
-Independent native review, actual admission/execution counts and the eight-case
-screen remain pending. No performance claim or selection follows from source
-or static native reduction.
+The independent `native-review.md` confirms one conditional DUP increment and
+original argument store per head, with no generic destination classification,
+old-home read or intermediate table/indirect transfer. Next-word decode and
+exact feedback lookup remain. Exact heads retain 64-byte stack reservations;
+the two descriptor heads add 16 bytes each (48→64 and 64→80). The four new
+heads total 5,210 bytes; ELF text grows 6,912 bytes. Nine ordinary LOAD/CALL/
+SEND/RETURN bodies retain their sizes and address-normalized instruction
+sequences. Differing rodata annotations resolve to identical string bytes.
+Those facts establish the intended native transformation, not its throughput.
+
+Unobserved common admission nominates seven distinct kernel sites in
+comprehensions and 56 in DeltaBlue. After three ordinary workload calls,
+comprehensions has three active sites (two exact and one descriptor); DeltaBlue
+has 41 (28 supplied-self exact, two NO_SELF exact and eleven descriptor).
+Kernel-filtered native breakpoints confirm at least one entry into each of
+those handler families. These are static site counts and bounded first-hit
+proofs, not dynamic frequencies. The fourth NO_SELF descriptor family passes
+the focused fixture but has no kernel first hit in this probe. Exact identities,
+commands, cold/postwarm images and limits are in `E59/prepared-coverage`.
+
+The stable two-pair screen improves comprehensions and coroutines, but logging
+loses 18.3% and DeltaBlue/generators also lose in both pairs. Root rejects the
+standalone packet. Preserve `pyjit/parity62-prepared-integrated` and its source
+branches; no confirmation, all29, upstream or full-system campaign follows.
+The method consumer may reuse its source infrastructure independently, with
+final-local nomination disabled for its isolated trial. Timing:
+`E59/parity62-prepared4-eight-selected57`, 32 workload rows, stable identity,
+no failure.
+
+| Workload | Prepared62 / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.948255 | 0.931407–0.965408 |
+| deltablue | 1.021921 | 1.018908–1.024943 |
+| coroutines | 0.964114 | 0.956796–0.971488 |
+| generators | 1.023161 | 1.015132–1.031253 |
+| logging_silent | 1.182918 | 1.178172–1.187683 |
+| raytrace | 0.988174 | 0.985945–0.990408 |
+| spectral_norm | 1.012265 | 1.011034–1.013498 |
+| nqueens | 1.019683 | 1.015668–1.023714 |
+
+### Bounded cycle diagnostic
+
+`E59/parity62-prepared4-branch-diagnostic` reruns the same balanced commands
+with four hardware counters, with 100% event running time. Its interval is the
+whole process, imports, warmup and seven timed kernel calls. It is distinct
+from a qualified kernel-only PMU campaign. Source-controller and executable
+hashes are stable; these ratios do not replace the elapsed screen above.
+
+| Workload | Instructions | Cycles | Branches | Branch misses |
+| --- | ---: | ---: | ---: | ---: |
+| comprehensions | .988185 | .970045 | .993012 | .962041 |
+| logging_silent | 1.000317 | 1.147451 | 1.000491 | .996456 |
+
+Logging executes essentially the same number of instructions and branches
+while spending more cycles. Aggregate branch-miss counts decrease slightly;
+an increased count does not explain this loss. This does not identify the
+remaining mechanism. A follow-on fetch diagnostic retains six Zen2 counters
+at 83% multiplexed running time under
+`E59/parity62-prepared4-fetch-diagnostic`. Its scaled counts do not establish
+an exclusive instruction-cache or fetch-stall cause and are exploratory only.
+No compiler, padding or alignment search follows. The next grouped architecture
+review must account for recurrent broad cycle losses as well as known repeated
+transport and dispatch work.

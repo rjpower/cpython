@@ -105,15 +105,17 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Prepared CALL fixture correction and method proposal peer | Common per-home admission, actual generated ownership/effects and complete mutable-writer closure |
-| Sol frame worker | Method-to-exact CALL proposal and implementation after peer approval | One owning callable handoff through the shared initializer; measured useful coverage and complete fallback |
+| Sol generator worker | Prepared CALL trial closed; method actual-diff peer next | Common per-home admission, actual generated ownership/effects and complete mutable-writer closure |
+| Sol frame worker | Approved method-to-exact CALL source implementation | One owning callable handoff through the shared initializer; measured useful coverage and complete fallback |
 | Sol continuation worker | Delegated RESUME→SEND trial closed | Qualified but rejected; preserve source and generator gain as evidence |
 | Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
-| Astra | Grouped round62 architecture review with all61 native outcomes | Broad review outside the patch loop |
+| Astra | Next grouped review using actual round62 outcomes | Broad review outside the patch loop; method evidence arrives before final design freeze |
 
 Allocation-only creation passes focused/native contracts but loses its broad
 comparison and is not selected. Delegated resume also qualifies, improves its
-generator target and loses important sentinels; it is not selected. The
+generator target and loses important sentinels; it is not selected. Prepared
+final-local CALL improves comprehensions 5.2% and coroutines 3.6%, but loses
+logging 18.3% and is rejected. The
 prepared CALL component begins with the final local argument plus exact/value
 descriptor CALL, then method-selection and GENERAL consumers. These generated
 spans reuse actual CALL bodies and owning windows; they do not invent borrowed

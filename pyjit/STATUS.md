@@ -16,7 +16,7 @@ physical execution remain targets. Parity is not achieved.
 | Packet | Current result |
 | --- | --- |
 | Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
-| Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role, including corrected synthetic cursor retirement. Native capture is retained; actual admission/execution probes and the benchmark screen are next. |
+| Prepared CALL62 | Integration a3cbad0637e completes both 117/79 builds and 227 focused methods per role. Actual native entries are confirmed; comprehensions improves 5.2% and coroutines 3.6%, but logging loses 18.3% in both screen pairs. Rejected as a standalone packet. |
 | Method-to-exact CALL62 | Root and source peer approve the one-clear contract. Implementation passes the acquired method owner directly to the shared initializer; actual admission coverage and fallback publication remain gates. |
 | Delegated resume62 | Integration 17139aa0166 completes both 117/79 builds and 397 focused methods per role. Generators improves 4.3%, but DeltaBlue loses 6.5%, logging 20.3% and spectral_norm 9.3% in both screen pairs. Rejected as a standalone packet. |
 
@@ -42,6 +42,12 @@ review/implementation cycle until the unchanged hot set reaches parity while
 retaining broad gains. Comprehensions still needs about 30.38% of selected57's
 instructions removed merely to equal upstream's measured instruction count;
 small native removals do not establish that budget or a throughput result.
+
+The next grouped Astra review is under way alongside the method-call trial.
+Prepared-call's short whole-process PMU diagnostic shows logging instructions
+1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer
+branch misses. An exclusive cause is not established; smaller native paths and
+unchanged ordinary handler bodies have not guaranteed broad gains.
 
 ## Selected checkpoint and performance
 

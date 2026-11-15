@@ -268,12 +268,20 @@ Introduce one logical-continuation resolver for cold observation/completion
 readers and one setter/canceller for redirect and suspension transitions. The
 resolver obtains saved semantic indices only for an armed private record;
 ordinary execution keeps direct pointers. Port frame-copy/escape, frame line
-queries and setters, pending redirect, completion, remote/debug readers and
+queries and setters, pending redirect, completion, debugger readers and
 terminal detachment together. In particular,
 [CompleteGeneratorReturn][g-complete], [CompleteRedirect][g-redirect] and
 [frame line handling][g-framelines] currently assume an in-image return PC.
 Use the existing interpreter-entry trampoline as an executable-target precedent,
 not as proof that these readers already support this new target.
+
+The clean-G [continuation census][continuation-census] inventories these actual
+consumers; it does not prove B is supported. Remote frame/async graph readers
+read `instr_ptr` and `ir_words`, and the debug-offset descriptor does not export
+`return_pc`. Keep their semantic location invariant and retain their controls;
+B does not require a remote-layout change merely because its executable return
+target changes. Port a remote reader only if an actual affected dependency is
+identified. This does not relax the direct return-PC reader/writer closure.
 
 **No stale receipt.** Output publication can clear a phase or invoke a finalizer.
 The continuation's armed state is private control, never a home-read receipt.
@@ -298,7 +306,8 @@ recipes in `ir_generator.py`, private metadata/ID denial in `ir_metadata_generat
 `Objects/codeobject.c` and `Python/{ir,instrumentation,specialize}.c`, and the
 record/continuation APIs in `pycore_interpframe*`, `Python/{frame,ceval}.c`.
 The enum registry and table contain one private target. Port the actual reader
-census above, including `Objects/frameobject.c` and remote tools. No arbitrary
+census above, including `Objects/frameobject.c`; verify unchanged remote-reader
+invariants without forcing unrelated source/layout edits. No arbitrary
 raw-C matcher or hand-copied SEND family grants ownership authority.
 
 **Peer/generation tests.** Prove actual SEND versus FOR, normal-return versus
@@ -472,3 +481,4 @@ rewritten by this proposal.
 [g-emitter]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Tools/cases_generator/ir_generator.py:3674
 [g-redirect]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Python/frame.c:397
 [g-framelines]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Objects/frameobject.c:3574
+[continuation-census]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/boundary65-source-host/continuation-reader-census.md

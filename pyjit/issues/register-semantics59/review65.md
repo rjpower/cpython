@@ -157,6 +157,14 @@ have real selection costs, but cold in the proposed organization means a
 semantic boundary, not a measured invocation rate. All byte sizes include
 cold arms/padding; none is an instruction-frequency or instruction-cache claim.
 
+The subsequent clean-G [continuation census][continuation-census] confirms B's
+direct risks: completion's `return_pc + IR_DS(word)`, pending-call/debugger and
+redirect readers/writers, generated completion/yield/observer recipes and frame
+copy. It is an inventory, not a support proof. Actual [remote frame][remote-frame]
+and [async graph][remote-async] readers use `instr_ptr` plus `ir_words`, not `return_pc`; the exported debug
+offsets likewise omit `return_pc`. B must keep semantic `instr_ptr` real and retain
+remote controls, but should not force an unrelated remote-layout port.
+
 Private entry has a 450 B head, 999 B helper, 982 B reservation helper and 128 B
 link helper. `_PyAwait_EnsureIdentity` is 255 B, preparation 869 B and
 `clear_await_frame`807 B. Actual helper register saves/locals count at their C
@@ -253,3 +261,6 @@ these bounded attempts produce.
 [g-lines]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Objects/frameobject.c:3574
 [i-call]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-integrated/Python/generated_ir_cases.c.h:8479
 [u-return]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/upstream-3a440b6/Python/bytecodes.c:1574
+[continuation-census]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/boundary65-source-host/continuation-reader-census.md
+[remote-frame]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Modules/_remote_debugging/frames.c:224
+[remote-async]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/call55-gc/Modules/_remote_debugging/asyncio.c:428

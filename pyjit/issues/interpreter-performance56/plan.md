@@ -13,11 +13,11 @@ The active workstream is [IR semantics59](../register-semantics59/README.md).
 The [round68 proposal](../../design/proposals/interpreter-parity68.md) and
 [review68](../register-semantics59/review68.md) recommend one retained-generator-
 delegation unit from selected57. Independent architecture and exact source-
-contract approval pass. The inert foundation and reader ports are integrated;
-Sol implements hot entry and yield, followed by complete lifecycle and reader
-qualification before activation. Retain real owning frames and
-ancestor prefixes, enter
-the current leaf directly, and update only changed delegation suffixes.
+contract approval pass. Complete entry, yield, lifecycle and reader source is
+integrated; both builds and 26 focused methods per role pass. Root qualifies
+actual native mechanism and lifecycle boundaries before timing. Retain real
+owning frames and ancestor prefixes, enter the current leaf directly, and update
+only changed delegation suffixes.
 Price the common membership pointer, ordinary generator costs, materialization,
 recursion and all observation/teardown consumers. No ordinary THREAD call or
 return checks are added. This targets generators, without claiming a combined
@@ -125,7 +125,7 @@ closed and unselected; preserved evidence is not a dependency list.
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Root | Adopt exact source contract, integrate, generate/build/qualify/measure | Selected57 base; complete source/native gates before one hot8 screen |
-| Sol-high source | Retained real generator-delegation prefix | W branch `pyjit/parity68-retained-delegation`; hot entry and yield, activation gated on complete closure |
+| Sol-high source | Retained real generator-delegation prefix | W branch `pyjit/parity68-retained-delegation`; source frozen, available for qualification corrections |
 | Independent Sol peer | Review contract, actual changes and qualification | Close recursion, effective readers, any-member teardown and remote lifetime |
 | Astra | Grouped review68 delivered | Architecture overview complete; no inner-loop or runtime work |
 

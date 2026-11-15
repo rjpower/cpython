@@ -17,10 +17,21 @@ observer invalidation, return-suffix retirement and remote readers have
 independent source approval and are integrated in G. Corrected closure9c builds
 pass 117 modules/79 shared extensions and all 17 focused methods per role,
 including 27 stopped-snapshot cases within one remote method.
-Hot entry and yield implementation continues. No generator record activation,
-native mechanism, performance result or broad qualification is claimed. Activation
-waits for complete lifecycle and reader closure. Selected57 remains unchanged;
-closure9c builds are current and no root job is running. Root owns integration,
+Complete entry/yield source now has independent approval and is integrated in G
+at `bf86c69dca8`, with corrected generated products. Both active13b builds pass
+117/79, and all 26 focused methods pass per role
+(one debug-only skip in release). Independent generated-product review passes.
+Seven lifecycle methods also pass both immutable release baselines. A first
+debug native controls at depths2/8/32 observe direct retained entries and yields
+without intermediate delegate dispatch; all six direct-backend allocation faults
+preserve behavior. Complete native qualification is in progress.
+Broader checks pass13 related modules per role. Two corrected inspection tests
+and eight delegated-yield tests now pass per role; the relocated strict source
+mutation test passes on the host. Current G is `27521e23fab`; both tests14 builds
+pass117/79. These test-only corrections preserve remote refusal and generator
+validation. VM SEND/FOR controls also confirm direct retained entry. Actual Tree
+prefix retention and recursion-boundary controls remain pending. No performance result or broad qualification is claimed.
+Selected57 remains unchanged. Root owns integration,
 qualification and measured selection. Details are in the
 [trial report](issues/register-semantics59/report.md) and [handoff](HANDOFF.md).
 The report also retains both rejected round67 candidates.

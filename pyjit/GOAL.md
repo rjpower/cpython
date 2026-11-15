@@ -17,9 +17,9 @@ under one architecture. The active [IR-semantics workstream](issues/register-sem
 advances the [round68 proposal](design/proposals/interpreter-parity68.md) under
 [review68](issues/register-semantics59/review68.md). Independent architecture
 and exact source-contract approval pass for retained real generator-delegation
-prefixes. The inert foundation and reader ports are integrated. Sol implements
-the hot entry and yield path, with complete lifecycle and reader closure before
-activation. Keep owning frames and existing execution
+prefixes. Complete entry, yield, lifecycle and reader source is integrated;
+both builds and focused behavior pass; root now qualifies native mechanism
+and lifecycle boundaries. Keep owning frames and existing execution
 semantics, resume the retained leaf directly, and update only changed suffixes.
 Charge storage and ordinary-generator costs without adding checks to ordinary
 function calls. This unit targets generators; no comprehension, DeltaBlue or

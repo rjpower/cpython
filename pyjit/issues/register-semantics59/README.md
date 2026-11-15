@@ -10,21 +10,14 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity68.md) and
 [review68](review68.md) recommend one retained-generator-delegation unit.
-Independent architecture and exact source-contract approval pass. Sol implements
-hot entry and yield after the inert foundation and reader ports, with complete
-lifecycle and reader qualification before activation. The inert foundation and optional common loop-proof/plan increment
-are integrated and pass both builds and focused runtime checks. The optional
-loop-proof increment is source- and product-approved. The inert materializer
-and generator, engine ingress/error and cold frame ports also have independent
-source approval and pass both builds and 23 focused methods per role. Observer,
-return-suffix and remote ports now have independent source approval and both
-corrected closure9c builds pass 117/79 and all 17 focused methods per role,
-including 27 stopped-snapshot cases within one method. Hot lifecycle
-and independent remote/entry reviews remain separate assignments within this unit.
-No retained execution, native mechanism, performance result or broad
-qualification is claimed. See the
-[trial report](report.md) for counts and the
-[handoff](../../HANDOFF.md) for paths and logs.
+Independent architecture, exact source-contract and generated-product approval
+pass. Complete entry, yield, lifecycle and reader source is integrated in G at
+`27521e23fab`; both tests14 builds pass117/79 and all 26 focused methods per
+role pass, with one debug-only skip in release. Native depth2/8/32 and VM SEND/FOR controls observe direct retained entry
+and yield without intermediate delegate dispatch. Six allocation faults preserve
+behavior. Corrected remote/host source tests pass. Complete native/lifecycle qualification is in progress; no performance
+or broad qualification is claimed. See the [trial report](report.md) for evidence
+and the [handoff](../../HANDOFF.md) for paths and commands.
 The [implementation contract](retained-delegation68.md) and
 [source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
 Both round67 candidates qualify but lose their screens: A hot8
@@ -56,10 +49,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `5e0bf7b1bfc`; closure9c builds and focused checks pass |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; hot entry and yield |
-| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; fixture closure complete, independent hot-entry review |
-| Independent Sol peers | Actual-diff cross-review | Observer/suffix/remote ports GO; complete hot path pending |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `27521e23fab`; builds/focus pass, native controls in progress |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; complete source frozen; actual ELF readback |
+| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; source/product GO; qualification coverage review |
+| Independent Sol peers | Actual-diff cross-review | Complete source/products GO; native qualification pending |
 | Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

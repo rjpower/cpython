@@ -1,5 +1,81 @@
 # Semantic IR trial results
 
+## Round68 complete source integration
+
+The VM entry/allocation helper, private native entry, yield helper and checked
+source/emitter connections have independent actual-diff approval. Root
+integrates them with all reader/lifecycle ports and seven new behavior tests.
+The complete candidate is G `bf86c69dca8`. Both active13b builds pass 117
+modules/79 shared extensions. All 26 focused methods pass per role: 16 delegation,
+seven lifecycle and three remote methods. Release skips one debug-only method.
+No performance result or selection is established.
+
+Debug steady controls at depths2/8/32 and release depth8 each observe39 direct
+retained native entries and39 yields, with no intermediate delegate SEND/YIELD/
+backedge handler hits, materialization or allocations while armed. Entry records
+are ENTERING with debt0; yield records are RUNNING with debt=count. The depth64
+allocation control reaches72/64/128/256/512/1024-byte direct-backend requests.
+Each separate injected NULL preserves all40 values, entry counts and terminal
+result identity. Fault fallback may fragment records and allocate again; no
+steady-cost claim is made for those abnormal controls. Recursion, actual Tree
+prefix retention and native costs remain qualification gates. Exact controllers, logs and receipts are in
+`E59/retained-delegation68-native-controls`.
+
+Product review rejects the first generation's indentation drift. The narrow
+source correction emits each closing brace separately, preserving CWriter's
+indent stack. Corrected products change exactly seven of 329 concrete handler
+bodies; the other 322, all labels and the prefix are byte-identical. Register-IR
+metadata is unchanged. The legacy macro-expansion table loses only YIELD_VALUE:
+the marker's conservative PC effect makes that legacy expansion unsupported.
+No supported tier2 behavior is claimed, and the effect is not weakened to
+restore the unused row. Independent product readback approves the exact seven
+handler changes and one metadata-row deletion.
+
+Checked plain, delegated and retained yields now publish GENERATOR_YIELD after
+their final recipient/debug callbacks. Immutable selected57 depth1/8 witnesses
+both passed: a consumer's later yield can mask the early classification. This
+is consistent result-ABI closure, not a reproduced baseline bug or measured gain.
+
+Seven new lifecycle methods cover exception/recursion recovery, non-None and
+throw identity, interior close, cyclic receivers, retirement reentry, live
+locals and tracing. All seven pass both immutable selected57 and upstream
+release controls through their own libraries. The first recursion fixture
+wrongly assumed pure deep delegation must fail on upstream; its corrected
+version requires an ordinary recursive leaf call and pins members for shallow
+cleanup. Both failed and passing baseline receipts are retained in
+`E59/retained-delegation68-native-controls`. All seven also pass both candidate
+roles in active13b.
+
+Broader active13b integration passes13 related modules in each role but was
+not clean. Both roles timed out in the nonblocking nested-generator exception
+sampler, while the exact immutable selected57 method passed. Source review
+confirms the reader refuses live retained membership as required; the test
+suppressed that refusal and retried indefinitely. The independently reviewed
+correction publishes the leaf frame before its exception-status assertion and
+adds a real retained nonblocking-refusal witness for both cache modes. No raw-PC
+fallback or automatic pause is introduced. An old source-mutation method moves
+to the host suite: cursor/suffix mutations assert strict ingress rejection,
+while the distinct guard mutation retains its absent-owner assertion. Positive
+receipts and unread-cursor rejection remain covered. Root executes the relocated
+host method successfully.
+
+These test-only corrections integrate as `4ae62c9903d` and `27521e23fab`.
+Both tests14 builds pass117/79, and both roles pass all ten affected runtime
+methods: eight delegated-yield and two remote inspection methods. Six
+sys_settrace errors remain the inherited debugger-jump baseline. Root also
+included a nonexistent test_frame_locals module in the first release selection;
+that command failure is retained and removed from subsequent selections.
+Original logs use `parity68-active13b-integration-*`; corrected focused logs use
+`parity68-tests14-*`. No broad full-system pass is claimed.
+
+Root also verifies complete successful VM entry at depth8:39 SEND and38 FOR
+returns report RUNNING/debt8/count8, with39 retained yields and zero intermediate
+delegate dispatch in each arm. FOR's first unspecialized resume uses the native
+entry once. The native/fault/VM controls are summarized in
+`retained-delegation68-native-controls/active13b-mechanism-summary.json`.
+They ran the actual active13b ELF before the test-only stamp rebuild; do not
+relabel that native evidence as the later image. No speedup follows from hits.
+
 ## Round68 observer, suffix and remote-reader integration
 
 Corrected observer7, incremental return-suffix8 and remote9 have independent

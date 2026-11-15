@@ -1,8 +1,9 @@
 # Retained generator delegation68: implementation contract
 
 Status: approved for bounded implementation after [independent source review](retained-delegation68-peer.md).
-The inert foundation is in progress; no runtime qualification or performance
-result is claimed. This canonical text integrates the approved noncalling
+Complete source and generated products are integrated; both builds and focused
+behavior pass. Native/lifecycle qualification is in progress; no performance
+result or selection is claimed. This canonical text integrates the approved noncalling
 ENTERING addendum into frozen source contract
 `836d0a93bc6406392153f7c7233fc1f197dea703c424cf1b25d4344ca594a30a`.
 The frozen input and addendum remain in
@@ -201,8 +202,8 @@ floor and evaluator body; it is not another evaluator. Price its additional
 symbol/text and the public cold flag normalization explicitly.
 
 `gen_send_value_ex` chooses this wrapper only for a
-checked retained root, no evaluator hook, None input and sufficient Python
-recursion budget. Skip the root's intermediate `_PyFrame_SetReturnValue`.
+checked retained root, no evaluator hook and None input. The retained entry
+checks the complete Python recursion budget before debiting it. Skip the root's intermediate `_PyFrame_SetReturnValue`.
 In `_PyEval_EvalFrameLoop`, dispatch the retained start label inside the
 existing nonzero arm; the ordinary zero arm and its `start_frame` remain
 unchanged. This uses the same activation, sentinel, borrow floor, tail-call
@@ -211,8 +212,10 @@ The source peer must approve this internal discriminator extension.
 
 Shortcut interception precedes the ordinary claim/materialize route. Native
 `gen_send_value` examines a member before `_Py_GEN_TRY_SET_FRAME_STATE`;
-SEND/SEND_GEN/FOR do so before `gen_try_set_executing`. Only record root +
-SUSPENDED + None + sufficient R + admissible observers can claim ENTERING.
+SEND/SEND_GEN/FOR do so before `gen_try_set_executing`. Native record-root
+next/send(None) with admissible observers can claim ENTERING before the count
+budget check. VM retained entry requires sufficient R and commits RUNNING
+under odd publication.
 All other member ingress dissolves first, then uses the original ordinary
 state claim once. A successful shortcut bypasses that ordinary claim and its
 one-unit recursion entry. Thus a mandatory ordinary mutation materializer
@@ -301,6 +304,10 @@ and use no cached record, root-state assertion or membership pointer. Preserve
 existing generator_return_kind publication at the final no-callback evaluator
 exit boundary. Do not turn leaf or external setters into an asserted noncalling
 interval or add a universal return barrier.
+Checked plain, delegated and retained yield paths set GENERATOR_YIELD after
+their final recipient flush and debug callback, immediately before dispatch.
+Relocating a plain-yield source store requires its complete suspension proof;
+the retained-yield marker alone grants no ownership or terminal authority.
 
 One-member records are valid after pop. A parent can run arbitrary ordinary
 body code, yield its own value, and later append its right child without
@@ -314,8 +321,8 @@ append adds one and ordinary pop restores one. During RUNNING, `recursion_debt`
 equals member count. Shortcut yield restores that count once and sets debt=0;
 shortcut resume debits it once. C recursion still belongs to the one existing
 evaluator activation. Ordinary leaf calls pay/restore their own debt. Check
-the entire count before entering the retained discriminator; insufficient
-budget dissolves before ordinary root entry so the existing descent produces
+the entire count before debiting it; insufficient budget dissolves before
+ordinary root entry so the existing descent produces
 its real failure site. No speculative partial debit is allowed.
 
 One proposed `_PyGen_MaterializeDelegation` is nonallocating and cannot call
@@ -346,7 +353,7 @@ Numeric ledger (R denotes incoming py_recursion_remaining; n includes root):
 | Ingress/exit | Before / after | Exact owner of debt |
 | --- | --- | --- |
 | Native retained root, R=100,n=8 | ENTERING100 -> RUNNING92 | Retained label debits8; ordinary start_frame is not also called |
-| VM SEND/FOR retained root, R=100,n=8 | ENTERING100 -> RUNNING92 | VM retained entry debits8; skip its ordinary one-unit entry |
+| VM SEND/FOR retained root, R=100,n=8 | SUSPENDED100 -> RUNNING92 under odd publication | VM retained entry debits8; skip its ordinary one-unit entry |
 | Initial ordinary root plus seven real descents | 100 ->99 ->...->92 | Existing actual per-frame entries; record records debt8 only |
 | Append ninth child | 92 ->91, debt8->9 | Existing child-entry debit1 |
 | Return ninth child | 91 ->92, debt9->8 | Existing RETURN credit1; pop must not credit again |
@@ -354,15 +361,16 @@ Numeric ledger (R denotes incoming py_recursion_remaining; n includes root):
 | Shortcut yield/resume at n8 | 92 ->100 /100->92 | Shared credit8/debit8 once |
 | ACTIVE dissolution n8 | 92 ->92 | Eight ordinary eventual exits now own the debt |
 | SUSPENDED or ENTERING dissolution | 100 ->100 | No outstanding Python debt; ENTERING root will pay ordinary start once if it continues |
-| R=7,n8 before retained claim | 7 unchanged on optional decline | Dissolve SUSPENDED first, then existing real root/descent recursion checks and error site |
-| Native or VM retained count1,R100 | ENTERING100 -> RUNNING99 | Exactly one debit, later yield credits1; same interception before ordinary debit |
-| Native or VM count1,R0 | 0 unchanged on decline | Dissolve before claim, then original one-unit ordinary entry/failure |
+| R=7,n8 before retained debit | 7 unchanged on decline | VM dissolves SUSPENDED; native may dissolve ENTERING after sentinel setup. Existing real root/descent checks produce the error site |
+| Native or VM retained count1,R100 | Native ENTERING100 or VM SUSPENDED100 -> RUNNING99 | Exactly one debit, later yield credits1; interception precedes ordinary debit |
+| Native or VM count1,R0 | No retained debit | Dissolve before ordinary root entry, then its original one-unit check/failure |
 | Early C-recursion entry failure | 100 ->100 Python debt | Materialize ENTERING then ordinary root failure/clear; C-recursion error semantics unchanged |
 
 Admission requires R>=n so every skipped `_Py_EnterRecursivePy` would have
-seen a positive old value (actual source uses remaining-- <=0). Low-budget
-and recursion_headroom cases take ordinary descent rather than approximating
-the source's error checks. After poll-induced ACTIVE dissolution, dispatch the
+seen a positive old value (actual source uses remaining-- <=0). Therefore none
+would enter its error checker, including when recursion_headroom is set.
+Low-budget cases take ordinary descent with the source's existing error checks.
+After poll-induced ACTIVE dissolution, dispatch the
 actual current leaf with debt already charged; never reenter start_frame.
 For VM ingress specifically, the new generated branch is placed **before**
 the existing `_Py_EnterRecursivePy` line in `enter_generator`; the retained

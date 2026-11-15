@@ -18,44 +18,48 @@ the changed suffix. The grouped architecture and exact
 [implementation contract](issues/register-semantics59/retained-delegation68.md)
 have independent approval. No second unit is active.
 
-G integrates the common loop proof, materializer, generator consumers, engine
-error/ingress ports, cold frame readers, observer invalidation, incremental
-return suffix and remote readers. Corrected closure9b builds at `d99deaaf1ac`
-pass 117 modules/79 shared extensions per role. Its first release focus passes
-15 of 17 methods; two public-image fixtures omitted explicit semantic-recovery
-metadata. Corrections are merged at `9d49490e2b2` and `5e0bf7b1bfc`;
-both closure9c builds pass 117/79 and all 17 focused methods pass per role.
-Regeneration at closure9 leaves generated products unchanged.
+G integrates the complete retained-entry, private native-resume, yield,
+lifecycle and reader source at `bf86c69dca817739d03ffe2bd6ecc53a8572bb96`.
+Test-only corrections advance G to `27521e23fab`; both tests14 builds pass117/79.
+Independent source and generated-product review pass. Active13b release and
+debug builds each pass 117 modules/79 shared extensions; all 26 focused methods
+pass per role, with one debug-only skip in release. Counts are 16 delegation,
+seven lifecycle and three remote methods. The stopped-reader method contains
+27 cases, four valid and 23 refusals; do not count those as methods.
 
-Root found and corrected the nested all-thread opcode tracing HEAD_LOCK path.
-Both source lanes independently cross-reviewed the other lane: observer7 plus
-lock correction, suffix8 and remote9 have source GO. Remote backedge validation
-now shares the producer's predicate. The first closure9 release compile exposed
-an early debug-header include cycle; source correction `d6e2d37a8ff` integrates
-as `d99deaaf1ac`. Keep the failed compile and fixture logs. These are corrected
-qualification findings, not retained mechanism or performance results.
+The first generated product was rejected for indentation drift and corrected
+before compilation. Exactly seven of 329 concrete handlers change; the other
+322, prefix and labels remain byte-identical. Register-IR metadata is unchanged.
+The conservative PC effect removes one unsupported legacy YIELD_VALUE expansion
+row; no supported tier2 qualification is claimed.
 
-Hot entry, native resume and yield source work continues in W. Frozen helper9
-`871c8fab6c3` plus post-setter debug correction `cf9591a3e2d` has independent
-source GO and no call sites; native10 `4bdec893c05` is under independent review.
-These are not yet merged. No record allocation can execute in G. Activation
-waits for complete lifecycle and reader closure.
-Root owns generation, builds, target/native jobs and measured selection;
-workers run bounded host checks and provide discoverable runtime tests.
+Debug native mechanism controls at depths2/8/32 and release depth8 observe39
+retained entries/yields each, with zero intermediate delegate dispatch,
+materialization or allocation while armed. Six actual direct-backend NULL
+faults preserve behavior. VM SEND/FOR positive controls pass. Actual Tree prefix
+and recursion-boundary qualification remains in progress. There is no performance
+result or selection. Selected57 is unchanged.
 
 | Owner | Current boundary |
 | --- | --- |
-| Sol-high source | W, `pyjit/parity68-retained-delegation`; hot entry/native resume/yield |
-| Sol-high remote | P, `pyjit/parity68-delegation-remote-readers`; independent native-entry review, remote fixture closure complete |
-| Root | G, `pyjit/parity68-retained-delegation-integrated`, `5e0bf7b1bfc`; closure9c builds/focus pass, no job running |
+| Sol-high source | W, `pyjit/parity68-retained-delegation`; complete source frozen, actual ELF structure/cost readback |
+| Sol-high remote | P, `pyjit/parity68-delegation-remote-readers`; source/product approval, independent qualification coverage review |
+| Root | G, `pyjit/parity68-retained-delegation-integrated`, `27521e23fab`; tests14 builds/focus pass, serialized native controls |
 | Astra | Grouped review68 `183447221537190a4ac1003026f554dbaf428a3d`, integrated in C `29a016e656d`; no inner-loop work |
 
-Current logs/manifests use `E59/parity68-closure9{,b,c}-*`; corrected build
-manifest is `parity68-closure9c-build-commands.json`, followed by the matching
-focus manifest. Focus covers 14 retained-delegation methods and three remote
-metadata methods. The stopped-reader method contains 27 cases, four valid and
-23 refusals; count those separately from test methods. Prior readers6 passed
-23 methods per role; its coverage overlaps and must not be added.
+Build/focus manifests use `E59/parity68-active13b-*` and `parity68-tests14-*`.
+Broader integration logs retain the six baseline trace errors, initial nonexistent
+module selection and corrected parser/remote test failures. Thirteen related
+modules pass per role; the ten affected tests pass both roles after correction.
+The relocated source-parser method passes root's host execution. Source changes
+since active13b are test-only; native captures retain their actual earlier ELF
+identity rather than being relabeled.
+Root native controls, receipts and exact commands live in
+`E59/retained-delegation68-native-controls`. Preserve earlier failed compile,
+fixture and generated-product attempts under their original tags. Corrected
+closure9c's 17-method inert coverage overlaps this active checkpoint; do not
+add counts. Seven lifecycle methods also pass immutable selected57 and upstream
+release baselines through their own libraries.
 
 Source receipts live in `E59/retained-delegation68-{source,frame,remote}-host`;
 independent cross-review is in `E59/retained-delegation68-closure-peer`.

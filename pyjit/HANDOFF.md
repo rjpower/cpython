@@ -36,8 +36,10 @@ The cold reviewer finds a 4,472-byte stack reservation, stack-backed engine
 state and one tail-merged indirect dispatch. See the
 [native post-review](issues/register-semantics59/engine-post-review.md). No
 flag, compiler or layout search follows this rejected backend.
-P `R/call55-pins` is frozen on `pyjit/parity60-engine` at `1ae2fb035277`, based
-on selected57. W's `pyjit/parity60-backend-identity` config packet is
+P `R/call55-pins` now implements the reviewed common-constant producer on
+`pyjit/parity60-common-constant`, based on selected57. Its former engine packet
+is preserved on `pyjit/parity60-engine` at `1ae2fb035277`. W's
+`pyjit/parity60-backend-identity` config packet is
 `47653c3bb4c3`; shared C probe/ELF diagnostic consumers also have actual peer GO
 and six mocked/synthetic host checks pass.
 
@@ -175,7 +177,7 @@ Existing component worktrees and branches are retained:
 | Worktree | Branch | Head |
 | --- | --- | --- |
 | `R/call55-ir` | `pyjit/parity60-backend-identity` | `47653c3bb4c3` |
-| `R/call55-pins` | `pyjit/parity60-engine` | `1ae2fb035277` |
+| `R/call55-pins` | `pyjit/parity60-common-constant` | In progress from selected57 |
 | `R/call55-gc` | `pyjit/parity60-integrated` | `ec230e55641` |
 
 G is the round59 integration tree; I remains the immutable selected control.

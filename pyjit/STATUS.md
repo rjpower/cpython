@@ -37,8 +37,13 @@ every case; identities remain stable. The [native post-review](issues/register-s
 resolves all 367 rows and finds a 4,472-byte stack reservation, stack-backed
 engine state and one shared indirect dispatch after GCC tail merging. No
 full-system or upstream rerun is claimed for this loser. Golden stays fixed;
-the concrete scalar proposal uses selected57's existing backend. Astra's next
-grouped review considers broader changes against this negative evidence.
+the [scalar proposal](issues/register-semantics59/scalar-proposal.md) and its
+[peer](issues/register-semantics59/scalar-peer.md) reject the allocated plan
+framework and defer the fixed two-word rival. The
+[common-constant producer](issues/register-semantics59/common-constant-proposal.md)
+is being implemented on selected57 without a new backend, frame field or
+per-site descriptor. Astra's next grouped review covers broader register-role,
+call and delegation changes against this negative evidence.
 
 The [all-word census](issues/register-semantics59/resident-coverage.md) limits
 the finite scalar-pair pilot, without bounding all possible regions. Its

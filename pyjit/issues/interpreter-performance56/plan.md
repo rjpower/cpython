@@ -104,18 +104,21 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol scalar worker | Concrete cross-word native scalar binding proposal on selected57; retain original PCs and complete slow exits | Independent peer before implementation; root generation/build/screen |
-| Independent peer | Review scalar admission, exits, ownership, invalidation and actual native removal | No source-name-only ownership grants |
+| Sol generator worker | Common-constant producer's checked canonical/no-count contract through existing typed result receipts | Root proposal peer GO; actual source post-review then root generation/build/screen |
+| Independent peer | Source ownership/canonical receipts, alias invalidation and actual native removal; prepare call/delegation source review | No source-name-only ownership grants |
 | Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
 | Astra | Grouped architecture review after measured cycles | Broad design, outside the patch loop |
 
 The same-GCC resident engine passes both builds and 465 methods/role but loses
 every hot-eight case, by 18.6–60.0%; preserve it without selection. Its actual
 state spills and single merged dispatch defeat the source residency premise.
-Admit the concrete cross-word integer add→multiply
-consumer, then float multiply→add with separate rounding and complete slow-exit
-materialization on unchanged selected57. The next grouped Astra review prices
-broader IR/interpreter changes against the engine's negative native evidence.
+The scalar [proposal](../register-semantics59/scalar-proposal.md) and
+[peer](../register-semantics59/scalar-peer.md) reject its allocated descriptor
+framework and defer the fixed two-word rival. Implement the independently
+reviewed [common-constant producer](../register-semantics59/common-constant-proposal.md)
+first, leaving TEMP destination refinement as a separate packet. The next
+grouped Astra review prices broader role/ownership and call/delegation changes
+against the engine's negative native evidence.
 Other provider, continuation, borrowed-argument, cache and encoding rivals have
 explicit reopening gates in the design; they are not scheduled investigations.
 

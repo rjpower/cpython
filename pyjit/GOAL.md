@@ -15,8 +15,16 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
 executes the reviewed [next design](design/proposals/interpreter-parity60.md):
-first compare a same-GCC resident engine, then test cross-word scalar value/fact
-lowering at concrete sites. The [review ledger](issues/register-semantics59/review-next.md)
+the same-GCC resident engine is rejected by all eight screens. The
+[scalar proposal](issues/register-semantics59/scalar-proposal.md) is deferred
+after its [peer review](issues/register-semantics59/scalar-peer.md); do not build
+an allocated descriptor framework for a two-word trial. The
+[common-constant producer](issues/register-semantics59/common-constant-proposal.md)
+is the next bounded implementation on selected57. Astra is reviewing broader
+register-role, call and delegation changes as a group. The
+[native review](issues/register-semantics59/engine-post-review.md) records the
+compiled engine's stack-backed state and shared dispatch. The
+[review ledger](issues/register-semantics59/review-next.md)
 incorporates all five rejected round59 executable screens and their
 [semantic/physical design](design/proposals/register-semantics59.md).
 Logical values, uses, edge results and continuations precede storage and

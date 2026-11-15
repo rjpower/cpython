@@ -273,5 +273,10 @@ The four shared tool consumers and bounded ELF target mapper have actual source
 peer GO; six host mocked/synthetic methods pass. Unsupported ELF/relocation or
 outside-engine targets fail; no stale tail-call object check is reported as an
 engine pass.
-No proposal or small pilot
-is a parity result; the broader cycle remains active.
+The [scalar implementation proposal](scalar-proposal.md) also rejects the
+allocated descriptor framework before coding: per-code records, reverse index,
+generation and mutation hooks are disproportionate for two operations. A fixed
+two-word rival avoids those fields but still needs a real common admission
+proof and shared arithmetic/commit receipts. Root defers it behind the broader
+producer-fact and register-role work; no scalar implementation or native saving
+is claimed. No proposal or small pilot is a parity result; the cycle remains active.

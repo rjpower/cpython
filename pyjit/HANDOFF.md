@@ -18,13 +18,13 @@ passes mechanism qualification but loses the broad screen. Execute the reviewed
 round65 return/accessor unit, followed conditionally by its private SEND-yield
 continuation. Preserve both round64 source branches and sealed evidence.
 Source approval, native mechanism approval and measured selection are separate
-gates. Never import a rejected executable as a prerequisite.
+gates. Unrelated rejected packets are not prerequisites.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol A, W | Correction committed as `8ed034598b3`, independently reviewed and integrated; 20 bounded source checks and three affected generated-case methods pass. Source frozen |
-| Sol B, P | `/root/boundary65_continuation`, branch `pyjit/parity65-yield-continuation` from G `0bbb42ef46a`; complete continuation proposal and independent A peer. No B implementation before proposal GO and revised A native gate |
-| Root, G | Original `ee0e77046591f39079b663160e8011ac1b29df76` passes both 117/79 builds, 46 focused and 708 runtime/reader methods per role, but cold native review rejects it: EMPTY paths add three instructions (one for redirect-discard); GENERAL paths save five. Preserve its ELF and evidence. Corrected G is `a6695887e949c3019216120c544e171dfa7ff90e`; regeneration passes with no generated changes and both `parity65-residence3` builds pass 117/79, 46 focused and 708 runtime/reader methods per role. Corrected native gate is underway; no timing or selection claim |
+| Sol A, W | `/root/boundary65_returns`; source correction `8ed034598b3` integrated. Completed; next independent whole-source B peer after B freezes. Reactivation currently hits the thread limit while B is active; root peers interfaces in the meantime |
+| Sol B, P | `/root/boundary65_continuation`, `pyjit/parity65-yield-continuation` fast-forwarded to `a6695887e94`; implementing approved complete B. Sole dispatch-only target ID385 approved; IDs 383/384 and held 393–409 unchanged. No worker full generation, build or target execution |
+| Root, G | Clean `a6695887e949c3019216120c544e171dfa7ff90e` on new `pyjit/parity65-continuation-integrated`; standalone A preserved on `pyjit/parity65-residence-integrated`. Both A3 builds 117/79, 46+708 methods/role, native/ABI/natural-receipt GO; own hot8 rejects logging 1.161661 and generators 1.055271. No A confirmation/all29/upstream/PMU/full. Root owns B integration and all target gates |
 | Astra | Source `374f8e3eadbac12be504f70885fe3a2a196f8fc0` plus `ceb46447bb0ef5a48f2478ba5f62f842d43e9550`, branch `weaver/interpreter-parity65-astra`, Loom `zfr7ow1e`; integrated C at `f18cefa4449` and `ba7316040e9`. Do not cherry-pick again |
 
 Use existing Sol workers for component cross-review. Sending a message to a
@@ -173,18 +173,29 @@ unlinks once, branches THREAD, and uses one owned-result resumable helper.
 It ports complete RETURN/YIELD source certificates and state-proved embedded
 accessors. Keep GENERAL versus EMPTY clearing authority separate.
 
-The original A ELF is native NO-GO; do not run target GDB or a timing screen
-for it. Root and an independent peer approve a bounded correction that consumes
-the reached THREAD proof in the two result-clear APIs and the AWAIT/GENERATOR
-proof in ReturnResumable. Keep the generic reason-bearing dispatcher unchanged.
-The wrong-residence source mutation and three affected generated-case consumers
-are in scope. Independent actual-source review approves patch SHA256
-`38d75f1e161979bc4f731b7bab41264092499d74e5e9b358ec5f1b4287b3b273`.
-All 20 bounded source checks pass. Root's three affected generated-case methods
-fail against the old fixtures and pass after correction. Source `8ed034598b3`
-is integrated as `a6695887e94`; regeneration changes no products. Both refreshed builds pass 117/79, 46 focused
-and 708 runtime/reader methods per role. Root owns final native qualification
-and the unchanged hot8 screen; no corrected performance result exists yet.
+Original A `ee0e7704659` is preserved on `pyjit/parity65-residence-initial` and
+is native NO-GO. The reached-residence correction `8ed034598b3` integrates as
+`a6695887e94`; all twenty bounded source checks and three affected generator-
+source consumers pass. Regeneration changes no products. Both residence3 builds
+pass 117/79, 46 focused and 708 runtime/reader methods per role.
+
+`boundary65-source-host/unit-a-corrected-native-cold-review.md` gives native GO:
+complete EMPTY paths save five instructions, GENERAL seven, no ordinary THREAD
+stack growth, generic CALL normalizes equal, and text is await9+1664B. Captured
+`parity65-residence3-native/python` SHA256 is
+`314e32ec75c112095a16deb5ffeede5913b8991760cb312ef432c9c08d057a73`.
+`retirement65-native-controls/natural1` and the independent ABI/receipt peer
+confirm one actual private child and its identity-free normal retirement on
+this binary. Earlier terminal/OOM evidence remains bound to await9, not a new
+injection claim for residence3.
+
+The stable 32-row `parity65-residence3-eight-selected57` screen rejects standalone
+A: comp .972740, Delta .989654, coroutines .606811, generators 1.055271,
+logging 1.161661, ray .980528, spectral .991837 and nqueens .999876. Both logging
+and generator pairs lose. No broader campaign follows. Current builds still
+contain A; they become stale as soon as G integrates B and must be refreshed.
+B is the already reviewed isolation attempt, with no established causal claim.
+Its complete source, runtime, native and own-screen gates remain outstanding.
 
 `E59/boundary65-source-host/unit-a-proposal.md` records the source proposal;
 its old pre-freeze classification dependency is superseded by the final design.
@@ -199,10 +210,9 @@ instruction address or reach generic SAVE_STACK/debug/source attribution.
 Port every actual return-PC reader/writer, preserve newer callback redirects
 and observer-required terminal detach, and keep YIELD nonraising. No ordinary
 header field, universal descriptor or per-code word mirror. Source contract
-work proceeds alongside A; shared integration is A then B. A has its own
-native and hot8 screen and may advance without B. A native failure stops A;
-a broad loss permits only the already reviewed B isolation attempt. No other
-lane is a prerequisite, and no new runtime result is claimed yet.
+work proceeds alongside A; shared integration is A then B. A passes its native gate and loses its own
+hot8 screen; only the already reviewed B isolation attempt proceeds. No other
+lane is a prerequisite, and no B runtime result is claimed yet.
 
 Before root integration: independent source peer, committed clean source and
 full patch/path/hash receipt. Root reviews/generates/commits products, refreshes

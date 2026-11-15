@@ -17,19 +17,14 @@ gets its own native gate and hot8 screen and may advance without B. Selected57
 remains unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
-Unit A at `ee0e7704659` passes both 117/79 builds, 46 focused methods and 708
-runtime/reader controls per role (13 release and 12 debug skips); source and
-generated-code reviews pass. Its cold native review is NO-GO: ordinary EMPTY
-THREAD returns add three instructions on scratch, local, discard and nonfinal
-binding paths, and one on redirect-discard. GENERAL paths save five. Root and
-an independent peer approve a bounded correction for the three existing
-retirement APIs and three missed source-test consumers. The correction has independent source GO and is integrated as `a6695887e94`;
-20 bounded source checks and three affected generated-case methods pass.
-Regeneration changes no products; both refreshed builds pass 117/79, 46 focused
-and 708 runtime/reader methods per role. The
-original ELF and failed paths remain sealed. Revised source still needs its own
-native qualification and unchanged hot8 screen; no improvement or selection
-claim is made. B remains a source proposal.
+Unit A is qualified at `a6695887e94` but rejected as a standalone executable.
+Both builds pass 117/79, 46 focused and 708 runtime/reader methods per role.
+Independent source/native/ABI and a fresh actual private-retirement receipt pass.
+Its stable hot8 screen cuts coroutine elapsed time 39.3%, comprehensions 2.7%
+and DeltaBlue 1.0%, but logging loses 16.2% and generators 5.5% in both pairs.
+No cause is established. B's already reviewed continuation is now in source
+implementation; it has no new runtime or performance result. Selected57 remains
+unchanged; no larger campaign follows the losing A screen.
 
 | Packet | Current result |
 | --- | --- |

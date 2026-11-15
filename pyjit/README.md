@@ -14,9 +14,12 @@ compact execution domain failed its native net-work gate. Complete deferred
 await passes lifecycle/native gates and cuts coroutine time 42.9%, but loses
 logging 27.7% and generators 5.2%; it is rejected as a standalone executable.
 Round65 first partitions return/retirement and uses proved embedded access;
-its optional second unit moves private SEND-yield handoff out of ordinary YIELD. Both fixed-role trials are rejected; no round64 runtime is selected.
+its first unit passes qualification but loses logging 16.2% and generators 5.5%
+in its own screen. The second unit now moves private SEND-yield handoff out of
+ordinary YIELD, subject to complete qualification and its own screen. No round64
+or round65 runtime is selected.
 The [trial report](issues/register-semantics59/report.md) records rejected
-round59–63 candidates; selected57 remains unchanged. The preceding
+round59–65 candidates; selected57 remains unchanged. The preceding
 [parity design](design/proposals/interpreter-parity58.md),
 [research ledger](issues/interpreter-parity58/research.md) and
 [workstream](issues/interpreter-parity58/README.md) retain the earlier diagnosis;

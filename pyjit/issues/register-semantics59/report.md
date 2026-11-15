@@ -1,23 +1,14 @@
 # Semantic IR trial results
 
-Latest completed cycle: [round64 await](#deferred-await64-qualified-mechanism-rejected-executable)
-passes lifecycle/native gates and cuts coroutine elapsed time 42.9% against
-selected57, but loses logging 27.7% and generators 5.2%. Reject the standalone
-executable; selected57 remains unchanged. Compact64 failed its native work gate.
-The completed [round65 review](review65.md) orders a return/accessor boundary
-change and an optional private SEND-yield continuation. Original A passes both
-builds and focused checks, but cold native review is NO-GO: ordinary EMPTY
-THREAD cleanup adds three instructions on scratch, local, discard and nonfinal
-binding paths, and one on redirect-discard; GENERAL paths save five. Root and
-an independent peer approve a bounded correction for the three existing
-retirement APIs and three missed source-test consumers. Its source patch has independent GO and is integrated as `a6695887e94`, with
-20 bounded source checks and three affected generated-case methods passing. The
-rejected ELF and paths remain sealed. Corrected A still needs native
-qualification and its own hot8 decision; no improvement or selection claim
-exists. B remains a source proposal.
-No new upstream or full-system result is claimed for this rejected cycle.
-The sections below retain each
-attempt's evidence and decision.
+Latest completed unit: round65 A passes source, runtime and native qualification,
+but loses its standalone hot8 screen: coroutine time falls 39.3%, while logging
+loses 16.2% and generators 5.5% in both pairs. Reject the executable; selected57
+remains unchanged. The already reviewed private SEND-yield continuation B is
+now active under [design65](../../design/proposals/interpreter-parity65.md) and
+[review65](review65.md). It must earn complete ownership/control closure, native
+gates and its own screen. No cause of the broad regressions is established.
+No confirmation, all29, direct-upstream, PMU or full diagnostics follows this
+losing screen. Earlier completed attempts and sealed evidence remain below.
 
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
@@ -27,49 +18,82 @@ loses every screen. [Round61](../../design/proposals/interpreter-parity61.md)
 tests producer/role contracts and complete creation/delegation transitions. These are incremental
 results, not a completed parity cycle. All four round62 candidates and both
 round63 fixed-role trials are rejected. The compact64 executor stops at its
-native net-work gate; complete deferred await is in isolated integration under
-the [round64 design](../../design/proposals/interpreter-parity64.md) and
+native net-work gate; complete deferred await qualifies and loses its screen
+under the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
-## Round65 return/accessor boundary: original executable rejected; correction under review
+## Round65 return/accessor boundary: qualified mechanism, rejected executable
 
-Integration `ee0e77046591f39079b663160e8011ac1b29df76` changes existing complete
-RETURN recipes to a THREAD branch and one owned-result resumable helper. State-
-proved embedded accesses avoid selecting an active view. No new return opcode,
-classification pass or frame field is introduced. Source and generated peers
-find no blocker. Both `parity65-residence2` builds pass 117/79, and all 46 focused
-methods pass per role, including sixteen await lifecycle methods and public
-generator construction from ordinary code. Another 708 runtime/reader methods
-pass per role, with thirteen release and twelve debug skips. Cold native
-review rejects this executable: EMPTY paths add three instructions on ordinary
-scratch/local/discard/nonfinal-binding cleanup and one on redirect-discard;
-GENERAL paths save five. The ELF and path evidence are retained. Do not run
-target GDB or a benchmark for this executable.
+Final integration `a6695887e949c3019216120c544e171dfa7ff90e` changes existing
+complete RETURN recipes to a THREAD branch and one owned-result resumable
+helper. State-proved embedded accesses avoid selecting an active view. The
+three retirement APIs consume the reached residence proof, retaining the
+existing clear engines, profiling update and live parent after callbacks.
+No new return opcode, classification pass or frame field is introduced.
 
-The first generated draft was rejected before compilation: the pure embedded
-cast was absent from the generator's nonescaping-function set, which added
-owner restaging and phase clears to YIELD. Source correction `04e0b8a6c2c`
-declares that effect and adds an emission regression. All nineteen bounded
-source checks pass; final generation changes only four RETURN bodies and the
-getter names in four YIELD bodies. Metadata and other products are unchanged.
-Evidence and both rejected/final product diffs are retained under
-`E59/boundary65-source-host`; builds and focused logs use `parity65-residence2`.
+Independent source/generated reviews pass. Both `parity65-residence3` builds
+pass 117/79, all 46 focused methods per role including sixteen await lifecycle
+methods and public generator construction from ordinary code, and 708 runtime/
+reader controls per role (thirteen release and twelve debug skips). All twenty
+bounded source methods and three affected generated-case consumers pass.
+These are focused integration checks, not a fresh full-system qualification.
 
-Root and an independent peer approve a bounded correction proposal retained in
-`E59/boundary65-source-host`. It narrows the two existing result-clear API
-contracts to their reached THREAD branch and lets ReturnResumable consume its
-existing AWAIT/GENERATOR branch. It keeps the generic reason-bearing dispatcher
-and existing clear engines. The header contracts, wrong-residence source
-mutation and three affected `test_generated_cases.py` consumers are in scope.
-The four-file source correction `8ed034598b3` has independent actual-source GO
-and is integrated as `a6695887e94`. All 20 bounded source checks pass, and the
-three affected generated-case methods pass after reproducing the stale-fixture
-failures. Regeneration changes no products. Both refreshed `parity65-residence3` builds
-pass 117/79, 46 focused and 708 runtime/reader methods per role. Root owns final
-native qualification. Revised A must pass native qualification and its own hot8 screen. The
-original executable remains rejected; the correction has no qualification or
-performance result yet.
+The first generated draft was rejected before compilation because a missing
+nonescaping declaration restaged YIELD's taken owner. Source `04e0b8a6c2c`
+repairs the declaration and adds an actual-emission regression. Final generation
+changes only four RETURN bodies and getter names in four YIELD bodies; metadata
+and other products are unchanged. The first compiled integration `ee0e7704659`
+then fails the native gate: EMPTY retirement still rediscovered residence in a
+generic helper, adding three instructions. Preserve its source branch
+`pyjit/parity65-residence-initial`, captured ELF and rejected path evidence.
+
+The independently peered four-file correction `8ed034598b3` narrows the existing
+API contracts, adds a wrong-residence mutation negative and updates three
+missed generator-source fixtures. Root integrates it as `a6695887e94`;
+regeneration changes no products. The corrected cold native review passes:
+complete EMPTY scratch/local/discard/nonfinal paths save five instructions,
+GENERAL saves seven, and redirect/rooted reentry variants also shrink. Ordinary
+THREAD stack does not grow; generic CALL normalizes equal and exact/general/
+binder paths retain their bounds. Admitted generator entry has zero active-view
+selections with 32 B local stack. Complete ordinary generator-return wrappers
+cost 64+G versus await9's 79+G GENERAL/75+G EMPTY, where G is the identical actual
+clear/completion interior. Text adds 1,664 B versus await9, within the 2 KiB cap.
+Private-await clearing adds 32 B simultaneous helper stack versus await9; that
+cost is retained in the ledger. These static facts establish no dynamic
+frequency or cycle explanation.
+
+`parity65-residence3-native/manifest.json` pins ELF SHA256
+`314e32ec75c112095a16deb5ffeede5913b8991760cb312ef432c9c08d057a73`.
+The independent final report and path evidence are under
+`boundary65-source-host/unit-a-corrected-native-cold-review.md` and
+`native-cold65-corrected`. Root's fresh `retirement65-native-controls/natural1`
+receipts link an actual private child to its identity-free NORMAL_RETURN and
+completed retirement on this exact binary. Independent ABI and receipt peers
+pass. This is one transaction, not new suspension/OOM/frequency evidence.
+
+The balanced, identity-stable 32-row hot8 screen is
+`parity65-residence3-eight-selected57`; no failure or postflight error occurs.
+Ratios are elapsed-time geometric means, below one is faster:
+
+| Workload | Candidate / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.972740 | 0.951365–0.994596 |
+| deltablue | 0.989654 | 0.984450–0.994885 |
+| coroutines | 0.606811 | 0.604728–0.608901 |
+| generators | 1.055271 | 1.051395–1.059162 |
+| logging_silent | 1.161661 | 1.161023–1.162298 |
+| raytrace | 0.980528 | 0.979084–0.981975 |
+| spectral_norm | 0.991837 | 0.989236–0.994445 |
+| nqueens | 0.999876 | 0.997984–1.001771 |
+
+Root rejects the standalone executable: logging and generators lose both pairs.
+No confirmation/all29/direct-upstream/PMU/full-system campaign follows. Preserve
+`pyjit/parity65-residence-integrated` at the final head. No new upstream result
+is inferred by multiplying historical ratios. The optional B continuation is a
+separate reviewed attempt, not evidence that its proposed mechanism caused or
+will repair these regressions. P and G start that attempt from the qualified A
+head; B still needs complete source, runtime and native qualification.
 
 ## Final loop-output binding: reject
 

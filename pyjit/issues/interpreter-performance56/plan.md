@@ -23,9 +23,12 @@ stable-frame deferred-await unit passes both builds, lifecycle and native gates.
 Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
 generators 5.2%; reject the standalone executable. The completed round65 review
 orders a bounded return/accessor refactor, then a conditional private SEND-yield
-continuation. A has its own native and hot8 decision; B is optional. Delegation
-spine, result continuation and
-anchored self have separate admission and cost gates. All round59–62 executables
+continuation. A passes native qualification but loses its own hot8 decision:
+coroutines .606811/selected57, logging 1.161661 and generators 1.055271. Reject
+the standalone executable; B now implements the already reviewed isolation
+hypothesis with complete reader/writer/control closure and its own gates.
+Delegation spine, result continuation and anchored self have separate admission
+and cost gates. All round59–62 executables
 and both round63 role trials remain
 rejected; selected57 is unchanged.
 Earlier source and evidence remain inputs, not prerequisites.

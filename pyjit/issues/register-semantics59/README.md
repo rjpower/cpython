@@ -10,14 +10,13 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity68.md) and
 [review68](review68.md) recommend one retained-generator-delegation unit.
-Independent architecture, exact source-contract and generated-product approval
-pass. Complete entry, yield, lifecycle and reader source is integrated in G at
-`27521e23fab`; both tests14 builds pass117/79 and all 26 focused methods per
-role pass, with one debug-only skip in release. Native depth2/8/32 and VM SEND/FOR controls observe direct retained entry
-and yield without intermediate delegate dispatch. Six allocation faults preserve
-behavior. Corrected remote/host source tests pass. Complete native/lifecycle qualification is in progress; no performance
-or broad qualification is claimed. See the [trial report](report.md) for evidence
-and the [handoff](../../HANDOFF.md) for paths and commands.
+Complete source, behavior and native mechanism qualification pass at G
+`c02cebf80c4`. Final15 builds each pass 117/79 and all 50 focused methods per
+role pass, with one release debug-only skip. The unchanged protected hot8
+screen rejects selection: generators 0.708007 and spectral_norm 0.892976 improve,
+but DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007 fail protection.
+Selected57 remains unchanged; next grouped review is pending. The [trial report](report.md) owns qualification and limits;
+[handoff](../../HANDOFF.md) owns paths and commands.
 The [implementation contract](retained-delegation68.md) and
 [source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
 Both round67 candidates qualify but lose their screens: A hot8
@@ -49,7 +48,7 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `27521e23fab`; builds/focus pass, native controls in progress |
+| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `c02cebf80c4`; qualified; protected hot8 rejected, frozen |
 | Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; complete source frozen; actual ELF readback |
 | Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; source/product GO; qualification coverage review |
 | Independent Sol peers | Actual-diff cross-review | Complete source/products GO; native qualification pending |

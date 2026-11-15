@@ -14,8 +14,11 @@ The [round68 proposal](../../design/proposals/interpreter-parity68.md) and
 [review68](../register-semantics59/review68.md) recommend one retained-generator-
 delegation unit from selected57. Independent architecture and exact source-
 contract approval pass. Complete entry, yield, lifecycle and reader source is
-integrated; both builds and 26 focused methods per role pass. Root qualifies
-actual native mechanism and lifecycle boundaries before timing. Retain real
+integrated and qualified; the unchanged protected hot8 screen rejects selection.
+Generator elapsed improves 29.2% and spectral_norm 10.7%, but DeltaBlue 10.1%,
+coroutines 7.2% and logging 23.9% losses fail protection. Preserve the qualified
+mechanism/evidence and stop without rescue. A next grouped Astra review must
+select concrete adjustments from these results before source work resumes. Retain real
 owning frames and ancestor prefixes, enter the current leaf directly, and update
 only changed delegation suffixes.
 Price the common membership pointer, ordinary generator costs, materialization,

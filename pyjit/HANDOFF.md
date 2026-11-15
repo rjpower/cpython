@@ -18,48 +18,50 @@ the changed suffix. The grouped architecture and exact
 [implementation contract](issues/register-semantics59/retained-delegation68.md)
 have independent approval. No second unit is active.
 
-G integrates the complete retained-entry, private native-resume, yield,
-lifecycle and reader source at `bf86c69dca817739d03ffe2bd6ecc53a8572bb96`.
-Test-only corrections advance G to `27521e23fab`; both tests14 builds pass117/79.
-Independent source and generated-product review pass. Active13b release and
-debug builds each pass 117 modules/79 shared extensions; all 26 focused methods
-pass per role, with one debug-only skip in release. Counts are 16 delegation,
-seven lifecycle and three remote methods. The stopped-reader method contains
-27 cases, four valid and 23 refusals; do not count those as methods.
+G integrates complete source and test corrections at
+`c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Source, generated-product and
+native/control reviews pass. Final15 release/debug builds each pass 117/79;
+all 50 focused methods pass per role (30 unit and 20 IR/copy, one debug-only
+skip in release). Related integration passes 13 modules per role and the full
+remote/delegated pair's 84 methods per role. Both current trace runs retain
+exactly the six inherited debugger-jump errors.
 
-The first generated product was rejected for indentation drift and corrected
-before compilation. Exactly seven of 329 concrete handlers change; the other
-322, prefix and labels remain byte-identical. Register-IR metadata is unchanged.
-The conservative PC effect removes one unsupported legacy YIELD_VALUE expansion
-row; no supported tier2 qualification is claimed.
-
-Debug native mechanism controls at depths2/8/32 and release depth8 observe39
-retained entries/yields each, with zero intermediate delegate dispatch,
-materialization or allocation while armed. Six actual direct-backend NULL
-faults preserve behavior. VM SEND/FOR positive controls pass. Actual Tree prefix
-and recursion-boundary qualification remains in progress. There is no performance
-result or selection. Selected57 is unchanged.
+The protected hot8 screen in `E59/retained68-hot8-selected57-screen` completes
+32 successful rows with stable identity: GM 0.989788, generators 0.708007,
+spectral_norm 0.892976, DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007.
+Protection fails. Root rejects selection with no confirmation/all29/PMU/full/
+timing rescue. Keep G/builds/controllers frozen; preserve the qualified mechanism
+and all failures/results. Selected57 remains unchanged. Next grouped Astra
+review is pending; no new implementation unit is authorized yet.
 
 | Owner | Current boundary |
 | --- | --- |
-| Sol-high source | W, `pyjit/parity68-retained-delegation`; complete source frozen, actual ELF structure/cost readback |
-| Sol-high remote | P, `pyjit/parity68-delegation-remote-readers`; source/product approval, independent qualification coverage review |
-| Root | G, `pyjit/parity68-retained-delegation-integrated`, `27521e23fab`; tests14 builds/focus pass, serialized native controls |
-| Astra | Grouped review68 `183447221537190a4ac1003026f554dbaf428a3d`, integrated in C `29a016e656d`; no inner-loop work |
+| Sol-high source | W, clean `ffe43426f9d`; final native decoded-body/identity readback complete, CPU checks paused |
+| Sol-high remote | P, clean `dfeaa9c7a8c`; source/control postreviews complete; independently audit screen |
+| Root | G, clean `c02cebf80c4`; qualified; screen rejected, selected57 unchanged |
+| Astra | Grouped review68 delivered; no inner-loop work |
 
-Build/focus manifests use `E59/parity68-active13b-*` and `parity68-tests14-*`.
-Broader integration logs retain the six baseline trace errors, initial nonexistent
-module selection and corrected parser/remote test failures. Thirteen related
-modules pass per role; the ten affected tests pass both roles after correction.
-The relocated source-parser method passes root's host execution. Source changes
-since active13b are test-only; native captures retain their actual earlier ELF
-identity rather than being relabeled.
-Root native controls, receipts and exact commands live in
-`E59/retained-delegation68-native-controls`. Preserve earlier failed compile,
-fixture and generated-product attempts under their original tags. Corrected
-closure9c's 17-method inert coverage overlaps this active checkpoint; do not
-add counts. Seven lifecycle methods also pass immutable selected57 and upstream
-release baselines through their own libraries.
+Logs/manifests use `E59/parity68-final15-*`; earlier corrected test-only
+checkpoints use `parity68-tests14-*`. Preserve all original failed compile,
+fixture, generated-product and broader selection attempts. The first source
+product was rejected for indentation drift before compilation. Corrected
+products change exactly seven of 329 concrete handlers; register-IR metadata
+is unchanged. One unsupported legacy YIELD_VALUE expansion row is removed by
+the conservative PC effect, with no supported tier2 qualification claim.
+
+Root controls and exact commands are in
+`E59/retained-delegation68-native-controls`. Summary/readback includes
+`active13b-mechanism-summary.json`, `tests14-tree-debug.json`, native entry
+failure receipts and `final15-screen-admission.json`. Tree preserves one
+record/root through 251 committed events and the count1 own-yield/resume/right
+append. Source plus actual decoded code proves no steady ancestry loop/stores;
+equal snapshots alone do not. Final release ELF is
+`4b5bd3abfc74eab6a40cd6a16e71ccd31b8d9992d8e3e6b80707d15b8156eb92`;
+debug is `1b6d89a30e6c5aa1683b5b50391a06b79cfe7a6954e64421bb279fd2157dc3d3`.
+`static-final15.md` compares all 51 release/58 debug saved function listings
+exactly with the earlier stamp. Do not infer entire .text byte identity or
+relabel earlier dynamic receipts as current-stamp execution. The final release
+steady depth8 control separately passes the exact current image.
 
 Source receipts live in `E59/retained-delegation68-{source,frame,remote}-host`;
 independent cross-review is in `E59/retained-delegation68-closure-peer`.

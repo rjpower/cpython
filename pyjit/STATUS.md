@@ -5,36 +5,37 @@
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
 The active runtime is selected57 at
 `0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
-tag `pyjit-golden-20261114-dictionary-readers`. No round67 candidate replaced
+tag `pyjit-golden-20261114-dictionary-readers`. No round67 or round68 candidate replaced
 it.
 
-The grouped [round68 proposal](design/proposals/interpreter-parity68.md) and
-[review](issues/register-semantics59/review68.md) are delivered. Independent
-architecture and exact source-contract approval pass for one retained-generator-
-delegation unit. The common loop proof, inert materializer, generator consumers,
-engine ingress/error ports, cold frame publication/copy/native readers,
-observer invalidation, return-suffix retirement and remote readers have
-independent source approval and are integrated in G. Corrected closure9c builds
-pass 117 modules/79 shared extensions and all 17 focused methods per role,
-including 27 stopped-snapshot cases within one remote method.
-Complete entry/yield source now has independent approval and is integrated in G
-at `bf86c69dca8`, with corrected generated products. Both active13b builds pass
-117/79, and all 26 focused methods pass per role
-(one debug-only skip in release). Independent generated-product review passes.
-Seven lifecycle methods also pass both immutable release baselines. A first
-debug native controls at depths2/8/32 observe direct retained entries and yields
-without intermediate delegate dispatch; all six direct-backend allocation faults
-preserve behavior. Complete native qualification is in progress.
-Broader checks pass13 related modules per role. Two corrected inspection tests
-and eight delegated-yield tests now pass per role; the relocated strict source
-mutation test passes on the host. Current G is `27521e23fab`; both tests14 builds
-pass117/79. These test-only corrections preserve remote refusal and generator
-validation. VM SEND/FOR controls also confirm direct retained entry. Actual Tree
-prefix retention and recursion-boundary controls remain pending. No performance result or broad qualification is claimed.
-Selected57 remains unchanged. Root owns integration,
-qualification and measured selection. Details are in the
-[trial report](issues/register-semantics59/report.md) and [handoff](HANDOFF.md).
-The report also retains both rejected round67 candidates.
+The grouped [round68 proposal](design/proposals/interpreter-parity68.md) is
+implemented, qualified and rejected by its protected hot8 screen. Current G is
+`c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Independent source, generated-product
+and native/control reviews pass. Final15 release/debug builds each pass 117/79,
+and all 50 focused methods pass per role (one debug-only skip in release).
+Related integration passes 13 modules per role plus the full remote/delegated
+pair's 84 methods per role. The six inherited debugger-jump errors remain exact
+in both roles; no fresh full-system pass is claimed.
+
+Native controls establish zero intermediate delegation handlers at depths2/8/32,
+direct VM SEND/FOR entry, all six direct-backend NULL fallback cases, numeric
+native recursion/error cleanup, and the actual unchanged Tree's retained count1
+own-yield/resume/right-append cycle. Real RUNNING remote reads/refusal and
+parked-owner profile changes pass. Suspended remote coverage combines source,
+synthetic reader cases and actual Tree suspended images; no separate suspended
+remote-process sample is claimed.
+
+The final native functions match the reviewed bodies. Main release .text grows
+13,120 B, native generator-entry stack grows, and every generator subtype pays
+an 8 B membership pointer. Those costs are charged; they predict no speedup.
+The stable 32-row screen has GM 0.989788, but DeltaBlue 1.101089,
+coroutines 1.072083 and logging 1.239007 fail protection. Generators 0.708007 and
+spectral_norm 0.892976 improve; this does not offset protected losses. Root stops
+without confirmation, all29, PMU, full suite or timing rescue. There is no fresh
+upstream result or parity claim. A next grouped review must address the actual
+new evidence; no new implementation lane is approved yet. The [trial report](issues/register-semantics59/report.md)
+owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
+Selected57 remains unchanged.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

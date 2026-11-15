@@ -15,9 +15,10 @@ The selected runtime remains selected57. Round67's two independently qualified
 source candidates both lost their screens and were rejected. The grouped
 [round68 proposal](design/proposals/interpreter-parity68.md) advances retained
 generator delegation through independent architecture and source-contract
-approval. Complete entry, yield, lifecycle and reader source is integrated;
-both builds and 26 focused methods per role pass. Native qualification is
-in progress. Selected57 remains the runtime baseline.
+approval. Complete source, behavior and native mechanism qualification pass,
+but protected hot8 losses reject selection despite a 29.2% generator elapsed
+gain. Selected57 remains the runtime baseline. The next grouped review will
+use these results before any further implementation.
 The [trial report](issues/register-semantics59/report.md)
 owns current qualification, rejected trials and retained evidence.
 

@@ -1,5 +1,71 @@
 # Semantic IR trial results
 
+## Round68: qualified mechanism, protected screen rejected
+
+The complete candidate is G `c02cebf80c48d47a9167dd86dce9bdc0fd11a623`.
+Final15 release/debug builds each pass 117 modules/79 shared extensions; all 50
+focused methods pass per role (30 unit and 20 IR reentry/semantic/copy methods,
+one debug-only release skip). This includes shared receivers, a true receiver
+cycle and foreign parked-owner profiling. Related integration passes 13 modules
+per role, plus 84 methods per role in full remote/delegated modules. Both trace
+runs retain exactly the six inherited jump errors. No fresh full-system pass.
+
+Independent actual native/control postreviews approve the unchanged Tree's
+251 committed events: 62 appends, 62 pops, 63 yields, 63 native resumes and final
+retirement. One record/root survives throughout, including count1 plain own
+yield, numeric native resume and right append. Older link/frame prefixes stay
+equal; the native code separately proves no ancestry loop/per-member stores.
+Both reached native error controls pass: eight-member R7 fallback materializes
+without a retained debit and restores the exact budget after ordinary failure;
+early C-entry error restores the soft limit before cleanup with unchanged
+Python budget/hard limit. Both restore external frame/exception state, clear
+memberships, preserve errors and never replay a value.
+
+Real RUNNING remote controls pass both roles: four stopped stack samples and
+two explicit nonblocking refusals per role, cache off/on. A stopped debugger
+positively observes the actual refusal at RUNNING count7/debt7/even sequence18;
+the eighth ordinary leaf is unadmitted, so this is not a zero-dispatch control.
+Suspended remote coverage is source proof, 27 synthetic reader cases and actual
+Tree suspended images, not a separate suspended remote-process sample.
+
+Final native readback pins release ELF
+`4b5bd3abfc74eab6a40cd6a16e71ccd31b8d9992d8e3e6b80707d15b8156eb92`
+and debug `1b6d89a30e6c5aa1683b5b50391a06b79cfe7a6954e64421bb279fd2157dc3d3`.
+All 51 release/58 debug captured decoded functions exactly match the earlier
+reviewed bodies. The stamp-to-stamp source delta is test-only; runtime/product
+hashes match. Main .text grows 13,120 B release/20,096 B debug versus selected57.
+Native gen_send_value own stack grows 24→72 B, gen_send_value_ex 72→88 B; universal
+8B membership/init and optional 136–1096 B record/link storage are charged. These
+facts predict no speedup and establish no whole-.text identity.
+
+Root freezes qualification and limits in
+`retained-delegation68-native-controls/final15-screen-admission.json`. The single
+unchanged two-pair hot8 screen completes in
+`E59/retained68-hot8-selected57-screen` with 32 successful rows and stable
+source/native identities. The aggregate hot8 GM is 0.9897878571052993:
+
+| Workload | Candidate / selected57 | Pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.989150881 | 0.962908–1.016109 |
+| deltablue | 1.101088734 | 1.098108–1.104077 |
+| coroutines | 1.072082993 | 1.068920–1.075255 |
+| generators | 0.708007467 | 0.707177–0.708839 |
+| logging_silent | 1.239006537 | 1.187297–1.292968 |
+| raytrace | 1.001915685 | 0.998443–1.005401 |
+| spectral_norm | 0.892976025 | 0.891709–0.894245 |
+| nqueens | 1.005174110 | 1.001595–1.008766 |
+
+GM and improvement predicates pass; all-means, logging and all-pairs protection
+fail. Root rejects selection without confirmation, all29, PMU, full suite or
+timing rescue. This is a qualified mechanism success and measured protected
+rejection, not an implementation failure. The generator elapsed gain is 29.2%
+and spectral_norm 10.7%; they do not offset DeltaBlue 10.1%, coroutines 7.2% and
+logging 23.9% losses. No fresh upstream comparison or quantitative cause is
+established. Earlier upstream ratios must not be multiplied into a current
+parity claim. Selected57 remains unchanged. A next grouped review must choose
+concrete adjustments from the complete evidence before implementation resumes. Source/control receipts, old failures and exact earlier-
+image limits remain below and in the execution handoff.
+
 ## Round68 complete source integration
 
 The VM entry/allocation helper, private native entry, yield helper and checked
@@ -46,7 +112,7 @@ cleanup. Both failed and passing baseline receipts are retained in
 `E59/retained-delegation68-native-controls`. All seven also pass both candidate
 roles in active13b.
 
-Broader active13b integration passes13 related modules in each role but was
+Broader active13b integration passes 13 related modules in each role but was
 not clean. Both roles timed out in the nonblocking nested-generator exception
 sampler, while the exact immutable selected57 method passed. Source review
 confirms the reader refuses live retained membership as required; the test
@@ -60,7 +126,7 @@ receipts and unread-cursor rejection remain covered. Root executes the relocated
 host method successfully.
 
 These test-only corrections integrate as `4ae62c9903d` and `27521e23fab`.
-Both tests14 builds pass117/79, and both roles pass all ten affected runtime
+Both tests14 builds pass 117/79, and both roles pass all ten affected runtime
 methods: eight delegated-yield and two remote inspection methods. Six
 sys_settrace errors remain the inherited debugger-jump baseline. Root also
 included a nonexistent test_frame_locals module in the first release selection;

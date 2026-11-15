@@ -1,7 +1,7 @@
 # IR59 execution logistics
 
-Inventory only, 2026-11-14. No build, interpreter probe, test, timing or PMU job
-was run for this note. Root owns those jobs and selection. Read the
+Execution guide, 2026-11-14. The [trial report](report.md) owns completed build,
+qualification and timing evidence. Root owns those jobs and selection. Read the
 [handoff](../../HANDOFF.md) before execution; canonical C source is stale.
 
 ## Fixed control and candidate
@@ -34,11 +34,16 @@ campaign rather than assuming the preserved path still contains those bytes.
 
 ## Configure, generate and qualify
 
-Root is configuring `reg59-results-{release,debug}` sequentially from the exact
-respective selected57 configure arguments. Retain GCC, mimalloc, computed-goto,
+`reg59-results-{release,debug}` are configured from the exact respective
+selected57 configure arguments. Retain GCC, mimalloc, computed-goto,
 shapes, dependency flags and frame-pointer options. The old debug configuration
 also includes `--with-pydebug` and `CFLAGS=-O1 -g`; do not substitute release
 flags. Existing configurations are recorded in each old Makefile's CONFIG_ARGS.
+The relocated module-specific dependency flags are also required: config.args
+alone loses them because the devlibs pkg-config files retain `/usr` prefixes.
+The first failed build and durable config.status/Makefile.pre repair are recorded
+in `E59/configure-module-relocation.json`; all module flag variables and all
+core/compiler flags now match selected57. Do not copy its source/build paths.
 
 Root's `C/pyjit/issues/call-model55/run-checks.py` extension accepts paired
 `--source`/`--build-prefix` and `--evidence-root`; its defaults still target I.
@@ -98,7 +103,7 @@ UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B "$MEASURE" \
   --candidate "$BASE/reg59-results-release" \
   --control "$BASE/call55-integrated-release" --control-role golden \
   --control-head 0dcba75bb3df40c32137db453b001f7e8f101de0 \
-  --module-log "candidate=$E59/reg59-results1-release-build.log" \
+  --module-log "candidate=$E59/reg59-results1-retry-release-build.log" \
   --module-log "golden=$BASE/pyjit-link-wave1/call-model55/comp57-dictionary-release-build.log" \
   --output "$E59/results1-eight-selected57" --cases "$CASES" --rounds 2 --cpu 15
 ```

@@ -3,7 +3,8 @@
 Status: active on 2026-11-14. Selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0` remains the runtime baseline.
 The coordinator owns native jobs, integration and measurement. No round59
-candidate is integrated yet. The [ordered design](../../design/proposals/register-semantics59.md)
+candidate is selected. The first executable is rejected; the
+[trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen. The
 [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
@@ -27,12 +28,12 @@ remain evidence; they are not proposed anew.
 | Owner | Deliverable | State |
 | --- | --- | --- |
 | Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Complete; six ordered trials frozen |
-| Independent peer | Check the actual semantic/physical boundary and first lane before implementation; post-review actual diffs | Source review active |
-| Implementation worker | Bounded reviewed runtime changes in a clean component worktree | First final-output binding admitted with explicit source vacate; implementation active |
-| Measurement worker | Reuse existing exact-identity harness and controls, retaining selected57 | Read-only logistics active; no native jobs |
+| Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | First actual-diff review GO; builder cleanup source GO |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Builder source complete; native Invoke implementation active; continuation proposal active |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | First hot-eight screen complete; losing executable rejected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 
-First candidate: explicit BODY-edge result placement for admitted local
+First rejected candidate: explicit BODY-edge result placement for admitted local
 FOR_ITER_LIST destinations. Semantic outcomes already define the body result;
 the missing binding is in generator storage lowering. Remove the intermediate
 window publication/move only, preserving current acquisition, canonicalization,
@@ -45,10 +46,10 @@ The binding must be reusable and must not be an opcode-specific generator bypass
 
 | Trial | Adjustment | State |
 | --- | --- | --- |
-| 1 | Bind a BODY result at final publication, independent of its staging cell | Peer admitted with VACATE_SOURCE; implementation active |
-| 2 | Separate builder input-span geometry from result allocation; FOR family follows only with complete fallback support | Independent worker preparing concrete allocator/admission proposal |
-| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Frozen architecture; implementation not started |
-| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | Frozen architecture; implementation not started |
+| 1 | Bind a BODY result at final publication, independent of its staging cell | f61edc21 passes generation, both builds and 37 focused methods/role; rejected by hot-eight screen |
+| 2 | Separate builder input-span geometry from result allocation; FOR family follows only with complete fallback support | d4584f8e45a passes generation, both builds and 207 focused methods/role; hot-eight screen running |
+| 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Concrete proposal reviewed; source implementation active |
+| 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | Concrete header/reader proposal complete; whole-path cost review active |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Frozen conditional trial; positive surviving opportunity required |
 | 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Frozen architecture; implementation not started |
 

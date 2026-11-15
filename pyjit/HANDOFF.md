@@ -6,8 +6,9 @@ it. Start with the [goal](GOAL.md), [active plan](issues/interpreter-performance
 [IR-semantics workstream](issues/register-semantics59/README.md) owns active work.
 Astra's [semantic/physical review](design/proposals/register-semantics59.md) is
 complete; an independent peer admitted the first explicit result-binding change
-with VACATE_SOURCE. Its implementation is active. Root owns serialized native
-jobs. No round59 runtime candidate is integrated. The preceding
+with VACATE_SOURCE. The first executable passes focused checks but is rejected
+by the eight-case screen; see the [trial report](issues/register-semantics59/report.md).
+Root owns serialized native jobs. No round59 runtime candidate is selected. The preceding
 [parity workstream](issues/interpreter-parity58/README.md) retains its review;
 its [design](design/proposals/interpreter-parity58.md),
 [research](issues/interpreter-parity58/research.md) and
@@ -17,8 +18,12 @@ runtime implementation or native campaign has begun. The completed
 Follow [process](PROCESS.md). The coordinator owns integration,
 qualification, measurement and selection.
 
-Round59 candidate source is `BASE/worktrees/call55-gc`, branch
-`pyjit/reg59-results`, initially selected57. Builds are
+Round59 candidate source G is `BASE/worktrees/call55-gc`, currently branch
+`pyjit/reg59-builders` at `d4584f8e45abeafaf0e919111e7fb5b86d7ab7a9`.
+The separate `pyjit/reg59-results` branch preserves rejected `f61edc21a4e`.
+Builder full generation, both 117/79 builds and 207 focused methods per role
+pass; its eight-case screen is running under `E59/builders2-eight-selected57`.
+Builds are
 `BASE/reg59-results-{release,debug}`, configured with the respective exact
 selected57 flags. Evidence is `BASE/pyjit-link-wave1/register-semantics59`.
 **Keep call55-integrated and both existing builds frozen at selected57**;
@@ -26,7 +31,12 @@ do not advance them for this cycle. Use the explicit source/build/evidence
 arguments documented in [measurement](issues/register-semantics59/measurement.md),
 not the check helper's default integrated path. The separate allocator proposal
 uses `BASE/worktrees/call55-ir`, branch `pyjit/reg59-edge-results`, initially
-selected57; prior worker branches remain preserved.
+selected57; its frozen source packet is `1b229867638`. Native Invoke's frozen
+five-path source is in `BASE/worktrees/call55-pins`, branch
+`pyjit/reg59-native-invoke`, pending integration into G. Its proposal and both
+actual source peers are GO; native products/tests/timing remain pending.
+The [continuation proposal](issues/register-semantics59/continuation-recipient-proposal.md)
+is under review. Prior worker branches remain preserved.
 
 ## Selected checkpoint and controls
 

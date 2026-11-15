@@ -46,3 +46,51 @@ The native acceptance gate is narrower than source line count: inspect actual el
 The current allocator intentionally uses canonical target names and contiguous scratch windows to make joins and prefix unwind correct (`regcfg.c:522,867,991`). Separating semantic values from homes must not remove those constraints before an equivalent EH and observer reconstruction contract exists. Call-window acquisitions cannot disappear merely by calling a local a virtual alias: overlapping child locals are owners today. A borrowed-argument rival would change lifetime/readers and remains a distinct experiment.
 
 The next reuse to examine after this packet is tuple/list BUILD success: the existing typed steal-on-success contract already identifies the point after inputs become dead and before final recipient publication. A final-output binding could remove result staging there while preserving allocation failure and input cleanup. It needs its own complete source/emitter proof and measured coverage. Generic native CALL is not automatically another staging opportunity: its selected transaction already has direct temporary publication and delayed local commit. Do not replace that delay with an early local write across callbacks or periodic failure.
+
+## Builder integration correction
+
+Root reviewed the complete compiler, geometry, constructor, outcome and emitter
+packet. Full generation changes only BUILD_LIST/TUPLE and their format rows.
+The initial native bootstrap rejects valid compiler images. Both workers
+independently reviewed the diagnostic path and the correction:
+
+- Consume a positive physical SET_NULL receipt instead of dropping it in an
+  UNKNOWN semantic row. This grants no general initialization/readability fact.
+- A fresh recipient requires logical vacancy/no outstanding owner; unlike an
+  in-place publication, it need not inspect the previous bits. The checked
+  `IR_STORE_FRESH_DST` short-circuits only the old scratch assertion. Existing
+  macros retain their behavior; result normalization, new-value checks, local
+  replacement and discard are shared.
+- The emitter selects this mode only after the actual successful-steal and
+  current-owner final receipt. Failure leaves inputs unchanged. The constructor
+  still rejects live owners and unknown logical state. A NO_HOME-only destination
+  may be written, while a preceding read remains rejected.
+
+Both actual source peers are GO. The four-method host gate passes after the
+associated fixture literals are ported; its first stale-literal failure is
+retained. Root's second full generation passes. Candidate `d4584f8e45a` is
+committed and both native builds are underway. No native test or performance
+pass is claimed yet. The [builder proposal](edge-results-proposal.md) owns the
+complete revised contract.
+
+## Explicit native Invoke source
+
+Root reviewed the actual source packet in `call55-pins` against selected57:
+five paths in bytecodes, analyzer/generator and two fixtures. Source GO, pending
+full generation, native qualification and post-review of actual emitted code.
+Two explicit markers consume one checked immutable input/result/retirement
+plan. The same vectorcall produces a separate result owner. NULL exits before
+any input retirement; success publishes B0 before closing callable, arguments
+descending and actual self. The absent-self gap remains untouched. The existing
+periodic check and delayed local/discard completion remain.
+
+The reservation audit supports omitting the second argument-clear pass: the
+parent's full slot extent remains reserved during callback reentry. No borrowed
+argument ABI, new provider or arbitrary scratch result layout is introduced.
+The source fixture checks actual NULL-error ordering and both execution variants.
+Root found that the first runtime root fixture retained another payload owner;
+the corrected fixture removes that owner and clears the source mapping during
+input retirement. The result must survive solely through the declared B0 root.
+The amended host source gate passes three methods. The
+[Invoke proposal](native-invoke-proposal.md) records actual source scope and
+pending gates; no runtime speedup follows from this source approval.

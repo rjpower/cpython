@@ -1,13 +1,17 @@
 # Register semantics and physical execution
 
-Status: proposed, 2026-11-14. The first trial below is ready for independent
-contract review; later trials are ordered proposals, not implemented features.
+Status: reviewed ordered trials, 2026-11-14. Trial 1 passes focused qualification
+but loses its performance screen and is rejected. Trial 2 is in native
+integration with the reviewed fresh-publication correction below; trial 3 is
+implemented in a separate source packet pending native integration. Later
+trials remain proposals. The [trial report](../../issues/register-semantics59/report.md)
+owns measured outcomes; this design does not imply selection.
 Selected57 (`0dcba75bb3df40c32137db453b001f7e8f101de0`) is the runtime baseline.
 The [review ledger](../../issues/register-semantics59/review-astra.md) separates
 source facts, retained measurements and hypotheses. The coordinator owns
 implementation, native measurements and admission.
 
-## First trial: bind a normal-edge result at final publication
+## First trial: normal-edge result binding (rejected executable)
 
 Freeze this narrow contract before broadening the design. A `FOR_ITER_LIST`
 BODY result already belongs to recipient A in `_PyIR_Outcome`. Its handler
@@ -254,6 +258,19 @@ bounds, legal input overlap and ownership instead. Update `_PyIR_Outcome`,
 `_PyIR_ObservedHomes`, definitions, physical transfers, absence and semantic
 admission for the changed shape together. An independent destination is not
 permission to overwrite a live owner.
+
+The first native bootstrap exposed a publication-contract mismatch: independent
+results were using the legacy macro's old-NULL/same-value assertion. Fresh
+scratch publication must instead be write-only after positive NO_HOME/no-owner
+admission, or after stealing and detaching an overlapping input. It grants no
+incoming NULL or readability fact. A compile-time fresh-publication mode keeps
+the existing normalization, new-value checks, local replacement and discard
+behavior without another clearing store or runtime mode branch. The concrete
+[builder contract](../../issues/register-semantics59/edge-results-proposal.md)
+and [trial report](../../issues/register-semantics59/report.md) own this reviewed
+correction and its native qualification. The losing FOR executable is removed
+from the independent builder candidate; its useful binding mechanism survives
+only through an active builder consumer.
 
 Concrete first allocation example: in `first, second = [], []`, the first
 scratch result remains live while the second builder folds to a local; the

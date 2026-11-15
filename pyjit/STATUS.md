@@ -10,7 +10,15 @@ direction, selected contracts and exact execution paths.
 The active [IR-semantics workstream](issues/register-semantics59/README.md) is
 revisiting semantic operations and their ownership/storage contracts with Astra,
 followed by peer-reviewed implementations and direct native comparisons. No
-round59 runtime candidate is integrated yet. The preceding
+round59 candidate is selected. The first executable result-binding trial passes
+focused qualification but is rejected: its two-pair screen loses coroutines
+8.7% and spectral_norm 31.5%, with comprehensions near flat. The
+[trial report](issues/register-semantics59/report.md) records exact evidence;
+the independent builder candidate passes generation, both 117/79 builds and
+207 focused methods per role and is entering its performance screen. Its
+fresh-result contract writes a positively vacant scratch home without reading
+old bits; the smaller empty-builder witness drops from two scratch cells to one.
+Native Invoke is source-reviewed pending integration. The preceding
 [parity workstream](issues/interpreter-parity58/README.md) has a completed
 Astra [architectural review](design/proposals/interpreter-parity58.md), a
 [source/native ledger](issues/interpreter-parity58/research.md) and

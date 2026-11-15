@@ -97,54 +97,39 @@ retirement. All ten are now retired; 12 current mirrors retain the goal → plan
 architecture/status chain. Canonical design/review evidence remains in git.
 
 
-## Pre-review followup priorities
+## Execution and delegation
 
-Current qualification and selection are complete. The next proposals use
-selected57 counters and the selected56 profiles for unchanged call/resume paths;
-no further implementation is part of checkpoint closure.
-The [independent cold review](review-integration.md) ranks five followups:
+The [IR-semantics workstream](../register-semantics59/README.md) owns the single
+ordered trial list. Its [design](../../design/proposals/register-semantics59.md),
+[peer review](../register-semantics59/peer.md) and
+[trial report](../register-semantics59/report.md) distinguish proposals, source
+packets, qualified executables and measured selections. The first loop-binding
+executable is rejected. Independent builder publication is qualified by focused
+checks and entering its performance screen; explicit native Invoke is source
+reviewed, and the continuation-action proposal is under review.
 
-| Priority | Hypothesis and first evidence gate |
-| --- | --- |
-| 1. Resume and delegated yield | Count common resume inputs, recipients, yields and slow exits. Remove one repeated operation across the existing checked transfer protocol; preserve observer and exception boundaries. SEND_GEN and delegated yield dominate generator samples, while terminal completion is only 1.90%. |
-| 2. Exact Python calls | Find repeated admission, binding, refresh or home work in compiled exact-call hits. Preserve overlap, independent function/code pins and callback-selected control; source-level repetition is insufficient. |
-| 3. Coroutine creation and retirement | Count copied homes, live owners, clear extents and callback-capable releases. Test one bounded construction/retirement hypothesis, rather than attributing the gap to zeroing or repeating a rejected broad constructor rewrite. |
-| 4. Guarded attribute-read hits | Measure repeated tag/type/shape and acquire/retire work in mono and PIC hits. Keep checked nomination, invalidation and pre-effect misses; logging's zero selector attempts rule out extra selector-loop execution there. |
-| 5. Next canonical producer | Count surviving publication/bridge work and post-pass temporary owners, then migrate one hot producer into the existing shared facts. The closed zero-candidate COPY morphology and zero hot-set CALL_EX sites do not justify more work on those slices. |
-
-Centralize compiler fact invalidation and meets when extending those contracts:
-canonicality, identity, ownership, nonnullness and readable homes remain distinct.
-Keep thin completion entries on one shared body. These are proposals requiring
-actual native removal, balanced elapsed results and broad regression checks;
-they imply neither a universal runtime call object nor a new frame ABI.
-
-
-## Pre-review regression lane and delegation
-
-Root owns integration, quiet timing and selection. Assign Sol workers disjoint
-proposals for (1) resume/delegated yield, (2) exact-call admission/binding, and
-(3) coroutine construction/retirement, with independent cross-review. Start
-only the lanes supported by dynamic counts; do not implement all ideas at once.
-A Terra/Luna documentation worker updates the affected as-built contract after
-integration. Astra reviews grouped architectural changes, not individual patches.
-
-Keep raytrace, spectral_norm and nqueens as regression sentinels alongside the
-focus six. Existing PMU distinguishes extra instructions from higher cycle cost;
-profiles do not yet isolate the culprit. A proposed fix must name and remove
-actual common-path work and preserve guard/effect/ownership contracts. Do not
-weaken the stronger element guard or specialize benchmark identities.
+Root owns integration, generation, serialized native jobs and quiet timing.
+Sol workers implement and cross-review bounded components in separate worktrees.
+Astra reviews the combined residual architecture after coherent measured cycles,
+not individual patches. Close conditional edge/borrow lanes without a new
+representation if the actual surviving census provides no consumer. Resident
+value/region proposals must state their reachable coverage and remaining native
+budget; a small pilot alone does not establish a path to parity.
 
 For each increment: propose → peer → implement → focused tests → actual-diff
-review → root integrate/hot comparison. Use coherent full suites at representation
-or final composition gates. Require stable exact-head/source/native identities,
-balanced pair ranges and direct broad comparisons before selection. If two
-bounded revisions remove no native work or show no measurable benefit, close
-that experiment. Do not reopen the rejected inline getter without a distinct
-hypothesis. Cross-CFG borrowing needs real eligible surviving opportunities.
+review → root integrate/hot comparison. Full suites belong at coherent protocol
+or final composition gates. Retain stable exact source/native identities and
+balanced pairs, and compare all29 directly before final selection. Preserve
+selected57, golden56, golden54 and upstream controls. Do not repeat a losing
+screen to search for a favorable result, tune handler padding, or weaken owner,
+readability or semantic admission checks.
 
-Only the existing GDB PrettyPrintTests class is quarantined. Six debugger-jump
-errors remain explicit. Do not call the complete suite green or convert cold
-profile samples into an additive savings budget.
+The hot set is comprehensions, DeltaBlue, generators and coroutines; logging,
+raytrace, spectral_norm and nqueens are regression sentinels. If a coherent cycle
+still misses upstream parity, commission another grouped Astra review of the
+actual remaining IR/interpreter costs and continue implementing measured winners.
+Only existing GDB PrettyPrintTests is quarantined; six debugger-jump errors
+remain explicit. Startup RSS and zero-box counts are not throughput gates.
 
 ## New comprehension evidence
 

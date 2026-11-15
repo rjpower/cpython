@@ -4,8 +4,8 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The current grouped design is [parity64](design/proposals/interpreter-parity64.md),
-supported by [review64](issues/register-semantics59/review64.md).
+The current grouped design is [parity65](design/proposals/interpreter-parity65.md),
+supported by [review65](issues/register-semantics59/review65.md).
 The [trial report](issues/register-semantics59/report.md) owns all measured
 outcomes, failures and selection decisions; this file owns execution logistics.
 
@@ -14,18 +14,18 @@ outcomes, failures and selection decisions; this file owns execution logistics.
 Selected57 remains unchanged. Every round59–62 runtime packet and both role63
 trials are rejected. PyValue integration is complete; parity is not achieved.
 Round64 is closed: compact fails its native net-work gate; complete await
-passes mechanism qualification but loses the broad screen. Continue the next
-grouped review, preserving both source branches and sealed evidence.
+passes mechanism qualification but loses the broad screen. Execute the reviewed
+round65 return/accessor unit, followed conditionally by its private SEND-yield
+continuation. Preserve both round64 source branches and sealed evidence.
 Source approval, native mechanism approval and measured selection are separate
 gates. Never import a rejected executable as a prerequisite.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol IR, P | Source `c82728bef30c8d144e3252a556a177d687d1e5ee`, clean on `pyjit/parity64-await-fixtures`; final ELF review GO in `E59/parity64-await9-native/native-review.md` |
-| Sol frames, W | Source `aadc5859c0fee328b76881217dcc7a87904d1d1b`, clean; SEND rewrite and terminal-phase corrections integrated |
-| Root, G | Clean `0bbb42ef46ab9c55996e9b507a528a12705eedf0`, branch `pyjit/parity64-await-integrated`; both await9 builds 117/79, lifecycle 16 pass per role, native entry/suspension/arena-OOM controls pass; hot8 rejects the broad executable |
-| Cold Sol | `E59/deferred-await-native-controls/cold-review9.md`: source GO; separate actual-ABI, controller and transaction receipt peers |
-| Astra | Grouped64 complete on `weaver/interpreter-parity64-astra`, final `62f9718e9d74c30a4808610500e8b61ee0e4fc80`, Loom channel `zfr7ow1e`. Integrated at `1b03334cab6` plus final clarification `d1137161d4e`; do not cherry-pick again |
+| Sol A, W | `/root/boundary65_returns`, branch `pyjit/parity65-residence-boundaries` from G `0bbb42ef46a`; implementing root/Astra-approved source proposal. Existing RETURN recipes and embedded accessors; owns shared bytecodes/generator until interface freeze |
+| Sol B, P | `/root/boundary65_continuation`, branch `pyjit/parity65-yield-continuation` from G `0bbb42ef46a`; complete continuation proposal and independent A peer. No B implementation before proposal GO/A native gate |
+| Root, G | Clean `0bbb42ef46ab9c55996e9b507a528a12705eedf0`, branch `pyjit/parity64-await-integrated`; both await9 builds 117/79. Qualified mechanism, rejected hot8. Preserve this branch before A integration |
+| Astra | Source `374f8e3eadbac12be504f70885fe3a2a196f8fc0` plus `ceb46447bb0ef5a48f2478ba5f62f842d43e9550`, branch `weaver/interpreter-parity65-astra`, Loom `zfr7ow1e`; integrated C at `f18cefa4449` and `ba7316040e9`. Do not cherry-pick again |
 
 Use existing Sol workers for component cross-review. Sending a message to a
 completed collaboration agent does not trigger a turn; use followup_task when
@@ -164,13 +164,39 @@ No new upstream performance claim is made. G/builds currently remain coherent
 and frozen; no target job is running. Before any next source change, preserve
 these branch/head identities and refresh both builds after integration.
 
-The next grouped review is requested on Astra Loom channel `zfr7ow1e`, message 13,
-with both compact and await outcomes and the complete native/measurement paths.
-It should propose concrete ordered changes to preserve structural activation
-savings without broad costs and address the unchanged hot4 gaps. Only its two
-review65 documents change on an isolated branch. Root owns peer review,
-integration, native qualification and publication. Do not reopen old losing
-packets as prerequisites or select await merely for its target gain.
+The final round65 design is integrated from the Astra source commits above.
+Root independently reviewed actual source and the proposal. A redundant cold
+classification pass/two private return aliases were removed because the public
+PyFrame/PyGen ingress still requires the same THREAD guard; they added no
+consumer/removal. Unit A changes existing complete RETURN recipes, takes and
+unlinks once, branches THREAD, and uses one owned-result resumable helper.
+It ports complete RETURN/YIELD source certificates and state-proved embedded
+accessors. Keep GENERAL versus EMPTY clearing authority separate.
+
+`E59/boundary65-source-host/unit-a-proposal.md` records the source proposal;
+its old pre-freeze classification dependency is superseded by the final design.
+`continuation-reader-census.md` inventories actual B readers/writers. Direct
+risks are completion arithmetic, copy, debugger/redirect and generated
+return/yield/observer recipes. Remote frame/async graph readers use real
+`instr_ptr` and `ir_words`, not `return_pc`; retain invariants/controls without
+an unrelated layout port. Census alone does not prove support.
+
+Unit B's private executable SEND-yield target must never become a semantic
+instruction address or reach generic SAVE_STACK/debug/source attribution.
+Port every actual return-PC reader/writer, preserve newer callback redirects
+and observer-required terminal detach, and keep YIELD nonraising. No ordinary
+header field, universal descriptor or per-code word mirror. Source contract
+work proceeds alongside A; shared integration is A then B. A has its own
+native and hot8 screen and may advance without B. A native failure stops A;
+a broad loss permits only the already reviewed B isolation attempt. No other
+lane is a prerequisite, and no new runtime result is claimed yet.
+
+Before root integration: independent source peer, committed clean source and
+full patch/path/hash receipt. Root reviews/generates/commits products, refreshes
+both reused builds, runs minimal controls/native gates and measures the changed
+candidate. Keep all immutable controls and selected design mirrors unchanged.
+Only a winning coherent candidate advances to confirmation/all29/upstream/PMU
+and full supported diagnostics. Source workers run no target/native jobs.
 
 The frozen rejected attribute branch contains source `c1066265668` at `1fe09389531`, generated products
 `18445aa21d5`, and fixture-only `035aa32e16c` at final `581c018a34a`.

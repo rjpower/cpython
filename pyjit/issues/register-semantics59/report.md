@@ -4,8 +4,11 @@ Latest completed cycle: [round64 await](#deferred-await64-qualified-mechanism-re
 passes lifecycle/native gates and cuts coroutine elapsed time 42.9% against
 selected57, but loses logging 27.7% and generators 5.2%. Reject the standalone
 executable; selected57 remains unchanged. Compact64 failed its native work gate.
-The next grouped Astra review is requested. No new upstream or full-system
-result is claimed for this rejected cycle. The sections below retain each
+The completed [round65 review](review65.md) orders a return/accessor boundary
+change and an optional private SEND-yield continuation. A implementation and B
+source proposal are active; neither has a new native or performance result.
+No new upstream or full-system result is claimed for this rejected cycle.
+The sections below retain each
 attempt's evidence and decision.
 
 Selected57 remains selected. The first loop-binding executable, standalone
@@ -1133,5 +1136,10 @@ mechanism qualification but lost the broad screen. Astra's next grouped review
 must use these distinct outcomes to specify concrete IR/interpreter changes,
 including how to preserve structural activation savings without ordinary-path
 regressions. No causal claim about code layout, compiler behavior or one branch
-is established by this screen. The next review is requested on Loom channel
-`zfr7ow1e`; root continues integration after the ordered design is reviewed.
+is established by this screen. The completed [next review](review65.md),
+source `374f8e3eadb` plus `ceb46447bb0`, orders two bounded units under the
+[round65 design](../../design/proposals/interpreter-parity65.md). Unit A changes
+existing complete returns and proved embedded access; B is an optional private
+SEND-yield continuation with complete reader/writer closure. A gets an
+independent native/hot8 decision before B, and may advance on its own. Source
+work is active; no new native or performance result follows from that proposal.

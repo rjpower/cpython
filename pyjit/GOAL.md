@@ -14,17 +14,21 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-has completed the reviewed [round64 design](design/proposals/interpreter-parity64.md).
+executes the reviewed [round65 design](design/proposals/interpreter-parity65.md):
+THREAD-first complete retirement and proved embedded access, followed
+conditionally by a private SEND-yield executable continuation. Each complete
+integration earns its own native and performance decision. No new return
+opcode, mode, classification pass or image mirror is required by unit A.
 Stable-frame deferred await passes lifecycle and native mechanism qualification,
 and cuts coroutine elapsed time 42.9% against selected57, but loses logging
-27.7% and generators 5.2%; the standalone executable is rejected. The next
-grouped review must preserve that structural saving without broad regressions.
+27.7% and generators 5.2%; the standalone executable is rejected. Round65 must
+preserve that structural saving without broad regressions.
 The bounded compact
 ordinary-C domain passed correctness controls but failed its native net-work
 gate and is closed. Both fixed-role trials
 are qualified and rejected. All round59–62 executables remain rejected. Their
 source branches and sealed evidence are retained without becoming prerequisites.
-The [review ledger](issues/register-semantics59/review64.md) separates source/native
+The [review ledger](issues/register-semantics59/review65.md) separates source/native
 facts, measured costs and unresolved cycle regressions. No evidence-backed
 combined parity budget has yet been established.
 Logical values, uses, edge results and continuations precede storage and

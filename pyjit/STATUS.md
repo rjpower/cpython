@@ -8,9 +8,13 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-has closed Astra's [round64 design](design/proposals/interpreter-parity64.md) and
-[review ledger](issues/register-semantics59/review64.md). Selected57 remains
-unchanged. PyValue rollout is complete; transport, effects, ownership and
+executes Astra's [round65 design](design/proposals/interpreter-parity65.md) and
+[review ledger](issues/register-semantics59/review65.md). Unit A changes existing
+RETURN recipes to THREAD-first retirement plus proved embedded accessors; no
+new opcode, mode, classification pass or image mirror. Unit B proposes one
+private SEND-yield target with complete semantic-PC/reader/writer closure. A
+gets its own native gate and hot8 screen and may advance without B. Selected57
+remains unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
 | Packet | Current result |
@@ -75,8 +79,9 @@ reviewed and integrated separately. Generation and generated-code review pass;
 both builds and the lifecycle/native gates pass. Its balanced hot8 screen shows
 a 42.9% coroutine gain but unacceptable logging and generator regressions.
 Round64 is closed with no selected runtime. The next grouped Astra review is
-requested with the complete compact and await outcomes; no all29/full-system
-campaign follows the rejected await screen.
+complete with the compact and await outcomes. Sol A implements the reviewed
+return/accessor boundary; Sol B prepares its complete continuation contract and
+independent peer. No all29/full-system campaign follows the rejected await screen.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

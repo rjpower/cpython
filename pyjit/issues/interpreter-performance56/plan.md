@@ -12,8 +12,8 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity64.md) and
-[grouped ledger](../register-semantics59/review64.md) rank five architectural
+The reviewed [next design](../../design/proposals/interpreter-parity65.md) and
+[grouped ledger](../register-semantics59/review65.md) rank five architectural
 options. Both fixed storage-role trials are qualified and rejected. The finite
 ordinary-C compact domain passes both builds and 29 focused methods per role,
 then stops at its native whole-path work gate: 47 internal instructions saved
@@ -21,8 +21,9 @@ against 93 added at entry/exit. Its 112-byte stack and 1,665-byte hot text pass
 the size caps; no timing or target coverage follows. The independent complete
 stable-frame deferred-await unit passes both builds, lifecycle and native gates.
 Its unchanged hot8 screen cuts coroutine time 42.9% but loses logging 27.7% and
-generators 5.2%; reject the standalone executable. The next grouped Astra review
-must turn that structural success into a broadly acceptable design. Delegation
+generators 5.2%; reject the standalone executable. The completed round65 review
+orders a bounded return/accessor refactor, then a conditional private SEND-yield
+continuation. A has its own native and hot8 decision; B is optional. Delegation
 spine, result continuation and
 anchored self have separate admission and cost gates. All round59–62 executables
 and both round63 role trials remain
@@ -108,29 +109,32 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity64.md)
+The workstream's [next design](../../design/proposals/interpreter-parity65.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All round59–62 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Close [compact-domain64](../register-semantics59/compact-domain64.md); independent complete await source peer | Compact native NO-GO, source/evidence preserved; no timing/target coverage |
-| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md), including reviewed admission/writer/terminal corrections | Final `0bbb42ef46a`, both 117/79 and lifecycle 16 per role; source/native/receipt peers GO. Preserve the qualified mechanism, reject the broad executable |
-| Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
-| Astra | Next grouped review after [round64](../register-semantics59/review64.md) | Requested with complete compact native loss and await mechanism success/broad loss; specify ordered concrete changes, outside the patch loop |
+| Sol A, returns | Existing complete RETURN recipes partition THREAD versus one owned-result resumable helper; state-proved embedded accessors | Implementing in W after root/Astra proposal GO; no new opcode, mode, image mirror or classification pass |
+| Sol B, continuation | Private SEND-yield target and complete semantic-PC/reader/writer contract; independent A source peer | Proposal in P; shared generator interfaces freeze after A. No B implementation before source GO and A native gate |
+| Coordinator | Peer interfaces, integrate, generate, qualify and measure | A gets its own hot8 and may advance without B. B integration receives separate native/performance decisions |
+| Astra | Completed [grouped65 review](../register-semantics59/review65.md) | Source `374f8e3eadb` plus clarification `ceb46447bb0` integrated; next broad review only after coherent measured outcomes |
 
-The compact unit's bounded whole-path cost gate fails; no roster, mirror,
-provider, layout or flag expansion rescues this packet. The await unit targets
-allocation, copying, creation return
-and reentry together; ordinary nested calls must not force materialization.
-An unsafe relocation design is rejected before runtime work.
+The compact unit is closed; no roster, mirror, provider, layout or flag
+expansion rescues it. Round65 retains the qualified await mechanism while
+removing ordinary-path work at actual boundaries. GENERAL already has a
+THREAD fast clear; EMPTY and complete return classification are priced
+separately. Unit A ports all existing RETURN/YIELD source certificates with
+the actual recipes. Unit B must port every actual return-PC consumer and writer,
+keep semantic PCs real, preserve newer redirects and price private arm/cancel
+and terminal work. It adds no ordinary frame field or universal resolver.
 
-Rank 3 remains conditional on a concrete execution-domain coverage and cost
-proposal. Ranks 4 and 5 require complete reader and invalidation ports, rather
-than shortcuts in SEND/YIELD or borrowed bits in owning cells. No universal
-frame field, per-word descriptor or compiler change is a prerequisite.
-
+An A native failure stops A; a broad loss permits only the already reviewed B
+isolation attempt. A passing screen can advance without B. The combined A+B
+screen is a changed executable, not a repeat of a loser. The delegation spine,
+native-result ownership region and anchored argument view remain deferred
+under their separate complete-path gates; no implementation is concurrent.
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol
 or final composition gates. Retain stable exact source/native identities and

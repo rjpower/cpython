@@ -6,13 +6,14 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[next grouped design](../../design/proposals/interpreter-parity64.md) and
-[review ledger](review64.md) drive implementation: both fixed storage-role
+[current grouped design](../../design/proposals/interpreter-parity65.md) and
+[review ledger](review65.md) drive implementation: both fixed storage-role
 trials are qualified and rejected. The compact execution domain passes focused
 runtime checks but stops at its native net-work gate, without timing. The complete
 deferred immediate-await unit passes lifecycle/native qualification and cuts
 coroutine time 42.9%, but loses logging 27.7% and generators 5.2%. It is rejected
-as a standalone executable. The next grouped review is requested.
+as a standalone executable. Round65 now changes the return/accessor boundary
+and conditionally introduces one private SEND-yield continuation.
 Every round59–62 runtime packet lost its broad comparison. The retained
 delegation spine and anchored-self ABI remain conditional options.
 The [first-lane source peer](peer.md) and [execution logistics](measurement.md)
@@ -36,12 +37,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | Next grouped IR/interpreter design with concrete ordered changes | Requested with closed compact and qualified-but-losing await outcomes |
-| Independent peer | Actual source and whole-path native closure | Both complete source packets approved; compact native NO-GO accepted |
-| Sol IR | Compact documentation closure and independent await review | Compact closed; full await source GO |
-| Sol frames | Complete await source and lifecycle corrections | Final integration `0bbb42ef46a`, source/native GO and lifecycle 16 per role; qualified mechanism, rejected broad executable |
-| Measurement | Reuse exact-identity harness and immutable selected57 | Await hot8 stable 32 rows, large coroutine gain with logging/generator losses; no all29/full follows |
-| Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
+| Astra | Five ranked complete adjustments and numerical gates | Grouped65 final plus remote-reader clarification integrated |
+| Sol A | Complete THREAD-first RETURN and proved embedded accessors | Implementing reviewed proposal in W; root and B peer, no worker native jobs |
+| Sol B | One private SEND-yield continuation; complete reader/writer proposal and A peer | Proposing in P; no implementation until A interface/native gate and source GO |
+| Coordinator | Peer/integrate/generate/qualify/measure each unit | A gets its own hot8 and may advance without B; selected57 and controls stay immutable |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

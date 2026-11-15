@@ -1,6 +1,9 @@
 # Interpreter parity69: summarize complete small Python callees
 
 Status: grouped architecture proposal, not implementation or selection.
+The exact [source contract](../../issues/register-semantics59/guarded-summary69.md)
+has independent [peer approval](../../issues/register-semantics59/guarded-summary69-peer.md).
+Root has released producer and consumer implementation as one complete unit.
 Base: canonical `0fa1cefea53180f1e41d4acade00d12b5a471fa3`.
 [Review69](../../issues/register-semantics59/review69.md) supplies the source and
 evidence ledger; the [report](../../issues/register-semantics59/report.md) owns

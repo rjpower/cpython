@@ -13,7 +13,8 @@ and [handoff](HANDOFF.md) explain development and runtime coordination.
 
 The selected runtime remains selected57. The grouped
 [round69 design](design/proposals/interpreter-parity69.md) ranks five options
-and advances one complete guarded-callee-summary unit to source-contract review.
+and advances one complete guarded-callee-summary unit through source-contract
+approval to implementation.
 A hit removes child-frame setup, body dispatch and teardown while keeping the
 caller's inputs owning. Round68's retained-delegation mechanism qualified but
 lost benchmark protection; it remains rejected despite a 29.2% generator gain.

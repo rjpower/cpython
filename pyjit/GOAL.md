@@ -16,11 +16,14 @@ combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
 follows the grouped [round69 design](design/proposals/interpreter-parity69.md)
 and [review](issues/register-semantics59/review69.md). Of five ranked options,
-one advances to exact source-contract review: guarded summaries of complete
+one advances to implementation: guarded summaries of complete
 small, callback-free Python callees. Keep the caller's owning inputs; remove
 child-frame initialization, body homes/dispatch and child retirement on a hit.
 Use existing generated atomic CALL completion, full entry admission and cold
-specialization nomination. No second implementation lane is queued.
+specialization nomination. The exact
+[source contract](issues/register-semantics59/guarded-summary69.md) has independent
+[peer approval](issues/register-semantics59/guarded-summary69-peer.md).
+No second implementation lane is queued.
 
 Selected57 remains the runtime baseline. Round68 qualified retained delegation
 but lost protected DeltaBlue, coroutine and logging benchmarks; earlier losing

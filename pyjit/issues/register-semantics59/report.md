@@ -1,13 +1,15 @@
 # Semantic IR trial results
 
-## Round69: architecture adopted; exact source contract under review
+## Round69: source contract approved; implementation released
 
 The grouped [design69](../../design/proposals/interpreter-parity69.md) and
 [review69](review69.md) rank five alternatives and order one complete
 guarded-callee-summary unit from selected57. Root integrates Astra commits
 `193b4be5e4c`, `a093bc19ca9` and `9e903ba0a412`. The independent Sol architecture
 peer approves the removal boundary and explicit atomic observation/lifetime
-policy. It requires exact source-contract approval before implementation.
+policy. The exact [source contract](guarded-summary69.md) then receives
+independent [peer GO](guarded-summary69-peer.md), and root releases producer
+and consumer implementation in parallel as one combined unit.
 
 A successful hit keeps the CALL window owning, evaluates a bounded checked
 expression, acquires one result and uses the existing generated atomic B0
@@ -15,10 +17,14 @@ completion. It removes child setup, body homes/dispatch and child clear/return.
 Full pre-body RESUME/tool/recursion admission, actual function environment,
 validated constant/binding maps and optional plan-tail lifetime remain required.
 Cold specialization nominates eligible calls; ordinary heads do not probe the
-feature. No runtime, native hit, performance result or parity claim exists yet.
+feature. The source contract captures original owners once and classifies cold
+callbacks before PC-restoring refresh, preserving pending, applied and same-PC
+redirects. No runtime qualification, native hit, performance result or parity
+claim exists yet.
 
 Source-only inputs are `E59/guarded-summary69-source-peer-note.md`,
-`guarded-summary69-design-peer.md` and the pending exact unit proposal. Existing
+`guarded-summary69-design-peer.md` and the exact unit proposal/peer (canonical
+copies linked above). Existing
 lazy empty kwargs and singleton empty varargs provide no new saving. The
 ordinary-path68 source note records real differences without attributing the
 observed regressions. There is no second lane or retained68 rescue.

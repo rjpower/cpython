@@ -35,11 +35,14 @@ without confirmation, all29, PMU, full suite or timing rescue. There is no fresh
 upstream result or parity claim. The completed
 [round69 design](design/proposals/interpreter-parity69.md) and
 [review](issues/register-semantics59/review69.md) rank five options and advance
-one guarded-callee-summary unit to exact source-contract review. It would
+one guarded-callee-summary unit. The exact
+[source contract](issues/register-semantics59/guarded-summary69.md) has independent
+[peer approval](issues/register-semantics59/guarded-summary69-peer.md), and
+producer/consumer implementation is released in parallel. The complete unit would
 remove the entire child execution boundary for admitted small callback-free
 callees. Existing generated atomic completion owns results and retirement;
 ordinary nonparticipating handlers remain unchanged at source. No runtime
-implementation or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
+qualification or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
 owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
 Selected57 remains unchanged.
 

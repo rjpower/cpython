@@ -10,10 +10,12 @@ and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
 [current grouped design](../../design/proposals/interpreter-parity69.md) and
 [review69](review69.md) rank five options and advance one guarded-callee-summary
-unit to exact source-contract review. Architecture peer GO accepts complete
+unit to implementation. Independent architecture and exact
+[source-contract](guarded-summary69.md) [peer](guarded-summary69-peer.md) GO accept complete
 child execution removal, generated atomic B0 completion, full pre-body RESUME
-admission and the stated atomic observation/lifetime policy. No implementation
-or performance result is claimed. The [trial report](report.md) owns evidence;
+admission and the stated atomic observation/lifetime policy. Producer and
+consumer are assigned in parallel; no runtime qualification or performance
+result is claimed. The [trial report](report.md) owns evidence;
 [handoff](../../HANDOFF.md) owns paths and commands.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
@@ -52,8 +54,8 @@ remain evidence; they are not proposed anew.
 | Owner | Deliverable | State |
 | --- | --- | --- |
 | Root | Integrate design69, then the complete qualified candidate | Preserves selected57 and rejected68; owns generated products, builds and timing |
-| Sol-high source | Exact guarded-summary69 source proposal | Producer, checked readers, adaptive arm and complete generated consumer; no edits before peer GO |
-| Independent Sol peer | Exact source-contract and actual-diff review | Architecture GO; source contract pending |
+| Sol-high producer | Whole-body admission and optional plan storage in P | Shared header/API first, then complete proof/lifecycle and focused tests |
+| Sol-high consumer | Checked readers, adaptive arm and generated CALL in W | Fixed source shapes and approved callback/control recipe; cross-review afterward |
 | Astra | Grouped review69 complete | Five ranked options, one ordered unit; no runtime or inner-loop work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)

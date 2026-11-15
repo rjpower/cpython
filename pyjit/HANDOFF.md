@@ -11,22 +11,33 @@ this file owns execution logistics.
 
 ## Current work
 
-Grouped69 is complete and independently approved for exact source-contract
-review. One unit advances: guarded summaries of complete small callback-free
+Grouped69 and its exact source contract have independent approval.
+One unit advances: guarded summaries of complete small callback-free
 Python callees, from selected57. A hit has no child frame, body homes/dispatch
 or child retirement. The existing generated atomic B0 completion owns the
 result, input drain, refresh, end service and recipient; full RESUME admission
 precedes effects. See the design for explicit observation/lifetime scheduling,
-optional plan tail and cold-only nomination. No implementation GO exists until
-the exact producer/consumer source proposal passes independent peer review.
+optional plan tail and cold-only nomination. The canonical
+[source contract](issues/register-semantics59/guarded-summary69.md) and
+[peer](issues/register-semantics59/guarded-summary69-peer.md) are exact copies of
+E59 proposal `42195df94d5d6ed30961b1044478b5755d050be09bbe4da8212f554d1272cc93`
+and peer `3cd3e4ed5fb2130abbc5957a5c791c433c16887027d7c048cab01f7cc3807b4a`.
+The applied/pending/same-PC callback contract is part of implementation, not an
+assumed property of raw B0 macros.
 
-Sol-high prepares `E59/guarded-summary69-unit-proposal.md`; the independent Sol
-peer owns `E59/guarded-summary69-design-peer.md` and subsequent source review.
-The architecture peer approves `193b4be5e4c` plus the additive source exclusions;
-root integrates the three review69 commits through `9e903ba0a412` in canonical
-documentation. Astra's grouped review is complete; do not use it in the inner
-loop. Runtime worktrees remain frozen on round68 until the new source contract
-is approved. Root owns integration, products, builds and measurement.
+Root releases two nonoverlapping edits within this one unit, both from selected57:
+
+| Owner | Worktree and branch | Files / dependency |
+| --- | --- | --- |
+| Sol-high producer | P, `pyjit/parity69-summary-admission` | `Objects/codeobject.c`, `pycore_ir.h`, `Python/ir.c`, focused admission tests; publish header/API first |
+| Sol-high consumer | W, `pyjit/parity69-guarded-callee-summary` | Readers, specialization, bytecodes/ceval, parser/emitter and focused tests; consumes producer interface |
+| Root | G remains frozen rejected68 until complete source integration | Generated products, both builds, merged focused checks, native mechanism/pricing and protected screen |
+
+Workers cross-review actual changes. Progress is in
+`E59/guarded-summary69-{producer,consumer}-progress.md`. They run only necessary
+host checks; root owns target execution. Old68 W/P branches are preserved;
+I/U remain immutable. Astra's grouped review is complete; do not use it in the
+inner loop. No source-only increment is selectable.
 
 ## Closed round68 checkpoint
 

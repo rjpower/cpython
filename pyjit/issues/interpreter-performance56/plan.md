@@ -12,8 +12,10 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 The [round69 design](../../design/proposals/interpreter-parity69.md) and
 [review](../register-semantics59/review69.md) rank five alternatives. Independent
-architecture review approves one complete guarded-callee-summary unit for
-exact source-contract review, from selected57. Keep caller inputs owning while
+architecture and exact [source-contract](../register-semantics59/guarded-summary69.md)
+[review](../register-semantics59/guarded-summary69-peer.md) approve one complete
+guarded-callee-summary unit from selected57. Producer and consumer implementation
+is released in parallel. Keep caller inputs owning while
 eliminating child initialization, body homes/dispatch and child clear/return
 for admitted small callback-free callees. Use the generated atomic B0
 completion, full pre-body RESUME admission, current function environment and
@@ -124,13 +126,13 @@ The [round69 design](../../design/proposals/interpreter-parity69.md),
 [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. Rounds59–68 remain closed and
 unselected; preserved evidence is not a dependency list. Grouped review69 is
-complete and independently approved for exact source-contract review.
+complete; independent exact source-contract approval releases implementation.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Root | Integrate design69; qualify and measure the complete candidate | Owns products, builds, focused checks, native evidence and selection |
-| Sol-high source | Exact producer/consumer proposal for guarded summaries | No implementation before exact source peer GO |
-| Independent Sol peer | Peer the exact source contract, then implementation | Architecture GO; check actual callback drain, redirect and B0 error ownership |
+| Sol-high producer | Complete admission and optional plan storage in P | Freeze shared header/API first; then actual body proof and lifecycle/tests |
+| Sol-high consumer | Checked readers, specialization and complete CALL in W | Approved atomic/control contract; cross-review producer after implementation |
 | Astra | Grouped review69 complete | Five ranked options; one ordered unit; no inner-loop work |
 
 No second lane, new profile/counter or compiler/flags/layout search is active.

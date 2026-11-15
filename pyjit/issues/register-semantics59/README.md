@@ -15,7 +15,9 @@ Complete source, behavior and native mechanism qualification pass at G
 role pass, with one release debug-only skip. The unchanged protected hot8
 screen rejects selection: generators 0.708007 and spectral_norm 0.892976 improve,
 but DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007 fail protection.
-Selected57 remains unchanged; next grouped review is pending. The [trial report](report.md) owns qualification and limits;
+Selected57 remains unchanged. The next grouped review69 is running in the
+[Astra session](http://127.0.0.1:7878/s/zfr7ow1e). The [trial report](report.md)
+owns qualification and limits;
 [handoff](../../HANDOFF.md) owns paths and commands.
 The [implementation contract](retained-delegation68.md) and
 [source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
@@ -49,10 +51,10 @@ remain evidence; they are not proposed anew.
 | Owner | Deliverable | State |
 | --- | --- | --- |
 | Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `c02cebf80c4`; qualified; protected hot8 rejected, frozen |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; complete source frozen; actual ELF readback |
-| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; source/product GO; qualification coverage review |
-| Independent Sol peers | Actual-diff cross-review | Complete source/products GO; native qualification pending |
-| Astra | [Review68](review68.md) delivered | Grouped overview complete; no runtime work |
+| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; source frozen; bounded source-only ordinary-path note |
+| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; qualified; STOP audit complete, frozen |
+| Independent Sol peers | Actual-diff cross-review | Complete source/products/native/control GO; measured rejection audited |
+| Astra | Grouped review69 | Active after closed [review68](review68.md); two documents only, no runtime work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

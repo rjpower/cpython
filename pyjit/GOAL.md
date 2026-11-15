@@ -14,8 +14,11 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-advances the [round68 proposal](design/proposals/interpreter-parity68.md) under
-[review68](issues/register-semantics59/review68.md). Independent architecture
+now reviews the next five architectural options after the closed
+[round68 proposal](design/proposals/interpreter-parity68.md) and
+[review68](issues/register-semantics59/review68.md). The grouped round69 review
+is running in the [Astra session](http://127.0.0.1:7878/s/zfr7ow1e); no new source
+unit is adopted before design delivery and independent review. Independent architecture
 and exact source-contract approval pass for retained real generator-delegation
 prefixes. Complete entry, yield, lifecycle and reader source is integrated;
 source, behavior and native mechanism qualification pass, but the protected

@@ -122,15 +122,17 @@ architecture/status chain. Canonical design/review evidence remains in git.
 The [round68 design](../../design/proposals/interpreter-parity68.md),
 [review](../register-semantics59/review68.md), and
 [trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. Round59–67 attempts remain
-closed and unselected; preserved evidence is not a dependency list.
+source-reviewed, qualified and selected changes. Rounds59–68 remain closed and unselected; preserved evidence is not a
+dependency list. Grouped review69 is active in the
+[Astra session](http://127.0.0.1:7878/s/zfr7ow1e), with five options and at most
+two concrete ordered units due before independent adoption.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Adopt exact source contract, integrate, generate/build/qualify/measure | Selected57 base; complete source/native gates before one hot8 screen |
-| Sol-high source | Retained real generator-delegation prefix | W branch `pyjit/parity68-retained-delegation`; source frozen, available for qualification corrections |
-| Independent Sol peer | Review contract, actual changes and qualification | Close recursion, effective readers, any-member teardown and remote lifetime |
-| Astra | Grouped review68 delivered | Architecture overview complete; no inner-loop or runtime work |
+| Root | Preserve selected57 and rejected68; adopt next reviewed design | No new implementation before grouped69 delivery and independent peer |
+| Sol-high source | Bounded ordinary-path source note for next review | W frozen; no runtime, profile or implementation lane |
+| Independent Sol peer | Review next grouped design after delivery | Round68 qualification/STOP audit complete; P frozen |
+| Astra | Grouped review69 active | Five concrete options, at most two ordered units; two documents only |
 
 No second lane, new profile/counter or compiler/flags/layout search is active.
 Design68 carries design67's exact screen, finite confirmation, all29 and

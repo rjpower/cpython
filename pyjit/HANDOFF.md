@@ -4,7 +4,7 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-Current proposal is [parity68](design/proposals/interpreter-parity68.md),
+The closed proposal is [parity68](design/proposals/interpreter-parity68.md),
 under [review68](issues/register-semantics59/review68.md). The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
@@ -12,7 +12,7 @@ this file owns execution logistics.
 ## Current work
 
 Round67 is closed: both candidates qualified their mechanisms and lost their
-screens. Selected57 is unchanged. Round68 has one unit: retain real owning
+screens. Selected57 is unchanged. Round68 qualified and rejected one unit: retain real owning
 generator-delegation prefixes, enter the actual leaf directly and update only
 the changed suffix. The grouped architecture and exact
 [implementation contract](issues/register-semantics59/retained-delegation68.md)
@@ -32,14 +32,17 @@ spectral_norm 0.892976, DeltaBlue 1.101089, coroutines 1.072083 and logging 1.23
 Protection fails. Root rejects selection with no confirmation/all29/PMU/full/
 timing rescue. Keep G/builds/controllers frozen; preserve the qualified mechanism
 and all failures/results. Selected57 remains unchanged. Next grouped Astra
-review is pending; no new implementation unit is authorized yet.
+review69 is running in the existing [Astra session](http://127.0.0.1:7878/s/zfr7ow1e)
+from canonical `0fa1cefea53`. It owns only proposal69/review69 documents in
+`/home/power/code/cpython/.worktrees/interpreter-parity64-astra`, branch
+`weaver/interpreter-parity69-astra`. No new implementation unit is adopted yet.
 
 | Owner | Current boundary |
 | --- | --- |
-| Sol-high source | W, clean `ffe43426f9d`; final native decoded-body/identity readback complete, CPU checks paused |
-| Sol-high remote | P, clean `dfeaa9c7a8c`; source/control postreviews complete; independently audit screen |
+| Sol-high source | W, clean `ffe43426f9d`; bounded ordinary-path source note for next review; no runtime work |
+| Sol-high remote | P, clean `dfeaa9c7a8c`; qualification and STOP audit complete; frozen |
 | Root | G, clean `c02cebf80c4`; qualified; screen rejected, selected57 unchanged |
-| Astra | Grouped review68 delivered; no inner-loop work |
+| Astra | Grouped review69 active; two design/review files only, no runtime work |
 
 Logs/manifests use `E59/parity68-final15-*`; earlier corrected test-only
 checkpoints use `parity68-tests14-*`. Preserve all original failed compile,

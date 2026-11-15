@@ -19,9 +19,10 @@ under [review67](issues/register-semantics59/review67.md). Independent source pe
 and shared-interface readback pass. Sol-high workers implement two lanes from
 selected57: complete native callout through rooted retirement/poll and a real
 result consumer; caller-anchored read-only exact-method self with complete
-promotion and owner-consumer closure. No round67 runtime or performance result
-exists. Root integrates and measures the lanes independently, then combines
-only qualified broad winners.
+promotion and owner-consumer closure. A qualifies but fails its balanced screen
+(logging +21.1%, DeltaBlue +2.2%, spectral_norm +5.3%) and is rejected. B is
+integrated independently and needs generator repairs before runtime qualification.
+Root combines only independently qualified broad winners; selected57 is unchanged.
 
 Round66 is closed: frozen B qualified but failed logging/generator protection;
 its auxiliary union was not implemented. The logging diagnostic showed

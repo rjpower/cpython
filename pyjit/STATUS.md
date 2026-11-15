@@ -18,12 +18,14 @@ blocked on B. A source and generated-product repairs are integrated at
 Five actual native transactions cover natural comprehension entry, normal
 completion, provider error, late-observer defusion and append OOM. Three further
 behavior controls pass per role, each covering both self forms; a separate
-real-source line-redirection control also passes both builds. Independent final
-qualification approves the single balanced hot8 screen, now running. Native
-review confirms the removed dispatch but finds adverse instruction/stack costs.
-B source `77d3d78ec99` has independent source GO after RETURN and synthetic-close
-repairs; it is not integrated or built. No round67
-performance result exists. PyValue rollout is complete; parity is not achieved.
+real-source line-redirection control also passes both builds. Its stable 32-row
+screen rejects selection: hot8 ratio 1.026137, logging 1.210653, DeltaBlue
+1.022085 and spectral_norm 1.053213. No larger A campaign follows.
+B source `77d3d78ec99` integrates independently at `a0bf313f305`, products
+`c358f39f481`. Its first release compile fails on a generated annotations-release
+guard testing a result wrapper instead of `.value`; repair and metadata
+readback are active. B has no runtime or timing result. PyValue rollout is
+complete; parity is not achieved.
 
 Round66 is closed. Frozen `64348dd5c18` passes qualification and its stable
 32-row screen has hot8 ratio .936871, but logging 1.076467 and generators 1.014457

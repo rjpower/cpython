@@ -13,8 +13,10 @@ adopted [round67 design](design/proposals/interpreter-parity67.md) and
 [review](issues/register-semantics59/review67.md). Two independent source lanes
 start from selected57: a complete native callout/result-consumer boundary, and
 one caller-anchored exact-method self binding. Shared ownership/effect interfaces
-have independent peer GO. Source implementation is active; neither lane has a
-runtime qualification or performance result. Selected57 remains unchanged.
+have independent peer GO. A qualifies but loses its balanced screen: logging
+slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. It is rejected. B is integrated
+independently; its first compile and product review require generator repairs.
+Selected57 remains unchanged.
 
 Round66's frozen continuation qualified but lost its logging/generator gates.
 Its finite logging diagnostic measured fewer instructions and more cycles;

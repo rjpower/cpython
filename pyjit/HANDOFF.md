@@ -15,17 +15,17 @@ Round67 source implementation is active under adopted
 [design67](design/proposals/interpreter-parity67.md) and
 [review67](issues/register-semantics59/review67.md). Independent final adoption
 and interface readback are `E59/callout67-source-host/grouped67-adoption-peer.md`.
-Both source lanes start from selected57. A's corrected source and products are
-integrated in G; fresh release/debug builds and focused methods pass. Root owns generation,
-build/native jobs, independent integration and
-selection. A proceeds without waiting for B. Workers run only bounded host
+Both source lanes start from selected57. A qualifies but loses its screen and
+is preserved on its branch. G now contains independent B; its first compile
+fails, with source/product repairs under review. Root owns generation,
+build/native jobs, integration and selection. Workers run only bounded host
 source/generator checks and write discoverable runtime tests for root.
 
 | Owner | Active checkout / branch |
 | --- | --- |
 | A source | P, `pyjit/parity67-native-callout`, `ffb371f56b7`; source/products and fixture repairs have independent GO |
-| B source | W, `pyjit/parity67-anchored-self`, `77d3d78ec99`; independent final source GO, no integration/products/build/runtime yet |
-| Root | G, `pyjit/parity67-callout-integrated`, `ba4ea9dd9a9`; both `parity67-callout3` builds pass 117/79; 103 focused methods and three extra behavior controls pass per role |
+| B source | W, `pyjit/parity67-anchored-self`, `77d3d78ec99`; checked release-operand repair active after first root compile |
+| Root | G, `pyjit/parity67-anchored-self-integrated`, `c358f39f481`; B source `a0bf313f305`, regeneration passes, first `parity67-anchor1` release compile fails. Both builds are stale; do not execute |
 | Astra | Final review source `5c62a30200b4181a62d801862cfb61e7b6625e40`; source design review complete, no runtime work |
 
 The old G continuation branch remains preserved at `64348dd5c18`.
@@ -46,12 +46,20 @@ must not be called byte-equal. Five actual controls under
 `E59/callout67-native-controls` have independent receipt GO. Extra retirement,
 provider-miss and pending-poll controls pass both forms in both builds.
 Real-source line redirection also passes both roles. Native structural/cost and
-final qualification peers approve one screen: `parity67-callout3-eight-selected57`
-is running, explicit hot8, two pairs/32 rows, CPU15. Keep G/builds/controllers and
-benchmark sources frozen; do not run host-heavy work during its quiet window.
+final qualification peers approve its screen: `parity67-callout3-eight-selected57`
+completes with stable identities, explicit hot8, two pairs/32 rows, CPU15.
+Root and independent screen peer reject selection: hot8 1.026137, logging
+1.210653, DeltaBlue 1.022085 and spectral_norm 1.053213. Preserve branch
+`pyjit/parity67-callout-integrated` at `ba4ea9dd9a9`; no confirmation/all29/PMU/full
+or further A repair follows. The old captured executable is static evidence.
 The static nominal boundary costs 370 versus 228 instructions and 216 versus
 72 bytes stack before shared callees; these are modeled path costs, not a
-dynamic instruction ratio or throughput result. No performance result yet.
+dynamic instruction ratio or a causal explanation for the screen losses.
+B is generated independently from selected57 at `c358f39f481`. First compile
+fails in SETUP_ANNOTATIONS: the promotion guard uses `found`, while the released
+value is `found.value`. Repair the shared operand handling and add its actual
+handler regression; retain `parity67-anchor1` failed log. Product peer is also
+resolving changed attribute-owner certificates before the next source freeze.
 P/W prior65 source branches remain preserved; their active source is now the
 independent67 lanes. Do not execute an old captured ELF against their changed
 Lib trees. Selected57 I and both builds remain immutable. The first source

@@ -16,8 +16,10 @@ units from selected57 after peer adoption of their shared owner/effect contract.
 A generates one complete native provider/retirement/poll/result-consumer boundary.
 B removes one method-self acquire/retire through a caller anchor, with promotion
 and all clear/traverse/take/copy/writer consumers ported. Both implementations
-are active; neither has runtime qualification or timing. Root integrates A first
-and B independently; B cannot delay A.
+have source review. A qualifies but loses its balanced screen and is rejected;
+logging slows 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B is integrated
+independently and needs generator repairs before qualification. Root combines
+only independently qualified winners.
 
 Round66 is the latest closed measured experiment. Its qualified frozen
 continuation has hot8 ratio .936871 but fails logging/generator protections.

@@ -3,8 +3,9 @@
 Round67 source implementation is active under [design67](../../design/proposals/interpreter-parity67.md)
 and [review67](review67.md), after independent adoption and shared-interface GO.
 A is the complete native callout/result consumer; B is one caller-anchored
-exact-method self. Both start selected57 and will be integrated independently.
-Neither has a runtime qualification or performance result.
+exact-method self. Both start selected57 independently. A qualifies and is
+rejected by its screen; B is integrated, with first compile/product repairs
+active before runtime qualification. Selected57 remains unchanged.
 
 A source `e93e934e971` and shared-feedback correction `3f02ac24599` have
 independent source GO. Initial products `b8e2ce95f28` preserve every existing
@@ -38,8 +39,8 @@ not frequency or speed results. A separate real-source line-redirection control
 passes both roles, including observed APPEND, a successful jump that skips an
 assignment, provider-once and payload-release assertions. The existing warning
 about filling one unbound local remains visible. Independent final qualification
-approves one screen; `parity67-callout3-eight-selected57` is running with frozen
-source/builds, explicit hot8, two pairs/32 rows on CPU15.
+approves one screen; `parity67-callout3-eight-selected57` completes with stable
+identities, explicit hot8, two pairs/32 rows on CPU15.
 
 Independent native review confirms the removed intermediate NCSR dispatch,
 but its nominal offline supplied-self boundary grows from 228 to 370 native
@@ -50,7 +51,29 @@ per nominated edge; feedback/frame sizes stay fixed. These costs do not predict
 dynamic frequency or speed, and design67 imposes no invented static veto.
 `unit-a-native-peer.md`, `unit-a-native-controls-peer.md` and
 `unit-a-final-qualification-peer.md` under `callout67-source-host` own the
-independent readbacks. No round67 timing result exists yet.
+independent readbacks.
+
+Root and independent `unit-a-screen-peer.md` reject A. All 32 rows succeed,
+identities remain stable, and the hot8 geometric mean is 1.026137293.
+
+| Workload | Native callout A / selected57 |
+| --- | ---: |
+| comprehensions | 0.985867441 |
+| deltablue | 1.022084868 |
+| coroutines | 0.980480121 |
+| generators | 1.009427841 |
+| logging_silent | 1.210653142 |
+| raytrace | 0.971882138 |
+| spectral_norm | 1.053212755 |
+| nqueens | 0.994660277 |
+
+Comprehension pairs are mixed (.969798/1.002204). Logging and spectral_norm
+lose in both pairs and exceed the per-pair gate; DeltaBlue exceeds its mean
+gate. The improvement subpredicate passes, but the complete selection
+conjunction fails. Preserve `pyjit/parity67-callout-integrated` at `ba4ea9dd9a9`
+and `callout67-source-host/root-screen-decision.json`. No confirmation, all29,
+fresh upstream, PMU, full suite or further A repair follows. Neither the static
+boundary trace nor this screen establishes a cause for the logging loss.
 
 B source `7bc2b2bfbe6` initially invalidated the checked canonical-return
 recipe. Repair `8a84d17c29d` restores all four canonical/EXIT proofs and adds
@@ -58,7 +81,12 @@ post-detach MayDealloc-guarded promotion at synthetic input releases. Five
 focused host checks pass. Independent readback then finds bare B/C identifiers
 in an emitted release guard. Final correction `77d3d78ec99` decodes the fields
 and adds actual IS_OP output assertions; independent final source GO closes
-all raised findings. B is not integrated or runtime-qualified.
+the raised source findings. Independent integration is `a0bf313f305`, with
+products `c358f39f481` after passing regeneration. The first release compile
+fails: SETUP_ANNOTATIONS emits `_PyValue_MayDealloc(found)` for a result wrapper,
+while its release uses `found.value`. Shared release-operand repair is active.
+Product readback is also resolving changed attribute-owner certificates.
+Retain `parity67-anchor1` failed logs; B has no target or performance result.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

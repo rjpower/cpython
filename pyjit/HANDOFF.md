@@ -4,12 +4,31 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The closed proposal is [parity68](design/proposals/interpreter-parity68.md),
-under [review68](issues/register-semantics59/review68.md). The
+The active proposal is [parity69](design/proposals/interpreter-parity69.md),
+under [review69](issues/register-semantics59/review69.md). The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
 ## Current work
+
+Grouped69 is complete and independently approved for exact source-contract
+review. One unit advances: guarded summaries of complete small callback-free
+Python callees, from selected57. A hit has no child frame, body homes/dispatch
+or child retirement. The existing generated atomic B0 completion owns the
+result, input drain, refresh, end service and recipient; full RESUME admission
+precedes effects. See the design for explicit observation/lifetime scheduling,
+optional plan tail and cold-only nomination. No implementation GO exists until
+the exact producer/consumer source proposal passes independent peer review.
+
+Sol-high prepares `E59/guarded-summary69-unit-proposal.md`; the independent Sol
+peer owns `E59/guarded-summary69-design-peer.md` and subsequent source review.
+The architecture peer approves `193b4be5e4c` plus the additive source exclusions;
+root integrates the three review69 commits through `9e903ba0a412` in canonical
+documentation. Astra's grouped review is complete; do not use it in the inner
+loop. Runtime worktrees remain frozen on round68 until the new source contract
+is approved. Root owns integration, products, builds and measurement.
+
+## Closed round68 checkpoint
 
 Round67 is closed: both candidates qualified their mechanisms and lost their
 screens. Selected57 is unchanged. Round68 qualified and rejected one unit: retain real owning
@@ -31,18 +50,16 @@ The protected hot8 screen in `E59/retained68-hot8-selected57-screen` completes
 spectral_norm 0.892976, DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007.
 Protection fails. Root rejects selection with no confirmation/all29/PMU/full/
 timing rescue. Keep G/builds/controllers frozen; preserve the qualified mechanism
-and all failures/results. Selected57 remains unchanged. Next grouped Astra
-review69 is running in the existing [Astra session](http://127.0.0.1:7878/s/zfr7ow1e)
-from canonical `0fa1cefea53`. It owns only proposal69/review69 documents in
-`/home/power/code/cpython/.worktrees/interpreter-parity64-astra`, branch
-`weaver/interpreter-parity69-astra`. No new implementation unit is adopted yet.
+and all failures/results. Selected57 remains unchanged. The completed grouped
+review69 lives in `/home/power/code/cpython/.worktrees/interpreter-parity64-astra`,
+branch `weaver/interpreter-parity69-astra`; it changed only its two review docs.
 
 | Owner | Current boundary |
 | --- | --- |
-| Sol-high source | W, clean `ffe43426f9d`; bounded ordinary-path source note for next review; no runtime work |
-| Sol-high remote | P, clean `dfeaa9c7a8c`; qualification and STOP audit complete; frozen |
+| Sol-high source | W, clean `ffe43426f9d`; frozen round68 implementation |
+| Sol-high remote | P, clean `dfeaa9c7a8c`; frozen round68 reader implementation |
 | Root | G, clean `c02cebf80c4`; qualified; screen rejected, selected57 unchanged |
-| Astra | Grouped review69 active; two design/review files only, no runtime work |
+| Astra | Grouped review69 complete; two design/review files only, no runtime work |
 
 Logs/manifests use `E59/parity68-final15-*`; earlier corrected test-only
 checkpoints use `parity68-tests14-*`. Preserve all original failed compile,
@@ -105,7 +122,7 @@ are refreshed. No candidate build is another immutable control.
 Only the complete current unit advances to native mechanism/ABI evidence and
 one unchanged hot8 screen. A losing screen stops without confirmation, all29,
 PMU, full suite or repair. A promising coherent winner advances under the
-[design68 selection rules](design/proposals/interpreter-parity68.md#ordered-handoff-and-selection).
+[design69 selection rules](design/proposals/interpreter-parity69.md#ordered-implementation-and-disposition).
 
 ## Paths and immutable controls
 

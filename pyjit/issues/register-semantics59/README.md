@@ -8,19 +8,20 @@ candidate is selected. All five first-cycle executable screens lose; the
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [closed round65 design](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
-[current grouped design](../../design/proposals/interpreter-parity68.md) and
-[review68](review68.md) recommend one retained-generator-delegation unit.
-Complete source, behavior and native mechanism qualification pass at G
-`c02cebf80c4`. Final15 builds each pass 117/79 and all 50 focused methods per
-role pass, with one release debug-only skip. The unchanged protected hot8
-screen rejects selection: generators 0.708007 and spectral_norm 0.892976 improve,
-but DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007 fail protection.
-Selected57 remains unchanged. The next grouped review69 is running in the
-[Astra session](http://127.0.0.1:7878/s/zfr7ow1e). The [trial report](report.md)
-owns qualification and limits;
+[current grouped design](../../design/proposals/interpreter-parity69.md) and
+[review69](review69.md) rank five options and advance one guarded-callee-summary
+unit to exact source-contract review. Architecture peer GO accepts complete
+child execution removal, generated atomic B0 completion, full pre-body RESUME
+admission and the stated atomic observation/lifetime policy. No implementation
+or performance result is claimed. The [trial report](report.md) owns evidence;
 [handoff](../../HANDOFF.md) owns paths and commands.
-The [implementation contract](retained-delegation68.md) and
-[source peer](retained-delegation68-peer.md) fix the representation and boundary rules.
+
+Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
+Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
+coroutines 1.072083 and logging 1.239007 fail protection despite generators
+0.708007 and spectral_norm 0.892976. Its
+[implementation contract](retained-delegation68.md) and
+[source peer](retained-delegation68-peer.md) remain closed evidence.
 Both round67 candidates qualify but lose their screens: A hot8
 1.026137/logging 1.210653; B hot8 1.114220/logging 1.430373. Both remain rejected;
 selected57 is unchanged.
@@ -50,11 +51,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integration and measured selection | G, `pyjit/parity68-retained-delegation-integrated`, `c02cebf80c4`; qualified; protected hot8 rejected, frozen |
-| Sol-high source | Retained-delegation implementation | W, `pyjit/parity68-retained-delegation`; source frozen; bounded source-only ordinary-path note |
-| Sol-high remote | Remote readers and debug offsets | P, `pyjit/parity68-delegation-remote-readers`; qualified; STOP audit complete, frozen |
-| Independent Sol peers | Actual-diff cross-review | Complete source/products/native/control GO; measured rejection audited |
-| Astra | Grouped review69 | Active after closed [review68](review68.md); two documents only, no runtime work |
+| Root | Integrate design69, then the complete qualified candidate | Preserves selected57 and rejected68; owns generated products, builds and timing |
+| Sol-high source | Exact guarded-summary69 source proposal | Producer, checked readers, adaptive arm and complete generated consumer; no edits before peer GO |
+| Independent Sol peer | Exact source-contract and actual-diff review | Architecture GO; source contract pending |
+| Astra | Grouped review69 complete | Five ranked options, one ordered unit; no runtime or inner-loop work |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

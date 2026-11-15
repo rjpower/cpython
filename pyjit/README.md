@@ -11,14 +11,12 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-The selected runtime remains selected57. Round67's two independently qualified
-source candidates both lost their screens and were rejected. The grouped
-[round68 proposal](design/proposals/interpreter-parity68.md) advances retained
-generator delegation through independent architecture and source-contract
-approval. Complete source, behavior and native mechanism qualification pass,
-but protected hot8 losses reject selection despite a 29.2% generator elapsed
-gain. Selected57 remains the runtime baseline. The next grouped review will
-use these results before any further implementation.
+The selected runtime remains selected57. The grouped
+[round69 design](design/proposals/interpreter-parity69.md) ranks five options
+and advances one complete guarded-callee-summary unit to source-contract review.
+A hit removes child-frame setup, body dispatch and teardown while keeping the
+caller's inputs owning. Round68's retained-delegation mechanism qualified but
+lost benchmark protection; it remains rejected despite a 29.2% generator gain.
 The [trial report](issues/register-semantics59/report.md)
 owns current qualification, rejected trials and retained evidence.
 

@@ -1,5 +1,28 @@
 # Semantic IR trial results
 
+## Round69: architecture adopted; exact source contract under review
+
+The grouped [design69](../../design/proposals/interpreter-parity69.md) and
+[review69](review69.md) rank five alternatives and order one complete
+guarded-callee-summary unit from selected57. Root integrates Astra commits
+`193b4be5e4c`, `a093bc19ca9` and `9e903ba0a412`. The independent Sol architecture
+peer approves the removal boundary and explicit atomic observation/lifetime
+policy. It requires exact source-contract approval before implementation.
+
+A successful hit keeps the CALL window owning, evaluates a bounded checked
+expression, acquires one result and uses the existing generated atomic B0
+completion. It removes child setup, body homes/dispatch and child clear/return.
+Full pre-body RESUME/tool/recursion admission, actual function environment,
+validated constant/binding maps and optional plan-tail lifetime remain required.
+Cold specialization nominates eligible calls; ordinary heads do not probe the
+feature. No runtime, native hit, performance result or parity claim exists yet.
+
+Source-only inputs are `E59/guarded-summary69-source-peer-note.md`,
+`guarded-summary69-design-peer.md` and the pending exact unit proposal. Existing
+lazy empty kwargs and singleton empty varargs provide no new saving. The
+ordinary-path68 source note records real differences without attributing the
+observed regressions. There is no second lane or retained68 rescue.
+
 ## Round68: qualified mechanism, protected screen rejected
 
 The complete candidate is G `c02cebf80c48d47a9167dd86dce9bdc0fd11a623`.

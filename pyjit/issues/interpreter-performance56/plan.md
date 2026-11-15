@@ -10,21 +10,21 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
 The active workstream is [IR semantics59](../register-semantics59/README.md).
-The [round68 proposal](../../design/proposals/interpreter-parity68.md) and
-[review68](../register-semantics59/review68.md) recommend one retained-generator-
-delegation unit from selected57. Independent architecture and exact source-
-contract approval pass. Complete entry, yield, lifecycle and reader source is
-integrated and qualified; the unchanged protected hot8 screen rejects selection.
-Generator elapsed improves 29.2% and spectral_norm 10.7%, but DeltaBlue 10.1%,
-coroutines 7.2% and logging 23.9% losses fail protection. Preserve the qualified
-mechanism/evidence and stop without rescue. A next grouped Astra review must
-select concrete adjustments from these results before source work resumes. Retain real
-owning frames and ancestor prefixes, enter the current leaf directly, and update
-only changed delegation suffixes.
-Price the common membership pointer, ordinary generator costs, materialization,
-recursion and all observation/teardown consumers. No ordinary THREAD call or
-return checks are added. This targets generators, without claiming a combined
-parity budget or a second source lane.
+The [round69 design](../../design/proposals/interpreter-parity69.md) and
+[review](../register-semantics59/review69.md) rank five alternatives. Independent
+architecture review approves one complete guarded-callee-summary unit for
+exact source-contract review, from selected57. Keep caller inputs owning while
+eliminating child initialization, body homes/dispatch and child clear/return
+for admitted small callback-free callees. Use the generated atomic B0
+completion, full pre-body RESUME admission, current function environment and
+validated binding/constant maps. Nominate only during cold specialization;
+preserve the 16-byte plan header and CALL feedback payload. There is no second
+implementation lane or demonstrated combined parity budget.
+
+Round68's retained delegation qualified but lost its protected screen.
+Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
+7.2% and logging 23.9% losses reject selection. Preserve the mechanism and
+evidence without further timing or repair. Selected57 remains unchanged.
 
 Both round67 units qualified their mechanisms but lost their screens. A loses
 logging 21.1%, DeltaBlue 2.2% and spectral_norm 5.3%. B loses all eight aggregate
@@ -119,25 +119,24 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The [round68 design](../../design/proposals/interpreter-parity68.md),
-[review](../register-semantics59/review68.md), and
+The [round69 design](../../design/proposals/interpreter-parity69.md),
+[review](../register-semantics59/review69.md), and
 [trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. Rounds59–68 remain closed and unselected; preserved evidence is not a
-dependency list. Grouped review69 is active in the
-[Astra session](http://127.0.0.1:7878/s/zfr7ow1e), with five options and at most
-two concrete ordered units due before independent adoption.
+source-reviewed, qualified and selected changes. Rounds59–68 remain closed and
+unselected; preserved evidence is not a dependency list. Grouped review69 is
+complete and independently approved for exact source-contract review.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Preserve selected57 and rejected68; adopt next reviewed design | No new implementation before grouped69 delivery and independent peer |
-| Sol-high source | Bounded ordinary-path source note for next review | W frozen; no runtime, profile or implementation lane |
-| Independent Sol peer | Review next grouped design after delivery | Round68 qualification/STOP audit complete; P frozen |
-| Astra | Grouped review69 active | Five concrete options, at most two ordered units; two documents only |
+| Root | Integrate design69; qualify and measure the complete candidate | Owns products, builds, focused checks, native evidence and selection |
+| Sol-high source | Exact producer/consumer proposal for guarded summaries | No implementation before exact source peer GO |
+| Independent Sol peer | Peer the exact source contract, then implementation | Architecture GO; check actual callback drain, redirect and B0 error ownership |
+| Astra | Grouped review69 complete | Five ranked options; one ordered unit; no inner-loop work |
 
 No second lane, new profile/counter or compiler/flags/layout search is active.
-Design68 carries design67's exact screen, finite confirmation, all29 and
-upstream rules. A losing screen stops the unit. The remaining hot-set gaps
-stay active even if this generator-specific unit wins.
+Design69 retains the exact screen, finite confirmation, all29 and upstream
+rules. A losing screen stops the unit. A broad winner may be selected before
+parity; repeat grouped review and implementation against the remaining gap.
 
 For each increment: propose → peer → implement → focused tests → actual-diff
 review → root integrate/hot comparison. Full suites belong at coherent protocol

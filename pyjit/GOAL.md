@@ -14,35 +14,26 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-now reviews the next five architectural options after the closed
-[round68 proposal](design/proposals/interpreter-parity68.md) and
-[review68](issues/register-semantics59/review68.md). The grouped round69 review
-is running in the [Astra session](http://127.0.0.1:7878/s/zfr7ow1e); no new source
-unit is adopted before design delivery and independent review. Independent architecture
-and exact source-contract approval pass for retained real generator-delegation
-prefixes. Complete entry, yield, lifecycle and reader source is integrated;
-source, behavior and native mechanism qualification pass, but the protected
-screen rejects this candidate. Preserve the real retained-delegation mechanism
-and its evidence; select no losing runtime. The next grouped review must choose
-concrete changes from the actual status before source work resumes. Keep owning frames and existing execution
-semantics, resume the retained leaf directly, and update only changed suffixes.
-Charge storage and ordinary-generator costs without adding checks to ordinary
-function calls. This unit targets generators; no comprehension, DeltaBlue or
-coroutine parity budget is claimed. Root selects only independently qualified
-broad winners. Both round67 runtimes are rejected; selected57 is unchanged.
+follows the grouped [round69 design](design/proposals/interpreter-parity69.md)
+and [review](issues/register-semantics59/review69.md). Of five ranked options,
+one advances to exact source-contract review: guarded summaries of complete
+small, callback-free Python callees. Keep the caller's owning inputs; remove
+child-frame initialization, body homes/dispatch and child retirement on a hit.
+Use existing generated atomic CALL completion, full entry admission and cold
+specialization nomination. No second implementation lane is queued.
 
-Round66 is closed: frozen B qualified but failed logging/generator protection;
-its auxiliary union was not implemented. The logging diagnostic showed
-instruction ratio .992588 and cycle ratio 1.085426, without establishing a mechanism.
-Rejected branches and evidence remain inputs, not prerequisites. No demonstrated
-combined parity budget exists; selected57 remains the runtime baseline.
+Selected57 remains the runtime baseline. Round68 qualified retained delegation
+but lost protected DeltaBlue, coroutine and logging benchmarks; earlier losing
+packets also remain closed. Preserve their evidence without making them
+prerequisites or claiming a combined parity budget. The
+[trial report](issues/register-semantics59/report.md) owns those outcomes.
+
 Logical values, uses, edge results and continuations precede storage and
 execution lowering. Sol workers implement and cross-review bounded changes
-after source-contract approval, and the coordinator owns integration, qualification and
-measured selection. Repeat until the unchanged hot set reaches upstream parity
-while retaining broad gains. A completed proposal does not complete this stage.
-Selected57 remains the
-runtime baseline. Keep rejected packets separate and preserve their evidence.
+after exact source-contract approval; the coordinator owns integration,
+qualification and measured selection. Repeat until the unchanged hot set
+reaches upstream parity while retaining broad gains. A completed proposal does
+not complete this stage.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while preserving logging performance. Frame clearing is

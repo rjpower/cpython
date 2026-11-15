@@ -32,9 +32,14 @@ The stable 32-row screen has GM 0.989788, but DeltaBlue 1.101089,
 coroutines 1.072083 and logging 1.239007 fail protection. Generators 0.708007 and
 spectral_norm 0.892976 improve; this does not offset protected losses. Root stops
 without confirmation, all29, PMU, full suite or timing rescue. There is no fresh
-upstream result or parity claim. The next grouped review69 is running in the
-[Astra session](http://127.0.0.1:7878/s/zfr7ow1e) from this complete evidence;
-no new implementation lane is approved yet. The [trial report](issues/register-semantics59/report.md)
+upstream result or parity claim. The completed
+[round69 design](design/proposals/interpreter-parity69.md) and
+[review](issues/register-semantics59/review69.md) rank five options and advance
+one guarded-callee-summary unit to exact source-contract review. It would
+remove the entire child execution boundary for admitted small callback-free
+callees. Existing generated atomic completion owns results and retirement;
+ordinary nonparticipating handlers remain unchanged at source. No runtime
+implementation or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
 owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
 Selected57 remains unchanged.
 

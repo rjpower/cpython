@@ -5,9 +5,16 @@ passes lifecycle/native gates and cuts coroutine elapsed time 42.9% against
 selected57, but loses logging 27.7% and generators 5.2%. Reject the standalone
 executable; selected57 remains unchanged. Compact64 failed its native work gate.
 The completed [round65 review](review65.md) orders a return/accessor boundary
-change and an optional private SEND-yield continuation. A is integrated and
-passes both builds and focused checks; compiled-path qualification is underway.
-B remains a source proposal. Neither has a new performance result.
+change and an optional private SEND-yield continuation. Original A passes both
+builds and focused checks, but cold native review is NO-GO: ordinary EMPTY
+THREAD cleanup adds three instructions on scratch, local, discard and nonfinal
+binding paths, and one on redirect-discard; GENERAL paths save five. Root and
+an independent peer approve a bounded correction for the three existing
+retirement APIs and three missed source-test consumers. Its source patch has independent GO and is integrated as `a6695887e94`, with
+20 bounded source checks and three affected generated-case methods passing. The
+rejected ELF and paths remain sealed. Corrected A still needs native
+qualification and its own hot8 decision; no improvement or selection claim
+exists. B remains a source proposal.
 No new upstream or full-system result is claimed for this rejected cycle.
 The sections below retain each
 attempt's evidence and decision.
@@ -25,7 +32,7 @@ the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
-## Round65 return/accessor boundary: qualification underway
+## Round65 return/accessor boundary: original executable rejected; correction under review
 
 Integration `ee0e77046591f39079b663160e8011ac1b29df76` changes existing complete
 RETURN recipes to a THREAD branch and one owned-result resumable helper. State-
@@ -34,8 +41,11 @@ classification pass or frame field is introduced. Source and generated peers
 find no blocker. Both `parity65-residence2` builds pass 117/79, and all 46 focused
 methods pass per role, including sixteen await lifecycle methods and public
 generator construction from ordinary code. Another 708 runtime/reader methods
-pass per role, with thirteen release and twelve debug skips. Complete native
-path review is underway; no benchmark or selected-runtime claim follows yet.
+pass per role, with thirteen release and twelve debug skips. Cold native
+review rejects this executable: EMPTY paths add three instructions on ordinary
+scratch/local/discard/nonfinal-binding cleanup and one on redirect-discard;
+GENERAL paths save five. The ELF and path evidence are retained. Do not run
+target GDB or a benchmark for this executable.
 
 The first generated draft was rejected before compilation: the pure embedded
 cast was absent from the generator's nonescaping-function set, which added
@@ -45,6 +55,21 @@ source checks pass; final generation changes only four RETURN bodies and the
 getter names in four YIELD bodies. Metadata and other products are unchanged.
 Evidence and both rejected/final product diffs are retained under
 `E59/boundary65-source-host`; builds and focused logs use `parity65-residence2`.
+
+Root and an independent peer approve a bounded correction proposal retained in
+`E59/boundary65-source-host`. It narrows the two existing result-clear API
+contracts to their reached THREAD branch and lets ReturnResumable consume its
+existing AWAIT/GENERATOR branch. It keeps the generic reason-bearing dispatcher
+and existing clear engines. The header contracts, wrong-residence source
+mutation and three affected `test_generated_cases.py` consumers are in scope.
+The four-file source correction `8ed034598b3` has independent actual-source GO
+and is integrated as `a6695887e94`. All 20 bounded source checks pass, and the
+three affected generated-case methods pass after reproducing the stale-fixture
+failures. Regeneration changes no products. Both refreshed `parity65-residence3` builds
+pass 117/79, 46 focused and 708 runtime/reader methods per role. Root owns final
+native qualification. Revised A must pass native qualification and its own hot8 screen. The
+original executable remains rejected; the correction has no qualification or
+performance result yet.
 
 ## Final loop-output binding: reject
 

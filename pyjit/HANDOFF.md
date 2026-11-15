@@ -22,9 +22,9 @@ gates. Never import a rejected executable as a prerequisite.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol A, W | `/root/boundary65_returns`, clean `04e0b8a6c2c` on `pyjit/parity65-residence-boundaries`; complete return/accessor source and pure-cast effect correction integrated. Source ownership frozen |
-| Sol B, P | `/root/boundary65_continuation`, branch `pyjit/parity65-yield-continuation` from G `0bbb42ef46a`; complete continuation proposal and independent A peer. No B implementation before proposal GO/A native gate |
-| Root, G | Clean `ee0e77046591f39079b663160e8011ac1b29df76` on `pyjit/parity65-residence-integrated`; both `parity65-residence2` builds pass 117/79, 46 focused and 708 runtime/reader methods per role. Source/generated peers GO; compiled-path gate underway. No timing or selection yet |
+| Sol A, W | Correction committed as `8ed034598b3`, independently reviewed and integrated; 20 bounded source checks and three affected generated-case methods pass. Source frozen |
+| Sol B, P | `/root/boundary65_continuation`, branch `pyjit/parity65-yield-continuation` from G `0bbb42ef46a`; complete continuation proposal and independent A peer. No B implementation before proposal GO and revised A native gate |
+| Root, G | Original `ee0e77046591f39079b663160e8011ac1b29df76` passes both 117/79 builds, 46 focused and 708 runtime/reader methods per role, but cold native review rejects it: EMPTY paths add three instructions (one for redirect-discard); GENERAL paths save five. Preserve its ELF and evidence. Corrected G is `a6695887e949c3019216120c544e171dfa7ff90e`; regeneration passes with no generated changes and both `parity65-residence3` builds pass 117/79, 46 focused and 708 runtime/reader methods per role. Corrected native gate is underway; no timing or selection claim |
 | Astra | Source `374f8e3eadbac12be504f70885fe3a2a196f8fc0` plus `ceb46447bb0ef5a48f2478ba5f62f842d43e9550`, branch `weaver/interpreter-parity65-astra`, Loom `zfr7ow1e`; integrated C at `f18cefa4449` and `ba7316040e9`. Do not cherry-pick again |
 
 Use existing Sol workers for component cross-review. Sending a message to a
@@ -172,6 +172,19 @@ consumer/removal. Unit A changes existing complete RETURN recipes, takes and
 unlinks once, branches THREAD, and uses one owned-result resumable helper.
 It ports complete RETURN/YIELD source certificates and state-proved embedded
 accessors. Keep GENERAL versus EMPTY clearing authority separate.
+
+The original A ELF is native NO-GO; do not run target GDB or a timing screen
+for it. Root and an independent peer approve a bounded correction that consumes
+the reached THREAD proof in the two result-clear APIs and the AWAIT/GENERATOR
+proof in ReturnResumable. Keep the generic reason-bearing dispatcher unchanged.
+The wrong-residence source mutation and three affected generated-case consumers
+are in scope. Independent actual-source review approves patch SHA256
+`38d75f1e161979bc4f731b7bab41264092499d74e5e9b358ec5f1b4287b3b273`.
+All 20 bounded source checks pass. Root's three affected generated-case methods
+fail against the old fixtures and pass after correction. Source `8ed034598b3`
+is integrated as `a6695887e94`; regeneration changes no products. Both refreshed builds pass 117/79, 46 focused
+and 708 runtime/reader methods per role. Root owns final native qualification
+and the unchanged hot8 screen; no corrected performance result exists yet.
 
 `E59/boundary65-source-host/unit-a-proposal.md` records the source proposal;
 its old pre-freeze classification dependency is superseded by the final design.

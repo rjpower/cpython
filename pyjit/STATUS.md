@@ -17,14 +17,19 @@ gets its own native gate and hot8 screen and may advance without B. Selected57
 remains unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
-Unit A is integrated at `ee0e7704659`. Both release and debug builds pass
-117 modules/79 shared extensions and 46 focused methods each, including all
-sixteen await lifecycle methods. Independent source and generated-code reviews
-pass. Another 708 runtime/reader controls pass per role (13 release and 12 debug
-skips). The first generated draft accidentally restaged YIELD's taken owner;
-declaring the proved embedded cast nonescaping removes that work, with a
-regression test. Compiled whole-path review is underway;
-there is no new timing or selection result. B remains a source proposal.
+Unit A at `ee0e7704659` passes both 117/79 builds, 46 focused methods and 708
+runtime/reader controls per role (13 release and 12 debug skips); source and
+generated-code reviews pass. Its cold native review is NO-GO: ordinary EMPTY
+THREAD returns add three instructions on scratch, local, discard and nonfinal
+binding paths, and one on redirect-discard. GENERAL paths save five. Root and
+an independent peer approve a bounded correction for the three existing
+retirement APIs and three missed source-test consumers. The correction has independent source GO and is integrated as `a6695887e94`;
+20 bounded source checks and three affected generated-case methods pass.
+Regeneration changes no products; both refreshed builds pass 117/79, 46 focused
+and 708 runtime/reader methods per role. The
+original ELF and failed paths remain sealed. Revised source still needs its own
+native qualification and unchanged hot8 screen; no improvement or selection
+claim is made. B remains a source proposal.
 
 | Packet | Current result |
 | --- | --- |

@@ -22,9 +22,9 @@ gates. Never import a rejected executable as a prerequisite.
 
 | Owner | Current source boundary |
 | --- | --- |
-| Sol A, W | `/root/boundary65_returns`, branch `pyjit/parity65-residence-boundaries` from G `0bbb42ef46a`; implementing root/Astra-approved source proposal. Existing RETURN recipes and embedded accessors; owns shared bytecodes/generator until interface freeze |
+| Sol A, W | `/root/boundary65_returns`, clean `04e0b8a6c2c` on `pyjit/parity65-residence-boundaries`; complete return/accessor source and pure-cast effect correction integrated. Source ownership frozen |
 | Sol B, P | `/root/boundary65_continuation`, branch `pyjit/parity65-yield-continuation` from G `0bbb42ef46a`; complete continuation proposal and independent A peer. No B implementation before proposal GO/A native gate |
-| Root, G | Clean `0bbb42ef46ab9c55996e9b507a528a12705eedf0`, branch `pyjit/parity64-await-integrated`; both await9 builds 117/79. Qualified mechanism, rejected hot8. Preserve this branch before A integration |
+| Root, G | Clean `ee0e77046591f39079b663160e8011ac1b29df76` on `pyjit/parity65-residence-integrated`; both `parity65-residence2` builds pass 117/79, 46 focused and 708 runtime/reader methods per role. Source/generated peers GO; compiled-path gate underway. No timing or selection yet |
 | Astra | Source `374f8e3eadbac12be504f70885fe3a2a196f8fc0` plus `ceb46447bb0ef5a48f2478ba5f62f842d43e9550`, branch `weaver/interpreter-parity65-astra`, Loom `zfr7ow1e`; integrated C at `f18cefa4449` and `ba7316040e9`. Do not cherry-pick again |
 
 Use existing Sol workers for component cross-review. Sending a message to a

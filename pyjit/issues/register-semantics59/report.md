@@ -5,8 +5,9 @@ passes lifecycle/native gates and cuts coroutine elapsed time 42.9% against
 selected57, but loses logging 27.7% and generators 5.2%. Reject the standalone
 executable; selected57 remains unchanged. Compact64 failed its native work gate.
 The completed [round65 review](review65.md) orders a return/accessor boundary
-change and an optional private SEND-yield continuation. A implementation and B
-source proposal are active; neither has a new native or performance result.
+change and an optional private SEND-yield continuation. A is integrated and
+passes both builds and focused checks; compiled-path qualification is underway.
+B remains a source proposal. Neither has a new performance result.
 No new upstream or full-system result is claimed for this rejected cycle.
 The sections below retain each
 attempt's evidence and decision.
@@ -23,6 +24,27 @@ native net-work gate; complete deferred await is in isolated integration under
 the [round64 design](../../design/proposals/interpreter-parity64.md) and
 [review](review64.md). See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
+
+## Round65 return/accessor boundary: qualification underway
+
+Integration `ee0e77046591f39079b663160e8011ac1b29df76` changes existing complete
+RETURN recipes to a THREAD branch and one owned-result resumable helper. State-
+proved embedded accesses avoid selecting an active view. No new return opcode,
+classification pass or frame field is introduced. Source and generated peers
+find no blocker. Both `parity65-residence2` builds pass 117/79, and all 46 focused
+methods pass per role, including sixteen await lifecycle methods and public
+generator construction from ordinary code. Another 708 runtime/reader methods
+pass per role, with thirteen release and twelve debug skips. Complete native
+path review is underway; no benchmark or selected-runtime claim follows yet.
+
+The first generated draft was rejected before compilation: the pure embedded
+cast was absent from the generator's nonescaping-function set, which added
+owner restaging and phase clears to YIELD. Source correction `04e0b8a6c2c`
+declares that effect and adds an emission regression. All nineteen bounded
+source checks pass; final generation changes only four RETURN bodies and the
+getter names in four YIELD bodies. Metadata and other products are unchanged.
+Evidence and both rejected/final product diffs are retained under
+`E59/boundary65-source-host`; builds and focused logs use `parity65-residence2`.
 
 ## Final loop-output binding: reject
 

@@ -17,6 +17,15 @@ gets its own native gate and hot8 screen and may advance without B. Selected57
 remains unchanged. PyValue rollout is complete; transport, effects, ownership and
 physical execution remain targets. Parity is not achieved.
 
+Unit A is integrated at `ee0e7704659`. Both release and debug builds pass
+117 modules/79 shared extensions and 46 focused methods each, including all
+sixteen await lifecycle methods. Independent source and generated-code reviews
+pass. Another 708 runtime/reader controls pass per role (13 release and 12 debug
+skips). The first generated draft accidentally restaged YIELD's taken owner;
+declaring the proved embedded cast nonescaping removes that work, with a
+regression test. Compiled whole-path review is underway;
+there is no new timing or selection result. B remains a source proposal.
+
 | Packet | Current result |
 | --- | --- |
 | Compact domain64 | Integrated at 9de7005b670. Both refreshed builds pass 117/79 and all eight new plus 21 control methods pass per role. Native stack/text caps pass, but complete nominal segments add instructions (227 versus 173; 280 versus 234). Stopped at the net-work gate; no benchmark or target coverage campaign. |

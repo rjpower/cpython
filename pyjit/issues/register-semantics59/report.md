@@ -920,3 +920,49 @@ with unchanged inspected ordinary native bodies. Those facts do not identify
 an exclusive cause. No layout/flag sweep or further counter fishing follows.
 Phase two is an independent attribute-role packet from selected57, excluding
 these losing FOR/append bodies; deferred await remains a separate source lane.
+
+## Round63 isolated attribute roles: native qualification
+
+Source `c1066265668d0256f78eaf04e3894f011485184e` starts directly from
+selected57, excluding the rejected list/FOR and append implementation. Root
+integrates at `1fe09389531`, commits generated products at `18445aa21d5`, then
+integrates fixture-only `035aa32e16c` at final
+`581c018a34a2c4d521cec789e1261a4b331c7dc8`. The
+[unit](role-lowering63.md#phase-two-source-qualification) records actual source
+receipts, independent approval, four passing focused host methods and coverage
+limits. No active ownership graph claims an unsupported poststate.
+
+Both `parity63-attributes2` builds complete 117/79. All 54 focused runtime
+methods pass per role across attribute_roles, operand_modes,
+native_owner_effects, admission, error_scope and transfer_admission. The first
+run passes the existing 47 and fails three new fixture assertions: method
+cases share warmed code, mutable payload instances do not qualify for CLASS,
+and a custom metaclass requests the unsupported metaclass-check member. The
+aborted finalizer fixture also reads an unset closure cell. The fixture-only
+successor uses fresh method code, supported builtin-list payloads containing a
+mortal object, and an ordinary type with abort-safe weakref.finalize. Exact
+active-head checks and four construction routes remain. Corrected seven pass
+both roles under attributes2; existing 47 pass release under attributes1 and
+debug under attributes1-debug-controls. No production gate is relaxed.
+
+Native capture `E59/parity63-attributes2-native` has ELF SHA256
+`0b827d770ba806326b82565bb916e8e19f2b5af7d5ead7e4e81cc71c714349a0`.
+Independent native mechanism review passes: two method owners/stores remain,
+class takes its receiver and publishes once before retirement, and shape moves
+the value before retiring the old field without a fictitious receiver owner.
+Reviewed successful static paths fall 54→46, 56→49, 88→71 and 73→58 instructions
+for NO_DICT, WITH_VALUES, class alias and shape store respectively. These paths
+include dispatch, exclude callees, use mortal acquisitions and nonfinalizing
+closes; they are not dynamic workload counts. Ten ordinary controls retain
+their normalized instructions/sizes; SEND's differing annotation anchors
+resolve to identical string bytes. Explicit class/shape stack stays 16 bytes,
+with no new common-path spills. Whole text grows 3,328 bytes and rodata 1,376;
+new bodies total 1,225 bytes, not the whole growth. Bounded actual probes in
+`E59/attribute63-coverage` have stable identities and kernel-filtered native
+first hits for all four active bodies. Comp finishes with six method sites and
+one store, Delta with 28 class/64 method/19 store sites, and logging with 12
+method sites. Logging also records a store first hit despite no active store
+at its final snapshot. These are static site counts and first-hit lower bounds,
+not invocation frequencies, steady-state store coverage or timing evidence.
+Setup can already specialize sites. No throughput or selection claim is made
+before the unchanged balanced screen.

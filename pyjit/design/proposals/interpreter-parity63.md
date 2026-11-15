@@ -42,15 +42,16 @@ as the independent activation lane. Rank 3 is conditional on the cost gate
 below, not a prerequisite for either. Do not integrate a losing round62 binary
 to obtain its source machinery.
 
-The component source review has now refined rank 2's unresolved relocation
-proposal: the [deferred-await unit](../../issues/register-semantics59/deferred-await63.md)
-is authoritative for implementation. Observation materializes an object view
-without moving the active frame. Storage moves only at a terminal suspension
-within the owning evaluator segment. This replaces the mid-activation
-promotion wording below; complete reader ports remain an implementation gate.
+The [deferred-await unit](../../issues/register-semantics59/deferred-await63.md)
+owns rank 2's complete implementation contract. Observation materializes an
+object view without moving the active frame. Storage moves only at a terminal
+suspension within the owning evaluator segment; complete reader ports remain
+an implementation gate.
 The [fixed-role unit](../../issues/register-semantics59/role-lowering63.md)
-specifies rank 1's phase-one source packet. Both units have root and independent
-source approval; neither has native qualification or measured results yet.
+specifies rank 1's source packets. Its list/FOR and append phase is qualified
+and rejected: comp .958819 improves, but logging 1.083074 loses both pairs.
+The isolated attribute phase and deferred await remain source work, with no
+native qualification or performance claim.
 
 ## Shared logical and physical model
 
@@ -319,170 +320,88 @@ ordinary operation bodies, with delayed object materialization. It is specific
 to an exact native coroutine function whose result has the single admitted
 await use. It is not a generic virtual-object system or native JIT inlining.
 
-### Admission and source interval
+### Complete activation contract
 
-Common image replay must prove the actual CALL result feeds GET_AWAITABLE,
-the latter feeds SEND's receiver, the intervening value is None, the SEND
-result/complete edge is the original one, and no other read, alias, branch,
-exception ingress or observable effect consumes that intermediate object.
-Match value identities and effects, not fixed opcode adjacency or source lines.
-Begin with the actual four-word, no-self, positional exact-arity path. Each
-interior word remains a legal ordinary entry with an ordinary object prestate;
-only entry through the admitted head can create the private activation.
-Unknown public images remain ordinary. All public construction routes use this
-same replay.
+The [deferred-await unit](../../issues/register-semantics59/deferred-await63.md)
+owns the source boundaries, owner ledger, reader census and focused tests.
+Common final replay proves the four-word value path and rejects additional
+reads, aliases or incompatible ingress. The cold pending CALL is ordinary until
+exact specialization; all covered-word writers revoke the certificate together.
+Keep mutable function, observer, origin, recursion and arena-space guards at the
+reached entry. Source positions grant no eligibility.
 
-At the head keep the current PEP523, function/code-version, arity, stack and
-recursion checks; require exact coroutine code, origin tracking disabled, and
-no active tracing/profiling/monitor event or LLTrace. Ordinary semantic CALL,
-GET_AWAITABLE and SEND PCs remain distinct for guards, errors and later
-observation. Unsupported current state falls back before taking owners. Use
-the central multiword writer to revoke the head if any covered word changes.
-Do not cache mutable tracing/origin state as an immutable image fact.
+The child uses disjoint owning homes, one argument move and a distinct arena
+residence with coroutine activation semantics. The ordinary fixed frame header
+stays 112 bytes. An await-only 96-byte header-side record holds the actual
+exception item, identity owner, creation-time name owners, parent/evaluator
+boundary and semantic word indices. No record byte is a scanned PyValue.
+Ordinary nested calls retain their existing overlap. The parent uses the
+explicit AWAIT_WAIT lifecycle with physically NULL absent SEND controls; it
+remains externally executing, with no suspended coroutine relation yet.
 
-### Private state and successful execution
+Synchronous completion takes the actual result, clears/pops through the
+residence-specific protocol and publishes directly at the original SEND
+completion edge. Body errors use their real instruction/handler before the
+parent await error edge. Neither exit replays creation or SEND. Frame clearing,
+exception links, recursion accounting, redirect handling and finalizer roots
+remain real work.
 
-Reserve the child in the thread arena with **disjoint child homes** first.
-Transfer the already owned positional argument once and clear the parent's
-consumed call window. The original parent SEND receiver/input slots stay valid
-NULL; no special non-object PyValue is published there. Disjoint storage avoids
-silently reinterpreting a callee argument as the parent's sent-value slot and
-keeps ordinary parent root scans truthful. Charge this move; do not claim the
-selected overlapping exact-call copy saving again.
+### Identity views and terminal storage transfer
 
-Use a distinct thread-backed await owner mode and an await-only record adjacent
-to that frame's fixed header in the **header side** of its arena reservation.
-Value homes still grow from the chunk's value side; raw record fields are
-never inside the initialized-NULL suffix scanned by `_PyThreadState_PopFrame`.
-The record holds an
-actual `_PyErr_StackItem`, the parent, original call/await/send PCs and the
-normal/exception completion targets. Its address is derived from the new
-owner mode and reserved layout; ordinary frames acquire no pointer or larger
-header. Reserve/account the additional arena extent explicitly. `saved_top`
-continues to describe the value top to restore; the owner mode supplies the
-extended header extent for pop/chunk restoration. `_PyThreadState_PopChunk`'s
-first-header assertion must use that same extent. Function and code retain
-their ordinary strong owners; argument homes retain their actual owners.
+Observation does not relocate active storage. A generic frame object or locals
+proxy may view the stable arena frame without allocating a coroutine. A request
+for coroutine identity creates an object with a checked active-frame pointer;
+its embedded frame is initially empty. All generator/frame/exception readers
+must select the actual representation. The record owns the identity; its view
+borrows frame and exception edges already owned by the active frame and thread.
+GC consumes those roots without allocating or double-counting them. Every
+executing private ancestor remains FRAME_EXECUTING, including an internal
+awaiting parent, until a genuine external suspension.
 
-Initialize the coroutine's logical exception state in the record and link it
-through `tstate->exc_info` before entering the body after its creation prefix.
-Account one active Python recursion level, maintain current/previous frame
-links, and publish the parent at the semantic SEND suspension boundary with
-an explicit private await-receiver state in the activation record. A reader
-needing the ordinary receiver requests promotion; it must not find fake bits
-or infer a coroutine from a NULL slot. Existing canonical PyValue homes never
-hold the private activation token.
+Only the owning evaluator's terminal suspension may move storage. The evaluator
+entry sentinel bounds the affected suffix: a nested C-to-Python evaluation
+cannot move older frames retained by a native caller below that boundary.
+Prepare every required object while the arena owners remain rooted, then commit
+nonfailing moves, receiver publication, exception/previous links and frame-view
+retargeting. Pop reservations in stack order. All terminal C continuations use
+the replacement frame afterward; no old slot/frame aliases survive that
+handoff. There is no middle-reservation tombstone scheme.
 
-Separate **storage residence** from **activation kind** at existing readers.
-A central thread-resident predicate admits ordinary thread and await frames
-for arena reservation, argument overlap in subsequent ordinary calls, copying
-and pop. Generator-backed predicates still require an actual heap generator.
-Do not leave `owner != THREAD` branches to treat the new mode as a heap caller.
-The coroutine code flag can distinguish return handling for this new mode
-without an extra universal synchronous-return branch. Price all changed native
-paths; a source predicate is not itself free.
+Keep YIELD nonraising. Suspension preparation belongs to the reached SEND
+continuation, where the outgoing value has an initialized home and allocation
+failure can follow the real outstanding SEND error edge. Generic SEND and
+SEND_GEN need their respective actual handoff receipts; a guessed predecessor
+or a new hidden YIELD exception certificate is insufficient. Observation and
+debugger mutation must preserve stable addresses until the same terminal
+boundary. Name/qualname snapshots, origin semantics and already exposed
+identities remain coherent through completion or transfer.
 
-If the body returns without an exposing effect, retire the thread-backed child
-through its owning frame protocol and publish the owned result directly at the
-original SEND completion recipient/PC. The completion consumes the private
-activation rather than nonexistent receiver/coroutine owners. Error completion
-preserves exception state and attribution at the original await and uses an
-explicit corresponding unwind edge. Neither path replays CALL, GET_AWAITABLE
-or SEND. This removes object allocation, heap-frame copying, the creation
-return and subsequent heap-frame entry; it retains body work and required
-frame initialization/retirement.
+```mermaid
+flowchart LR
+    Call[Certified exact CALL] --> Arena[Arena coroutine activation]
+    Arena --> Body[Ordinary body and nested calls]
+    Body --> Return[Direct SEND completion]
+    Body --> View[Identity or frame view]
+    View --> Body
+    Body --> Prepare[Reached SEND yield continuation]
+    Prepare -->|allocation failure| Error[Original SEND error edge]
+    Prepare -->|all allocations ready| Move[Terminal suffix transfer]
+    Move --> Yield[Ordinary nonraising YIELD]
+```
 
-### Promotion and reader closure
+**Whole-unit gate:** no head is enabled before arena extent/root accounting,
+entry/return/error, observation, debugger redirects, terminal suspension and all
+direct generator/frame readers are closed. The unit names concrete source and
+runtime cases. Price the new representation select on ordinary generators as
+well as the admitted await cycle, record reservation, name owners and disjoint
+argument transport. Natural hits, materialization counts, native instructions
+and broad results decide selection. Structural counts alone earn no speedup.
 
-Before the first real suspension, frame/generator exposure, tracing/monitor
-event, debugger redirection, or native effect that requires ordinary
-frames, materialize the affected active await chain. Allocate the real
-coroutine objects and heap frames, initialize names/code/origin semantics,
-move owned homes and exception values, and install each original parent
-receiver/continuation. Repair `current_frame`, child `previous`, exception
-`previous_item`, `tstate->exc_info`, active await links and profiler/frame
-associations before any callback or collector observes the new chain. A
-partially promoted chain remains under explicit transition roots; allocation
-failure unwinds through that published state, never an unrooted C array.
-
-Promotion is a transaction: prepare allocations while the old thread records
-still own everything, then commit nonfailing owner moves and pointer repairs.
-Nested records remain allocated until their links and saved stack extents are
-safe to retire. If an ordinary thread child is still above a promoted await
-frame, retain the cleared old arena reservation as a retirement record until
-the child pops; then reclaim it in the arena pop protocol. It is not a live
-Python frame or an owner, and GC does not scan its raw header payload. The
-peer design must close this deferred reclamation and all live C-frame aliases;
-it may not free a middle arena allocation or leave a stale C pointer usable.
-Materialization on an interior-frame query promotes enough of
-the chain to make all reachable frame/generator relations ordinary. Early
-return can keep ordinary owned result transport; no immediate destruction or
-incidental allocation/GC-count equivalence to CPython is required.
-
-The source port includes generated reached effect boundaries, stack growth/
-pop, code/function/frame ownership helpers, error unwinding, recursion, GC,
-`PyFrame_GetGenerator`/`frame.f_generator`, locals/frame exposure, debugger,
-monitoring and profiler readers. In particular `_PyGen_GetGeneratorFromFrame`
-cannot cast a thread await frame as an embedded heap generator. Root scanning
-must visit the record's real exception owner and owning child homes, while the
-absent receiver contributes no reference. GC traversal must consume these real
-roots directly, without allocating or recursively promoting during collection.
-A pre-collection observation hook that requires an ordinary coroutine must
-promote before entering collection; ordinary collection alone is not such an
-observation. No collector may use an unmodified embedded-generator cast for
-this owner mode.
-
-Ordinary nested Python calls, including recursive immediate awaits, do **not**
-promote merely because Python runs: their arguments and the await record's
-exception/frame roots are already real. Promotion triggers are an actual
-request for an observable coroutine/frame relation, real suspension, an event
-requiring ordinary observed state, or a reached native/collector reader whose
-contract cannot consume the private activation. A generic family name cannot
-make a whole body callback-free or force unconditional promotion of every
-recursive call. Reached guarded successes keep their real effect contracts.
-Hook existing publication and observation paths, not a mode test at every
-value read. A reader that retains raw frame pointers across a possible
-promotion needs an explicit refresh/stability rule before admission. This
-includes another thread's `PyThreadState_GetFrame`/`sys._current_frames` while
-the target has released the GIL inside a native call. GIL-only execution does
-not make those suspended native aliases disappear. Either the completed port
-provides safe relocation and refresh for every supported retained alias, or
-that state needs a stable-frame materialization design before this lane can be
-implemented. Merely repairing `current_frame` is insufficient. Charge
-added ordinary-handler checks; they are a real logging risk. Existing exposed
-frames or unsupported preexisting observation can conservatively deny entry.
-
-Files: common use/def admission and execution selection; `ir_generator.py`
-CALL/entry/return/error recipes; `pycore_interpframe_structs.h` owner enum and
-await-only record layout; arena/frame helpers; `genobject.c`, `frame.c`, `gc.c`,
-`frameobject.c`, monitoring/debug/profiler adapters. The bounded peer proposal
-must give a reader/writer table and a promotion state machine before runtime
-implementation. It cannot stop at the new CALL head.
-
-The minimum source closure for that peer unit is concrete:
-
-| Reader or transition | Required await-mode contract |
-| --- | --- |
-| `_PyFrame_ReserveForCall`, `_PyFrame_PushOverlapping` and exact-call lowering | Test thread residence separately from coroutine identity; preserve ordinary nested-call overlap while the await's own initial homes remain disjoint |
-| `_PyThreadState_PushFrame`, `_PyThreadState_PopFrame`, `_PyThreadState_PopChunk` | Reserve and restore the extended header extent; never scan the raw record as PyValues; drain deferred cleared reservations in stack order |
-| `_PyFrame_GetHomeView`, `_PyFrame_Traverse`, `_PyGC_VisitFrameStack` | Admit the private active phase with truthful NULL-controlled homes and actual exception roots; allocate nothing during traversal |
-| `_PyFrame_TryClearExceptCode` and general/error clear continuations | Choose extent from actual storage/phase, close each owner once, preserve transition roots across finalizers, then retire the record |
-| `_PyFrame_GetFrameObject`, `_PyFrame_MakeAndSetFrameObject`, thread-frame queries and locals proxies | Complete promotion before observable publication; account for cross-thread queries and native aliases, not just the current interpreter handler |
-| `_PyGen_GetGeneratorFromFrame`, `frame.f_generator`, `PyFrame_GetGenerator`, frame clear/line redirection | Require a real generator-backed owner or request completed promotion; never reinterpret the private header as an embedded object |
-| Generated RETURN/YIELD/SEND/error paths | Distinguish direct private completion, first true suspension and already promoted execution; preserve semantic recipients, exception links and recursion on each transition |
-| Monitoring, profiling, debug and executable-word writers | Deny or revoke admission at entry; promote active affected frames before an observer requires ordinary state; preserve all four semantic PCs |
-
-The table bounds the source design work; it is not a claim that these ports or
-the native-alias proof already exist. In particular, mid-activation relocation
-is the largest unresolved feasibility obligation, and can reject this layout.
-
-**Falsifiers:** no accepted natural hits; allocating a coroutine on every hit
-anyway; a second owning argument snapshot; lost exception owner/recursion level;
-common guards that always promote; unbounded native stack storage; or a broad
-sentinel loss. Measure the complete immediate-await cycle, ordinary calls and
-promotion controls, including nested awaits that really yield, frame queries,
-GC/error injection and observers enabled from a child. This lane has much
-larger source work to remove than direct creation, but no speedup is assumed.
+**Falsifiers:** no accepted natural hits; allocating a coroutine on every
+synchronous completion; ordinary nested calls forcing materialization; a second
+owning argument snapshot; lost exception owners or recursion accounting;
+mid-activation relocation; traversal that allocates; an unmodeled YIELD error;
+unbounded native stack; or repeated broad sentinel losses.
 
 ## 3. A small effect-bounded execution domain
 

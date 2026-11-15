@@ -11,7 +11,18 @@ this file owns current execution paths.
 
 ## Current execution
 
-G is frozen on `pyjit/parity63-role-integrated`, at
+G is on `pyjit/parity63-attributes-integrated`, with reviewed source
+`c1066265668d0256f78eaf04e3894f011485184e` integrated at `1fe09389531`,
+generated products at `18445aa21d5`, and fixture-only successor at
+`581c018a34a2c4d521cec789e1261a4b331c7dc8`. Full generation and both
+`parity63-attributes2` builds pass 117/79. All 54 focused methods pass per role:
+new seven under attributes2 and other 47 under attributes1 (debug-controls
+for debug). Native capture is `E59/parity63-attributes2-native`, ELF SHA256
+`0b827d770ba806326b82565bb916e8e19f2b5af7d5ead7e4e81cc71c714349a0`.
+Independent native mechanism review passes; timing remains pending. Both reused builds
+are coherent with this G. Actual first hits for all four new bodies occur in
+comp/Delta; logging also hits method/store in `E59/attribute63-coverage`.
+The rejected list source is preserved on `pyjit/parity63-role-integrated`, at
 `034f2b22f87bb4e9e54e689bb5ead8a252e60a97`. Source `90cd71b4874e` integrates at
 `519205b2d57`, generated products at `c7fecde25a4`, and fixture-only correction
 `a0e1cea9da2` supplies valid ordinary geometry to private-ID rejection tests.
@@ -23,7 +34,7 @@ Actual native hits for both bodies occur in comp. The stable hot-eight screen
 rejects: comp .958819, coroutines .963592 and spectral .954570 improve, but
 logging 1.083074 loses both pairs. Preserve the branch/evidence; no all29,
 confirmation, direct upstream, PMU or full campaign follows this loser.
-Builds are coherent with this frozen G until its next source switch.
+Those builds were coherent with the frozen list source before G switched.
 
 The method trial is preserved on `pyjit/parity62-method-integrated`, at
 `ab4cb5f49fb0210a80bcdb94b597ad6ed94db9ac`. Its registry-only correction is
@@ -42,8 +53,8 @@ confirm native entry on Delta and ray. The stable hot-eight screen rejects:
 Delta 1.032009 and logging 1.228535 despite comp .965035. No all29/upstream/full
 campaign follows. All four round62 candidates are rejected.
 
-No native job runs. P begins isolated phase-two attributes from selected57,
-excluding FOR/append bodies and their source recipe. W continues complete
+P freezes isolated phase-two attributes at fixture successor `035aa32e16c`, excluding FOR/append
+bodies and their source recipe, and peers W's next slice. W continues complete
 deferred-await source with no active entry. Preserve all rejected branches
 and captures; captured standalone ELFs must not execute against changed Lib.
 
@@ -152,10 +163,10 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity63-attributes`, from selected57; role a0e branch preserved | Reviewed attribute-role source implementation; no FOR/append heads or body-edge recipe |
+| Generator | P / `pyjit/parity63-attributes`, at `035aa32e16c`; role a0e branch preserved | Attribute source frozen; independent peer for the next await slice |
 | Frames | W / `pyjit/parity63-deferred-await`, from selected57; method882 branch preserved | Reviewed deferred-await complete source implementation; no active head/native use before full reader/transition closure |
 | Continuation | A / `pyjit/parity62-delegated-resume`, at `d43f88d0402` | Frozen rejected source and evidence |
-| Coordinator | G / `pyjit/parity63-role-integrated`, at `034f2b22f87` | Rejected phase-one list roles frozen; await reviewed attribute source before next integration |
+| Coordinator | G / `pyjit/parity63-attributes-integrated`, at `581c018a34a` | Both builds/focused/native gates pass; balanced screen next |
 | Astra | Final grouped63 architecture review | Complete; root and Sol peers own component loop |
 
 The rejected creation [proposal](issues/register-semantics59/created-generator-proposal.md)

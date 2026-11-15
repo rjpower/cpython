@@ -106,8 +106,8 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | [Attribute-role refinement](../register-semantics59/role-lowering63.md#phase-two-source-refinement) from selected57; list/FOR and append trial rejected | Reached owner receipts, body-edge publication, common admission and central writer closure |
-| Sol frame worker | [Deferred immediate-await unit](../register-semantics59/deferred-await63.md) source implementation after root/peer approval | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before implementation |
+| Sol generator worker | [Attribute-role refinement](../register-semantics59/role-lowering63.md#phase-two-source-refinement) frozen at c1066265668 and integrated; now peers await source | Reached owner receipts, canonical pair publication, common admission and central writer closure; root owns native gates |
+| Sol frame worker | [Deferred immediate-await unit](../register-semantics59/deferred-await63.md) source implementation after root/peer approval | Stable active addresses, real exception roots, complete materialization and frame/coroutine reader closure before enabling a head |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
 | Astra | Completed grouped63 review | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 

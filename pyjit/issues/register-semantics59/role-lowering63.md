@@ -177,3 +177,31 @@ see the [trial report](report.md) for all ratios, native identities and limits.
 Source and native evidence remain under E59. Phase two starts independently
 from selected57 and excludes the FOR/append private heads and local-result
 recipe; its source implementation remains unqualified.
+
+## Phase-two source qualification
+
+Isolated source `c1066265668d0256f78eaf04e3894f011485184e` starts directly
+from selected57. Root integrates it at `1fe09389531`. The eleven-path packet
+has no generated products, list/FOR or append heads, or local-result recipe.
+Final source patch SHA256 is
+`374e0b26817d5ac95dad7c267adcf782567ba8dc7c113d913c0ee5073a28fc87`,
+retained with the freeze manifest under `E59/attribute-role-source-host`.
+Four focused source methods pass in both record modes; seven runtime methods
+are AST-checked only at this gate. Root owns generation and native qualification.
+
+Independent actual-source review approves the packet after binding a fixed
+local's NULL-owner receipt to its matching pending OWNER and consuming it at
+retirement. Existing rules already reject pre-retirement overwrite/address
+escape. The amendment prevents a later acquired owner with the same C name from
+inheriting that receipt; its later retirement remains. No selected attribute
+body was shown unsafe. Source mutations cover both cases without granting a
+fact from names alone.
+
+The class fixture drops the sole external receiver reference, collects and
+checks eventual release, result rooting and reentry. A class's own MRO/type
+cycle makes this an eventual-lifetime control, not proof of an immediate
+receiver-release callback. The displaced shape field supplies the immediate
+callback/locals mutation/GC case. Independent cold no-nomination images for
+each method output are not supplied; the two separate final-replay absence
+checks are source-reviewed, and no malformed live-output image is executed.
+Native and performance results are not yet claimed.

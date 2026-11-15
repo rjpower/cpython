@@ -34,7 +34,7 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped63 final; no runtime changes |
 | Independent peer | Check unit ownership, recovery and reader closure before implementation | Both units approved by root and source peer |
-| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | List roles rejected; isolated attributes and complete deferred-await source under way |
+| Implementation workers | List/FOR and append roles, then attribute roles; independent deferred-await design | List roles rejected; attribute source integrated with native gates pending; complete deferred-await source under way |
 | Measurement | Reuse exact-identity harness and immutable selected57 | Round59–62 closed; no winner selected |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 

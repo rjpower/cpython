@@ -242,11 +242,32 @@ and the official-container configure regeneration pass. Only the target table,
 UNKNOWN block and generated configure change; semantic metadata is unchanged.
 Both fresh configurations match all compared compiler/core/module flags and
 byte-identical selected57 pyconfig.h. Both builds complete 117 modules/79 shared
-extensions. Each role passes 465 methods across 17 focused modules. The hot-eight
-screen is running; no performance result exists yet. Native capture resolves all 367 table
-rows inside `run_handlers`; cold review finds stack-backed state, a 4,472-byte
-stack reservation and one shared indirect dispatch after GCC tail merging.
-These costs must be charged against removed ABI handoff. Setup is retained in E59
+extensions. Each role passes 465 methods across 17 focused modules. The balanced
+hot-eight screen rejects the candidate in every workload and every pair:
+
+| Workload | Engine / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 1.218648 | 1.175412–1.263475 |
+| deltablue | 1.338757 | 1.333543–1.343992 |
+| coroutines | 1.185821 | 1.172873–1.198913 |
+| generators | 1.438227 | 1.425445–1.451124 |
+| logging_silent | 1.599627 | 1.598617–1.600637 |
+| raytrace | 1.300208 | 1.297438–1.302985 |
+| spectral_norm | 1.291620 | 1.286112–1.297151 |
+| nqueens | 1.302795 | 1.297197–1.308416 |
+
+`E59/parity60-engine1-eight-selected57` records stable identities and successful
+pre/post checks. No all29, full-system or direct upstream rerun is justified for
+this broad loser. Preserve `pyjit/parity60-integrated` at ec230e55641 and its
+builds; the next scalar trial starts from unchanged selected57.
+
+The [native post-review](engine-post-review.md) resolves all 367 table rows
+inside `run_handlers`. Actual machine code has stack-backed engine state,
+a 4,472-byte stack reservation and one shared indirect dispatch after GCC
+tail merging. Candidate text grows 55,424 bytes. SEND also gains an outlined
+return-publication helper. These concrete costs defeat the intended simple
+state-residency argument; they do not quantify the cause of each elapsed loss.
+No flag, compiler or alignment search follows. Setup is retained in E59
 `parity60-configure-commands.json` and `configure-parity60.py`.
 The four shared tool consumers and bounded ELF target mapper have actual source
 peer GO; six host mocked/synthetic methods pass. Unsupported ELF/relocation or

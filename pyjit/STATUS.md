@@ -30,10 +30,15 @@ Generation passes with unchanged semantic metadata. Both fresh configurations
 match selected57's core/module flags and byte-identical pyconfig.h. Both builds
 complete 117 modules/79 shared extensions. Release and debug each pass 465
 methods across 17 ownership, call, exception, observer and suspension modules.
-The native target map resolves all 367 rows inside the actual engine. Cold
-review finds a 4,472-byte stack reservation and one shared indirect dispatch
-after GCC tail merging; state remains stack-backed. The balanced eight-case
-performance screen is running; the candidate is not selected.
+The balanced screen rejects the engine in all eight cases: comprehensions
++21.9%, DeltaBlue +33.9%, coroutines +18.6%, generators +43.8%, logging +60.0%,
+raytrace +30.0%, spectral_norm +29.2% and nqueens +30.3%. Both pairs lose in
+every case; identities remain stable. The [native post-review](issues/register-semantics59/engine-post-review.md)
+resolves all 367 rows and finds a 4,472-byte stack reservation, stack-backed
+engine state and one shared indirect dispatch after GCC tail merging. No
+full-system or upstream rerun is claimed for this loser. Golden stays fixed;
+the concrete scalar proposal uses selected57's existing backend. Astra's next
+grouped review considers broader changes against this negative evidence.
 
 The [all-word census](issues/register-semantics59/resident-coverage.md) limits
 the finite scalar-pair pilot, without bounding all possible regions. Its

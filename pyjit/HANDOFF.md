@@ -21,16 +21,21 @@ appended UNKNOWN block; semantic metadata is unchanged. The official cached
 Autoconf image regenerates configure successfully. Both fresh configurations
 match selected57's core/module flags and byte-identical pyconfig.h. Both native
 builds pass 117 modules/79 shared extensions. Each role passes 465 methods in
-17 focused modules. The two-pair hot-eight screen is running, with no result yet:
-`E59/parity60-engine1-eight-selected57`. Focus logs/manifests are
+17 focused modules. The two-pair hot-eight screen rejects every case in every
+pair: comprehensions 1.218648, DeltaBlue 1.338757, coroutines 1.185821,
+generators 1.438227, logging 1.599627, raytrace 1.300208, spectral_norm 1.291620,
+nqueens 1.302795. Identities are stable in
+`E59/parity60-engine1-eight-selected57`. Preserve this losing branch/build;
+the next scalar packet starts from selected57, not this engine. Focus logs/manifests are
 `E59/parity60-engine1-{release,debug}-focus.log` and
 `E59/parity60-engine1-focus-commands.json`.
 Native capture `E59/parity60-engine1-native` resolves all 367 table rows in
 `run_handlers`; ELF SHA256 is
 `ef23fed1a41afbd165e940c8c118e173994c9837d7c5fd7a86cc1936e2ef5794`.
 The cold reviewer finds a 4,472-byte stack reservation, stack-backed engine
-state and one tail-merged indirect dispatch. Root must charge that actual
-native work before selecting this backend.
+state and one tail-merged indirect dispatch. See the
+[native post-review](issues/register-semantics59/engine-post-review.md). No
+flag, compiler or layout search follows this rejected backend.
 P `R/call55-pins` is frozen on `pyjit/parity60-engine` at `1ae2fb035277`, based
 on selected57. W's `pyjit/parity60-backend-identity` config packet is
 `47653c3bb4c3`; shared C probe/ELF diagnostic consumers also have actual peer GO

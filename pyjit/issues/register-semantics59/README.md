@@ -33,8 +33,8 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Next grouped cycle frozen: engine then concrete scalar consumer |
 | Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Five executable screens lose; next engine and backend-identity lanes active |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | All five hot-eight screens complete; no winner selected |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Round60 engine loses all eight cases; concrete scalar proposal starts from selected57 |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Five round59 screens and the round60 engine screen complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 
 ## Reviewed trial order

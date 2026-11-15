@@ -38,7 +38,7 @@ remain evidence; they are not proposed anew.
 | Astra | Five ranked complete IR/interpreter adjustments with source and cost gates | Grouped64 final; no runtime changes |
 | Independent peer | Actual source and whole-path native closure | Both complete source packets approved; compact native NO-GO accepted |
 | Sol IR | Compact documentation closure and independent await review | Compact closed; full await source GO |
-| Sol frames | Independent await generation/source corrections | Frozen source `f98decf1109`, 34 paths; root integration at `47151110b00` needs a window-adapter correction and reservation-OOM exception fix before native qualification |
+| Sol frames | Await normal-result receipt, then lifecycle qualification | Source `cf9310fbd23e` integrates with metadata at `791c48d0df5`; full generation passes with execution products unchanged. Both await7 builds pass. Cold pending admission succeeds, but SEND quickening revokes the installed head. Reviewed fixture ready; certificate-lifetime correction under design/peer |
 | Measurement | Reuse exact-identity harness and immutable selected57 | Compact coverage unused/unqualified; no timing or target coverage campaign |
 | Coordinator | Interface review, integration, generation, serialized qualification and selection | Active |
 

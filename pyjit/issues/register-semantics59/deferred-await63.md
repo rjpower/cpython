@@ -1,6 +1,20 @@
 # Deferred immediate await: complete activation unit
 
-Complete source-reviewed unit, 2026-11-15. Root and independent Sol peer approve source `f98decf1109aac74c6254972b51e35250d33e5d5`; isolated integration is `47151110b00`. The first full generation found an unclassified private window-output adapter. That repair and the arena-failure exception contract precede native builds; no runtime qualification or admission result is claimed. Read with [round64](../../design/proposals/interpreter-parity64.md) and [review64](review64.md). Source authority is selected57, `BASE/worktrees/call55-integrated` at `0dcba75bb3df40c32137db453b001f7e8f101de0`. Rejected creation, prepared-call, method and compact handlers are not prerequisites.
+Complete source and generated-code reviewed unit, 2026-11-15. Source
+`cf9310fbd23e` is integrated at `791c48d0df5`, including new metadata products.
+Full generation, twelve original host methods and both await6 117/79 builds pass.
+Correcting the CALL-prefix/SEND-continuation rule exposed a missing LOAD_GLOBAL
+normal-result fact; the reviewed
+[receipt correction](normal-result64.md) is source-reviewed and regenerated.
+Only its three global normal-result contracts change; all generated execution
+products are byte-identical. Both await7 builds pass 117/79. Actual cold admission now succeeds, but
+SEND quickening revokes the installed private head before its first use.
+A compatible-quickening certificate rule is under design/peer review. No private native
+mechanism or performance pass is claimed. Read with
+[round64](../../design/proposals/interpreter-parity64.md) and [review64](review64.md).
+Source authority is selected57, `BASE/worktrees/call55-integrated` at
+`0dcba75bb3df40c32137db453b001f7e8f101de0`. Rejected creation, prepared-call,
+method and compact handlers are not prerequisites.
 
 The unit removes the coroutine object and create/return/reenter cycle when an exact native coroutine is called and immediately awaited to completion. Its ordinary body still runs. The first scope has exact positional arity, no defaults, cells/free variables, supplied self, async generators or free-threaded execution. The caller must be an existing private AWAIT activation or an embedded exact coroutine, not an ordinary THREAD/async-generator caller whose public image happens to spell SEND. Other contexts decline normally. Both zero and nonzero argument counts are supported. Ordinary nested Python calls remain ordinary calls and do not force materialization. Existing thread-call overlap remains available to those nested calls; the deferred await's own argument homes are disjoint and require one owner move.
 
@@ -39,7 +53,7 @@ The new accessor is not a promise that every raw pointer obtained from an expose
 
 ## Source admission and executing-word lifetime
 
-Use common final fixed-point use/def replay for compiler, constructor, replace and marshal images. Prove the actual CALL output is the sole input of GET_AWAITABLE, its output is SEND's receiver, the sent input is None, and the normal completion destination/edge is the existing SEND completion. No intermediate alias, extra read, branch/exception ingress, callback, observer point or incompatible owner publication is allowed. Initially accept the four actual semantic words, with geometry derived from their formats. Do not infer the relation from adjacency alone or source positions. Interior words remain ordinary entry points for ordinary object prestates.
+Use common final fixed-point use/def replay for compiler, constructor, replace and marshal images. Prove the actual CALL output is the sole input of GET_AWAITABLE, its output is SEND's receiver, the sent input is None, and the normal completion destination/edge is the existing SEND completion. CALL/GET_AWAITABLE/None form one linear prefix without intermediate alias, extra read, interior branch/exception ingress, callback, observer point or incompatible owner publication. SEND is a separate continuation entry: normal delegation resumes at it through a backedge. The common image's final fixed-point delegated-role proof and the checked source protocol establish its actual SEND/YIELD receiver relation. Only the certified CALL entry establishes private WAIT; the SEND side-entry retains ordinary object prestates and grants no private home fact. All four words remain covered by live-writer revocation. Initially accept those actual semantic words, with geometry derived from their formats. Adjacency or source positions do not prove the value relation.
 
 The CALL window and eventual SEND receiver/input homes need positive readable/consumed or owner-free facts as appropriate. Overlapping homes are legal only where the common replay proves the same consumed owner, never by physical proximity. Clear every consumed CALL owner exactly once; initialize the absent SEND receiver and input cells to physical NULL with write-only stores before any scan. NO_HOME is not incoming NULL or readability. No fake coroutine, private pointer or tagged control value enters a canonical home.
 
@@ -141,7 +155,7 @@ Native falsifiers: zero useful natural hits; an object allocated on every synchr
 
 ## Source census and cost ledger before private entry
 
-The complete source includes record/view, SEND handoff, suspension coverage, entry/completion, nomination, private heads and central writer closure. Independent `E59/deferred-await-source-host/whole1-peer.md` approves the 34-path frozen packet; eleven host methods pass and thirteen runtime methods are AST-only. Full generation is now the active integration gate. This ledger records source costs, not native qualification. Raw-reader snapshots remain under `E59/deferred-await-source-host/raw-{readers-current,generators-all}.txt`.
+The complete source includes record/view, SEND handoff, suspension coverage, entry/completion, nomination, private heads and central writer closure. Independent `E59/deferred-await-source-host/whole1-peer.md` approves the original 34-path packet. Root integration exposed and corrected an unclassified output, a private contract weakening the ordinary CALL cohort, a missing arena-failure exception, feedback-union alignment growth and the remote descriptor-size tripwire. Every correction has actual-source peer approval. Twelve host methods and both await6 builds pass. The CALL-prefix/SEND-continuation correction is integrated, but runtime14 still fails cold activation. Native cold replay proves the callable lacks LOAD_GLOBAL result facts; the reviewed normal-only receipt is integrated and regenerated at `791c48d0df5`, with both await7 builds passing. Native diagnostics confirm pending nomination and private-head installation, then ordinary SEND quickening invalidates it before use. `E59/deferred-await-native-controls/generated-peer.md` approves the products: all 331 ordinary metadata rows and the 75-event ownership table match selected57 exactly; 312 of 329 ordinary bodies are unchanged and seventeen contain the reviewed residence/completion/handoff hooks. This ledger records source costs, not native qualification. Raw-reader snapshots remain under `E59/deferred-await-source-host/raw-{readers-current,generators-all}.txt`.
 
 | Reader family | Current closure / remaining gate |
 | --- | --- |
@@ -168,11 +182,17 @@ The unchanged 112-byte header gains a separate 72-byte record per private activa
 Ordinary source costs also count: one pointer field in every generator/coroutine/async-generator object, a thread record pointer, active-versus-embedded selections in shared getters/traversal, positive residence tests for ordinary call overlap, the AWAIT retirement branch, and conditional SEND/YIELD handoff checks. Ordinary RETURN uses the widened generator-return owner classification; it has no extra WAIT test on a non-generator return. Generator completion adds an exact WAIT test and the shared observer receives its explicit completion flag; ordinary callers pass false. Root must inspect the compiled ordinary paths, spills and total text alongside the admitted cycle. No byte-equivalence or broad speedup is claimed from these source changes.
 
 
-The complete first source packet is frozen for independent review as
-`E59/deferred-await-source-host/whole1.patch` with its exact path/hash manifest.
-Eleven focused source methods pass; thirteen runtime methods have been parsed
-only. Entry chunk-allocation failure remains a native debugger-injection gate:
-the arena uses VirtualAlloc, so a Python allocator `set_nomemory` fixture does
-not cover it. Identity and terminal-preparation failure fixtures use the actual
-GC-object allocator instead. No target execution, generation, native ABI or
-performance result is claimed for this packet.
+The original complete packet and its path/hash manifest remain sealed as
+`E59/deferred-await-source-host/whole1.patch` and `whole1-freeze.json`; later
+corrections and executed failures are recorded in the handoff. Entry chunk OOM
+still requires actual VirtualAlloc injection; Python allocator hooks do not
+cover that edge. Identity and terminal-preparation fixtures use the actual GC
+allocator. Source and build passes do not qualify private activation.
+
+WAIT traversal currently relies on selected57's independent physical
+owner-or-NULL initialized-home invariant, as ordinary GC does. NO_HOME alone
+does not grant a readable physical cell. Private entry adds write-only NULL
+controls and disjoint initialized child homes; it does not establish general
+static scratch authority. Any future bitmap/M4 removal of the physical-NULL
+invariant must port this reader too. The actual source audit is retained in
+`E59/deferred-await-native-controls/generated-peer.md`.

@@ -1035,3 +1035,56 @@ no natural entry, completed segment or absence. There is no rescue through
 expanded operations, mirrors, providers, flags or layout searches. Selected57
 remains unchanged. The independently reviewed complete await source
 `f98decf1109` proceeds separately to root generation/native qualification.
+
+
+## Deferred await64: activation qualification in progress
+
+Isolated integration `35c4a38fc660e48e2d8eecab7f8a7a38910baa40`
+contains the complete stable-frame source, generated products `045a09e4c65`
+and independently reviewed integration corrections. Both await6 builds pass
+117 modules/79 shared extensions; twelve host source methods pass. All 331
+ordinary format rows and the ownership table still match selected57. The
+[unit](deferred-await63.md) and [handoff](../../HANDOFF.md) own its reader/cost
+contract and exact source chain.
+
+Native runtime14 has not passed activation. The first release run at await5
+passes two methods and fails eleven activation checks: requiring SEND to share
+the preceding three words' block excludes the ordinary resume backedge.
+The reviewed correction retains a linear CALL/GET_AWAITABLE/None prefix and
+admits SEND as its separately validated continuation. Await6 adds an interior
+entry fixture but still fails cold nomination; debug is not run after that
+release failure.
+
+Root's actual cold replay (`E59/deferred-await-native-controls/admission2.*`)
+then locates the missing proof: argument home3 is initialized, nonNULL and
+may-own, while callable home1 has none of those facts after LOAD_GLOBAL.
+CALL admission must keep rejecting that prestate. The reviewed
+[normal-result receipt](normal-result64.md) restores only an actually published
+scratch result after UNKNOWN invalidation; it does not preserve unrelated
+facts across callbacks or grant error/phase/complete-map authority. Its actual
+source peer, body-equivalence check, refreshed builds and activation tests
+precede the remaining native gates. No private-entry hit, lifecycle pass,
+throughput result or selection is claimed. Selected57 remains unchanged.
+
+
+The normal-result correction has root and independent source approval. Source
+`cf9310fbd23e` integrates at `ba603b73c1a`, followed by root-generated metadata
+`791c48d0df5`. Four host methods pass, including source mutations, family
+intersection, fresh global labels and in-memory metadata/body equality. Root
+full generation passes; only the metadata header changes. The 75→76 event
+insertion changes exactly three contracts across all 333 normalized rows;
+all other fields and all generated execution products are byte-identical.
+`E59/deferred-await-native-controls/root-normal-result-products.json` records
+that comparison. Both await7 builds pass 117/79. Runtime14 release still fails its cold setup;
+get_ir(adaptive=True) does not itself create the executing copy. The reviewed
+fixture-only `90da5f9d471` uses get_feedback(code,0) before inspection and adds
+valid bare-YIELD callee negatives, with no target pass yet.
+
+Actual root replay confirms the global-result facts and cold pending entry.
+Native `specialize3.log` proves CanDeferAwait admits, and `specialize4.log`
+records private head383→384 followed by SEND104→SEND_GEN223. That covered-word
+rewrite invalidates the head before first private use: the current generic
+CALL marks CALL_EFFECTS and finishes through its generic fallback even after
+specialization. A source-checked compatible-quickening certificate correction
+is under design/peer review. Original semantic/observer invalidation must
+remain; no private lifecycle, throughput or selection claim follows.

@@ -16,7 +16,7 @@ physical execution remain targets. Parity is not achieved.
 | Packet | Current result |
 | --- | --- |
 | Compact domain64 | Integrated at 9de7005b670. Both refreshed builds pass 117/79 and all eight new plus 21 control methods pass per role. Native stack/text caps pass, but complete nominal segments add instructions (227 versus 173; 280 versus 234). Stopped at the net-work gate; no benchmark or target coverage campaign. |
-| Deferred await63/64 | Complete 34-path source f98decf1109 has independent GO; eleven source methods pass, thirteen runtime methods are AST-only. Integrated separately at 47151110b00. Full generation found an unclassified private window-output adapter; source repair precedes builds. Actual record is 72 bytes plus the unchanged 112-byte header. |
+| Deferred await63/64 | Integration `791c48d0df5` passes both await7 builds (117/79). Reviewed normal-result metadata restores cold CALL_AWAIT_PENDING admission without changing generated execution bodies. Actual native specialization installs the private head, then ordinary SEND→SEND_GEN quickening revokes it before first use. A reviewed certificate-lifetime correction is being proposed. Runtime14 also exposed lazy-exec fixture setup; its source-only correction and bare-YIELD negatives are ready. No private lifecycle or performance pass. Record is 72 bytes plus the unchanged 112-byte header. |
 | List/FOR and append roles63 | Both 117/79 builds and 49 focused methods per role pass; native review and actual comp hits pass. Comp improves 4.1%, coroutines 3.6%, spectral_norm 4.5%, but logging loses 8.3%. Rejected. |
 | Isolated attribute roles63 | Both 117/79 builds and 54 focused methods per role pass at 581c018a34a; native review and all four actual first hits pass. Comp improves 3.5% and Delta 3.1%, but logging loses 22.3%, spectral_norm 6.3% and generators 1.8%. Rejected. |
 | Allocation-only creation62 | Both 117/79 builds and 526 focused methods per role pass. Coroutines improves 4.4% in six-pair confirmation, but all29 is 0.49% slower with 12 wins; logging, spectral_norm and deepcopy_memo lose. Rejected as a standalone packet. |
@@ -58,7 +58,7 @@ The [await unit](issues/register-semantics59/deferred-await63.md) has root and
 independent source approval: object views preserve active frame addresses and
 terminal storage movement is bounded by the evaluator entry. The complete
 reader/retirement/suspension/head/writer source packet is frozen with independent
-GO. No target execution or native qualification is claimed. Golden remains unchanged.
+GO. Target tests have run but private activation is still blocked; no native mechanism qualification is claimed. Golden remains unchanged.
 
 The grouped [review64](issues/register-semantics59/review64.md) is integrated.
 The finite ordinary-C domain retained generic CALL cuts, owning homes and real
@@ -68,8 +68,9 @@ simultaneous adapter/domain stack,
 precedes that result. The [compact unit](issues/register-semantics59/compact-domain64.md)
 has root and [independent source approval](issues/register-semantics59/compact-domain64-peer.md)
 and is rejected at its native net-work gate. Complete await source is independently
-reviewed and integrated separately; its first full-generation failure is under
-repair. Neither unit has a measured performance result.
+reviewed and integrated separately. Generation and generated-code review pass;
+both builds pass and the lifecycle gates remain open. Neither unit has a measured
+performance result.
 
 Prepared-call's short whole-process PMU diagnostic shows logging instructions
 1.000317 and cycles 1.147451, with essentially flat branches and slightly fewer

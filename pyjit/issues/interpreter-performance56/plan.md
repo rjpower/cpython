@@ -113,7 +113,7 @@ screens are closed and losing; no current runtime change is selected.
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Sol generator worker | Close [compact-domain64](../register-semantics59/compact-domain64.md); independent complete await source peer | Compact native NO-GO, source/evidence preserved; no timing/target coverage |
-| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md), frozen source `f98decf1109` | Root integration `47151110b00` needs generation/window-adapter and reservation-OOM exception corrections before native qualification |
+| Sol frame worker | [Complete deferred-await unit](../register-semantics59/deferred-await63.md) and reviewed [normal-result receipt](../register-semantics59/normal-result64.md) | Normal-result source/metadata integrated at `791c48d0df5`; full generation passes, execution products unchanged. Both await7 builds pass. Cold admission succeeds; compatible quickening currently revokes the private head before use. Fixture correction ready, writer contract under design/peer |
 | Coordinator | Review interfaces, integrate approved source, generate, serialize native qualification and screens | Confirm/all29/upstream/full diagnostics at a winning coherent checkpoint |
 | Astra | Completed [grouped64 review](../register-semantics59/review64.md) | Broad review outside the component patch loop; repeat after coherent measured outcomes if parity is unmet |
 

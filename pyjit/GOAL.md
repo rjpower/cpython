@@ -21,8 +21,8 @@ ascent. The preceding same-GCC resident engine is rejected by all eight screens.
 after its [peer review](issues/register-semantics59/scalar-peer.md); do not build
 an allocated descriptor framework for a two-word trial. The
 [common-constant producer](issues/register-semantics59/common-constant-proposal.md)
-lost its standalone broad screen; TEMP qualification is blocked on an
-admission regression. Creation and ascent proceed independently from
+and corrected TEMP refinement both lost their broad screens. Creation and
+ascent proceed independently from
 selected57. Astra's grouped review is
 complete; source peers close each call and delegation packet before coding. The
 [native review](issues/register-semantics59/engine-post-review.md) records the

@@ -358,6 +358,124 @@ selected57 but admitted by the candidate. Root's constructor-only comparison
 is retained in `E59/constant2-vacancy-baseline.json`; no malformed image was
 executed. The source-derived normal graph must preserve the existing recipient
 rule when replacing the old FRESH summary. The worker is reviewing that common
-consumer before a correction and source peer. Do not weaken the negative test
-or claim qualification/timing for this candidate. Failed evidence remains
+consumer before a correction and source peer. This failed revision was not
+timed. Failed evidence remains
 `E59/parity61-constant2-release-focus.log` and its command manifest.
+
+### Corrected TEMP composition: rejected
+
+Peer-reviewed cold replay repair `65c99464e0b` retains a proved scratch-owner
+collision through descendants and joins and diagnoses it only at the selected
+normal endpoint. It preserves the existing same-owner stamp proof and leaves
+unreadable prefixes uncovered. Public constructor, replace and marshal routes
+reject the malformed image. The correction adds no execution field or hot work.
+Root integrates it at `53e9a57cfa25665c503010e7a49a557b096d4287`.
+
+Both corrected builds complete 117 modules/79 shared extensions. All 161 methods
+in seven focused modules pass per role, including test_ir_error_checkpoints'
+actual repeated SAME_VALUE publication. Native ELF SHA256 is
+`c0ea36348c034313fc4995bba1f885d3364fe6739748f567e75f765db0401f54`.
+The real TEMP handler is 69 bytes, ordinary handler 356 bytes. The TEMP body
+directly reads the canonical table, stores the result and dispatches; no owner,
+numeric-normalization, destination or finalizer branches survive.
+
+The stable-identity balanced screen still rejects the composition: logging and
+spectral_norm regress in both pairs. Large opposing outliers elsewhere prevent
+claiming their aggregate ratios as reliable gains. No confirmation, all29,
+full-system or direct upstream campaign follows this loser. Raw evidence is
+`E59/parity61-constant3-eight-selected57`, with matching build/focus manifests
+and `parity61-constant3-native`. Creation and ascent retain clean selected57 bases.
+
+| Workload | TEMP composition / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 1.060650 | .968009–1.162158 |
+| deltablue | .850720 | .698020–1.036826 |
+| coroutines | .875078 | .864887–.885390 |
+| generators | .969242 | .955817–.982856 |
+| logging_silent | 1.144407 | 1.135283–1.153604 |
+| raytrace | .980502 | .975321–.985710 |
+| spectral_norm | 1.058099 | 1.058028–1.058169 |
+| nqueens | 1.112951 | .994279–1.245787 |
+
+## Checked delegated ascent: not selected
+
+Source `86886b6f846` and fixture correction `53df1c14deb` are integrated with
+generated products at `410bea361909d37aa4ae998a5084648f117b7200`, retained on
+`pyjit/parity61-ascent-integrated`. Root source post-review approves the bounded
+loop. Ownership, error and phase metadata are byte-identical to selected57;
+only the delegated handler product changes. The fast loop is GIL release
+without DTrace; debug and instrumented handlers retain ordinary execution.
+
+Both builds complete 117 modules/79 shared extensions. Focused coverage is
+397 methods across eight suspension, observer and lifecycle modules per role.
+The initial release run's only failures were two negative subcases in the new
+fixture: omitted semantic recovery caused an earlier constructor rejection.
+The fixture now supplies its original recovery table and all nine methods
+pass on the targeted release retry; the seven other modules' production code
+is unchanged. Debug passes all 397 in one run. This is focused qualification,
+not a full-system result.
+
+Separate GDB probes establish actual native composition with stable pre/post
+source/ELF identities. Depth8 has 68 entries of eight real suspensions;
+depth40 has 136 entries of sixteen and 68 of eight. Profiling has zero ordinary
+entries and 544 instrumented entries. A custom iterator splits exact groups,
+with 136 entries of eight. Workload identity, send, completion and exception
+checks pass. Optional reject-site counters incorrectly count guard visits due
+to GDB Python condition handling; they are explicitly invalid as rejection
+evidence. The independent entry/fold/publication histograms are unaffected.
+Raw logs and executed scripts remain in `E59/parity61-ascent-diagnostic`.
+
+Native ELF SHA256 is
+`1c1ec948c9bc5fc727c295877c2332442a1eb3b7085ffb90bd423acc555f162b`.
+Ordinary YIELD_DELEGATED grows 556→1,076 bytes and its stack reservation grows
+16→32 bytes; SEND_GEN and the instrumented twin remain unchanged. The admitted
+continue edge removes intermediate publication, dispatch and result take/clear.
+Its guard chain nevertheless stages operands through four stack stores and
+six reloads, besides type, PC, word, identity and vacancy branches. This is a
+concrete added cost, not exclusive attribution of every elapsed change.
+
+The stable two-pair screen rejects this version: generators regress in both
+pairs despite coroutine gains. Do not compose this unselected dependency with
+creation or spend full diagnostics on it. No all29, direct-upstream or full
+system rerun is claimed. Evidence uses `parity61-ascent{1,2}` build/focus tags,
+`parity61-ascent2-native` and `parity61-ascent2-eight-selected57`.
+
+| Workload | Ascent / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | .979626 | .963690–.995826 |
+| deltablue | .999177 | .994097–1.004284 |
+| coroutines | .951782 | .950362–.953205 |
+| generators | 1.078980 | 1.072055–1.085949 |
+| logging_silent | 1.004998 | 1.002926–1.007074 |
+| raytrace | 1.010922 | 1.010803–1.011041 |
+| spectral_norm | .955606 | .955289–.955922 |
+| nqueens | .990123 | .986422–.993837 |
+
+## Direct final-frame creation: qualification in progress
+
+Frozen source `b10667203fee0e2ef31ad366e201b9eb678564b1` has root and independent
+actual-diff approval. Root integrates the source and five generated products at
+`f8ecd806cdbcfb34e76ad8fab533bf966b785330`, from clean selected57. The two new
+learned-only CALL handlers reuse the existing-size feedback payload and shared
+frame initializer/return writer. Ordinary generated bodies are unchanged.
+Both native builds complete 117 modules/79 shared extensions; three focused
+host source methods pass. No performance screen has run.
+
+The first release runtime module runs ten methods and fails three assertions.
+Two expect creator nomination after a prewarm function mutation; a read-only
+probe shows these functions no longer have a usable specialization version.
+The allocation callback must mutate a pristine, already nominated function
+instead. The third expects immediate weakref death after a callback writes
+through f_locals. That setter deliberately retains the old binding in
+f_overwritten_fast_locals to protect borrowed local reads. The probe confirms
+that edge and eventual release after closing the parent and releasing its
+frame. Correct the fixture's lifetime claim; the source result-root handoff
+is a separate ownership proof. A clean gc_verify checks reachability, not
+exact owning counts.
+
+Evidence is `E59/parity61-created1-release-focus.log` and
+`E59/created-generator-diagnostic/probe.log`. Debug qualification and timing
+await the focused correction; no production repair is indicated by these
+three assertions. The initial native capture stopped at a compiler-renamed
+helper; `parity61-created1-native2` retains the successful capture using the
+actual `.constprop.0` symbol. Neither failure is hidden or counted as a pass.

@@ -8,75 +8,33 @@ method/list composition and its losing revisions. The [goal](GOAL.md),
 direction, selected contracts and exact execution paths.
 
 The active [IR-semantics workstream](issues/register-semantics59/README.md)
-has closed all five round59 executable screens without a selected winner.
-Final loop binding, independent builders, builder+Invoke, continuation action
-encoding and isolated Invoke all lose important workloads despite focused
-qualification. Isolated Invoke passes both builds and 66 methods per role,
-but loses coroutines 8.1%, logging 12.6% and spectral_norm 14.2% while improving
-comprehensions 3.1%. Continuation encoding passes 112 methods per role but
-loses DeltaBlue 15.5%, generators 5.5% and logging 11.5%. The
-[trial report](issues/register-semantics59/report.md) retains every ratio,
-qualification limit, rejected branch and native mechanism. Golden is unchanged.
+executes Astra's [round61 design](design/proposals/interpreter-parity61.md) and
+[review ledger](issues/register-semantics59/review61.md). Selected57 remains
+unchanged. PyValue rollout is complete; transport, effects, ownership and
+physical execution remain targets. Parity is not achieved.
 
-The preceding [round60 design](design/proposals/interpreter-parity60.md) and
-[review ledger](issues/register-semantics59/review-next.md) prioritize a same-GCC
-computed-goto engine, followed by actual cross-word inline-scalar lowering.
-Their current dispositions follow; round61 below drives ongoing work.
-Upstream's measured build already uses computed goto; selected57 uses separate
-tail-called handlers with path-specific state repacking. The independent
-[backend peer](issues/register-semantics59/backend-peer.md) admits that experiment
-with explicit lexical-owner, error, redispatch and identity contracts. Engine
-source and identity/config/preflight packets are integrated in G at ec230e55641.
-Generation passes with unchanged semantic metadata. Both fresh configurations
-match selected57's core/module flags and byte-identical pyconfig.h. Both builds
-complete 117 modules/79 shared extensions. Release and debug each pass 465
-methods across 17 ownership, call, exception, observer and suspension modules.
-The balanced screen rejects the engine in all eight cases: comprehensions
-+21.9%, DeltaBlue +33.9%, coroutines +18.6%, generators +43.8%, logging +60.0%,
-raytrace +30.0%, spectral_norm +29.2% and nqueens +30.3%. Both pairs lose in
-every case; identities remain stable. The [native post-review](issues/register-semantics59/engine-post-review.md)
-resolves all 367 rows and finds a 4,472-byte stack reservation, stack-backed
-engine state and one shared indirect dispatch after GCC tail merging. No
-full-system or upstream rerun is claimed for this loser. Golden stays fixed;
-the [scalar proposal](issues/register-semantics59/scalar-proposal.md) and its
-[peer](issues/register-semantics59/scalar-peer.md) reject the allocated plan
-framework and defer the fixed two-word rival. The
-[common-constant producer](issues/register-semantics59/common-constant-proposal.md)
-is integrated at 8bb861d357e on selected57 without a new backend, frame field or
-per-site descriptor. Both builds complete 117/79 and 43 focused runtime methods
-pass per role. Full generation changes only its handler and resolved ownership
-metadata; the other 330 populated format rows retain their contracts. Native
-handler size falls 620→356 bytes, with DUP and numeric normalization removed.
-The producer-only screen is not selected: comprehensions .969376, DeltaBlue
-1.036249, coroutines .979717, generators .984184, logging 1.139183, raytrace
-.989650, spectral_norm 1.015950 and nqueens .995691 versus selected57.
-Matched whole-process diagnostics show fewer instructions but more cycles in
-DeltaBlue/logging; no exclusive cache/layout cause is established. The
-[trial report](issues/register-semantics59/report.md) retains the scope and raw
-evidence. TEMP source packet 8db82c67bd4 is peer-approved, generated and
-integrated at fe38bad0b50. Both 117/79 builds pass. The first release focused
-run fails one new scratch-owner admission test; the other five modules pass.
-A constructor-only baseline proves regression: selected57 rejects the image,
-candidate admits it. No malformed image was executed. The shared normal-map
-consumer has a peer-approved cold diagnostic correction in implementation;
-debug qualification and timing await the correction.
+| Packet | Current result |
+| --- | --- |
+| Producer and TEMP destination | Both corrected builds complete 117/79; 161 focused methods pass per role. Actual TEMP handler is 69 bytes, but logging loses 14.4% and spectral_norm 5.8% in both screen pairs. Rejected; preserve source/evidence. |
+| Direct final-heap-frame creation | Frozen b10667203fe has root and independent actual source GO; three host source checks pass. Root generation and both117/79 builds pass at f8ecd806cdb. First release fixture module fails three assertions; worker diagnosis is active, no timing. |
+| Checked delegated ascent | Root integrates source and generated handler at 410bea36190. Both builds complete 117/79; focused397-method coverage passes per role, with a targeted release fixture retry. Actual native probes confirm eight-frame composition, 16-frame bound, profiling fallback and custom-iterator split. Screen improves coroutines 4.8% but loses generators 7.9% in both pairs; not selected. |
 
-Astra's [round61 design](design/proposals/interpreter-parity61.md) and
-[ledger](issues/register-semantics59/review61.md) are complete. After the producer,
-independently admit its TEMP destination refinement, direct exact coroutine
-creation in the final heap frame, then checked delegated-yield ascent. The
-last two compose whole transitions; they retain real frames and owning homes
-at effects. Worker source proposals and independent peers precede implementation;
-root owns generation, native jobs, combined qualification and measured selection.
-Ascent's actual source diff has root peer GO; creation's source implementation
-is still in progress. Neither has a native performance result yet.
+The producer-only increment also lost its screen. Earlier round59's five
+executable trials and round60's computed-goto engine are rejected; scalar
+plans are deferred. The [trial report](issues/register-semantics59/report.md)
+owns every ratio, exact identity, failure and selection decision. The
+[engine native review](issues/register-semantics59/engine-post-review.md)
+records its stack-backed state and merged dispatch; no compiler or alignment
+search follows. Losing packets are not prerequisites for independent lanes.
 
-The [all-word census](issues/register-semantics59/resident-coverage.md) limits
-the finite scalar-pair pilot, without bounding all possible regions. Its
-pre-monitor label weights are not natural specialized-hit counts. The new
-trials do not close a parity budget: comprehensions still needs about 30.38%
-of selected57's instructions removed for equal upstream count. PyValue rollout
-is complete; transport, effects, ownership and physical execution remain targets.
+Astra reviews the architecture after coherent measured cycles. Sol workers
+implement and peer-review bounded packets; root owns generation, native jobs,
+merged qualification and measured selection. At a winning checkpoint compare
+all29 and upstream directly and run full supported diagnostics. Repeat the
+review/implementation cycle until the unchanged hot set reaches parity while
+retaining broad gains. Comprehensions still needs about 30.38% of selected57's
+instructions removed merely to equal upstream's measured instruction count;
+small native removals do not establish that budget or a throughput result.
 
 ## Selected checkpoint and performance
 

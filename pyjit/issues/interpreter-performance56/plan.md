@@ -105,11 +105,11 @@ screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Correct native-discovered scratch-owner admission regression; then review creation's generator/result contracts | TEMP both builds pass; release fails one new admission case, timing blocked |
-| Sol frame worker | Direct exact creation into final heap frame, existing transition roots and shared final initializer | Root proposal GO; independent actual source peer before native integration |
-| Sol ascent worker | Compose eligible delegated yields without repeated parent result transport | Actual source diff has root peer GO; native integration pending |
+| Sol generator worker | Review creation's generator/result and learned-cache contracts | TEMP correction passes both roles; composition loses screen |
+| Sol frame worker | Direct exact creation into final heap frame, existing transition roots and shared final initializer | Frozen actual source peer GO; both builds pass, three new release assertions under diagnosis |
+| Sol ascent worker | Compose eligible delegated yields without repeated parent result transport | Focused native and actual-hop gates pass; generators lose 7.9%, unselected |
 | Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
-| Astra | Grouped architecture review after measured cycles | Broad design, outside the patch loop |
+| Astra | Grouped round62 architecture review with actual61 native evidence | Freeze after creation result; outside the patch loop |
 
 The same-GCC resident engine passes both builds and 465 methods/role but loses
 every hot-eight case, by 18.6–60.0%; preserve it without selection. Its actual
@@ -120,7 +120,8 @@ framework and defer the fixed two-word rival. Implement the independently
 reviewed [common-constant producer](../register-semantics59/common-constant-proposal.md)
 first, leaving TEMP destination refinement as a separate packet. Producer-only
 passes focused qualification but loses logging/DeltaBlue, so is not selected;
-the complete TEMP contract is the next screen. Astra's round61 review is now
+the complete TEMP contract also loses its broad screen after its admission
+correction passes both roles. Astra's round61 review is now
 frozen: direct exact creation and checked delegated ascent proceed independently
 from selected57. Neither requires a losing producer or scalar packet.
 Other provider, continuation, borrowed-argument, cache and encoding rivals have

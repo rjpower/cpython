@@ -16,17 +16,29 @@ screen are unselected. Golden remains selected57. PyValue integration is
 complete. Do not revive rejected providers, scalar descriptors, continuation
 actions, alignment sweeps or a second compiler without a new reviewed consumer.
 
-G is on `pyjit/parity61-common-constant`, at `fe38bad0b50` after TEMP generation.
-Both native builds pass 117/79 under tag `parity61-constant2`. The first release
-focused run fails one scratch-owner admission test; the other five modules
-pass. Baseline selected57 rejects this constructed image while fe38 admits it
-(`E59/constant2-vacancy-baseline.json`); no malformed code was executed. The
-generator worker is fixing the shared normal-map/admission consumer. Debug and
-timing await correction. Source packet `8db82c67bd4` had actual
-peer GO and six focused host methods pass. It adds one executing-only TEMP
-variant, chosen in the cold executing-copy walk before the no-feedback return.
-Public images retain ordinary words; observation may restore the generic form.
-No frame/exec field, allocation or per-word lookup is added.
+G is on `pyjit/parity61-created-integrated`, at `f8ecd806cdb` after generation.
+Its source packet is `b10667203fe`: root and independent actual source GO,
+three host source checks pass. Two new generated learned-only CALL handlers
+use the existing-size feedback payload; ordinary handler bodies are unchanged.
+Both native builds pass 117/79 under tag `parity61-created1`. First release
+new-fixture module runs ten methods and fails three assertions: two expect
+creator nomination after code/default mutation and one expects immediate
+weakref death during a displaced-local callback. Frame worker owns serialized
+read-only native diagnosis; root holds further native jobs. No debug or timing
+result yet. The former constant composition is preserved on
+`pyjit/parity61-common-constant` at `53e9a57cfa2` and is rejected.
+
+TEMP source `8db82c67bd4` added one executing-only scratch variant. Native
+checks found a constructor rejection regression; root's comparison is
+`E59/constant2-vacancy-baseline.json` and no malformed code was executed.
+Cold repair `65c99464e0b` preserves known-owner conflict diagnostics through
+selected normal replay. Both corrected builds pass 117/79 and all 161 methods
+across seven focused modules pass per role, including valid SAME_VALUE stores.
+The real TEMP handler is 69 bytes with no ownership/normalization/destination
+checks, but logging loses 14.4% and spectral_norm 5.8% in both screen pairs.
+Other wide pair ranges are not reliable gains. Evidence is
+`E59/parity61-constant3-{native,eight-selected57}`. No all29/full/upstream
+campaign follows this loser; creation/ascent do not depend on it.
 
 The first producer candidate `8bb861d357eaa8349a0fd89c0ef11df5dd72818d` is retained
 on `pyjit/parity61-producer-only`. Both builds completed 117 modules/79 shared
@@ -39,6 +51,17 @@ ELF SHA256 `28326a4e7c99114d090d7ea8d849a998fae3b276f3097d03546ec203eab063c8`.
 but more cycles for both losing cases. Its scope differs from kernel-only PMU.
 No exclusive cache/layout mechanism is established.
 
+Ascent integrated `410bea36190` is preserved on
+`pyjit/parity61-ascent-integrated`. Both 117/79 builds and 397 focused-method
+coverage per role pass after one targeted release fixture correction. GDB
+histograms prove actual eight-frame and bounded 16 composition, profiling
+fallback and custom-iterator split. The native handler grows 556→1,076 bytes
+with operand spills. Screen rejects generators +7.9% despite coroutines −4.8%.
+Evidence: `E59/parity61-ascent2-{native,eight-selected57}` and
+`parity61-ascent-diagnostic`; optional reject-site counters are invalid as
+rejection evidence, while independent hop histograms pass. Do not compose it
+as a selected dependency or run it against G's changed Lib.
+
 The current build directories are `BASE/reg59-results-{release,debug}`. Root
 restored their compiler/core/module flags and byte-identical pyconfig.h to
 selected57 using `E59/prepare-parity61-builds.py`; the ledger is
@@ -50,11 +73,11 @@ execution. The two role builds run serially under the shared root helper.
 
 | Worker | Source tree / branch | Current boundary |
 | --- | --- | --- |
-| Generator | P / `pyjit/parity61-common-constant-temp`, from `8db82c67bd4` | Correct the native-discovered scratch-owner admission regression; creation post-review resumes afterward |
-| Frames | W / `pyjit/parity61-created-generator`, from selected57 | Implement direct exact heap-caller creation after root proposal GO; actual source peer before integration |
-| Ascent | A / `pyjit/parity61-ascent`, from selected57 | Actual source diff has root peer GO; commit and native integration pending |
-| Coordinator | G / `pyjit/parity61-common-constant` | TEMP builds, focused native checks, capture and quiet screen; merge only qualified measured winners |
-| Astra | Documentation only | Round61 grouped review complete; next review after the coherent measured cycle if parity remains unmet |
+| Generator | P / `pyjit/parity61-common-constant-temp`, at `65c99464e0b` | TEMP correction qualified but composition loses; independent creation post-review |
+| Frames | W / `pyjit/parity61-created-generator`, at `b10667203fe` | Frozen source actual peer GO; native gates root-owned |
+| Ascent | A / `pyjit/parity61-ascent`, at `53df1c14deb` | Native qualification/hop diagnostics complete; screen loses generators, preserve source |
+| Coordinator | G / `pyjit/parity61-created-integrated` | Creation build/focused qualification, native capture and quiet screen; select measured winners |
+| Astra | New round62 documents only | Broad review underway with rejected61 native evidence; freeze after creation outcome |
 
 Creation's [proposal](issues/register-semantics59/created-generator-proposal.md)
 uses existing EXTERNAL roots, takes scratch inputs before allocation, pins the

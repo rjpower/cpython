@@ -1,11 +1,15 @@
 # Direct creation in the final generator frame
 
-Proposal review GO; implementation is underway in isolated W branch
+Source proposal and actual diff have root and independent peer GO. Frozen
+source is `b10667203fee0e2ef31ad366e201b9eb678564b1` in isolated W branch
 `pyjit/parity61-created-generator`, based on selected57 `0dcba75bb3df`.
-Source post-review, generation and native qualification remain pending. Preserve
-the selected NCSR backend and generic creation path. This is the bounded implementation of
+Three focused host source checks pass. Root has generated and reviewed the two
+new handlers at integrated `f8ecd806cdb`; the first release run passed seven
+runtime methods and exposed three fixture assumptions, diagnosed below.
+Corrected runtime qualification remains pending. Preserve the selected NCSR
+backend and generic creation path. This is the bounded implementation of
 [parity61 packet 2](../../design/proposals/interpreter-parity61.md), not a new
-call framework.
+call framework. No native qualification or performance result is claimed yet.
 
 ## Initial admission
 
@@ -20,6 +24,8 @@ cell/free-variable initialization and nonoptimized locals.
 Require current function/version and standard vectorcall, exact positional
 arity with zero keyword-only parameters, no defaults and no closure/cell
 requirements. Pin the selected code independently of mutable `func_code`.
+Constant homes must be disjoint from the actual argument prefix; their normal
+shared initializer therefore cannot replace an argument owner.
 The code must already have an executable with the actual admitted initial
 RETURN_GENERATOR source/created-copy contract and
 `_PyIR_PLAN_ALL_CREATED_EMPTY`. The whole-image flag alone is insufficient:
@@ -48,6 +54,20 @@ there is no method expansion in this provider. Selection belongs beside
 the existing exact-function specialization, after ordinary version/code
 preparation. Its reached guards include the current heap-caller condition.
 Ordinary exact calls acquire no new branch to test for this provider.
+
+The actual marker exports the existing `LEARNED_ONLY` effect, including its
+NO_SELF form: constructor, replace and marshal images cannot install a cached
+creation entry. Its ordinary function-version and exact-arity guards precede
+the provider. Version invalidation carries immutable code/default/closure and
+created-entry qualification; the hit does not recheck plans or tool arrays.
+Cold nomination stores the monitoring protocol's actual `uint32_t` version in
+a named union view of the existing CALL binding payload, with a size assertion.
+Global/local changes, tool removal and restart advance that version and refuse
+overflow (`instrumentation.c:global_version`, `set_global_version`, SetEvents,
+SetLocalEvents and restart). The hit compares the global version, retaining
+mutable heap-caller, hook, origin and debug LLTrace gates. Cross-thread changes
+therefore cannot be hidden by an old thread-local snapshot. No frame field,
+payload allocation or new monitoring protocol is introduced.
 
 Use the existing two-register `_PyCallResult` convention: miss before effects,
 error, or completed call with no child. A private C provider in `ceval.c`,
@@ -202,3 +222,19 @@ publication, while preserving one object allocation and complete final homes.
 Count actual moves/pins/guards/spills/text and result-retirement order. A smaller
 constructor alone is insufficient. Screen coroutines, generators and the full
 eight-case sentinels once; reject broad losses rather than search layouts.
+
+Source freeze: W `b10667203fee0e2ef31ad366e201b9eb678564b1`, 15 paths,
+independently source-reviewed. Three focused source methods pass in both record
+modes. Initial release failures were fixture assumptions: prewarm code/default
+mutation permanently disables function specialization, and proxy overwrites
+retain old fast locals to protect borrowed loads. The allocation control now
+starts with an untouched MAKE_FUNCTION target, while retaining code mutation
+during allocation. The defaults/reset negative route remains separate from a
+fresh positive observer control. The displaced-local fixture observes the
+published child, closes it, mutates another binding and checks reachable GC
+during reentry; it requires weakref release after the parent and captured frame
+are dropped. That runtime witness does not count owners. The consuming writer's
+source-slot NULL handoff establishes ownership transfer separately. The retained
+diagnostic is `register-semantics59/created-generator-diagnostic` under the
+evidence root. Corrected qualification, native shape and performance remain
+pending; selected57 is unchanged.

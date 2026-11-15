@@ -117,9 +117,11 @@ immortal and constructs their canonical values. Inline constants also own no
 reference. Preserve that invariant as a no-count copy and canonical publication.
 The TEMP destination flavor is a separate increment: a known scratch destination
 needs neither the `nlocalsplus` comparison nor local retirement/discard branches.
-Both TEMP builds pass, but native checks exposed a scratch-owner admission
-regression in the shared normal-map consumer. Correct that rejection before
-debug qualification or timing; retain the failing evidence and selected57 control.
+Native checks exposed a scratch-owner admission regression in the shared
+normal-map consumer. The peer-reviewed cold correction now passes 161 focused
+methods per role. The 69-byte TEMP handler removes the intended checks but
+loses logging and spectral_norm in both screen pairs; reject this composition.
+The trial report retains the failure, repair and measured screen.
 
 The actual selected native handler at `0x35d080` retains the ownership mask,
 destination comparison at `0x35d0d7`, and the temporary arm's pointer/type tests
@@ -428,4 +430,5 @@ silently broadening it. Focused passes alone do not qualify a new golden runtime
 
 There is no new full-system result for this proposal. Preserve all rejected
 experiments and selected57. The producer-only screen is recorded and rejected;
-TEMP, creation and ascent have no qualified performance result yet.
+The corrected TEMP composition also loses. Creation has no native result;
+ascent passes focused native/actual-hop gates but loses generators 7.9%.

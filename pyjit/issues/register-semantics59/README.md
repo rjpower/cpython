@@ -34,7 +34,7 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Round61 frozen: producer/role facts, direct creation, delegated ascent |
 | Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Producer standalone loses; TEMP admission correction; creation coding; ascent actual source peer GO |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Producer/TEMP/ascent screens lose; creation frozen source peer GO, native integration underway |
 | Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Round59 five screens, round60 engine and producer-only complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 

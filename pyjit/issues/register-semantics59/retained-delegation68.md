@@ -124,6 +124,15 @@ no learned handler can be installed publicly. No numeric private ID is needed
 unless implementation reveals a real handler requirement, in which case root
 and the source peer must first agree an unused selected-registry ID.
 
+The common view explicitly carries `NULL_CONTROL_READABLE` authority, not a
+static `MUST_READABLE` claim. Actual generator creation/copy initializes every
+home, and the exact heap frame does not overlap caller storage. Full nullable
+ranges describe that existing physical control; admission checks the actual
+owner/lifecycle. Separately prove the receiver owner, SEND None-input TAKE,
+delegated outgoing TAKE, NULL transfer and effect-free resume/backedge preserve
+the same remaining homes. Neither semantic MAY facts nor the worklist's
+complete bit establish readability. Generic home readers and GC remain unchanged.
+
 Store rows in the immutable semantic plan with exact size/overflow checks and
 an ordinary NULL/no-row result if optional allocation fails. Look up a row
 only on a reached new SEND. Root resume/yield uses direct record leaf and

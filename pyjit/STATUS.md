@@ -11,11 +11,16 @@ it.
 The grouped [round68 proposal](design/proposals/interpreter-parity68.md) and
 [review](issues/register-semantics59/review68.md) are delivered. Independent
 architecture and exact source-contract approval pass for one retained-generator-
-delegation unit. Sol is implementing the inert foundation; activation waits for
-complete lifecycle and reader closure. No runtime qualification or new performance
-result is claimed. Root owns integration, qualification and measured selection.
-The [round67 report](issues/register-semantics59/report.md)
-retains exact evidence and limits for both rejected candidates.
+delegation unit. Source commit `b213c8e73110e8035fe44c8f228538d08ee245b6`
+implements its inert foundation; it is independently source-approved and
+integrated at `9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`. Release and debug
+builds each pass 117 modules/79 shared extensions, with 16 focused methods per
+role. No record allocation or activation, semantic plan geometry, generic THREAD
+change, native mechanism, performance result or broad qualification is claimed.
+Activation waits for complete lifecycle and reader closure. Root owns integration,
+qualification and measured selection. Details are in the
+[trial report](issues/register-semantics59/report.md) and [handoff](HANDOFF.md).
+The report also retains both rejected round67 candidates.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

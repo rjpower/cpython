@@ -1,5 +1,21 @@
 # Semantic IR trial results
 
+## Round68 inert foundation
+
+The [round68 design](../../design/proposals/interpreter-parity68.md) and
+[implementation contract](retained-delegation68.md) have independent approval.
+Foundation source `b213c8e73110e8035fe44c8f228538d08ee245b6` is integrated at
+`9dc169962b988e8c7a10dc93ff8360f5ccd7cff9`. Release and debug builds each pass
+117 modules/79 shared extensions, and all 16 focused methods pass per role
+across `test_ir_retained_delegation`, `test_ir_created_plan`, and
+`test_ir_delegated_yield`. The foundation allocates no records and enables no
+retained execution. It establishes no native mechanism, performance result or
+broad qualification. Sol is implementing the optional common loop proof;
+activation waits for complete lifecycle and reader closure. The
+[handoff](../../HANDOFF.md) identifies logs and command manifests.
+
+## Round67: both qualified runtimes rejected
+
 Round67 is closed under [design67](../../design/proposals/interpreter-parity67.md)
 and [review67](review67.md), after independent adoption and shared-interface GO.
 A is the complete native callout/result consumer; B is one caller-anchored
@@ -132,11 +148,7 @@ per-workload aggregates are:
 | nqueens | 1.1003578304681976 |
 
 Root closes B without confirmation, all29, PMU, full suite or repair. No cause
-is inferred. A and B are both rejected; selected57 remains unchanged. The
-delivered [round68 proposal](../../design/proposals/interpreter-parity68.md)
-has independent architecture and source-contract approval for retained generator
-delegation. The inert foundation is being implemented; no runtime qualification
-or new performance claim is made.
+is inferred. A and B are both rejected; selected57 remains unchanged.
 
 Round66's final design by Astra (`945afac1e2546555da9c41cda708952af254db73`)
 was integrated at `fd42900d565`. Frozen runtime `64348dd5c182af27c058e60f1e3f849f00d7ef81`

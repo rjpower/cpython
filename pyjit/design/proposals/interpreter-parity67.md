@@ -201,6 +201,18 @@ that description for compiler and public IR. Unknown coverage rejects fusion;
 it does not become a proof by setting a transfer-kind annotation. This is a
 prerequisite within Unit A, not a demand to finish universal IRSC2/bitmap work.
 
+**Retained lower-prefix authority.** Root peers the source worker's bounded
+extension in `E59/callout67-source-host/retained-owner-root-peer.md`. A separate
+cold must-fact retains a previously proved canonical owning home through a
+positively checked untouched prefix. CALL requires the complete CALL_DRAIN
+geometry, home below BASE and distinct from its recipient; FOR requires its
+common body/GEN/completion contract. Physical preservation, absence and a runtime
+type check cannot establish this authority. Joins intersect it; abrupt/recovery
+ingress drops it. Generic UNKNOWN still makes `complete=0`, existing certificates
+keep their meanings, and only native-edge nomination consumes the new fact.
+This closes the loop-carried list admission gap without a runtime owner bitmap.
+Its implementation and natural eligibility remain qualification obligations.
+
 Generate the straight-line ordinary-C body from the same specialized CALL
 retirement and APPEND source/emitter used for ordinary handlers, with explicit
 physical exits instead of NCSR dispatch between them. Factor the shared emission

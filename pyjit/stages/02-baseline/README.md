@@ -7,10 +7,11 @@ Python behavior and tooling separately; exact CPython display or destruction
 timing is not a performance gate.
 
 The [active plan](../../issues/interpreter-performance56/plan.md) combines
-value transport, borrowing, calls/returns and specialization. Astra's broad
-review precedes implementation. The coordinator integrates reviewed increments
-and reports their native work and performance. [Status](../../STATUS.md) owns
-selection and qualification; selected54 remains golden. The
+value transport, borrowing, calls/returns and specialization. Astra reviews
+architecture and admission gates after coherent experimental cycles.
+The coordinator integrates reviewed increments and reports their
+native work and performance. [Status](../../STATUS.md) owns selection and
+qualification; selected57 is current, while golden54 remains immutable. The
 [model55 report](../../issues/call-model55/report.md) retains previous results
 and pending source components. Native method and tracing JIT tiers belong to
 later stages.

@@ -48,5 +48,5 @@ The [benchmark guide](../bench/README.md) describes the existing CLI.
 [Earlier GC results](../issues/gc-cleanup-scanning/performance.md) are historical
 measurements, not restored-runtime performance. The
 [current status](../STATUS.md) records the selected checkpoint and its results;
-the [current plan](../issues/generator-delegation52/plan.md) sets the next
+the [current plan](../issues/interpreter-performance56/plan.md) sets the next
 measurement work.

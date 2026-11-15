@@ -24,7 +24,10 @@ evidence was obtained. Keep exact operational details in the handoff and
 experiment records. Label planned JIT tiers explicitly.
 
 The active interpreter-performance plan combines values, borrowing, calls and
-specialization. Its broad Astra review precedes implementation. Model55 source
-components and earlier measurements remain evidence; they do not establish
-selected architecture. Retire duplicate proposal/progress pages and obsolete
-Loom mirrors after their decisions and evidence have one durable owner.
+specialization. Grouped architectural reviews set coherent cycles of bounded
+changes. Component proposals and actual diffs receive independent peer review;
+the coordinator integrates and measures. Model55 source components and earlier
+measurements remain evidence;
+they do not establish selected architecture. Retire duplicate proposal/progress
+pages and obsolete Loom mirrors after their decisions and evidence have one
+durable owner.

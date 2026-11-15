@@ -3,8 +3,9 @@
 Selected57 remains selected. The first loop-binding executable, standalone
 builders and builder+Invoke composition all lose their performance screens.
 Continuation encoding and isolated Invoke also lose. All five first-cycle
-executable screens are closed; golden is unchanged. The next grouped design
-starts a broader engine experiment. These are incremental
+executable screens are closed; golden is unchanged. The round60 engine also
+loses every screen. [Round61](../../design/proposals/interpreter-parity61.md)
+tests producer/role contracts and complete creation/delegation transitions. These are incremental
 results, not a completed parity cycle. See the [workstream](README.md) and
 [ordered design](../../design/proposals/register-semantics59.md).
 
@@ -280,3 +281,83 @@ two-word rival avoids those fields but still needs a real common admission
 proof and shared arithmetic/commit receipts. Root defers it behind the broader
 producer-fact and register-role work; no scalar implementation or native saving
 is claimed. No proposal or small pilot is a parity result; the cycle remains active.
+
+## Round61 common-constant producer: not selected standalone
+
+Source packet 57b2411b1f4 and runtime fixture 4a80ea6b1ff are integrated with
+generated products at `8bb861d357eaa8349a0fd89c0ef11df5dd72818d`, retained as
+`pyjit/parity61-producer-only`. Its checked getter reads the initialized
+interpreter's canonical inline/immortal table without acquiring a count. The
+shared typed result receipt selects existing canonical publication. There is
+no new opcode, frame field or descriptor. Destination classification and
+old-local retirement remain generic. Actual source peers approve the packet;
+four focused host source methods pass.
+
+Full generation passes. Only LOAD_COMMON_CONSTANT's handler and resolved owner
+program change; the other 330 populated format rows retain their contracts.
+Both builds complete 117 modules/79 shared extensions, with compiler/core/module
+flags and byte-identical pyconfig.h matched to selected57. All 43 methods across
+five focused runtime modules pass per role, including all 14 constants in
+scratch/local/discard recipients, four image routes, finalizer reentry,
+malformed indices, scalar ownership and subinterpreter initialization/clear.
+
+Native capture `E59/parity61-constant1-native` has ELF SHA256
+`28326a4e7c99114d090d7ea8d849a998fae3b276f3097d03546ec203eab063c8`.
+The actual handler shrinks 620→356 bytes: new-result DUP/count acquisition and
+numeric normalization disappear, with no getter call. Generic destination and
+old-owner handling remain. The balanced two-pair screen has stable identities:
+
+| Workload | Producer / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | .969376 | .944770–.994623 |
+| deltablue | 1.036249 | 1.026599–1.045990 |
+| coroutines | .979717 | .972948–.986533 |
+| generators | .984184 | .982033–.986340 |
+| logging_silent | 1.139183 | 1.137531–1.140837 |
+| raytrace | .989650 | .987821–.991483 |
+| spectral_norm | 1.015950 | 1.015859–1.016041 |
+| nqueens | .995691 | .986902–1.004559 |
+
+The standalone producer is **not selected**: logging and DeltaBlue lose in
+both pairs. The separate TEMP refinement completes the producer/destination
+contract and will be screened independently as a composition. Creation and
+ascent start from selected57, without this losing prerequisite. No all29,
+full-system or direct upstream campaign is claimed for the producer-only packet.
+Timing evidence: `E59/parity61-constant1-eight-selected57`. Build, generation
+and focused manifests use the same `parity61-constant1` tag; setup is retained
+in `prepare-parity61-builds.py` and `parity61-build-setup-commands.json`.
+
+A short matched PMU diagnostic distinguishes removed work from elapsed cost:
+
+| Workload | Instructions / selected57 | Cycles / selected57 |
+| --- | ---: | ---: |
+| deltablue | .991916 | 1.038745 |
+| logging_silent | .986431 | 1.119502 |
+
+These are two balanced pairs of **whole-process** user counters, including
+imports, one warmup and seven unchanged timed kernel calls. They are not the
+earlier kernel-only interval and must not be combined with its per-tray counts.
+Both instruction pairs decrease while cycles increase. This rules out a net
+whole-process instruction-count increase as the sole explanation; it does not
+establish branch, cache, layout, scheduling or individual-handler attribution.
+The diagnostic retains commands, raw counter CSVs, benchmark-source and ELF
+identities in `E59/parity61-constant1-counter-diagnostic`, driven by
+`E59/diagnose-constant1-counters.py`. No compiler/flag/alignment search follows.
+
+## TEMP refinement: qualification in progress
+
+Source packet `8db82c67bd4` adds one executing-only scratch-destination variant,
+cold selection before the no-feedback return, public-image rejection and base/
+shadow/instrumentation mappings. Actual source peers approve it and six focused
+host methods pass. Root generation and both 117/79 builds pass at fe38bad0b50.
+The first six-module release runtime check runs 153 methods and fails one new
+scratch-owner admission case; the other five modules pass. Debug has not run.
+
+The image LOAD_CONST A0 → LOAD_COMMON_CONSTANT A0 → RETURN A0 is rejected by
+selected57 but admitted by the candidate. Root's constructor-only comparison
+is retained in `E59/constant2-vacancy-baseline.json`; no malformed image was
+executed. The source-derived normal graph must preserve the existing recipient
+rule when replacing the old FRESH summary. The worker is reviewing that common
+consumer before a correction and source peer. Do not weaken the negative test
+or claim qualification/timing for this candidate. Failed evidence remains
+`E59/parity61-constant2-release-focus.log` and its command manifest.

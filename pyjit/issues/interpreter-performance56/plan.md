@@ -12,10 +12,11 @@ and [handoff](../../HANDOFF.md) own direction, selected contracts and exact stat
 The active workstream is [IR semantics59](../register-semantics59/README.md).
 All five first-cycle executables lose their screens; the
 [trial report](../register-semantics59/report.md) owns those decisions.
-The reviewed [next design](../../design/proposals/interpreter-parity60.md) and
-[grouped ledger](../register-semantics59/review-next.md) select two concrete
-experiments: same-GCC resident execution, then cross-word inline-scalar lowering.
-Selected57 remains the control. Earlier designs and rejected packets are
+The reviewed [next design](../../design/proposals/interpreter-parity61.md) and
+[grouped ledger](../register-semantics59/review61.md) select producer/role
+contracts, direct suspendable creation and checked delegated ascent. The
+resident engine is rejected; scalar plans are deferred. Selected57 remains
+the control. Earlier designs and rejected packets are
 references and evidence, not selected implementation or independent mandates.
 
 ## Outcome
@@ -97,15 +98,16 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The workstream's [next design](../../design/proposals/interpreter-parity60.md)
+The workstream's [next design](../../design/proposals/interpreter-parity61.md)
 and [trial report](../register-semantics59/report.md) distinguish proposed,
 source-reviewed, qualified and selected changes. All five round59 executable
 screens are closed and losing; no current runtime change is selected.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Sol generator worker | Common-constant producer's checked canonical/no-count contract through existing typed result receipts | Root proposal peer GO; actual source post-review then root generation/build/screen |
-| Independent peer | Source ownership/canonical receipts, alias invalidation and actual native removal; prepare call/delegation source review | No source-name-only ownership grants |
+| Sol generator worker | Correct native-discovered scratch-owner admission regression; then review creation's generator/result contracts | TEMP both builds pass; release fails one new admission case, timing blocked |
+| Sol frame worker | Direct exact creation into final heap frame, existing transition roots and shared final initializer | Root proposal GO; independent actual source peer before native integration |
+| Sol ascent worker | Compose eligible delegated yields without repeated parent result transport | Actual source diff has root peer GO; native integration pending |
 | Coordinator | Merge packets, generate, serialize builds/tests/quiet screens, qualify and select | All29 and full diagnostics at a winning coherent checkpoint |
 | Astra | Grouped architecture review after measured cycles | Broad design, outside the patch loop |
 
@@ -116,9 +118,11 @@ The scalar [proposal](../register-semantics59/scalar-proposal.md) and
 [peer](../register-semantics59/scalar-peer.md) reject its allocated descriptor
 framework and defer the fixed two-word rival. Implement the independently
 reviewed [common-constant producer](../register-semantics59/common-constant-proposal.md)
-first, leaving TEMP destination refinement as a separate packet. The next
-grouped Astra review prices broader role/ownership and call/delegation changes
-against the engine's negative native evidence.
+first, leaving TEMP destination refinement as a separate packet. Producer-only
+passes focused qualification but loses logging/DeltaBlue, so is not selected;
+the complete TEMP contract is the next screen. Astra's round61 review is now
+frozen: direct exact creation and checked delegated ascent proceed independently
+from selected57. Neither requires a losing producer or scalar packet.
 Other provider, continuation, borrowed-argument, cache and encoding rivals have
 explicit reopening gates in the design; they are not scheduled investigations.
 

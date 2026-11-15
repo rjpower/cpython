@@ -18,9 +18,10 @@ loses DeltaBlue 15.5%, generators 5.5% and logging 11.5%. The
 [trial report](issues/register-semantics59/report.md) retains every ratio,
 qualification limit, rejected branch and native mechanism. Golden is unchanged.
 
-Astra's [next grouped design](design/proposals/interpreter-parity60.md) and
+The preceding [round60 design](design/proposals/interpreter-parity60.md) and
 [review ledger](issues/register-semantics59/review-next.md) prioritize a same-GCC
 computed-goto engine, followed by actual cross-word inline-scalar lowering.
+Their current dispositions follow; round61 below drives ongoing work.
 Upstream's measured build already uses computed goto; selected57 uses separate
 tail-called handlers with path-specific state repacking. The independent
 [backend peer](issues/register-semantics59/backend-peer.md) admits that experiment
@@ -41,9 +42,34 @@ the [scalar proposal](issues/register-semantics59/scalar-proposal.md) and its
 [peer](issues/register-semantics59/scalar-peer.md) reject the allocated plan
 framework and defer the fixed two-word rival. The
 [common-constant producer](issues/register-semantics59/common-constant-proposal.md)
-is being implemented on selected57 without a new backend, frame field or
-per-site descriptor. Astra's next grouped review covers broader register-role,
-call and delegation changes against this negative evidence.
+is integrated at 8bb861d357e on selected57 without a new backend, frame field or
+per-site descriptor. Both builds complete 117/79 and 43 focused runtime methods
+pass per role. Full generation changes only its handler and resolved ownership
+metadata; the other 330 populated format rows retain their contracts. Native
+handler size falls 620→356 bytes, with DUP and numeric normalization removed.
+The producer-only screen is not selected: comprehensions .969376, DeltaBlue
+1.036249, coroutines .979717, generators .984184, logging 1.139183, raytrace
+.989650, spectral_norm 1.015950 and nqueens .995691 versus selected57.
+Matched whole-process diagnostics show fewer instructions but more cycles in
+DeltaBlue/logging; no exclusive cache/layout cause is established. The
+[trial report](issues/register-semantics59/report.md) retains the scope and raw
+evidence. TEMP source packet 8db82c67bd4 is peer-approved, generated and
+integrated at fe38bad0b50. Both 117/79 builds pass. The first release focused
+run fails one new scratch-owner admission test; the other five modules pass.
+A constructor-only baseline proves regression: selected57 rejects the image,
+candidate admits it. No malformed image was executed. The shared normal-map
+consumer has a peer-approved cold diagnostic correction in implementation;
+debug qualification and timing await the correction.
+
+Astra's [round61 design](design/proposals/interpreter-parity61.md) and
+[ledger](issues/register-semantics59/review61.md) are complete. After the producer,
+independently admit its TEMP destination refinement, direct exact coroutine
+creation in the final heap frame, then checked delegated-yield ascent. The
+last two compose whole transitions; they retain real frames and owning homes
+at effects. Worker source proposals and independent peers precede implementation;
+root owns generation, native jobs, combined qualification and measured selection.
+Ascent's actual source diff has root peer GO; creation's source implementation
+is still in progress. Neither has a native performance result yet.
 
 The [all-word census](issues/register-semantics59/resident-coverage.md) limits
 the finite scalar-pair pilot, without bounding all possible regions. Its

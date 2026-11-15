@@ -6,9 +6,10 @@ The coordinator owns native jobs, integration and measurement. No round59
 candidate is selected. All five first-cycle executable screens lose; the
 [trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[next grouped design](../../design/proposals/interpreter-parity60.md) and
-[review ledger](review-next.md) now drive implementation: computed-goto engine,
-then a concrete cross-word scalar consumer. Their coverage and abort gates are
+[next grouped design](../../design/proposals/interpreter-parity61.md) and
+[review ledger](review61.md) now drive implementation: producer/role contracts,
+direct exact creation and delegated ascent. The engine is rejected and scalar
+plans are deferred. Coverage and abort gates are
 explicit; no parity result is implied. The
 [first-lane source peer](peer.md) and [execution logistics](measurement.md)
 record admission and exact paths.
@@ -31,10 +32,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Next grouped cycle frozen: engine then concrete scalar consumer |
+| Astra | A specific ordered set of semantic IR and interpreter adjustments, with consumers, contracts and tests | Round61 frozen: producer/role facts, direct creation, delegated ascent |
 | Independent peer | Check the actual semantic/physical boundary before implementation; post-review actual diffs | Engine and identity source direction GO; actual source and native gates retained |
-| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Round60 engine loses all eight cases; concrete scalar proposal starts from selected57 |
-| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Five round59 screens and the round60 engine screen complete; no winner selected |
+| Implementation workers | Bounded reviewed runtime changes in separate component worktrees | Producer standalone loses; TEMP admission correction; creation coding; ascent actual source peer GO |
+| Measurement | Reuse existing exact-identity harness and controls, retaining selected57 | Round59 five screens, round60 engine and producer-only complete; no winner selected |
 | Coordinator | Interface decisions, generation, builds, focused/full checks, hot screens and winner selection | Active |
 
 ## Reviewed trial order
@@ -46,7 +47,7 @@ remain evidence; they are not proposed anew.
 | 3 | Connect native Invoke's explicit result-owner token to the existing CFG result and emit one ordered input-retirement plan | Composition 582 and isolated 5c60 pass focused gates but both screens lose |
 | 4 | Carry an admitted recipient action in the continuation instead of repeatedly classifying raw return_slot | 14bf4eb passes both builds and 112 methods/role; screen loses, closed |
 | 5 | Separate edge value identity from home identity at a demonstrated CFG allocation consumer | Demoted: no new admitted consumer beyond closed zero-COPY census |
-| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Eight-case coverage complete; next grouped review selects broad engine then concrete scalar consumer |
+| 6 | Keep values/projections resident across semantic operations; choose regions, cache or wider physical form by residual cost | Engine loses; scalar plans deferred; round61 producer/role and creation/delegation packets active |
 
 Coordinator architecture review: GO for the bounded trials, with existing
 selected outcomes, call result IDs, overlap and direct returns retained.

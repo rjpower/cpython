@@ -7,25 +7,28 @@ Python behavior, explicit ownership and useful observation APIs.
 The selected interpreter uses one owning frame stack, overlapping argument homes
 and explicit recipients and continuations. Carry established value and layout facts
 through the generator. Source attribution belongs to observation; execution and
-exception recovery use semantic state. Compiler line restrictions need an
-observer reconstruction contract before removal.
+exception recovery use semantic state. Source positions do not grant ownership
+or initialization facts.
 
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-executes the reviewed [next design](design/proposals/interpreter-parity60.md):
-the same-GCC resident engine is rejected by all eight screens. The
+executes the reviewed [next design](design/proposals/interpreter-parity61.md):
+producer/role contracts, direct suspendable creation and checked delegated
+ascent. The preceding same-GCC resident engine is rejected by all eight screens. The
 [scalar proposal](issues/register-semantics59/scalar-proposal.md) is deferred
 after its [peer review](issues/register-semantics59/scalar-peer.md); do not build
 an allocated descriptor framework for a two-word trial. The
 [common-constant producer](issues/register-semantics59/common-constant-proposal.md)
-is the next bounded implementation on selected57. Astra is reviewing broader
-register-role, call and delegation changes as a group. The
+lost its standalone broad screen; TEMP qualification is blocked on an
+admission regression. Creation and ascent proceed independently from
+selected57. Astra's grouped review is
+complete; source peers close each call and delegation packet before coding. The
 [native review](issues/register-semantics59/engine-post-review.md) records the
 compiled engine's stack-backed state and shared dispatch. The
-[review ledger](issues/register-semantics59/review-next.md)
-incorporates all five rejected round59 executable screens and their
+[review ledger](issues/register-semantics59/review61.md)
+incorporates the rejected engine, all five rejected round59 executable screens and their
 [semantic/physical design](design/proposals/register-semantics59.md).
 Logical values, uses, edge results and continuations precede storage and
 execution lowering. Astra reviews the remaining architecture after coherent

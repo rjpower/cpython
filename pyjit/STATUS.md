@@ -72,18 +72,18 @@ all29, full-suite, upstream, PMU or repair follows for either loser.
 Round71 is closed. The user has authorized the
 [execution-state design72](design/proposals/execution-state72.md). Two Sol 6.1
 workers own compiler/layout and accumulator/effect/activation work. The
-[layout source contract](issues/register-semantics59/execution72-layout.md) has
-independent review and implementation GO. Its complete cold-map/allocator source
-`1e07e1bf590e` passes independent source post-review. Candidate G is now
-`240f4c2b977`, with magic 64424 and reviewed integration fixes. Both builds pass
-117/79 and 53 focused methods per role at `48084587d0b`; broader related checks
-found one stale test corruption offset, now ported to the 24-byte header.
-Regeneration leaves handlers unchanged. Three ordinary compiler probes produced
-identical words and extents, so root removed the unproven scalar relocation pass
-before timing. Explicit cold survivor maps remain; no packing gain is claimed. The
+[layout source contract](issues/register-semantics59/execution72-layout.md) is
+implemented and rejected at G `240f4c2b977`, with magic 64424. Both builds pass
+117/79 and all 1,143 methods across 20 related modules per role (16 release/15
+debug skips). Three ordinary compiler probes produced identical words and
+extents, so root removed the unproven scalar relocation pass before timing.
+The remaining cold-map unit loses its stable 32-row hot8 screen: GM 1.003934,
+spectral_norm 1.070835 and logging 1.014417. No cause, packing gain or selection
+is claimed; no further qualification or repair follows for this unit. The
 [accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
-also has independent peer and root GO; its generator implementation proceeds
-in parallel, with shared runtime edits deferred until the layout rebase. Root owns integration, generation, native tests
+has independent peer and root GO. Both workers implement it directly from
+selected57: its existing reserved NULL homes and materialization before effects
+do not need the rejected exception-map layout. Root owns integration, generation, native tests
 and benchmark selection. Fresh warmed profiles compare selected57 and upstream:
 SEND/delegated yield account for about 45% of selected generator samples; the
 coroutine workload stresses creation and synchronous completion. These are

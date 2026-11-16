@@ -1,14 +1,50 @@
 # Semantic IR trial results
 
-## Execution72: source contracts active
+## Execution72: layout rejected; carried-owner ABI in implementation
 
 The user authorizes [design72](../../design/proposals/execution-state72.md)
 implementation with Sol 6.1 workers and root integration/validation. Compiler
 allocation must serve ordinary execution; cold exception and observer consumers
 use explicit ownership maps. The execution ABI carries a canonical owned result
-through complete producer/consumer paths. Shared interfaces are being specified
-and independently cross-reviewed; no72 runtime change or performance win is
-claimed. Both workers start from immutable selected57 in new W/P branches.
+through complete producer/consumer paths. The reviewed ABI is being implemented
+directly from selected57 in W/P; no ABI runtime qualification or win is claimed.
+
+The separate cold-layout unit at G `240f4c2b977` (magic 64424) passes both
+117-module/79-extension builds and 1,143 methods across 20 related modules per
+role (16 release/15 debug skips), under `E59/execution72-layout6-*`. It replaces
+prefix survivor descriptions with explicit physical keep sets, including reached
+nullable error views. Generated handlers remain unchanged. The attempted
+scalar hole allocator produced identical words/extents in all three ordinary
+native probes, so root removed it at `ba98006e236` before timing. No ordinary
+packing, frame-size or initialization saving was demonstrated.
+
+`E59/layout72-hot8-selected57-screen` has 32 successful rows, two balanced pairs,
+stable source/ELF/config identities and no pre/postflight errors. Candidate over
+selected57 elapsed-time ratios (lower is better):
+
+| Case | Geometric mean | Pair 1 | Pair 2 |
+| --- | ---: | ---: | ---: |
+| comprehensions | 0.972545 | 0.945798 | 1.000049 |
+| deltablue | 0.991952 | 0.998149 | 0.985794 |
+| coroutines | 1.000732 | 0.999947 | 1.001517 |
+| generators | 0.988965 | 0.999113 | 0.978919 |
+| logging_silent | 1.014417 | 1.002920 | 1.026045 |
+| raytrace | 0.988562 | 0.989768 | 0.987357 |
+| spectral_norm | 1.070835 | 1.072379 | 1.069293 |
+| nqueens | 1.006466 | 1.010759 | 1.002190 |
+
+Hot8 GM is **1.003934**. The unit fails the protection gates and is rejected.
+There is no confirmation, all29, full-suite, fresh upstream or PMU expansion,
+and no established cause for its losses. Earlier numbered receipts retain the
+integration failures and corrections (canonical container APIs, format magic,
+fixture RESUME and corruption offset); the final passes do not erase them.
+
+Both workers checked the dependency against actual source: the first accumulator
+ABI retains existing homes/windows/NULL initialization and spills before cold
+effects. It therefore needs no nonprefix exception map. The ABI starts directly
+from selected57; the rejected unit stays preserved and excluded. This removes
+an unnecessary dependency without waiving any performance gate. Physical
+repacking requires a concrete demonstrated placement benefit before reopening.
 
 Fresh diagnostic profiles in `E59/architecture-diagnosis72-fresh` compare the
 unchanged selected57/upstream binaries on warmed coroutine and generator kernels.

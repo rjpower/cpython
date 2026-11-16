@@ -1,12 +1,24 @@
 # Execution72 compiler/layout source proposal
 
-Reviewed first-unit source contract, from selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Independent source review and root implementation GO received on 2026-11-15. The complete cold-map source is integrated in candidate G. Both builds pass 117 modules/79 shared extensions; 53 focused methods pass per role at `48084587d0b`. The narrowed foundation at `ba98006e236` retains the existing compactor; qualification continues before selection. **Yes: cold EH survivor maps can release physical allocation independently of the accumulator ABI, with initialized scratch retained.** This is the first implementable unit; it does not claim the full execution72 architecture or an accumulator speedup.
+Closed, measured rejection from selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0`.
+Final G `240f4c2b977` builds 117 modules/79 shared extensions and passes 1,143
+related methods per role. The stable protected hot8 screen loses: GM 1.003934,
+spectral_norm 1.070835 and logging 1.014417. No packing benefit or causal
+explanation is established. The accumulator ABI uses existing reserved NULL
+homes and materializes before effects, so it does not need this unit. Preserve
+the implementation/evidence; do not import or retry it. The contract below
+records the rejected mechanism, not a current implementation prerequisite.
 
 ## Ownership and first implementation boundary
 
 Compiler worker owns `Python/regcfg.c`, `regcfg_passes.c`, `assemble.c`, `Objects/codeobject.c`, `Include/internal/pycore_regcfg.h`, and new compiler/public-image tests. No new SSA or parallel owner analysis. Reuse logical canonical/fresh register IDs, current liveness, owner-held occupancy, generated `_PyIR_NormalSemanticTransfer`/Storage actions, and codeobject semantic worklist.
 
-Root assigns this worker the COMPLETE cold layout unit: also `Python/ceval.c`, `frame.c`, `Objects/frameobject.c`, `instrumentation.c`, `Modules/_opcode.c`, `Lib/dis.py` and test-support map decoders, plus required cold generator/frame-header consumers. This worker owns shared `pycore_ir_exception.h`, `pycore_ir_source.h`, `pycore_ceval.h` and any HomeView/error-scope changes for this unit. The backend worker develops the accumulator ABI proposal read-only, then rebases on the integrated cold-layout checkpoint before any overlapping runtime edits. Generator/effect-ABI changes belong to that later backend unit. Root owns magic/integration/products. No concurrent shared-header edits.
+The complete unit covered `Python/ceval.c`, `frame.c`, `Objects/frameobject.c`,
+`instrumentation.c`, `Modules/_opcode.c`, `Lib/dis.py`, test-support map decoders
+and required generator/frame-header consumers, including shared exception,
+source and HomeView/error-scope headers. Root owned magic/integration/products.
+The original ABI rebase dependency is removed after measured rejection; current
+compiler/backend ownership is in the [ABI contract](execution72-abi.md).
 
 The foundation retains existing compaction. It removes the unwinder's numeric
 suffix contract: the compiler serializes physical homes of logical handler

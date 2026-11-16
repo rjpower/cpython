@@ -27,8 +27,10 @@ The user has resumed work on the [execution-state design72](design/proposals/exe
 logical values before physical allocation, a carried owned result, typed effect
 boundaries and exact ownership maps. Ordinary execution chooses the layout;
 exception cleanup consumes it. Two Sol 6.1 workers specify and cross-review the
-compiler/layout and execution/activation interfaces, then implement bounded
-increments. Root owns merged validation and selection. Repeated logging losses
+compiler/validation and execution/activation interfaces, then implement bounded
+increments. The separate layout72 unit lost its protected screen and is closed;
+the first ABI slice keeps existing physical homes and needs no changed EH map.
+Root owns merged validation and selection. Repeated logging losses
 remain unexplained; smaller source or native frames do not predict throughput.
 The selected runtime retains its current contracts until a measured winner lands.
 

@@ -18,31 +18,31 @@ results, hashes and qualification limits; [design71](design/proposals/interprete
 and [review71](issues/register-semantics59/review71.md) retain the closed contracts.
 Astra is for grouped architecture review, not the component loop.
 
-Two Sol 6.1 workers now own exact source proposals and cross-review: W on
-`pyjit/execution72-layout` covers compiler/allocation/maps; P on
-`pyjit/execution72-abi` covers the generator, execution ABI and activations.
-Both new branches start at selected57 and preserve the old branches below.
-Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
-The [layout source contract](issues/register-semantics59/execution72-layout.md)
-has independent peer and root GO. W's complete cold map and allocator unit is
-`1e07e1bf590e` atop codec `c63defae27c`; independent source post-review passes.
-G is now `240f4c2b977`, branch `pyjit/execution72-layout-integrated`, magic 64424.
-Full regeneration changes no handlers. Integration repaired legacy container
-API uses, a missing RESUME in the observer fixture, a stale corruption-test
-offset, and generated API descriptions. Magic 64423 was already present in old
-IRSC1 caches, so it cannot identify this format. At `48084587d0b`, both builds
-pass 117/79 and 53 focused methods per role. Three ordinary compiler probes have
-identical words/extents; root removed the unproven relocation pass at
-`ba98006e236`, retaining established compaction and explicit cold keep maps.
-Current build/focus tags are `execution72-layout6-*`; earlier numbered receipts
-retain actual failures and limits. P has independent peer and root GO for the
-[accumulator ABI contract](issues/register-semantics59/execution72-abi.md) and
-implements the generator/runtime ABI; W has rebased on the layout foundation
-for compiler selection, common validation and continuation-map lifetime. The
-shared header interface is P `0ad8147b9df`, independently consumed by W. Root integrates only
-complete reviewed sources into G, generates and reviews products, then runs
-focused native checks and hot8. No runtime winner has landed for72 yet.
-Reused G builds are being refreshed and are not executable controls.
+Two Sol 6.1 workers implement the independently reviewed
+[accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
+directly from selected57. W, branch `pyjit/execution72-compiler-abi-selected57`,
+owns selection, common validation and continuation-map lifetime. P, branch
+`pyjit/execution72-carried-owner`, owns generator/runtime ABI and activations.
+The shared header is `f2a8a302b93` in W / `392307588` in P; W's map lifetime is
+`da134719c4f`, P's typed stored-recipient checkpoint `c9ada93f713`.
+These are incomplete source checkpoints, not runtime GO. Root integrates only
+the complete reviewed ABI sources, generates/reviews products, then runs native
+checks and hot8. Proposals/progress use `E59/execution72-*`; no72 winner exists.
+
+The [layout unit](issues/register-semantics59/execution72-layout.md) is closed
+and rejected. G and its builds are frozen at `240f4c2b977`, branch
+`pyjit/execution72-layout-integrated`, magic 64424. Both final
+`execution72-layout6` builds pass 117/79 and 1,143 related methods per role.
+Integration fixes and earlier failed receipts remain preserved. Three ordinary
+compiler probes showed identical words/extents; root removed the unproven
+relocation pass at `ba98006e236` before timing. The remaining explicit cold maps
+lose `E59/layout72-hot8-selected57-screen`: GM 1.003934, spectral_norm 1.070835,
+logging 1.014417, stable identities and all 32 rows successful. No confirmation,
+all29, full suite, upstream or PMU follows. Existing ABI reserved NULL homes and
+pre-effect materialization do not depend on these maps; both workers confirmed
+that source boundary. Start the ABI G branch from I, not this rejected unit.
+Keep old W layout/P layout-based ABI branches and sealed evidence. Magic 64423
+already identified older IRSC1 caches; do not reuse 64423 or 64424 for the ABI.
 
 Preserved round71 runtime trees:
 

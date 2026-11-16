@@ -4,8 +4,12 @@ Reviewed source contract; independent peer and root implementation GO received
 on 2026-11-15. Based on selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Root owns implementation release,
 integration, generation and all runtime/native qualification. P implements on
-branch `pyjit/execution72-abi`. This unit follows the initialized-first cold-map unit;
-it does not import rejected71 canonical propagation or hot/cold arithmetic.
+`pyjit/execution72-carried-owner`; W on `pyjit/execution72-compiler-abi-selected57`.
+Both start directly from selected57. The cold-map unit lost its performance
+screen and is excluded. This ABI retains existing reserved NULL homes, windows,
+initialization and physical allocation, and materializes before effects; both
+source owners confirmed that it does not need nonprefix exception maps. It also
+excludes rejected71 canonical propagation and hot/cold arithmetic.
 
 ## Fixed representation
 
@@ -244,7 +248,7 @@ goes through existing completion after materialization; an already applied
 redirect owns its actual landing state and old homes cannot be read/cleared
 again, including same-PC f_lineno generation changes. Abnormal provider/poll
 results enter the actual error checkpoint and never publish a successful ACC
-output. The initialized-first keep map consumes the reached home layout.
+output. Existing exception/home maps consume the materialized reached layout.
 
 Existing 40B transition result roots remain for held C results during frame
 retirement and effect adapters. No duplicate frame edge or new global root
@@ -266,15 +270,15 @@ explicit refusal require root assignment and closure before enabling ACC code.
 
 ## Source boundaries and staged commits
 
-After the cold-map unit freezes, compiler worker owns ACC edge selection and
+Compiler worker owns ACC edge selection and
 common validation in regcfg/assemble/codeobject, executable primary map lifetime
 in ir.c, and compiler/public-image tests. Backend owns generator parsed placement
 and effect lowering, bytecodes, ceval macros/entry/completion, frame/genobject
 residence and focused behavior tests. Shared `pycore_ir.h` payload/continuation
 types, exec pointer and mode tables get one reviewed sequential interface commit.
 Frame header, interpframe, ceval headers and debug exports get a second reviewed
-commit after rebase. Root assigns remote schema/magic ports. No overlapping
-edits while the cold-map worker owns those files.
+commit. Backend owns remote schema ports; root owns magic and integration.
+The closed cold-map unit is not a shared-file dependency.
 
 Raw closure inventory from selected source: return_slot/return_pc constructors
 and copy in interpframe; `_PyFrame_SetReturnValue`/PublishReturnSlot; eval-loop
@@ -292,7 +296,7 @@ permission to leave a raw old consumer.
 
 First source increments: (1) inert shared scalar interface and executable-map
 lifetime with no ACC selection; (2) parsed static placement/effect emitter and
-focused host emission/mutation tests; (3) rebase and typed writer/reader ports,
+focused host emission/mutation tests; (3) typed writer/reader ports,
 complete CALL/SEND/YIELD source closure and compiler edge selection; (4) only
 then root-generated products and activation. No partial runtime nomination.
 

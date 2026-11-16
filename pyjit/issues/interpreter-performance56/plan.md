@@ -56,8 +56,12 @@ Both units are closed and unselected. The user has authorized the
 logical values from physical owners, carry one result through dispatch, and
 generate effect boundaries and cold ownership maps. Ordinary execution chooses
 layout; exception teardown consumes it. Existing argument overlap remains.
-Sol 6.1 workers cross-review exact compiler/layout and execution/activation
-interfaces before implementation. Root integrates a complete producer/consumer
+The separate explicit-survivor layout unit passes related behavior checks but
+loses its protected screen (GM 1.003934; spectral_norm 1.070835, logging 1.014417)
+and is closed. The first accumulator ABI retains current homes and materializes
+before effects, so it does not depend on that rejected unit. Sol 6.1 workers
+implement the reviewed compiler/validation and execution/activation interfaces
+directly from selected57. Root integrates a complete producer/consumer
 slice, including errors and observation, before expanding the port. Native
 spills and all result consumers count toward the cost; logging remains protected.
 The prospectively reviewed
@@ -170,10 +174,10 @@ not a dependency list.
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
 | Root | Integrate reviewed72 units and validate complete execution paths | Preserve selected57/evidence; own generation, native qualification and selection |
-| Sol 6.1 compiler/layout worker | Logical values, allocation and cold ownership maps | W from selected57; exact source contract, focused host checks and post-review |
+| Sol 6.1 compiler worker | ACC edge selection, common validation and continuation maps | W directly from selected57; focused host checks and post-review |
 | Sol 6.1 execution worker | Accumulator, effects and activation/result transfer | P from selected57; shared ABI cross-review, focused host checks and post-review |
 
-Both72 source-contract lanes are active. Both71 screens remain closed. Fresh
+Both72 ABI implementation lanes are active. The layout72 and both71 screens remain closed. Fresh
 diagnostic profiles are retained under `E59/architecture-diagnosis72-fresh`;
 they do not establish a timing result or a removable cycle budget.
 A losing screen stops the unit. A qualified broad winner may be selected before

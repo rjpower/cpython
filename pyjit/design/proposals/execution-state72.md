@@ -1,11 +1,11 @@
 # Execution state: diagnosis and proposed replacement contract
 
 Status: user-authorized direction, 2026-11-15. Source inspection and fresh
-diagnostic profiles completed. The first complete [layout contract](../../issues/register-semantics59/execution72-layout.md)
-has independent source-review approval and is being implemented by a Sol 6.1
-worker. A second Sol worker implements the reviewed
+diagnostic profiles completed. The complete [layout unit](../../issues/register-semantics59/execution72-layout.md)
+passed related behavior checks but lost its protected performance screen and
+is closed. Two Sol 6.1 workers implement the reviewed
 [accumulator/effect/activation contract](../../issues/register-semantics59/execution72-abi.md)
-in nonoverlapping generator files, then rebases before shared runtime changes.
+directly from selected57, dividing compiler/validation and runtime/generator work.
 Selected57 remains golden. This does not restart the rejected experiments or
 claim parity. Read the [current interpreter](../interpreter.md) for selected
 behavior and the [trial report](../../issues/register-semantics59/report.md) for
@@ -178,14 +178,16 @@ state. Maps cannot assume that a failed operation reached its normal output.
 The initial scope is GIL execution; free-threaded and remote-reader contracts
 need explicit closure before broader qualification.
 
-The initialized-layout unit is a separately qualified foundation: require actual
-arbitrary survivor-map behavior and the existing hot8
-regression protections. It need not claim an isolated throughput gain to advance
-to the accumulator composition. A flat foundation is not a selected performance
-winner. The bounded scalar-relocation attempt produced identical words and
-extents in all three native probes; its interval pass was removed before
-timing. Existing compaction remains, with no packing gain claimed. The complete accumulator composition must earn the existing improvement
-and protection gates before replacing golden.
+The initialized-layout unit is rejected: hot8 GM 1.003934, spectral_norm 1.070835
+and logging 1.014417. Its bounded scalar relocation produced identical words
+and extents in all three native probes and was removed before timing. The
+first accumulator slice retains existing homes, windows, NULL initialization
+and compaction, and materializes before effects. Both source owners confirmed
+it needs no changed EH map. It therefore starts directly from selected57;
+the rejected unit is neither retried nor imported. Physical repacking remains
+deferred until it demonstrates useful placement. The complete accumulator
+composition must earn existing improvement and protection gates before
+replacing golden.
 
 Compare unchanged comp/Delta/coroutine/generator workloads and logging before
 generalizing. Preserve the existing broad protection rules. A new accumulator,

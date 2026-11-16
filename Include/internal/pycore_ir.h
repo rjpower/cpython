@@ -73,6 +73,46 @@ extern "C" {
  * it tells the handler to release the result (_PyIR_DISCARDS), where a
  * CALL; POP_TOP pair took two words. */
 #define IR_NO_DST       IR_FIELD_MAX
+
+/* A private native transfer target receives an owned value instead of a word.
+ * The target, rather than a runtime tag, defines the payload's meaning. */
+typedef uint64_t _PyIRPayload;
+
+typedef enum {
+    _PyIR_GEN_CONSUMER_NONE,
+    _PyIR_GEN_CONSUMER_DELEGATED,
+    _PyIR_GEN_CONSUMER_RETURN,
+    _PyIR_GEN_CONSUMER_STORE_LOCAL,
+    _PyIR_GEN_CONSUMER_DISCARD,
+    _PyIR_GEN_CONSUMER_SEND,
+} _PyIRGeneratorConsumer;
+
+enum {
+    _PyIR_GEN_BOUNDARY_PLACED = 1,
+    _PyIR_GEN_BOUNDARY_CLOSED = 2,
+    _PyIR_GEN_BOUNDARY_OBSERVER = 4,
+};
+
+/* Cold shape identity. Geometry and ownership still come from the source
+ * format and logical edges; these flags grant neither owner nor error facts. */
+typedef struct {
+    uint16_t ordinary;
+    uint16_t handler;
+    uint8_t yielded_consumer;
+    uint8_t completed_consumer;
+    uint8_t resume_consumer;
+    uint8_t flags;
+} _PyIRGeneratorBoundary;
+static_assert(sizeof(_PyIRGeneratorBoundary) == 8,
+              "generator boundary encoding must remain fixed");
+
+extern const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[];
+/* Invalid handler returns NULL; an ordinary handler has a NONE shape. */
+extern const _PyIRGeneratorBoundary *_PyIR_GeneratorBoundaryOf(int handler);
+/* Cold placement selection: -1 means that complete source closure is absent. */
+extern int _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
+                                        int completed_consumer,
+                                        int resume_consumer);
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit

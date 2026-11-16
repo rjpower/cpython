@@ -60,6 +60,276 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 
 /* Decoding */
 
+const _PyIRGeneratorBoundary *
+_PyIR_GeneratorBoundaryOf(int handler)
+{
+    if (handler < 0 || handler >= IR_NUM_HANDLERS ||
+        !(_PyIR_HandlerFlags[handler] & _PyIR_H_DISPATCH))
+    {
+        return NULL;
+    }
+    const _PyIRGeneratorBoundary *boundary =
+        &_PyIR_GeneratorBoundaries[handler];
+    assert(boundary->handler == handler);
+    return boundary;
+}
+
+int
+_PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
+                              int completed_consumer, int resume_consumer)
+{
+    const _PyIRGeneratorBoundary *source = _PyIR_GeneratorBoundaryOf(ordinary);
+    if (source == NULL || source->ordinary != ordinary ||
+        source->flags & _PyIR_GEN_BOUNDARY_PLACED ||
+        yielded_consumer < _PyIR_GEN_CONSUMER_NONE ||
+        yielded_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        completed_consumer < _PyIR_GEN_CONSUMER_NONE ||
+        completed_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        resume_consumer < _PyIR_GEN_CONSUMER_NONE ||
+        resume_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        !(yielded_consumer || completed_consumer || resume_consumer))
+    {
+        return -1;
+    }
+    for (int handler = 0; handler < IR_NUM_HANDLERS; handler++) {
+        const _PyIRGeneratorBoundary *boundary =
+            _PyIR_GeneratorBoundaryOf(handler);
+        if (boundary != NULL && boundary->ordinary == ordinary &&
+            (boundary->flags & (_PyIR_GEN_BOUNDARY_PLACED |
+                                _PyIR_GEN_BOUNDARY_CLOSED)) ==
+                (_PyIR_GEN_BOUNDARY_PLACED | _PyIR_GEN_BOUNDARY_CLOSED) &&
+            boundary->yielded_consumer == yielded_consumer &&
+            boundary->completed_consumer == completed_consumer &&
+            boundary->resume_consumer == resume_consumer)
+        {
+            return handler;
+        }
+    }
+    return -1;
+}
+
+static int
+generator_ordinary(_PyIRWord word)
+{
+    const _PyIRGeneratorBoundary *boundary =
+        _PyIR_GeneratorBoundaryOf(IR_HANDLER(word));
+    return boundary == NULL ? -1 : boundary->ordinary;
+}
+
+static int
+generator_is(_PyIRWord word, int ordinary)
+{
+    int handler = generator_ordinary(word);
+    return handler == ordinary ||
+        (_PyIR_FormatOf(ordinary)->twin != 0 &&
+         handler == _PyIR_FormatOf(ordinary)->twin);
+}
+
+/* This is the existing successful-edge retirement receipt, not an opcode
+ * classification. It grants no physical NULL or owner fact. */
+static const _PyIROwnershipEvent *
+generator_completion(_PyIRWord word)
+{
+    int ordinary = generator_ordinary(word);
+    if (ordinary < 0) {
+        return NULL;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(ordinary);
+    if (fmt->owner_events != 1 || fmt->roles[0] != _PyIR_ROLE_DST ||
+        fmt->roles[1] != _PyIR_ROLE_BASE)
+    {
+        return NULL;
+    }
+    const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
+    if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != 1 ||
+        !(event->flags & _PyIR_COMPLETION_HAS_RESULT) ||
+        event->src != _PyIR_Extent(fmt->reads, 0))
+    {
+        return NULL;
+    }
+    return event;
+}
+
+static int
+generator_exit(_PyIRWord word, int pc)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(generator_ordinary(word));
+    return fmt->flags & _PyIR_FORWARD ? pc + 1 + IR_DS(word) : (int)IR_CD(word);
+}
+
+/* Resume STORE_LOCAL is an actual STORE_FAST consumer. Completion
+ * STORE_LOCAL instead means an already folded local A, and skips no word. */
+static int
+generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
+                       int *consumer)
+{
+    if (pc + 2 >= nwords || !generator_is(words[pc + 1], RESUME)) {
+        return _PyIR_GEN_CONSUMER_NONE;
+    }
+    int home = (int)IR_A(words[pc]);
+    _PyIRWord next = words[pc + 2];
+    if (generator_is(next, STORE_FAST) && (int)IR_A(next) == home &&
+        (int)IR_B(next) < nl && home >= nl && home != IR_NO_DST)
+    {
+        *consumer = pc + 2;
+        return _PyIR_GEN_CONSUMER_STORE_LOCAL;
+    }
+    if (!generator_is(next, JUMP_BACKWARD_NO_INTERRUPT)) {
+        return _PyIR_GEN_CONSUMER_NONE;
+    }
+    int target = (int)IR_CD(next);
+    if (target < 0 || target >= nwords) {
+        return _PyIR_GEN_CONSUMER_NONE;
+    }
+    const _PyIROwnershipEvent *event = generator_completion(words[target]);
+    if (event == NULL || !(event->flags & _PyIR_COMPLETION_SEND_YIELDED) ||
+        event->src != 3 || event->extent != 2 ||
+        (int)IR_B(words[target]) + event->extent != home)
+    {
+        return _PyIR_GEN_CONSUMER_NONE;
+    }
+    *consumer = target;
+    return _PyIR_GEN_CONSUMER_SEND;
+}
+
+static int
+generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
+{
+    int target = generator_exit(words[pc], pc);
+    if (target < 0 || target >= nwords) {
+        return _PyIR_GEN_CONSUMER_NONE;
+    }
+    int home = (int)IR_A(words[pc]);
+    if (home == IR_NO_DST) {
+        return _PyIR_GEN_CONSUMER_DISCARD;
+    }
+    if (home < nl) {
+        return _PyIR_GEN_CONSUMER_STORE_LOCAL;
+    }
+    if ((generator_is(words[target], RETURN_VALUE) ||
+         generator_is(words[target], RETURN_VALUE_EMPTY)) &&
+        (int)IR_A(words[target]) == home)
+    {
+        return _PyIR_GEN_CONSUMER_RETURN;
+    }
+    return _PyIR_GEN_CONSUMER_NONE;
+}
+
+int
+_PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords, int nl,
+                                int pc)
+{
+    if (pc < 0 || pc >= nwords || nl < 0 || nl > IR_MAX_SLOTS) {
+        return -1;
+    }
+    _PyIRWord word = words[pc];
+    int ordinary = generator_ordinary(word);
+    if (ordinary < 0) {
+        return -1;
+    }
+    int yielded = _PyIR_GEN_CONSUMER_NONE;
+    int completed = _PyIR_GEN_CONSUMER_NONE;
+    int resume = _PyIR_GEN_CONSUMER_NONE;
+    const _PyIROwnershipEvent *event = generator_completion(word);
+    if (event != NULL) {
+        completed = generator_completed_shape(words, nwords, nl, pc);
+        if (completed == _PyIR_GEN_CONSUMER_NONE) {
+            return -1;
+        }
+        if (event->flags & _PyIR_COMPLETION_SEND_YIELDED) {
+            if (pc + 1 >= nwords || event->src != 3 || event->extent != 2 ||
+                !generator_is(words[pc + 1], YIELD_DELEGATED) ||
+                IR_D(words[pc + 1]) != IR_B(word) ||
+                IR_B(words[pc + 1]) != IR_B(word) + event->extent)
+            {
+                return -1;
+            }
+            int consumer;
+            if (generator_resume_shape(words, nwords, nl, pc + 1, &consumer) !=
+                    _PyIR_GEN_CONSUMER_SEND || consumer != pc)
+            {
+                return -1;
+            }
+            yielded = _PyIR_GEN_CONSUMER_DELEGATED;
+        }
+    }
+    else if (generator_is(word, YIELD_VALUE) ||
+             generator_is(word, YIELD_DELEGATED))
+    {
+        int consumer;
+        resume = generator_resume_shape(words, nwords, nl, pc, &consumer);
+        if (resume == _PyIR_GEN_CONSUMER_NONE ||
+            (generator_is(word, YIELD_DELEGATED) &&
+             (resume != _PyIR_GEN_CONSUMER_SEND || consumer != pc - 1)) ||
+            (!generator_is(word, YIELD_DELEGATED) &&
+             resume != _PyIR_GEN_CONSUMER_STORE_LOCAL))
+        {
+            return -1;
+        }
+    }
+    else {
+        return -1;
+    }
+    return _PyIR_GeneratorBoundaryHandler(ordinary, yielded, completed, resume);
+}
+
+int
+_PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords, int nl,
+                            int pc, int handler)
+{
+    if (_PyIR_GeneratorBoundaryCandidate(words, nwords, nl, pc) != handler) {
+        return 0;
+    }
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+    if (boundary->yielded_consumer == _PyIR_GEN_CONSUMER_DELEGATED) {
+        const _PyIRGeneratorBoundary *next =
+            _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[pc + 1]));
+        if (next == NULL || !(next->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
+            next->resume_consumer != _PyIR_GEN_CONSUMER_SEND)
+        {
+            return 0;
+        }
+    }
+    if (boundary->resume_consumer == _PyIR_GEN_CONSUMER_SEND) {
+        if (pc == 0) {
+            return 0;
+        }
+        const _PyIRGeneratorBoundary *source =
+            _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[pc - 1]));
+        if (source == NULL || !(source->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
+            source->yielded_consumer != _PyIR_GEN_CONSUMER_DELEGATED)
+        {
+            return 0;
+        }
+    }
+    if (boundary->completed_consumer != _PyIR_GEN_CONSUMER_NONE) {
+        int target = generator_exit(words[pc], pc);
+        int send_found = boundary->yielded_consumer != _PyIR_GEN_CONSUMER_NONE;
+        /* END_SEND has both normal SEND and CLEANUP_THROW ingress. Select
+         * them together; a compatible window on one edge cannot certify a
+         * different edge's value or make a partial public cycle complete. */
+        for (int i = 0; i < nwords; i++) {
+            const _PyIROwnershipEvent *event = generator_completion(words[i]);
+            if (event == NULL || generator_exit(words[i], i) != target) {
+                continue;
+            }
+            const _PyIRGeneratorBoundary *incoming =
+                _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[i]));
+            if (incoming == NULL ||
+                !(incoming->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
+                incoming->completed_consumer != boundary->completed_consumer ||
+                IR_A(words[i]) != IR_A(words[pc]) ||
+                IR_B(words[i]) != IR_B(words[pc]))
+            {
+                return 0;
+            }
+            send_found |= incoming->yielded_consumer != _PyIR_GEN_CONSUMER_NONE;
+        }
+        return send_found;
+    }
+    return 1;
+}
+
 int
 _PyIR_EventOpcode(int handler)
 {
@@ -390,10 +660,9 @@ _PyCode_GenericHandler(PyCodeObject *co, int i)
     return _PyCode_InstrHandler(co, i);
 }
 
-int
-_PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
+static int
+ordinary_handler_for(int handler, int opcode)
 {
-    int handler = _PyCode_InstrHandler(co, i);
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     if (fmt->flags & _PyIR_FUSED) {
         // Instrumentation sees a fused word as a conditional jump
@@ -427,6 +696,29 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         return handler;
     }
     return _PyIR_CallRoleHandler(handler, opcode);
+}
+
+int
+_PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
+{
+    int handler = _PyCode_InstrHandler(co, i);
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+    int ordinary = boundary == NULL ? handler : boundary->ordinary;
+    int target = ordinary_handler_for(ordinary, opcode);
+    if (boundary == NULL || !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
+        (_PyIR_FormatOf(target)->flags & _PyIR_TRANSPARENT))
+    {
+        /* LINE/INSTRUCTION keep their existing transparent identity. Their
+         * callback path must materialize before an ordinary source body. */
+        return target;
+    }
+    int placed = _PyIR_GeneratorBoundaryHandler(
+        target, boundary->yielded_consumer, boundary->completed_consumer,
+        boundary->resume_consumer);
+    if (placed < 0) {
+        Py_FatalError("missing closed generator instrumentation target");
+    }
+    return placed;
 }
 
 int

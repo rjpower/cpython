@@ -1611,6 +1611,46 @@ jump_word(int target)
     return IR_WORD(IR_JUMP, 0, 0, target & IR_FIELD_MAX, target >> 12);
 }
 
+/* Word entries keep their original homed IO. Only a private native outcome
+ * consumes a payload, so initial None and debugger/native materialization
+ * remain ordinary ingress. Use the same bounded physical-edge predicates as
+ * public admission, after logical completion lowering and allocation. */
+static void
+place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
+{
+#ifdef Py_GIL_DISABLED
+    return;
+#else
+    for (int pc = 0; pc < nwords; pc++) {
+        int handler = _PyIR_GeneratorBoundaryCandidate(
+            words, nwords, nlocalsplus, pc);
+        if (handler >= 0) {
+            words[pc] = (words[pc] & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
+        }
+    }
+    /* Only removals follow nomination. A missing throw/join/loop sibling
+     * therefore removes its connected shapes and cannot oscillate. */
+    int changed;
+    do {
+        changed = 0;
+        for (int pc = 0; pc < nwords; pc++) {
+            int handler = IR_HANDLER(words[pc]);
+            const _PyIRGeneratorBoundary *boundary =
+                _PyIR_GeneratorBoundaryOf(handler);
+            if (boundary == NULL ||
+                !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
+                _PyIR_CheckGeneratorBoundary(words, nwords, nlocalsplus,
+                                            pc, handler))
+            {
+                continue;
+            }
+            words[pc] = (words[pc] & ~(_PyIRWord)0xFFFF) | boundary->ordinary;
+            changed = 1;
+        }
+    } while (changed);
+#endif
+}
+
 /* The words and the feedback table, in a->a_bytecode and a->a_fbinit */
 static int
 assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
@@ -1667,6 +1707,7 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
         }
     }
+    place_generator_boundaries(words, a->a_nwords, nlocalsplus);
     return SUCCESS;
 }
 

@@ -309,6 +309,22 @@ instr_entry(_PyInstr *instr)
 static inline int
 set_opcode(_PyInstr *instr, int opcode)
 {
+    int previous = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    const _PyIRGeneratorBoundary *boundary =
+        _PyIR_GeneratorBoundaryOf(previous);
+    if (boundary != NULL && boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) {
+        const _PyIRGeneratorBoundary *target = _PyIR_GeneratorBoundaryOf(opcode);
+        assert(target != NULL);
+        int placed = _PyIR_GeneratorBoundaryHandler(
+            target->ordinary, boundary->yielded_consumer,
+            boundary->completed_consumer, boundary->resume_consumer);
+        /* CLOSED is a cold source-family invariant. Never turn a supported
+         * specialization into a placement-induced failure/backoff. */
+        if (placed < 0) {
+            Py_FatalError("missing closed generator specialization target");
+        }
+        opcode = placed;
+    }
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
     int handler = IR_HANDLER(old);

@@ -3962,6 +3962,34 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
     return normal_transfer_proof(&image, plan, NULL);
 }
 
+static int
+validate_generator_boundaries(struct _PyCodeConstructor *con)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    for (int pc = 0; pc < nwords; pc++) {
+        int handler = IR_HANDLER(words[pc]);
+        const _PyIRGeneratorBoundary *boundary =
+            _PyIR_GeneratorBoundaryOf(handler);
+        if (boundary == NULL || !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED)) {
+            continue;
+        }
+#ifdef Py_GIL_DISABLED
+        PyErr_SetString(PyExc_ValueError,
+                        "code: generator boundary placement requires the GIL");
+        return -1;
+#else
+        if (!_PyIR_CheckGeneratorBoundary(words, nwords, nl, pc, handler)) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %d has an incomplete generator boundary", pc);
+            return -1;
+        }
+#endif
+    }
+    return 0;
+}
+
 /* The normalized words and all semantic proofs refer to the same immutable
  * image. A caller's constructor and borrowed input references stay unchanged. */
 static PyObject *
@@ -3986,6 +4014,11 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     }
     if (normalized != NULL) {
         Py_SETREF(words, normalized);
+    }
+    checked.code = words;
+    if (validate_generator_boundaries(&checked) < 0) {
+        Py_DECREF(words);
+        return NULL;
     }
     return words;
 }

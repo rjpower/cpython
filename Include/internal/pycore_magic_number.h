@@ -350,8 +350,12 @@ Known values:
    64419: canonical CALL families certify virtual self and kwargs holes
    64420: delegated yield names its retained receiver explicitly
    64421: general return and certified empty-scratch return forms
-   64422: position-independent IRSC semantic recovery and IRSM2 positions */
-#define PYC_MAGIC_NUMBER 64422
+   64422: position-independent IRSC semantic recovery and IRSM2 positions
+   64423: preserved experimental ownership-map format
+   64424: preserved experimental ownership-map cache revision
+   64425: preserved experimental carried-owner format
+   64426: complete generator transfer boundary shapes */
+#define PYC_MAGIC_NUMBER 64426
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

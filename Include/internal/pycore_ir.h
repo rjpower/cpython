@@ -114,6 +114,13 @@ extern const _PyIRGeneratorBoundary *_PyIR_GeneratorBoundaryOf(int handler);
 extern int _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
                                         int completed_consumer,
                                         int resume_consumer);
+/* Cold checked-image geometry. Neither query grants ownership/value facts.
+ * Candidate nominates one complete source shape; Check also requires its
+ * connected source words to carry compatible placements. */
+extern int _PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords,
+                                           int nlocalsplus, int pc);
+extern int _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords,
+                                      int nlocalsplus, int pc, int handler);
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit

@@ -70,8 +70,9 @@ to executable preparation, indexed by semantic word. Its meaning is fixed by
 the source contract: CALL/implicit child normal result; SEND completed result;
 YIELD resume input. It never means SEND's yielded result. Non-provider rows
 have a canonical invalid value. `_PyCodeExec` gains one pointer (+8B on target),
-and its checked allocation appends `2*nwords` bytes with ordinary feedback
-alignment padding. Charge all words, including nonparticipants. No extra frame
+and its checked allocation appends `2*nwords` bytes after words and feedback;
+the current ordering needs no extra alignment padding. Charge all words,
+including nonparticipants. No extra frame
 cache pointer. Binding loads the code/exec pointer and indexed uint16 row once
 at the activation edge. This is a scalar load, not a descriptor interpreter,
 search, per-return semantic opcode decode or per-op EH-map lookup.
@@ -135,9 +136,15 @@ their physical NULL state, not just vacated ownership.
 
 RESUME's fast path retains its real tool/poll gate. A reached effect spills B,
 clears ACC_LIVE and enters the body-only WORD continuation without repeating
-stats, guards or polling. Its materialized-input counterpart may retake B only
-when actual redirect/epoch/next-mode state permits that continuation; same-PC
-return alone is insufficient. The no-interrupt jump carries directly. Preserve
+stats, guards or polling. The first implementation keeps that value materialized
+through explicit WORD counterparts until its owning consumer; it does not
+retake old B after a callback. Those cold counterparts select materialized
+targets explicitly, so ordinary dispatch never passes WORD bits to an ACC
+target. They preserve capability for newly produced outgoing values to carry
+again. Charge this cold query/dispatch chain and its initialized-control owner
+views; an immutable ACC graph cannot describe a now-homed owner. Same-PC return
+alone grants no old continuation authority. The no-interrupt jump carries
+directly. Preserve
 ACC_LIVE across a statically known carrier chain without redundant writes.
 STORE_FAST is an admitted owning consumer for the ordinary YIELD → RESUME →
 local-binding path, using existing local publication/displaced-owner semantics.
@@ -225,6 +232,20 @@ normal snapshot of the retired child.
 Python return must not acquire the native call's periodic poll. Native provider
 calls retain their existing reached retirement/poll order and get their result
 continuation once. No replay of provider, setter, poll, monitor or stats.
+
+For the generic native CALL provider, a source-selected `CALL_ACC_RESULT` flag
+requests an owned-result return. Bind the primary continuation and return PC
+before provider/monitor entry. Keep the result in the existing EXTERNAL root
+through input retirement and native end polling, including LOAD_SPECIAL's
+poll suppression. Successful status 2 returns that owner in the same union
+word used for the child pointer; `_PyCallResult` remains at most 16B on the
+target, rather than gaining a third field and a hidden return buffer. The
+generated consumer uses the actual refreshed continuation and PC through
+`IR_COMPLETE_CANONICAL`. An unchanged ACC landing dispatches directly; a
+redirect, local or discard follows its existing typed completion route. There
+is no destination publication followed by a retake. Error paths retain their
+existing rooted consumption. Ordinary providers retain their existing result
+path; the flag is selected by source lowering, not a per-return mode lookup.
 
 ## Three distinct generator continuations
 

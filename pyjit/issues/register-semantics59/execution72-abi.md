@@ -52,7 +52,7 @@ return. No representation aliases IR_NO_DST with ACC. Frame layout keeps the
 same 16-bit field and alignment; the actual offsetof/sizeof receipt is required
 before claiming no growth. All old raw field readers/writers are ported.
 
-Keep packed words unchanged. Add a dense uint16 **primary continuation map**
+Keep the eight-byte packed-word encoding. Add a dense uint16 **primary continuation map**
 to executable preparation, indexed by semantic word. Its meaning is fixed by
 the source contract: CALL/implicit child normal result; SEND completed result;
 YIELD resume input. It never means SEND's yielded result. Non-provider rows
@@ -101,6 +101,31 @@ Initial supported source roles are:
   path is non-reentrant; RESUME/backedge pending work goes through an effect
   entry before any callback. A transparent jump must have one proven owner on
   its selected edge; it is not a blanket pass-through permission.
+
+The independently reviewed carrier amendment uses input role `CARRY=254` and
+output edge `PRESERVE=16` in the existing eight-byte mode row. A carrier forwards
+the same logical definition; it neither creates an owner nor consumes a Python
+operand. Its variant's otherwise-unused B field has the distinct typed
+`CARRY_HOME` role and names the reserved scratch spill home. Initial audited
+bodies are RESUME (oparg A) and JUMP_BACKWARD_NO_INTERRUPT (target CD). There is
+no previous-PC inference, new frame field or extra ABI argument. The compiler
+stores one carried logical ID per participating operation, maps it through
+existing allocation, and requires one incoming definition and one eventual
+owning consumer. The public validator checks B's bounds and agreement with the
+producer; source/debug operand decoding retains the ordinary instruction's
+meaning. Register actual carrier homes in the existing Storage graph; require
+their physical NULL state, not just vacated ownership.
+
+RESUME's fast path retains its real tool/poll gate. A reached effect spills B,
+clears ACC_LIVE and enters the body-only WORD continuation without repeating
+stats, guards or polling. Its materialized-input counterpart may retake B only
+when actual redirect/epoch/next-mode state permits that continuation; same-PC
+return alone is insufficient. The no-interrupt jump carries directly. Preserve
+ACC_LIVE across a statically known carrier chain without redundant writes.
+STORE_FAST is an admitted owning consumer for the ordinary YIELD → RESUME →
+local-binding path, using existing local publication/displaced-owner semantics.
+This amendment closes actual generator control flow; tests and native receipts
+must demonstrate it rather than treating an enum or variant as a reached hit.
 
 The selection is reusable for any supported producer/consumer pair. Tests must
 include more than named ADD-to-RETURN motifs. The next bulk port would add

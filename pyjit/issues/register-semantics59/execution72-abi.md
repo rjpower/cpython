@@ -269,6 +269,26 @@ path; the flag is selected by source lowering, not a per-return mode lookup.
    entry owns/closes the unused input once and does not publish a fictitious
    successful value.
 
+SEND completion retains the existing 16B step-result ABI: its pointer word is
+a union of the next instruction and an owned result, selected by an explicit
+successful-result status. An unobserved carried completion roots that result
+through input retirement before returning it to typed completion. PRE
+observation sees the still-owned input window and a rooted result. A reached
+POST observer instead receives the ordinary committed state: transfer the
+result to A and detach it from the external root before calling the observer.
+Continue through explicit materialized WORD counterparts afterward; do not
+retake A based on an unchanged PC. The physical post view must describe the
+homed value even when the immutable word selects an ACC output. Redirects,
+including same-PC generation changes during observation or input finalization,
+use the actual landing and cannot deliver an old held result to a stale ACC
+consumer. Errors consume the held result once or leave its materialized owner
+to the reached cleanup recipe. Input finalizers are observer boundaries too:
+execute the existing non-reentrant close primitive in original retirement
+order, and materialize before the first close that may reenter. Test each owner
+at its actual turn, so aliases need no speculative all-input finality proof.
+Charge these close gates and the cold materialization path. This is
+source-contract approval; runtime and native qualification remain required.
+
 Yield commits suspended state, real resume PC, exception/recursion unlink and
 external detach before publishing its owner to the parent. The final native
 GENERATOR_YIELD/RETURN classification is after the last publication callback.

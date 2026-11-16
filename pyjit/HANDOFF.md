@@ -26,7 +26,9 @@ Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
 The [layout source contract](issues/register-semantics59/execution72-layout.md)
 has independent peer and root GO; W is implementing the complete cold map and
 allocator unit. Its initial codec commit is `c63defae27c`; it is not independently
-buildable. P continues the exact accumulator ABI contract. Root integrates only
+buildable. P has independent peer and root GO for the
+[accumulator ABI contract](issues/register-semantics59/execution72-abi.md) and
+implements nonoverlapping generator files before rebasing shared runtime edits. Root integrates only
 complete reviewed sources into G, generates and reviews products, then runs
 focused native checks and hot8. No runtime winner has landed for72 yet. Existing G/builds stay on rejected71B until integration.
 

@@ -74,7 +74,9 @@ Round71 is closed. The user has authorized the
 workers own compiler/layout and accumulator/effect/activation work. The
 [layout source contract](issues/register-semantics59/execution72-layout.md) has
 independent review and implementation GO; its complete cold-map port is in
-progress. The exact accumulator ABI remains under source review. Root owns integration, generation, native tests
+progress. The [accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
+also has independent peer and root GO; its generator implementation proceeds
+in parallel, with shared runtime edits deferred until the layout rebase. Root owns integration, generation, native tests
 and benchmark selection. Fresh warmed profiles compare selected57 and upstream:
 SEND/delegated yield account for about 45% of selected generator samples; the
 coroutine workload stresses creation and synchronous completion. These are

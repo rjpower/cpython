@@ -55,3 +55,23 @@ No sentinel is added by this first compiler unit. A later accumulator location m
 Host checks: codec roundtrip/overflow/shape negatives; a real compiler CFG before/after ordinary scalar-hole witness; explicit survivor/payload alias rejection; protected scalar overwrite and partial-error owner transfer; fixed windows/call live-across-owner preservation; source-only recovery using its own survivor row. Require a validated physical-image fixture with a drop below a retained higher EH home, without pretending pinned canonical IDs naturally emit it. New discoverable runtime tests (root executes) cover finalizer/weakref GC reentry during non-prefix drops, exception chaining/handled monitor failure, nested calls with overlap, generator throw/close and copied/captured frames, CodeType/replace/marshal malformed maps and source/debugger recovery. Reuse existing owner/error/phase tests rather than expand into an API census.
 
 Root must integrate all cold readers before enabling free-hole placement, regenerate/review metadata/products, build both roles and run focused behavior. No runtime GO follows from compiler-only host syntax. Charge allocation metadata/compile cost and any changed call-window moves separately. Native acceptance of the later accumulator slice remains arithmetic + ordinary call + SEND/yield through full consumers, without borrowing a speed claim from this layout unit.
+
+## Reviewed implementation clarifications
+
+The reached HomeView gets a nullable override without widening its readable
+ranges. Its per-view range count becomes uint16 with an explicit checked bound;
+a uint16 flags field uses the remaining space, retaining the target 16-byte
+view. Global plan offsets remain uint32. Shared readers honor the nullable
+override. Retirement-only cursor clipping remains separate from ERROR scopes.
+
+The allocator records intervals from existing occupancy acquisition, release,
+region and folded-reservation transitions. It does not duplicate their owner
+transfer rules in a second simulator. Conflict checks cannot assume end-order
+from begin-order; interval storage must avoid a new fixed 32 KiB native stack
+frame. These refinements preserve the reviewed allocation scope.
+
+Keep membership does not grant initialized, non-NULL or owner facts. Kept homes
+retain the prior unknown state unless actual incoming evidence proves more.
+Existing abrupt-prefix and operand capabilities remain conservative; intersect
+them with keep membership rather than broadening their source-effect claims.
+Handcrafted test images must encode their intended survivors explicitly.

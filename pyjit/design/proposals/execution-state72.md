@@ -3,8 +3,9 @@
 Status: user-authorized direction, 2026-11-15. Source inspection and fresh
 diagnostic profiles completed. The first complete [layout contract](../../issues/register-semantics59/execution72-layout.md)
 has independent source-review approval and is being implemented by a Sol 6.1
-worker. A second Sol worker specifies the accumulator/effect/activation ABI;
-its exact contract remains under review.
+worker. A second Sol worker implements the reviewed
+[accumulator/effect/activation contract](../../issues/register-semantics59/execution72-abi.md)
+in nonoverlapping generator files, then rebases before shared runtime changes.
 Selected57 remains golden. This does not restart the rejected experiments or
 claim parity. Read the [current interpreter](../interpreter.md) for selected
 behavior and the [trial report](../../issues/register-semantics59/report.md) for

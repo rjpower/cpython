@@ -4,8 +4,8 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The current direction is [execution-boundary73](design/proposals/execution-boundary73.md),
-adopted for Sol 6.1 implementation after grouped and source cross-review. The
+The latest completed checkpoint is [execution-boundary73](design/proposals/execution-boundary73.md),
+implemented and protocol-qualified, but rejected by its protected screen. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
@@ -20,7 +20,7 @@ home-elimination credit.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Clean candidate `d9a9cff0631`; both `execution73-boundary8` builds pass 117/79 |
+| G | `pyjit/execution73-boundary-integrated` | Clean candidate `dee619e80ab`; both `execution73-boundary10` builds pass 117/79 |
 | P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
 | W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
 
@@ -37,20 +37,40 @@ retirement. The two matched observation probes distinguish PRE source attributio
 from POST consumer attribution. No runtime behavior was changed to satisfy an
 incorrect fixture.
 
-Both builds match `d9a9cff0631`; magic is 64427. All 22 new boundary methods plus
+Both builds match `dee619e80ab`; magic is 64427. All 22 new boundary methods plus
 the two observed crash regressions pass per role in `execution73-boundary8-fixes`.
 The 24-module combined protocol check passes 803 release and 792 debug methods,
-with eight skips each. Debug explicitly excludes 11 host parser checks. Eight
-debug owner controls and eight release native cost controls pass. Unique
-completion remains more expensive (884 versus 769 instructions); retained
-completion is flat (536 versus 537). P proposes a guarded callback-free close
-of an already-cleared unique receiver, with W independent peer before edits.
-The memo is `E59/execution73-cleared-receiver-proposal.md`. Root will price the
-whole corrected path before hot8. The first entry-recursion injection did not
+with eight skips each, refreshed on boundary10. Debug explicitly excludes 11
+host parser checks. The first entry-recursion injection did not
 reach its private breakpoint. The corrected control admits the actual ordinary
-SEND entry and passes in `execution73-boundary8-debug-entry2`, preserving the
+SEND entry and passes in `execution73-boundary10-debug-entry`, preserving the
 failed receipt and all root/error/recovery checks.
-No73 benchmark performance result is qualified yet. Earlier build/test failures and
+The guarded receiver correction is now integrated after exact peer review:
+P `c4e0e082af4`, fixture `0352cd4b3d1`, root-identity correction `c6f017b1d5e`.
+Six new retirement methods pass both boundary10 roles. All eight final native
+controls pass: unique 711, retained 537, coroutine 689, HOME 2022 instructions.
+Compared with selected57, unique/coroutine/HOME native stack falls to 120/120/136B
+from 272B; yield and ordinary control costs remain as boundary8. The new helper
+and actual free execute, with no completion effect in the eligible controls.
+Boundary9's 918-instruction unique completion was a failed admission: an empty,
+disarmed STAGED root remained linked. The actual root readback and peer-approved
+frame-identity correction are retained; do not repeat blanket root-chain refusal.
+All eight final owner controls pass. HOME's old controller incorrectly required
+an effect for its callback-free numeric fixture. Its peer-reviewed correction
+requires both actual normal HOME sites exactly once, both direct completions,
+and no effects; forced-callback cases still require effects. The fresh receipt
+is `execution73-boundary10-debug-owner-home2`; the failed receipt is preserved.
+Natural snapshots preserve all 659 logging and 597 raytrace specialized sites.
+
+The screen `E59/execution73-hot8-selected57-screen` finishes all 32 rows with
+stable identities. Hot8 GM is 0.962227, but logging 1.104419 and raytrace
+1.019669 fail protection. The independent verdict is
+`E59/execution73-boundary10-screen-peer.md`. Preserve G and its builds; do not
+retime this executable or run winner confirmation/all29. No target job remains.
+The bounded diagnostic is complete in `E59/execution73-boundary10-diagnostic`:
+three counter pairs and one sample per role for each of logging/raytrace.
+See the trial report for ratios, limitations and the next integration constraint.
+Earlier build/test failures and
 matched probes remain under `execution73-boundary{3,4,5,6,7}`.
 
 Root's focused protocol driver is `E59/execution73-qualify-protocol.py`; it records

@@ -1,6 +1,6 @@
 # Register semantics and interpreter parity
 
-Status: stage remains open; execution72 closed on 2026-11-16. Selected57
+Status: stage remains open; execution73 checkpoint completed on 2026-11-16. Selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0` remains golden. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
@@ -17,9 +17,11 @@ The [trial report](report.md) owns exact outcomes, qualification limits and
 follow-up constraints. The [active plan](../interpreter-performance56/plan.md)
 owns the next architecture decision, and [handoff](../../HANDOFF.md) owns runtime
 paths and commands. Earlier59–71 attempts remain closed; their designs/reviews
-are historical evidence. Execution-boundary73 is now authorized: one grouped
-review, a complete generator-cycle implementation and independent source review,
-followed by root integration and measurement. The bounded
+are historical evidence. Execution-boundary73 has completed grouped review,
+implementation, protocol qualification and the protected screen. Its complete
+generator/coroutine paths improve, but logging/raytrace regress; no promotion.
+Preserve the implementation and measured evidence. The next correction targets
+the shared ordinary return boundary, subject to source review. The bounded
 [diagnosis](execution73-diagnosis.md) explains rejected72 without reopening its
 selection. The new work must demonstrate
 a complete execution-boundary saving, preserve specialization coverage, and
@@ -44,10 +46,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate73 and validate complete paths | Own diagnosis, generation, qualification and selection |
-| Astra | One grouped execution-boundary review | Combined contract and removal of old work |
-| Sol 6.1 compiler worker | Specialization preservation and continuation admission | Source proposal and backend cross-review in W |
-| Sol 6.1 execution worker | Complete generator transfer and retirement | Source proposal and compiler cross-review in P |
+| Root | Completed integration, qualification and rejected screen | Own report and changed-candidate validation |
+| Astra | Grouped execution-boundary review complete | Outside the component implementation loop |
+| Sol 6.1 compiler worker | Specialization preservation and continuation admission complete | Next source peer: shared return boundary |
+| Sol 6.1 execution worker | Complete generator transfer and retirement complete | Next source proposal: ordinary/generator return isolation |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

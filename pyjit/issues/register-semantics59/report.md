@@ -1,49 +1,152 @@
 # Semantic IR trial results
 
-## Execution73: integrated protocol; common retirement correction in review
+## Execution73: complete fast paths improve; protection rejects promotion
 
-Candidate `d9a9cff0631` on `pyjit/execution73-boundary-integrated` implements
-the complete delegated-generator boundary, including explicit local/discard
-consumers, live HOME results, observer handling and callback retirement. Both
-builds pass 117 modules/79 shared extensions. The combined 24-module check passes
-803 release and 792 debug methods, with eight skips per role; debug omits 11
-host parser checks. Eight debug ownership controls pass. These are focused
-protocol results, not full-system qualification or a selection decision.
+The checkpoint is implemented and measured at
+`dee619e80abbcab1c2a69a07411e17cc0b32ccfa` on
+`pyjit/execution73-boundary-integrated`. Sol 6.1 workers implemented and
+cross-reviewed the compiler/runtime changes; root integrated, generated, built,
+qualified and measured them. The complete delegated-generator boundary includes
+entry, yield/resume, completed return, explicit local/discard consumers, live
+HOME results, observers, errors and callback retirement. Existing CALL/arithmetic
+specializations remain intact. Selected57 `0dcba75bb3df` remains golden.
 
-Eight release native controls count the actual producer through its consumer:
+The meaningful change is a complete result path through the actual consumer.
+Callback-free completed receiver destruction now uses a guarded shared destructor
+suffix instead of packaging an effect that cannot reenter. Unsupported owners
+retain the complete effect protocol. The frame header, home reservation and
+initialization are unchanged; this checkpoint claims no packing benefit.
 
-| Control | Selected57 instructions | Boundary8 instructions | Selected / candidate peak stack B |
+### Protected throughput screen
+
+Two balanced pairs, seven samples per row, CPU15, hash seed zero and JIT disabled
+produce 32 successful rows with identical pre/post source, ELF and configuration
+identities. Ratios are elapsed candidate/selected57; lower is better.
+
+| Workload | Mean ratio | Pair 1 | Pair 2 | Elapsed-time change |
+| --- | ---: | ---: | ---: | ---: |
+| comprehensions | 0.979727 | 0.958674 | 1.001242 | -2.03% |
+| deltablue | 1.009154 | 1.005488 | 1.012834 | +0.92% |
+| coroutines | 0.936329 | 0.940784 | 0.931895 | -6.37% |
+| generators | 0.940151 | 0.941308 | 0.938995 | -5.98% |
+| logging_silent | 1.104419 | 1.103165 | 1.105674 | +10.44% |
+| raytrace | 1.019669 | 1.019104 | 1.020233 | +1.97% |
+| spectral_norm | 0.753125 | 0.764196 | 0.742213 | -24.69% |
+| nqueens | 0.995569 | 0.997833 | 0.993311 | -0.44% |
+
+Hot8 geometric mean is **0.962226809**. The aggregate and meaningful-win gates
+pass. Logging and raytrace fail the per-case protection; logging also fails its
+stricter mean and both per-pair caps. Independent audit confirms **NO-GO for
+promotion**. Comprehensions has mixed pairs; two pairs are not a full confidence
+study. Do not override protected workloads with the aggregate gain.
+
+The candidate and its complete fast paths are preserved. No winner confirmation,
+all29, full suite or fresh upstream comparison follows this rejected screen.
+The historical selected57 all29/upstream ratio of 1.127137 is not a fresh result
+for this candidate and must not be multiplied by these hot8 ratios.
+
+### Qualification and actual native cost
+
+Both final builds complete 117 modules and 79 shared extensions. The combined
+24-module protocol run passes **803 release / 792 debug methods**, eight skips
+per role; debug excludes 11 host parser checks. Six additional completed-receiver
+retirement methods pass per role. Eight debug owner controls, injected recursion
+failure and all eight release native controls pass. These are focused protocol
+results, not full-system qualification. GIL-only scope remains.
+
+Natural unchanged logging/raytrace snapshots preserve all **659/597** warmed
+specialized sites. Across 159/58 matching code objects, before and after snapshots
+have identical immutable/adaptive code bytes, operands and heads. These are
+specialization snapshots, not a dynamic frequency census.
+
+| Complete control | Selected57 instructions | Final candidate | Selected / candidate peak stack B |
 | --- | ---: | ---: | ---: |
 | Arithmetic | 223 | 224 | 80 / 80 |
 | Exact call | 479 | 481 | 80 / 80 |
 | Generic call | 1764 | 1767 | 1328 / 1328 |
 | Yield | 245 | 255 | 24 / 24 |
-| Unique generator completion | 769 | 884 | 272 / 336 |
-| Retained generator completion | 537 | 536 | 120 / 120 |
-| Coroutine completion | 721 | 863 | 272 / 336 |
-| Two awaits with live HOME intermediate | 2099 | 2386 | 272 / 336 |
+| Unique generator completion | 769 | 711 | 272 / 120 |
+| Retained generator completion | 537 | 537 | 120 / 120 |
+| Coroutine completion | 721 | 689 | 272 / 120 |
+| Two awaits with live HOME intermediate | 2099 | 2022 | 272 / 136 |
 
-Stack counts exclude the red zone. These are reached-path instruction counts,
-not timing, natural frequencies or an upstream comparison. Receiver destruction
-still enters `GEN_COMPLETE_EFFECT` even for an already-cleared object with no
-callback-capable remaining owners. That suffix contributes 143 instructions per
-unique receiver plus nine in source decoding. The measured deallocator-family
-work is unchanged from selected57. Retained receivers bypass the effect, so
-their flat result cannot stand in for common unique-owner completion.
+Counts span the actual producer through consumer and parent interpreter exit,
+including guards, helper calls, GC unlink and allocator free. HOME includes both
+SENDs, the intervening CALL, ADD and RETURN. Stack excludes the red zone. These
+single reached paths do not establish natural frequency or an upstream budget.
+Eligible unique/coroutine/HOME paths reach the new receiver helper and actual
+free without GEN_COMPLETE_EFFECT. Retained completion is flat; yield still adds
+ten instructions. The final source and ELF are pinned in the native receipts.
 
-The next bounded correction proposes a shared, guarded callback-free close of
-an already-cleared exact generator/coroutine. Its proof, returning helper, GC
-unlink, header decrements and free remain costs. Unsupported owners retain the
-effect protocol. Source peer review precedes implementation; no saving is
-claimed yet. The first entry-recursion injection did not reach its private
-breakpoint. A corrected control verifies the actual ordinary SEND input before
-injecting failure and passes child-link, rooted error allocation and recovery
-checks (`execution73-boundary8-debug-entry2`). No73 hot8 screen has run;
-selected57 remains golden.
+Two integration findings matter to future changes. First, CLEARED state alone
+cannot authorize immediate destruction: callbacks may still be retiring the
+frame. The helper rejects any transition record whose frame is the receiver's
+embedded frame, regardless of kind, and checks every remaining callback-capable
+owner. Boundary9's blanket nonempty-root-chain check incorrectly declined a
+linked but disarmed STAGED record with no frame authority. Actual readback and
+peer review corrected that admission; the failed 918-instruction receipt remains.
+Second, the HOME controller originally required an effect even for a numeric
+callback-free fixture. Its corrected receipt requires both normal HOME sites
+and both direct completions exactly once, while forced-callback cases continue
+to require effects. No runtime semantics were weakened to satisfy a fixture.
 
-Receipts are `E59/execution73-boundary8-*`; the correction memo is
-`E59/execution73-cleared-receiver-proposal.md`. The [design](../../design/proposals/execution-boundary73.md)
-owns the execution contract and [handoff](../../HANDOFF.md) owns current paths.
+### Bounded regression diagnosis
+
+Three matched counter pairs and one 499 Hz user-cycle recording per role/workload
+use the unchanged warmed logging/raytrace kernels. All 16 invocations pass,
+identities remain stable, all stat events run at 100%, and no samples are lost.
+Independent readback reproduces the ratios:
+
+| Candidate / selected57 | Cycles | Instructions | Cycles / instruction |
+| --- | ---: | ---: | ---: |
+| logging_silent | 1.104734 | 1.001482 | 1.103099 |
+| raytrace | 1.015496 | 1.001085 | 1.014395 |
+
+The regression is mostly increased cycle cost per instruction, not a substantial
+increase in total executed work. Logging's sampled paths remain ordinary method
+lookup, calls and returns. The 464/512 logging samples cannot establish a causal
+instruction, dependency, cache or code-layout explanation. Preserved specialization
+and nearly unchanged instruction counts rule out the previous raytrace mechanism
+as the explanation for this checkpoint; they do not identify the hardware cause.
+
+Source/native review identifies a concrete shared-path change worth correcting:
+ordinary RETURN_VALUE text grows 596 to 914 bytes, and RETURN_VALUE_EMPTY grows
+780 to 1114 bytes, with changed native register assignment/control layout. Their
+local stack allocations remain 16 bytes. Representative CALL/arithmetic and
+frame-clear helpers retain their sizes. Ordinary THREAD returns do not take a
+generator target lookup, so do not invent one as the source of the loss.
+
+Next source correction: isolate generator-owned return in a terminal target,
+retaining the selected ordinary return state and all new generator consumers.
+Peer the owner, callback and observer boundary before implementation; measure
+complete ordinary returns and generator cycles, then apply unchanged protection
+to the changed candidate. This is a source hypothesis, not a proved 10% recovery.
+Do not discard the demonstrated fast paths, add a generic fallback on their
+admitted cases, tune padding/compiler flags, or retime an unchanged loser.
+
+### Retained evidence
+
+All evidence is under the existing E59 directory described in [handoff](../../HANDOFF.md):
+
+- `execution73-boundary10-{release,debug}-build.log`: final builds.
+- `execution73-boundary10-protocol-{release,debug}-*`: 24-module qualification.
+- `execution73-boundary10-retirement-*`: six additional methods per role.
+- `execution73-boundary10-debug-owner-*`, including `home2`: eight owner controls.
+- `execution73-boundary10-debug-entry.entry.json`: reached rooted recursion failure.
+- `execution73-boundary10-native-*.native.json` and `execution73-boundary10-native-peer.md`:
+  actual whole paths and independent native/specialization readback.
+- `execution73-boundary10-{logging,raytrace}-specialization-comparison.json`:
+  natural snapshot comparison and exact input hashes.
+- `execution73-hot8-selected57-screen/{summary,commands,status,identity-before,identity-after}.json`:
+  raw screen, source/build identities and stable completion.
+- `execution73-boundary10-screen-peer.md`: independent screen and diagnostic audit.
+- `execution73-boundary10-diagnostic/{summary,results,identity-before,identity-after}.json`:
+  finite counters, samples and protocol identity; raw perf data and flat reports retained.
+- `execution73-boundary10-ordinary-path-review.md`: source/native shared-path review.
+
+Earlier boundary8/9 receipts, failed admissions and controller versions remain
+unchanged. The [design](../../design/proposals/execution-boundary73.md) owns the
+contract; the [active plan](../interpreter-performance56/plan.md) owns follow-up.
 
 ## Execution72: both units rejected; selected57 remains golden
 

@@ -1,9 +1,10 @@
 # Execution boundary73: complete generator transfer and effect lowering
 
-Status: grouped source-contract GO, adopted by root for implementation,
-2026-11-16. This is a source-ready replacement slice, not selection of an
-executable. Selected57 remains golden. Root owns independent adoption,
-integration, generated products and qualification. The companion
+Status: implemented and protocol-qualified at `dee619e80ab`, 2026-11-16.
+The complete boundary improves generator/coroutine throughput, but fails the
+protected screen on logging and raytrace. Selected57 remains golden; the
+[trial report](../../issues/register-semantics59/report.md) owns the measured
+decision. Root owns integration, generated products and qualification. The companion
 [review73](../../issues/register-semantics59/review73.md) records the evidence
 and limitations.
 
@@ -336,15 +337,22 @@ have completed. It does not predict refcounts before alias-sensitive releases.
 
 The shared generator primitive consumes an exact generator/coroutine only under
 the GIL, at count one, with a cleared frame, no weakrefs or exception owner,
-NULL pending frame headers and frame/exception links, no active transition roots,
+NULL pending frame headers and frame/exception links, no transition-root record
+whose frame is this receiver's embedded frame,
 and no reftracer callback. Its retained code owner must have count greater than
 one; the generator's name and qualified name must be the same objects owned by
 that code. Coroutine origin must be NULL. Check executable initialization before
 reading the other frame fields. Every failed guard leaves the owner untouched.
 
 Cleared state alone is insufficient: normal return sets it before callbacks
-finish retiring slots and headers. Rejecting every active transition-root scope
-avoids admitting that intermediate state without a root scan or new state bit.
+finish retiring slots and headers. Reject a matching record of any kind before
+consuming the receiver. Actual boundary9 readback found a disarmed STAGED record
+with NULL frame and no remaining authority still linked on ordinary completion;
+a blanket nonempty-chain refusal disabled the optimization. Compare frame
+identities through the existing chain, including records of every kind. Do not
+introduce a root-kind shortcut, a new state bit or a separate owner census. The
+matching retiring record stays linked through callbacks and frame takeover;
+unrelated records cannot authorize receiver cleanup. Charge the chain walk.
 The code/name alias proof makes all three header decrements nonfinal. Reuse the
 ordinary destructor's final code/name/free suffix, with GC untracking and the
 existing specialized DECREF accounting. Do not add another classifier to ordinary
@@ -356,7 +364,10 @@ Successful close continues the already-selected result consumer without effect
 root packaging, source decoding or intermediate output publication. The actual
 guards, returning C helper, spills, GC unlink, decrements and allocator free all
 remain in the measured path. Independent source review and root adoption approve
-the correction; implementation and measured qualification remain separate gates.
+the correction. Final native readback reaches the helper and actual free:
+unique completion 711 instructions versus selected57's 769, coroutine 689 versus
+721, and the two-await HOME expression 2022 versus 2099. Retained completion is
+flat at 537. These reached-path savings do not override the protected screen.
 The proposal is `E59/execution73-cleared-receiver-proposal.md`, SHA256
 `7eeda87a0dff6de24ded69c165e0f19f580fa01717f8f548a756ebf97d572437`.
 

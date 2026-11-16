@@ -1,6 +1,6 @@
 # Interpreter performance: combined plan
 
-## Active increment: execution-boundary73
+## Latest checkpoint: execution-boundary73
 
 The user authorized the corrective implementation after72's rejection. Start
 from selected57 unless source review demonstrates a necessary reused component.
@@ -8,18 +8,30 @@ The [grouped Astra review](../register-semantics59/review73.md) and independent
 source peers approve the [complete boundary contract](../../design/proposals/execution-boundary73.md).
 Sol runtime and compiler workers implemented and cross-reviewed the pinned
 interfaces, including explicit STORE_FAST/POP_TOP completion consumers.
-Root has integrated the source and generated products and now verifies the
-complete native path, then runs the unchanged hot8 screen. Promising results
-advance to confirmation, broad qualification and upstream comparison.
+Root integrated, generated, built and qualified candidate `dee619e80ab`, including
+the guarded shared close of cleared receivers. Complete native controls include
+actual destruction and show savings for unique completion and coroutine/HOME
+consumers. Natural logging/raytrace snapshots retain every warmed specialization.
+The unchanged hot8 screen has GM 0.962227, with coroutines/generators about 6%
+faster and spectral_norm 24.69% faster. Logging +10.44% and raytrace +1.97%
+nevertheless fail protection. Independent review rejects promotion; selected57
+remains golden. The [report](../register-semantics59/report.md) owns exact results.
 
-Boundary8 passes the combined protocol and owner controls. Native readback
-isolates a remaining penalty in unique receiver destruction: the callback effect
-packages and republishes state even when the cleared receiver can be freed
-without callbacks. P proposes a guarded shared close operation; W peers its
-ownership and deallocation proof before implementation. Root will measure the
-actual corrected producer-through-consumer path, including guard and free costs.
-No73 screen has run, and the retained receiver result does not stand in for this
-common unique-owner case.
+Preserve the complete implementation and its fast paths. The next correction
+must isolate the shared ordinary return boundary from generator-specific native
+state: ordinary RETURN handlers grew even though CALL/arithmetic bodies and
+warmed bytecode images remain unchanged. Source-review a separate terminal
+generator-return entry while retaining the selected ordinary return state and
+all new generator consumers. Measure the full ordinary and generator paths,
+then rerun protection only for a changed candidate. This is a concrete source
+hypothesis, not a demonstrated explanation of logging's regression.
+
+The bounded final diagnostic is complete: logging executes 0.15% more instructions
+and 10.47% more cycles; raytrace 0.11% and 1.55%. Hardware attribution remains
+open. Do not substitute padding, flags or an unchanged rerun for the source
+correction, discard completed fast paths, or waive logging protection after the
+fact. No confirmation, all29, full suite or fresh upstream run follows this
+losing screen; those remain winner gates.
 
 Preserve semantic specialization when choosing physical placement. Separate
 callback-capable retirement from ordinary transfer without retaining the old
@@ -34,7 +46,7 @@ it cannot reverse its sealed screen or justify an unchanged retiming.
 
 Selected57 remains golden. The [selected report](../comprehensions57/report.md)
 owns its qualification and upstream comparison. The
-[trial report](../register-semantics59/report.md) owns rounds59–72, their
+[trial report](../register-semantics59/report.md) owns rounds59–73, their
 mechanism successes, incomplete gates and measured rejections. Those packets
 are evidence, not prerequisites or runtime components selected for73.
 
@@ -136,10 +148,10 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Boundary73 integration, builds, behavior/native checks and protected screen | Preserve selected57 until a qualified winner; publish exact outcome |
-| Sol 6.1 compiler worker | Boundary selection, public validation and focused tests | Source and generated-product review complete; support concrete integration failures |
-| Sol 6.1 execution worker | Complete generator transfer and callback retirement | Source and cross-review complete; support concrete integration failures |
-| Sol 6.1 cold reviewer | Integrated implementation and complete native controls | Independent ownership and cost readback before selection |
+| Root | Boundary73 checkpoint complete; next shared-return correction remains source-gated | Preserve selected57 and candidate evidence; own changed-candidate validation |
+| Sol 6.1 compiler worker | Boundary selection, public validation and focused tests complete | Peer the next generated return split before implementation |
+| Sol 6.1 execution worker | Complete generator transfer and callback retirement complete | Propose the ordinary/generator return split, preserving all consumers |
+| Sol 6.1 cold reviewer | Native, ownership, specialization and screen reviews complete | Audit actual whole paths and protection for any successor |
 
 Both72 ABI implementation lanes are frozen. The layout72 and both71 screens remain closed. Fresh
 diagnostic profiles are retained under `E59/architecture-diagnosis72-fresh`;

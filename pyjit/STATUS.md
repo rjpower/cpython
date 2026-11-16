@@ -2,28 +2,48 @@
 
 ## Live state
 
-Execution-boundary73 is active. The user authorized implementation of the
+Execution-boundary73 is implemented, protocol-qualified and measured, but
+unselected. The user authorized implementation of the
 complete generator cycle, preservation of specialized operations, and separation
 of callback effects from ordinary transfers. The
 [combined contract](design/proposals/execution-boundary73.md) has grouped Astra,
 independent source and root adoption GO. Root has integrated the Sol runtime
 and compiler source and generated the combined products. Independent comparison
 preserves existing instruction contracts and ordinary CALL/arithmetic bodies.
-Candidate `d9a9cff0631` builds both roles with 117 modules and 79 shared extensions.
+Candidate `dee619e80ab` builds both roles with 117 modules and 79 shared extensions.
 All 22 new boundary tests and two discovered crash regressions pass per role.
 The fixes resolve monitoring wrappers before native completion and avoid reading
 uninitialized Python-frame fields on interpreter entry trampolines. Explicit
 STORE_FAST/POP_TOP consumers are implemented; magic 64427 invalidates earlier
 cached shapes. Combined protocol qualification passes 803 release and 792 debug
 methods across 24 modules, with eight skips per role; debug omits 11 host parser
-checks. Eight debug owner controls and eight release native cost controls pass.
-The latter expose remaining common-path overhead: unique generator completion is
-884 instructions versus selected57's 769, while retained completion is 536
-versus 537. A bounded correction under independent review will distinguish
-callback-free destruction of an already-cleared receiver from callback effects.
+checks. The corrected callback-free receiver close passes six new behavioral
+methods on both roles. All eight native cost controls pass: unique generator
+completion is now 711 instructions versus selected57's 769, coroutine completion
+689 versus 721, and two-await HOME completion 2022 versus 2099. Retained completion
+is flat; yield retains ten extra instructions. These include actual deallocation,
+not just private-handler bodies. The earlier blanket root-chain guard declined
+an empty STAGED record; the corrected guard excludes actual receiver-frame
+authority. All eight final debug owner controls and the protocol refresh pass.
 The corrected entry-failure control reaches ordinary SEND and verifies rooted
 RecursionError allocation and recovery; its earlier unreached injection remains
-recorded. No73 hot8 timing or selection claim exists yet.
+recorded. Natural logging/raytrace snapshots preserve all 659/597 warmed
+specializations and matching code-image bytes.
+
+The unchanged two-pair hot8 screen has stable identities and 32 successful
+rows. Candidate/selected57 geometric mean is **0.962227**, but protection fails:
+coroutines improve 6.37%, generators 5.98% and spectral_norm 24.69%; logging
+regresses 10.44% and raytrace 1.97%. Comprehensions improves 2.03% with mixed
+pairs, DeltaBlue regresses 0.92%, and nqueens improves 0.44%. Independent review
+confirms no promotion. No winner confirmation, all29, full suite or new upstream
+comparison follows for this executable.
+
+A bounded three-pair counter comparison finds logging cycles +10.47% with
+instructions +0.15%, and raytrace cycles +1.55% with instructions +0.11%.
+The increased cost per instruction is measured; its hardware cause is not.
+The complete fast paths remain preserved in the candidate branch. The
+[trial report](issues/register-semantics59/report.md) owns results and evidence;
+the [plan](issues/interpreter-performance56/plan.md) records the remaining work.
 Root completed the bounded
 [logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 on immutable selected57 and rejected72; this does not reopen72 selection.

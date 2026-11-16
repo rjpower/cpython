@@ -20,9 +20,11 @@ and validated. The [trial report](issues/register-semantics59/report.md) gives
 exact results, limits and the next design constraints. Follow the goal → plan →
 architecture/status chain above; rejected trials are evidence, not prerequisites.
 
-[Execution-boundary73](design/proposals/execution-boundary73.md) is active:
-replace the complete delegated-generator cycle
-and its callback retirement path while preserving existing specialization.
+[Execution-boundary73](design/proposals/execution-boundary73.md) is implemented
+and measured. Generator/coroutine throughput improves about 6%, but logging and
+raytrace regress, so it is not selected. The complete fast paths and retained
+specializations are preserved in the candidate. The trial report owns this
+checkpoint; the active plan identifies the next shared-return correction.
 The [bounded diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 records confirmed specialization losses in rejected72 and the distinct logging
 regression. The active plan records review, implementation and integration roles.

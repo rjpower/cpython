@@ -10,15 +10,19 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
-Current work: [execution-boundary73](design/proposals/execution-boundary73.md),
-adopted after the execution72 review and independent source cross-review.
-Replace a complete delegated generator transfer and return boundary, preserve
-existing specialization coverage, and separate callback retirement from ordinary
-transfer. Astra owns one grouped design review; Sol 6.1 workers own source and
-cross-review; the coordinator owns integration and qualification. A bounded
-logging/raytrace diagnostic of frozen72 is authorized to explain the regression,
-without reopening its selection decision. Frame packing waits for demonstrated
-layout and store reductions.
+Latest checkpoint: [execution-boundary73](design/proposals/execution-boundary73.md)
+is implemented, protocol-qualified and measured at `dee619e80ab`. Complete
+generator/coroutine paths improve about 6%, but logging and raytrace regress,
+so selected57 remains golden. Existing specialization coverage is preserved;
+callback-free completed receiver destruction now avoids effect packaging.
+The [report](issues/register-semantics59/report.md) separates these real gains
+from the failed protection gate. Next: source-review isolation of generator
+return handling from the shared ordinary return path, whose native body grew.
+Counters show increased cycle cost rather than substantial extra instructions;
+they do not prove the hardware cause. Retain the completed fast paths and
+validate a changed candidate before promotion. Astra owns grouped architecture
+review; Sol 6.1 owns source and cross-review; root owns integration and measurement.
+Frame packing waits for demonstrated layout and store reductions.
 
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)

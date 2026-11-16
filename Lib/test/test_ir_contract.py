@@ -591,7 +591,8 @@ class ContractTests(unittest.TestCase):
                     self.assertNotIn(name, opcode._specialized_opmap)
                     self.assertFalse(name.startswith("INSTRUMENTED_"))
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
-        suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
+        suspends = {opcode.opname[row.ordinary_handler] for row in ROWS.values()
+                    if row.effects & _opcode.IR_SUSPENDS}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "RETURN_GENERATOR"})
@@ -732,10 +733,13 @@ class AnalyzerTests(unittest.TestCase):
         # value_temps is a NULL constant, so its dispatch finishes no
         # bridges.
         _, handlers = self.generated()
-        self.assertEqual(handlers.keys(), self.insts.keys())
+        entries = {name: self.ir_generator.generator_word_entry(name, self.analysis)
+                   for name in self.insts}
+        self.assertEqual(handlers.keys(), set(entries.values()))
         record = "_PyValueTemps *value_temps = &value_owners;"
         null = "_PyValueTemps *const value_temps = NULL;"
-        for name, body in handlers.items():
+        for name, entry in entries.items():
+            body = handlers[entry]
             boxes = bool(CONTRACT[self.ids[name]].effects & _opcode.IR_BOXES)
             with self.subTest(handler=name):
                 self.assertEqual(record in body, boxes)

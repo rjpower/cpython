@@ -363,6 +363,9 @@ enum {
     _PyIR_OWNER_STORAGE_RESULT,
     _PyIR_OWNER_STORAGE_GUARD,
     _PyIR_OWNER_STORAGE_NORMAL,
+    /* Logical normal-edge result in a private native transfer. This is not
+     * a home publication, error snapshot or reached reader authority. */
+    _PyIR_OWNER_NATIVE_WINDOW_OUT,
 };
 
 #define _PyIR_COMPLETION_HAS_RESULT 1u

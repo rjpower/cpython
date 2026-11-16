@@ -4,9 +4,10 @@
 
 The user authorized the corrective implementation after72's rejection. Start
 from selected57 unless source review demonstrates a necessary reused component.
-One grouped Astra review defines the whole SEND/yield/resume/completed-return
-contract and its deletion ledger. Sol runtime and compiler workers independently
-review their interfaces before implementing. Root integrates and verifies the
+The [grouped Astra review](../register-semantics59/review73.md) and independent
+source peers approve the [complete boundary contract](../../design/proposals/execution-boundary73.md).
+Sol runtime and compiler workers are implementing the pinned interfaces.
+Root integrates and verifies the
 complete native path, then runs the unchanged hot8 screen. Promising results
 advance to confirmation, broad qualification and upstream comparison.
 

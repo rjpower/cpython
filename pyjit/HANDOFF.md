@@ -4,22 +4,27 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The current direction is [execution-state72](design/proposals/execution-state72.md),
-authorized by the user for Sol 6.1 implementation after source cross-review. The
+The current direction is [execution-boundary73](design/proposals/execution-boundary73.md),
+adopted for Sol 6.1 implementation after grouped and source cross-review. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
 ## Current work
 
-Execution-boundary73 is authorized and active. Astra owns only proposal73 and
-review73 in this checkout. P and W prepare runtime/compiler source memos at
-`E59/execution73-{runtime,compiler}-proposal.md`, then cross-review before source
-edits. Root owns integration and timing. Preserve G at frozen72 until the bounded
-logging/raytrace diagnostic finishes; its driver and output are
+Execution-boundary73 has grouped Astra, independent source and root adoption GO.
+P and W implement from selected57 after cross-review of the pinned runtime
+proposal `d251c9cd` and compiler proposal `be5c4640`; their memos are
+`E59/execution73-{runtime,compiler}-proposal.md`. P owns the initial shared query
+header, then runtime/generation; W consumes that interface for compiler/public
+admission and focused tests. Root owns integration and timing. G is now
+`pyjit/execution73-boundary-integrated` at selected57. **Its build directories
+still contain72 ELFs: do not run them until rebuilding against the new source.**
+The bounded logging/raytrace diagnostic is complete and sealed; driver/output are
 `E59/execution73-diagnostic-driver.py` and `E59/execution73-diagnostic`.
 The user explicitly authorized this diagnosis after72's failed screen; earlier
 no-diagnostic instructions below describe the closed trial, not this new work.
-No73 implementation has landed yet.
+No73 runtime implementation has landed yet. The following72 sections retain the
+closed trial's source/build coordinates, not G's current checkout.
 
 Round71 is closed: canonical provenance (A) and standalone arithmetic hot/cold
 lowering (B) pass source/product review, both builds and focused tests but lose

@@ -10,7 +10,8 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
-Current work: **execution-boundary73**, authorized after the execution72 review.
+Current work: [execution-boundary73](design/proposals/execution-boundary73.md),
+adopted after the execution72 review and independent source cross-review.
 Replace a complete delegated generator transfer and return boundary, preserve
 existing specialization coverage, and separate callback retirement from ordinary
 transfer. Astra owns one grouped design review; Sol 6.1 workers own source and
@@ -33,8 +34,8 @@ frame size/initialization. Neither is selected.
 The objective remains logical values before physical allocation, a cheap result
 channel, typed effect boundaries and exact ownership maps. Ordinary execution
 chooses layout; exception cleanup consumes it. Before another broad rollout,
-the next grouped review must establish a complete producer/effect/consumer net
-saving and retain existing specialization coverage. No third72 lane is adopted.
+the adopted boundary73 contract requires a complete producer/effect/consumer net
+saving and retained specialization coverage. No third72 lane is adopted.
 Smaller source or native frames alone do not predict throughput. The selected
 runtime retains its contracts until a measured winner lands.
 

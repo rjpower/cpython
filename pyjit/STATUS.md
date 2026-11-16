@@ -4,11 +4,13 @@
 
 Execution-boundary73 is active. The user authorized implementation of the
 complete generator cycle, preservation of specialized operations, and separation
-of callback effects from ordinary transfers. Astra is reviewing the combined
-contract while two Sol 6.1 workers prepare runtime and compiler interfaces for
-cross-review. No73 runtime change or performance result exists yet. Root is
-running a bounded logging/raytrace diagnostic on immutable selected57 and
-rejected72; this does not reopen72 selection.
+of callback effects from ordinary transfers. The
+[combined contract](design/proposals/execution-boundary73.md) has grouped Astra,
+independent source and root adoption GO. Two Sol 6.1 workers are implementing
+runtime/generation and compiler/public admission, respectively. No complete73
+runtime or performance result exists yet. Root completed the bounded
+[logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
+on immutable selected57 and rejected72; this does not reopen72 selection.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
 The active runtime is selected57 at

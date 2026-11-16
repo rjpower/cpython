@@ -276,6 +276,32 @@ class GeneratorBoundaryTests(unittest.TestCase):
             iterator.send(object())
         self.assertIsNone(iterator.gi_frame)
 
+    def test_placed_virtual_send_advances_its_cursor(self):
+        def outer(values):
+            return (yield from values)
+
+        self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_RETURN)
+        values = (17, 23, 31, 47)
+        for _ in range(ROUNDS):
+            iterator = outer(values)
+            try:
+                for value in values:
+                    self.assertEqual(next(iterator), value)
+                with self.assertRaises(StopIteration) as ended:
+                    next(iterator)
+                self.assertIsNone(ended.exception.value)
+            finally:
+                iterator.close()
+        selected = [row for _, _, row in sites(outer, True)
+                    if NAMES[row.ordinary_handler] == "SEND_VIRTUAL"]
+        self.assertEqual(len(selected), 1)
+        row = selected[0]
+        self.assertTrue(row.generator_boundary_flags & _opcode.GEN_BOUNDARY_CLOSED)
+        self.assertEqual(row.generator_yielded_consumer,
+                         _opcode.GEN_CONSUMER_DELEGATED)
+        self.assertEqual(row.generator_completed_consumer,
+                         _opcode.GEN_CONSUMER_RETURN)
+
     def test_throw_completion_and_close_keep_real_receiver(self):
         value, result = object(), object()
         closed = []

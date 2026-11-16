@@ -17,6 +17,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT8_RELAXED()
 #include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
@@ -235,20 +236,27 @@ _PyGen_TryCloseClearedNoReentry(PyObject *self)
 #else
     if ((!PyGen_CheckExact(self) && !PyCoro_CheckExact(self)) ||
         Py_REFCNT(self) != 1 ||
-        _PyRuntime.ref_tracer.tracer_func != NULL ||
-        ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots != NULL)
+        _PyRuntime.ref_tracer.tracer_func != NULL)
     {
         return false;
     }
     PyGenObject *gen = _PyGen_CAST(self);
-    /* CLEARED is published before retirement callbacks. No active root scope
-     * and no pending headers are required before consuming the container. */
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    for (_PyTransitionRoots *roots =
+             ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
+         roots != NULL; roots = roots->previous)
+    {
+        if (roots->frame == frame) {
+            return false;
+        }
+    }
+    /* CLEARED is published before retirement callbacks. No matching root scope
+     * or pending headers may remain when consuming the container. */
     if (gen->gi_frame_state != FRAME_CLEARED ||
         gen->gi_weakreflist != NULL || gen->gi_exc_state.exc_value != NULL)
     {
         return false;
     }
-    _PyInterpreterFrame *frame = &gen->gi_iframe;
     PyCodeObject *code = frame->f_executable;
     /* make_gen has not populated the other frame fields when code is NULL. */
     if (code == NULL || Py_REFCNT(code) <= 1) {

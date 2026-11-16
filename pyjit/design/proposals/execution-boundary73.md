@@ -326,6 +326,40 @@ case, receiver release can immediately enter this effect. Its entry, root
 setup, actual generator/free work and final result consumer all belong in the
 cost. The design is not justified by a nonfinal receiver fixture alone.
 
+### Callback-free destruction of a completed receiver
+
+Boundary8 native readback shows the remaining cost of treating every last
+reference as reentrant. Its unique completion executes 884 instructions versus
+selected57's 769; retained completion is 536 versus 537. The bounded correction
+extends the executed close protocol at receiver0, after the earlier input closes
+have completed. It does not predict refcounts before alias-sensitive releases.
+
+The shared generator primitive consumes an exact generator/coroutine only under
+the GIL, at count one, with a cleared frame, no weakrefs or exception owner,
+NULL pending frame headers and frame/exception links, no active transition roots,
+and no reftracer callback. Its retained code owner must have count greater than
+one; the generator's name and qualified name must be the same objects owned by
+that code. Coroutine origin must be NULL. Check executable initialization before
+reading the other frame fields. Every failed guard leaves the owner untouched.
+
+Cleared state alone is insufficient: normal return sets it before callbacks
+finish retiring slots and headers. Rejecting every active transition-root scope
+avoids admitting that intermediate state without a root scan or new state bit.
+The code/name alias proof makes all three header decrements nonfinal. Reuse the
+ordinary destructor's final code/name/free suffix, with GC untracking and the
+existing specialized DECREF accounting. Do not add another classifier to ordinary
+generator destruction. Exact generator completion requires no user finalizer;
+callback-capable names, weakrefs, code ownership and origin stay on the effect
+path. Async generators and free-threaded execution are excluded.
+
+Successful close continues the already-selected result consumer without effect
+root packaging, source decoding or intermediate output publication. The actual
+guards, returning C helper, spills, GC unlink, decrements and allocator free all
+remain in the measured path. Independent source review and root adoption approve
+the correction; implementation and measured qualification remain separate gates.
+The proposal is `E59/execution73-cleared-receiver-proposal.md`, SHA256
+`7eeda87a0dff6de24ded69c165e0f19f580fa01717f8f548a756ebf97d572437`.
+
 ## Ownership, observation and external entry closure
 
 | Boundary | Authoritative ownership/state |

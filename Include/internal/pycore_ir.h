@@ -86,6 +86,8 @@ typedef enum {
     _PyIR_GEN_CONSUMER_DISCARD,
     _PyIR_GEN_CONSUMER_SEND,
     _PyIR_GEN_CONSUMER_HOME,
+    _PyIR_GEN_CONSUMER_STORE_FAST,
+    _PyIR_GEN_CONSUMER_POP_TOP,
 } _PyIRGeneratorConsumer;
 
 enum {

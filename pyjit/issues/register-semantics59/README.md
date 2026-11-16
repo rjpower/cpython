@@ -17,7 +17,11 @@ The [trial report](report.md) owns exact outcomes, qualification limits and
 follow-up constraints. The [active plan](../interpreter-performance56/plan.md)
 owns the next architecture decision, and [handoff](../../HANDOFF.md) owns runtime
 paths and commands. Earlier59–71 attempts remain closed; their designs/reviews
-are historical evidence. No next unit is adopted. Future work must demonstrate
+are historical evidence. Execution-boundary73 is now authorized: one grouped
+review, a complete generator-cycle implementation and independent source review,
+followed by root integration and measurement. The bounded
+[diagnosis](execution73-diagnosis.md) explains rejected72 without reopening its
+selection. The new work must demonstrate
 a complete execution-boundary saving, preserve specialization coverage, and
 keep cold observation/cleanup obligations out of ordinary transfer paths where
 ownership permits.
@@ -40,9 +44,10 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate72 and validate complete paths | Preserve controls/evidence; own generation, qualification and selection |
-| Sol 6.1 layout worker | Compiler allocation and cold owner maps | Source proposal and backend cross-review in W |
-| Sol 6.1 execution worker | Accumulator/effect/activation ABI | Source proposal and compiler cross-review in P |
+| Root | Integrate73 and validate complete paths | Own diagnosis, generation, qualification and selection |
+| Astra | One grouped execution-boundary review | Combined contract and removal of old work |
+| Sol 6.1 compiler worker | Specialization preservation and continuation admission | Source proposal and backend cross-review in W |
+| Sol 6.1 execution worker | Complete generator transfer and retirement | Source proposal and compiler cross-review in P |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

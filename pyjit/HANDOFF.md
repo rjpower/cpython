@@ -11,6 +11,16 @@ this file owns execution logistics.
 
 ## Current work
 
+Execution-boundary73 is authorized and active. Astra owns only proposal73 and
+review73 in this checkout. P and W prepare runtime/compiler source memos at
+`E59/execution73-{runtime,compiler}-proposal.md`, then cross-review before source
+edits. Root owns integration and timing. Preserve G at frozen72 until the bounded
+logging/raytrace diagnostic finishes; its driver and output are
+`E59/execution73-diagnostic-driver.py` and `E59/execution73-diagnostic`.
+The user explicitly authorized this diagnosis after72's failed screen; earlier
+no-diagnostic instructions below describe the closed trial, not this new work.
+No73 implementation has landed yet.
+
 Round71 is closed: canonical provenance (A) and standalone arithmetic hot/cold
 lowering (B) pass source/product review, both builds and focused tests but lose
 their early protected screens. The [trial report](issues/register-semantics59/report.md) owns exact

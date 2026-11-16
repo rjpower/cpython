@@ -2,6 +2,14 @@
 
 ## Live state
 
+Execution-boundary73 is active. The user authorized implementation of the
+complete generator cycle, preservation of specialized operations, and separation
+of callback effects from ordinary transfers. Astra is reviewing the combined
+contract while two Sol 6.1 workers prepare runtime and compiler interfaces for
+cross-review. No73 runtime change or performance result exists yet. Root is
+running a bounded logging/raytrace diagnostic on immutable selected57 and
+rejected72; this does not reopen72 selection.
+
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
 The active runtime is selected57 at
 `0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
@@ -36,9 +44,9 @@ simplification is not. The [trial report](issues/register-semantics59/report.md)
 owns exact results, costs and follow-up constraints; the
 [design](design/proposals/execution-state72.md) and
 [source contract](issues/register-semantics59/execution72-abi.md) retain the
-attempted architecture. No third lane or new design is adopted. Earlier rejected
-units remain closed; the next grouped review must price a complete execution
-boundary and preserve specialization coverage before broader implementation.
+attempted architecture. Earlier rejected units remain closed. The authorized73
+review must price a complete execution boundary and preserve specialization
+coverage before broader implementation.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

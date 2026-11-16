@@ -1,5 +1,26 @@
 # Interpreter performance: combined plan
 
+## Active increment: execution-boundary73
+
+The user authorized the corrective implementation after72's rejection. Start
+from selected57 unless source review demonstrates a necessary reused component.
+One grouped Astra review defines the whole SEND/yield/resume/completed-return
+contract and its deletion ledger. Sol runtime and compiler workers independently
+review their interfaces before implementing. Root integrates and verifies the
+complete native path, then runs the unchanged hot8 screen. Promising results
+advance to confirmation, broad qualification and upstream comparison.
+
+Preserve semantic specialization when choosing physical placement. Separate
+callback-capable retirement from ordinary transfer without retaining the old
+general completion machinery on the fast path. Finalizing receivers are a real
+path to price, not an assumed rare exception. Defer frame packing until actual
+smaller layouts or fewer stores are demonstrated. Root also runs three matched
+cycles/instructions pairs and one bounded sample per role for logging/raytrace
+on frozen72 and selected57. This diagnostic explains the rejected experiment;
+it cannot reverse its sealed screen or justify an unchanged retiming.
+
+## Retained stage history
+
 Status: selected57 adds dictionary provider cleanup and lifetime repair to
 selected56 after peer review, focused qualification and direct measurement.
 The [current report](../comprehensions57/report.md) records the small broad gain,

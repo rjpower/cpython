@@ -10,6 +10,15 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
+Current work: **execution-boundary73**, authorized after the execution72 review.
+Replace a complete delegated generator transfer and return boundary, preserve
+existing specialization coverage, and separate callback retirement from ordinary
+transfer. Astra owns one grouped design review; Sol 6.1 workers own source and
+cross-review; the coordinator owns integration and qualification. A bounded
+logging/raytrace diagnostic of frozen72 is authorized to explain the regression,
+without reopening its selection decision. Frame packing waits for demonstrated
+layout and store reductions.
+
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization

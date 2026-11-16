@@ -12813,7 +12813,9 @@
             {
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
-                IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                assert(ir_completed_target != NULL);
+                IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
             }
         }
 
@@ -23367,7 +23369,9 @@ DISPATCH();
                     {
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                        py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        assert(ir_completed_target != NULL);
+                        IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
                     }
                 }if (!_PyValue_TryXCloseNoReentry(v)) {
                     assert(_PyValue_IsHome(sent.value));
@@ -23697,7 +23701,9 @@ DISPATCH();
                     {
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                        py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        assert(ir_completed_target != NULL);
+                        IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
                     }
                 }
                 next = next_index.value;
@@ -23822,7 +23828,9 @@ DISPATCH();
                         {
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                            py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            assert(ir_completed_target != NULL);
+                            IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
                         }
                     }
                     retval = item;
@@ -23841,7 +23849,9 @@ DISPATCH();
                         {
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                            py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            assert(ir_completed_target != NULL);
+                            IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
                         }
                     }if (!_PyValue_TryXCloseNoReentry(v)) {
                         assert(_PyValue_IsHome(sent.value));

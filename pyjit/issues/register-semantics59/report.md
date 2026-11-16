@@ -1,5 +1,50 @@
 # Semantic IR trial results
 
+## Execution73: integrated protocol; common retirement correction in review
+
+Candidate `d9a9cff0631` on `pyjit/execution73-boundary-integrated` implements
+the complete delegated-generator boundary, including explicit local/discard
+consumers, live HOME results, observer handling and callback retirement. Both
+builds pass 117 modules/79 shared extensions. The combined 24-module check passes
+803 release and 792 debug methods, with eight skips per role; debug omits 11
+host parser checks. Eight debug ownership controls pass. These are focused
+protocol results, not full-system qualification or a selection decision.
+
+Eight release native controls count the actual producer through its consumer:
+
+| Control | Selected57 instructions | Boundary8 instructions | Selected / candidate peak stack B |
+| --- | ---: | ---: | ---: |
+| Arithmetic | 223 | 224 | 80 / 80 |
+| Exact call | 479 | 481 | 80 / 80 |
+| Generic call | 1764 | 1767 | 1328 / 1328 |
+| Yield | 245 | 255 | 24 / 24 |
+| Unique generator completion | 769 | 884 | 272 / 336 |
+| Retained generator completion | 537 | 536 | 120 / 120 |
+| Coroutine completion | 721 | 863 | 272 / 336 |
+| Two awaits with live HOME intermediate | 2099 | 2386 | 272 / 336 |
+
+Stack counts exclude the red zone. These are reached-path instruction counts,
+not timing, natural frequencies or an upstream comparison. Receiver destruction
+still enters `GEN_COMPLETE_EFFECT` even for an already-cleared object with no
+callback-capable remaining owners. That suffix contributes 143 instructions per
+unique receiver plus nine in source decoding. The measured deallocator-family
+work is unchanged from selected57. Retained receivers bypass the effect, so
+their flat result cannot stand in for common unique-owner completion.
+
+The next bounded correction proposes a shared, guarded callback-free close of
+an already-cleared exact generator/coroutine. Its proof, returning helper, GC
+unlink, header decrements and free remain costs. Unsupported owners retain the
+effect protocol. Source peer review precedes implementation; no saving is
+claimed yet. The first entry-recursion injection did not reach its private
+breakpoint. A corrected control verifies the actual ordinary SEND input before
+injecting failure and passes child-link, rooted error allocation and recovery
+checks (`execution73-boundary8-debug-entry2`). No73 hot8 screen has run;
+selected57 remains golden.
+
+Receipts are `E59/execution73-boundary8-*`; the correction memo is
+`E59/execution73-cleared-receiver-proposal.md`. The [design](../../design/proposals/execution-boundary73.md)
+owns the execution contract and [handoff](../../HANDOFF.md) owns current paths.
+
 ## Execution72: both units rejected; selected57 remains golden
 
 The user authorizes [design72](../../design/proposals/execution-state72.md)

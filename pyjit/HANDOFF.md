@@ -20,7 +20,7 @@ home-elimination credit.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Clean candidate `8fa5c2d8660`; both `execution73-boundary5` builds pass 117/79 |
+| G | `pyjit/execution73-boundary-integrated` | Clean candidate `d9a9cff0631`; both `execution73-boundary8` builds pass 117/79 |
 | P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
 | W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
 
@@ -29,24 +29,35 @@ common predicates and tests, and cross-reviews P. Root owns generation,
 integration, builds, target execution and timing. Workers must not run target
 jobs or alter immutable controls. Source integration includes the compiler,
 runtime, rooted low-recursion entry and monitoring identity corrections.
-Boundary3 generation and the independent metadata/table comparison pass: all
-331 existing instruction contracts and ordinary CALL/arithmetic bodies are
-preserved. Emitted-body review closed the missing virtual-iterator cursor store
-and provider-result rooting gap; the new callback boundary is explicit in the
-design. Generated products have independent peer GO. Four focused host generator
-tests pass. The first 22 target methods run on both roles; eight failures and
-two errors exposed missing explicit STORE/POP consumer selection and fixture
-assumptions. Root's matched monitoring probe shows identical selected/candidate
-behavior; same-line LINE and BRANCH_LEFT expectations were incorrect. P/W are
-adding distinct explicit-consumer targets and correcting the fixtures. Existing
-completion/discard tests pass; send/delegated tests need new placement-aware
-expectations. No73 executable or performance result is qualified yet.
+Boundary8 generated products have independent peer GO: all ordinary contracts
+and CALL/arithmetic bodies are preserved. Implementation corrections cover
+virtual cursor publication, provider-result rooting, explicit STORE_FAST/POP_TOP
+consumption, transparent monitoring target selection and interpreter-trampoline
+retirement. The two matched observation probes distinguish PRE source attribution
+from POST consumer attribution. No runtime behavior was changed to satisfy an
+incorrect fixture.
 
-G's builds now match `8fa5c2d8660`. Rebuild after integrating further source
-changes: a moved source tree invalidates its old runtime/Lib pairing even when
-the ELF itself is preserved. The first two build failures and crash diagnosis
-are retained under `execution73-boundary{3,4}`; private dispatch declaration and
-metadata-only exporter fixes are included in the current candidate.
+Both builds match `d9a9cff0631`; magic is 64427. All 22 new boundary methods plus
+the two observed crash regressions pass per role in `execution73-boundary8-fixes`.
+The 24-module combined protocol check passes 803 release and 792 debug methods,
+with eight skips each. Debug explicitly excludes 11 host parser checks. Eight
+debug owner controls and eight release native cost controls pass. Unique
+completion remains more expensive (884 versus 769 instructions); retained
+completion is flat (536 versus 537). P proposes a guarded callback-free close
+of an already-cleared unique receiver, with W independent peer before edits.
+The memo is `E59/execution73-cleared-receiver-proposal.md`. Root will price the
+whole corrected path before hot8. The first entry-recursion injection did not
+reach its private breakpoint. The corrected control admits the actual ordinary
+SEND entry and passes in `execution73-boundary8-debug-entry2`, preserving the
+failed receipt and all root/error/recovery checks.
+No73 benchmark performance result is qualified yet. Earlier build/test failures and
+matched probes remain under `execution73-boundary{3,4,5,6,7}`.
+
+Root's focused protocol driver is `E59/execution73-qualify-protocol.py`; it records
+its exact selections and delegates identity-checked execution to run-checks.
+The native controller now accepts a proved private GEN_SEND_INPUT producer for
+the complete mode while retaining the ordinary SEND start and identical consumer
+end. Its previous version and selected receipts remain intact.
 
 Root completed and sealed the bounded frozen72 logging/raytrace diagnosis in
 `E59/execution73-diagnostic`, with driver `E59/execution73-diagnostic-driver.py`.
@@ -81,7 +92,7 @@ Important retained refs:
 Preserve these refs and sealed `E59` receipts. Old captured ELFs are static
 reference material after their source/Lib trees or build directories move.
 Magic 64424 identifies rejected layout72; 64425 identifies rejected ABI72;
-64426 is reserved for boundary73. Never reuse an old format identity.
+64426 identifies the initial boundary73 shapes; 64427 adds explicit completion consumers. Never reuse an old format identity.
 
 ## Paths and immutable controls
 

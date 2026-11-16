@@ -6,10 +6,20 @@ The user authorized the corrective implementation after72's rejection. Start
 from selected57 unless source review demonstrates a necessary reused component.
 The [grouped Astra review](../register-semantics59/review73.md) and independent
 source peers approve the [complete boundary contract](../../design/proposals/execution-boundary73.md).
-Sol runtime and compiler workers are implementing the pinned interfaces.
-Root integrates and verifies the
+Sol runtime and compiler workers implemented and cross-reviewed the pinned
+interfaces, including explicit STORE_FAST/POP_TOP completion consumers.
+Root has integrated the source and generated products and now verifies the
 complete native path, then runs the unchanged hot8 screen. Promising results
 advance to confirmation, broad qualification and upstream comparison.
+
+Boundary8 passes the combined protocol and owner controls. Native readback
+isolates a remaining penalty in unique receiver destruction: the callback effect
+packages and republishes state even when the cleared receiver can be freed
+without callbacks. P proposes a guarded shared close operation; W peers its
+ownership and deallocation proof before implementation. Root will measure the
+actual corrected producer-through-consumer path, including guard and free costs.
+No73 screen has run, and the retained receiver result does not stand in for this
+common unique-owner case.
 
 Preserve semantic specialization when choosing physical placement. Separate
 callback-capable retirement from ordinary transfer without retaining the old
@@ -126,9 +136,10 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Closed both72 units after integration and protected screens | Preserve selected57 and rejected evidence; publish outcome |
-| Sol 6.1 compiler worker | Compiler, validation, tests and final cold review complete | W frozen; source and screen peers retained |
-| Sol 6.1 execution worker | Runtime/generator, readers and product reviews complete | P frozen; focused host/source receipts retained |
+| Root | Boundary73 integration, builds, behavior/native checks and protected screen | Preserve selected57 until a qualified winner; publish exact outcome |
+| Sol 6.1 compiler worker | Boundary selection, public validation and focused tests | Source and generated-product review complete; support concrete integration failures |
+| Sol 6.1 execution worker | Complete generator transfer and callback retirement | Source and cross-review complete; support concrete integration failures |
+| Sol 6.1 cold reviewer | Integrated implementation and complete native controls | Independent ownership and cost readback before selection |
 
 Both72 ABI implementation lanes are frozen. The layout72 and both71 screens remain closed. Fresh
 diagnostic profiles are retained under `E59/architecture-diagnosis72-fresh`;

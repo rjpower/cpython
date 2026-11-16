@@ -8,13 +8,23 @@ of callback effects from ordinary transfers. The
 [combined contract](design/proposals/execution-boundary73.md) has grouped Astra,
 independent source and root adoption GO. Root has integrated the Sol runtime
 and compiler source and generated the combined products. Independent comparison
-preserves all existing instruction contracts and ordinary CALL/arithmetic
-bodies. Emitted-body review closed the virtual-iterator cursor publication
-bug and provider-result rooting gap. Both builds of `8fa5c2d8660` pass 117 modules
-and 79 shared extensions. The first target tests pass basic transfers, live
-results across awaits, GC and specialization preservation; they expose missing
-explicit STORE/discard selection and fixture assumptions. Those corrections are
-in progress. No73 executable or performance result is qualified yet. Root completed the bounded
+preserves existing instruction contracts and ordinary CALL/arithmetic bodies.
+Candidate `d9a9cff0631` builds both roles with 117 modules and 79 shared extensions.
+All 22 new boundary tests and two discovered crash regressions pass per role.
+The fixes resolve monitoring wrappers before native completion and avoid reading
+uninitialized Python-frame fields on interpreter entry trampolines. Explicit
+STORE_FAST/POP_TOP consumers are implemented; magic 64427 invalidates earlier
+cached shapes. Combined protocol qualification passes 803 release and 792 debug
+methods across 24 modules, with eight skips per role; debug omits 11 host parser
+checks. Eight debug owner controls and eight release native cost controls pass.
+The latter expose remaining common-path overhead: unique generator completion is
+884 instructions versus selected57's 769, while retained completion is 536
+versus 537. A bounded correction under independent review will distinguish
+callback-free destruction of an already-cleared receiver from callback effects.
+The corrected entry-failure control reaches ordinary SEND and verifies rooted
+RecursionError allocation and recovery; its earlier unreached injection remains
+recorded. No73 hot8 timing or selection claim exists yet.
+Root completed the bounded
 [logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 on immutable selected57 and rejected72; this does not reopen72 selection.
 

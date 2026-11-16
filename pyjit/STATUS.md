@@ -8,54 +8,39 @@ The active runtime is selected57 at
 tag `pyjit-golden-20261114-dictionary-readers`. No round67 or round68 candidate replaced
 it.
 
-The grouped [round68 proposal](design/proposals/interpreter-parity68.md) is
-implemented, qualified and rejected by its protected hot8 screen. Its qualified G was
-`c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Independent source, generated-product
-and native/control reviews pass. Final15 release/debug builds each pass 117/79,
-and all 50 focused methods pass per role (one debug-only skip in release).
-Related integration passes 13 modules per role plus the full remote/delegated
-pair's 84 methods per role. The six inherited debugger-jump errors remain exact
-in both roles; no fresh full-system pass is claimed.
+Round69's guarded-callee summaries remove child execution on actual hits, but
+its early protected hot8 screen rejects the candidate at G
+`52806aacedf5be0a89546344162bb53a8e40ec34`. Both builds pass 117 modules/79 shared
+extensions, 29 focused methods (one skip), 53 related methods and 350 code,
+marshal, function and monitoring methods (nine skips) per role. All 331 existing
+format rows remain unchanged. Source/product review closed a real scratch-result
+transfer gap and preserved proofs after shared-reader extraction.
 
-Native controls establish zero intermediate delegation handlers at depths2/8/32,
-direct VM SEND/FOR entry, all six direct-backend NULL fallback cases, numeric
-native recursion/error cleanup, and the actual unchanged Tree's retained count1
-own-yield/resume/right-append cycle. Real RUNNING remote reads/refusal and
-parked-owner profile changes pass. Suspended remote coverage combines source,
-synthetic reader cases and actual Tree suspended images; no separate suspended
-remote-process sample is claimed.
+Native projection/select controls confirm no child frame or child dispatch,
+correct results and consumed inputs. Complete release paths nevertheless grow
+395→437 and 537→612 native instructions, with synchronous stack 80→152/264B.
+The unchanged DeltaBlue kernel has a real successful summary call; comprehensions
+has no selected summary sites in that control. Neither site counts nor one hit
+establish frequency. Positive committed-summary redirect branches remain
+unqualified: the public finalizer fixture crosses an existing external-frame
+rejection boundary. The screen was explicitly an early rejection diagnostic,
+not proof of complete behavioral qualification.
 
-The final native functions match the reviewed bodies. Main release .text grows
-13,120 B, native generator-entry stack grows, and every generator subtype pays
-an 8 B membership pointer. Those costs are charged; they predict no speedup.
-The stable 32-row screen has GM 0.989788, but DeltaBlue 1.101089,
-coroutines 1.072083 and logging 1.239007 fail protection. Generators 0.708007 and
-spectral_norm 0.892976 improve; this does not offset protected losses. Root stops
-without confirmation, all29, PMU, full suite or timing rescue. There is no fresh
-upstream result or parity claim. The completed
-[round69 design](design/proposals/interpreter-parity69.md) and
-[review](issues/register-semantics59/review69.md) rank five options and advance
-one guarded-callee-summary unit. The exact
-[source contract](issues/register-semantics59/guarded-summary69.md) has independent
-[peer approval](issues/register-semantics59/guarded-summary69-peer.md), and
-producer/consumer source and generated products are integrated at G `f19b6629588`.
-Review closed a real scratch-recipient transfer gap, including output into the
-virtual self hole, and preserved ordinary proofs after extracting shared guards.
-Full generation passes; all 331 existing format rows are unchanged, with 11 new
-summary handlers. Both builds pass 117 modules/79 shared extensions. Fixture-only
-corrections advance G to `c8e80771354`: debug passes all 18 focused methods
-(one skip); release has one callback-redirect failure. The same fixture also
-fails on immutable selected57 because its finalizer crosses an unsupported
-external-frame debugger boundary. Related release checks pass five modules;
-the sixth has a stale source assertion after extraction of a shared field-read
-helper. These failures remain open; no native summary hit or timing is claimed.
-The complete unit would
-remove the entire child execution boundary for admitted small callback-free
-callees. Existing generated atomic completion owns results and retirement;
-ordinary CALL heads retain their existing paths. No complete runtime
-qualification or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
-owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
-Selected57 remains unchanged.
+All 32 screen rows succeed with stable identities. Geometric mean is 1.012667;
+DeltaBlue 1.034596, logging 1.176093, generators 1.018079 and raytrace 1.034177 fail
+protection. Coroutines 0.957014 and spectral_norm 0.945332 improve. Root closes
+round69 without repair, confirmation, all29, PMU or full-suite expansion.
+Selected57 remains golden. There is no fresh upstream result or parity claim.
+The [trial report](issues/register-semantics59/report.md) owns exact results and
+qualification limits; [handoff](HANDOFF.md) owns execution logistics.
+
+The next grouped architectural review must use the complete native paths and
+these broad losses to choose concrete changes. No new runtime lane is released.
+The closed [round69 design](design/proposals/interpreter-parity69.md),
+[source contract](issues/register-semantics59/guarded-summary69.md) and
+[review](issues/register-semantics59/review69.md) remain evidence. Round68 and
+both round67 candidates also remain rejected; their mechanisms and preserved
+measurements do not establish a combined parity budget.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

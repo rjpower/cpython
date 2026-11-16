@@ -8,15 +8,16 @@ candidate is selected. All five first-cycle executable screens lose; the
 and [Astra review ledger](review-astra.md) are frozen historical inputs. The
 [closed round65 design](../../design/proposals/interpreter-parity65.md) and
 [review65](review65.md) retain round65 contracts and rejected outcomes. The
-[current grouped design](../../design/proposals/interpreter-parity69.md) and
-[review69](review69.md) rank five options and advance one guarded-callee-summary
-unit to implementation. Independent architecture and exact
-[source-contract](guarded-summary69.md) [peer](guarded-summary69-peer.md) GO accept complete
-child execution removal, generated atomic B0 completion, full pre-body RESUME
-admission and the stated atomic observation/lifetime policy. Producer and
-consumer are assigned in parallel; no runtime qualification or performance
-result is claimed. The [trial report](report.md) owns evidence;
-[handoff](../../HANDOFF.md) owns paths and commands.
+[closed grouped design69](../../design/proposals/interpreter-parity69.md) and
+[review69](review69.md) ordered guarded callee summaries. Actual hits remove
+child execution, but complete native instruction/stack costs grow. The early
+protected screen rejects G `52806aacedf`: GM 1.012667, Delta 1.034596,
+logging 1.176093, generators 1.018079 and raytrace 1.034177. Positive committed
+summary redirect coverage remains incomplete; this is not a fully qualified
+checkpoint. Stop further qualification/repair/timing. Selected57 is unchanged.
+The [trial report](report.md) owns evidence; [handoff](../../HANDOFF.md) owns
+paths and commands. The next grouped review will choose new concrete units;
+none is released yet.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
 Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
@@ -53,10 +54,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate design69, then the complete qualified candidate | Preserves selected57 and rejected68; owns generated products, builds and timing |
-| Sol-high producer | Whole-body admission and optional plan storage in P | Shared header/API first, then complete proof/lifecycle and focused tests |
-| Sol-high consumer | Checked readers, adaptive arm and generated CALL in W | Fixed source shapes and approved callback/control recipe; cross-review afterward |
-| Astra | Grouped review69 complete | Five ranked options, one ordered unit; no runtime or inner-loop work |
+| Root | Close69 and commission the next grouped review | Preserve controls/evidence; own qualification and selection |
+| Astra | Five next concrete options and ordered source units | Broad review only; no runtime/inner-loop work |
+| Sol-high workers | Idle until exact source-contract adoption | Bounded proposal/peer/implementation/test/post-review |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

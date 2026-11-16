@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round69: integrated source; focused runtime qualification
+## Round69: child boundary removed; early protected screen rejected
 
 The grouped [design69](../../design/proposals/interpreter-parity69.md) and
 [review69](review69.md) rank five alternatives and order one complete
@@ -51,8 +51,8 @@ mistaken for a tuple-backed constant, and `FunctionType` left positive-test
 functions unversioned. Independently reviewed fixture corrections preserve
 negative unversioned coverage and use actual MAKE_FUNCTION plus warmed callee
 read facts for positive coverage. G `c8e80771354` contains those corrections;
-both stamp builds pass. Debug passes all 18 focused methods (one skip). Release
-has one remaining failure: a finalizer's parent redirect crosses an external
+both stamp builds pass. At tests5, debug passes all 18 focused methods (one skip).
+Release has one remaining failure: a finalizer's parent redirect crosses an external
 frame and is rejected. Root's stopped release control confirms
 `child->external=1`, discarded recipient and CALL opcode. The identical fixture,
 with only its summary-head assertion omitted, also fails on selected57 release
@@ -60,13 +60,79 @@ and debug. This is not evidence for widening debugger authority. Preserve
 `parity69-tests5-new-release-focus.log`, `parity69-tests5-debug-debug-focus.log`,
 `guarded-summary69-redirect-release-gdb1.log` and the two selected57 baseline logs.
 
-Related release qualification passes five of six modules. The remaining
+At tests5, related release qualification passes five of six modules. The remaining
 `test_ir_operand_modes` failure asserts an inline field-read expression that
 has moved into the shared checked reader; its proof must follow both the helper
-and owning consumer. No complete runtime qualification, native hit, performance
-result or parity claim exists yet. Prior source GOs missed the generated
+and owning consumer. At that intermediate checkpoint, no complete runtime
+qualification, native hit or performance result existed. Prior source GOs missed the generated
 recipient gap; the separate recipient/metadata peer addendum records that real
 correction independently of these fixture issues.
+
+Final G is `52806aacedf5be0a89546344162bb53a8e40ec34`. Reviewed test-only
+`53f7867e695` and `8a9dae105c2` port the shared-reader proof and record the actual
+supported/rejected debugger outcome, without expanding setter authority. Both
+`parity69-tests6` builds pass 117/79. Both roles pass 29 focused methods (one skip),
+53 related methods and 350 code/marshal/function/monitoring methods (nine skips).
+This does **not** close the literal mutation-control matrix: existing traced
+redirect tests deny summary entry, and the finalizer test does not establish
+positive committed-summary PENDING/APPLIED/same-PC/service-failure branches.
+
+`E59/guarded-summary69-native-controls` contains complete native CALL paths,
+with all guards, reads, acquisition, input drain, poll, recipient and dispatch:
+
+| Witness | Selected57 instructions | Candidate instructions | Selected/candidate synchronous stack |
+| --- | ---: | ---: | ---: |
+| Projection |395|437|80/152B|
+| Select false |537|612|80/264B|
+| Select true |537|612|80/264B|
+
+All three candidate release and debug witnesses have no child dispatch, correct
+result identity, vacated consumed owners and balanced native stack. Release
+stamp6 repeats the original stamp5 counts. Missing out-of-line helper entries
+alone do not prove absence of inline allocation/clear; source and whole path
+establish the removed child boundary. These are reached synchronous stack
+figures, not universal bounds. The native instruction/stack planning targets
+are missed. Main release .text grows 45,696B versus selected57; the 11 named
+summary handlers occupy 19,775B. Named reader helpers occupy 7,352B and cold
+completion helpers 1,900B. These scopes differ from whole-text growth.
+
+Independent source/native/control readback is
+`E59/guarded-summary69-native-peer.md` and its machine ledger. It confirms the
+mechanism and cost scopes, explicitly retains the incomplete callback matrix,
+and recommends UNSELECTABLE/STOP rather than complete qualification.
+
+Unchanged natural-kernel receipts are
+`E59/guarded-summary69-natural/{deltablue,comprehensions}-tests6-release-v2.native.json`.
+Delta has 23 static selected sites and one witnessed successful call at
+`BinaryConstraint.choose_method` word47 (`CALL_PY_SUMMARY_SELF_2`), 653 instructions
+and no child frame. Comp has 0 selected sites/0 attempts/0 demonstrated hits.
+No nomination/equality cause or invocation frequency follows. The first natural
+launch refused a bad fixture-only json-package path check before kernel entry;
+its log is retained and the corrected fixture received independent review.
+
+Root records the unresolved behavioral gate in
+`E59/guarded-summary69-tests6-screen-admission.json` and runs one unchanged
+**early rejection diagnostic**, not a selectable checkpoint. The 32 successful
+rows in `E59/summary69-hot8-selected57-screen` have stable source/ELF identities:
+
+| Workload | Candidate / selected57 |
+| --- | ---: |
+| comprehensions |0.979364115|
+| deltablue |1.034596287|
+| coroutines |0.957014137|
+| generators |1.018078910|
+| logging_silent |1.176093456|
+| raytrace |1.034176961|
+| spectral_norm |0.945331801|
+| nqueens |0.974314386|
+| Geometric mean |1.012667498|
+
+Only the improvement predicate passes. GM, every-mean, logging and every-pair
+protection fail. Comprehension pairs oppose one another; do not attribute its
+aggregate to summary execution. Delta/logging/generator/ray losses occur in
+both pairs. Root rejects round69 and stops further qualification, repair,
+confirmation, all29, PMU, full-suite expansion and timing rescue. Selected57
+remains unchanged. No new upstream ratio or regression cause is claimed.
 
 Source-only inputs are `E59/guarded-summary69-source-peer-note.md`,
 `guarded-summary69-design-peer.md` and the exact unit proposal/peer (canonical

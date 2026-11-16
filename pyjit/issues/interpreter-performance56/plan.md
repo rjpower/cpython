@@ -10,18 +10,21 @@ and [critical audit](review.md), then the experiments below. The [goal](../../GO
 and [handoff](../../HANDOFF.md) own direction, selected contracts and exact state.
 
 The active workstream is [IR semantics59](../register-semantics59/README.md).
-The [round69 design](../../design/proposals/interpreter-parity69.md) and
-[review](../register-semantics59/review69.md) rank five alternatives. Independent
-architecture and exact [source-contract](../register-semantics59/guarded-summary69.md)
-[review](../register-semantics59/guarded-summary69-peer.md) approve one complete
-guarded-callee-summary unit from selected57. Producer and consumer implementation
-is released in parallel. Keep caller inputs owning while
-eliminating child initialization, body homes/dispatch and child clear/return
-for admitted small callback-free callees. Use the generated atomic B0
-completion, full pre-body RESUME admission, current function environment and
-validated binding/constant maps. Nominate only during cold specialization;
-preserve the 16-byte plan header and CALL feedback payload. There is no second
-implementation lane or demonstrated combined parity budget.
+The closed [round69 design](../../design/proposals/interpreter-parity69.md) and
+[review](../register-semantics59/review69.md) ordered one guarded-callee-summary
+unit from selected57. Actual hits remove the child frame/body/retirement, but
+complete projection/select paths grow in instructions and stack. Its stable
+32-row early diagnostic loses DeltaBlue 3.5%, logging 17.6%, generators 1.8% and
+raytrace 3.4%; GM 1.012667. Positive committed-summary redirect coverage remains
+incomplete. Stop the executable without further qualification or repair.
+
+The next grouped Astra review must compare five concrete options against the
+new full-path evidence and select at most two bounded source units. Sol peers
+must approve exact owner/effect/observer contracts before implementation. The
+coordinator qualifies merged behavior and native cost, then measures unchanged
+workloads. Do not silently waive missing behavioral gates or substitute a head
+selection for an actual hit. No new source lane or combined parity budget is
+approved yet.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -121,23 +124,18 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 ## Execution and delegation
 
-The [round69 design](../../design/proposals/interpreter-parity69.md),
-[review](../register-semantics59/review69.md), and
-[trial report](../register-semantics59/report.md) distinguish proposed,
-source-reviewed, qualified and selected changes. Rounds59–68 remain closed and
-unselected; preserved evidence is not a dependency list. Grouped review69 is
-complete; independent exact source-contract approval releases implementation.
+The [trial report](../register-semantics59/report.md) distinguishes actual
+mechanism evidence, incomplete qualification and measured rejection. Rounds59–69
+remain unselected; preserved evidence is not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Integrate design69; qualify and measure the complete candidate | Owns products, builds, focused checks, native evidence and selection |
-| Sol-high producer | Complete admission and optional plan storage in P | Freeze shared header/API first; then actual body proof and lifecycle/tests |
-| Sol-high consumer | Checked readers, specialization and complete CALL in W | Approved atomic/control contract; cross-review producer after implementation |
-| Astra | Grouped review69 complete | Five ranked options; one ordered unit; no inner-loop work |
+| Root | Close69, update canonical/Loom chain and commission grouped review | Preserve selected57 and all rejected evidence; own runtime and selection |
+| Astra | Next grouped architectural review | Five concrete options and ordered bounded units; no runtime/inner-loop work |
+| Sol-high workers | Idle until exact source-contract adoption | Proposal, independent peer, implementation, minimal tests and post-review |
 
-No second lane, new profile/counter or compiler/flags/layout search is active.
-Design69 retains the exact screen, finite confirmation, all29 and upstream
-rules. A losing screen stops the unit. A broad winner may be selected before
+No new runtime lane, profile/counter or compiler/flags/layout search is active.
+A losing screen stops the unit. A qualified broad winner may be selected before
 parity; repeat grouped review and implementation against the remaining gap.
 
 For each increment: propose → peer → implement → focused tests → actual-diff

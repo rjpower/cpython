@@ -11,15 +11,13 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-The selected runtime remains selected57. The grouped
-[round69 design](design/proposals/interpreter-parity69.md) ranks five options
-and advances one complete guarded-callee-summary unit through source-contract
-approval to implementation.
-A hit removes child-frame setup, body dispatch and teardown while keeping the
-caller's inputs owning. Round68's retained-delegation mechanism qualified but
-lost benchmark protection; it remains rejected despite a 29.2% generator gain.
-The [trial report](issues/register-semantics59/report.md)
-owns current qualification, rejected trials and retained evidence.
+The selected runtime remains selected57. The latest grouped
+[round69 design](design/proposals/interpreter-parity69.md) removed child execution
+on actual guarded-summary hits, but its early protected screen loses DeltaBlue,
+logging, generators and raytrace. It is stopped without complete callback
+qualification or selection. The next grouped architectural review will choose
+new concrete changes; no source lane is released. The
+[trial report](issues/register-semantics59/report.md) owns results and limits.
 
 ## Architecture and evidence
 

@@ -14,21 +14,17 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-follows the grouped [round69 design](design/proposals/interpreter-parity69.md)
-and [review](issues/register-semantics59/review69.md). Of five ranked options,
-one advances to implementation: guarded summaries of complete
-small, callback-free Python callees. Keep the caller's owning inputs; remove
-child-frame initialization, body homes/dispatch and child retirement on a hit.
-Use existing generated atomic CALL completion, full entry admission and cold
-specialization nomination. The exact
-[source contract](issues/register-semantics59/guarded-summary69.md) has independent
-[peer approval](issues/register-semantics59/guarded-summary69-peer.md).
-No second implementation lane is queued.
+records the closed [round69 design](design/proposals/interpreter-parity69.md)
+and [review](issues/register-semantics59/review69.md). Guarded callee summaries
+remove child execution on actual hits, but their complete native paths cost
+more instructions and their early screen loses protected benchmarks. They
+remain rejected with callback qualification incomplete. The next grouped review
+must choose concrete IR/interpreter changes from this evidence before releasing
+new Sol units. No second lane or losing-executable rescue is queued.
 
-Selected57 remains the runtime baseline. Round68 qualified retained delegation
-but lost protected DeltaBlue, coroutine and logging benchmarks; earlier losing
-packets also remain closed. Preserve their evidence without making them
-prerequisites or claiming a combined parity budget. The
+Selected57 remains the runtime baseline. Round68 and earlier losing packets
+also remain closed. Preserve their evidence without making them prerequisites
+or claiming a combined parity budget. The
 [trial report](issues/register-semantics59/report.md) owns those outcomes.
 
 Logical values, uses, edge results and continuations precede storage and

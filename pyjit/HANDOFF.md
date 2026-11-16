@@ -4,150 +4,67 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The active proposal is [parity69](design/proposals/interpreter-parity69.md),
+The latest closed proposal is [parity69](design/proposals/interpreter-parity69.md),
 under [review69](issues/register-semantics59/review69.md). The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
 ## Current work
 
-Grouped69 and its exact source contract have independent approval.
-One unit advances: guarded summaries of complete small callback-free
-Python callees, from selected57. A hit has no child frame, body homes/dispatch
-or child retirement. The existing generated atomic B0 completion owns the
-result, input drain, refresh, end service and recipient; full RESUME admission
-precedes effects. See the design for explicit observation/lifetime scheduling,
-optional plan tail and cold-only nomination. The canonical
-[source contract](issues/register-semantics59/guarded-summary69.md) and
-[peer](issues/register-semantics59/guarded-summary69-peer.md) are exact copies of
-E59 proposal `42195df94d5d6ed30961b1044478b5755d050be09bbe4da8212f554d1272cc93`
-and peer `3cd3e4ed5fb2130abbc5957a5c791c433c16887027d7c048cab01f7cc3807b4a`.
-The applied/pending/same-PC callback contract is part of implementation, not an
-assumed property of raw B0 macros.
+Round69 is stopped and unselected. The next grouped architectural review is
+pending; no new source unit is released. Selected57 remains immutable/golden.
+Root owns navigation, qualification, runtime jobs and integration. Preserve all
+round69 branches/controllers/evidence; do not retry its losing executable.
 
-Root integrated the two nonoverlapping source components from selected57:
+## Closed round69 checkpoint
 
-| Owner | Worktree and branch | Files / dependency |
-| --- | --- | --- |
-| Sol-high producer | P, `pyjit/parity69-summary-admission` | `Objects/codeobject.c`, `pycore_ir.h`, `Python/ir.c`, focused admission tests; publish header/API first |
-| Sol-high consumer | W, `pyjit/parity69-guarded-callee-summary` | Readers, specialization, bytecodes/ceval, parser/emitter and focused tests; consumes producer interface |
-| Root | G, `pyjit/parity69-guarded-summary-integrated`, `c8e80771354` | Source/products and fixture corrections committed; both builds pass 117/79; focused qualification active |
+G is clean `52806aacedf5be0a89546344162bb53a8e40ec34`, branch
+`pyjit/parity69-guarded-summary-integrated`. P is frozen producer
+`b2780170943db23e16b97de2f40e084cc12ea3cc`; W is frozen consumer
+`8a9dae105c2939f0db1f3b58664f6bcbfc903c68`. Reused build prefixes are
+`BASE/reg59-results-{release,debug}`. Both `parity69-tests6` builds pass 117/79;
+29 focused, 53 related and 350 observation/code/marshal methods pass per role
+with 1+9 skips. Full generation/products and independent source/product reviews
+pass; all 331 existing format rows remain unchanged.
 
-Producer `0e1cf75c0d6` and consumer `065f294e691` received independent actual-source
-review; correction `912aea3fa10` preserves existing canonical method-output
-checks after extracting the shared type guard. Six initial host tests and that
-focused correction pass. Root's first full generation stopped on the guard
-registry; its second generated cases but stopped on the new release marker's
-effect registry. Logs are `E59/parity69-summary{1,2}-release-regen.log`.
-Generated-code review then found a real recipient gap: scratch A need not equal
-B0, and a virtual self hole may receive the result. Reviewed correction
-`f9a45132ac4` adds the real owner move and complete release/output metadata.
-Regeneration 3 passes but its table comparison detects lost LOAD_ATTR ownership
-facts. Reviewed `a18747af84c` ports the actual disjoint-child guard proof.
-Regeneration 4 passes; root's `E59/guarded-summary69-products4.json` confirms all 331
-existing format rows unchanged,329 → 340 concrete handlers and only shared
-guard/raw-read substitutions in 20 existing bodies. Five generated products are
-committed. Independent product review passes at `f19b6629588`; both builds pass
-117/79. Fixture-only `88ad28f38bc` and `c8e80771354` correct tuple-constant and
-versioned-function/prewarmed-read assumptions. The `parity69-tests5` stamp builds
-also pass 117/79. Debug passes all 18 focused methods (one skip); release has one
-finalizer-redirect failure. Root's GDB attributes rejection to `child->external`;
-the identical fixture fails on immutable selected57 release/debug too. Consumer
-is reviewing the fixture against existing debugger authority, without expanding
-the setter. Related release checks pass five modules; `test_ir_operand_modes`
-needs its shared field-reader source proof ported. Logs use
-`parity69-tests5-{new,debug,related}-*`; baseline and stopped controls use
-`guarded-summary69-redirect-*`. No native hit or timing is claimed for round69.
+Full behavioral qualification remains incomplete. The corrected finalizer
+fixture records the actual external-ancestor rejection/supported outcome,
+without changing debugger authority. Existing positive redirect tests run
+ordinary fallback under tracing; they do not prove committed-summary
+PENDING/APPLIED/same-PC/service-error paths. Root records this limit before
+an early rejection screen in `E59/guarded-summary69-tests6-screen-admission.json`.
 
-The immutable selected57 recipient control passes 100 calls into each of a
-fresh scratch home and a virtual self hole; it is not candidate execution.
-Receipt: `E59/guarded-summary69-recipient-selected57.json`. Producer is preparing
-bounded native controls without launching targets; consumer is preparing natural
-unchanged-kernel coverage. Root owns all builds and runtime jobs.
+Actual projection/select native controls have no child execution, correct
+results and consumed owners, but complete release instruction counts grow
+395→437 and 537→612; reached stack 80→152/264B. Original stamp5 and current
+stamp6 receipts are separately pinned in `E59/guarded-summary69-native-controls`.
+Natural unchanged Delta has one real success and 23 static sites; comp has 0
+selected sites. Receipts are `E59/guarded-summary69-natural/*-tests6-release-v2.native.json`.
+The first natural launch's fixture preflight failure is retained; no kernel
+entry or hit was claimed for it.
 
-Workers cross-review actual changes. Progress is in
-`E59/guarded-summary69-{producer,consumer}-progress.md`. They run only necessary
-host checks; root owns target execution. Old68 W/P branches are preserved;
-I/U remain immutable. Preserve rejected68's branch and evidence; reused G and
-its stale builds are no longer an executable round68 checkpoint. Astra's grouped
-review is complete; do not use it in the
-inner loop. No source-only increment is selectable.
+The stable 32-row `E59/summary69-hot8-selected57-screen` rejects the candidate:
+GM 1.012667, Delta 1.034596, logging 1.176093, generators 1.018079,
+raytrace 1.034177; coro 0.957014 and spectral 0.945332 improve. Root stops all
+remaining qualification, source repair, confirmation/all29/PMU/full/timing
+rescue. This was explicitly an early diagnostic, not complete behavioral GO.
+No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
+owns full outcomes, failures, exact receipts and historical source corrections.
 
-## Closed round68 checkpoint
+Workers remain idle pending the next concrete source contract. Astra owns
+broad grouped review only, with no target execution or inner-loop work. C's
+runtime source remains stale; I/U remain immutable. Preserved68 binaries and
+older captures are static evidence only after reuse of G/Lib/builds.
 
-Round67 is closed: both candidates qualified their mechanisms and lost their
-screens. Selected57 is unchanged. Round68 qualified and rejected one unit: retain real owning
-generator-delegation prefixes, enter the actual leaf directly and update only
-the changed suffix. The grouped architecture and exact
-[implementation contract](issues/register-semantics59/retained-delegation68.md)
-have independent approval. No second unit is active.
+## Preserved round68 checkpoint
 
-G integrates complete source and test corrections at
-`c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Source, generated-product and
-native/control reviews pass. Final15 release/debug builds each pass 117/79;
-all 50 focused methods pass per role (30 unit and 20 IR/copy, one debug-only
-skip in release). Related integration passes 13 modules per role and the full
-remote/delegated pair's 84 methods per role. Both current trace runs retain
-exactly the six inherited debugger-jump errors.
-
-The protected hot8 screen in `E59/retained68-hot8-selected57-screen` completes
-32 successful rows with stable identity: GM 0.989788, generators 0.708007,
-spectral_norm 0.892976, DeltaBlue 1.101089, coroutines 1.072083 and logging 1.239007.
-Protection fails. Root rejects selection with no confirmation/all29/PMU/full/
-timing rescue. Keep G/builds/controllers frozen; preserve the qualified mechanism
-and all failures/results. Selected57 remains unchanged. The completed grouped
-review69 lives in `/home/power/code/cpython/.worktrees/interpreter-parity64-astra`,
-branch `weaver/interpreter-parity69-astra`; it changed only its two review docs.
-
-| Owner | Current boundary |
-| --- | --- |
-| Sol-high source | W, clean `ffe43426f9d`; frozen round68 implementation |
-| Sol-high remote | P, clean `dfeaa9c7a8c`; frozen round68 reader implementation |
-| Root | G, clean `c02cebf80c4`; qualified; screen rejected, selected57 unchanged |
-| Astra | Grouped review69 complete; two design/review files only, no runtime work |
-
-Logs/manifests use `E59/parity68-final15-*`; earlier corrected test-only
-checkpoints use `parity68-tests14-*`. Preserve all original failed compile,
-fixture, generated-product and broader selection attempts. The first source
-product was rejected for indentation drift before compilation. Corrected
-products change exactly seven of 329 concrete handlers; register-IR metadata
-is unchanged. One unsupported legacy YIELD_VALUE expansion row is removed by
-the conservative PC effect, with no supported tier2 qualification claim.
-
-Root controls and exact commands are in
-`E59/retained-delegation68-native-controls`. Summary/readback includes
-`active13b-mechanism-summary.json`, `tests14-tree-debug.json`, native entry
-failure receipts and `final15-screen-admission.json`. Tree preserves one
-record/root through 251 committed events and the count1 own-yield/resume/right
-append. Source plus actual decoded code proves no steady ancestry loop/stores;
-equal snapshots alone do not. Final release ELF is
-`4b5bd3abfc74eab6a40cd6a16e71ccd31b8d9992d8e3e6b80707d15b8156eb92`;
-debug is `1b6d89a30e6c5aa1683b5b50391a06b79cfe7a6954e64421bb279fd2157dc3d3`.
-`static-final15.md` compares all 51 release/58 debug saved function listings
-exactly with the earlier stamp. Do not infer entire .text byte identity or
-relabel earlier dynamic receipts as current-stamp execution. The final release
-steady depth8 control separately passes the exact current image.
-
-Source receipts live in `E59/retained-delegation68-{source,frame,remote}-host`;
-independent cross-review is in `E59/retained-delegation68-closure-peer`.
-The [trial report](issues/register-semantics59/report.md) owns earlier increment
-results rather than duplicating them here. Exact publication ordering and
-count1 native setter/hook order are in the contract body. Materialization is
-nonallocating and noncalling; successful entry publishes None only after real
-links and debt are committed. Nonblocking remote readers refuse membership
-without dereferencing it; blocking readers validate a fresh committed snapshot
-under the existing all-thread stop. Ordinary THREAD paths gain no semantic
-checks. No source-only checkpoint is eligible for selection.
-
-Rejected B67 integration remains preserved on
-`pyjit/parity67-anchored-self-integrated` at `65fa10014885d139a47099ed384aefe59d26b943`.
-The [implementation contract](issues/register-semantics59/retained-delegation68.md)
-and [source peer](issues/register-semantics59/retained-delegation68-peer.md)
-integrate frozen contract `836d0a93bc6406392153f7c7233fc1f197dea703c424cf1b25d4344ca594a30a`
-and its independently approved ENTERING noncalling addendum.
-Materialization never calls the recipient setter: a successful entry continuation
-publishes None exactly once after valid links/debt; early C-entry failure clears
-without publishing unused input. No extra universal frame field is introduced.
+Rejected round68 is preserved on `pyjit/parity68-retained-delegation-integrated`
+at `c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Its captured native files and
+`E59/retained-delegation68-*` evidence remain sealed. G/Lib/builds have moved on;
+never execute its captured ELF against the current Lib. The
+[trial report](issues/register-semantics59/report.md) owns its complete
+qualification and rejection; the
+[contract](issues/register-semantics59/retained-delegation68.md) owns its protocol.
 
 ## Closed experiments
 

@@ -1,8 +1,10 @@
 # Execution state: diagnosis and proposed replacement contract
 
 Status: user-authorized direction, 2026-11-15. Source inspection and fresh
-diagnostic profiles completed. Sol 6.1 workers are specifying and cross-reviewing
-the compiler/layout and execution/activation source contracts before edits.
+diagnostic profiles completed. The first complete [layout contract](../../issues/register-semantics59/execution72-layout.md)
+has independent source-review approval and is being implemented by a Sol 6.1
+worker. A second Sol worker specifies the accumulator/effect/activation ABI;
+its exact contract remains under review.
 Selected57 remains golden. This does not restart the rejected experiments or
 claim parity. Read the [current interpreter](../interpreter.md) for selected
 behavior and the [trial report](../../issues/register-semantics59/report.md) for
@@ -174,6 +176,13 @@ Observing Python, GC, finalizers and callbacks must see consistent owner/control
 state. Maps cannot assume that a failed operation reached its normal output.
 The initial scope is GIL execution; free-threaded and remote-reader contracts
 need explicit closure before broader qualification.
+
+The initialized-layout unit is a separately qualified foundation: require actual
+compiler hole reuse, arbitrary survivor-map behavior and the existing hot8
+regression protections. It need not claim an isolated throughput gain to advance
+to the accumulator composition. A flat foundation is not a selected performance
+winner. The complete accumulator composition must earn the existing improvement
+and protection gates before replacing golden.
 
 Compare unchanged comp/Delta/coroutine/generator workloads and logging before
 generalizing. Preserve the existing broad protection rules. A new accumulator,

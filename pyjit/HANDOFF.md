@@ -23,9 +23,12 @@ Two Sol 6.1 workers now own exact source proposals and cross-review: W on
 `pyjit/execution72-abi` covers the generator, execution ABI and activations.
 Both new branches start at selected57 and preserve the old branches below.
 Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
-Root approves the shared interface, integrates reviewed sources into G, generates
-and reviews products, then runs focused native checks and hot8. No runtime work
-has landed for72 yet. Existing G/builds stay on rejected71B until integration.
+The [layout source contract](issues/register-semantics59/execution72-layout.md)
+has independent peer and root GO; W is implementing the complete cold map and
+allocator unit. Its initial codec commit is `c63defae27c`; it is not independently
+buildable. P continues the exact accumulator ABI contract. Root integrates only
+complete reviewed sources into G, generates and reviews products, then runs
+focused native checks and hot8. No runtime winner has landed for72 yet. Existing G/builds stay on rejected71B until integration.
 
 Preserved round71 runtime trees:
 

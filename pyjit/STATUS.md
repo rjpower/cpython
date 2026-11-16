@@ -71,8 +71,10 @@ all29, full-suite, upstream, PMU or repair follows for either loser.
 
 Round71 is closed. The user has authorized the
 [execution-state design72](design/proposals/execution-state72.md). Two Sol 6.1
-workers specify and cross-review compiler/layout and accumulator/effect/activation
-interfaces before source edits. Root owns integration, generation, native tests
+workers own compiler/layout and accumulator/effect/activation work. The
+[layout source contract](issues/register-semantics59/execution72-layout.md) has
+independent review and implementation GO; its complete cold-map port is in
+progress. The exact accumulator ABI remains under source review. Root owns integration, generation, native tests
 and benchmark selection. Fresh warmed profiles compare selected57 and upstream:
 SEND/delegated yield account for about 45% of selected generator samples; the
 coroutine workload stresses creation and synchronous completion. These are

@@ -32,6 +32,9 @@ _PyGen_FinalizerIsNoop(PyObject *op)
 
 PyAPI_FUNC(PyObject *)_PyGen_yf(PyGenObject *);
 extern int _PyGen_ClearFrame(PyGenObject *self);
+/* Consume a last owner only when cleared-container destruction cannot reenter.
+ * False leaves the owner intact. */
+extern bool _PyGen_TryCloseClearedNoReentry(PyObject *self);
 
 /* Set StopIteration(value), or a bare StopIteration for PyValue_NULL.
    Return 0, or -1 with another exception set. StopIteration's value field

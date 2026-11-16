@@ -17,6 +17,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT8_RELAXED()
 #include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
@@ -207,6 +208,68 @@ _PyGen_ClearFrame(PyGenObject *gen)
     return 0;
 }
 
+static inline void
+gen_dealloc_finish(PyGenObject *gen)
+{
+    Py_CLEAR(gen->gi_iframe.f_executable);
+    Py_CLEAR(gen->gi_name);
+    Py_CLEAR(gen->gi_qualname);
+    PyObject_GC_Del(gen);
+}
+
+#ifndef Py_GIL_DISABLED
+static void
+gen_dealloc_cleared_no_reentry(PyObject *self)
+{
+    _PyObject_GC_UNTRACK(self);
+    gen_dealloc_finish(_PyGen_CAST(self));
+}
+#endif
+
+bool
+_PyGen_TryCloseClearedNoReentry(PyObject *self)
+{
+#ifdef Py_GIL_DISABLED
+    (void)self;
+    return false;
+#else
+    if ((!PyGen_CheckExact(self) && !PyCoro_CheckExact(self)) ||
+        Py_REFCNT(self) != 1 ||
+        _PyRuntime.ref_tracer.tracer_func != NULL ||
+        ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots != NULL)
+    {
+        return false;
+    }
+    PyGenObject *gen = _PyGen_CAST(self);
+    /* CLEARED is published before retirement callbacks. No active root scope
+     * and no pending headers are required before consuming the container. */
+    if (gen->gi_frame_state != FRAME_CLEARED ||
+        gen->gi_weakreflist != NULL || gen->gi_exc_state.exc_value != NULL)
+    {
+        return false;
+    }
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    PyCodeObject *code = frame->f_executable;
+    /* make_gen has not populated the other frame fields when code is NULL. */
+    if (code == NULL || Py_REFCNT(code) <= 1) {
+        return false;
+    }
+    if (frame->frame_obj != NULL || frame->f_locals != NULL ||
+        frame->f_funcobj != NULL || frame->previous != NULL ||
+        gen->gi_exc_state.previous_item != NULL ||
+        gen->gi_name != code->co_name || gen->gi_qualname != code->co_qualname ||
+        (PyCoro_CheckExact(self) &&
+         ((PyCoroObject *)self)->cr_origin_or_finalizer != NULL))
+    {
+        return false;
+    }
+    /* The code owner survives its decrement and pins both canonical names,
+     * including when those names alias. None of the three closes can finalize. */
+    Py_DECREF_MORTAL_SPECIALIZED(self, gen_dealloc_cleared_no_reentry);
+    return true;
+#endif
+}
+
 static void
 gen_dealloc(PyObject *self)
 {
@@ -236,11 +299,7 @@ gen_dealloc(PyObject *self)
         gen_clear_frame(gen);
     }
     assert(gen->gi_exc_state.exc_value == NULL);
-    Py_CLEAR(gen->gi_iframe.f_executable);
-    Py_CLEAR(gen->gi_name);
-    Py_CLEAR(gen->gi_qualname);
-
-    PyObject_GC_Del(gen);
+    gen_dealloc_finish(gen);
 }
 
 static void

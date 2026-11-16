@@ -202,7 +202,10 @@ TARGET(GEN_COMPLETE_EFFECT)
  * final. Count/kind are constants in each generated native entry. */
 #define GENERATOR_CLOSE_INPUT(K) \
     do { \
-        if (!_PyValue_TryXCloseNoReentry(frame->base[base + (K)])) { \
+        PyValue input = frame->base[base + (K)]; \
+        if (!_PyValue_TryXCloseNoReentry(input) && \
+            !((K) == 0 && PyValue_RefcountOnObject(input) && \
+              _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))) { \
             IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, \
                         frame->base + base + (K) + 1, next_instr, result); \
         } \

@@ -28,7 +28,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--control', required=True, type=Path)
     parser.add_argument('--control-role', choices=['upstream', 'golden'], default='upstream')
@@ -39,13 +39,27 @@ def main():
     parser.add_argument('--cases', default='logging_silent')
     parser.add_argument('--group', choices=['kernels', 'micro'], default='kernels')
     parser.add_argument('--rounds', type=int, default=6)
+    parser.add_argument('--single-pair-confirmation', action='store_true',
+                        help='allow one confirmation pair; requires --rounds 1')
     parser.add_argument('--cpu', type=int, default=15)
     parser.add_argument('--loops', type=int, help='fixed micro loop count for both roles')
-    args = parser.parse_args()
-    assert args.rounds > 0 and args.rounds % 2 == 0
+    args = parser.parse_args(argv)
+    if args.single_pair_confirmation:
+        if args.rounds != 1:
+            parser.error('--single-pair-confirmation requires --rounds 1')
+    elif args.rounds <= 0 or args.rounds % 2:
+        parser.error('--rounds must be positive and even without --single-pair-confirmation')
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
     assert args.loops is None or (args.group == 'micro' and args.loops > 0)
     assert args.cpu in os.sched_getaffinity(0)
     args.output.mkdir(parents=True, exist_ok=False)
+    (args.output / 'run-request.json').write_text(json.dumps(
+        {'mode': 'single-pair-confirmation' if args.single_pair_confirmation else 'balanced',
+         'requested_rounds': args.rounds}, indent=2))
     checkpoint = load('checkpoint_measure', ROOT / 'issues/checkpoint-closure/measure.py')
     bench = load('kernel_registry', ROOT / 'bench/run.py')
     roster = {item.name: item for item in bench.BENCHMARKS if item.group == args.group}

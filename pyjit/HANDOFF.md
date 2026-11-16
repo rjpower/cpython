@@ -40,8 +40,9 @@ the trial report owns hashes and resolved findings. A's worker creates branch
 only: root owns full generation, products, builds and target execution. B remains
 queued until A's disposition; its source contract explicitly covers all hot
 close sites, canonical arithmetic, once-only stats and the borrowed-reader cut.
-The second worker proposes the opt-in one-pair confirmation capability in the
-canonical host measurement helper, with root review before edits. The two
+The opt-in one-pair confirmation capability in the canonical host measurement
+helper has passed root proposal/diff review and three host test methods; see
+the measurement recipe. It has not launched a confirmation. The two
 `round71-*-architecture-input.md` memos are static source/native input only.
 Root owns implementation release, runtime jobs and integration. Selected57 stays
 immutable/golden; preserve round69 branches, controllers and evidence.
@@ -81,7 +82,8 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-Workers implement A and prepare the independent host-harness proposal above.
+The A worker implements source/tests; the other worker is available for its
+independent actual-diff review.
 Astra's broad review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.

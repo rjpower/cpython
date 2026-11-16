@@ -44,6 +44,15 @@ No round71 full generation, runtime build, native test, timing or performance
 claim exists yet. Selected57 remains golden; rejected rounds remain closed.
 The grouped design owns prospective native and unchanged protected-screen gates.
 
+The prospectively reviewed host confirmation capability is implemented:
+`--single-pair-confirmation` requires `--rounds 1`; otherwise positive even
+rounds and default six are unchanged. Request mode/round count is recorded before
+preflight. Invalid combinations cannot create output or launch a target. Timing,
+driver, samples, ordering, controls and summary shape are unchanged. Root reviews
+the actual diff and all three new host test methods pass, including mocked
+preflight rejection. No benchmark or native interpreter was launched by these
+tests. The [measurement recipe](measurement.md) records winner-only use.
+
 ## Round70: stopped at source adoption
 
 The [grouped design70](../../design/proposals/interpreter-parity70.md) and

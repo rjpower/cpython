@@ -94,7 +94,7 @@ those retained outputs. The HANDOFF records the current candidate branch.
 
 ## Timing commands
 
-Use the existing `C/pyjit/issues/deltablue-call-model-20261110/measure.py` unchanged.
+Use `C/pyjit/issues/deltablue-call-model-20261110/measure.py`.
 It already accepts explicit build paths, `--control-role golden`, and a full
 `--control-head`. No script with embedded 9ec, 72ee or other old candidate head
 may launch a new campaign. Establish the candidate's clean committed source
@@ -114,6 +114,15 @@ UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B "$MEASURE" \
 
 Those eight cases are four hot workloads plus four sentinels, not an all-29
 result. Two pairs produce 32 workload rows; six confirmation pairs produce 96.
+Round71's winner-only confirmation uses one fresh pair: pass both
+`--single-pair-confirmation --rounds 1` with a new output directory. The explicit
+flag accepts only one pair; without it, positive even rounds remain required.
+`run-request.json` records mode and requested rounds before preflight. The
+confirmation uses the same seven samples, driver, controls and first-pair role
+order as the existing controller. It is not another selection screen or a retry
+for a losing candidate. Verify its 16 hot8 rows and apply the design's individual
+confirmation and pooled-screen gates.
+
 For all29, pass all kernel names explicitly in `--cases`; omitting that option
 selects only `logging_silent`. Require 29 summary entries and 116 rows before
 calling a two-pair campaign all29.

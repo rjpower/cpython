@@ -997,6 +997,11 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
     PyCodeObject *co = frame->f_executable;
     _PyIRWord word = co->co_words[continuation - 1];
     int handler = IR_HANDLER(word);
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+    if (boundary == NULL) {
+        return -1;
+    }
+    handler = boundary->ordinary;
     if (handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) {
         return -1;
     }

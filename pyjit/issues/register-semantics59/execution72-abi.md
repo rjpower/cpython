@@ -33,6 +33,19 @@ is introduced. ACC entry reloads its own word: that extra load/register pressure
 is charged. Same-site deopt, instrumentation and pair accounting retain the
 same PC and input mode; they cannot reinterpret ACC bits as a word.
 
+Cold specialization and instrumentation writers preserve that placement even
+when a child is running or a generator is suspended. LINE/INSTRUCTION monitors
+use finite generated wrappers nominated by immutable site mode and monitor
+opcode. The sparse nomination row is three uint16 fields (6B), with two rows
+per admitted site mode; event-specific instrumented counterparts are also
+generated before compiler selection. A wrapper retains its static payload
+meaning, spills before invoking hooks, then executes the materialized underlying
+operation while preserving its output placement. Ordinary dispatch and normal
+completion do not consult this cold nomination table. Charge all wrapper text,
+table rows, cold spills and mode-preserving specialization refusals. Root must
+verify changes made while an ACC continuation is already armed, including
+monitor removal and hook errors, rather than only instrumenting before entry.
+
 The compiler keeps a normal allocated home for each initially carried logical
 value. Its operand fields continue to name this **cold spill home**. The home
 is reserved for the full owner lifetime and physically NULL while ACC owns the
@@ -320,7 +333,8 @@ explicit refusal require root assignment and closure before enabling ACC code.
 
 Compiler worker owns ACC edge selection and
 common validation in regcfg/assemble/codeobject, executable primary map lifetime
-in ir.c, and compiler/public-image tests. Backend owns generator parsed placement
+in ir.c, cold specialization/instrumentation writers and compiler/public-image
+tests. Backend owns generator parsed placement
 and effect lowering, bytecodes, ceval macros/entry/completion, frame/genobject
 residence and focused behavior tests. Shared `pycore_ir.h` payload/continuation
 types, exec pointer and mode tables get one reviewed sequential interface commit.

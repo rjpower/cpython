@@ -23,11 +23,24 @@ Two Sol 6.1 workers implement the independently reviewed
 directly from selected57. W, branch `pyjit/execution72-compiler-abi-selected57`,
 owns selection, common validation and continuation-map lifetime. P, branch
 `pyjit/execution72-carried-owner`, owns generator/runtime ABI and activations.
+W also owns cold specialization/instrumentation writers; P generates their
+finite mode-preserving wrappers. Their sparse nomination table is cold-only.
 The shared header is `f2a8a302b93` in W / `392307588` in P; W's map lifetime is
 `da134719c4f`, P's typed stored-recipient checkpoint `c9ada93f713`.
 These are incomplete source checkpoints, not runtime GO. Root integrates only
 the complete reviewed ABI sources, generates/reviews products, then runs native
 checks and hot8. Proposals/progress use `E59/execution72-*`; no72 winner exists.
+
+Current partial checkpoints are W `07831d121d9` (compiler selection, validation,
+HANDOFF terminal graph and magic 64425) and P `90421ad6788` (scalar carried
+results, typed completion and cold monitor interface). Partial independent
+source reviews pass; full CALL/SEND/YIELD/effect and instrumentation closure is
+still in progress. No complete ABI generation, interpreter build or runtime
+qualification has occurred. Do not execute an old ELF against these Lib trees.
+Root's six selected native controls and prepared supplementary owner probe are
+`E59/execution72-native-*` and `execution72-owner-{probe,run}.py`; the owner
+probe remains unexecuted. `execution72-geometry-checkpoint.json` verifies the
+current frame header is unchanged while the executable header grows 40→48B.
 
 The [layout unit](issues/register-semantics59/execution72-layout.md) is closed
 and rejected. G and its builds are frozen at `240f4c2b977`, branch

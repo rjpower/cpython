@@ -29,8 +29,17 @@ constructor/init path; rejected samples include generic native transactions,
 binding and initialization. Source review finds a concrete mechanism: round72's
 physical placement registry omits existing CALL and arithmetic specializations,
 so an otherwise legal specialization can be declined solely because the site
-uses a carried result. Natural warmed-site snapshots are still pending; this
-source finding and sampling do not assign the whole regression to constructors.
+uses a carried result. Untimed snapshots of the unchanged warmed kernel confirm
+nine ordinary-handler differences across 58 matching code objects: six constructor
+return sites lose `CALL_NO_SELF_ALLOC_AND_ENTER_INIT`, one loses the builtin-fast
+call, and two lose float arithmetic specialization. The constructor sites are
+`Point.__add__`, `Point.__sub__`, `Vector.__add__`, `Vector.__sub__`,
+`Vector.cross` and `Vector.scale`. These are actual specialization losses;
+snapshots supply neither hit counts nor the fraction of slowdown they explain.
+
+The corresponding logging snapshots have 159 matching code objects and no
+ordinary-handler differences. Constructor specialization loss therefore does
+not explain the observed logging regression. Its hardware cause remains open.
 
 The corrective implementation starts from selected57 and leaves ordinary CALL
 and arithmetic specialization intact. It must remove a complete generator
@@ -44,6 +53,8 @@ Evidence under `E59`:
 - `execution73-diagnostic/results.json`: all invocation receipts.
 - `execution73-diagnostic/summary.json`: paired counter ratios and aggregates.
 - `execution73-diagnostic/record-*-flat.txt`: samples, with no lost samples.
+- `execution73-diagnostic/snapshot-*.json`: warmed immutable/adaptive words.
+- `execution73-diagnostic/snapshot-commands.json`: four successful untimed runs.
 
 E59 is the established `python-boil-the-ocean/build/pyjit-link-wave1/`
 `register-semantics59` evidence directory. No new upstream ratio follows from

@@ -9,9 +9,12 @@ of callback effects from ordinary transfers. The
 independent source and root adoption GO. Root has integrated the Sol runtime
 and compiler source and generated the combined products. Independent comparison
 preserves all existing instruction contracts and ordinary CALL/arithmetic
-bodies. Emitted-body review is closing a virtual-iterator cursor publication
-bug and a provider-result rooting gap before compilation. No73 executable or
-performance result is qualified yet. Root completed the bounded
+bodies. Emitted-body review closed the virtual-iterator cursor publication
+bug and provider-result rooting gap. Both builds of `8fa5c2d8660` pass 117 modules
+and 79 shared extensions. The first target tests pass basic transfers, live
+results across awaits, GC and specialization preservation; they expose missing
+explicit STORE/discard selection and fixture assumptions. Those corrections are
+in progress. No73 executable or performance result is qualified yet. Root completed the bounded
 [logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 on immutable selected57 and rejected72; this does not reopen72 selection.
 

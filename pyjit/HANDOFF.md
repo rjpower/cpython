@@ -20,7 +20,7 @@ home-elimination credit.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Source integrated through `0612361b0e7`; generated-product review in progress |
+| G | `pyjit/execution73-boundary-integrated` | Clean candidate `8fa5c2d8660`; both `execution73-boundary5` builds pass 117/79 |
 | P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
 | W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
 
@@ -29,15 +29,24 @@ common predicates and tests, and cross-reviews P. Root owns generation,
 integration, builds, target execution and timing. Workers must not run target
 jobs or alter immutable controls. Source integration includes the compiler,
 runtime, rooted low-recursion entry and monitoring identity corrections.
-Boundary2 generation and the independent metadata/table comparison pass: all
+Boundary3 generation and the independent metadata/table comparison pass: all
 331 existing instruction contracts and ordinary CALL/arithmetic bodies are
-preserved. Emitted-body review found a missing virtual-iterator cursor store;
-that fix and provider-result rooting are pending before compilation. No73
-executable or performance result is qualified yet.
+preserved. Emitted-body review closed the missing virtual-iterator cursor store
+and provider-result rooting gap; the new callback boundary is explicit in the
+design. Generated products have independent peer GO. Four focused host generator
+tests pass. The first 22 target methods run on both roles; eight failures and
+two errors exposed missing explicit STORE/POP consumer selection and fixture
+assumptions. Root's matched monitoring probe shows identical selected/candidate
+behavior; same-line LINE and BRANCH_LEFT expectations were incorrect. P/W are
+adding distinct explicit-consumer targets and correcting the fixtures. Existing
+completion/discard tests pass; send/delegated tests need new placement-aware
+expectations. No73 executable or performance result is qualified yet.
 
-**G's build directories still contain rejected72 ELFs. Do not execute them
-until rebuilding against G's current source.** A moved source tree invalidates
-its old runtime/Lib pairing even when the ELF itself is preserved.
+G's builds now match `8fa5c2d8660`. Rebuild after integrating further source
+changes: a moved source tree invalidates its old runtime/Lib pairing even when
+the ELF itself is preserved. The first two build failures and crash diagnosis
+are retained under `execution73-boundary{3,4}`; private dispatch declaration and
+metadata-only exporter fixes are included in the current candidate.
 
 Root completed and sealed the bounded frozen72 logging/raytrace diagnosis in
 `E59/execution73-diagnostic`, with driver `E59/execution73-diagnostic-driver.py`.

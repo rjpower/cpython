@@ -85,7 +85,9 @@ entry followed by generic repair on a supposedly admitted fast path.
 The shared cold reverse row is the backend memo's eight-byte
 `_PyIRGeneratorBoundary`: uint16 `ordinary, handler`, uint8
 `yielded_consumer, completed_consumer, resume_consumer, flags`. Consumer codes
-are NONE, DELEGATED, RETURN, STORE_LOCAL, DISCARD, SEND and HOME. Generate
+are NONE, DELEGATED, RETURN, STORE_LOCAL, DISCARD, SEND, HOME, STORE_FAST and
+POP_TOP. STORE_LOCAL/DISCARD describe an already folded destination;
+STORE_FAST/POP_TOP consume an explicit ordinary successor. Generate
 `_PyIR_GeneratorBoundaryOf(handler)` and the cold selection query
 `_PyIR_GeneratorBoundaryHandler(ordinary, yielded, completed, resume)` from the
 same declarations as the bodies. The query succeeds only for complete
@@ -132,6 +134,14 @@ frame/PC/phase afterward. Pending or applied redirects use their real landing.
 A same-PC generation change is still a change. No callback path indexes an
 old SEND outcome table from a newly redirected `instr_ptr`.
 
+For a generic provider's yielded result, success commits the logical SEND edge
+before retiring its sent input. If that release can reenter, the effect entry
+roots the result, publishes the real yielded-result home and YIELD continuation,
+then releases the input and dispatches from the current frame state. This is an
+intentional bounded-lifetime frontier; finalizers need not observe the old SEND
+PC. Required source events and error attribution remain correct, and a callback
+redirect must not replay SEND or force the original YIELD landing.
+
 Native interpreter entry and FOR_ITER require explicit boundary entries with
 their existing semantics. They are not fabricated SEND images. There is no
 claim of optimizing FOR_ITER in this slice. Native send retains setter-before-
@@ -159,6 +169,12 @@ The first enabled shape includes all of the following:
    private retake adapter. It retains and charges the necessary store and
    ordinary dispatch, using the same replacement retirement/effect engine.
    Direct RETURN/local/discard consumers still avoid redundant home traffic.
+   Explicit STORE_FAST/POP_TOP successors have separate static native entries:
+   validate their actual input against SEND's scratch A, consume once, count
+   the instruction once and advance past it. A finalizing release instead
+   enters the effect path, publishes the original scratch A and lands on the
+   real ordinary consumer. This does not rewrite public words or add a hot
+   recipient-mode test to folded destinations.
 2. YIELD_DELEGATED takes the outgoing owner and commits the real suspended
    frame, exception links, recursion credit, profile state, PC and external
    detach. It dispatches that owner to the parent's yielded consumer. It

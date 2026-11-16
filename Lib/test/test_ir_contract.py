@@ -347,7 +347,7 @@ class ContractTests(unittest.TestCase):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     self.assertEqual(row.ninputs, 3)
                     self.assertEqual(sorted(inputs), [0, 2])
                     self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
@@ -956,7 +956,7 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
-                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     # Frontend YIELD_VALUE1 is normalized to three logical
                     # inputs/outputs before allocation. Its cursor dependency
                     # remains in SSA without a physical input field.

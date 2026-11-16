@@ -1,15 +1,24 @@
 """Normal SEND and throw completion retire their input windows."""
 
 import marshal
+import opcode
 from pathlib import Path
 import tempfile
 import types
 import unittest
 
+import _opcode
 import _testinternalcapi
 from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import encoded, make_code
+
+
+CONTRACTS = _opcode.get_ir_contract()
+
+
+def ordinary_name(name):
+    return opcode.opname[CONTRACTS[opcode.opname.index(name)].ordinary_handler]
 
 
 class SendTransferTests(unittest.TestCase):
@@ -70,7 +79,7 @@ class SendTransferTests(unittest.TestCase):
             def throw(self, error):
                 raise StopIteration("recovered")
 
-        names = {row[0] for row in _testinternalcapi.get_ir(outer.__code__)}
+        names = {ordinary_name(row[0]) for row in _testinternalcapi.get_ir(outer.__code__)}
         self.assertTrue({"SEND", "CLEANUP_THROW"} <= names)
         for admitted in routes(outer.__code__):
             function = types.FunctionType(admitted, globals())
@@ -98,12 +107,25 @@ class SendTransferTests(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
-        names = [name for name, fmt in formats.items() if fmt.group == "SEND"]
+        boundaries = ir_generator.generator_boundaries(analysis)
+        names = [name for name, fmt in formats.items()
+                 if fmt.group == "SEND" and name not in boundaries]
         expected = ir_generator.OwnershipEvent(
             "_PyIR_OWNER_NORMAL_COMPLETION", flags=3, src=3, dst=1, extent=2)
         self.assertGreaterEqual(len(names), 4)
         for name in names:
             self.assertEqual(contracts[name].ownership_events, (expected,))
+        for name, boundary in boundaries.items():
+            completed = ir_generator.OwnershipEvent(
+                "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=4 if
+                boundary.base == "CLEANUP_THROW" else 3, dst=1)
+            if boundary.yielded == "DELEGATED":
+                self.assertEqual(contracts[name].ownership_events, (
+                    ir_generator.OwnershipEvent(
+                        "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2),
+                    completed))
+            elif boundary.base == "CLEANUP_THROW":
+                self.assertEqual(contracts[name].ownership_events, (completed,))
         self.assertEqual(contracts["CLEANUP_THROW"].ownership_events, (
             ir_generator.OwnershipEvent(
                 "_PyIR_OWNER_NORMAL_COMPLETION", flags=1, src=4, dst=1),))
@@ -116,9 +138,9 @@ class SendTransferTests(unittest.TestCase):
             changed.write_text(text.replace(marker, changed_route, 1))
             analysis = analyzer.analyze_files([str(changed)])
             formats = ir_generator.compute_formats(analysis)
-            contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in names:
-            self.assertNotIn(expected, contracts[name].ownership_events)
+            with self.assertRaisesRegex(SyntaxError,
+                    "generator boundary needs the complete SEND source contract"):
+                ir_generator.handler_contracts(analysis, formats)
 
 
 if __name__ == "__main__":

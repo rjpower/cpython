@@ -1,16 +1,25 @@
 """Delegated suspension carries an admitted explicit receiver role."""
 
 import marshal
+import opcode
 import sys
 from pathlib import Path
 import tempfile
 import types
 import unittest
 
+import _opcode
 import _testinternalcapi
 from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import encoded, make_code
+
+
+CONTRACTS = _opcode.get_ir_contract()
+
+
+def ordinary_name(name):
+    return opcode.opname[CONTRACTS[opcode.opname.index(name)].ordinary_handler]
 
 
 class DelegatedYieldTests(unittest.TestCase):
@@ -130,7 +139,7 @@ class DelegatedYieldTests(unittest.TestCase):
         for source, factory in ((outer, lambda: iter((17, 23))),
                                 (awaiting, Awaitable)):
             rows = _testinternalcapi.get_ir(source.__code__)
-            selected = [row for row in rows if row[0] == "YIELD_DELEGATED"]
+            selected = [row for row in rows if ordinary_name(row[0]) == "YIELD_DELEGATED"]
             self.assertEqual(len(selected), 1)
             self.assertEqual(selected[0][3], 0)
             self.assertGreaterEqual(selected[0][4], source.__code__.co_nlocals)
@@ -167,6 +176,9 @@ class DelegatedYieldTests(unittest.TestCase):
         try:
             for source, receiver in ((outer, iter(range(4))), (awaiting, Awaitable())):
                 code = source.__code__
+                original = next(CONTRACTS[opcode.opname.index(row[0])]
+                                for row in _testinternalcapi.get_ir(code)
+                                if ordinary_name(row[0]) == "YIELD_DELEGATED")
                 suspended = source(receiver)
                 iterator = suspended.__await__() if source is awaiting else suspended
                 iterator_receiver = None
@@ -180,9 +192,20 @@ class DelegatedYieldTests(unittest.TestCase):
                             self.assertIsInstance(actual, types.GeneratorType)
                         self.assertIs(actual, receiver if source is outer else iterator_receiver)
                         rows = _testinternalcapi.get_ir(code, True)
-                        names = {row[0] for row in rows}
+                        names = {ordinary_name(row[0]) for row in rows}
                         self.assertIn("INSTRUMENTED_YIELD_DELEGATED" if enabled
                                       else "YIELD_DELEGATED", names)
+                        actual = next(CONTRACTS[opcode.opname.index(row[0])]
+                                      for row in rows if ordinary_name(row[0]) ==
+                                      ("INSTRUMENTED_YIELD_DELEGATED" if enabled
+                                       else "YIELD_DELEGATED"))
+                        self.assertEqual(
+                            (actual.generator_yielded_consumer,
+                             actual.generator_completed_consumer,
+                             actual.generator_resume_consumer),
+                            (original.generator_yielded_consumer,
+                             original.generator_completed_consumer,
+                             original.generator_resume_consumer))
                     with self.assertRaises(StopIteration):
                         next(iterator)
                 finally:
@@ -208,12 +231,21 @@ class DelegatedYieldTests(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
-        send_names = [name for name, fmt in formats.items() if fmt.group == "SEND"]
+        boundaries = ir_generator.generator_boundaries(analysis)
+        send_names = [name for name, fmt in formats.items()
+                      if fmt.group == "SEND" and name not in boundaries]
         self.assertGreaterEqual(len(send_names), 4)
         expected = ir_generator.OwnershipEvent(
             "_PyIR_OWNER_NORMAL_COMPLETION", flags=3, src=3, dst=1, extent=2)
         for name in send_names:
             self.assertEqual(contracts[name].ownership_events, (expected,))
+        for name, boundary in boundaries.items():
+            if boundary.yielded == "DELEGATED":
+                self.assertEqual(contracts[name].ownership_events, (
+                    ir_generator.OwnershipEvent(
+                        "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2),
+                    ir_generator.OwnershipEvent(
+                        "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=1)))
         for name in ("YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"):
             self.assertEqual(formats[name].roles,
                              [ir_generator.ROLE_DST, f"{ir_generator.ROLE_IN0} + 2",
@@ -233,9 +265,9 @@ class DelegatedYieldTests(unittest.TestCase):
             changed.write_text(text.replace(marker, "null_or_index = window[0];", 1))
             altered = analyzer.analyze_files([str(changed)])
             altered_formats = ir_generator.compute_formats(altered)
-            altered_contracts = ir_generator.handler_contracts(altered, altered_formats)
-            for name in send_names:
-                self.assertNotIn(expected, altered_contracts[name].ownership_events)
+            with self.assertRaisesRegex(SyntaxError,
+                    "generator boundary needs the complete SEND source contract"):
+                ir_generator.handler_contracts(altered, altered_formats)
             source_marker = "macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;"
             self.assertIn(source_marker, text)
             suffix = """op(_OPAQUE_SEND_SUFFIX,
@@ -247,9 +279,9 @@ class DelegatedYieldTests(unittest.TestCase):
                 source_marker.replace("+ _SEND;", "+ _SEND + _OPAQUE_SEND_SUFFIX;"), 1))
             altered = analyzer.analyze_files([str(changed)])
             altered_formats = ir_generator.compute_formats(altered)
-            altered_contracts = ir_generator.handler_contracts(altered, altered_formats)
-            for name in send_names:
-                self.assertNotIn(expected, altered_contracts[name].ownership_events)
+            with self.assertRaisesRegex(SyntaxError,
+                    "generator boundary needs the complete SEND source contract"):
+                ir_generator.handler_contracts(altered, altered_formats)
             guard = "EXIT_IF(!PyValue_IsNone(val));"
             self.assertIn(guard, text)
             changed.write_text(text.replace(guard,
@@ -257,9 +289,9 @@ class DelegatedYieldTests(unittest.TestCase):
             altered = analyzer.analyze_files([str(changed)])
             self.assertFalse(altered.uops["_GUARD_TOS_IS_NONE"].properties.escapes)
             altered_formats = ir_generator.compute_formats(altered)
-            altered_contracts = ir_generator.handler_contracts(altered, altered_formats)
-            for name in send_names:
-                self.assertNotIn(expected, altered_contracts[name].ownership_events)
+            with self.assertRaisesRegex(SyntaxError,
+                    "generator boundary needs the complete SEND source contract"):
+                ir_generator.handler_contracts(altered, altered_formats)
             changed.write_text(text.replace("IR_METADATA_PASSTHROUGH(1);",
                                             "IR_METADATA_PASSTHROUGH(1);\n(void)unused_cursor;", 1))
             altered = analyzer.analyze_files([str(changed)])

@@ -556,6 +556,31 @@ TARGET(GEN_RETURN_PARENT)
     GENERATOR_DISPATCH();
 }
 
+/* Source RETURN has already counted, debited and unlinked the child. Keep
+ * generator routing and its legacy fallback out of the shared RETURN body. */
+TARGET(GEN_RETURN_ROUTE)
+{
+    _PyValueTemps *const value_temps = NULL;
+    PyValue value = generator_payload(ir_word);
+    _PyInterpreterFrame *dying = frame;
+    frame = tstate->current_frame;
+    if (generator_outcome_target(frame, frame->instr_ptr,
+                                 generator_completed_targets) != NULL) {
+        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, slots,
+                    frame->instr_ptr, value);
+    }
+    value = _PyEval_FrameClearAndPopWithResult(tstate, dying, value);
+    frame = tstate->current_frame;
+    slots = _PyFrame_Slots(frame);
+    _PyIRStepResult completed = _PyEval_CompleteGeneratorReturn(tstate, frame, value);
+    next_instr = completed.next;
+    if (completed.status < 0) {
+        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+    }
+    LLTRACE_RESUME_FRAME();
+    GENERATOR_DISPATCH();
+}
+
 /* The incoming frame has been unlinked and debited by the source RETURN.
  * Until its first effect, unfinished owners remain in the actual child. */
 TARGET(GEN_RETURN_RETIRED)

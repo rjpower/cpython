@@ -5740,17 +5740,8 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit("if (generator_outcome_target(frame, frame->instr_ptr, "
-                  "generator_completed_targets) != NULL) {\n")
-        self.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, {dying}, "
+        self.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, {dying}, "
                   f"_PyFrame_Slots({dying}), frame->instr_ptr, {value});\n")
-        self.emit("}\n")
-        self.emit(f"{value} = _PyEval_FrameClearAndPopWithResult(tstate, {dying}, {value});\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
-        self.emit(f"_PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
-        self.emit("next_instr = ir_completed.next;\n")
-        self.emit("if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
-        self.emit("LLTRACE_RESUME_FRAME();\nDISPATCH();\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -9244,7 +9235,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                "GEN_THROW_COMPLETE_RETURN", "GEN_THROW_COMPLETE_STORE",
                "GEN_THROW_COMPLETE_DISCARD", "GEN_THROW_COMPLETE_HOME",
                "GEN_THROW_COMPLETE_STORE_FAST", "GEN_THROW_COMPLETE_POP_TOP",
-               "GEN_RETURN_RETIRED", "GEN_RETURN_PARENT", "GEN_REDIRECT_EFFECT",
+               "GEN_RETURN_ROUTE", "GEN_RETURN_RETIRED", "GEN_RETURN_PARENT",
+               "GEN_REDIRECT_EFFECT",
                "GEN_RETIRE_EFFECT_SLOTS", "GEN_RETIRE_EFFECT_ASSOCIATION",
                "GEN_RETIRE_EFFECT_LOCALS", "GEN_RETIRE_EFFECT_FUNCTION",
                "GEN_RETIRE_EFFECT_EXCEPTION")

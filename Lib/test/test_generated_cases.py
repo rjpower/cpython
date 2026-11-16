@@ -435,6 +435,40 @@ class TestIRCases(unittest.TestCase):
                     self.assertLess(guard, tail)
                     self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
 
+    def test_generator_return_route_leaves_thread_return_unchanged(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        for name in ("RETURN_VALUE", "RETURN_VALUE_EMPTY",
+                     "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    out = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(out, analysis, formats)
+                    ir_generator.generate_handler(name, instructions[name], formats[name],
+                                                  emitter, out, record)
+                    body = output.getvalue()
+                    branch = body.index("if (generator_return) {")
+                    end = body.index("}\n", branch)
+                    route = body[branch:end]
+                    self.assertIn("frame->phase_state = 0;", route)
+                    self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, "
+                                  "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
+                    self.assertNotIn("generator_outcome_target(", body)
+                    self.assertNotIn("_PyEval_FrameClear", route)
+                    self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
+                    clear = ("_PyEval_FrameClearAndPopWithResult" if name.endswith("_EMPTY")
+                             else "_PyEval_FrameClearAndPopGeneralWithResult")
+                    self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
+                    self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
+                    self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
+                    self.assertEqual(body.count("DTRACE_FUNCTION_RETURN();"), 1)
+                    self.assertEqual(body.count("frame = tstate->current_frame = dying->previous;"), 1)
+
     def test_generator_explicit_completion_consumer_targets(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

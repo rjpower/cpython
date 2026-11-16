@@ -48,6 +48,17 @@ def finish(generator, value):
     raise AssertionError("generator did not complete")
 
 
+class GeneratorContractExportTests(unittest.TestCase):
+    def test_metadata_only_operation_has_an_ordinary_identity(self):
+        handler = HANDLERS["BINARY_OP"]
+        row = CONTRACTS[handler]
+        self.assertEqual(row.ordinary_handler, handler)
+        self.assertEqual(row.generator_yielded_consumer, _opcode.GEN_CONSUMER_NONE)
+        self.assertEqual(row.generator_completed_consumer, _opcode.GEN_CONSUMER_NONE)
+        self.assertEqual(row.generator_resume_consumer, _opcode.GEN_CONSUMER_NONE)
+        self.assertEqual(row.generator_boundary_flags, 0)
+
+
 @unittest.skipIf(support.Py_GIL_DISABLED, "requires adaptive specialization")
 class SpecializationPreservationTests(unittest.TestCase):
     def test_constructor_init_specialization_survives_result_return(self):

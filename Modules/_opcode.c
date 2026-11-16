@@ -440,6 +440,7 @@ static PyObject *
 ir_contract_row(PyTypeObject *type, int h)
 {
     const _PyIRFormat *fmt = &_PyIR_Formats[h];
+    /* Logical metadata rows need not have executable boundary entries. */
     const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(h);
     PyObject *row = PyStructSequence_New(type);
     if (row == NULL) {
@@ -469,11 +470,11 @@ ir_contract_row(PyTypeObject *type, int h)
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->call_input_holes),
         PyLong_FromLong(fmt->error_routes),
-        PyLong_FromLong(boundary->ordinary),
-        PyLong_FromLong(boundary->yielded_consumer),
-        PyLong_FromLong(boundary->completed_consumer),
-        PyLong_FromLong(boundary->resume_consumer),
-        PyLong_FromLong(boundary->flags),
+        PyLong_FromLong(boundary == NULL ? h : boundary->ordinary),
+        PyLong_FromLong(boundary == NULL ? 0 : boundary->yielded_consumer),
+        PyLong_FromLong(boundary == NULL ? 0 : boundary->completed_consumer),
+        PyLong_FromLong(boundary == NULL ? 0 : boundary->resume_consumer),
+        PyLong_FromLong(boundary == NULL ? 0 : boundary->flags),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,

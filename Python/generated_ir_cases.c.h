@@ -12762,6 +12762,61 @@
             }
         }
 
+        TARGET(CLEANUP_THROW_XFER_DISCARD) {
+            int opcode = CLEANUP_THROW;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CLEANUP_THROW);
+            PyObject *value_boxes[9];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 9};
+            _PyValueTemps *value_temps = &value_owners;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue exc_value_st;
+            PyValue value;
+            PyObject *ir_obj_exc_value_st = NULL;
+            exc_value_st = window[3];
+            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
+                frame->phase_state = 0;
+                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
+                if (ir_obj_exc_value_st == NULL) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                BOX_STAT_INC(CLEANUP_THROW);
+            }
+            else {
+                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
+            }
+            PyObject *exc_value = ir_obj_exc_value_st;
+            assert(exc_value && PyExceptionInstance_Check(exc_value));
+            frame->phase_state = 0;
+            frame->phase_state = 0;
+            int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
+            if (!matches) {
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyErr_SetRaisedException(tstate, Py_NewRef(exc_value));
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                monitor_reraise(tstate, frame, this_instr);
+                frame->phase_state = 0;
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
+            }
+            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+            frame->phase_state = 0;
+            {
+                PyValue ir_completed = completed;
+                assert(_PyValue_IsHome(ir_completed));
+                IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+            }
+        }
+
         TARGET(COMPARE_OP) {
             int opcode = COMPARE_OP;
             (void)(opcode);
@@ -17657,6 +17712,19 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                if (generator_return) {
+                    frame->phase_state = 0;
+                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                    }
+                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                    slots = _PyFrame_Slots(frame);
+                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_completed.next;
+                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                    LLTRACE_RESUME_FRAME();
+DISPATCH();
+                }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
@@ -17722,6 +17790,19 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                if (generator_return) {
+                    frame->phase_state = 0;
+                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                    }
+                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                    slots = _PyFrame_Slots(frame);
+                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_completed.next;
+                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                    LLTRACE_RESUME_FRAME();
+DISPATCH();
+                }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
@@ -17808,6 +17889,7 @@
                 _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
                 FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
                 slots = _PyFrame_Slots(frame);
+                IR_TRY_NATIVE_YIELD(outgoing);
                 next_instr = frame->return_pc;
                 if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
                 LLTRACE_RESUME_FRAME();
@@ -22919,6 +23001,19 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                if (generator_return) {
+                    frame->phase_state = 0;
+                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                    }
+                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                    slots = _PyFrame_Slots(frame);
+                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_completed.next;
+                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                    LLTRACE_RESUME_FRAME();
+DISPATCH();
+                }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
@@ -22971,6 +23066,19 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                if (generator_return) {
+                    frame->phase_state = 0;
+                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                    }
+                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                    slots = _PyFrame_Slots(frame);
+                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
+                    next_instr = ir_completed.next;
+                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                    LLTRACE_RESUME_FRAME();
+DISPATCH();
+                }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
@@ -23206,6 +23314,77 @@
             DISPATCH();
         }
 
+        TARGET(SEND_ASYNC_GEN_XFER_DISCARD) {
+            int opcode = SEND_ASYNC_GEN;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SEND_ASYNC_GEN);
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue iter;
+            PyValue null_in;
+            PyValue v;
+            PyValue asend;
+            PyValue null_out;
+            PyValue retval;
+            // _GUARD_3OS_ASYNC_GEN_ASEND
+            {
+                iter = window[0];
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                if (!PyAsyncGenASend_CheckExact(iter_o)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+            }
+            // _SEND_ASYNC_GEN
+            {
+                v = window[2];
+                null_in = window[1];
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                assert(PyAsyncGenASend_CheckExact(iter_o));
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyStatusValue sent = _PyValue_Send(iter_o, v);
+                PySendResult what = (PySendResult)sent.status;
+                if (what == PYGEN_ERROR) {frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                if (what == PYGEN_RETURN) {
+                    PyValue completed = sent.value;
+                    frame->phase_state = 0;
+                    {
+                        PyValue ir_completed = completed;
+                        assert(_PyValue_IsHome(ir_completed));
+                        IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                    }
+                }if (!_PyValue_TryXCloseNoReentry(v)) {
+                    assert(_PyValue_IsHome(sent.value));
+                    IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
+                }
+                window[2] = PyValue_NULL;
+                asend = iter;
+                null_out = null_in;
+                retval = sent.value;
+            }
+            IR_PUBLISH_TEMP(window[0], asend);
+            IR_PUBLISH_TEMP(window[1], null_out);
+            assert(_PyValue_IsHome(retval));
+            window[2] = PyValue_NULL;
+            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
+        }
+
         TARGET(SEND_GEN) {
             int opcode = SEND_GEN;
             (void)(opcode);
@@ -23272,6 +23451,85 @@
                     if (_Py_EnterRecursivePy(tstate)) {
                         PyValue_XCLOSE(ir_resume_input);
                         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
+                    }
+                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    LOAD_IP(0);
+                    IR_SKIP_RESUME();
+                    DTRACE_FUNCTION_ENTRY();
+                    LLTRACE_RESUME_FRAME();
+                    DISPATCH();
+                }
+            }
+        }
+
+        TARGET(SEND_GEN_XFER_DISCARD) {
+            int opcode = SEND_GEN;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SEND_GEN);
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue receiver;
+            PyValue v;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+            }
+            // _SEND_GEN_FRAME
+            {
+                v = window[2];
+                receiver = window[0];
+                if (!PyValue_IsObject(receiver)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+                if (Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+                if (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+                STAT_INC(SEND, hit);
+                frame->phase_state = 0;
+                {
+                    _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
+                    PyValue ir_resume_input = PyValue_None;
+                    if (_PY_IR_SEND == _PY_IR_SEND) {
+                        ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
+                        IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                    }
+                    frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                    frame->return_pc = next_instr;
+                    ir_resumed_frame->previous = frame;
+                    gen->gi_exc_state.previous_item = tstate->exc_info;
+                    tstate->exc_info = &gen->gi_exc_state;
+                    frame = tstate->current_frame = ir_resumed_frame;
+                    slots = _PyFrame_Slots(frame);
+                    if (tstate->py_recursion_remaining <= 1) {
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
+                    }
+                    --tstate->py_recursion_remaining;
+                    _PyInstr *ir_resume_site = frame->instr_ptr;
+                    if (ir_resume_site > frame->ir_words) {
+                        py_tail_call_funcptr ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                        if (ir_resume_target != NULL) {
+                            IR_GEN_TAIL(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
+                        }
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
                     LOAD_IP(0);
@@ -23366,6 +23624,237 @@
             IR_PUBLISH_TEMP(window[1], null_or_index);
             IR_PUBLISH_TEMP(window[2], next);
             DISPATCH();
+        }
+
+        TARGET(SEND_VIRTUAL_XFER_DISCARD) {
+            int opcode = SEND_VIRTUAL;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SEND_VIRTUAL);
+            PyObject *value_boxes[14];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 14};
+            _PyValueTemps *value_temps = &value_owners;
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue val;
+            PyValue nos;
+            PyValue iter;
+            PyValue null_or_index;
+            PyValue none;
+            PyValue next;
+            PyObject *ir_obj_iter = NULL;
+            // _GUARD_TOS_IS_NONE
+            {
+                val = window[2];
+                if (!PyValue_IsNone(val)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+            }
+            // _GUARD_NOS_NOT_NULL
+            {
+                nos = window[1];
+                if (PyValue_IsNull(nos)) {
+                    UPDATE_MISS_STATS(SEND);
+                    JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
+                }
+            }
+            // _SEND_VIRTUAL
+            {
+                none = val;
+                null_or_index = nos;
+                iter = window[0];
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    frame->phase_state = 0;
+                    ir_obj_iter = _PyValueTemps_Box(value_temps, iter);
+                    if (ir_obj_iter == NULL) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    BOX_STAT_INC(SEND_VIRTUAL);
+                }
+                else {
+                    ir_obj_iter = PyValue_AsKnownObjectBorrow(iter);
+                }
+                PyObject *iter_o = ir_obj_iter;
+                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                index = next_index.index;
+                if (PyValue_IsNull(next_index.value)) {
+                    if (index < 0) {frame->phase_state = 0;
+                        frame->phase_state = 0;
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    PyValue completed = PyValue_None;
+                    frame->phase_state = 0;
+                    {
+                        PyValue ir_completed = completed;
+                        assert(_PyValue_IsHome(ir_completed));
+                        IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                    }
+                }
+                next = next_index.value;
+                null_or_index = PyValue_TagIndex(index);
+            }
+            IR_PUBLISH_TEMP(window[1], null_or_index);
+            assert(_PyValue_IsHome(next));
+            window[2] = PyValue_NULL;
+            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, next);
+        }
+
+        TARGET(SEND_XFER_DISCARD) {
+            int opcode = SEND;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SEND);
+            PyObject *value_boxes[14];
+            _PyValueTemps value_owners;
+            value_owners = (_PyValueTemps){value_boxes, 0, 14};
+            _PyValueTemps *value_temps = &value_owners;
+            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue receiver;
+            PyValue null_or_index;
+            PyValue v;
+            PyValue retval;
+            PyObject *ir_obj_receiver = NULL;
+            // _SPECIALIZE_SEND
+            {
+                receiver = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    _Py_Specialize_Send(receiver, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(SEND);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _SEND
+            {
+                v = window[2];
+                null_or_index = window[1];
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    frame->phase_state = 0;
+                    ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
+                    if (ir_obj_receiver == NULL) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    BOX_STAT_INC(SEND);
+                }
+                else {
+                    ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
+                }
+                PyObject *receiver_o = ir_obj_receiver;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                if (!IS_PEP523_HOOKED(tstate) &&
+                    (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                    !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
+                    gen_try_set_executing((PyGenObject *)receiver_o))
+                {
+                    PyGenObject *gen = (PyGenObject *)receiver_o;
+                    frame->phase_state = 0;
+                    {
+                        _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
+                        PyValue ir_resume_input = PyValue_None;
+                        if (_PY_IR_SEND == _PY_IR_SEND) {
+                            ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
+                            IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                        }
+                        frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                        frame->return_pc = next_instr;
+                        ir_resumed_frame->previous = frame;
+                        gen->gi_exc_state.previous_item = tstate->exc_info;
+                        tstate->exc_info = &gen->gi_exc_state;
+                        frame = tstate->current_frame = ir_resumed_frame;
+                        slots = _PyFrame_Slots(frame);
+                        if (tstate->py_recursion_remaining <= 1) {
+                            IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
+                        }
+                        --tstate->py_recursion_remaining;
+                        _PyInstr *ir_resume_site = frame->instr_ptr;
+                        if (ir_resume_site > frame->ir_words) {
+                            py_tail_call_funcptr ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                            if (ir_resume_target != NULL) {
+                                IR_GEN_TAIL(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
+                            }
+                        }
+                        _PyFrame_SetReturnValue(frame, ir_resume_input);
+                        LOAD_IP(0);
+                        IR_SKIP_RESUME();
+                        DTRACE_FUNCTION_ENTRY();
+                        LLTRACE_RESUME_FRAME();
+                        DISPATCH();
+                    }
+                }
+                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    null_or_index = window[1];
+                    PyValue item = next.value;
+                    int found = next.status;
+                    if (found <= 0) {
+                        if (found < 0) {frame->phase_state = 0;
+                            frame->phase_state = 0;
+                            IR_PUBLISH_TEMP(window[1], null_or_index);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                        }
+                        PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                        frame->phase_state = 0;
+                        {
+                            PyValue ir_completed = completed;
+                            assert(_PyValue_IsHome(ir_completed));
+                            IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                        }
+                    }
+                    retval = item;
+                }
+                else {
+                    frame->phase_state = 0;
+                    frame->phase_state = 0;
+                    _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                    if (sent.status == PYGEN_ERROR) {frame->phase_state = 0;
+                        frame->phase_state = 0;
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    if (sent.status == PYGEN_RETURN) {
+                        PyValue completed = sent.value;
+                        frame->phase_state = 0;
+                        {
+                            PyValue ir_completed = completed;
+                            assert(_PyValue_IsHome(ir_completed));
+                            IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], frame, slots, this_instr, ir_completed);
+                        }
+                    }if (!_PyValue_TryXCloseNoReentry(v)) {
+                        assert(_PyValue_IsHome(sent.value));
+                        IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
+                    }
+                    window[2] = PyValue_NULL;
+                    retval = sent.value;
+                }
+            }
+            IR_PUBLISH_TEMP(window[1], null_or_index);
+            assert(_PyValue_IsHome(retval));
+            window[2] = PyValue_NULL;
+            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
         }
 
         TARGET(SETUP_ANNOTATIONS) {
@@ -25528,6 +26017,7 @@
             _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
             FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
             slots = _PyFrame_Slots(frame);
+            IR_TRY_NATIVE_YIELD(outgoing);
             next_instr = frame->return_pc;
             if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
             LLTRACE_RESUME_FRAME();
@@ -25597,6 +26087,7 @@
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
+            IR_TRY_NATIVE_YIELD(value);
             IR_STORE_CANONICAL_RETURN(value);
             DISPATCH();
         }

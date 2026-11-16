@@ -115,8 +115,8 @@ bodies are RESUME (oparg A) and JUMP_BACKWARD_NO_INTERRUPT (target CD). There is
 no previous-PC inference, new frame field or extra ABI argument. The compiler
 stores one carried logical ID per participating operation, maps it through
 existing allocation, and requires one definition per incoming edge and one
-eventual owning consumer. The public validator checks B's bounds and agreement with the
-producer; source/debug operand decoding retains the ordinary instruction's
+eventual owning consumer. The public validator checks B's bounds and agreement
+with the producer; source/debug operand decoding retains the ordinary instruction's
 meaning. Register actual carrier homes in the existing Storage graph; require
 their physical NULL state, not just vacated ownership.
 
@@ -182,8 +182,10 @@ For LOCAL, the old owner is still in its binding on entry. After pending
 redirect handling and fresh continuation/PC selection, a callback-free commit
 captures old, publishes incoming to the actual binding, and replaces the root's
 result owner with old; then it removes that result from the root before the
-actual consuming close. DISCARD similarly removes/consumes the rooted incoming
-owner. No frame home is claimed to root the argument before that cold entry
+actual consuming close. The intermediate root store may be elided when the
+entire exchange and detachment are callback-free. A traversable root must not
+retain the consumed pointer during deallocation. DISCARD similarly removes and
+consumes the rooted incoming owner. No frame home is claimed to root the argument before that cold entry
 pushes its record. An alias of old and incoming still represents two existing
 references; no new duplicate is made. Nonfinal LOCAL admission examines old
 before mutation; successful publication followed by executed Try is guaranteed
@@ -200,6 +202,12 @@ SUBSCR_GETITEM and init-shim children use typed HOME/LOCAL/DISCARD bindings too.
 THREAD owner alone is not a CALL discriminator. Interpreter exit consumes ACC
 directly where its generated target supports it; otherwise its explicit vacant
 cell remains a priced boundary, not a fictitious frame-size saving.
+
+The generated ownership graph ends the child at the actual rooted-helper
+handoff. Its terminal checkpoint requires an empty ACC; it grants no parent
+home or result authority. The existing logical EXIT transfer describes the
+child's end. A graph captured after switching frames cannot be presented as a
+normal snapshot of the retired child.
 
 Python return must not acquire the native call's periodic poll. Native provider
 calls retain their existing reached retirement/poll order and get their result
@@ -317,7 +325,8 @@ and effect lowering, bytecodes, ceval macros/entry/completion, frame/genobject
 residence and focused behavior tests. Shared `pycore_ir.h` payload/continuation
 types, exec pointer and mode tables get one reviewed sequential interface commit.
 Frame header, interpframe, ceval headers and debug exports get a second reviewed
-commit. Backend owns remote schema ports; root owns magic and integration.
+commit. Backend owns remote schema ports; compiler owns magic and public-image
+fixtures; root owns generated products and integration.
 The closed cold-map unit is not a shared-file dependency.
 
 Raw closure inventory from selected source: return_slot/return_pc constructors
@@ -363,3 +372,10 @@ unknown-provider specialization refusal. No extra opcode/native hop may be
 silently omitted from a path total. Nonparticipant dispatch keeps low16 loads.
 No expected speedup, frame-size saving, natural benchmark coverage or parity
 claim precedes these complete receipts and root's broad protection screen.
+
+A standalone native C check of the current typed-header checkpoint confirms
+the 64-bit GIL release frame header remains 112B, with the recipient at offset
+104 (2B) and phase at 110. The executable header grows 40→48B; words remain 8B.
+`E59/execution72-geometry-checkpoint.json` pins the actual headers, compiler,
+fixture and binaries. This is layout evidence, not an interpreter build or
+qualification of a final candidate; changed headers require a fresh check.

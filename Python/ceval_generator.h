@@ -322,6 +322,31 @@ TARGET(GEN_SEND_YIELD)
     DISPATCH();
 }
 
+/* Provider success commits the yielded edge before retiring a final sent
+ * input. The result becomes the next YIELD's real input, so callbacks can
+ * redirect that continuation without any old-home retake afterward. */
+TARGET(GEN_YIELD_INPUT_EFFECT)
+{
+    _PyValueTemps *const value_temps = NULL;
+    _PyTransitionRoots roots = {
+        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
+        .result = generator_payload(ir_word), .result_present = 1};
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    int home = IR_B(*next_instr) + 2;
+    PyValue sent = frame->base[home];
+    frame->base[home] = roots.result;
+    _PyValue_CheckTemp(roots.result);
+    generator_detach_result(&roots);
+    frame->instr_ptr = next_instr + 1;
+    frame->phase_state = 0;
+    PyValue_XCLOSE(sent);
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    frame = tstate->current_frame;
+    slots = _PyFrame_Slots(frame);
+    next_instr = frame->instr_ptr;
+    DISPATCH();
+}
+
 /* A private resumed input is not an ordinary handler ABI. Generic providers
  * and effects receive it once in their authoritative input home. */
 TARGET(GEN_SEND_INPUT_HOME)

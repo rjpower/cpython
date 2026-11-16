@@ -3476,6 +3476,7 @@ class IREmitter(Emitter):
         self.error_uncovered = True
         self.error_finalized = False
         self.error_local_dst = False
+        self.generator_boundary = None
         self.send_source_parts = None
         self.error_redispatch_origin = None
         self.error_checkpoint_sites = {}
@@ -5080,6 +5081,24 @@ class IREmitter(Emitter):
                         ) -> tuple[bool, Token | None, Storage]:
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
+        if (self.generator_boundary is not None and
+                self.generator_boundary.yielded == "DELEGATED" and
+                self.send_source_parts is not None and
+                uop is self.send_source_parts[-1] and
+                _statement_text(stmt) == ["PyValue_CLOSE", "(", "v", ")", ";"]):
+            # The complete source contract proves sent.value is the owned
+            # successful provider result and that all other state is homed.
+            # A failed Try leaves v intact for the rooted effect entry.
+            self.emit("if (!_PyValue_TryXCloseNoReentry(v)) {\n")
+            self.emit("assert(_PyValue_IsHome(sent.value));\n")
+            self.emit("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, "
+                      "this_instr, sent.value);\n")
+            self.emit("}\n")
+            self.emit("window[2] = PyValue_NULL;\n")
+            self.value_kill(next(token for token in stmt.contents if token.text == "v"),
+                            storage, False)
+            storage.stack.home_node = None
+            return True, None, storage
         if not any(token.text in {"IR_GUARD_SHAPE_READ", "IR_DUP_SHAPE_READ"}
                    for token in stmt.contents):
             storage.stack.shape_read_binding = None
@@ -9212,6 +9231,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     for name in sorted({generator_word_entry(name, analysis) for name in ids}):
         out.emit(f"{function_proto(name)};\n")
     private = ("GEN_SEND_YIELD", "GEN_SEND_INPUT", "GEN_SEND_INPUT_HOME",
+               "GEN_YIELD_INPUT_EFFECT",
                "GEN_RESUME_SEND", "GEN_RESUME_STORE", "GEN_RESUME_EFFECT",
                "GEN_ENTRY_EFFECT",
                "GEN_COMPLETE_RETURN", "GEN_COMPLETE_STORE", "GEN_COMPLETE_DISCARD",

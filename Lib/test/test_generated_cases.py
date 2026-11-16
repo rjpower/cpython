@@ -384,6 +384,32 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn("IR_PUBLISH_TEMP(window[2], next);", body)
             self.assertNotIn("IR_MOVE_TO_DST", body)
 
+    def test_generator_provider_result_precedes_sent_input_effect(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        for name in ("SEND_XFER_DISCARD", "SEND_ASYNC_GEN_XFER_DISCARD"):
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    out = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(out, analysis, formats)
+                    ir_generator.generate_handler(name, instructions[name], formats[name],
+                                                  emitter, out, record)
+                    body = output.getvalue()
+                    provider = body.index("_PyValue_Send(")
+                    attempt = body.index("if (!_PyValue_TryXCloseNoReentry(v))", provider)
+                    effect = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT", attempt)
+                    clear = body.index("window[2] = PyValue_NULL;", effect)
+                    self.assertLess(provider, attempt)
+                    self.assertLess(attempt, effect)
+                    self.assertLess(effect, clear)
+                    self.assertNotIn("PyValue_CLOSE(v);", body)
+                    self.assertIn("this_instr, sent.value);", body)
+
     def test_error_ingress_keeps_native_bridge_owners(self):
         output = self.ir_output("""
         inst(OP, (value -- result)) {

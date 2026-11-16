@@ -1,6 +1,117 @@
 # Semantic IR trial results
 
-## Execution73: complete fast paths improve; protection rejects promotion
+## Execution73 final correction: generator gains retained; logging still rejects promotion
+
+Final candidate **`44f066f5fd55947edf709bbcf9bf17c607307e4b`** adds one reviewed
+correction to boundary10: generator-owned return routing moves from shared
+RETURN bodies into private `GEN_RETURN_ROUTE`. It preserves the complete new
+retirement/consumer paths, existing specialization and ordinary THREAD return
+source. Stats, DTrace, recursion credit and unlink run once before the private
+tail. Unadmitted parents retain the rooted legacy completion, with the actual
+parent refreshed after callbacks. No public IR format, frame layout or owner
+mode changes. Sol source/peer work and root integration follow the same contract.
+
+This corrects the shared compilation structure; it does **not** fix logging.
+Selected57 remains golden. Both complete candidates and their separate results
+are preserved; this report does not assemble a winner from their best cases.
+
+### Final unchanged hot8 screen
+
+Two balanced pairs, seven samples per row, 32 successful rows, CPU15/hash0/JIT
+off, stable source/ELF/config identities. Ratios are candidate/selected57 elapsed
+time; lower is better.
+
+| Workload | Mean ratio | Pair 1 | Pair 2 | Elapsed-time change |
+| --- | ---: | ---: | ---: | ---: |
+| comprehensions | 0.965114 | 0.943223 | 0.987512 | -3.49% |
+| deltablue | 0.991318 | 0.980902 | 1.001844 | -0.87% |
+| coroutines | 0.912995 | 0.910978 | 0.915017 | -8.70% |
+| generators | 0.932682 | 0.933628 | 0.931737 | -6.73% |
+| logging_silent | 1.137318 | 1.127260 | 1.147466 | +13.73% |
+| raytrace | 0.973901 | 0.977025 | 0.970788 | -2.61% |
+| spectral_norm | 0.978184 | 0.985592 | 0.970832 | -2.18% |
+| nqueens | 1.003958 | 1.005747 | 1.002172 | +0.40% |
+
+GM **0.985010428** and the meaningful-win predicate pass. Logging fails the
+ordinary per-case cap, its stricter mean cap and both per-pair caps. Independent
+raw-row/identity recomputation confirms **NO-GO**. DeltaBlue has mixed pairs;
+small means are not established speedups. Boundary10's 24.69% spectral_norm gain
+is not retained here. Its 10.44% logging loss and this 13.73% loss are separate
+comparisons, not a matched causal experiment between the candidates.
+
+No unchanged retiming, winner confirmation, all29, full-suite escalation or fresh
+upstream run follows. Historical upstream ratios do not establish this candidate's
+position versus upstream. The wider parity objective remains open.
+
+### Qualification and measured implementation tradeoff
+
+Both final builds pass 117 modules/79 shared extensions. The 24-module protocol
+rerun passes **803 release / 792 debug methods**, eight skips per role, with the
+11 host parser methods excluded from debug. Six additional retirement methods
+pass per role. All eight owner controls and rooted recursion-failure injection
+pass on the final debug ELF. HOME and retained controls explicitly require the
+new private route; the other controls also record reached route entries.
+Source qualification includes one host lowering test covering four RETURN forms
+in both record modes. Full generation changes exactly those four bodies and one
+private prototype; ordinary tables and metadata remain byte-identical.
+
+Native review finds RETURN_VALUE text **914→509 bytes**, RETURN_VALUE_EMPTY
+**1114→683 bytes**, compared with selected57's 596/780 bytes. Both still allocate
+16 local native stack bytes. The new private route occupies 412 bytes and has
+its own prologue, lookup and tail hop. Seventeen other inspected ordinary/helper
+symbols retain identical sizes and relocation-normalized instructions versus
+both baselines. This is a bounded native comparison, not whole-program identity.
+
+| Complete control | Selected57 instructions | Boundary10 | Final isolated return | Selected / final peak stack B |
+| --- | ---: | ---: | ---: | ---: |
+| Arithmetic | 223 | 224 | 223 | 80 / 80 |
+| Exact call | 479 | 481 | 479 | 80 / 80 |
+| Generic call | 1764 | 1767 | 1766 | 1328 / 1328 |
+| Yield | 245 | 255 | 255 | 24 / 24 |
+| Unique generator completion | 769 | 711 | 722 | 272 / 120 |
+| Retained generator completion | 537 | 537 | 548 | 120 / 120 |
+| Coroutine completion | 721 | 689 | 700 | 272 / 120 |
+| Two awaits with live HOME intermediate | 2099 | 2022 | 2055 | 272 / 136 |
+
+These are actual producer-through-consumer windows ending at the recorded
+ordinary parent continuation, including the helper/free and new route. Stack
+excludes the red zone. Routing adds 11 net instructions to the unique, retained
+and coroutine controls and 33 to HOME versus boundary10. Eligible unique
+receivers still bypass generic completion effects and execute actual destruction.
+The retained case is now a measured cost. Whole-path source/ELF/control and
+histogram audits pass; none of these counts predicts the benchmark ratio.
+
+### What remains unresolved
+
+The split achieves its intended source/native change but does not recover
+logging. The previous candidate's bounded PMU result—cycles +10.47%, instructions
++0.15%—belongs to boundary10, not this executable. Preserved specialization and
+small ordinary instruction differences are useful constraints; they do not
+identify frontend, prediction, dependency or state-handoff costs. Smaller RETURN
+handlers were an inadequate performance hypothesis on their own.
+
+Keep the complete generator improvements for a successor. Require a causal
+account of ordinary call/return cycle cost before choosing another source
+correction; no automatic third lane or speculative IR rewrite follows this
+checkpoint. Do not discard the fast paths, claim frame packing, tune padding or
+compiler flags, or waive logging protection. The [plan](../interpreter-performance56/plan.md)
+records the remaining work and winner-only qualification gates.
+
+Final evidence under E59:
+
+- `execution73-return-isolation-{proposal,peer}.md` and `*-v1-host.json`:
+  exact source contract, frozen source review and focused host test.
+- `execution73-boundary11-products-peer.md`: exact generated-product comparison.
+- `execution73-boundary11-{release,debug}-build.log`, `*-protocol-*` and
+  `*-retirement-*`: final builds and protocol results.
+- `execution73-boundary11-debug-owner-*` and `*-debug-entry.entry.json`:
+  reached ownership/effect and error controls.
+- `execution73-boundary11-native-*.native.json`, `*-ordinary-native-peer.md` and
+  `*-native-peer.md`: complete native costs, static comparison and independent audit.
+- `execution73-boundary11-hot8-selected57-screen/`: all raw rows and stable identities;
+  `execution73-boundary11-screen-peer.json`: independent recomputation.
+
+## Execution73 boundary10: complete fast paths improve; protection rejects promotion
 
 The checkpoint is implemented and measured at
 `dee619e80abbcab1c2a69a07411e17cc0b32ccfa` on
@@ -70,7 +181,7 @@ specialization snapshots, not a dynamic frequency census.
 | Coroutine completion | 721 | 689 | 272 / 120 |
 | Two awaits with live HOME intermediate | 2099 | 2022 | 272 / 136 |
 
-Counts span the actual producer through consumer and parent interpreter exit,
+Counts span the actual producer through consumer to its recorded parent continuation,
 including guards, helper calls, GC unlink and allocator free. HOME includes both
 SENDs, the intervening CALL, ADD and RETURN. Stack excludes the red zone. These
 single reached paths do not establish natural frequency or an upstream budget.
@@ -116,11 +227,11 @@ local stack allocations remain 16 bytes. Representative CALL/arithmetic and
 frame-clear helpers retain their sizes. Ordinary THREAD returns do not take a
 generator target lookup, so do not invent one as the source of the loss.
 
-Next source correction: isolate generator-owned return in a terminal target,
+The subsequent correction, now measured above, isolates generator-owned return in a terminal target,
 retaining the selected ordinary return state and all new generator consumers.
-Peer the owner, callback and observer boundary before implementation; measure
-complete ordinary returns and generator cycles, then apply unchanged protection
-to the changed candidate. This is a source hypothesis, not a proved 10% recovery.
+Source peer reviewed the owner, callback and observer boundary before implementation.
+Root measured complete ordinary returns and generator cycles, then applied unchanged
+protection to the changed candidate. The logging regression remained after the correction.
 Do not discard the demonstrated fast paths, add a generic fallback on their
 admitted cases, tune padding/compiler flags, or retime an unchanged loser.
 

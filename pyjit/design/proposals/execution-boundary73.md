@@ -1,8 +1,8 @@
 # Execution boundary73: complete generator transfer and effect lowering
 
-Status: implemented and protocol-qualified at `dee619e80ab`, 2026-11-16.
-The complete boundary improves generator/coroutine throughput, but fails the
-protected screen on logging and raytrace. Selected57 remains golden; the
+Status: implemented and protocol-qualified at `44f066f5fd5`, including return
+isolation, 2026-11-16. The complete boundary improves generator/coroutine
+throughput, but fails the protected screen on logging. Selected57 remains golden; the
 [trial report](../../issues/register-semantics59/report.md) owns the measured
 decision. Root owns integration, generated products and qualification. The companion
 [review73](../../issues/register-semantics59/review73.md) records the evidence
@@ -364,12 +364,53 @@ Successful close continues the already-selected result consumer without effect
 root packaging, source decoding or intermediate output publication. The actual
 guards, returning C helper, spills, GC unlink, decrements and allocator free all
 remain in the measured path. Independent source review and root adoption approve
-the correction. Final native readback reaches the helper and actual free:
+the correction. Boundary10 native readback reaches the helper and actual free:
 unique completion 711 instructions versus selected57's 769, coroutine 689 versus
 721, and the two-await HOME expression 2022 versus 2099. Retained completion is
 flat at 537. These reached-path savings do not override the protected screen.
 The proposal is `E59/execution73-cleared-receiver-proposal.md`, SHA256
 `7eeda87a0dff6de24ded69c165e0f19f580fa01717f8f548a756ebf97d572437`.
+
+### Separate ordinary RETURN from generator routing
+
+Boundary10 preserves ordinary CALL/arithmetic bodies and specialization, but
+its inline generator routing enlarges the native RETURN/EMPTY handlers. The
+protected screen rejects logging/raytrace regressions; nearly unchanged retired
+instruction counts leave their cycle-cost cause unresolved. Source review adopts
+one bounded correction, without claiming that text size explains the loss.
+
+Keep the existing generator-owner branch after result acquisition, instruction
+accounting, DTrace, recursion credit and child unlink. Its taken arm must-tail
+one private `GEN_RETURN_ROUTE` target. The five arguments carry the dying child,
+its real homes, thread state, parent semantic PC and already-owned result. The
+ordinary THREAD clear, result recipient and dispatch stay in the source handler.
+No frame field, public opcode, format identity, mapping or ordinary lookup changes.
+
+The route owns the existing outcome lookup and either tails `GEN_RETURN_RETIRED`
+or uses the exact rooted legacy clear/completion suffix for unadmitted parents.
+Refresh the current parent and slots after callback-capable clearing; honor the
+actual completion/error PC and pending redirect. Repeat none of the source entry
+actions, acquire no second result owner, and add no unrooted callback. The private
+hop and its generated native cost belong in the complete generator measurement.
+Moving this control flow out of shared RETURN reduces native live-state overlap;
+it does not guarantee register identity or a throughput gain. Exact source peer
+and root adoption cover `E59/execution73-return-isolation-proposal.md`, SHA256
+`b028b19a07114c868b40baf468d634059a3159f2216f9b06575b220425666183`.
+
+```mermaid
+flowchart TD
+    R[RETURN: take result, account, unlink once] --> O{Frame owner}
+    O -->|THREAD| T[Ordinary clear and caller recipient]
+    O -->|Generator| G[Must-tail GEN_RETURN_ROUTE]
+    G --> A{Admitted generator continuation}
+    A -->|Yes| F[GEN_RETURN_RETIRED]
+    A -->|No| L[Rooted legacy clear and completion]
+    F --> Q{Callback retirement needed}
+    Q -->|Yes| E[Rooted callback effects]
+    Q -->|No| C[Direct result consumer]
+    E --> C
+    L --> P[Refresh actual parent and completion PC]
+```
 
 ## Ownership, observation and external entry closure
 

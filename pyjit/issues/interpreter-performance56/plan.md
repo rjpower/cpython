@@ -1,46 +1,51 @@
 # Interpreter performance: combined plan
 
-## Latest checkpoint: execution-boundary73
+## Latest checkpoint: execution-boundary73 and RETURN isolation
 
-The user authorized the corrective implementation after72's rejection. Start
-from selected57 unless source review demonstrates a necessary reused component.
-The [grouped Astra review](../register-semantics59/review73.md) and independent
-source peers approve the [complete boundary contract](../../design/proposals/execution-boundary73.md).
-Sol runtime and compiler workers implemented and cross-reviewed the pinned
-interfaces, including explicit STORE_FAST/POP_TOP completion consumers.
-Root integrated, generated, built and qualified candidate `dee619e80ab`, including
-the guarded shared close of cleared receivers. Complete native controls include
-actual destruction and show savings for unique completion and coroutine/HOME
-consumers. Natural logging/raytrace snapshots retain every warmed specialization.
-The unchanged hot8 screen has GM 0.962227, with coroutines/generators about 6%
-faster and spectral_norm 24.69% faster. Logging +10.44% and raytrace +1.97%
-nevertheless fail protection. Independent review rejects promotion; selected57
-remains golden. The [report](../register-semantics59/report.md) owns exact results.
+The [grouped review](../register-semantics59/review73.md), exact source peers and
+root approved the [complete boundary contract](../../design/proposals/execution-boundary73.md).
+Sol workers implemented and cross-reviewed; root integrated, generated, built,
+qualified and measured. The complete generator paths and guarded callback-free
+receiver close remain in the candidate; none was replaced by a generic fallback
+to satisfy the checkpoint.
 
-Preserve the complete implementation and its fast paths. The next correction
-must isolate the shared ordinary return boundary from generator-specific native
-state: ordinary RETURN handlers grew even though CALL/arithmetic bodies and
-warmed bytecode images remain unchanged. Source-review a separate terminal
-generator-return entry while retaining the selected ordinary return state and
-all new generator consumers. Measure the full ordinary and generator paths,
-then rerun protection only for a changed candidate. This is a concrete source
-hypothesis, not a demonstrated explanation of logging's regression.
+Boundary10 `dee619e80ab` improves coroutine/generator throughput about 6% and
+spectral_norm 24.69%, but loses logging 10.44% and raytrace 1.97%. Preserved
+specialization and three matched PMU pairs show logging's extra cycles without
+a comparable increase in executed instructions. Native review found enlarged
+shared RETURN bodies, so root adopted a bounded source correction: one private
+GEN_RETURN_ROUTE, with ordinary return state and all generator consumers retained.
 
-The bounded final diagnostic is complete: logging executes 0.15% more instructions
-and 10.47% more cycles; raytrace 0.11% and 1.55%. Hardware attribution remains
-open. Do not substitute padding, flags or an unchanged rerun for the source
-correction, discard completed fast paths, or waive logging protection after the
-fact. No confirmation, all29, full suite or fresh upstream run follows this
-losing screen; those remain winner gates.
+That correction is complete at `44f066f5fd5`. Ordinary RETURN/EMPTY text falls
+below selected57; arithmetic and exact-call whole-path counts match selected57.
+The extra generator hop is charged. Protocol, owner, native and error controls
+pass. The final protected screen improves coroutines 8.70%, generators 6.73%,
+comprehensions 3.49% and raytrace 2.61%, but loses logging 13.73%. GM 0.985010
+passes; logging protection fails. Independent review rejects promotion.
+Selected57 remains golden. The [report](../register-semantics59/report.md) owns
+both complete results and their evidence limits.
 
-Preserve semantic specialization when choosing physical placement. Separate
-callback-capable retirement from ordinary transfer without retaining the old
-general completion machinery on the fast path. Finalizing receivers are a real
-path to price, not an assumed rare exception. Defer frame packing until actual
-smaller layouts or fewer stores are demonstrated. Root also completed three matched
-cycles/instructions pairs and one bounded sample per role for logging/raytrace
-on frozen72 and selected57. This diagnostic explains the rejected experiment;
-it cannot reverse its sealed screen or justify an unchanged retiming.
+## Remaining work and constraints
+
+1. Preserve both implementations, source contracts and sealed evidence. Do not
+   retime either executable unchanged or combine their best individual results.
+2. The next correction needs a causal account of ordinary call/return cycle
+   cost. RETURN size reduction and equivalent instruction counts are now proved
+   insufficient as predictors. Distinguish frontend/prediction costs from native
+   dependency and state handoff before choosing another representation change;
+   do not assert which explains logging from sparse samples.
+3. Retain complete generator consumers and existing specializations in any
+   successor. No automatic third source lane, padding/flag search, renewed
+   frame-packing claim or weaker protection follows from these rejected screens.
+4. Once a changed candidate passes unchanged hot8 protection, run finite
+   confirmation, all29, full qualification and a direct upstream comparison.
+   No fresh upstream ratio or parity claim exists for this checkpoint.
+
+The earlier frozen72 diagnosis is complete and remains separate. It establishes
+raytrace specialization loss there, not the cause of the current logging loss.
+Source peers review the next concrete correction before implementation; root
+owns all target execution and measured selection. Astra stays out of the
+component loop unless the architecture changes.
 
 ## Selected baseline and closed work
 
@@ -148,9 +153,9 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Boundary73 checkpoint complete; next shared-return correction remains source-gated | Preserve selected57 and candidate evidence; own changed-candidate validation |
-| Sol 6.1 compiler worker | Boundary selection, public validation and focused tests complete | Peer the next generated return split before implementation |
-| Sol 6.1 execution worker | Complete generator transfer and callback retirement complete | Propose the ordinary/generator return split, preserving all consumers |
+| Root | Boundary73 and return-isolation checkpoints complete | Preserve selected57 and candidate evidence; own changed-candidate validation |
+| Sol 6.1 compiler worker | Boundary selection, public validation and focused tests complete | Peer the next concrete source contract before implementation |
+| Sol 6.1 execution worker | Complete generator transfer and callback retirement complete | Return isolation complete; preserve all consumers in successors |
 | Sol 6.1 cold reviewer | Native, ownership, specialization and screen reviews complete | Audit actual whole paths and protection for any successor |
 
 Both72 ABI implementation lanes are frozen. The layout72 and both71 screens remain closed. Fresh

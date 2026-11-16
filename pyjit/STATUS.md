@@ -2,51 +2,49 @@
 
 ## Live state
 
-Execution-boundary73 is implemented, protocol-qualified and measured, but
-unselected. The user authorized implementation of the
-complete generator cycle, preservation of specialized operations, and separation
-of callback effects from ordinary transfers. The
-[combined contract](design/proposals/execution-boundary73.md) has grouped Astra,
-independent source and root adoption GO. Root has integrated the Sol runtime
-and compiler source and generated the combined products. Independent comparison
-preserves existing instruction contracts and ordinary CALL/arithmetic bodies.
-Candidate `dee619e80ab` builds both roles with 117 modules and 79 shared extensions.
-All 22 new boundary tests and two discovered crash regressions pass per role.
-The fixes resolve monitoring wrappers before native completion and avoid reading
-uninitialized Python-frame fields on interpreter entry trampolines. Explicit
-STORE_FAST/POP_TOP consumers are implemented; magic 64427 invalidates earlier
-cached shapes. Combined protocol qualification passes 803 release and 792 debug
-methods across 24 modules, with eight skips per role; debug omits 11 host parser
-checks. The corrected callback-free receiver close passes six new behavioral
-methods on both roles. All eight native cost controls pass: unique generator
-completion is now 711 instructions versus selected57's 769, coroutine completion
-689 versus 721, and two-await HOME completion 2022 versus 2099. Retained completion
-is flat; yield retains ten extra instructions. These include actual deallocation,
-not just private-handler bodies. The earlier blanket root-chain guard declined
-an empty STAGED record; the corrected guard excludes actual receiver-frame
-authority. All eight final debug owner controls and the protocol refresh pass.
-The corrected entry-failure control reaches ordinary SEND and verifies rooted
-RecursionError allocation and recovery; its earlier unreached injection remains
-recorded. Natural logging/raytrace snapshots preserve all 659/597 warmed
-specializations and matching code-image bytes.
+Execution-boundary73 and its bounded RETURN isolation correction are implemented,
+protocol-qualified and measured. Final candidate `44f066f5fd5` remains unselected;
+selected57 stays golden. Sol 6.1 workers implemented and cross-reviewed; root
+integrated, generated, qualified and measured both candidates.
 
-The unchanged two-pair hot8 screen has stable identities and 32 successful
-rows. Candidate/selected57 geometric mean is **0.962227**, but protection fails:
-coroutines improve 6.37%, generators 5.98% and spectral_norm 24.69%; logging
-regresses 10.44% and raytrace 1.97%. Comprehensions improves 2.03% with mixed
-pairs, DeltaBlue regresses 0.92%, and nqueens improves 0.44%. Independent review
-confirms no promotion. No winner confirmation, all29, full suite or new upstream
-comparison follows for this executable.
+The complete generator/coroutine path handles yield, resume, return, real HOME
+results, direct consumers, observers and callback retirement. A guarded shared
+close avoids effect packaging for callback-free completed receivers. The final
+correction moves generator routing out of shared RETURN bodies into one private
+tail entry. Public IR and frame layout stay unchanged. The native RETURN/EMPTY
+bodies shrink from boundary10's 914/1114 bytes to 509/683, below selected57's
+596/780; the private route and its cost are counted separately.
 
-A bounded three-pair counter comparison finds logging cycles +10.47% with
-instructions +0.15%, and raytrace cycles +1.55% with instructions +0.11%.
-The increased cost per instruction is measured; its hardware cause is not.
-The complete fast paths remain preserved in the candidate branch. The
-[trial report](issues/register-semantics59/report.md) owns results and evidence;
-the [plan](issues/interpreter-performance56/plan.md) records the remaining work.
-Root completed the bounded
-[logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
-on immutable selected57 and rejected72; this does not reopen72 selection.
+Both final builds pass 117 modules/79 shared extensions. The 24-module protocol
+passes 803 release and 792 debug methods, eight skips each; debug excludes 11
+host parser checks. Six additional retirement methods, eight owner controls,
+injected rooted recursion failure and eight native cost controls pass. Arithmetic
+and exact-call controls match selected57's counts; unique generator completion
+is 722 versus 769, coroutine 700 versus 721, and two-await HOME 2055 versus 2099.
+Retained completion costs 11 more instructions and yield ten more. These are
+reached-path costs, not throughput predictions or full-system qualification.
+
+The final two-pair hot8 screen has 32 successful rows and stable identities.
+Candidate/selected57 GM is **0.985010**. Coroutines improve 8.70%, generators 6.73%,
+comprehensions 3.49%, raytrace 2.61%, spectral_norm 2.18% and DeltaBlue 0.87%;
+nqueens regresses 0.40%. **Logging regresses 13.73%**, failing protection in both
+pairs. Independent review rejects promotion. No winner confirmation, all29,
+full suite or fresh upstream comparison follows.
+
+The earlier boundary10 candidate `dee619e80ab` is separately preserved, including
+its ELF copies: GM 0.962227, but logging +10.44% and raytrace +1.97%. Its natural
+snapshots retain all 659/597 warmed logging/raytrace specializations. Its bounded
+PMU diagnosis finds logging cycles +10.47% with instructions +0.15%. Those
+counters belong to boundary10, not the final return-isolated executable.
+Outlining RETURN did not solve logging; neither smaller handlers nor the two
+builds establish a hardware cause. Do not combine their best benchmark results.
+
+The complete fast paths remain preserved. The
+[trial report](issues/register-semantics59/report.md) owns both results,
+qualification and causal limits; the [plan](issues/interpreter-performance56/plan.md)
+records the remaining common call/return cycle-cost problem. The older
+[diagnosis](issues/register-semantics59/execution73-diagnosis.md) concerns frozen72
+and does not reopen its selection decision.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
 The active runtime is selected57 at

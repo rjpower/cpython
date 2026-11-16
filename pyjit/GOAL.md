@@ -11,18 +11,21 @@ exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
 Latest checkpoint: [execution-boundary73](design/proposals/execution-boundary73.md)
-is implemented, protocol-qualified and measured at `dee619e80ab`. Complete
-generator/coroutine paths improve about 6%, but logging and raytrace regress,
-so selected57 remains golden. Existing specialization coverage is preserved;
-callback-free completed receiver destruction now avoids effect packaging.
-The [report](issues/register-semantics59/report.md) separates these real gains
-from the failed protection gate. Next: source-review isolation of generator
-return handling from the shared ordinary return path, whose native body grew.
-Counters show increased cycle cost rather than substantial extra instructions;
-they do not prove the hardware cause. Retain the completed fast paths and
-validate a changed candidate before promotion. Astra owns grouped architecture
-review; Sol 6.1 owns source and cross-review; root owns integration and measurement.
-Frame packing waits for demonstrated layout and store reductions.
+and its RETURN isolation correction are implemented, protocol-qualified and
+measured at `44f066f5fd5`. Coroutines improve 8.70% and generators 6.73% versus
+selected57, but logging regresses 13.73%, so golden is unchanged. Complete fast
+paths, shared callback-free destruction and private generator-return routing
+remain preserved. The [report](issues/register-semantics59/report.md) records
+both failed screens without combining their best results.
+
+The common call/return cycle-cost problem remains. The prior candidate's PMU
+counts and unchanged specialization exclude a large executed-work increase as
+its logging explanation; they do not establish a hardware cause. Smaller
+ordinary RETURN handlers did not recover logging. Retain the completed paths,
+require a concrete causal case before another correction, and validate changed
+candidates before promotion. Astra owns grouped architecture review; Sol 6.1
+owns source and cross-review; root owns integration and measurement. Frame
+packing waits for demonstrated layout and store reductions.
 
 Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)

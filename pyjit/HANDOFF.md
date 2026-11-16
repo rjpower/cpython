@@ -9,87 +9,58 @@ implemented and protocol-qualified, but rejected by its protected screen. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
-## Current work
+## Completed checkpoint and retained worktrees
 
-Execution-boundary73 has grouped Astra, independent source and root adoption GO.
-P and W implement from selected57 after cross-review of the runtime and compiler
-contracts in `E59/execution73-{runtime,compiler}-proposal.md`. The subsequent
-HOME amendment is in the canonical design: a live result can require its real
-scratch home across another call or await; that necessary store earns no
-home-elimination credit.
+Boundary73 and its bounded return-isolation correction have completed source
+review, integration, generation, protocol/native qualification and separate
+protected screens. Both are unselected. The next source change requires a
+concrete causal case; do not repeat either screen or weaken its gates.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Clean candidate `dee619e80ab`; both `execution73-boundary10` builds pass 117/79 |
-| P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
-| W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
+| G | `pyjit/execution73-boundary-integrated` | Clean final candidate `44f066f5fd55947edf709bbcf9bf17c607307e4b`; both boundary11 builds pass 117/79 |
+| P | `pyjit/execution73-return-isolation` | Clean source `557c225602c`; all source integrated |
+| W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
 
-P owns the initial shared boundary header. W consumes it, adds the bounded
-common predicates and tests, and cross-reviews P. Root owns generation,
-integration, builds, target execution and timing. Workers must not run target
-jobs or alter immutable controls. Source integration includes the compiler,
-runtime, rooted low-recursion entry and monitoring identity corrections.
-Boundary8 generated products have independent peer GO: all ordinary contracts
-and CALL/arithmetic bodies are preserved. Implementation corrections cover
-virtual cursor publication, provider-result rooting, explicit STORE_FAST/POP_TOP
-consumption, transparent monitoring target selection and interpreter-trampoline
-retirement. The two matched observation probes distinguish PRE source attribution
-from POST consumer attribution. No runtime behavior was changed to satisfy an
-incorrect fixture.
+Magic remains 64427. The return correction changes no public layout, metadata or
+ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;
+`44f066f5fd5` commits its two generated products. The design records the exact
+private route contract and independent source/product adoption.
 
-Both builds match `dee619e80ab`; magic is 64427. All 22 new boundary methods plus
-the two observed crash regressions pass per role in `execution73-boundary8-fixes`.
-The 24-module combined protocol check passes 803 release and 792 debug methods,
-with eight skips each, refreshed on boundary10. Debug explicitly excludes 11
-host parser checks. The first entry-recursion injection did not
-reach its private breakpoint. The corrected control admits the actual ordinary
-SEND entry and passes in `execution73-boundary10-debug-entry`, preserving the
-failed receipt and all root/error/recovery checks.
-The guarded receiver correction is now integrated after exact peer review:
-P `c4e0e082af4`, fixture `0352cd4b3d1`, root-identity correction `c6f017b1d5e`.
-Six new retirement methods pass both boundary10 roles. All eight final native
-controls pass: unique 711, retained 537, coroutine 689, HOME 2022 instructions.
-Compared with selected57, unique/coroutine/HOME native stack falls to 120/120/136B
-from 272B; yield and ordinary control costs remain as boundary8. The new helper
-and actual free execute, with no completion effect in the eligible controls.
-Boundary9's 918-instruction unique completion was a failed admission: an empty,
-disarmed STAGED root remained linked. The actual root readback and peer-approved
-frame-identity correction are retained; do not repeat blanket root-chain refusal.
-All eight final owner controls pass. HOME's old controller incorrectly required
-an effect for its callback-free numeric fixture. Its peer-reviewed correction
-requires both actual normal HOME sites exactly once, both direct completions,
-and no effects; forced-callback cases still require effects. The fresh receipt
-is `execution73-boundary10-debug-owner-home2`; the failed receipt is preserved.
-Natural snapshots preserve all 659 logging and 597 raytrace specialized sites.
+Final boundary11 qualification: 803 release / 792 debug methods in 24 modules,
+eight skips each; debug omits 11 host parser methods. Six additional retirement
+methods pass per role. All eight debug owner controls and the rooted recursion
+failure control pass. HOME and retained controls explicitly require the new
+GEN_RETURN_ROUTE entry. All eight release native controls pass, including the
+extra private hop. Ordinary arithmetic/exact counts match selected57; unique,
+coroutine and HOME completion remain lower; retained completion costs 11 more
+instructions and yield ten more. See the report for the exact table.
 
-The screen `E59/execution73-hot8-selected57-screen` finishes all 32 rows with
-stable identities. Hot8 GM is 0.962227, but logging 1.104419 and raytrace
-1.019669 fail protection. The independent verdict is
-`E59/execution73-boundary10-screen-peer.md`. Preserve G and its builds; do not
-retime this executable or run winner confirmation/all29. No target job remains.
-The bounded diagnostic is complete in `E59/execution73-boundary10-diagnostic`:
-three counter pairs and one sample per role for each of logging/raytrace.
-See the trial report for ratios, limitations and the next integration constraint.
-Earlier build/test failures and
-matched probes remain under `execution73-boundary{3,4,5,6,7}`.
+`E59/execution73-boundary11-hot8-selected57-screen` has 32 successful rows and
+stable identities. GM is 0.985010; logging 1.137318 fails protection in both pairs.
+The independent verdict and whole-path audit are in
+`E59/execution73-boundary11-native-peer.md`, with screen recomputation JSON.
+No winner confirmation, all29, full suite or fresh upstream run follows. No
+target job remains; G and its build directories are frozen at this checkpoint.
 
-Root's focused protocol driver is `E59/execution73-qualify-protocol.py`; it records
-its exact selections and delegates identity-checked execution to run-checks.
-The native controller now accepts a proved private GEN_SEND_INPUT producer for
-the complete mode while retaining the ordinary SEND start and identical consumer
-end. Its previous version and selected receipts remain intact.
+Earlier boundary10 is preserved at `pyjit/execution73-boundary10-measured`,
+`dee619e80abbcab1c2a69a07411e17cc0b32ccfa`. Its ELF copies are
+`E59/execution73-boundary10-{release,debug}.elf`, with hashes and omitted native
+source-file digests in `execution73-boundary10-retained-identity.json`.
+They are static evidence after G advances, not runnable controls against G's new
+source. Its screen is `execution73-hot8-selected57-screen`; its finite PMU
+comparison is `execution73-boundary10-diagnostic`. Do not attribute those PMU
+ratios to boundary11. The earlier frozen72 comparison remains separately in
+`execution73-diagnostic` and the canonical [diagnosis](issues/register-semantics59/execution73-diagnosis.md).
 
-Root completed and sealed the bounded frozen72 logging/raytrace diagnosis in
-`E59/execution73-diagnostic`, with driver `E59/execution73-diagnostic-driver.py`.
-The [diagnosis](issues/register-semantics59/execution73-diagnosis.md) owns its
-findings. Eight selected57 native controls are ready, including retained versus
-finalizing receivers and a two-await expression with a live intermediate result.
-Controllers are `E59/execution73-native-{fixture,controller,run}.py`;
-`execution73-native-control-peer.md` records independent readback.
+Reusable root-only controls are `E59/execution73-{native,owner,entry}-*.py` and
+`execution73-qualify-protocol.py`. Every new invocation needs a fresh tag/manifest.
+The HOME controller's initial effect-only expectation and the first unreached
+entry injection remain preserved as failed evidence; their corrected controls
+retain callback, owner and reached-entry checks. No prior receipt is overwritten.
 
-The user authorized this corrective implementation and the bounded diagnosis.
-Closed-trial stop rules do not prohibit73; they prohibit restarting a rejected
-executable unchanged. Astra remains outside the component implementation loop.
+Astra owns grouped architecture review, Sol workers source and independent peer,
+and root integration/target jobs/selection. Preserve earlier refs and evidence.
 
 ## Closed trials and retained evidence
 

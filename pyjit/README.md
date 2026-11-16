@@ -21,10 +21,11 @@ exact results, limits and the next design constraints. Follow the goal → plan 
 architecture/status chain above; rejected trials are evidence, not prerequisites.
 
 [Execution-boundary73](design/proposals/execution-boundary73.md) is implemented
-and measured. Generator/coroutine throughput improves about 6%, but logging and
-raytrace regress, so it is not selected. The complete fast paths and retained
-specializations are preserved in the candidate. The trial report owns this
-checkpoint; the active plan identifies the next shared-return correction.
+and measured, including the RETURN isolation correction. Coroutines improve
+8.70% and generators 6.73%, but logging regresses 13.73%, so it is not selected.
+The complete fast paths and retained specializations are preserved in the
+candidate. The trial report owns this checkpoint; the active plan identifies
+the remaining call/return cycle-cost problem.
 The [bounded diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 records confirmed specialization losses in rejected72 and the distinct logging
 regression. The active plan records review, implementation and integration roles.

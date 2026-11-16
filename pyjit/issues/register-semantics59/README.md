@@ -19,9 +19,10 @@ owns the next architecture decision, and [handoff](../../HANDOFF.md) owns runtim
 paths and commands. Earlier59–71 attempts remain closed; their designs/reviews
 are historical evidence. Execution-boundary73 has completed grouped review,
 implementation, protocol qualification and the protected screen. Its complete
-generator/coroutine paths improve, but logging/raytrace regress; no promotion.
-Preserve the implementation and measured evidence. The next correction targets
-the shared ordinary return boundary, subject to source review. The bounded
+generator/coroutine paths improve, but logging regresses; no promotion.
+The subsequent shared-return isolation correction also fails logging protection.
+Preserve both implementations and measured evidence; the cycle-cost cause remains
+open, and another correction requires a concrete source contract. The bounded
 [diagnosis](execution73-diagnosis.md) explains rejected72 without reopening its
 selection. The new work must demonstrate
 a complete execution-boundary saving, preserve specialization coverage, and
@@ -48,8 +49,8 @@ remain evidence; they are not proposed anew.
 | --- | --- | --- |
 | Root | Completed integration, qualification and rejected screen | Own report and changed-candidate validation |
 | Astra | Grouped execution-boundary review complete | Outside the component implementation loop |
-| Sol 6.1 compiler worker | Specialization preservation and continuation admission complete | Next source peer: shared return boundary |
-| Sol 6.1 execution worker | Complete generator transfer and retirement complete | Next source proposal: ordinary/generator return isolation |
+| Sol 6.1 compiler worker | Specialization preservation and continuation admission complete | Return isolation source peer complete |
+| Sol 6.1 execution worker | Complete generator transfer and retirement complete | Return isolation implemented and measured |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

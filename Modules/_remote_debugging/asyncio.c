@@ -429,6 +429,10 @@ get_awaited_coro_address(
         return -1;
     }
     int handler = IR_HANDLER(word);
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+    if (boundary != NULL) {
+        handler = boundary->ordinary;
+    }
     int receiver = (int)IR_D(word);
     if ((handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) ||
         IR_A(word) != return_slot ||

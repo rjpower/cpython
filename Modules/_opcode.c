@@ -414,6 +414,11 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {"call_input_holes", "bit k: CALL window input k is virtual NULL and is not read"},
     {"error_routes", "complete exceptional routes, including conditional bridges and local publication"},
+    {"ordinary_handler", "source handler before generator boundary placement"},
+    {"generator_yielded_consumer", "statically selected yielded consumer"},
+    {"generator_completed_consumer", "statically selected completed consumer"},
+    {"generator_resume_consumer", "statically selected resume consumer"},
+    {"generator_boundary_flags", "cold source closure and placement flags"},
     {NULL}
 };
 
@@ -435,6 +440,7 @@ static PyObject *
 ir_contract_row(PyTypeObject *type, int h)
 {
     const _PyIRFormat *fmt = &_PyIR_Formats[h];
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(h);
     PyObject *row = PyStructSequence_New(type);
     if (row == NULL) {
         return NULL;
@@ -463,6 +469,11 @@ ir_contract_row(PyTypeObject *type, int h)
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->call_input_holes),
         PyLong_FromLong(fmt->error_routes),
+        PyLong_FromLong(boundary->ordinary),
+        PyLong_FromLong(boundary->yielded_consumer),
+        PyLong_FromLong(boundary->completed_consumer),
+        PyLong_FromLong(boundary->resume_consumer),
+        PyLong_FromLong(boundary->flags),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,
@@ -643,6 +654,14 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_ROLE_LOCAL_MOVE", _PyIR_ROLE_LOCAL_MOVE);
     ADD_IR_CONSTANT("IR_ROLE_CELL", _PyIR_ROLE_CELL);
     ADD_IR_CONSTANT("IR_ROLE_IN0", _PyIR_ROLE_IN0);
+    ADD_IR_CONSTANT("GEN_BOUNDARY_CLOSED", _PyIR_GEN_BOUNDARY_CLOSED);
+    ADD_IR_CONSTANT("GEN_CONSUMER_NONE", _PyIR_GEN_CONSUMER_NONE);
+    ADD_IR_CONSTANT("GEN_CONSUMER_DELEGATED", _PyIR_GEN_CONSUMER_DELEGATED);
+    ADD_IR_CONSTANT("GEN_CONSUMER_RETURN", _PyIR_GEN_CONSUMER_RETURN);
+    ADD_IR_CONSTANT("GEN_CONSUMER_STORE_LOCAL", _PyIR_GEN_CONSUMER_STORE_LOCAL);
+    ADD_IR_CONSTANT("GEN_CONSUMER_DISCARD", _PyIR_GEN_CONSUMER_DISCARD);
+    ADD_IR_CONSTANT("GEN_CONSUMER_SEND", _PyIR_GEN_CONSUMER_SEND);
+    ADD_IR_CONSTANT("GEN_CONSUMER_HOME", _PyIR_GEN_CONSUMER_HOME);
     ADD_IR_CONSTANT("IR_LOC_NONE", _PyIR_LOC_NONE);
     ADD_IR_CONSTANT("IR_LOC_A", _PyIR_LOC_A);
     ADD_IR_CONSTANT("IR_LOC_B", _PyIR_LOC_B);

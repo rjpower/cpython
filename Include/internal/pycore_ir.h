@@ -109,7 +109,7 @@ static_assert(sizeof(_PyIRGeneratorBoundary) == 8,
 
 extern const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[];
 /* Invalid handler returns NULL; an ordinary handler has a NONE shape. */
-extern const _PyIRGeneratorBoundary *_PyIR_GeneratorBoundaryOf(int handler);
+PyAPI_FUNC(const _PyIRGeneratorBoundary *) _PyIR_GeneratorBoundaryOf(int handler);
 /* Cold placement selection: -1 means that complete source closure is absent. */
 extern int _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
                                         int completed_consumer,

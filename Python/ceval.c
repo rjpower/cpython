@@ -2399,6 +2399,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
+#include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 
 /* The only non-tail call into the handlers.  GCC 15.2 miscompiles a call

@@ -38,6 +38,8 @@ from ir_generator import (
     binary_op_handlers,
     binary_ops,
     compute_formats,
+    generator_boundaries,
+    generator_boundary_source_closed,
     handler_contracts,
     handler_ids,
     handler_instructions,
@@ -54,6 +56,7 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
+    name = name.split("_XFER_", 1)[0]
     if name == "RETURN_VALUE_EMPTY":
         return "RETURN_VALUE"
     if name == "INSTRUMENTED_RETURN_VALUE_EMPTY":
@@ -79,16 +82,18 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
     dispatch = handler_ids(analysis)
     insts = handler_instructions(analysis)
     binary = set(binary_op_handlers(analysis))
+    boundaries = generator_boundaries(analysis)
     bases = {}
     flags = {}
     for name in ids:
-        inst = insts.get(name) or analysis.instructions.get(name)
-        base = inst.family.name if inst is not None and inst.family else name
-        if name.startswith("INSTRUMENTED_") and base == name:
-            original = name[len("INSTRUMENTED_"):]
+        ordinary = boundaries[name].base if name in boundaries else name
+        inst = insts.get(name) or analysis.instructions.get(ordinary)
+        base = inst.family.name if inst is not None and inst.family else ordinary
+        if ordinary.startswith("INSTRUMENTED_") and base == ordinary:
+            original = ordinary[len("INSTRUMENTED_"):]
             if original in ids:
                 base = original
-        call_role = call_role_variant(name)
+        call_role = call_role_variant(ordinary)
         if call_role is not None:
             base = call_role[1]
         bases[name] = base
@@ -99,18 +104,19 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
                 parts.append("_PyIR_H_SAVES_IP")
         if inst is not None and inst.family:
             parts.append("_PyIR_H_SPECIALIZED")
-        if name.startswith("INSTRUMENTED_"):
+        if ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_INSTRUMENTED")
         if name in binary:
             parts.append("_PyIR_H_BINARY_OP")
-        if name in analysis.ir_only or name in EXECUTION_VARIANTS or call_role is not None:
+        if (name in analysis.ir_only or name in EXECUTION_VARIANTS
+                or name in boundaries or call_role is not None):
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
         if name in analysis.pseudos:
             parts.append("_PyIR_H_PSEUDO")
         if name in dispatch and (inst is None or not inst.family) \
-                and not name.startswith("INSTRUMENTED_"):
+                and not ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_PRISTINE")
             fmt = formats[name]
             if (fmt.fb != "_PyIR_LOC_NONE" and inst is not None
@@ -269,6 +275,24 @@ def generate_ir_metadata(
             for name in sorted(fact_ids, key=fact_ids.get):
                 out.emit(f"[{fact_ids[name]}] = {values[name]}, /* {name} */\n")
             out.emit("};\n#endif\n\n")
+        boundaries = generator_boundaries(analysis)
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[IR_NUM_HANDLERS] = {\n")
+        for name in sorted(fact_ids, key=fact_ids.get):
+            boundary = boundaries.get(name)
+            if boundary is None:
+                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[name]}, {fact_ids[name]}, 0, 0, 0, 0 }},\n")
+            else:
+                flags = "_PyIR_GEN_BOUNDARY_PLACED"
+                if generator_boundary_source_closed(boundary, analysis, formats):
+                    flags += " | _PyIR_GEN_BOUNDARY_CLOSED"
+                if boundary.base.startswith("INSTRUMENTED_"):
+                    flags += " | _PyIR_GEN_BOUNDARY_OBSERVER"
+                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[boundary.base]}, {fact_ids[name]}, "
+                         f"_PyIR_GEN_CONSUMER_{boundary.yielded}, "
+                         f"_PyIR_GEN_CONSUMER_{boundary.completed}, "
+                         f"_PyIR_GEN_CONSUMER_{boundary.resume}, {flags} }},\n")
+        out.emit("};\n#endif\n\n")
         ranges = analysis.numbers.ranges
         if ranges:
             out.emit("/* Numbers reserved by ir_numbers.txt for the steps that "

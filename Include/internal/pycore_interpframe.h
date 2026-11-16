@@ -627,6 +627,9 @@ enum {
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
 int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
+/* Stop before reentry, retaining a generator's executable owner. DONE means
+ * only its exception state can remain; the outlined entry owns that close. */
+int _PyFrame_TryClearGenerator(PyGenObject *gen);
 PyValue _PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason);
 void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
                             int initial_extent, PyValue result,

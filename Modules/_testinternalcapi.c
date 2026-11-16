@@ -5177,6 +5177,10 @@ check_frame_copy(PyObject *args, int mode)
         while (site < exec->nwords) {
             protocol = code->co_words[site];
             int handler = IR_HANDLER(protocol);
+            const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+            if (boundary != NULL) {
+                handler = boundary->ordinary;
+            }
             if ((created && _PyIR_BaseOpcode(handler) == RETURN_GENERATOR) ||
                 (delegated && (handler == YIELD_DELEGATED ||
                                handler == INSTRUMENTED_YIELD_DELEGATED)))

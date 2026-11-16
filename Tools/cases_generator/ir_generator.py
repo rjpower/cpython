@@ -183,6 +183,92 @@ EXECUTION_VARIANTS = {
 
 
 @dataclass(frozen=True)
+class GeneratorBoundary:
+    base: str
+    yielded: str = "NONE"
+    completed: str = "NONE"
+    resume: str = "NONE"
+
+
+def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
+    """Complete source families; private outcome targets do not change IO."""
+    result = {}
+    for name, inst in all_instructions(analysis).items():
+        family = inst.family.name if inst.family else name
+        if family in {"SEND", "INSTRUMENTED_SEND"} or name == "CLEANUP_THROW":
+            for consumer in ("RETURN", "STORE_LOCAL", "DISCARD", "HOME"):
+                result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
+                    name, "NONE" if name == "CLEANUP_THROW" else "DELEGATED", consumer)
+        elif name in {"YIELD_VALUE", "YIELD_DELEGATED",
+                      "INSTRUMENTED_YIELD_VALUE", "INSTRUMENTED_YIELD_DELEGATED"}:
+            for consumer in ("SEND", "STORE_LOCAL"):
+                result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
+                    name, resume=consumer)
+    return result
+
+
+def generator_word_entry(name: str, analysis: Analysis) -> str:
+    """Shape identities share a WORD body without an adapter tail hop."""
+    boundaries = generator_boundaries(analysis)
+    boundary = boundaries.get(name)
+    if boundary is None:
+        return name
+    if boundary.resume != "NONE":
+        return boundary.base
+    return min(key for key, row in boundaries.items() if row.base == boundary.base)
+
+
+def generator_boundary_source_closed(boundary: GeneratorBoundary,
+                                     analysis: Analysis,
+                                     formats: dict[str, "IRFormat"]) -> bool:
+    """Only complete audited sources may publish an executable shape."""
+    insts = all_instructions(analysis)
+    resume = insts.get("RESUME")
+    jump = insts.get("JUMP_BACKWARD_NO_INTERRUPT")
+    if resume is None or jump is None or normal_transfer_kind(
+            resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
+        return False
+    jump_parts = [part for part in jump.parts if isinstance(part, Uop)]
+    expected = "{ assert(JUMP_TARGET(oparg) < next_instr); JUMPTO(oparg); }"
+    if (len(jump.parts) != 1 or len(jump_parts) != 1 or
+            canonical_body_tokens(jump_parts[0]) !=
+            [token.text for token in tokenize(expected)]):
+        return False
+    # A new family member without the same source contract closes no shape;
+    # eligibility is never recovered by declining its specialization later.
+    send_members = [inst for name, inst in insts.items()
+                    if name == "SEND" or inst.family is not None and
+                    inst.family.name == "SEND"]
+    if not send_members or any(send_source_contract(inst, formats[inst.name]) is None
+                               for inst in send_members):
+        return False
+    inst = insts[boundary.base]
+    fmt = formats[boundary.base]
+    if boundary.resume != "NONE":
+        return (canonical_frame_transfer_input(inst) or abrupt_suspend_contract(inst, fmt)
+                or metadata_only_passthroughs(inst) == frozenset({1}))
+    if boundary.yielded != "NONE":
+        return send_source_contract(inst, fmt) is not None
+    # The existing typed completion marker owns its canonical argument and
+    # checks the complete four-input retirement window.
+    return (fmt.window and fmt.field_of(ROLE_DST) == "A" and
+            fmt.field_of(ROLE_BASE) == "B" and len(external_io(inst)[0]) == 4 and
+            sum(token.text == "IR_COMPLETE_STEP" for token in uop_token_list(inst)) == 1)
+
+
+def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
+    """Intersect only bodies selectable with the same physical entry."""
+    boundaries = generator_boundaries(analysis)
+    groups = {}
+    for name in handler_instructions(analysis):
+        boundary = boundaries.get(name)
+        shape = None if boundary is None else (
+            boundary.yielded, boundary.completed, boundary.resume)
+        groups.setdefault((formats[name].group, shape), []).append(name)
+    return groups.values()
+
+
+@dataclass(frozen=True)
 class CallRoleFamily:
     base: str
     member_prefix: str
@@ -238,6 +324,7 @@ def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
 
 
 def canonical_handler(name: str) -> str:
+    name = name.split("_XFER_", 1)[0]
     role = call_role_variant(name)
     if role is not None:
         return role[0]
@@ -1194,7 +1281,8 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + list(execution_variants(analysis)) + sorted(call_role_variants(analysis)))
+             + list(execution_variants(analysis)) + sorted(call_role_variants(analysis))
+             + sorted(generator_boundaries(analysis)))
     table = analysis.numbers
     for name in names:
         ids[name] = table.number(
@@ -1214,6 +1302,8 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
             result[name] = result[variant.base]
     for name, (base, _, _) in call_role_variants(analysis).items():
         result[name] = result[base]
+    for name, boundary in generator_boundaries(analysis).items():
+        result[name] = result[boundary.base]
     return result
 
 
@@ -2373,6 +2463,8 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
         formats[name] = fmt
     for name, (base, _, _) in call_role_variants(analysis).items():
         formats[name] = formats[base]
+    for name, boundary in generator_boundaries(analysis).items():
+        formats[name] = formats[boundary.base]
     return formats
 
 
@@ -3368,6 +3460,7 @@ class IREmitter(Emitter):
     def __init__(self, out: CWriter, analysis: Analysis,
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
+        self.analysis = analysis
         self.formats = formats
         # Global labels use the same emitter without entering emit_handler.
         # They have no certifying source contract or per-handler receipts.
@@ -3400,6 +3493,7 @@ class IREmitter(Emitter):
         self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
+        self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
@@ -3606,6 +3700,7 @@ class IREmitter(Emitter):
         self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
         self.abrupt_prefix = True
         self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
         self.emit("next_instr = frame->return_pc;\n")
         self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")
@@ -5497,6 +5592,14 @@ class IREmitter(Emitter):
             self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
             return
         if inst.family is not None:
+            if self.generator_boundary is not None:
+                boundary = self.generator_boundary
+                head = f"{inst.family.name}_XFER_{boundary.completed}"
+                if head not in generator_boundaries(self.analysis):
+                    raise analysis_error("generator deopt has no complete source shape", inst.where)
+                self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
+                self.emit(f"JUMP_TO_PREDICTED({generator_word_entry(head, self.analysis)});\n")
+                return
             super().emit_jump_to_predicted(inst)
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
@@ -5567,6 +5670,16 @@ class IREmitter(Emitter):
         self.emit("{\n")
         target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
                   else f"next_instr + {distance}")
+        if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
+            self.emit(f"PyValue ir_completed = {value};\n")
+            self.emit("assert(_PyValue_IsHome(ir_completed));\n")
+            self.emit("IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], "
+                      "frame, slots, this_instr, ir_completed);\n")
+            self.emit("}\n")
+            self.abrupt_operand_sources.add(id(tkn))
+            self.error_terminal_sources.add(id(tkn))
+            self.error_finalized = True
+            return False
         recipient = "" if kind == "_PY_IR_FOR_ITER" else f"{dst}, "
         self.emit(f"_PyIRStepResult ir_step_result = {entries[kind]}(tstate, frame, this_instr, {base}, {recipient}{target}, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
@@ -5596,6 +5709,23 @@ class IREmitter(Emitter):
         self.normal_completions.add(OwnershipEvent(
             "_PyIR_OWNER_NORMAL_COMPLETION", flags=int(produces_result),
             src=count, dst=1))
+
+    def finish_generator_return(self, tkn, tkn_iter, uop, storage, inst):
+        value, dying = self.macro_args(tkn, tkn_iter, 2)
+        if inst is None or not canonical_frame_transfer_input(inst):
+            raise analysis_error("generator return needs canonical source transfer", tkn)
+        self.emit("if (generator_outcome_target(frame, frame->instr_ptr, "
+                  "generator_completed_targets) != NULL) {\n")
+        self.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, {dying}, "
+                  f"_PyFrame_Slots({dying}), frame->instr_ptr, {value});\n")
+        self.emit("}\n")
+        self.emit(f"{value} = _PyEval_FrameClearAndPopWithResult(tstate, {dying}, {value});\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit(f"_PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
+        self.emit("next_instr = ir_completed.next;\n")
+        self.emit("if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
+        self.emit("LLTRACE_RESUME_FRAME();\nDISPATCH();\n")
+        return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
@@ -5660,6 +5790,16 @@ class IREmitter(Emitter):
         self.emit("PyValue_XCLOSE(ir_resume_input);\n")
         self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
         self.emit("}\n")
+        if self.generator_boundary is not None:
+            self.emit("if (next_instr != NULL) {\n")
+            self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
+            self.emit("if (ir_resume_site > frame->ir_words) {\n")
+            self.emit("py_tail_call_funcptr ir_resume_target = "
+                      "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
+            self.emit("if (ir_resume_target != NULL) {\n")
+            self.emit("IR_GEN_TAIL(ir_resume_target, frame, slots, "
+                      "ir_resume_site, ir_resume_input);\n")
+            self.emit("}\n}\n}\n")
         self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
         self.emit("LOAD_IP(0);\n")
         self.emit("IR_SKIP_RESUME();\n")
@@ -6516,6 +6656,14 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+    boundary = generator_boundaries(emitter.analysis).get(name)
+    if boundary is not None:
+        if fmt.group == "SEND" and send_source_contract(inst, fmt) is None:
+            raise analysis_error("generator boundary needs the complete SEND source contract", inst.where)
+        if boundary.resume != "NONE" and not (
+                canonical_frame_transfer_input(inst) or abrupt_suspend_contract(inst, fmt)
+                or metadata_only_passthroughs(inst) == frozenset({1})):
+            raise analysis_error("generator boundary needs checked yield transport", inst.where)
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     if any(token.text in ELEMENT_INTRINSICS
            for part in parts for token in part.body.tokens()):
@@ -7007,6 +7155,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         _PyInterpreterFrame *dying = frame;
         int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
         frame = tstate->current_frame = dying->previous;
+        if (generator_return) {
+            IR_FINISH_GENERATOR_RETURN(temp, dying);
+        }
         temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
@@ -7047,6 +7198,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  emitter: IREmitter, out: CWriter, record: bool,
                  roles: dict[str, set[str]]) -> None:
     "One pass of generate_handler, which records the roles it finds"
+    emitter.generator_boundary = generator_boundaries(emitter.analysis).get(name)
+    if (emitter.generator_boundary is not None and not generator_boundary_source_closed(
+            emitter.generator_boundary, emitter.analysis, emitter.formats)):
+        emitter.generator_boundary = None
     emitter.pending_owner = None
     emitter.shape_read_guards = 0
     emitter.shape_read_uses = 0
@@ -7085,6 +7240,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.normal_null_receipts = []
     emitter.null_outputs = null_output_names(inst, fmt)
     emitter.send_yielded_published = False
+    emitter.native_window_out = False
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
     emitter.normal_completions = set()
@@ -7094,7 +7250,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
-    if name != inst.name and name not in EXECUTION_VARIANTS and call_role_variant(name) is None:
+    if (name != inst.name and name not in EXECUTION_VARIANTS
+            and call_role_variant(name) is None and emitter.generator_boundary is None):
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
@@ -7263,6 +7420,23 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
              not stack.shape_read_complete)):
         raise analysis_error("polymorphic shape execution needs one dominating checked read", inst.where)
     out.start_line()
+    if reachable and canonical_frame_transfer_input(inst) and any(
+            isinstance(part, Uop) and part.name == "_YIELD_VALUE" for part in inst.parts):
+        out.emit("IR_TRY_NATIVE_YIELD(value);\n")
+    if (reachable and emitter.generator_boundary is not None
+            and emitter.generator_boundary.yielded == "DELEGATED"):
+        if emitter.send_source_parts is None or not fmt.window or fmt.dst_offset != 2:
+            raise analysis_error("native yielded outcome requires checked source window", inst.where)
+        outputs = external_io(inst)[1]
+        result = outputs[-1].item.name
+        out.emit(f"assert(_PyValue_IsHome({result}));\n")
+        out.emit("window[2] = PyValue_NULL;\n")
+        out.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, {result});\n")
+        stack.home_node = None
+        emitter.native_window_out = True
+        emitter.ownership_events.append(OwnershipEvent(
+            "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2))
+        reachable = False
     if reachable:
         assert isinstance(stack, IRStack)
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
@@ -7351,7 +7525,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         completions = emitter.normal_completions
-        if emitter.send_yielded_published:
+        if emitter.generator_boundary is not None:
+            completions = {replace(event, kind="_PyIR_OWNER_NATIVE_WINDOW_OUT",
+                                  flags=1, extent=0) for event in completions}
+            if emitter.send_yielded_published and not emitter.native_window_out:
+                completions.add(OwnershipEvent(
+                    "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2))
+        elif emitter.send_yielded_published:
             completions = {replace(event, flags=event.flags | 2, extent=2)
                            for event in completions}
         emitter.ownership_events.extend(sorted(completions,
@@ -7365,6 +7545,8 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
+        if generator_word_entry(name, analysis) != name:
+            continue
         emitter.handler_format = formats[name]
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
@@ -7692,10 +7874,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
     if programs is not None:
         # A pristine word can redispatch to any member. A successful final
         # vacate in one member does not certify an uncovered sibling.
-        grouped: dict[str, list[str]] = {}
-        for name in handler_instructions(analysis):
-            grouped.setdefault(formats[name].group, []).append(name)
-        for members in grouped.values():
+        for members in redispatch_cohorts(analysis, formats):
             yielded = [programs[name] for name in members
                        if len(programs.get(name, ())) == 1 and
                        programs[name][0].kind == "_PyIR_OWNER_NORMAL_COMPLETION" and
@@ -7747,10 +7926,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                         "_PyIR_OWNER_NORMAL_CLEAR_INPUTS", "_PyIR_OWNER_CALL_DRAIN"):
                     del programs[name]
     if checkpoints is not None:
-        groups: dict[str, list[str]] = {}
-        for name in handler_instructions(analysis):
-            groups.setdefault(formats[name].group, []).append(name)
-        for members in groups.values():
+        for members in redispatch_cohorts(analysis, formats):
             common = checkpoints.get(members[0], ())
             if not all(checkpoints.get(name, ()) == common for name in members):
                 for name in members:
@@ -8721,9 +8897,7 @@ def handler_contracts(analysis: Analysis,
     normal_storage = {}
     boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt,
                              error_routes, observer_entries, checkpoints, normal_storage)
-    for group in {fmt.group for fmt in formats.values()}:
-        members = [name for name in handler_instructions(analysis)
-                   if formats[name].group == group]
+    for members in redispatch_cohorts(analysis, formats):
         # Stack-only formats have no independently emitted family members.
         # They cannot acquire a storage certificate from an empty intersection.
         if not members:
@@ -9011,6 +9185,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
     "The prototypes of the handlers and labels, and the dispatch table"
     ids = handler_ids(analysis)
+    formats = compute_formats(analysis)
     n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
@@ -9019,8 +9194,44 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     for name in analysis.labels:
         out.emit(f"{function_proto(name)};\n")
     out.emit("\n")
-    for name in sorted(ids):
+    for name in sorted({generator_word_entry(name, analysis) for name in ids}):
         out.emit(f"{function_proto(name)};\n")
+    private = ("GEN_SEND_YIELD", "GEN_SEND_INPUT", "GEN_SEND_INPUT_HOME",
+               "GEN_RESUME_SEND", "GEN_RESUME_STORE", "GEN_RESUME_EFFECT",
+               "GEN_COMPLETE_RETURN", "GEN_COMPLETE_STORE", "GEN_COMPLETE_DISCARD",
+               "GEN_COMPLETE_HOME", "GEN_COMPLETE_EFFECT", "GEN_RETURN",
+               "GEN_THROW_COMPLETE_RETURN", "GEN_THROW_COMPLETE_STORE",
+               "GEN_THROW_COMPLETE_DISCARD", "GEN_THROW_COMPLETE_HOME",
+               "GEN_RETURN_RETIRED", "GEN_RETURN_PARENT", "GEN_REDIRECT_EFFECT",
+               "GEN_RETIRE_EFFECT_SLOTS", "GEN_RETIRE_EFFECT_ASSOCIATION",
+               "GEN_RETIRE_EFFECT_LOCALS", "GEN_RETIRE_EFFECT_FUNCTION",
+               "GEN_RETIRE_EFFECT_EXCEPTION")
+    for name in private:
+        out.emit(f"{function_proto(name)};\n")
+    boundaries = generator_boundaries(analysis)
+    for column in ("Yielded", "Completed", "Resume"):
+        out.emit(f"static py_tail_call_funcptr generator_{column.lower()}_targets[{n}] = {{\n")
+        for name, boundary in sorted(boundaries.items()):
+            if not generator_boundary_source_closed(boundary, analysis, formats):
+                continue
+            target = None
+            if column == "Yielded" and boundary.yielded == "DELEGATED":
+                target = "GEN_SEND_YIELD"
+            elif column == "Completed" and boundary.completed != "NONE":
+                target = ("GEN_THROW_COMPLETE_" if boundary.base == "CLEANUP_THROW"
+                          else "GEN_COMPLETE_") + {
+                    "STORE_LOCAL": "STORE", "RETURN": "RETURN",
+                    "DISCARD": "DISCARD", "HOME": "HOME"}[boundary.completed]
+            elif column == "Resume":
+                if boundary.resume != "NONE":
+                    target = "GEN_RESUME_" + {
+                        "SEND": "SEND", "STORE_LOCAL": "STORE"}[boundary.resume]
+                elif boundary.yielded == "DELEGATED":
+                    target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
+                              else "GEN_SEND_INPUT_HOME")
+            if target is not None:
+                out.emit(f"[{ids[name]}] = _TAIL_CALL_{target},\n")
+        out.emit("};\n")
     out.emit("\n")
     out.emit(function_proto("UNKNOWN_OPCODE"))
     out.emit(" {\n")
@@ -9032,7 +9243,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     by_index = {i: name for name, i in ids.items()}
     out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}] = {{\n")
     for i in range(n):
-        name = by_index.get(i, "UNKNOWN_OPCODE")
+        name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
         out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
     out.emit("};\n")
 

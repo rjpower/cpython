@@ -108,6 +108,29 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 #define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
 
+#ifdef Py_STATS
+#  define IR_GEN_ARGS(F, S, IP, V) (F), (S), tstate, (IP), (V).bits, lastopcode
+#else
+#  define IR_GEN_ARGS(F, S, IP, V) (F), (S), tstate, (IP), (V).bits
+#endif
+#define IR_GEN_TAIL(target, F, S, IP, V) \
+    do { \
+        Py_MUSTTAIL return (target)(IR_GEN_ARGS(F, S, IP, V)); \
+    } while (0)
+
+#define IR_TRY_NATIVE_YIELD(V) \
+    do { \
+        if (frame->owner != FRAME_OWNED_BY_INTERPRETER) { \
+            py_tail_call_funcptr ir_yield_target = generator_outcome_target( \
+                frame, frame->instr_ptr, generator_yielded_targets); \
+            if (ir_yield_target != NULL && !frame->pending_redirect) { \
+                assert(_PyValue_IsHome(V)); \
+                IR_GEN_TAIL(ir_yield_target, frame, _PyFrame_Slots(frame), \
+                            frame->instr_ptr, (V)); \
+            } \
+        } \
+    } while (0)
+
 #define DISPATCH_GOTO() \
     do { \
         Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \

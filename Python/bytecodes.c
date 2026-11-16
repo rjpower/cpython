@@ -1475,6 +1475,9 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
+            if (generator_return) {
+                IR_FINISH_GENERATOR_RETURN(temp, dying);
+            }
             temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
             RELOAD_STACK();
             IR_RETURN_TO_CALLER(temp, generator_return);
@@ -1491,6 +1494,9 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
+            if (generator_return) {
+                IR_FINISH_GENERATOR_RETURN(temp, dying);
+            }
             temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
             RELOAD_STACK();
             IR_RETURN_TO_CALLER(temp, generator_return);

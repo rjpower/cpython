@@ -495,6 +495,17 @@ _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame)
     return try_clear_except_code(frame, _PyFrame_NumSlots(frame));
 }
 
+int
+_PyFrame_TryClearGenerator(PyGenObject *gen)
+{
+    int stage;
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    stage = try_clear_except_code(&gen->gi_iframe,
+                                  _PyFrame_NumSlots(&gen->gi_iframe));
+    Py_END_CRITICAL_SECTION();
+    return stage;
+}
+
 void
 _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, int initial_extent,
                         PyValue result, _PyTransitionRoots *roots)

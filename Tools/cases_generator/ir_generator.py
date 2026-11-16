@@ -5696,7 +5696,10 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("IR_GEN_TAIL(generator_completed_targets[IR_HANDLER(ir_word)], "
+            self.emit("py_tail_call_funcptr ir_completed_target = generator_outcome_target("
+                      "frame, this_instr, generator_completed_targets);\n")
+            self.emit("assert(ir_completed_target != NULL);\n")
+            self.emit("IR_GEN_TAIL(ir_completed_target, "
                       "frame, slots, this_instr, ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))

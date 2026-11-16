@@ -18,6 +18,10 @@ generator_payload(_PyIRWord payload)
 static inline uint64_t
 generator_control_generation(_PyInterpreterFrame *frame)
 {
+    /* Interpreter entry frames do not initialize frame_obj. */
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return 0;
+    }
     return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
 }
 

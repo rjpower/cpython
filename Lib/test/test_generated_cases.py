@@ -410,6 +410,31 @@ class TestIRCases(unittest.TestCase):
                     self.assertNotIn("PyValue_CLOSE(v);", body)
                     self.assertIn("this_instr, sent.value);", body)
 
+    def test_generator_completion_resolves_actual_source(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        for name in ("SEND_XFER_DISCARD", "SEND_VIRTUAL_XFER_DISCARD",
+                     "SEND_ASYNC_GEN_XFER_DISCARD", "CLEANUP_THROW_XFER_DISCARD"):
+            for record in (False, True):
+                with self.subTest(name=name, record=record):
+                    output = io.StringIO()
+                    out = CWriter(output, 0, False)
+                    emitter = ir_generator.IREmitter(out, analysis, formats)
+                    ir_generator.generate_handler(name, instructions[name], formats[name],
+                                                  emitter, out, record)
+                    body = output.getvalue()
+                    resolve = body.index("generator_outcome_target(frame, this_instr, "
+                                         "generator_completed_targets)")
+                    guard = body.index("assert(ir_completed_target != NULL);", resolve)
+                    tail = body.index("IR_GEN_TAIL(ir_completed_target,", guard)
+                    self.assertLess(resolve, guard)
+                    self.assertLess(guard, tail)
+                    self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
+
     def test_generator_explicit_completion_consumer_targets(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

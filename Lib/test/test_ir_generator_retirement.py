@@ -152,6 +152,9 @@ class ClearedReceiverTests(unittest.TestCase):
     def test_coroutine_origin_owner_is_released(self):
         origins, before = [], []
 
+        def origin_count(origin):
+            return sys.getrefcount(origin)
+
         async def leaf():
             return Result()
 
@@ -159,7 +162,7 @@ class ClearedReceiverTests(unittest.TestCase):
             coroutine = leaf()
             origin = coroutine.cr_origin
             origins.append(origin)
-            before.append(sys.getrefcount(origin))
+            before.append(origin_count(origin))
             return coroutine
 
         async def outer():
@@ -174,10 +177,11 @@ class ClearedReceiverTests(unittest.TestCase):
             with self.assertRaises(StopIteration) as stopped:
                 coroutine.send(None)
             self.assertIsInstance(stopped.exception.value, Result)
-            self.assertIsNotNone(origins[-1])
-            # The helper's local origin and the child coroutine both released
-            # their owners; the list and this call's argument remain.
-            self.assertEqual(sys.getrefcount(origins[-1]), before[-1] - 2)
+            origin = origins[-1]
+            self.assertIsNotNone(origin)
+            # Both snapshots hold the origin in a caller local and use the
+            # same helper; only the child coroutine's owner has disappeared.
+            self.assertEqual(origin_count(origin), before[-1] - 1)
 
     def test_nested_completion_during_child_retirement(self):
         result_refs, observed = [], []

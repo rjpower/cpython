@@ -7740,7 +7740,7 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
     # specialized native iterator or a Python generator returning to it.
     if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}
            for t in uop_token_list(inst)):
-        group = inst.family.name if inst.family else name.removeprefix("INSTRUMENTED_")
+        group = inst.family.name if inst.family else inst.name.removeprefix("INSTRUMENTED_")
         if group == "FOR_ITER":
             events.update(EVENT_PREFIX + e for e in
                           ("BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"))

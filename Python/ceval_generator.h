@@ -634,7 +634,7 @@ TARGET(GEN_RETURN)
         _PyValue_CheckTemp(value);
         DISPATCH();
     }
-    INSTRUCTION_STATS(RETURN_VALUE);
+    INSTRUCTION_STATS(IR_HANDLER(*next_instr));
     _Py_LeaveRecursiveCallPy(tstate);
     _PyInterpreterFrame *dying = frame;
     int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;

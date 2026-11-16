@@ -297,6 +297,68 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
+    def test_generator_boundary_source_closure(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def checked(text):
+            Path(self.temp_input_filename).write_text(text)
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            return analysis, formats, ir_generator.generator_boundaries(analysis)
+
+        analysis, formats, rows = checked(source)
+        self.assertEqual(len(rows), 28)
+        for name, row in rows.items():
+            with self.subTest(name=name):
+                self.assertTrue(ir_generator.generator_boundary_source_closed(
+                    row, analysis, formats))
+                instruction = ir_generator.handler_instructions(analysis)[name]
+                ordinary = ir_generator.all_instructions(analysis)[row.base]
+                self.assertEqual(ir_generator.monitoring_events(name, instruction),
+                                 ir_generator.monitoring_events(row.base, ordinary))
+        for before, after in (
+            ("assert(JUMP_TARGET(oparg) < next_instr);",
+             "unknown_effect(); assert(JUMP_TARGET(oparg) < next_instr);"),
+            ("_PyValue_Send(receiver_o, v)", "unknown_send(receiver_o, v)"),
+        ):
+            with self.subTest(mutation=before):
+                self.assertIn(before, source)
+                analysis, formats, rows = checked(source.replace(before, after, 1))
+                self.assertFalse(any(ir_generator.generator_boundary_source_closed(
+                    row, analysis, formats) for row in rows.values()))
+
+    def test_generator_boundary_placement_cohorts_and_entry(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        rows = ir_generator.generator_boundaries(analysis)
+        for cohort in ir_generator.redispatch_cohorts(analysis, formats):
+            shapes = {(rows[name].yielded, rows[name].completed, rows[name].resume)
+                      if name in rows else None for name in cohort}
+            self.assertEqual(len(shapes), 1)
+        for row in rows.values():
+            entries = {ir_generator.generator_word_entry(name, analysis)
+                       for name, other in rows.items() if other.base == row.base}
+            self.assertEqual(len(entries), 1)
+        instructions = ir_generator.handler_instructions(analysis)
+        for record in (False, True):
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            emitter = ir_generator.IREmitter(out, analysis, formats)
+            name = "SEND_GEN_XFER_DISCARD"
+            ir_generator.generate_handler(name, instructions[name], formats[name],
+                                          emitter, out, record)
+            body = output.getvalue()
+            self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT", body)
+            self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
+            self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
+            self.assertIn("generator_resume_targets[", body)
+            self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
+                                for event in emitter.ownership_events))
+
     def test_error_ingress_keeps_native_bridge_owners(self):
         output = self.ir_output("""
         inst(OP, (value -- result)) {

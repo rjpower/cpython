@@ -16,9 +16,12 @@ The selected runtime remains selected57. Independent source review stopped the
 canonical CALL results added consumer work without a credible net saving.
 The adopted [round71 design](design/proposals/interpreter-parity71.md) orders
 canonical-value fact transport, then generated hot/slow execution separation.
-Exact source contracts have independent GO. A passed source/product review,
-both builds and focused tests, then lost its early protected screen. B is now
-implementing the standalone ADD/SUB split from selected57, without A.
+Both units passed source/product review, builds and focused tests, then lost
+their early protected screens. Neither is selected. The user has authorized
+implementation of the [execution-state design72](design/proposals/execution-state72.md),
+with Sol 6.1 workers owning compiler/layout and execution/activation changes.
+Root owns integration and validation. Shared interfaces receive independent
+source review before implementation; selected57 remains golden.
 The stopped round69 summary trial removed child execution on hits but lost its
 early protected screen with callback qualification incomplete. The
 [trial report](issues/register-semantics59/report.md) owns results and limits.

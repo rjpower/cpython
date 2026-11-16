@@ -58,9 +58,26 @@ DeltaBlue 1.039961, logging 1.121887 and spectral_norm 1.022087. Comprehensions
 and complete dynamic native qualification remain incomplete; root stops those
 jobs and all further A timing. This is a measured rejection, not selection GO.
 
-B now implements the standalone ADD/SUB hot/terminal-slow split from selected57,
-without A. Root retains selected57 as golden. There is no fresh upstream result
-or causal explanation for these losses. The latest measured
+B standalone source `ca437447078` plus formatting `f337d93bd62` integrates as G
+`e8be22ec1e1`. Both builds pass 117/79 and 24 focused methods per role. Metadata
+and 327 nonparticipant bodies are unchanged. Both hot arithmetic functions have
+zero returning C calls; occupied stack remains up to 32B including red-zone
+spills, while cold reservation grows 40→56B and combined text grows 914B.
+Its stable 32-row screen also rejects selection: GM 1.017289, logging 1.263918.
+Six case means improve, including comp 0.972692 and Delta 0.989830. Independent
+review confirms both screen rejections. Actual hot/slow attribution and complete
+native/natural qualification remain incomplete and stopped. No confirmation,
+all29, full-suite, upstream, PMU or repair follows for either loser.
+
+Round71 is closed. The user has authorized the
+[execution-state design72](design/proposals/execution-state72.md). Two Sol 6.1
+workers specify and cross-review compiler/layout and accumulator/effect/activation
+interfaces before source edits. Root owns integration, generation, native tests
+and benchmark selection. Fresh warmed profiles compare selected57 and upstream:
+SEND/delegated yield account for about 45% of selected generator samples; the
+coroutine workload stresses creation and synchronous completion. These are
+diagnostic samples, not a new timing campaign or causal savings budget.
+Selected57 remains golden, and logging regressions remain unexplained. The closed
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
 Round68 and both round67 candidates also remain rejected; their mechanisms and

@@ -46,8 +46,20 @@ source has independent post-review GO. Root has integrated it from selected57
 and generated the candidate. Product review, both 117/79 builds and 24 focused
 methods per role pass. Static native removal is real, but the early protected
 hot8 screen rejects A: GM 1.011186, logging 1.121887 and DeltaBlue 1.039961.
-Root stops its remaining native qualification and all further timing. B now
+Root stops its remaining native qualification and all further timing. B then
 implements standalone ADD/SUB hot/cold lowering from selected57, without A.
+Its source/products, both 117/79 builds and 24 focused methods per role pass;
+actual hot functions have no returning C calls. The early protected screen
+still rejects B: GM 1.017289, logging 1.263918 despite six improved means.
+Both units are closed and unselected. The user has authorized the
+[execution-state design72](../../design/proposals/execution-state72.md): separate
+logical values from physical owners, carry one result through dispatch, and
+generate effect boundaries and cold ownership maps. Ordinary execution chooses
+layout; exception teardown consumes it. Existing argument overlap remains.
+Sol 6.1 workers cross-review exact compiler/layout and execution/activation
+interfaces before implementation. Root integrates a complete producer/consumer
+slice, including errors and observation, before expanding the port. Native
+spills and all result consumers count toward the cost; logging remains protected.
 The prospectively reviewed
 one-pair confirmation option is implemented and passes its host tests; default
 balanced screen behavior remains unchanged.
@@ -157,12 +169,13 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Close A; integrate B after independent frozen-diff review | Preserve selected57/evidence; own generation/runtime, qualification and selection |
-| Astra | Grouped71 complete | Five options, two ordered units; no inner-loop work |
-| Sol-high workers | B source/tests in P; opposite-worker post-review | Standalone ADD/SUB from selected57; no A import or parallel generator lanes |
+| Root | Integrate reviewed72 units and validate complete execution paths | Preserve selected57/evidence; own generation, native qualification and selection |
+| Sol 6.1 compiler/layout worker | Logical values, allocation and cold ownership maps | W from selected57; exact source contract, focused host checks and post-review |
+| Sol 6.1 execution worker | Accumulator, effects and activation/result transfer | P from selected57; shared ABI cross-review, focused host checks and post-review |
 
-Only B's source lane is active. A's screen is closed. No profile/counter campaign
-or compiler/flags/layout search is active.
+Both72 source-contract lanes are active. Both71 screens remain closed. Fresh
+diagnostic profiles are retained under `E59/architecture-diagnosis72-fresh`;
+they do not establish a timing result or a removable cycle budget.
 A losing screen stops the unit. A qualified broad winner may be selected before
 parity; repeat grouped review and implementation against the remaining gap.
 

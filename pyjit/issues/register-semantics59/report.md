@@ -1,6 +1,28 @@
 # Semantic IR trial results
 
-## Round71: A screen rejected; standalone B implementation active
+## Execution72: source contracts active
+
+The user authorizes [design72](../../design/proposals/execution-state72.md)
+implementation with Sol 6.1 workers and root integration/validation. Compiler
+allocation must serve ordinary execution; cold exception and observer consumers
+use explicit ownership maps. The execution ABI carries a canonical owned result
+through complete producer/consumer paths. Shared interfaces are being specified
+and independently cross-reviewed; no72 runtime change or performance win is
+claimed. Both workers start from immutable selected57 in new W/P branches.
+
+Fresh diagnostic profiles in `E59/architecture-diagnosis72-fresh` compare the
+unchanged selected57/upstream binaries on warmed coroutine and generator kernels.
+All four runs succeed with stable source/ELF/config/module/kernel identities
+and zero lost samples. Selected generator SEND and delegated yield together
+account for 45.24% of exclusive sampled cycles. Selected coroutine exact calls,
+generator completion and SEND account for 9.48%, 7.76% and 6.27%, respectively;
+construction, copying, allocation and destruction also contribute. These are
+single diagnostic profiles, not new balanced timing or causal saving estimates.
+The coroutine kernel has no outward suspension, so suspension-only work cannot
+explain or remove its creation/completion costs. Full reports, annotations and
+the sibling `architecture-diagnosis72-driver.py` retain commands and limits.
+
+## Round71: both generator units rejected; selected57 unchanged
 
 Root integrates Astra `4ee0ab177f9` as `2c186e0fb6f` and adopts the
 [design71](../../design/proposals/interpreter-parity71.md) for independent exact
@@ -84,11 +106,63 @@ predicate passes. Root rejects A and stops remaining qualification, confirmation
 all29, upstream, PMU, full-suite and repair work. The native-control packages
 remain unexecuted; no complete behavioral/native qualification is claimed.
 The screen is not a causal explanation or a fresh upstream comparison.
+Independent `E59/round71-canonical-screen-peer.md`, SHA
+`ab1f74f72ee3f382f8060ee4e4012ece896992129a145957728f694712c16fb6`,
+verifies all 32 rows, stable identities and the same rejection predicates.
 
-B implementation now starts independently in P from selected57, with the
-reviewed standalone ADD/SUB scope. It imports no A reader facts or executable.
-Existing canonical arithmetic supplies the representation prerequisite. Root
-retains selected57 as golden; the unchanged grouped selection gates remain.
+B starts independently from selected57, without A. Frozen source
+`ca437447078595a146d9576fe3a446674f2b990e` passes independent final review
+`E59/round71-split-post-review.md`, SHA
+`f37bfee3ef696f630d377573607f77e74b3134a76e04d021537cb87b5f0fbce5`.
+Five new host methods and four adjacent regressions pass; all 331 computed
+formats match I. Tiny formatting-only `f337d93bd625` also passes source peer
+and five focused methods. Root integrates both and all generated products as G
+`e8be22ec1e1374a32338bf84c7278d46e85de1fb`. Split1's patch remains sealed;
+split2 product peer SHA is
+`644672922fe5a4d481fb5d7a8471035d00b47b4e35ad20b035b205a83f5c5877`.
+Only ADD/SUB bodies change, adding two private slow functions; all 327 other
+bodies and metadata are unchanged. Both `parity71-split2` builds pass 117/79;
+both `parity71-split2-runtime` runs pass 24 methods, including the three new
+runtime tests. Source/parser tests remain host-only.
+
+Actual release static peer `E59/round71-split-native-static-peer.md`, SHA
+`e1e9c6bd7c3c2e8c077b5b089a1f11db402e24a1fb65ba84570c82d6d98c12e8`,
+confirms zero call instructions in either hot function. All three exits are
+terminal dispatch/deopt/private-slow transfers. Hot RSP movement falls 40→8B,
+but spills occupy 24B below entry for scratch/discard and up to 32B for local
+completion. Private cold reservation is 56B versus I's 40B, with repeated pure
+prefix and added local-finality admission. Combined symbol text grows
+1,288→2,202 bytes; ELF text grows 896B. No A canonicalization credit applies.
+These static facts do not prove executed whole-consumer costs or frequencies.
+
+An explicitly early rejection screen again precedes full dynamic native
+qualification. All 32 rows succeed with stable identity in
+`E59/split71-hot8-selected57-screen`:
+
+| Workload | B / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.972692 | 0.957820–0.987795 |
+| deltablue | 0.989830 | 0.980845–0.998898 |
+| coroutines | 0.987418 | 0.980326–0.994560 |
+| generators | 0.986255 | 0.979774–0.992778 |
+| logging_silent | 1.263918 | 1.258128–1.269734 |
+| raytrace | 0.981065 | 0.977562–0.984582 |
+| spectral_norm | 1.005973 | 0.992940–1.019177 |
+| nqueens | 0.980679 | 0.973496–0.987915 |
+
+GM 1.017289 fails protection; logging fails its own cap, case-mean cap and both
+pair caps. Only the opportunity predicate passes. Independent screen peer
+`E59/round71-split-screen-peer.md`, SHA
+`9973cdddacd575b8e49334af3e843fd38a792aab2e0ca75eefe6c8b79a4c89a2`,
+confirms rejection. Root stops B without repair, dynamic qualification,
+confirmation/all29/full/upstream/PMU or A+B composition. Actual attributed hot,
+overflow, final-local slow and unchanged-kernel native proofs remain incomplete;
+passing runtime methods and static absence of calls do not close those gates.
+
+Both ordered71 units are rejected; selected57 remains golden. No fresh upstream
+performance or explanation for the repeated logging regression is claimed.
+Design72 uses these results to choose a complete execution-contract change;
+source cleanup or smaller native frames alone do not predict speed.
 
 The prospectively reviewed host confirmation capability is implemented:
 `--single-pair-confirmation` requires `--rounds 1`; otherwise positive even

@@ -22,9 +22,16 @@ source adoption stops it before implementation: typed routing solves the
 implicit-child ambiguity without a credible whole-consumer saving. Grouped71
 is complete. The adopted [round71 design](../../design/proposals/interpreter-parity71.md)
 and [review](review71.md) order canonical fact transport then hot/terminal-slow
-generation. Both exact source contracts have independent GO; A is in source
-implementation from selected57, B waits for A's disposition. No generation,
-runtime build or performance result exists for round71 yet.
+generation. Both units pass source/product review, builds and focused runtime
+tests, then lose their early protected screens: A GM 1.011186/logging 1.121887;
+B GM 1.017289/logging 1.263918. Static removal is real: A loses eight conversion
+edges; B's hot bodies have no returning C calls. Full dynamic native qualification
+remains incomplete and stopped. Neither is selected or a prerequisite. Root
+has user authorization to implement the
+[execution-state design72](../../design/proposals/execution-state72.md) through
+Sol 6.1 workers. Compiler/layout and execution/activation contracts are being
+cross-reviewed. Root owns integration and native/performance validation;
+selected57 stays golden.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
 Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
@@ -61,9 +68,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate A after actual-diff review | Preserve controls/evidence; own qualification and selection |
-| Astra | Grouped71 complete | Broad architecture only; no inner-loop work |
-| Sol-high workers | A implementation; host confirmation proposal | B source GO queued; no parallel generator lanes |
+| Root | Integrate72 and validate complete paths | Preserve controls/evidence; own generation, qualification and selection |
+| Sol 6.1 layout worker | Compiler allocation and cold owner maps | Source proposal and backend cross-review in W |
+| Sol 6.1 execution worker | Accumulator/effect/activation ABI | Source proposal and compiler cross-review in P |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

@@ -20,11 +20,17 @@ credible complete-consumer saving. The adopted [round71 design](design/proposals
 and [review](issues/register-semantics59/review71.md) order two independently
 selectable generator units: canonical-value fact transport, then callback-free
 hot bodies with terminal ordinary slow entries. Both exact source contracts have
-independent GO. A passes source/product review, builds and focused tests but
-loses its early protected screen. B now implements the standalone ADD/SUB split
-from selected57, without importing A. A's remaining qualification is stopped.
-Existing owners, homes, encoded IR and calling conventions remain.
-No losing-executable rescue is queued.
+independent GO. Both units pass source/product review, builds and focused tests
+but lose their early protected screens. A removes canonicalization work; B
+removes hot returning C edges. Neither is selected or fully native-qualified.
+The user has resumed work on the [execution-state design72](design/proposals/execution-state72.md):
+logical values before physical allocation, a carried owned result, typed effect
+boundaries and exact ownership maps. Ordinary execution chooses the layout;
+exception cleanup consumes it. Two Sol 6.1 workers specify and cross-review the
+compiler/layout and execution/activation interfaces, then implement bounded
+increments. Root owns merged validation and selection. Repeated logging losses
+remain unexplained; smaller source or native frames do not predict throughput.
+The selected runtime retains its current contracts until a measured winner lands.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

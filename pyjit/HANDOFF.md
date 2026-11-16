@@ -4,64 +4,58 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The current adopted proposal is [parity71](design/proposals/interpreter-parity71.md),
-under [review71](issues/register-semantics59/review71.md). The
+The current direction is [execution-state72](design/proposals/execution-state72.md),
+authorized by the user for Sol 6.1 implementation after source cross-review. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
 ## Current work
 
-Round69 is stopped and unselected. Astra's grouped70 commit
-`3067f7181b6fd237f77b12925bbb76d5d8dd62aa` is integrated as `07941d2b663`.
-It owns only [proposal70](design/proposals/interpreter-parity70.md) and
-[review70](issues/register-semantics59/review70.md). The proposal changes ordinary
-CALL to A=B scratch plus explicit caller consumption; there is no legacy-word
-translator. Implementation is not released.
+Round71 is closed: canonical provenance (A) and standalone arithmetic hot/cold
+lowering (B) pass source/product review, both builds and focused tests but lose
+their early protected screens. The [trial report](issues/register-semantics59/report.md) owns exact
+results, hashes and qualification limits; [design71](design/proposals/interpreter-parity71.md)
+and [review71](issues/register-semantics59/review71.md) retain the closed contracts.
+Astra is for grouped architecture review, not the component loop.
 
-Round70 is now stopped before implementation. The exact source proposal is
-`E59/round70-unit-proposal.md`; final independent peer is
-`E59/round70-unit-proposal-peer.md`. A typed continuation resolves implicit-child
-routing, but adds work without a credible complete-consumer saving. No runtime
-edits, builds or timings were performed. The trial report owns exact hashes and
-the cost argument.
+Two Sol 6.1 workers now own exact source proposals and cross-review: W on
+`pyjit/execution72-layout` covers compiler/allocation/maps; P on
+`pyjit/execution72-abi` covers the generator, execution ABI and activations.
+Both new branches start at selected57 and preserve the old branches below.
+Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
+Root approves the shared interface, integrates reviewed sources into G, generates
+and reviews products, then runs focused native checks and hot8. No runtime work
+has landed for72 yet. Existing G/builds stay on rejected71B until integration.
 
-Grouped review71 from Astra channel `zfr7ow1e`, commit `4ee0ab177f9`, is
-integrated as `2c186e0fb6f` and adopted for exact source review. The two serial,
-independently selectable units are canonical fact transport (A), then generated
-hot/body-only terminal slow lowering (B). A need not win for B to proceed; both
-are selected57-relative. Root has released A implementation only.
+Preserved round71 runtime trees:
 
-Source proposals are `E59/round71-canonical-source-proposal.md` and
-`E59/round71-split-source-proposal.md`. Opposite Sol-high workers independently
-review them into `round71-canonical-source-peer.md` and
-`round71-split-source-peer.md`. Both exact contracts now have independent GO;
-the trial report owns hashes and resolved findings. A's worker creates branch
-`pyjit/parity71-canonical-provenance` in W from immutable selected57. Source/tests
-only: root owns full generation, products, builds and target execution. A froze
-as W `d33f7b2d9bd`; independent source post-review gives GO. Root integrates it
-as G `2cc957b53c8`, generates successfully under `parity71-canonical1`, reviews
-the sole product change and commits it as `ff1618987bd`. Exactly five of 329
-handlers change; all metadata and other products remain unchanged. Independent
-product review gives GO in `E59/round71-canonical-products-peer.md`. Both
-`parity71-canonical1` builds pass 117/79. The `parity71-canonical1-runtime` focus
-passes all 24 methods per role: CanonicalProvenanceRuntimeTests, PyValueTests
-and OperandModeTests. The host source class is excluded. Static native review
-confirms eight Canonicalize edges removed; the early protected screen then
-rejects A with GM 1.011186 and logging 1.121887. All 32 rows succeed with stable
-identity. Complete dynamic native paths and actual HINT coverage remain
-incomplete and are stopped. Both prepared native-control packages remain
-unexecuted. No confirmation/all29/PMU/full or A repair follows.
+| Tree | Head / branch | State |
+| --- | --- | --- |
+| W | `d33f7b2d9bd`, `pyjit/parity71-canonical-provenance` | Rejected A source |
+| P | `f337d93bd62`, `pyjit/parity71-terminal-hot-cold` | Rejected B source plus formatting |
+| G | `e8be22ec1e1`, `pyjit/parity71-terminal-integrated` | Rejected B source/products; both live builds |
 
-B implementation is released in P, branch `pyjit/parity71-terminal-hot-cold`
-from immutable selected57. It covers standalone ADD/SUB only, without A's reader
-facts or executable. The source contract explicitly covers all hot
-close sites, canonical arithmetic, once-only stats and the borrowed-reader cut.
-The opt-in one-pair confirmation capability in the canonical host measurement
-helper has passed root proposal/diff review and three host test methods; see
-the measurement recipe. It has not launched a confirmation. The two
-`round71-*-architecture-input.md` memos are static source/native input only.
-Root owns implementation release, runtime jobs and integration. Selected57 stays
-immutable/golden; preserve round69 branches, controllers and evidence.
+Preserved A integration is `ff1618987bd` on
+`pyjit/parity71-canonical-integrated`. Both candidates build 117/79 and pass
+24 focused methods per role. A removes eight conversion edges; B's two hot
+functions have no returning C calls but retain red-zone spills. Their stable
+32-row screens lose: A GM 1.011186/logging 1.121887; B GM 1.017289/logging
+1.263918. Independent peers verify both rejections. Stop all further qualification,
+repair and timing for either source; no composition or automatic dependency.
+
+Tags are `parity71-canonical1{,-runtime}` and `parity71-split2{,-runtime}`;
+outputs are `E59/{canonical71,split71}-hot8-selected57-screen`. The two
+`round71-*-source-proposal.md`, corresponding peers, post-reviews and product/
+static/screen reviews retain source authority. Actual dynamic whole-consumer,
+hot/slow and natural/HINT attribution remain incomplete. The prepared A native
+and natural controllers remain unexecuted. No confirmation/all29/full/upstream/
+PMU result or cause is claimed. Never execute preserved A ELFs against current G/Lib.
+
+The host measurement helper has reviewed one-pair confirmation support, with
+three host test methods passing; no confirmation was launched. Source/runtime
+jobs remain root-owned. Selected57/I/U stay immutable/golden; preserve all
+rejected branches and sealed evidence. Workers are active on72 source contracts;
+independent cross-review precedes implementation.
 
 ## Closed round69 checkpoint
 
@@ -98,10 +92,9 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-The B worker implements source/tests in P; the A worker independently reviews
-its frozen diff and host receipts. G remains frozen rejected A until root B
-integration. Preserve A/69 branches and sealed evidence.
-Astra's broad review is complete; it stays out of the component loop. C's
+The workers have moved to72 contracts; G remains frozen rejected B until a
+reviewed integration. Preserve A/B/69 branches and sealed evidence.
+Astra's71 review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.
 

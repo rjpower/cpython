@@ -335,6 +335,29 @@ TARGET(GEN_SEND_INPUT_HOME)
     DISPATCH();
 }
 
+/* The child link is committed, but its recursion debit has not happened.
+ * Error construction may allocate; the incoming owner is rooted first. */
+TARGET(GEN_ENTRY_EFFECT)
+{
+    _PyValueTemps *const value_temps = NULL;
+    _PyTransitionRoots roots = {
+        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
+        .result = generator_payload(ir_word), .result_present = 1};
+    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    if (_Py_EnterRecursivePy(tstate)) {
+        PyValue value = roots.result;
+        generator_detach_result(&roots);
+        PyValue_XCLOSE(value);
+        _PyThreadState_PopTransitionRoots(tstate, &roots);
+        PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
+    }
+    PyValue value = roots.result;
+    generator_detach_result(&roots);
+    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots,
+                frame->instr_ptr, value);
+}
+
 TARGET(GEN_RESUME_EFFECT)
 {
     _PyValueTemps *const value_temps = NULL;

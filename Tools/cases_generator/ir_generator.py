@@ -5786,12 +5786,11 @@ class IREmitter(Emitter):
         self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
         self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
-        self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
-        self.emit("PyValue_XCLOSE(ir_resume_input);\n")
-        self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
-        self.emit("}\n")
         if self.generator_boundary is not None:
-            self.emit("if (next_instr != NULL) {\n")
+            self.emit("if (tstate->py_recursion_remaining <= 1) {\n")
+            self.emit("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, "
+                      "frame->instr_ptr, ir_resume_input);\n}\n")
+            self.emit("--tstate->py_recursion_remaining;\n")
             self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
             self.emit("if (ir_resume_site > frame->ir_words) {\n")
             self.emit("py_tail_call_funcptr ir_resume_target = "
@@ -5799,7 +5798,12 @@ class IREmitter(Emitter):
             self.emit("if (ir_resume_target != NULL) {\n")
             self.emit("IR_GEN_TAIL(ir_resume_target, frame, slots, "
                       "ir_resume_site, ir_resume_input);\n")
-            self.emit("}\n}\n}\n")
+            self.emit("}\n}\n")
+        else:
+            self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
+            self.emit("PyValue_XCLOSE(ir_resume_input);\n")
+            self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
+            self.emit("}\n")
         self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
         self.emit("LOAD_IP(0);\n")
         self.emit("IR_SKIP_RESUME();\n")
@@ -9198,6 +9202,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
         out.emit(f"{function_proto(name)};\n")
     private = ("GEN_SEND_YIELD", "GEN_SEND_INPUT", "GEN_SEND_INPUT_HOME",
                "GEN_RESUME_SEND", "GEN_RESUME_STORE", "GEN_RESUME_EFFECT",
+               "GEN_ENTRY_EFFECT",
                "GEN_COMPLETE_RETURN", "GEN_COMPLETE_STORE", "GEN_COMPLETE_DISCARD",
                "GEN_COMPLETE_HOME", "GEN_COMPLETE_EFFECT", "GEN_RETURN",
                "GEN_THROW_COMPLETE_RETURN", "GEN_THROW_COMPLETE_STORE",

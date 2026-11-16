@@ -7,92 +7,38 @@ The active runtime is selected57 at
 `0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
 tag `pyjit-golden-20261114-dictionary-readers`. No later candidate replaced it.
 
-Round69's guarded-callee summaries remove child execution on actual hits, but
-its early protected hot8 screen rejects the candidate at G
-`52806aacedf5be0a89546344162bb53a8e40ec34`. Both builds pass 117 modules/79 shared
-extensions, 29 focused methods (one skip), 53 related methods and 350 code,
-marshal, function and monitoring methods (nine skips) per role. All 331 existing
-format rows remain unchanged. Source/product review closed a real scratch-result
-transfer gap and preserved proofs after shared-reader extraction.
+Execution72 is complete and unselected. Sol 6.1 workers implemented and
+cross-reviewed the compiler/validation and runtime/generator changes; root
+integrated, generated, built, tested and measured them. The separate cold-layout
+unit passed 1,143 related methods per role but lost its screen. It demonstrated
+no frame-packing gain and was excluded from the ABI candidate.
 
-Native projection/select controls confirm no child frame or child dispatch,
-correct results and consumed inputs. Complete release paths nevertheless grow
-395→437 and 537→612 native instructions, with synchronous stack 80→152/264B.
-The unchanged DeltaBlue kernel has a real successful summary call; comprehensions
-has no selected summary sites in that control. Neither site counts nor one hit
-establish frequency. Positive committed-summary redirect branches remain
-unqualified: the public finalizer fixture crosses an existing external-frame
-rejection boundary. The screen was explicitly an early rejection diagnostic,
-not proof of complete behavioral qualification.
+The carried-owner ABI is preserved at `c6d54fd3b5d` on
+`pyjit/execution72-abi-integrated`. Both final builds pass 117 modules/79 shared
+extensions. Across the affected integrations, 768 methods in 19 related modules
+pass per role (12 skips), plus eight discarded-result completion methods. Final
+coroutine qualification passes all 100 methods per role. Six complete native
+paths, six owner-placement probes and an injected native-entry failure pass.
+Cold review finds no further structural blocker, while retaining actual branch
+coverage and full-suite limits.
 
-All 32 screen rows succeed with stable identities. Geometric mean is 1.012667;
-DeltaBlue 1.034596, logging 1.176093, generators 1.018079 and raytrace 1.034177 fail
-protection. Coroutines 0.957014 and spectral_norm 0.945332 improve. Root closes
-round69 without repair, confirmation, all29, PMU or full-suite expansion.
-Selected57 remains golden. There is no fresh upstream result or parity claim.
-The [trial report](issues/register-semantics59/report.md) owns exact results and
-qualification limits; [handoff](HANDOFF.md) owns execution logistics.
+The unchanged two-pair hot8 screen rejects selection: **1.067106 GM** versus
+selected57. Comprehensions improves 2.7% and spectral_norm 1.2%; DeltaBlue loses
+6.8%, coroutines 1.8%, generators 1.6%, logging 21.1%, raytrace 29.0% and nqueens
+1.4%. All 32 rows succeed with stable identities. No confirmation, all29, full
+suite, fresh upstream measurement or repair follows for this loser.
 
-Independent source adoption stops the [round70 design](design/proposals/interpreter-parity70.md)
-before implementation. Implicit children also use shared return publication;
-a typed continuation can resolve routing but does not establish a substantive
-complete-consumer saving. Existing Python discard avoids result publication,
-while the new convention adds a scratch store and separate consumption.
-No runtime edit, generation, build, test or timing was performed for round70.
-The [round71 design](design/proposals/interpreter-parity71.md) and
-[review](issues/register-semantics59/review71.md) are integrated and adopted for
-independent exact source review. A carries canonical-bit facts from audited
-storage readers to existing publication. B splits eligible generated handlers
-at a pre-effect cut, keeping ordinary slow execution in a body-only terminal
-entry. They retain owners, homes, encoded words and the five-argument ABI.
-Both exact source contracts have independent GO. A source `d33f7b2d9bd` and its
-generated products pass independent review. Root integrates them as G
-`ff1618987bd` from selected57. Both builds pass 117 modules/79 shared extensions;
-all 24 focused methods pass per role. Generation changes
-exactly five handlers; the other 324 and all metadata remain unchanged. Five new
-host generator methods and five adjacent regressions pass. Static native review
-confirms eight Canonicalize call sites removed and 1,117 fewer bytes across the
-five handlers. Its early 32-row hot8 screen nevertheless rejects A: GM 1.011186,
-DeltaBlue 1.039961, logging 1.121887 and spectral_norm 1.022087. Comprehensions
-0.967622 and raytrace 0.968651 improve. All identities are stable. Actual HINT
-and complete dynamic native qualification remain incomplete; root stops those
-jobs and all further A timing. This is a measured rejection, not selection GO.
-
-B standalone source `ca437447078` plus formatting `f337d93bd62` integrates as G
-`e8be22ec1e1`. Both builds pass 117/79 and 24 focused methods per role. Metadata
-and 327 nonparticipant bodies are unchanged. Both hot arithmetic functions have
-zero returning C calls; occupied stack remains up to 32B including red-zone
-spills, while cold reservation grows 40→56B and combined text grows 914B.
-Its stable 32-row screen also rejects selection: GM 1.017289, logging 1.263918.
-Six case means improve, including comp 0.972692 and Delta 0.989830. Independent
-review confirms both screen rejections. Actual hot/slow attribution and complete
-native/natural qualification remain incomplete and stopped. No confirmation,
-all29, full-suite, upstream, PMU or repair follows for either loser.
-
-Round71 is closed. The user has authorized the
-[execution-state design72](design/proposals/execution-state72.md). Two Sol 6.1
-workers own compiler/layout and accumulator/effect/activation work. The
-[layout source contract](issues/register-semantics59/execution72-layout.md) is
-implemented and rejected at G `240f4c2b977`, with magic 64424. Both builds pass
-117/79 and all 1,143 methods across 20 related modules per role (16 release/15
-debug skips). Three ordinary compiler probes produced identical words and
-extents, so root removed the unproven scalar relocation pass before timing.
-The remaining cold-map unit loses its stable 32-row hot8 screen: GM 1.003934,
-spectral_norm 1.070835 and logging 1.014417. No cause, packing gain or selection
-is claimed; no further qualification or repair follows for this unit. The
-[accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
-has independent peer and root GO. Both workers implement it directly from
-selected57: its existing reserved NULL homes and materialization before effects
-do not need the rejected exception-map layout. Root owns integration, generation, native tests
-and benchmark selection. Fresh warmed profiles compare selected57 and upstream:
-SEND/delegated yield account for about 45% of selected generator samples; the
-coroutine workload stresses creation and synchronous completion. These are
-diagnostic samples, not a new timing campaign or causal savings budget.
-Selected57 remains golden, and logging regressions remain unexplained. The closed
-[round69 design](design/proposals/interpreter-parity69.md) and
-[source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
-Round68 and both round67 candidates also remain rejected; their mechanisms and
-preserved measurements do not establish a combined parity budget.
+The ABI retains the 112B frame header, existing reserved homes and initialization.
+It adds an 8B executable-header pointer and 2B/word map. Complete native arithmetic
+and exact-call paths improve slightly; generic calls and generator completion
+add work. Thus carrying a value is demonstrated, but the intended common-case
+simplification is not. The [trial report](issues/register-semantics59/report.md)
+owns exact results, costs and follow-up constraints; the
+[design](design/proposals/execution-state72.md) and
+[source contract](issues/register-semantics59/execution72-abi.md) retain the
+attempted architecture. No third lane or new design is adopted. Earlier rejected
+units remain closed; the next grouped review must price a complete execution
+boundary and preserve specialization coverage before broader implementation.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

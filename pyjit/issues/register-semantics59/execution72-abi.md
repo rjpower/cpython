@@ -1,5 +1,10 @@
 # Execution72 carried-owner ABI: exact first source unit
 
+Outcome: implemented and rejected at `c6d54fd3b5d`, 2026-11-16. Focused behavior
+and complete native controls pass; protected hot8 GM is 1.067106/selected57.
+This remains an experimental contract, not selected architecture. The
+[report](report.md) owns costs, limits and the STOP decision.
+
 Reviewed source contract; independent peer and root implementation GO received
 on 2026-11-15. Based on selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Root owns implementation release,
@@ -104,6 +109,16 @@ helpers and every unselected operand remain direct. A missing variant declines
 selection before code emission; it does not add a dynamic runtime fallback.
 Public images validate producer, consuming edge and mode together.
 
+Family-wide ownership facts intersect only handlers that can replace one
+another at the same site with the same payload convention. Ordinary WORD,
+placed ACC, and private materialized WORD entries are distinct groups;
+placement groups also retain the input role and output-edge mask. Sparse
+monitor adapters preserve their own observation contract before dispatching
+to the underlying operation. Copying a site's operand geometry does not make
+its monitoring body an ordinary ownership-transfer implementation. Keep
+handler-specific physical storage proofs distinct from family-common facts;
+do not copy a certificate merely to restore a previously available optimization.
+
 Initial supported source roles are:
 
 * ADD/SUB single result, generic provider and exact-inline-int fast arm;
@@ -114,6 +129,9 @@ Initial supported source roles are:
   generic CALL provider fallback; unsupported adaptive providers stay in the
   same ACC-capable generic family rather than nominate an incompatible head;
 * SEND's `v`, yielded value and completed result as separate edge identities;
+  CLEANUP_THROW's existing completed-result helper supplies the same convention
+  at the shared normal join. Every predecessor must agree; exceptional ingress
+  does not become a carried edge;
 * YIELD_VALUE/YIELD_DELEGATED outgoing value and resume input, separately;
 * transparent control along these edges only where the source-derived fast
   path is non-reentrant; RESUME/backedge pending work goes through an effect
@@ -150,6 +168,14 @@ STORE_FAST is an admitted owning consumer for the ordinary YIELD → RESUME →
 local-binding path, using existing local publication/displaced-owner semantics.
 This amendment closes actual generator control flow; tests and native receipts
 must demonstrate it rather than treating an enum or variant as a reached hit.
+
+Generic SEND's virtual iterator path consumes its sent input logically but can
+leave dead bits in the output home. Ordinary publication overwrote those bits.
+The carried-output lowering instead clears that home at the successful output
+boundary, after canonicalizing the new native result. It adds no reference
+release and grants no physical certificate where the window graph is unknown.
+Charge the clear, including paths that already cleared the input; direct VM
+generator entry does not reach this output tail.
 
 Selection collects candidate producer-to-consumer edges before changing any
 opcode. It then removes unavailable or conflicting native modes and incomplete
@@ -309,10 +335,12 @@ shortcut or Python prewalk is proposed.
 Native generator send is a cold ingress. Preserve current setter-before-hook
 semantics: duplicate the borrowed input once, consume/materialize it into the
 actual typed incoming home before PEP523 selection, and root it across early
-C-recursion failure. For ACC this is its reserved vacant spill home; the
-private default start entry takes it once after valid entry and continues with
-ACC. This external boundary pays a home round trip. The nested SEND fast cycle
-does not. Created-frame unused None and throw/close are explicit discard/error
+C-recursion failure. For ACC this is its reserved vacant spill home. The first
+implementation deliberately keeps native entry materialized through its
+explicit WORD chain after the setter and evaluator hook, rather than retaking
+a home after that callback boundary. This external boundary pays ordinary home
+traffic and establishes no native-resume ACC hit. The nested VM SEND fast cycle
+still transfers the input directly. Created-frame unused None and throw/close are explicit discard/error
 entries; arbitrary public nonzero throwflag keeps its existing exception
 meaning. No reserved public integer discriminator or hook bypass.
 
@@ -344,6 +372,24 @@ conditional ownership state or address may be implicitly carried in a hidden
 continuation record. If this fails, materialize ACC and retain the existing
 ordinary body at that operation; charge its returning C edges. The first
 adapter splits therefore use only audited cuts with this complete property.
+
+For the checked callback-free input spill followed by the ordinary body, retain
+that body's independently proved abrupt operand footprint. The spill writes
+only the encoded input home. This preserves facts about lower unrelated homes
+at exception joins without importing the ordinary body's physical error
+snapshots into the adapter. Unknown transfer/error descriptions remain unknown;
+an uncovered callback or changed source invalidates the footprint certificate.
+Classify allocation/boxing from the actual emitted record body. A conservative
+placeholder can erase a valid footprint and reject nested asynchronous
+comprehensions. The same audited nonfailing spill may retain the sole COMPLETE
+error-census receipt of a nonfailing ordinary body; it cannot copy other routes
+or physical snapshots. Source-mutation tests must revoke these capabilities.
+Likewise, the error census and emitted displaced-local cleanup share one
+physical-result-sink predicate. A concrete carried output has no local sink,
+even when its ordinary format can replace a local. This removes that nonexistent
+effect from the proof obligation; all actual provider, source, unwind, terminal
+and boxing checks still apply. Latent activation results retain their physical
+recipient obligations.
 
 Ordinary effect return uses the actual logical continuation. A pending redirect
 goes through existing completion after materialization; an already applied

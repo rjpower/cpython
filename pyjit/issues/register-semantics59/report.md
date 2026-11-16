@@ -1,13 +1,155 @@
 # Semantic IR trial results
 
-## Execution72: layout rejected; carried-owner ABI in implementation
+## Execution72: both units rejected; selected57 remains golden
 
 The user authorizes [design72](../../design/proposals/execution-state72.md)
 implementation with Sol 6.1 workers and root integration/validation. Compiler
 allocation must serve ordinary execution; cold exception and observer consumers
 use explicit ownership maps. The execution ABI carries a canonical owned result
-through complete producer/consumer paths. The reviewed ABI is being implemented
-directly from selected57 in W/P; no ABI runtime qualification or win is claimed.
+through complete producer/consumer paths. The reviewed ABI is integrated directly
+from selected57 and passes focused qualification, but loses its protected
+performance screen. Neither72 unit is selected. Preserve candidate
+`c6d54fd3b5d53b89d47d1dbda30080e4ebdae529` on
+`pyjit/execution72-abi-integrated`; do not expand, retime or repair this trial.
+
+The unchanged hot8 screen has 32 successful rows, two balanced pairs, stable
+source/ELF/config identities and no pre/postflight errors. Elapsed-time ratios
+are candidate/selected57; lower is better:
+
+| Case | Geometric mean | Pair 1 | Pair 2 |
+| --- | ---: | ---: | ---: |
+| comprehensions | 0.972770 | 0.949018 | 0.997117 |
+| deltablue | 1.068427 | 1.070154 | 1.066704 |
+| coroutines | 1.018138 | 1.020060 | 1.016219 |
+| generators | 1.015677 | 1.015820 | 1.015534 |
+| logging_silent | 1.210843 | 1.211955 | 1.209733 |
+| raytrace | 1.289980 | 1.285528 | 1.294447 |
+| spectral_norm | 0.988198 | 0.988148 | 0.988248 |
+| nqueens | 1.013510 | 1.016173 | 1.010854 |
+
+Hot8 GM is **1.067106**. Six means exceed protection; DeltaBlue, logging and
+raytrace also breach the per-pair cap. The complete screen is
+`E59/abi72-hot8-selected57-screen`. No winner confirmation, all29, full suite,
+fresh upstream comparison or further PMU/repair follows. The cumulative focused
+passes below establish useful behavioral coverage, not full qualification.
+
+The common-case objective is not achieved. This implementation carries values,
+but retains reserved homes and existing provider transactions, adds ordinary
+continuation-map/kind work, and materializes before potentially reentrant
+completion. Its larger helper frames and complete native costs are measured
+below. The frame header and slot allocation do not shrink. These facts explain
+why removed stores cannot be booked as a net saving; they do not apportion the
+logging or raytrace timing losses. Lost constructor specialization is another
+known cost, with no measured frequency or causal attribution.
+
+The next grouped architecture decision should require one complete cheap
+producer/effect/consumer boundary before another broad rollout: execution-only
+value transport, explicit materialization at actual effects, and specialization
+coverage independent of value placement. An eligible placement must not force a
+previously specialized call onto a generic provider. Compile-time proofs must
+use the actual physical sink, as the integration defects demonstrate. Frame
+packing remains a separate unproved optimization; exception cleanup should
+consume a chosen layout, but changing its maps alone demonstrated no packing
+gain. This is a follow-up direction, not an adopted third72 lane or a parity
+claim.
+
+The complete source freezes P `5d7140f9579` and W `f132e957c33` received
+independent source review and merged into G `758a4d8655f`. Full generation
+exposed noncanonical monitor bases; the corrected `execution72-abi2` and `abi3`
+generation runs pass. Product review then found missing C token consumption,
+a cold LINE redirect using the wrong payload convention, and ordinary ownership
+facts weakened by grouping different execution modes together. These are
+integration defects corrected before qualification, not passing native
+results. Generation and product review now pass through `execution72-abi5`.
+Its native build compiled the bootstrap executable, then module freezing
+exposed missing accumulator-result propagation between operations inside one
+basic block. The validator correctly rejected the following return's unproved
+owner. Root GDB attribution pins the CALL→RETURN case.
+The exact source/product peers and numbered receipts remain under
+`E59/execution72-*`; [handoff](../../HANDOFF.md) owns the current heads.
+
+The paired fixed-point/replay correction restores bootstrap compilation.
+`execution72-abi6` release builds 117 modules/79 extensions, and 19 of 22 focused
+accumulator tests pass. Two failures expose missing CLEANUP_THROW participation
+at the shared SEND-completion join; one negative-image fixture reaches an earlier
+learned-only-handler rejection. Debug bootstrap catches a separate physical
+invariant violation: generic SEND's virtual iterator path leaves dead `None`
+bits where ordinary output publication used to overwrite them. Carrying the
+new result must instead vacate that reserved home. The reviewed correction adds
+one NULL store after successful generic SEND, without changing its UNKNOWN
+transfer proof or duplicating a close. CLEANUP_THROW receives the existing
+completed-result convention so the shared join admits both ingresses. A further
+cold validator correction recognizes certified completed-edge retirement while
+still rejecting an unrelated occupied result home.
+
+Both `execution72-abi8` builds pass 117 modules/79 extensions. All 23 initial
+carried-owner tests pass on release and debug. The candidate's injected native
+C-stack-entry failure control passes, including recoverable ownership and
+subsequent resume.
+
+ABI9 ports legacy handler-name/cohort tests and synthetic public images while
+retaining their geometry and monitoring assertions. An independent abrupt
+footprint receipt fixes the await/keyword-call rejection. Both builds pass
+117/79; all 595 methods across 17 related modules pass on debug (nine skips),
+including the now-24-method accumulator suite. The corresponding release run
+also passes those modules, but finds a nested-comprehension compile rejection
+and a typed delegated-recipient reader defect. Eight separate discarded-result
+completion methods pass in both roles.
+
+ABI10 corrects runtime/remote DISCARD and LOCAL recipient readers and preserves
+actual RESUME/carrier error receipts. Both builds pass 117/79 at `af8778289f5`.
+Remote inspection and accumulator tests pass in both roles. The nested comprehension
+still failed at that head. GDB confirms the corrected exceptional footprints; its first
+trace recorded physical NULL bits, not logical absence. Independent review
+caught that distinction before any consumer change. The identical minimal
+source compiles under selected57. The remaining defect is an ordinary-format
+local-sink requirement applied to a carried constant that has no local sink.
+Producer `50e7a603b0a` shares one physical-sink predicate between emitted cleanup
+and proof generation, retaining all source/callback/error checks. ABI11 changes
+only the constant's no-error census. Final G `c6d54fd3b5d` builds 117/79 in both
+roles and passes all 100 coroutine methods on each. Across ABI9–11, all 768
+methods in the 19 related modules pass per role, with 12 skips; this is cumulative
+focused qualification, not one full-suite run. Eight additional discarded-result
+completion methods pass both roles. All failed receipts remain preserved.
+
+The six frozen native controls repeat successfully on final ABI11 with the same
+counts as ABI8. Counts include the
+producer through its real consumer, with the same boundary as selected57:
+
+| Control | Selected57 instructions | ABI11 instructions | Selected / ABI11 maximum C-stack decrease |
+| --- | ---: | ---: | ---: |
+| Arithmetic | 223 | 202 | 80 / 80 B |
+| Exact Python call | 479 | 474 | 80 / 80 B |
+| Generic native call | 1,764 | 1,821 | 1,328 / 1,408 B |
+| Delegated yield | 245 | 253 | 24 / 40 B |
+| Generator completion | 769 | 848 | 272 / 368 B |
+| Coroutine completion | 721 | 832 | 272 / 368 B |
+
+Receipts are `E59/execution72-abi11-native-*`, collated in
+`execution72-abi11-native-summary.json`. These are single reached paths,
+not natural frequencies or timing results; stack decreases exclude red-zone use.
+In particular, completion can materialize a result before receiver retirement.
+The extra typed-state and materialization costs remain part of the candidate.
+All six supplementary owner probes pass with actual target, live phase, NULL
+reserved home and nonzero payload checks (`execution72-abi11-owner-*`). These do
+not prove reference-count uniqueness or hot-benchmark coverage. The initial
+probe serialization failure and its preserved original script remain recorded.
+The constructor-init shim has no carried-output variant in this slice, so a
+CALL→RETURN placement falls back to generic execution; the benchmark must charge
+that lost specialization. The ordinary shim's monitoring test is ported
+to exercise its intended ordinary path without relaxing its event assertions.
+The injected native-entry failure also repeats successfully on final debug.
+Final release text grows 7,667,038→7,904,020 B (+236,982 B), data grows 3,712 B,
+and BSS is unchanged. These are ELF sections, not hot working-set measurements.
+The protected screen rejects the candidate as recorded above; no fresh upstream
+comparison or selection occurred.
+
+Standalone C geometry on the integrated headers confirms the 112-byte frame
+header and two-byte recipient are unchanged. The executable header grows
+40→48 bytes, plus the two-byte-per-word continuation map. This is recorded in
+`E59/execution72-geometry-integrated.json`; it establishes no frame-packing,
+instruction-count or throughput gain. The native C-stack-entry failure control
+passes on both selected57 and candidate debug.
 
 The separate cold-layout unit at G `240f4c2b977` (magic 64424) passes both
 117-module/79-extension builds and 1,143 methods across 20 related modules per

@@ -11,20 +11,14 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-The selected runtime remains selected57. Independent source review stopped the
-[round70 design](design/proposals/interpreter-parity70.md) before implementation:
-canonical CALL results added consumer work without a credible net saving.
-The adopted [round71 design](design/proposals/interpreter-parity71.md) orders
-canonical-value fact transport, then generated hot/slow execution separation.
-Both units passed source/product review, builds and focused tests, then lost
-their early protected screens. Neither is selected. The user has authorized
-implementation of the [execution-state design72](design/proposals/execution-state72.md),
-with Sol 6.1 workers owning compiler/layout and execution/activation changes.
-Root owns integration and validation. Shared interfaces receive independent
-source review before implementation; selected57 remains golden.
-The stopped round69 summary trial removed child execution on hits but lost its
-early protected screen with callback qualification incomplete. The
-[trial report](issues/register-semantics59/report.md) owns results and limits.
+The selected runtime remains selected57. Both independently implemented
+[execution-state72](design/proposals/execution-state72.md) units are closed and
+rejected: cold ownership maps demonstrated no packing benefit, and carried-value
+execution added more ordinary transfer work than it removed on the protected
+benchmark set. Sol 6.1 workers implemented and peer-reviewed; root integrated
+and validated. The [trial report](issues/register-semantics59/report.md) gives
+exact results, limits and the next design constraints. Follow the goal → plan →
+architecture/status chain above; rejected trials are evidence, not prerequisites.
 
 ## Architecture and evidence
 

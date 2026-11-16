@@ -1,15 +1,16 @@
 # Execution state: diagnosis and proposed replacement contract
 
-Status: user-authorized direction, 2026-11-15. Source inspection and fresh
-diagnostic profiles completed. The complete [layout unit](../../issues/register-semantics59/execution72-layout.md)
-passed related behavior checks but lost its protected performance screen and
-is closed. Two Sol 6.1 workers implement the reviewed
-[accumulator/effect/activation contract](../../issues/register-semantics59/execution72-abi.md)
-directly from selected57, dividing compiler/validation and runtime/generator work.
-Selected57 remains golden. This does not restart the rejected experiments or
-claim parity. Read the [current interpreter](../interpreter.md) for selected
-behavior and the [trial report](../../issues/register-semantics59/report.md) for
-previous results.
+Status: attempted and rejected, 2026-11-16. Sol 6.1 workers implemented and
+cross-reviewed the bounded [layout](../../issues/register-semantics59/execution72-layout.md)
+and [carried-owner ABI](../../issues/register-semantics59/execution72-abi.md)
+units; root integrated and validated. Both lost protected screens. Layout
+showed no frame-packing gain. The ABI carried values correctly in reached
+controls, but retained old effect transactions and added common-path work;
+hot8 GM was 1.067106/selected57. This proposal is not selected architecture and
+its intended complete execution simplification remains unproved. The
+[trial report](../../issues/register-semantics59/report.md) owns results and
+follow-up constraints. Selected57 remains golden; read the
+[current interpreter](../interpreter.md) for its behavior.
 
 ## Diagnosis
 

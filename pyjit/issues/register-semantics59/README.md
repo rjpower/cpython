@@ -1,54 +1,26 @@
 # Register semantics and interpreter parity
 
-Status: active on 2026-11-15. Selected57
-`0dcba75bb3df40c32137db453b001f7e8f101de0` remains the runtime baseline.
-The coordinator owns native jobs, integration and measurement. No round59
-candidate is selected. All five first-cycle executable screens lose; the
-[trial report](report.md) records qualification and performance. The [ordered design](../../design/proposals/register-semantics59.md)
-and [Astra review ledger](review-astra.md) are frozen historical inputs. The
-[closed round65 design](../../design/proposals/interpreter-parity65.md) and
-[review65](review65.md) retain round65 contracts and rejected outcomes. The
-[closed grouped design69](../../design/proposals/interpreter-parity69.md) and
-[review69](review69.md) ordered guarded callee summaries. Actual hits remove
-child execution, but complete native instruction/stack costs grow. The early
-protected screen rejects G `52806aacedf`: GM 1.012667, Delta 1.034596,
-logging 1.176093, generators 1.018079 and raytrace 1.034177. Positive committed
-summary redirect coverage remains incomplete; this is not a fully qualified
-checkpoint. Stop further qualification/repair/timing. Selected57 is unchanged.
-The [trial report](report.md) owns evidence; [handoff](../../HANDOFF.md) owns
-paths and commands. The [round70 design](../../design/proposals/interpreter-parity70.md) and
-[review70](review70.md) proposed one canonical CALL-result convention. Independent
-source adoption stops it before implementation: typed routing solves the
-implicit-child ambiguity without a credible whole-consumer saving. Grouped71
-is complete. The adopted [round71 design](../../design/proposals/interpreter-parity71.md)
-and [review](review71.md) order canonical fact transport then hot/terminal-slow
-generation. Both units pass source/product review, builds and focused runtime
-tests, then lose their early protected screens: A GM 1.011186/logging 1.121887;
-B GM 1.017289/logging 1.263918. Static removal is real: A loses eight conversion
-edges; B's hot bodies have no returning C calls. Full dynamic native qualification
-remains incomplete and stopped. Neither is selected or a prerequisite. Root
-has user authorization to implement the
-[execution-state design72](../../design/proposals/execution-state72.md) through
-Sol 6.1 workers. Compiler/layout and execution/activation contracts are being
-cross-reviewed. Root owns integration and native/performance validation;
-selected57 stays golden.
+Status: stage remains open; execution72 closed on 2026-11-16. Selected57
+`0dcba75bb3df40c32137db453b001f7e8f101de0` remains golden. Root coordinates
+integration and native validation; Sol 6.1 workers implement and cross-review.
 
-Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
-Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
-coroutines 1.072083 and logging 1.239007 fail protection despite generators
-0.708007 and spectral_norm 0.892976. Its
-[implementation contract](retained-delegation68.md) and
-[source peer](retained-delegation68-peer.md) remain closed evidence.
-Both round67 candidates qualify but lose their screens: A hot8
-1.026137/logging 1.210653; B hot8 1.114220/logging 1.430373. Both remain rejected;
-selected57 is unchanged.
+Both [execution72](../../design/proposals/execution-state72.md) units are
+implemented and rejected. The cold-layout unit demonstrated no packing gain.
+The [carried-owner ABI](execution72-abi.md) passes focused runtime and native
+controls but loses its protected screen: hot8 GM 1.067106, DeltaBlue 1.068427,
+logging 1.210843 and raytrace 1.289980 versus selected57. The common-case result
+transport remains too expensive; no frame-size or initialization reduction
+was implemented. All sources and evidence are preserved; no losing trial is a
+prerequisite or a candidate for retiming.
 
-Round66 is closed. Its qualified frozen continuation loses logging/generator
-protection; its finite logging diagnostic reports fewer instructions and more
-cycles without identifying a cause. The union remains unimplemented. Earlier
-qualified losses and native rejections remain evidence, not prerequisites.
-The [trial report](report.md) owns exact measurements; [execution logistics](measurement.md)
-and the [handoff](../../HANDOFF.md) own immutable controls and target jobs.
+The [trial report](report.md) owns exact outcomes, qualification limits and
+follow-up constraints. The [active plan](../interpreter-performance56/plan.md)
+owns the next architecture decision, and [handoff](../../HANDOFF.md) owns runtime
+paths and commands. Earlier59–71 attempts remain closed; their designs/reviews
+are historical evidence. No next unit is adopted. Future work must demonstrate
+a complete execution-boundary saving, preserve specialization coverage, and
+keep cold observation/cleanup obligations out of ordinary transfer paths where
+ownership permits.
 
 The user requests repeated architecture → ordered implementation → measured
 selection cycles until upstream parity. The hot set is comprehensions,

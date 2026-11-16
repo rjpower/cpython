@@ -14,25 +14,20 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-has stopped the [round70 design](design/proposals/interpreter-parity70.md) at
-independent source adoption. Its canonical result convention did not show a
-credible complete-consumer saving. The adopted [round71 design](design/proposals/interpreter-parity71.md)
-and [review](issues/register-semantics59/review71.md) order two independently
-selectable generator units: canonical-value fact transport, then callback-free
-hot bodies with terminal ordinary slow entries. Both exact source contracts have
-independent GO. Both units pass source/product review, builds and focused tests
-but lose their early protected screens. A removes canonicalization work; B
-removes hot returning C edges. Neither is selected or fully native-qualified.
-The user has resumed work on the [execution-state design72](design/proposals/execution-state72.md):
-logical values before physical allocation, a carried owned result, typed effect
-boundaries and exact ownership maps. Ordinary execution chooses the layout;
-exception cleanup consumes it. Two Sol 6.1 workers specify and cross-review the
-compiler/validation and execution/activation interfaces, then implement bounded
-increments. The separate layout72 unit lost its protected screen and is closed;
-the first ABI slice keeps existing physical homes and needs no changed EH map.
-Root owns merged validation and selection. Repeated logging losses
-remain unexplained; smaller source or native frames do not predict throughput.
-The selected runtime retains its current contracts until a measured winner lands.
+has completed the [execution-state72](design/proposals/execution-state72.md)
+attempt. Sol 6.1 workers implemented and cross-reviewed its compiler/validation
+and execution/activation changes; root integrated and validated. Both layout
+and carried-owner units lost their protected screens. The latter demonstrates
+actual carried values, but increases common transfer work and retains existing
+frame size/initialization. Neither is selected.
+
+The objective remains logical values before physical allocation, a cheap result
+channel, typed effect boundaries and exact ownership maps. Ordinary execution
+chooses layout; exception cleanup consumes it. Before another broad rollout,
+the next grouped review must establish a complete producer/effect/consumer net
+saving and retain existing specialization coverage. No third72 lane is adopted.
+Smaller source or native frames alone do not predict throughput. The selected
+runtime retains its contracts until a measured winner lands.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

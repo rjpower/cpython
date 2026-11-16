@@ -60,10 +60,17 @@ The separate explicit-survivor layout unit passes related behavior checks but
 loses its protected screen (GM 1.003934; spectral_norm 1.070835, logging 1.014417)
 and is closed. The first accumulator ABI retains current homes and materializes
 before effects, so it does not depend on that rejected unit. Sol 6.1 workers
-implement the reviewed compiler/validation and execution/activation interfaces
-directly from selected57. Root integrates a complete producer/consumer
-slice, including errors and observation, before expanding the port. Native
-spills and all result consumers count toward the cost; logging remains protected.
+have implemented the reviewed compiler/validation and execution/activation
+interfaces directly from selected57. Final ABI11 builds pass 117/79 in both roles;
+cumulative focused qualification passes 768 methods across 19 related modules
+per role, plus eight discard methods. Six native paths and owner probes pass,
+but show increased generic-call and generator completion work. The unchanged
+hot8 screen rejects the ABI: GM 1.067106, DeltaBlue 1.068427, logging 1.210843,
+raytrace 1.289980. Both72 units are closed; no confirmation/all29/full/upstream
+or rescue follows. Neither layout nor the ABI demonstrated the intended
+common-case simplification. The next grouped design must prove net removal
+across a complete effect/consumer boundary and preserve specialization coverage
+before a broad port. No third72 lane is adopted; selected57 remains golden.
 The prospectively reviewed
 one-pair confirmation option is implemented and passes its host tests; default
 balanced screen behavior remains unchanged.
@@ -173,11 +180,11 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Integrate reviewed72 units and validate complete execution paths | Preserve selected57/evidence; own generation, native qualification and selection |
-| Sol 6.1 compiler worker | ACC edge selection, common validation and continuation maps | W directly from selected57; focused host checks and post-review |
-| Sol 6.1 execution worker | Accumulator, effects and activation/result transfer | P from selected57; shared ABI cross-review, focused host checks and post-review |
+| Root | Closed both72 units after integration and protected screens | Preserve selected57 and rejected evidence; publish outcome |
+| Sol 6.1 compiler worker | Compiler, validation, tests and final cold review complete | W frozen; source and screen peers retained |
+| Sol 6.1 execution worker | Runtime/generator, readers and product reviews complete | P frozen; focused host/source receipts retained |
 
-Both72 ABI implementation lanes are active. The layout72 and both71 screens remain closed. Fresh
+Both72 ABI implementation lanes are frozen. The layout72 and both71 screens remain closed. Fresh
 diagnostic profiles are retained under `E59/architecture-diagnosis72-fresh`;
 they do not establish a timing result or a removable cycle budget.
 A losing screen stops the unit. A qualified broad winner may be selected before

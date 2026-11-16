@@ -18,32 +18,54 @@ results, hashes and qualification limits; [design71](design/proposals/interprete
 and [review71](issues/register-semantics59/review71.md) retain the closed contracts.
 Astra is for grouped architecture review, not the component loop.
 
-Two Sol 6.1 workers implement the independently reviewed
+Two Sol 6.1 workers have implemented and independently reviewed the
 [accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
-directly from selected57. W, branch `pyjit/execution72-compiler-abi-selected57`,
-owns selection, common validation and continuation-map lifetime. P, branch
-`pyjit/execution72-carried-owner`, owns generator/runtime ABI and activations.
-W also owns cold specialization/instrumentation writers; P generates their
-finite mode-preserving wrappers. Their sparse nomination table is cold-only.
-The shared header is `f2a8a302b93` in W / `392307588` in P; W's map lifetime is
-`da134719c4f`, P's typed stored-recipient checkpoint `c9ada93f713`.
-These are incomplete source checkpoints, not runtime GO. Root integrates only
-the complete reviewed ABI sources, generates/reviews products, then runs native
-checks and hot8. Proposals/progress use `E59/execution72-*`; no72 winner exists.
+directly from selected57. W owns compiler/common validation/tests on
+`pyjit/execution72-compiler-abi-selected57`; P owns runtime/generation/readers,
+with final corrections on `pyjit/execution72-delegated-readers`. Both are frozen.
+Root owns generation, integration, builds, native controls and timing.
 
-Current partial checkpoints are W `07831d121d9` (compiler selection, validation,
-HANDOFF terminal graph and magic 64425) and P `90421ad6788` (scalar carried
-results, typed completion and cold monitor interface). Partial independent
-source reviews pass; full CALL/SEND/YIELD/effect and instrumentation closure is
-still in progress. No complete ABI generation, interpreter build or runtime
-qualification has occurred. Do not execute an old ELF against these Lib trees.
-Root's six selected native controls and prepared supplementary owner probe are
-`E59/execution72-native-*` and `execution72-owner-{probe,run}.py`; the owner
-probe remains unexecuted. `execution72-geometry-checkpoint.json` verifies the
-current frame header is unchanged while the executable header grows 40→48B.
+G is `c6d54fd3b5d`, branch `pyjit/execution72-abi-integrated`, magic 64425.
+Complete initial sources W `f132e957c33` and P `5d7140f9579` plus reviewed
+integration corrections are retained in its history. These close monitor
+metadata/payload routing, physical owner propagation, generic SEND's vacated
+output, shared completion joins, typed suspended readers and actual emitted
+error footprints. Latest producer `50e7a603b0a` makes emitted local cleanup and
+its proof use the same physical-result predicate. ABI11 generation changes
+only LOAD_COMMON_CONSTANT_ACC_OUT's no-error census; independent product GO is
+`E59/execution72-abi11-product-readback.json`. Both final builds pass 117/79.
+Never execute an older ELF against a moved source/Lib tree.
+
+ABI10 release/debug builds passed 117 modules/79 extensions and all 97 methods
+across remote inspection and the 24-method accumulator module (three skips).
+ABI9 passed 595 debug methods across 17 related runtime modules (nine skips);
+eight discarded-result completion methods separately passed both roles.
+The ABI10 nested-comprehension compile rejection is resolved in ABI11.
+The first GDB trace recorded NULL bits, not logical absence; the corrected trace
+identifies a fictitious error edge on the carried constant. ABI11 addresses that
+actual producer defect without changing validation or generated instruction
+bodies. All 100 coroutine methods pass on both final builds. Across ABI9–11,
+all 768 related methods pass per role (12 skips), plus the eight discard methods.
+Keep all numbered failures and peers under `E59/execution72-*`.
+
+Six selected/native candidate controls and six supplementary owner probes pass
+and repeat on final ABI11. Their complete path costs remain mixed. The native
+C-stack-entry failure control also repeats on final debug, with recoverable
+ownership/resume. Final receipts use `execution72-abi11-{native,owner,entry}*`.
+Controllers are `execution72-native-{fixture,controller,run}.py`,
+`execution72-owner-{probe,run}.py` and `execution72-entry-*.py`. The probe's
+original GDB serialization failure is preserved; its reviewed correction changes
+only output. Cold review `execution72-final-cold-review.md` records ordinary
+map/kind/stack costs and actual coverage limits. The stable 32-row screen
+`abi72-hot8-selected57-screen` rejects selection: GM 1.067106, DeltaBlue 1.068427,
+logging 1.210843, raytrace 1.289980. Independent audit is
+`execution72-screen-peer.json`. STOP this trial: no confirmation, all29, full
+suite, upstream/PMU or rescue. Selected57 remains golden. The frame header remains
+112B; executable header grows 40→48B plus
+2B/word (`execution72-geometry-integrated.json`). This is no frame-packing gain.
 
 The [layout unit](issues/register-semantics59/execution72-layout.md) is closed
-and rejected. G and its builds are frozen at `240f4c2b977`, branch
+and rejected. Its preserved source is `240f4c2b977`, branch
 `pyjit/execution72-layout-integrated`, magic 64424. Both final
 `execution72-layout6` builds pass 117/79 and 1,143 related methods per role.
 Integration fixes and earlier failed receipts remain preserved. Three ordinary
@@ -54,7 +76,8 @@ logging 1.014417, stable identities and all 32 rows successful. No confirmation,
 all29, full suite, upstream or PMU follows. Existing ABI reserved NULL homes and
 pre-effect materialization do not depend on these maps; both workers confirmed
 that source boundary. Start the ABI G branch from I, not this rejected unit.
-Keep old W layout/P layout-based ABI branches and sealed evidence. Magic 64423
+G has moved to the ABI candidate; never run preserved layout ELFs with G's new
+Lib tree. Keep old W layout/P layout-based ABI branches and sealed evidence. Magic 64423
 already identified older IRSC1 caches; do not reuse 64423 or 64424 for the ABI.
 
 Preserved round71 runtime trees:
@@ -84,8 +107,7 @@ PMU result or cause is claimed. Never execute preserved A ELFs against current G
 The host measurement helper has reviewed one-pair confirmation support, with
 three host test methods passing; no confirmation was launched. Source/runtime
 jobs remain root-owned. Selected57/I/U stay immutable/golden; preserve all
-rejected branches and sealed evidence. Workers are active on72 source contracts;
-independent cross-review precedes implementation.
+rejected branches and sealed evidence. Current72 integration is described above.
 
 ## Closed round69 checkpoint
 
@@ -122,8 +144,7 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-The workers have moved to72 contracts; G remains frozen rejected B until a
-reviewed integration. Preserve A/B/69 branches and sealed evidence.
+Preserve A/B/69 branches and sealed evidence; G now holds the72 candidate above.
 Astra's71 review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.

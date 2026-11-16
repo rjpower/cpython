@@ -11,8 +11,9 @@ this file owns execution logistics.
 
 ## Current work
 
-Round69 is stopped and unselected. The next grouped architectural review is
-pending; no new source unit is released. Selected57 remains immutable/golden.
+Round69 is stopped and unselected. Grouped architectural review70 is commissioned
+in Astra session `zfr7ow1e`, from canonical `b959c9af9b5`. It owns only proposal70
+and review70; no new source unit is released. Selected57 remains immutable/golden.
 Root owns navigation, qualification, runtime jobs and integration. Preserve all
 round69 branches/controllers/evidence; do not retry its losing executable.
 

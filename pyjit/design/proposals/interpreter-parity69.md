@@ -1,15 +1,21 @@
 # Interpreter parity69: summarize complete small Python callees
 
-Status: grouped architecture proposal, not implementation or selection.
+Status: **closed, unselected implementation trial**. Actual hits remove child
+execution, but complete native paths grow in instructions/stack and the early
+protected screen loses DeltaBlue, logging, generators and raytrace. Positive
+committed-summary redirect qualification remains incomplete. See the
+[report](../../issues/register-semantics59/report.md) for exact outcomes and
+limits. The original approved design and gates below remain unchanged evidence.
 The exact [source contract](../../issues/register-semantics59/guarded-summary69.md)
 has independent [peer approval](../../issues/register-semantics59/guarded-summary69-peer.md).
-Root has released producer and consumer implementation as one complete unit.
+Root released producer and consumer implementation as one complete unit; that
+executable is now stopped without repair or further qualification.
 Base: canonical `0fa1cefea53180f1e41d4acade00d12b5a471fa3`.
 [Review69](../../issues/register-semantics59/review69.md) supplies the source and
 evidence ledger; the [report](../../issues/register-semantics59/report.md) owns
 closed results. Selected57 remains unchanged.
 
-**GO to independent source-contract review for one bounded unit: guarded,
+**Original decision: GO to independent source-contract review for one bounded unit: guarded,
 callback-free summaries of complete small Python callee bodies.** Implement
 admission and the complete CALL consumer together, from selected57. Do not
 start a second runtime lane. **STOP retained68 as an executable candidate**;

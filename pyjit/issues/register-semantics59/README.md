@@ -22,8 +22,9 @@ source adoption stops it before implementation: typed routing solves the
 implicit-child ambiguity without a credible whole-consumer saving. Grouped71
 is complete. The adopted [round71 design](../../design/proposals/interpreter-parity71.md)
 and [review](review71.md) order canonical fact transport then hot/terminal-slow
-generation. Independent exact source cross-peers precede implementation; no
-runtime lane is released.
+generation. Both exact source contracts have independent GO; A is in source
+implementation from selected57, B waits for A's disposition. No generation,
+runtime build or performance result exists for round71 yet.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
 Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
@@ -60,9 +61,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Adopt71 and close source contracts | Preserve controls/evidence; own qualification and selection |
+| Root | Integrate A after actual-diff review | Preserve controls/evidence; own qualification and selection |
 | Astra | Grouped71 complete | Broad architecture only; no inner-loop work |
-| Sol-high workers | Independent source cross-peers | No implementation until exact contract GO |
+| Sol-high workers | A implementation; host confirmation proposal | B source GO queued; no parallel generator lanes |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

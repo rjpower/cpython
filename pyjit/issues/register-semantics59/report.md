@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round71: grouped design adopted; exact source review
+## Round71: exact source GO; A implementation released
 
 Root integrates Astra `4ee0ab177f9` as `2c186e0fb6f` and adopts the
 [design71](../../design/proposals/interpreter-parity71.md) for independent exact
@@ -19,9 +19,30 @@ ordinary. The cold entry retains advanced PC and counts semantic entry/body
 effects once. Root requires actual non-reentrant hot close lowering, not merely
 a precheck followed by an unchanged deallocator branch.
 
-No runtime edit, generation, build, test, timing or performance claim exists for
-round71 yet. Selected57 remains golden; rejected rounds remain closed. The
-grouped design owns prospective native and unchanged protected-screen gates.
+Independent A source GO covers proposal SHA
+`3c93c425f5ec90fd59919a05c36e77552ef5ae684163a2a75e88060b81d3f516`;
+peer `round71-canonical-source-peer.md` SHA
+`4848f2658db8b2a7bfd009761a8730090011748b52ae4897878c2d1b8e90defa`.
+A's narrow assignment-result lookup reuses HelperEffect without strengthening
+UNKNOWN whole-handler effects or inventing arbitrary home-pointer authority.
+HINT retains its successful NULL check and once-only hit counter; acquisition
+moves across only that noncalling counter/NULL boundary.
+
+Independent B GO covers amended proposal SHA
+`006ceb5f500105597afd79a0e941067bb1def81d52d7cfe1b09776df67725e45`;
+peer `round71-split-source-peer.md` SHA
+`ce223c48dc4a8e59b28316d9e63250080f7b3e4a92c137bf2b4ab2ae53c53b2d`.
+It executes the existing non-reentrant close outside assert, including the
+old-local close inside canonical publication, revalidates changed arithmetic
+proofs and preserves the configured statistics ABI. Native removal still needs
+proof in the actual ELF. No raw decrement or compiler assume is authorized.
+
+Root releases A source/tests in W on new `pyjit/parity71-canonical-provenance`
+from selected57. B stays queued until A's disposition. The other worker prepares
+the explicit one-pair confirmation option for prospective host-harness review.
+No round71 full generation, runtime build, native test, timing or performance
+claim exists yet. Selected57 remains golden; rejected rounds remain closed.
+The grouped design owns prospective native and unchanged protected-screen gates.
 
 ## Round70: stopped at source adoption
 

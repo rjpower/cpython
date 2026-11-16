@@ -19,9 +19,10 @@ independent source adoption. Its canonical result convention did not show a
 credible complete-consumer saving. The adopted [round71 design](design/proposals/interpreter-parity71.md)
 and [review](issues/register-semantics59/review71.md) order two independently
 selectable generator units: canonical-value fact transport, then callback-free
-hot bodies with terminal ordinary slow entries. Exact source contracts are in
-independent cross-review; no runtime unit is released. Existing owners, homes,
-encoded IR and calling conventions remain. No losing-executable rescue is queued.
+hot bodies with terminal ordinary slow entries. Both exact source contracts have
+independent GO. A is in implementation; B is queued behind A's disposition.
+Existing owners, homes, encoded IR and calling conventions remain.
+No losing-executable rescue is queued.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

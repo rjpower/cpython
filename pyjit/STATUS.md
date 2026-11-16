@@ -45,9 +45,10 @@ independent exact source review. A carries canonical-bit facts from audited
 storage readers to existing publication. B splits eligible generated handlers
 at a pre-effect cut, keeping ordinary slow execution in a body-only terminal
 entry. They retain owners, homes, encoded words and the five-argument ABI.
-Both source proposals are in independent cross-review; no implementation is
-released. A is not a mandatory winner for B, and its savings cannot be counted
-twice. The latest measured
+Both exact source contracts have independent GO. Root releases A implementation
+in a separate worktree from selected57; B remains queued until A's disposition.
+No round71 generation, runtime build, native test or timing has run. A is not a
+mandatory winner for B, and its savings cannot be counted twice. The latest measured
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
 Round68 and both round67 candidates also remain rejected; their mechanisms and

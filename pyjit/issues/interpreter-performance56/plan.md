@@ -39,7 +39,13 @@ eligible callback-free hot bodies from body-only terminal ordinary slow entries.
 Both retain encoded words, homes and the five-argument handler ABI. Exact source
 contracts are independently cross-peered before implementation. A need not win
 for B to proceed, and any native/frame saving earned by A is excluded from B's
-credit. No source lane is released or combined parity budget assumed.
+credit. No combined parity budget is assumed.
+
+Both exact source contracts now have independent GO. Root releases A source
+implementation only, from selected57 in W; B waits for A's disposition. Root
+owns generation/products/builds and target qualification. In parallel the other
+worker prepares the prospectively reviewed one-pair confirmation capability;
+default balanced screen behavior remains unchanged.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -146,11 +152,12 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Adopt71 and close exact source contracts | Preserve selected57/evidence; own runtime, qualification and selection |
+| Root | Integrate A after actual-diff peer | Preserve selected57/evidence; own generation/runtime, qualification and selection |
 | Astra | Grouped71 complete | Five options, two ordered units; no inner-loop work |
-| Sol-high producer / consumer | Independent canonical / hot-slow source cross-peers | No implementation until exact contracts receive GO |
+| Sol-high workers | A source/tests; host confirmation proposal | B source GO is queued; no parallel generator lanes |
 
-No new runtime lane, profile/counter or compiler/flags/layout search is active.
+Only A's source lane is active. No target job, profile/counter campaign or
+compiler/flags/layout search is active.
 A losing screen stops the unit. A qualified broad winner may be selected before
 parity; repeat grouped review and implementation against the remaining gap.
 

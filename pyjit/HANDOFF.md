@@ -29,14 +29,19 @@ Grouped review71 from Astra channel `zfr7ow1e`, commit `4ee0ab177f9`, is
 integrated as `2c186e0fb6f` and adopted for exact source review. The two serial,
 independently selectable units are canonical fact transport (A), then generated
 hot/body-only terminal slow lowering (B). A need not win for B to proceed; both
-are selected57-relative. No runtime implementation is released.
+are selected57-relative. Root has released A implementation only.
 
 Source proposals are `E59/round71-canonical-source-proposal.md` and
 `E59/round71-split-source-proposal.md`. Opposite Sol-high workers independently
 review them into `round71-canonical-source-peer.md` and
-`round71-split-source-peer.md`. Root checks actual no-returning-C hot closes,
-canonical arithmetic after source edits, once-only entry/stats and the A/B
-owned-versus-borrowed reader boundary before implementation GO. The two
+`round71-split-source-peer.md`. Both exact contracts now have independent GO;
+the trial report owns hashes and resolved findings. A's worker creates branch
+`pyjit/parity71-canonical-provenance` in W from immutable selected57. Source/tests
+only: root owns full generation, products, builds and target execution. B remains
+queued until A's disposition; its source contract explicitly covers all hot
+close sites, canonical arithmetic, once-only stats and the borrowed-reader cut.
+The second worker proposes the opt-in one-pair confirmation capability in the
+canonical host measurement helper, with root review before edits. The two
 `round71-*-architecture-input.md` memos are static source/native input only.
 Root owns implementation release, runtime jobs and integration. Selected57 stays
 immutable/golden; preserve round69 branches, controllers and evidence.
@@ -76,8 +81,8 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-Workers perform the bounded exact source cross-reviews above. Astra's broad
-review is complete; it stays out of the component loop. C's
+Workers implement A and prepare the independent host-harness proposal above.
+Astra's broad review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.
 

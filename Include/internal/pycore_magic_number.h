@@ -354,8 +354,9 @@ Known values:
    64423: preserved experimental ownership-map format
    64424: preserved experimental ownership-map cache revision
    64425: preserved experimental carried-owner format
-   64426: complete generator transfer boundary shapes */
-#define PYC_MAGIC_NUMBER 64426
+   64426: complete generator transfer boundary shapes
+   64427: distinguish explicit generator STORE_FAST and POP_TOP consumers */
+#define PYC_MAGIC_NUMBER 64427
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

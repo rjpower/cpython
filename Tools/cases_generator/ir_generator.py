@@ -3243,11 +3243,13 @@ class IRStack(Stack):
         return False
 
     def save_variables(self, out: CWriter,
-                       canonical_result: str | None = None) -> None:
+                       canonical_result: str | None = None,
+                       native_result: PointerOffset | None = None) -> None:
         out.start_line()
         var_offset = self.base_offset
         for var in self.variables:
-            if var.in_local and not var.memory_offset and not var.is_array():
+            if (var_offset != native_result and var.in_local and
+                    not var.memory_offset and not var.is_array()):
                 if self.store(out, var, var_offset, canonical_result):
                     var.memory_offset = var_offset
             var_offset = var_offset.push(var.item)
@@ -3313,7 +3315,8 @@ class IRStack(Stack):
         self.home_node = None
 
     def flush(self, out: CWriter,
-              canonical_result: str | None = None) -> None:
+              canonical_result: str | None = None,
+              native_result: PointerOffset | None = None) -> None:
         if self.physical_sp is None:
             # After a frame switch there is nothing of this frame to write.
             if self.variables:
@@ -3322,7 +3325,7 @@ class IRStack(Stack):
         self._print(out)
         if may_be_positive(self.physical_sp - self.logical_sp):
             self.vacate(out, self.logical_sp, self.physical_sp)
-        self.save_variables(out, canonical_result)
+        self.save_variables(out, canonical_result, native_result)
         self.physical_sp = self.logical_sp
         out.start_line()
 
@@ -5789,7 +5792,8 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None:
             self.emit("if (tstate->py_recursion_remaining <= 1) {\n")
             self.emit("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, "
-                      "frame->instr_ptr, ir_resume_input);\n}\n")
+                      "frame->instr_ptr, ir_resume_input);\n")
+            self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
             self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
             self.emit("if (ir_resume_site > frame->ir_words) {\n")
@@ -5798,7 +5802,8 @@ class IREmitter(Emitter):
             self.emit("if (ir_resume_target != NULL) {\n")
             self.emit("IR_GEN_TAIL(ir_resume_target, frame, slots, "
                       "ir_resume_site, ir_resume_input);\n")
-            self.emit("}\n}\n")
+            self.emit("}\n")
+            self.emit("}\n")
         else:
             self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
@@ -7433,6 +7438,12 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             raise analysis_error("native yielded outcome requires checked source window", inst.where)
         outputs = external_io(inst)[1]
         result = outputs[-1].item.name
+        # The payload replaces only the result home. Cursor and other through
+        # outputs still need their source-ordered final publications.
+        assert isinstance(stack, IRStack)
+        stack.final = True
+        stack.flush(out, native_result=stack.layout.base +
+                    PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
         out.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, {result});\n")

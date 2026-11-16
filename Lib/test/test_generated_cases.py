@@ -359,6 +359,31 @@ class TestIRCases(unittest.TestCase):
             self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
                                 for event in emitter.ownership_events))
 
+    def test_generator_native_result_preserves_virtual_cursor(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        instructions = ir_generator.handler_instructions(analysis)
+        for record in (False, True):
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            emitter = ir_generator.IREmitter(out, analysis, formats)
+            name = "SEND_VIRTUAL_XFER_DISCARD"
+            ir_generator.generate_handler(name, instructions[name], formats[name],
+                                          emitter, out, record)
+            body = output.getvalue()
+            update = body.index("null_or_index = PyValue_TagIndex(index);")
+            publish = body.index("IR_PUBLISH_TEMP(window[1], null_or_index);", update)
+            clear = body.index("window[2] = PyValue_NULL;", publish)
+            transfer = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD", clear)
+            self.assertLess(update, publish)
+            self.assertLess(publish, clear)
+            self.assertLess(clear, transfer)
+            self.assertNotIn("IR_PUBLISH_TEMP(window[2], next);", body)
+            self.assertNotIn("IR_MOVE_TO_DST", body)
+
     def test_error_ingress_keeps_native_bridge_owners(self):
         output = self.ir_output("""
         inst(OP, (value -- result)) {

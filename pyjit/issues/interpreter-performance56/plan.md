@@ -44,8 +44,11 @@ credit. No combined parity budget is assumed.
 Both exact source contracts have independent GO. A is implemented and its frozen
 source has independent post-review GO. Root has integrated it from selected57
 and generated the candidate. Product review, both 117/79 builds and 24 focused
-methods per role pass. Complete native qualification precedes timing. B waits
-for A's disposition. The prospectively reviewed
+methods per role pass. Static native removal is real, but the early protected
+hot8 screen rejects A: GM 1.011186, logging 1.121887 and DeltaBlue 1.039961.
+Root stops its remaining native qualification and all further timing. B now
+implements standalone ADD/SUB hot/cold lowering from selected57, without A.
+The prospectively reviewed
 one-pair confirmation option is implemented and passes its host tests; default
 balanced screen behavior remains unchanged.
 
@@ -154,12 +157,12 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Qualify A native paths, then screen if justified | Preserve selected57/evidence; own generation/runtime, qualification and selection |
+| Root | Close A; integrate B after independent frozen-diff review | Preserve selected57/evidence; own generation/runtime, qualification and selection |
 | Astra | Grouped71 complete | Five options, two ordered units; no inner-loop work |
-| Sol-high workers | Independent A product review; native-control preparation | B source GO is queued; no parallel generator lanes |
+| Sol-high workers | B source/tests in P; opposite-worker post-review | Standalone ADD/SUB from selected57; no A import or parallel generator lanes |
 
-Only A's integration lane is active. No round71 timing, profile/counter campaign
-or compiler/flags/layout search has run.
+Only B's source lane is active. A's screen is closed. No profile/counter campaign
+or compiler/flags/layout search is active.
 A losing screen stops the unit. A qualified broad winner may be selected before
 parity; repeat grouped review and implementation against the remaining gap.
 

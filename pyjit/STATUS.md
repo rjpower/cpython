@@ -50,11 +50,17 @@ generated products pass independent review. Root integrates them as G
 `ff1618987bd` from selected57. Both builds pass 117 modules/79 shared extensions;
 all 24 focused methods pass per role. Generation changes
 exactly five handlers; the other 324 and all metadata remain unchanged. Five new
-host generator methods and five adjacent regressions pass. All three new runtime
-methods pass within the focused set. Actual HINT selection and complete native
-paths remain unqualified; no timing has run.
-B remains queued until A's disposition. A is not a
-mandatory winner for B, and its savings cannot be counted twice. The latest measured
+host generator methods and five adjacent regressions pass. Static native review
+confirms eight Canonicalize call sites removed and 1,117 fewer bytes across the
+five handlers. Its early 32-row hot8 screen nevertheless rejects A: GM 1.011186,
+DeltaBlue 1.039961, logging 1.121887 and spectral_norm 1.022087. Comprehensions
+0.967622 and raytrace 0.968651 improve. All identities are stable. Actual HINT
+and complete dynamic native qualification remain incomplete; root stops those
+jobs and all further A timing. This is a measured rejection, not selection GO.
+
+B now implements the standalone ADD/SUB hot/terminal-slow split from selected57,
+without A. Root retains selected57 as golden. There is no fresh upstream result
+or causal explanation for these losses. The latest measured
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
 Round68 and both round67 candidates also remain rejected; their mechanisms and

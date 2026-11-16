@@ -20,9 +20,9 @@ credible complete-consumer saving. The adopted [round71 design](design/proposals
 and [review](issues/register-semantics59/review71.md) order two independently
 selectable generator units: canonical-value fact transport, then callback-free
 hot bodies with terminal ordinary slow entries. Both exact source contracts have
-independent GO. A's source and generated products have independent post-review
-GO; both integrated builds and focused tests pass. Root is checking complete
-native paths before timing. B is queued behind A's disposition.
+independent GO. A passes source/product review, builds and focused tests but
+loses its early protected screen. B now implements the standalone ADD/SUB split
+from selected57, without importing A. A's remaining qualification is stopped.
 Existing owners, homes, encoded IR and calling conventions remain.
 No losing-executable rescue is queued.
 

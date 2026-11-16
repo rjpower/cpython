@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round71: A builds and focused runtime pass; native qualification open
+## Round71: A screen rejected; standalone B implementation active
 
 Root integrates Astra `4ee0ab177f9` as `2c186e0fb6f` and adopts the
 [design71](../../design/proposals/interpreter-parity71.md) for independent exact
@@ -56,10 +56,39 @@ Root commits products as G `ff1618987bd`. Both `parity71-canonical1` builds pass
 117 modules/79 shared extensions. Both `parity71-canonical1-runtime` runs pass
 24 methods: three CanonicalProvenanceRuntimeTests plus existing PyValueTests
 and OperandModeTests. No host parser/generator methods run under the target.
-Actual HINT selection and complete native read-to-consumer cost remain
-qualification gates. B stays queued until
-A's disposition. No round71 timing or performance claim exists. Selected57
-remains golden; the grouped design owns the unchanged protected-screen gates.
+Static native review `E59/round71-canonical-native-static-peer.md`, SHA
+`178a7dda29aa31e5af2e04acd6c40f89c0a37e5c8b688595a91b6eb460d8fc3a`,
+confirms eight actual Canonicalize call sites removed. Five-handler text falls
+4,237→3,120 bytes. Own entry stack falls SLOT 56→24B, HINT 56→40B and both GLOBAL
+40→8B; DEREF stays 24B. These are static responsibilities, not executed counts.
+Discard already bypassed Publish, so it earns no discarded-value conversion credit.
+
+Root admits one explicitly early rejection screen with dynamic native, actual
+HINT and unchanged-kernel reach qualification still open. All 32 rows succeed
+with stable before/after identity in `E59/canonical71-hot8-selected57-screen`:
+
+| Workload | A / selected57 | Two-pair range |
+| --- | ---: | ---: |
+| comprehensions | 0.967622 | 0.947623–0.988043 |
+| deltablue | 1.039961 | 1.032705–1.047267 |
+| coroutines | 0.986835 | 0.982007–0.991688 |
+| generators | 0.993264 | 0.988547–0.998003 |
+| logging_silent | 1.121887 | 1.117875–1.125912 |
+| raytrace | 0.968651 | 0.967219–0.970086 |
+| spectral_norm | 1.022087 | 1.019974–1.024205 |
+| nqueens | 0.997729 | 0.995400–1.000062 |
+
+GM 1.011186 fails the ≤0.995 screen; DeltaBlue, logging and spectral fail mean
+protection and Delta/logging pairs fail the pair cap. Only the improvement
+predicate passes. Root rejects A and stops remaining qualification, confirmation,
+all29, upstream, PMU, full-suite and repair work. The native-control packages
+remain unexecuted; no complete behavioral/native qualification is claimed.
+The screen is not a causal explanation or a fresh upstream comparison.
+
+B implementation now starts independently in P from selected57, with the
+reviewed standalone ADD/SUB scope. It imports no A reader facts or executable.
+Existing canonical arithmetic supplies the representation prerequisite. Root
+retains selected57 as golden; the unchanged grouped selection gates remain.
 
 The prospectively reviewed host confirmation capability is implemented:
 `--single-pair-confirmation` requires `--rounds 1`; otherwise positive even

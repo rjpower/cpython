@@ -45,9 +45,16 @@ handlers change; all metadata and other products remain unchanged. Independent
 product review gives GO in `E59/round71-canonical-products-peer.md`. Both
 `parity71-canonical1` builds pass 117/79. The `parity71-canonical1-runtime` focus
 passes all 24 methods per role: CanonicalProvenanceRuntimeTests, PyValueTests
-and OperandModeTests. The host source class is excluded. Complete native paths
-and actual HINT coverage remain open; no timing has run. B remains queued until
-A's disposition; its source contract explicitly covers all hot
+and OperandModeTests. The host source class is excluded. Static native review
+confirms eight Canonicalize edges removed; the early protected screen then
+rejects A with GM 1.011186 and logging 1.121887. All 32 rows succeed with stable
+identity. Complete dynamic native paths and actual HINT coverage remain
+incomplete and are stopped. Both prepared native-control packages remain
+unexecuted. No confirmation/all29/PMU/full or A repair follows.
+
+B implementation is released in P, branch `pyjit/parity71-terminal-hot-cold`
+from immutable selected57. It covers standalone ADD/SUB only, without A's reader
+facts or executable. The source contract explicitly covers all hot
 close sites, canonical arithmetic, once-only stats and the borrowed-reader cut.
 The opt-in one-pair confirmation capability in the canonical host measurement
 helper has passed root proposal/diff review and three host test methods; see
@@ -91,8 +98,9 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-The A worker implements source/tests; the other worker is available for its
-independent actual-diff review.
+The B worker implements source/tests in P; the A worker independently reviews
+its frozen diff and host receipts. G remains frozen rejected A until root B
+integration. Preserve A/69 branches and sealed evidence.
 Astra's broad review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.

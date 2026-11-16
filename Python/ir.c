@@ -82,11 +82,11 @@ _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
     if (source == NULL || source->ordinary != ordinary ||
         (source->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
         yielded_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        yielded_consumer > _PyIR_GEN_CONSUMER_HOME ||
+        yielded_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
         completed_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        completed_consumer > _PyIR_GEN_CONSUMER_HOME ||
+        completed_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
         resume_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        resume_consumer > _PyIR_GEN_CONSUMER_HOME ||
+        resume_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
         !(yielded_consumer || completed_consumer || resume_consumer))
     {
         return -1;
@@ -211,6 +211,16 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
         (int)IR_A(words[target]) == home)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
+    }
+    if (generator_is(words[target], STORE_FAST) &&
+        (int)IR_A(words[target]) == home && (int)IR_B(words[target]) < nl)
+    {
+        return _PyIR_GEN_CONSUMER_STORE_FAST;
+    }
+    if (generator_is(words[target], POP_TOP) &&
+        (int)IR_A(words[target]) == home)
+    {
+        return _PyIR_GEN_CONSUMER_POP_TOP;
     }
     /* A real SSA value may survive another call/await or feed an ordinary
      * arithmetic provider. Its necessary scratch publication is retained.

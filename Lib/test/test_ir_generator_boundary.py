@@ -107,7 +107,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
         replacement = struct.pack(f"<{len(words)}Q", *words)
         for route in (construct, lambda source, **kw: source.replace(**kw)):
             with self.assertRaisesRegex(ValueError, message):
-                route(code, co_code=replacement)
+                route(code, co_code=replacement,
+                      co_exceptiontable=code.co_exceptiontable)
         payload = marshal.dumps(code)
         self.assertEqual(payload.count(original), 1)
         with self.assertRaisesRegex(ValueError, message):
@@ -130,7 +131,7 @@ class GeneratorBoundaryTests(unittest.TestCase):
                             _opcode.GEN_CONSUMER_DELEGATED
                             for _, _, row in sites(delegated, True)))
 
-    def test_folded_local_and_discard_completion(self):
+    def test_explicit_local_and_discard_completion(self):
         def stored(value):
             result = yield from leaf(value)
             return result
@@ -141,15 +142,22 @@ class GeneratorBoundaryTests(unittest.TestCase):
 
         value, reply = object(), object()
         for function, expected, consumer in (
-                (stored, reply, _opcode.GEN_CONSUMER_STORE_LOCAL),
-                (discarded, None, _opcode.GEN_CONSUMER_DISCARD)):
+                (stored, reply, _opcode.GEN_CONSUMER_STORE_FAST),
+                (discarded, None, _opcode.GEN_CONSUMER_POP_TOP)):
             with self.subTest(function=function.__name__):
                 selected = self.assert_completed_shape(function, consumer)
-                for _, word, row in selected:
-                    if consumer == _opcode.GEN_CONSUMER_STORE_LOCAL:
-                        self.assertLess(word[1], function.__code__.co_nlocals)
-                    else:
-                        self.assertEqual(word[1], 4095)
+                words = _testinternalcapi.get_ir(function.__code__)
+                for pc, word, row in selected:
+                    target_pc = (word[3] | word[4] << 12
+                                 if NAMES[row.ordinary_handler] == "CLEANUP_THROW"
+                                 else pc + 1 + ((word[4] ^ 2048) - 2048))
+                    target = words[target_pc]
+                    self.assertGreaterEqual(word[1], function.__code__.co_nlocals)
+                    self.assertEqual(target[0], "STORE_FAST" if consumer ==
+                                     _opcode.GEN_CONSUMER_STORE_FAST else "POP_TOP")
+                    self.assertEqual(target[1], word[1])
+                    if consumer == _opcode.GEN_CONSUMER_STORE_FAST:
+                        self.assertLess(target[2], function.__code__.co_nlocals)
                 iterator = function(value)
                 self.assertIs(next(iterator), value)
                 self.assertIs(finish(iterator, reply), expected)
@@ -248,7 +256,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
         # Extra NULL scratch makes the alternate B a valid window. Neither
         # mutation changes a handler or fails an unrelated index bound.
         code = delegated.__code__.replace(
-            co_stacksize=delegated.__code__.co_stacksize + 1)
+            co_stacksize=delegated.__code__.co_stacksize + 1,
+            co_exceptiontable=delegated.__code__.co_exceptiontable)
         original = list(struct.unpack(f"<{len(code.co_code) // 8}Q", code.co_code))
         pc, row = next((pc, row) for pc, word, row in sites(delegated)
                        if NAMES[row.ordinary_handler] == "CLEANUP_THROW")
@@ -420,7 +429,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
 
     def test_line_and_instruction_hooks_preserve_deopt_and_respecialization(self):
         def outer(value):
-            return (yield from leaf(value))
+            result = yield from leaf(value)
+            return result
 
         value, reply = object(), object()
         for _ in range(ROUNDS):
@@ -467,21 +477,25 @@ class GeneratorBoundaryTests(unittest.TestCase):
         ordinary = []
 
         def outer(value):
-            result = yield from leaf(value)
+            result = (
+                yield from leaf(value)
+            )
             ordinary.append("ordinary continuation")
-            return result
+            return "redirected"
 
-        self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_STORE_LOCAL)
+        self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_STORE_FAST)
         monitor, tool = sys.monitoring, 2
-        event = monitor.events.BRANCH_LEFT
+        event = monitor.events.LINE
         monitor.use_tool_id(tool, "generator completion redirect")
         commits = []
 
-        def callback(code, source, target):
+        def callback(code, line):
             self.assertIs(code, outer.__code__)
+            if line != code.co_firstlineno + 1:
+                return
             frame = sys._getframe(1)
             self.assertIs(frame.f_code, code)
-            frame.f_lineno = code.co_firstlineno + 3
+            frame.f_lineno = code.co_firstlineno + 5
             commits.append(frame.f_lineno)
 
         iterator = outer(object())
@@ -490,8 +504,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
         try:
             monitor.set_local_events(tool, outer.__code__, event)
             reply = object()
-            self.assertIs(finish(iterator, reply), reply)
-            self.assertEqual(commits, [outer.__code__.co_firstlineno + 3])
+            self.assertEqual(finish(iterator, reply), "redirected")
+            self.assertEqual(commits, [outer.__code__.co_firstlineno + 5])
             self.assertEqual(ordinary, [])
         finally:
             monitor.set_local_events(tool, outer.__code__, 0)
@@ -501,7 +515,9 @@ class GeneratorBoundaryTests(unittest.TestCase):
 
     def test_pre_and_post_completion_errors_keep_the_semantic_source(self):
         def outer(value):
-            return (yield from leaf(value))
+            return (
+                yield from leaf(value)
+            )
 
         self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_RETURN)
         source = next(pc for pc, word, row in sites(outer)
@@ -509,15 +525,20 @@ class GeneratorBoundaryTests(unittest.TestCase):
         monitor, tool = sys.monitoring, 2
         monitor.use_tool_id(tool, "generator completion observer errors")
         try:
-            for event in (monitor.events.STOP_ITERATION, monitor.events.BRANCH_LEFT):
+            for event in (monitor.events.STOP_ITERATION, monitor.events.LINE):
                 iterator = outer(object())
                 next(iterator)
                 seen = []
 
-                def callback(code, offset, *args):
+                def callback(code, position, *args):
                     self.assertIs(code, outer.__code__)
-                    self.assertEqual(offset, source)
-                    seen.append(offset)
+                    if event == monitor.events.LINE:
+                        if position != code.co_firstlineno + 1:
+                            return
+                        self.assertEqual(sys._getframe(1).f_lasti, source)
+                    else:
+                        self.assertEqual(position, source)
+                    seen.append(position)
                     raise LookupError("completion observer")
 
                 monitor.register_callback(tool, event, callback)
@@ -525,7 +546,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
                     monitor.set_local_events(tool, outer.__code__, event)
                     with self.assertRaisesRegex(LookupError, "completion observer"):
                         iterator.send(object())
-                    self.assertEqual(seen, [source])
+                    self.assertEqual(seen, [outer.__code__.co_firstlineno + 1
+                                           if event == monitor.events.LINE else source])
                     self.assertIsNone(iterator.gi_frame)
                 finally:
                     monitor.set_local_events(tool, outer.__code__, 0)
@@ -541,7 +563,7 @@ class GeneratorBoundaryTests(unittest.TestCase):
             copied = result
             return copied
 
-        self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_STORE_LOCAL)
+        self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_STORE_FAST)
         target = outer.__code__.co_firstlineno + 2
         replacement, commits = object(), []
 

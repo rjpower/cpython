@@ -26,13 +26,20 @@ Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
 The [layout source contract](issues/register-semantics59/execution72-layout.md)
 has independent peer and root GO. W's complete cold map and allocator unit is
 `1e07e1bf590e` atop codec `c63defae27c`; independent source post-review passes.
-Root integrates them in G `62b85041b8d`, branch
-`pyjit/execution72-layout-integrated`, with magic 64423. Full regeneration
-changes no products. The first release compile catches legacy list/comparison
-APIs in the new assembler helper; W is correcting those before native tests.
-Logs use `E59/execution72-layout1-*`. P has independent peer and root GO for the
+G is now `240f4c2b977`, branch `pyjit/execution72-layout-integrated`, magic 64424.
+Full regeneration changes no handlers. Integration repaired legacy container
+API uses, a missing RESUME in the observer fixture, a stale corruption-test
+offset, and generated API descriptions. Magic 64423 was already present in old
+IRSC1 caches, so it cannot identify this format. At `48084587d0b`, both builds
+pass 117/79 and 53 focused methods per role. Three ordinary compiler probes have
+identical words/extents; root removed the unproven relocation pass at
+`ba98006e236`, retaining established compaction and explicit cold keep maps.
+Current build/focus tags are `execution72-layout6-*`; earlier numbered receipts
+retain actual failures and limits. P has independent peer and root GO for the
 [accumulator ABI contract](issues/register-semantics59/execution72-abi.md) and
-implements nonoverlapping generator files before rebasing shared runtime edits. Root integrates only
+implements the generator/runtime ABI; W has rebased on the layout foundation
+for compiler selection, common validation and continuation-map lifetime. The
+shared header interface is P `0ad8147b9df`, independently consumed by W. Root integrates only
 complete reviewed sources into G, generates and reviews products, then runs
 focused native checks and hot8. No runtime winner has landed for72 yet.
 Reused G builds are being refreshed and are not executable controls.

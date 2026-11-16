@@ -74,10 +74,13 @@ Round71 is closed. The user has authorized the
 workers own compiler/layout and accumulator/effect/activation work. The
 [layout source contract](issues/register-semantics59/execution72-layout.md) has
 independent review and implementation GO. Its complete cold-map/allocator source
-`1e07e1bf590e` passes independent source post-review and integrates into candidate
-G `62b85041b8d` with magic 64423. Regeneration leaves handlers unchanged. Native
-build qualification is underway; the first compile found legacy container API
-uses in the new assembler helper, now being corrected. The
+`1e07e1bf590e` passes independent source post-review. Candidate G is now
+`240f4c2b977`, with magic 64424 and reviewed integration fixes. Both builds pass
+117/79 and 53 focused methods per role at `48084587d0b`; broader related checks
+found one stale test corruption offset, now ported to the 24-byte header.
+Regeneration leaves handlers unchanged. Three ordinary compiler probes produced
+identical words and extents, so root removed the unproven scalar relocation pass
+before timing. Explicit cold survivor maps remain; no packing gain is claimed. The
 [accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
 also has independent peer and root GO; its generator implementation proceeds
 in parallel, with shared runtime edits deferred until the layout rebase. Root owns integration, generation, native tests

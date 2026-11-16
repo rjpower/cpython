@@ -1,6 +1,6 @@
 # Execution72 compiler/layout source proposal
 
-Reviewed first-unit source contract, from selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Independent source review and root implementation GO received on 2026-11-15. Implementation is in progress; runtime qualification remains pending. **Yes: cold EH survivor maps can release physical allocation independently of the accumulator ABI, with initialized scratch retained.** This is the first implementable unit; it does not claim the full execution72 architecture or an accumulator speedup.
+Reviewed first-unit source contract, from selected57 `0dcba75bb3df40c32137db453b001f7e8f101de0`. Independent source review and root implementation GO received on 2026-11-15. The complete cold-map source is integrated in candidate G. Both builds pass 117 modules/79 shared extensions; 53 focused methods pass per role at `48084587d0b`. The narrowed foundation at `ba98006e236` retains the existing compactor; qualification continues before selection. **Yes: cold EH survivor maps can release physical allocation independently of the accumulator ABI, with initialized scratch retained.** This is the first implementable unit; it does not claim the full execution72 architecture or an accumulator speedup.
 
 ## Ownership and first implementation boundary
 
@@ -8,11 +8,20 @@ Compiler worker owns `Python/regcfg.c`, `regcfg_passes.c`, `assemble.c`, `Object
 
 Root assigns this worker the COMPLETE cold layout unit: also `Python/ceval.c`, `frame.c`, `Objects/frameobject.c`, `instrumentation.c`, `Modules/_opcode.c`, `Lib/dis.py` and test-support map decoders, plus required cold generator/frame-header consumers. This worker owns shared `pycore_ir_exception.h`, `pycore_ir_source.h`, `pycore_ceval.h` and any HomeView/error-scope changes for this unit. The backend worker develops the accumulator ABI proposal read-only, then rebases on the integrated cold-layout checkpoint before any overlapping runtime edits. Generator/effect-ABI changes belong to that later backend unit. Root owns magic/integration/products. No concurrent shared-header edits.
 
-The first allocator increment changes only fresh scalar placement from append-above-all-owners to lowest admissible free hole. Existing logical canonical block-entry names initially keep stable physical assignments, and windows retain their existing consecutive allocation/reservation schedule. Logical canonical IDs remain join identities; the EH serializer obtains their physical homes through `cfg->slot`, never `nlocalsplus + depth`. The cleanup contract permits arbitrary survivor positions and no longer imposes suffix order. A dense pinned canonical prefix may still prevent the compiler from producing a fresh value below an EH survivor in this first increment. Do not claim that witness or general canonical coloring; demonstrate actual ordinary scalar hole reuse separately and test arbitrary EH placement with validated public physical images.
+The foundation retains existing compaction. It removes the unwinder's numeric
+suffix contract: the compiler serializes physical homes of logical handler
+survivors, and all cold consumers use explicit membership. Canonical join IDs
+and contiguous call windows keep their established placement. There is no
+frame-size, slot-count or initialization-elision claim.
 
-Concrete placement: first run the existing complete allocator, then a bounded scalar relocation pass. Reuse its owner-held transfer rules to derive per-region ownership intervals from definition through actual consuming operation, including unread owners and folded NULL reservations. A fresh value is movable only for one scalar output, no jump-only result, no canonical/region-edge identity, no folded reservation, and no participation in ANY window input/output bundle (including virtual NULL holes). Reserve those fixed intervals at their existing homes. Visit movable values in definition order; move one only to a lower physical hole whose interval is disjoint from every other held/reserved interval. Test both endpoints conservatively so a dying input is not mistaken for an available output before its actual read/take. If no lower hole qualifies, retain its existing assignment. Update interval placement after each move, recompute slot extent and run the ordinary physical verifier with explicit EH membership replacing the suffix check. No runtime fallback or speculative window reconstruction is introduced. Sparse per-slot interval lists avoid a dense value-by-value matrix; no extra owning MOVE/dispatch is added.
-
-This first pass cannot invalidate a future window because all its member values/reservations remain fixed; it cannot put a live-across-call owner above that call's window because it only lowers a previously valid scalar assignment. Canonical bundle coloring and windows requiring explicit moves are outside this first unit. Their additional ordinary cost must be proposed and priced separately; neither is needed to release the EH constraint now.
+The proposed scalar interval/relocation pass was implemented and tested, then
+removed at `ba98006e236` after the bounded native comparison found identical
+words and extents for all three ordinary source probes. Its additional compiler
+bookkeeping had no demonstrated useful placement. Future coloring must first
+show a concrete benefit; it is not a prerequisite for accumulator transport.
+The arbitrary physical-layout contract has its own positive runtime fixture:
+keep home 7 while dropping home 4, with the exception payload in home 9 and
+GC/reentrant observation during cleanup.
 
 ## Concrete cold format
 
@@ -52,7 +61,7 @@ No sentinel is added by this first compiler unit. A later accumulator location m
 
 ## Small decisive checks and release gate
 
-Host checks: codec roundtrip/overflow/shape negatives; a real compiler CFG before/after ordinary scalar-hole witness; explicit survivor/payload alias rejection; protected scalar overwrite and partial-error owner transfer; fixed windows/call live-across-owner preservation; source-only recovery using its own survivor row. Require a validated physical-image fixture with a drop below a retained higher EH home, without pretending pinned canonical IDs naturally emit it. New discoverable runtime tests (root executes) cover finalizer/weakref GC reentry during non-prefix drops, exception chaining/handled monitor failure, nested calls with overlap, generator throw/close and copied/captured frames, CodeType/replace/marshal malformed maps and source/debugger recovery. Reuse existing owner/error/phase tests rather than expand into an API census.
+Host checks: codec roundtrip/overflow/shape negatives; explicit survivor/payload alias rejection; protected scalar overwrite and partial-error owner transfer; fixed windows/call live-across-owner preservation; source-only recovery using its own survivor row. Require a validated physical-image fixture with a drop below a retained higher EH home, without pretending pinned canonical IDs naturally emit it. New discoverable runtime tests (root executes) cover finalizer/weakref GC reentry during non-prefix drops, exception chaining/handled monitor failure, nested calls with overlap, generator throw/close and copied/captured frames, CodeType/replace/marshal malformed maps and source/debugger recovery. Reuse existing owner/error/phase tests rather than expand into an API census.
 
 Root must integrate all cold readers before enabling free-hole placement, regenerate/review metadata/products, build both roles and run focused behavior. No runtime GO follows from compiler-only host syntax. Charge allocation metadata/compile cost and any changed call-window moves separately. Native acceptance of the later accumulator slice remains arithmetic + ordinary call + SEND/yield through full consumers, without borrowing a speed claim from this layout unit.
 
@@ -63,12 +72,6 @@ ranges. Its per-view range count becomes uint16 with an explicit checked bound;
 a uint16 flags field uses the remaining space, retaining the target 16-byte
 view. Global plan offsets remain uint32. Shared readers honor the nullable
 override. Retirement-only cursor clipping remains separate from ERROR scopes.
-
-The allocator records intervals from existing occupancy acquisition, release,
-region and folded-reservation transitions. It does not duplicate their owner
-transfer rules in a second simulator. Conflict checks cannot assume end-order
-from begin-order; interval storage must avoid a new fixed 32 KiB native stack
-frame. These refinements preserve the reviewed allocation scope.
 
 Keep membership does not grant initialized, non-NULL or owner facts. Kept homes
 retain the prior unknown state unless actual incoming evidence proves more.

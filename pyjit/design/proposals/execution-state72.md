@@ -179,10 +179,12 @@ The initial scope is GIL execution; free-threaded and remote-reader contracts
 need explicit closure before broader qualification.
 
 The initialized-layout unit is a separately qualified foundation: require actual
-compiler hole reuse, arbitrary survivor-map behavior and the existing hot8
+arbitrary survivor-map behavior and the existing hot8
 regression protections. It need not claim an isolated throughput gain to advance
 to the accumulator composition. A flat foundation is not a selected performance
-winner. The complete accumulator composition must earn the existing improvement
+winner. The bounded scalar-relocation attempt produced identical words and
+extents in all three native probes; its interval pass was removed before
+timing. Existing compaction remains, with no packing gain claimed. The complete accumulator composition must earn the existing improvement
 and protection gates before replacing golden.
 
 Compare unchanged comp/Delta/coroutine/generator workloads and logging before

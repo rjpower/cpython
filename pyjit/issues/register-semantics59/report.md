@@ -1,5 +1,28 @@
 # Semantic IR trial results
 
+## Round71: grouped design adopted; exact source review
+
+Root integrates Astra `4ee0ab177f9` as `2c186e0fb6f` and adopts the
+[design71](../../design/proposals/interpreter-parity71.md) for independent exact
+source review. A preserves canonical-bit provenance from audited SLOT/HINT/
+GLOBAL/CELL readers through existing publication. B generates a pre-effect hot
+body and a body-only terminal ordinary slow entry under the unchanged five-arg
+ABI. No owner, home or dispatch removal is claimed by A. B must prove actual
+native preservation removal after charging admission, slow replay and text.
+A is not a mandatory winner for B; their native/frame credits remain separate.
+
+Exact source proposals and opposite-worker cross-peers are under E59 with
+`round71-canonical-source-*` and `round71-split-source-*` names. The A/B reader
+boundary is explicit: an acquired result cannot cross B's slow tail. Field
+splits need a reviewed canonical borrow, then cut, then acquisition, or remain
+ordinary. The cold entry retains advanced PC and counts semantic entry/body
+effects once. Root requires actual non-reentrant hot close lowering, not merely
+a precheck followed by an unchanged deallocator branch.
+
+No runtime edit, generation, build, test, timing or performance claim exists for
+round71 yet. Selected57 remains golden; rejected rounds remain closed. The
+grouped design owns prospective native and unchanged protected-screen gates.
+
 ## Round70: stopped at source adoption
 
 The [grouped design70](../../design/proposals/interpreter-parity70.md) and

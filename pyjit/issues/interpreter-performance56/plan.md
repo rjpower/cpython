@@ -32,12 +32,14 @@ already bypasses destination lookup and result-home traffic. Neither the typed
 alternative nor a native-only scope advances. No runtime change or timing was
 performed; the trial report owns the final source evidence.
 
-Grouped review71 reassesses generated execution-state transport across C
-effects, immutable fact transport and physical derived borrowing. Two Sol-high
-workers provide independent source/native inputs. Astra must specify concrete
-physical lowering and complete added/removed work for at most two bounded units;
-it must distinguish them from the rejected mechanisms. No source lane is
-released and no combined parity budget is assumed.
+The adopted [round71 design](../../design/proposals/interpreter-parity71.md)
+orders two serial, independently selectable generator units. A transports audited
+canonical-bit facts through existing ownership and publication. B separates
+eligible callback-free hot bodies from body-only terminal ordinary slow entries.
+Both retain encoded words, homes and the five-argument handler ABI. Exact source
+contracts are independently cross-peered before implementation. A need not win
+for B to proceed, and any native/frame saving earned by A is excluded from B's
+credit. No source lane is released or combined parity budget assumed.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -144,9 +146,9 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Close70; coordinate grouped71 | Preserve selected57/evidence; own runtime, qualification and selection |
-| Astra | Grouped71 architecture review | Five substantial options, concrete physical lowering; no inner-loop work |
-| Sol-high producer / consumer | Execution-state / value-transport source inputs | Source/native readback only; no implementation release |
+| Root | Adopt71 and close exact source contracts | Preserve selected57/evidence; own runtime, qualification and selection |
+| Astra | Grouped71 complete | Five options, two ordered units; no inner-loop work |
+| Sol-high producer / consumer | Independent canonical / hot-slow source cross-peers | No implementation until exact contracts receive GO |
 
 No new runtime lane, profile/counter or compiler/flags/layout search is active.
 A losing screen stops the unit. A qualified broad winner may be selected before

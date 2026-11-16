@@ -20,8 +20,10 @@ paths and commands. The [round70 design](../../design/proposals/interpreter-pari
 [review70](review70.md) proposed one canonical CALL-result convention. Independent
 source adoption stops it before implementation: typed routing solves the
 implicit-child ambiguity without a credible whole-consumer saving. Grouped71
-reviews generated execution state and physical value transport; no runtime lane
-is released.
+is complete. The adopted [round71 design](../../design/proposals/interpreter-parity71.md)
+and [review](review71.md) order canonical fact transport then hot/terminal-slow
+generation. Independent exact source cross-peers precede implementation; no
+runtime lane is released.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
 Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
@@ -58,9 +60,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Close70 and coordinate71 | Preserve controls/evidence; own qualification and selection |
-| Astra | Grouped71 review | Broad architecture only; no runtime/inner-loop work |
-| Sol-high workers | Execution-state and value-transport source inputs | No runtime implementation or execution |
+| Root | Adopt71 and close source contracts | Preserve controls/evidence; own qualification and selection |
+| Astra | Grouped71 complete | Broad architecture only; no inner-loop work |
+| Sol-high workers | Independent source cross-peers | No implementation until exact contract GO |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

@@ -39,9 +39,15 @@ a typed continuation can resolve routing but does not establish a substantive
 complete-consumer saving. Existing Python discard avoids result publication,
 while the new convention adds a scratch store and separate consumption.
 No runtime edit, generation, build, test or timing was performed for round70.
-Grouped review71 examines generated execution-state/effect boundaries and
-physical value transport, supported by two independent Sol source inputs.
-No new runtime lane is released. The latest measured
+The [round71 design](design/proposals/interpreter-parity71.md) and
+[review](issues/register-semantics59/review71.md) are integrated and adopted for
+independent exact source review. A carries canonical-bit facts from audited
+storage readers to existing publication. B splits eligible generated handlers
+at a pre-effect cut, keeping ordinary slow execution in a body-only terminal
+entry. They retain owners, homes, encoded words and the five-argument ABI.
+Both source proposals are in independent cross-review; no implementation is
+released. A is not a mandatory winner for B, and its savings cannot be counted
+twice. The latest measured
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
 Round68 and both round67 candidates also remain rejected; their mechanisms and

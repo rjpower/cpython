@@ -14,7 +14,9 @@ and [handoff](HANDOFF.md) explain development and runtime coordination.
 The selected runtime remains selected57. Independent source review stopped the
 [round70 design](design/proposals/interpreter-parity70.md) before implementation:
 canonical CALL results added consumer work without a credible net saving.
-Grouped review71 examines generated execution state and physical value transport.
+The adopted [round71 design](design/proposals/interpreter-parity71.md) orders
+canonical-value fact transport, then generated hot/slow execution separation.
+Exact source contracts are in independent cross-review before implementation.
 The stopped round69 summary trial removed child execution on hits but lost its
 early protected screen with callback qualification incomplete. The
 [trial report](issues/register-semantics59/report.md) owns results and limits.

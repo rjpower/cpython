@@ -4,8 +4,8 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The latest closed proposal is [parity69](design/proposals/interpreter-parity69.md),
-under [review69](issues/register-semantics59/review69.md). The
+The current adopted proposal is [parity71](design/proposals/interpreter-parity71.md),
+under [review71](issues/register-semantics59/review71.md). The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
@@ -25,11 +25,20 @@ routing, but adds work without a credible complete-consumer saving. No runtime
 edits, builds or timings were performed. The trial report owns exact hashes and
 the cost argument.
 
-Grouped review71 is commissioned in Astra channel `zfr7ow1e`: only proposal71
-and review71, no runtime work or agents. Sol-high producer supplies
-`E59/round71-execution-architecture-input.md`; consumer supplies
-`E59/round71-value-architecture-input.md`, both source/native readback only.
-Root owns the final adoption and any implementation release. Selected57 stays
+Grouped review71 from Astra channel `zfr7ow1e`, commit `4ee0ab177f9`, is
+integrated as `2c186e0fb6f` and adopted for exact source review. The two serial,
+independently selectable units are canonical fact transport (A), then generated
+hot/body-only terminal slow lowering (B). A need not win for B to proceed; both
+are selected57-relative. No runtime implementation is released.
+
+Source proposals are `E59/round71-canonical-source-proposal.md` and
+`E59/round71-split-source-proposal.md`. Opposite Sol-high workers independently
+review them into `round71-canonical-source-peer.md` and
+`round71-split-source-peer.md`. Root checks actual no-returning-C hot closes,
+canonical arithmetic after source edits, once-only entry/stats and the A/B
+owned-versus-borrowed reader boundary before implementation GO. The two
+`round71-*-architecture-input.md` memos are static source/native input only.
+Root owns implementation release, runtime jobs and integration. Selected57 stays
 immutable/golden; preserve round69 branches, controllers and evidence.
 
 ## Closed round69 checkpoint
@@ -67,8 +76,8 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-Workers perform only the bounded review71 inputs above. Astra owns
-broad grouped review only, with no target execution or inner-loop work. C's
+Workers perform the bounded exact source cross-reviews above. Astra's broad
+review is complete; it stays out of the component loop. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.
 
@@ -100,7 +109,7 @@ are refreshed. No candidate build is another immutable control.
 Only the complete current unit advances to native mechanism/ABI evidence and
 one unchanged hot8 screen. A losing screen stops without confirmation, all29,
 PMU, full suite or repair. A promising coherent winner advances under the
-[design69 selection rules](design/proposals/interpreter-parity69.md#ordered-implementation-and-disposition).
+[design71 selection rules](design/proposals/interpreter-parity71.md#ordered-qualification-and-selection).
 
 ## Paths and immutable controls
 

@@ -16,11 +16,12 @@ combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
 has stopped the [round70 design](design/proposals/interpreter-parity70.md) at
 independent source adoption. Its canonical result convention did not show a
-credible complete-consumer saving. Grouped review71 now examines generated
-execution state across C effects, immutable fact transport and physical borrowed
-values. Two independent Sol source inputs support that broad review. No runtime
-unit is released; implementation requires a concrete physical lowering and peer
-approval. No losing-executable rescue is queued.
+credible complete-consumer saving. The adopted [round71 design](design/proposals/interpreter-parity71.md)
+and [review](issues/register-semantics59/review71.md) order two independently
+selectable generator units: canonical-value fact transport, then callback-free
+hot bodies with terminal ordinary slow entries. Exact source contracts are in
+independent cross-review; no runtime unit is released. Existing owners, homes,
+encoded IR and calling conventions remain. No losing-executable rescue is queued.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

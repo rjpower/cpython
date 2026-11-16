@@ -495,7 +495,9 @@ class GeneratorBoundaryTests(unittest.TestCase):
                 return
             frame = sys._getframe(1)
             self.assertIs(frame.f_code, code)
-            frame.f_lineno = code.co_firstlineno + 5
+            with self.assertWarnsRegex(
+                    RuntimeWarning, "assigning None to 1 unbound local"):
+                frame.f_lineno = code.co_firstlineno + 5
             commits.append(frame.f_lineno)
 
         iterator = outer(object())
@@ -513,15 +515,17 @@ class GeneratorBoundaryTests(unittest.TestCase):
             monitor.free_tool_id(tool)
             iterator.close()
 
-    def test_pre_and_post_completion_errors_keep_the_semantic_source(self):
+    def test_pre_and_post_completion_errors_keep_the_observed_location(self):
         def outer(value):
             return (
                 yield from leaf(value)
             )
 
         self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_RETURN)
-        source = next(pc for pc, word, row in sites(outer)
-                      if row.generator_yielded_consumer == _opcode.GEN_CONSUMER_DELEGATED)
+        source, word = next((pc, word) for pc, word, row in sites(outer)
+                            if row.generator_yielded_consumer ==
+                            _opcode.GEN_CONSUMER_DELEGATED)
+        completed = source + 1 + ((word[4] ^ 2048) - 2048)
         monitor, tool = sys.monitoring, 2
         monitor.use_tool_id(tool, "generator completion observer errors")
         try:
@@ -535,9 +539,10 @@ class GeneratorBoundaryTests(unittest.TestCase):
                     if event == monitor.events.LINE:
                         if position != code.co_firstlineno + 1:
                             return
-                        self.assertEqual(sys._getframe(1).f_lasti, source)
+                        self.assertEqual(sys._getframe(1).f_lasti, completed)
                     else:
                         self.assertEqual(position, source)
+                        self.assertEqual(sys._getframe(1).f_lasti, source)
                     seen.append(position)
                     raise LookupError("completion observer")
 

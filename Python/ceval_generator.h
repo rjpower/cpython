@@ -240,28 +240,30 @@ TARGET(NAME) \
     frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
-#define GENERATOR_COMPLETE_STORE(NAME, THROW) \
+#define GENERATOR_COMPLETE_STORE(NAME, THROW, EXPLICIT) \
 TARGET(NAME) \
 { \
     _PyValueTemps *const value_temps = NULL; \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
-    int destination = IR_A(source_word); \
+    _PyInstr *consumer = GENERATOR_COMPLETED_EXIT(THROW); \
+    int destination = (EXPLICIT) ? IR_B(*consumer) : IR_A(source_word); \
     PyValue old = frame->base[destination]; \
     if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old) \
             ? PyValue_AsKnownObjectBorrow(old) : NULL)) { \
         IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
     } \
+    if (EXPLICIT) { INSTRUCTION_STATS(STORE_FAST); } \
     frame->base[destination] = result; \
     _PyValue_CheckHome(result); \
     bool closed = _PyValue_TryXCloseNoReentry(old); \
     assert(closed); \
     (void)closed; \
-    next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
-    frame->instr_ptr = frame->return_pc = next_instr; \
+    frame->instr_ptr = frame->return_pc = consumer; \
+    next_instr = consumer + ((EXPLICIT) ? 1 : 0); \
     frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
-#define GENERATOR_COMPLETE_DISCARD(NAME, THROW) \
+#define GENERATOR_COMPLETE_DISCARD(NAME, THROW, EXPLICIT) \
 TARGET(NAME) \
 { \
     _PyValueTemps *const value_temps = NULL; \
@@ -271,17 +273,22 @@ TARGET(NAME) \
     } \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
+    if (EXPLICIT) { INSTRUCTION_STATS(POP_TOP); ++next_instr; } \
     frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
 GENERATOR_COMPLETE_RETURN(GEN_COMPLETE_RETURN, false)
 GENERATOR_COMPLETE_HOME(GEN_COMPLETE_HOME, false)
-GENERATOR_COMPLETE_STORE(GEN_COMPLETE_STORE, false)
-GENERATOR_COMPLETE_DISCARD(GEN_COMPLETE_DISCARD, false)
+GENERATOR_COMPLETE_STORE(GEN_COMPLETE_STORE, false, false)
+GENERATOR_COMPLETE_DISCARD(GEN_COMPLETE_DISCARD, false, false)
+GENERATOR_COMPLETE_STORE(GEN_COMPLETE_STORE_FAST, false, true)
+GENERATOR_COMPLETE_DISCARD(GEN_COMPLETE_POP_TOP, false, true)
 GENERATOR_COMPLETE_RETURN(GEN_THROW_COMPLETE_RETURN, true)
 GENERATOR_COMPLETE_HOME(GEN_THROW_COMPLETE_HOME, true)
-GENERATOR_COMPLETE_STORE(GEN_THROW_COMPLETE_STORE, true)
-GENERATOR_COMPLETE_DISCARD(GEN_THROW_COMPLETE_DISCARD, true)
+GENERATOR_COMPLETE_STORE(GEN_THROW_COMPLETE_STORE, true, false)
+GENERATOR_COMPLETE_DISCARD(GEN_THROW_COMPLETE_DISCARD, true, false)
+GENERATOR_COMPLETE_STORE(GEN_THROW_COMPLETE_STORE_FAST, true, true)
+GENERATOR_COMPLETE_DISCARD(GEN_THROW_COMPLETE_POP_TOP, true, true)
 #undef GENERATOR_COMPLETE_RETURN
 #undef GENERATOR_COMPLETE_HOME
 #undef GENERATOR_COMPLETE_STORE

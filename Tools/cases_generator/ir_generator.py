@@ -196,7 +196,8 @@ def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
     for name, inst in all_instructions(analysis).items():
         family = inst.family.name if inst.family else name
         if family in {"SEND", "INSTRUMENTED_SEND"} or name == "CLEANUP_THROW":
-            for consumer in ("RETURN", "STORE_LOCAL", "DISCARD", "HOME"):
+            for consumer in ("RETURN", "STORE_LOCAL", "DISCARD", "HOME",
+                             "STORE_FAST", "POP_TOP"):
                 result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
                     name, "NONE" if name == "CLEANUP_THROW" else "DELEGATED", consumer)
         elif name in {"YIELD_VALUE", "YIELD_DELEGATED",
@@ -9236,8 +9237,10 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                "GEN_ENTRY_EFFECT",
                "GEN_COMPLETE_RETURN", "GEN_COMPLETE_STORE", "GEN_COMPLETE_DISCARD",
                "GEN_COMPLETE_HOME", "GEN_COMPLETE_EFFECT", "GEN_RETURN",
+               "GEN_COMPLETE_STORE_FAST", "GEN_COMPLETE_POP_TOP",
                "GEN_THROW_COMPLETE_RETURN", "GEN_THROW_COMPLETE_STORE",
                "GEN_THROW_COMPLETE_DISCARD", "GEN_THROW_COMPLETE_HOME",
+               "GEN_THROW_COMPLETE_STORE_FAST", "GEN_THROW_COMPLETE_POP_TOP",
                "GEN_RETURN_RETIRED", "GEN_RETURN_PARENT", "GEN_REDIRECT_EFFECT",
                "GEN_RETIRE_EFFECT_SLOTS", "GEN_RETIRE_EFFECT_ASSOCIATION",
                "GEN_RETIRE_EFFECT_LOCALS", "GEN_RETIRE_EFFECT_FUNCTION",
@@ -9257,7 +9260,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                 target = ("GEN_THROW_COMPLETE_" if boundary.base == "CLEANUP_THROW"
                           else "GEN_COMPLETE_") + {
                     "STORE_LOCAL": "STORE", "RETURN": "RETURN",
-                    "DISCARD": "DISCARD", "HOME": "HOME"}[boundary.completed]
+                    "DISCARD": "DISCARD", "HOME": "HOME",
+                    "STORE_FAST": "STORE_FAST", "POP_TOP": "POP_TOP"}[boundary.completed]
             elif column == "Resume":
                 if boundary.resume != "NONE":
                     target = "GEN_RESUME_" + {

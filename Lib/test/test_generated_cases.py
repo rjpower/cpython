@@ -308,7 +308,7 @@ class TestIRCases(unittest.TestCase):
             return analysis, formats, ir_generator.generator_boundaries(analysis)
 
         analysis, formats, rows = checked(source)
-        self.assertEqual(len(rows), 28)
+        self.assertEqual(len(rows), 38)
         for name, row in rows.items():
             with self.subTest(name=name):
                 self.assertTrue(ir_generator.generator_boundary_source_closed(
@@ -409,6 +409,25 @@ class TestIRCases(unittest.TestCase):
                     self.assertLess(effect, clear)
                     self.assertNotIn("PyValue_CLOSE(v);", body)
                     self.assertIn("this_instr, sent.value);", body)
+
+    def test_generator_explicit_completion_consumer_targets(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        rows = ir_generator.generator_boundaries(analysis)
+        ids = ir_generator.handler_ids(analysis)
+        output = io.StringIO()
+        ir_generator.generate_ir_targets([self.temp_input_filename], analysis, output)
+        targets = output.getvalue().split("generator_completed_targets", 1)[1].split("};", 1)[0]
+        for name, row in rows.items():
+            if row.completed not in {"STORE_FAST", "POP_TOP"}:
+                continue
+            prefix = "GEN_THROW_COMPLETE_" if row.base == "CLEANUP_THROW" else "GEN_COMPLETE_"
+            self.assertIn(f"[{ids[name]}] = _TAIL_CALL_{prefix}{row.completed},", targets)
+            self.assertEqual(ir_generator.generator_word_entry(name, analysis),
+                             ir_generator.generator_word_entry(
+                                 f"{row.base}_XFER_DISCARD", analysis))
 
     def test_error_ingress_keeps_native_bridge_owners(self):
         output = self.ir_output("""

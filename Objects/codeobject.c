@@ -3072,6 +3072,13 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                     home < nl + image->scratch &&
                     (semantic_home_facts(work, state, home, nl) & (1u << SEM_NO_HOME));
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
+            case _PyIR_OWNER_NATIVE_WINDOW_OUT:
+                /* The checked private edge carries a logical result. It
+                 * does not publish that value in a physical frame home or
+                 * certify an error snapshot. Full shape admission precedes
+                 * this proof, independently of the source event. */
+                *complete = 0;
+                return semantic_leaf_step(image, work, state, pc, inspect, complete);
             case _PyIR_OWNER_UNPACK_LOCAL_DRAIN:
             case _PyIR_OWNER_NORMAL_CLEAR_INPUTS: {
                 int arg = admitted_word_arg(word, image->fbinit, image->nfb);
@@ -3229,7 +3236,15 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->owner_events != 1) {
-        return;
+        /* A placed SEND can declare its yielded and completed logical
+         * edges separately. Do not generalize other multi-action programs. */
+        for (int at = 0; at < fmt->owner_events; at++) {
+            if (_PyIR_OwnerPrograms[fmt->owner_program + at].kind !=
+                    _PyIR_OWNER_NATIVE_WINDOW_OUT)
+            {
+                return;
+            }
+        }
     }
     const _PyIROwnershipEvent *program = _PyIR_OwnerPrograms + fmt->owner_program;
     for (int at = 0; at < fmt->owner_events; at++) {
@@ -3248,13 +3263,17 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
             }
             continue;
         }
-        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION) {
+        int native = event->kind == _PyIR_OWNER_NATIVE_WINDOW_OUT;
+        if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION && !native) {
             continue;
         }
-        if (edge == 0 && (event->flags & _PyIR_COMPLETION_SEND_YIELDED)) {
+        if (native && event->dst != edge) {
+            continue;
+        }
+        if (edge == 0 && (native || (event->flags & _PyIR_COMPLETION_SEND_YIELDED))) {
             assert(event->src == 3 && event->extent == 2);
-            /* This is the actual yielded/body publication, independently
-             * of A, which belongs to the SEND completion route. */
+            /* The logical yielded result is independent of completion A.
+             * A native result has no physical B+2 publication authority. */
             work->delegated = (semantic_delegated){
                 .receiver = (int)IR_B(word), .outgoing = (int)IR_B(word) + event->extent,
                 .origin = pc, .kind = SEM_DELEGATED_KNOWN};
@@ -4007,6 +4026,7 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     PyObject *normalized = NULL;
     if (validate_semantic_and_position_maps(&checked) < 0 ||
         validate_completion_words(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
+        validate_generator_boundaries(&checked) < 0 ||
         validate_normal_transfers(&checked, &normalized) < 0)
     {
         Py_DECREF(words);

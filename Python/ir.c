@@ -80,13 +80,13 @@ _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
 {
     const _PyIRGeneratorBoundary *source = _PyIR_GeneratorBoundaryOf(ordinary);
     if (source == NULL || source->ordinary != ordinary ||
-        source->flags & _PyIR_GEN_BOUNDARY_PLACED ||
+        (source->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
         yielded_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        yielded_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        yielded_consumer > _PyIR_GEN_CONSUMER_HOME ||
         completed_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        completed_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        completed_consumer > _PyIR_GEN_CONSUMER_HOME ||
         resume_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        resume_consumer > _PyIR_GEN_CONSUMER_SEND ||
+        resume_consumer > _PyIR_GEN_CONSUMER_HOME ||
         !(yielded_consumer || completed_consumer || resume_consumer))
     {
         return -1;
@@ -212,7 +212,11 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
     }
-    return _PyIR_GEN_CONSUMER_NONE;
+    /* A real SSA value may survive another call/await or feed an ordinary
+     * arithmetic provider. Its necessary scratch publication is retained.
+     * Common normal-transfer admission proves that A is absent or belongs
+     * to the actual retired window; this shape query grants no such fact. */
+    return _PyIR_GEN_CONSUMER_HOME;
 }
 
 int

@@ -312,7 +312,7 @@ set_opcode(_PyInstr *instr, int opcode)
     int previous = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
     const _PyIRGeneratorBoundary *boundary =
         _PyIR_GeneratorBoundaryOf(previous);
-    if (boundary != NULL && boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) {
+    if (boundary != NULL && (boundary->flags & _PyIR_GEN_BOUNDARY_PLACED)) {
         const _PyIRGeneratorBoundary *target = _PyIR_GeneratorBoundaryOf(opcode);
         assert(target != NULL);
         int placed = _PyIR_GeneratorBoundaryHandler(

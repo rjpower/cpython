@@ -11,10 +11,10 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-The selected runtime remains selected57. The current
-[round70 design](design/proposals/interpreter-parity70.md) proposes canonical
-CALL results plus ordinary caller consumption. Source review must resolve
-shared completion for property/getitem children before implementation GO.
+The selected runtime remains selected57. Independent source review stopped the
+[round70 design](design/proposals/interpreter-parity70.md) before implementation:
+canonical CALL results added consumer work without a credible net saving.
+Grouped review71 examines generated execution state and physical value transport.
 The stopped round69 summary trial removed child execution on hits but lost its
 early protected screen with callback qualification incomplete. The
 [trial report](issues/register-semantics59/report.md) owns results and limits.

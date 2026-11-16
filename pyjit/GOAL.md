@@ -14,14 +14,13 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-follows the [round70 design](design/proposals/interpreter-parity70.md) and
-[review](issues/register-semantics59/review70.md). One proposed unit makes ordinary
-CALL results canonical at the vacated call-window base, with assignment/discard
-as ordinary caller operations. It changes the IR format directly and preserves
-real frames. Independent adoption and exact source-contract review precede any
-implementation. Shared return publication for implicit non-CALL children is an
-open source-review obligation. No second lane or losing-executable rescue is
-queued.
+has stopped the [round70 design](design/proposals/interpreter-parity70.md) at
+independent source adoption. Its canonical result convention did not show a
+credible complete-consumer saving. Grouped review71 now examines generated
+execution state across C effects, immutable fact transport and physical borrowed
+values. Two independent Sol source inputs support that broad review. No runtime
+unit is released; implementation requires a concrete physical lowering and peer
+approval. No losing-executable rescue is queued.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

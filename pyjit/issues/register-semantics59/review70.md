@@ -1,5 +1,11 @@
 # Grouped architecture review70
 
+**Final root disposition: STOP before implementation.** Exact source feasibility
+and independent peer reject adoption of the proposal, including the typed
+continuation alternative as currently motivated. It solves routing without a
+credible whole-consumer work reduction. See the [trial report](report.md).
+The original grouped recommendation below did not grant implementation GO.
+
 **Recommend one canonical CALL-result unit from selected57 for independent
 source adoption.** Move local assignment/discard to explicit caller IR and
 remove their state from both Python and native call producers. The complete

@@ -17,9 +17,11 @@ summary redirect coverage remains incomplete; this is not a fully qualified
 checkpoint. Stop further qualification/repair/timing. Selected57 is unchanged.
 The [trial report](report.md) owns evidence; [handoff](../../HANDOFF.md) owns
 paths and commands. The [round70 design](../../design/proposals/interpreter-parity70.md) and
-[review70](review70.md) propose one canonical CALL-result convention. Exact source
-work and independent adoption must resolve implicit property/getitem/initializer
-returns before implementation; no runtime lane is released.
+[review70](review70.md) proposed one canonical CALL-result convention. Independent
+source adoption stops it before implementation: typed routing solves the
+implicit-child ambiguity without a credible whole-consumer saving. Grouped71
+reviews generated execution state and physical value transport; no runtime lane
+is released.
 
 Round68's retained delegation is qualified and rejected at G `c02cebf80c4`.
 Both 117/79 builds and focused/native controls pass, but DeltaBlue 1.101089,
@@ -56,9 +58,9 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Integrate70 and resolve source adoption | Preserve controls/evidence; own qualification and selection |
-| Astra | Grouped70 complete | Broad review only; no runtime/inner-loop work |
-| Sol-high workers | Exact source proposal and independent adoption | Resolve shared return boundary before implementation GO |
+| Root | Close70 and coordinate71 | Preserve controls/evidence; own qualification and selection |
+| Astra | Grouped71 review | Broad architecture only; no runtime/inner-loop work |
+| Sol-high workers | Execution-state and value-transport source inputs | No runtime implementation or execution |
 
 The [compact unit](compact-domain64.md) and its [independent peer](compact-domain64-peer.md)
 record its bounded execution attempt. The [fixed-role unit](role-lowering63.md)

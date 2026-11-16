@@ -25,13 +25,19 @@ instructions assign/discard/move it. Change compiler CFG before encoding,
 validate the new format and update producers/magic without a legacy translator.
 All consumer instructions and dispatch are charged in native comparisons.
 
-Independent adoption and exact source-contract work are active. Property,
-getitem and initializer children share Python's return publisher; the proposed
-CALL-only invariant cannot replace it universally. Resolve and price that
-boundary before implementation. Sol peers approve explicit ownership/effect/
-observer contracts; root qualifies merged behavior/native cost and measures
-unchanged workloads. No source lane is released and no combined parity budget
-is assumed.
+Independent adoption stops round70 before implementation. A typed continuation
+can distinguish implicit children, but the proposal adds publication/consumption
+work without a credible complete-consumer reduction. Existing Python discard
+already bypasses destination lookup and result-home traffic. Neither the typed
+alternative nor a native-only scope advances. No runtime change or timing was
+performed; the trial report owns the final source evidence.
+
+Grouped review71 reassesses generated execution-state transport across C
+effects, immutable fact transport and physical derived borrowing. Two Sol-high
+workers provide independent source/native inputs. Astra must specify concrete
+physical lowering and complete added/removed work for at most two bounded units;
+it must distinguish them from the rejected mechanisms. No source lane is
+released and no combined parity budget is assumed.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -133,13 +139,14 @@ architecture/status chain. Canonical design/review evidence remains in git.
 
 The [trial report](../register-semantics59/report.md) distinguishes actual
 mechanism evidence, incomplete qualification and measured rejection. Rounds59–69
-remain unselected; preserved evidence is not a dependency list.
+remain unselected; round70 is stopped at source adoption. Preserved evidence is
+not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Integrate design70 and resolve source adoption | Preserve selected57/evidence; own runtime, qualification and selection |
-| Astra | Grouped70 complete | Five ranked options, one ordered proposal; no inner-loop work |
-| Sol-high producer / consumer | Exact source proposal / independent adoption | No implementation until shared return boundary and exact contract receive GO |
+| Root | Close70; coordinate grouped71 | Preserve selected57/evidence; own runtime, qualification and selection |
+| Astra | Grouped71 architecture review | Five substantial options, concrete physical lowering; no inner-loop work |
+| Sol-high producer / consumer | Execution-state / value-transport source inputs | Source/native readback only; no implementation release |
 
 No new runtime lane, profile/counter or compiler/flags/layout search is active.
 A losing screen stops the unit. A qualified broad winner may be selected before

@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round70: source adoption requires changes
+## Round70: stopped at source adoption
 
 The [grouped design70](../../design/proposals/interpreter-parity70.md) and
 [review70](review70.md), Astra `3067f7181b6`, propose a new A=B scratch CALL format
@@ -8,7 +8,7 @@ and explicit ordinary caller consumption. Root integrates the documents as
 `07941d2b663`. There is no legacy-word translator, runtime implementation or
 source GO.
 
-Independent source adoption is **CHANGE** in `E59/round70-design-peer.md`.
+Initial independent source adoption was **CHANGE** in `E59/round70-design-peer.md`.
 Non-generator returns also complete property/getattribute/getitem and initializer
 children with arbitrary recipients. A CALL-only invariant does not authorize
 replacing their shared publisher. Retaining that publisher would withdraw the
@@ -17,9 +17,31 @@ alternative discriminator needs an explicit architecture and cost amendment.
 The second obligation is the pending CALL→POP source state: the old discard
 recipe assumes the returned value is already absent, whereas pre-POP has a live
 result. Exact proof and once-only consumption must precede implementation.
-Sol source feasibility is active; neither a narrowed native-only scope nor a
-new continuation mode is approved. Selected57 and the frozen round69 evidence
-remain unchanged.
+Final source feasibility and independent peer stop the proposal before edits.
+A formal 16-bit CALL-scratch/generic continuation sum resolves routing, but adds
+packing, masking and a kind branch. Crucially, the existing Python discard path
+checks `IR_NO_DST` before destination/local-count lookup and never stores its
+result. The proposed B0 store followed by POP adds a load, clear and dispatch.
+Local replacement retains the same old-owner close in STORE; already canonical
+scratch results earn no move removal. General native destination liveness is a
+real possible saving, but no substantive complete-consumer budget offsets those
+common added costs. The reduced native-only variant is also stopped. This is a
+source-budget judgment, not a measured claim that every alternative is slower.
+
+The cold post-POP recipe is coherent design feasibility: prove the semantic
+post-discard edge, keep the result separately owned, commit redirect state before
+closing callbacks, consume it once and reload the actual continuation afterward.
+It has no implementation or runtime qualification. No qualification jobs follow
+for a stopped proposal.
+
+Exact receipts are `E59/round70-unit-proposal.md`, SHA256
+`33f4b682eba171a481007b5fe95e4733bbbb147eb49af1a5c89ac193740ae77a`, and
+`E59/round70-unit-proposal-peer.md`, SHA256
+`1e8995b8b15364d34ec6a5d1e2dff2ebfd53f12027ff03a2cd6f363ad10d0eb8`.
+No runtime edit, generation, build, test or timing was performed for round70.
+Selected57 and frozen round69 remain unchanged. Grouped review71 now examines
+generated execution state, effect boundaries and physical value transport;
+no new source implementation is released.
 
 ## Round69: child boundary removed; early protected screen rejected
 

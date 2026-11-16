@@ -18,15 +18,19 @@ It owns only [proposal70](design/proposals/interpreter-parity70.md) and
 CALL to A=B scratch plus explicit caller consumption; there is no legacy-word
 translator. Implementation is not released.
 
-Sol-high consumer owns independent adoption in `E59/round70-design-peer.md`;
-producer prepares exact source feasibility in `E59/round70-unit-proposal.md`.
-Neither edits runtime sources or launches targets. Early adoption review finds
-that property/getitem/initializer children share ordinary return publication;
-a CALL-only invariant is insufficient for a universal fast publisher. Root
-requires a precise, priced solution or changed scope before GO. Astra remains
-out of the component loop. Selected57 stays immutable/golden; preserve the
-round69 branches, controllers and evidence. Root owns navigation, qualification,
-runtime jobs and integration.
+Round70 is now stopped before implementation. The exact source proposal is
+`E59/round70-unit-proposal.md`; final independent peer is
+`E59/round70-unit-proposal-peer.md`. A typed continuation resolves implicit-child
+routing, but adds work without a credible complete-consumer saving. No runtime
+edits, builds or timings were performed. The trial report owns exact hashes and
+the cost argument.
+
+Grouped review71 is commissioned in Astra channel `zfr7ow1e`: only proposal71
+and review71, no runtime work or agents. Sol-high producer supplies
+`E59/round71-execution-architecture-input.md`; consumer supplies
+`E59/round71-value-architecture-input.md`, both source/native readback only.
+Root owns the final adoption and any implementation release. Selected57 stays
+immutable/golden; preserve round69 branches, controllers and evidence.
 
 ## Closed round69 checkpoint
 
@@ -63,7 +67,7 @@ rescue. This was explicitly an early diagnostic, not complete behavioral GO.
 No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
 owns full outcomes, failures, exact receipts and historical source corrections.
 
-Workers remain idle pending the next concrete source contract. Astra owns
+Workers perform only the bounded review71 inputs above. Astra owns
 broad grouped review only, with no target execution or inner-loop work. C's
 runtime source remains stale; I/U remain immutable. Preserved68 binaries and
 older captures are static evidence only after reuse of G/Lib/builds.

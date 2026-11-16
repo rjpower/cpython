@@ -1,5 +1,14 @@
 # Interpreter parity70: make call results ordinary caller values
 
+**Closed: STOP before implementation.** Independent source adoption found that
+implicit property/getitem children share the return publisher without a CALL
+discriminator. A typed continuation could resolve routing, but did not establish
+a credible complete-consumer saving. Existing Python discard bypasses destination
+lookup and stores no result; the proposed STORE/POP convention adds home traffic
+and dispatch while retaining the same ownership work. No runtime was changed or
+measured. The [trial report](../../issues/register-semantics59/report.md) owns
+the final disposition; the recommendation below is retained as reviewed history.
+
 **CHANGE the common call-result convention in one bounded unit from selected57.**
 Every ordinary CALL produces an owner in its vacated window base; assignment,
 discard and other uses are explicit caller operations. Keep real Python frames,

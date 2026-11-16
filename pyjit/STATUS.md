@@ -33,15 +33,15 @@ Selected57 remains golden. There is no fresh upstream result or parity claim.
 The [trial report](issues/register-semantics59/report.md) owns exact results and
 qualification limits; [handoff](HANDOFF.md) owns execution logistics.
 
-The [round70 design](design/proposals/interpreter-parity70.md) and
-[review](issues/register-semantics59/review70.md) rank five options and propose
-one common CALL-result unit: A=B at a scratch window, with explicit ordinary
-caller assignment/discard. It requires no legacy-word translator. Independent
-adoption and exact source-contract review are active; implementation is not
-released. The first source obligation is shared return publication: property,
-getitem and initializer children also use it, so a CALL-only invariant cannot
-authorize replacing every non-generator return. Resolve that boundary and its
-cost before source GO. The latest closed
+Independent source adoption stops the [round70 design](design/proposals/interpreter-parity70.md)
+before implementation. Implicit children also use shared return publication;
+a typed continuation can resolve routing but does not establish a substantive
+complete-consumer saving. Existing Python discard avoids result publication,
+while the new convention adds a scratch store and separate consumption.
+No runtime edit, generation, build, test or timing was performed for round70.
+Grouped review71 examines generated execution-state/effect boundaries and
+physical value transport, supported by two independent Sol source inputs.
+No new runtime lane is released. The latest measured
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
 Round68 and both round67 candidates also remain rejected; their mechanisms and

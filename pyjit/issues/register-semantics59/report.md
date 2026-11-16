@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round71: exact source GO; A implementation released
+## Round71: A builds and focused runtime pass; native qualification open
 
 Root integrates Astra `4ee0ab177f9` as `2c186e0fb6f` and adopts the
 [design71](../../design/proposals/interpreter-parity71.md) for independent exact
@@ -37,12 +37,29 @@ old-local close inside canonical publication, revalidates changed arithmetic
 proofs and preserves the configured statistics ABI. Native removal still needs
 proof in the actual ELF. No raw decrement or compiler assume is authorized.
 
-Root releases A source/tests in W on new `pyjit/parity71-canonical-provenance`
-from selected57. B stays queued until A's disposition. The other worker prepares
-the explicit one-pair confirmation option for prospective host-harness review.
-No round71 full generation, runtime build, native test, timing or performance
-claim exists yet. Selected57 remains golden; rejected rounds remain closed.
-The grouped design owns prospective native and unchanged protected-screen gates.
+A is frozen in W as `d33f7b2d9bdec4b652281d92c99eba133126cb79`, seven files.
+Independent actual-diff review gives source GO in
+`E59/round71-canonical-post-review.md`, SHA
+`d5bfe1c252184f68d4728234ce388689d6801e34c51ac0ace8bd8932f73fe9fc`.
+Five new host generator methods and five adjacent regressions pass; all 331
+computed formats equal selected57. These are host receipts, not native tests.
+
+Root integrates source as G `2cc957b53c8` on
+`pyjit/parity71-canonical-integrated` from selected57, preserving round69.
+Full `parity71-canonical1` generation succeeds. Its sole product change is
+18 additions/19 deletions in `Python/generated_ir_cases.c.h`: canonical stores
+and owning nullable readers in SLOT, HINT, DEREF and both specialized GLOBAL
+heads. No other product or metadata changes. Independent product GO is in
+`E59/round71-canonical-products-peer.md`, SHA
+`106992522c65a04e72d2c7a42fa90ee40abca4958dc423d80198207b6c01c4c9`.
+Root commits products as G `ff1618987bd`. Both `parity71-canonical1` builds pass
+117 modules/79 shared extensions. Both `parity71-canonical1-runtime` runs pass
+24 methods: three CanonicalProvenanceRuntimeTests plus existing PyValueTests
+and OperandModeTests. No host parser/generator methods run under the target.
+Actual HINT selection and complete native read-to-consumer cost remain
+qualification gates. B stays queued until
+A's disposition. No round71 timing or performance claim exists. Selected57
+remains golden; the grouped design owns the unchanged protected-screen gates.
 
 The prospectively reviewed host confirmation capability is implemented:
 `--single-pair-confirmation` requires `--rounds 1`; otherwise positive even

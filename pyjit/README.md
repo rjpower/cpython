@@ -16,7 +16,9 @@ The selected runtime remains selected57. Independent source review stopped the
 canonical CALL results added consumer work without a credible net saving.
 The adopted [round71 design](design/proposals/interpreter-parity71.md) orders
 canonical-value fact transport, then generated hot/slow execution separation.
-Exact source contracts have independent GO. A is in implementation; B follows
+Exact source contracts have independent GO. A's source and generated products
+have passed independent review; both builds and focused tests pass. Native
+qualification precedes timing. B follows
 after A's disposition.
 The stopped round69 summary trial removed child execution on hits but lost its
 early protected screen with callback qualification incomplete. The

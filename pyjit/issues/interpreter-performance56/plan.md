@@ -41,11 +41,13 @@ contracts are independently cross-peered before implementation. A need not win
 for B to proceed, and any native/frame saving earned by A is excluded from B's
 credit. No combined parity budget is assumed.
 
-Both exact source contracts now have independent GO. Root releases A source
-implementation only, from selected57 in W; B waits for A's disposition. Root
-owns generation/products/builds and target qualification. In parallel the other
-worker prepares the prospectively reviewed one-pair confirmation capability;
-default balanced screen behavior remains unchanged.
+Both exact source contracts have independent GO. A is implemented and its frozen
+source has independent post-review GO. Root has integrated it from selected57
+and generated the candidate. Product review, both 117/79 builds and 24 focused
+methods per role pass. Complete native qualification precedes timing. B waits
+for A's disposition. The prospectively reviewed
+one-pair confirmation option is implemented and passes its host tests; default
+balanced screen behavior remains unchanged.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -152,12 +154,12 @@ not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Integrate A after actual-diff peer | Preserve selected57/evidence; own generation/runtime, qualification and selection |
+| Root | Qualify A native paths, then screen if justified | Preserve selected57/evidence; own generation/runtime, qualification and selection |
 | Astra | Grouped71 complete | Five options, two ordered units; no inner-loop work |
-| Sol-high workers | A source/tests; host confirmation proposal | B source GO is queued; no parallel generator lanes |
+| Sol-high workers | Independent A product review; native-control preparation | B source GO is queued; no parallel generator lanes |
 
-Only A's source lane is active. No target job, profile/counter campaign or
-compiler/flags/layout search is active.
+Only A's integration lane is active. No round71 timing, profile/counter campaign
+or compiler/flags/layout search has run.
 A losing screen stops the unit. A qualified broad winner may be selected before
 parity; repeat grouped review and implementation against the remaining gap.
 

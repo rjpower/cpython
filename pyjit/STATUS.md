@@ -45,9 +45,15 @@ independent exact source review. A carries canonical-bit facts from audited
 storage readers to existing publication. B splits eligible generated handlers
 at a pre-effect cut, keeping ordinary slow execution in a body-only terminal
 entry. They retain owners, homes, encoded words and the five-argument ABI.
-Both exact source contracts have independent GO. Root releases A implementation
-in a separate worktree from selected57; B remains queued until A's disposition.
-No round71 generation, runtime build, native test or timing has run. A is not a
+Both exact source contracts have independent GO. A source `d33f7b2d9bd` and its
+generated products pass independent review. Root integrates them as G
+`ff1618987bd` from selected57. Both builds pass 117 modules/79 shared extensions;
+all 24 focused methods pass per role. Generation changes
+exactly five handlers; the other 324 and all metadata remain unchanged. Five new
+host generator methods and five adjacent regressions pass. All three new runtime
+methods pass within the focused set. Actual HINT selection and complete native
+paths remain unqualified; no timing has run.
+B remains queued until A's disposition. A is not a
 mandatory winner for B, and its savings cannot be counted twice. The latest measured
 [round69 design](design/proposals/interpreter-parity69.md) and
 [source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.

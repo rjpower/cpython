@@ -37,8 +37,17 @@ review them into `round71-canonical-source-peer.md` and
 `round71-split-source-peer.md`. Both exact contracts now have independent GO;
 the trial report owns hashes and resolved findings. A's worker creates branch
 `pyjit/parity71-canonical-provenance` in W from immutable selected57. Source/tests
-only: root owns full generation, products, builds and target execution. B remains
-queued until A's disposition; its source contract explicitly covers all hot
+only: root owns full generation, products, builds and target execution. A froze
+as W `d33f7b2d9bd`; independent source post-review gives GO. Root integrates it
+as G `2cc957b53c8`, generates successfully under `parity71-canonical1`, reviews
+the sole product change and commits it as `ff1618987bd`. Exactly five of 329
+handlers change; all metadata and other products remain unchanged. Independent
+product review gives GO in `E59/round71-canonical-products-peer.md`. Both
+`parity71-canonical1` builds pass 117/79. The `parity71-canonical1-runtime` focus
+passes all 24 methods per role: CanonicalProvenanceRuntimeTests, PyValueTests
+and OperandModeTests. The host source class is excluded. Complete native paths
+and actual HINT coverage remain open; no timing has run. B remains queued until
+A's disposition; its source contract explicitly covers all hot
 close sites, canonical arithmetic, once-only stats and the borrowed-reader cut.
 The opt-in one-pair confirmation capability in the canonical host measurement
 helper has passed root proposal/diff review and three host test methods; see
@@ -49,7 +58,7 @@ immutable/golden; preserve round69 branches, controllers and evidence.
 
 ## Closed round69 checkpoint
 
-G is clean `52806aacedf5be0a89546344162bb53a8e40ec34`, branch
+Round69 is preserved at `52806aacedf5be0a89546344162bb53a8e40ec34`, branch
 `pyjit/parity69-guarded-summary-integrated`. P is frozen producer
 `b2780170943db23e16b97de2f40e084cc12ea3cc`; W is frozen consumer
 `8a9dae105c2939f0db1f3b58664f6bcbfc903c68`. Reused build prefixes are

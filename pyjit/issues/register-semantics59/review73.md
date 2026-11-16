@@ -7,6 +7,15 @@ from selected57. Do not adopt rejected72 or call its remaining transactions a
 completed implementation of the effect ABI. This is one grouped architecture
 review; source owners and root own the subsequent implementation loop.
 
+Root adoption amendment: both source peers subsequently approved the explicit
+HOME completion consumer. Actual selected57 coroutine IR showed that the
+RETURN/local/discard grammar excluded both `fibonacci` awaits: one result stays
+live across another call, and the other feeds ADD. HOME publishes the necessary
+live result through the same new retirement/effect engine. It adds no carried
+arithmetic mode or old-helper fallback and receives no home-removal credit.
+The design's source-adoption section records the evidence and contract; a new
+two-await native control will measure the entire consuming expression.
+
 ## Evidence reviewed and verdict
 
 The runtime source anchors are actual immutable trees:

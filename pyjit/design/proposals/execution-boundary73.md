@@ -85,7 +85,7 @@ entry followed by generic repair on a supposedly admitted fast path.
 The shared cold reverse row is the backend memo's eight-byte
 `_PyIRGeneratorBoundary`: uint16 `ordinary, handler`, uint8
 `yielded_consumer, completed_consumer, resume_consumer, flags`. Consumer codes
-are NONE, DELEGATED, RETURN, STORE_LOCAL, DISCARD and SEND. Generate
+are NONE, DELEGATED, RETURN, STORE_LOCAL, DISCARD, SEND and HOME. Generate
 `_PyIR_GeneratorBoundaryOf(handler)` and the cold selection query
 `_PyIR_GeneratorBoundaryHandler(ordinary, yielded, completed, resume)` from the
 same declarations as the bodies. The query succeeds only for complete
@@ -138,11 +138,13 @@ The first enabled shape includes all of the following:
 1. SEND's sent input, yielded result and completed result remain three distinct
    definitions. Its yielded result can feed YIELD_DELEGATED directly. Its
    completed result can feed RETURN directly, be stored in its real local,
-   or be consumed as discard. STORE/discard are actual
+   be consumed as discard, or commit to its real live scratch home. STORE/discard are actual
    consumers, not artificial accumulator spill steps. A further unsupported
    consumer leaves the whole connected shape ordinary before activation.
-   An admitted completed edge cannot instead publish A and dispatch an
-   unchanged consumer merely because its direct body was omitted.
+   HOME is an explicit final publication consumer, not a spill followed by a
+   private retake adapter. It retains and charges the necessary store and
+   ordinary dispatch, using the same replacement retirement/effect engine.
+   Direct RETURN/local/discard consumers still avoid redundant home traffic.
 2. YIELD_DELEGATED takes the outgoing owner and commits the real suspended
    frame, exception links, recursion credit, profile state, PC and external
    detach. It dispatches that owner to the parent's yielded consumer. It
@@ -187,6 +189,26 @@ incomplete shape is rejected by common public admission. This introduces no
 hot closure check and no separate proof system.
 
 ## Effects own the retirement suffix
+
+### Source adoption amendment: real live result homes
+
+Root's readback of unchanged selected57 coroutine IR exposed a coverage gap in
+the initial finite grammar. In `fibonacci`, SEND word 11 completes into scratch 2
+at word 15; that value survives another call and await. SEND word 20 completes
+into scratch 3 at word 24's ADD. RETURN/local/discard alone admits neither cycle.
+The retained artifact is `E59/execution73-selected-fibonacci-ir.json`; this is
+compiled source geometry, not a dynamic hit count.
+
+Both source peers approved HOME before implementation measurement. It accepts
+an ordinary valid live scratch destination under the existing ownership and
+overlap proof, independent of benchmark or operation names. It publishes the
+canonical result once after input retirement, then dispatches the actual exit.
+The effect entry detaches remaining inputs before overlapping publication.
+The old generic completion helper is still replaced; no home elimination or
+arithmetic specialization credit is claimed. This corrects an overly narrow
+consumer grammar without importing general carried arithmetic or CALL modes.
+
+### Retirement execution
 
 Separate native functions are required for ordinary transfer and callback
 execution. Conditional root allocation inside one large C function is not a

@@ -12,187 +12,61 @@ this file owns execution logistics.
 ## Current work
 
 Execution-boundary73 has grouped Astra, independent source and root adoption GO.
-P and W implement from selected57 after cross-review of the pinned runtime
-proposal `d251c9cd` and compiler proposal `be5c4640`; their memos are
-`E59/execution73-{runtime,compiler}-proposal.md`. P owns the initial shared query
-header, then runtime/generation; W consumes that interface for compiler/public
-admission and focused tests. Root owns integration and timing. G is now
-`pyjit/execution73-boundary-integrated` at selected57. **Its build directories
-still contain72 ELFs: do not run them until rebuilding against the new source.**
-The bounded logging/raytrace diagnostic is complete and sealed; driver/output are
-`E59/execution73-diagnostic-driver.py` and `E59/execution73-diagnostic`.
-The user explicitly authorized this diagnosis after72's failed screen; earlier
-no-diagnostic instructions below describe the closed trial, not this new work.
-No73 runtime implementation has landed yet. The following72 sections retain the
-closed trial's source/build coordinates, not G's current checkout.
+P and W implement from selected57 after cross-review of the runtime and compiler
+contracts in `E59/execution73-{runtime,compiler}-proposal.md`. The subsequent
+HOME amendment is in the canonical design: a live result can require its real
+scratch home across another call or await; that necessary store earns no
+home-elimination credit.
 
-Round71 is closed: canonical provenance (A) and standalone arithmetic hot/cold
-lowering (B) pass source/product review, both builds and focused tests but lose
-their early protected screens. The [trial report](issues/register-semantics59/report.md) owns exact
-results, hashes and qualification limits; [design71](design/proposals/interpreter-parity71.md)
-and [review71](issues/register-semantics59/review71.md) retain the closed contracts.
-Astra is for grouped architecture review, not the component loop.
-
-Two Sol 6.1 workers have implemented and independently reviewed the
-[accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
-directly from selected57. W owns compiler/common validation/tests on
-`pyjit/execution72-compiler-abi-selected57`; P owns runtime/generation/readers,
-with final corrections on `pyjit/execution72-delegated-readers`. Both are frozen.
-Root owns generation, integration, builds, native controls and timing.
-
-G is `c6d54fd3b5d`, branch `pyjit/execution72-abi-integrated`, magic 64425.
-Complete initial sources W `f132e957c33` and P `5d7140f9579` plus reviewed
-integration corrections are retained in its history. These close monitor
-metadata/payload routing, physical owner propagation, generic SEND's vacated
-output, shared completion joins, typed suspended readers and actual emitted
-error footprints. Latest producer `50e7a603b0a` makes emitted local cleanup and
-its proof use the same physical-result predicate. ABI11 generation changes
-only LOAD_COMMON_CONSTANT_ACC_OUT's no-error census; independent product GO is
-`E59/execution72-abi11-product-readback.json`. Both final builds pass 117/79.
-Never execute an older ELF against a moved source/Lib tree.
-
-ABI10 release/debug builds passed 117 modules/79 extensions and all 97 methods
-across remote inspection and the 24-method accumulator module (three skips).
-ABI9 passed 595 debug methods across 17 related runtime modules (nine skips);
-eight discarded-result completion methods separately passed both roles.
-The ABI10 nested-comprehension compile rejection is resolved in ABI11.
-The first GDB trace recorded NULL bits, not logical absence; the corrected trace
-identifies a fictitious error edge on the carried constant. ABI11 addresses that
-actual producer defect without changing validation or generated instruction
-bodies. All 100 coroutine methods pass on both final builds. Across ABI9–11,
-all 768 related methods pass per role (12 skips), plus the eight discard methods.
-Keep all numbered failures and peers under `E59/execution72-*`.
-
-Six selected/native candidate controls and six supplementary owner probes pass
-and repeat on final ABI11. Their complete path costs remain mixed. The native
-C-stack-entry failure control also repeats on final debug, with recoverable
-ownership/resume. Final receipts use `execution72-abi11-{native,owner,entry}*`.
-Controllers are `execution72-native-{fixture,controller,run}.py`,
-`execution72-owner-{probe,run}.py` and `execution72-entry-*.py`. The probe's
-original GDB serialization failure is preserved; its reviewed correction changes
-only output. Cold review `execution72-final-cold-review.md` records ordinary
-map/kind/stack costs and actual coverage limits. The stable 32-row screen
-`abi72-hot8-selected57-screen` rejects selection: GM 1.067106, DeltaBlue 1.068427,
-logging 1.210843, raytrace 1.289980. Independent audit is
-`execution72-screen-peer.json`. STOP this trial: no confirmation, all29, full
-suite, upstream/PMU or rescue. Selected57 remains golden. The frame header remains
-112B; executable header grows 40→48B plus
-2B/word (`execution72-geometry-integrated.json`). This is no frame-packing gain.
-
-The [layout unit](issues/register-semantics59/execution72-layout.md) is closed
-and rejected. Its preserved source is `240f4c2b977`, branch
-`pyjit/execution72-layout-integrated`, magic 64424. Both final
-`execution72-layout6` builds pass 117/79 and 1,143 related methods per role.
-Integration fixes and earlier failed receipts remain preserved. Three ordinary
-compiler probes showed identical words/extents; root removed the unproven
-relocation pass at `ba98006e236` before timing. The remaining explicit cold maps
-lose `E59/layout72-hot8-selected57-screen`: GM 1.003934, spectral_norm 1.070835,
-logging 1.014417, stable identities and all 32 rows successful. No confirmation,
-all29, full suite, upstream or PMU follows. Existing ABI reserved NULL homes and
-pre-effect materialization do not depend on these maps; both workers confirmed
-that source boundary. Start the ABI G branch from I, not this rejected unit.
-G has moved to the ABI candidate; never run preserved layout ELFs with G's new
-Lib tree. Keep old W layout/P layout-based ABI branches and sealed evidence. Magic 64423
-already identified older IRSC1 caches; do not reuse 64423 or 64424 for the ABI.
-
-Preserved round71 runtime trees:
-
-| Tree | Head / branch | State |
+| Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| W | `d33f7b2d9bd`, `pyjit/parity71-canonical-provenance` | Rejected A source |
-| P | `f337d93bd62`, `pyjit/parity71-terminal-hot-cold` | Rejected B source plus formatting |
-| G | `e8be22ec1e1`, `pyjit/parity71-terminal-integrated` | Preserved rejected B source/products |
+| G | `pyjit/execution73-boundary-integrated` | Clean selected57 base; root integration pending |
+| P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
+| W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
 
-Preserved A integration is `ff1618987bd` on
-`pyjit/parity71-canonical-integrated`. Both candidates build 117/79 and pass
-24 focused methods per role. A removes eight conversion edges; B's two hot
-functions have no returning C calls but retain red-zone spills. Their stable
-32-row screens lose: A GM 1.011186/logging 1.121887; B GM 1.017289/logging
-1.263918. Independent peers verify both rejections. Stop all further qualification,
-repair and timing for either source; no composition or automatic dependency.
+P owns the initial shared boundary header. W consumes it, adds the bounded
+common predicates and tests, and cross-reviews P. Root owns generation,
+integration, builds, target execution and timing. Workers must not run target
+jobs or alter immutable controls. No complete73 runtime has landed yet.
 
-Tags are `parity71-canonical1{,-runtime}` and `parity71-split2{,-runtime}`;
-outputs are `E59/{canonical71,split71}-hot8-selected57-screen`. The two
-`round71-*-source-proposal.md`, corresponding peers, post-reviews and product/
-static/screen reviews retain source authority. Actual dynamic whole-consumer,
-hot/slow and natural/HINT attribution remain incomplete. The prepared A native
-and natural controllers remain unexecuted. No confirmation/all29/full/upstream/
-PMU result or cause is claimed. Never execute preserved A ELFs against current G/Lib.
+**G's build directories still contain rejected72 ELFs. Do not execute them
+until rebuilding against G's current source.** A moved source tree invalidates
+its old runtime/Lib pairing even when the ELF itself is preserved.
 
-The host measurement helper has reviewed one-pair confirmation support, with
-three host test methods passing; no confirmation was launched. Source/runtime
-jobs remain root-owned. Selected57/I/U stay immutable/golden; preserve all
-rejected branches and sealed evidence. Current72 integration is described above.
+Root completed and sealed the bounded frozen72 logging/raytrace diagnosis in
+`E59/execution73-diagnostic`, with driver `E59/execution73-diagnostic-driver.py`.
+The [diagnosis](issues/register-semantics59/execution73-diagnosis.md) owns its
+findings. Eight selected57 native controls are ready, including retained versus
+finalizing receivers and a two-await expression with a live intermediate result.
+Controllers are `E59/execution73-native-{fixture,controller,run}.py`;
+`execution73-native-control-peer.md` records independent readback.
 
-## Closed round69 checkpoint
+The user authorized this corrective implementation and the bounded diagnosis.
+Closed-trial stop rules do not prohibit73; they prohibit restarting a rejected
+executable unchanged. Astra remains outside the component implementation loop.
 
-Round69 is preserved at `52806aacedf5be0a89546344162bb53a8e40ec34`, branch
-`pyjit/parity69-guarded-summary-integrated`. P is frozen producer
-`b2780170943db23e16b97de2f40e084cc12ea3cc`; W is frozen consumer
-`8a9dae105c2939f0db1f3b58664f6bcbfc903c68`. Reused build prefixes are
-`BASE/reg59-results-{release,debug}`. Both `parity69-tests6` builds pass 117/79;
-29 focused, 53 related and 350 observation/code/marshal methods pass per role
-with 1+9 skips. Full generation/products and independent source/product reviews
-pass; all 331 existing format rows remain unchanged.
+## Closed trials and retained evidence
 
-Full behavioral qualification remains incomplete. The corrected finalizer
-fixture records the actual external-ancestor rejection/supported outcome,
-without changing debugger authority. Existing positive redirect tests run
-ordinary fallback under tracing; they do not prove committed-summary
-PENDING/APPLIED/same-PC/service-error paths. Root records this limit before
-an early rejection screen in `E59/guarded-summary69-tests6-screen-admission.json`.
+Selected57 remains golden. Both72 units and rounds59–71 are unselected. The
+[trial report](issues/register-semantics59/report.md) owns their source identities,
+qualification, measurements and rejection decisions. Do not repeat those
+chronologies here or make historical experiments prerequisites for current work.
 
-Actual projection/select native controls have no child execution, correct
-results and consumed owners, but complete release instruction counts grow
-395→437 and 537→612; reached stack 80→152/264B. Original stamp5 and current
-stamp6 receipts are separately pinned in `E59/guarded-summary69-native-controls`.
-Natural unchanged Delta has one real success and 23 static sites; comp has 0
-selected sites. Receipts are `E59/guarded-summary69-natural/*-tests6-release-v2.native.json`.
-The first natural launch's fixture preflight failure is retained; no kernel
-entry or hit was claimed for it.
+Important retained refs:
 
-The stable 32-row `E59/summary69-hot8-selected57-screen` rejects the candidate:
-GM 1.012667, Delta 1.034596, logging 1.176093, generators 1.018079,
-raytrace 1.034177; coro 0.957014 and spectral 0.945332 improve. Root stops all
-remaining qualification, source repair, confirmation/all29/PMU/full/timing
-rescue. This was explicitly an early diagnostic, not complete behavioral GO.
-No fresh upstream result or cause is claimed. The [trial report](issues/register-semantics59/report.md)
-owns full outcomes, failures, exact receipts and historical source corrections.
+| Trial | Preserved integration |
+| --- | --- |
+| Execution72 ABI | `pyjit/execution72-abi-integrated`, `c6d54fd3b5d` |
+| Execution72 layout | `pyjit/execution72-layout-integrated`, `240f4c2b977` |
+| Round71 terminal split | `pyjit/parity71-terminal-integrated`, `e8be22ec1e1` |
+| Round71 canonical provenance | `pyjit/parity71-canonical-integrated`, `ff1618987bd` |
+| Round69 guarded summaries | `pyjit/parity69-guarded-summary-integrated`, `52806aacedf5` |
+| Round68 retained delegation | `pyjit/parity68-retained-delegation-integrated`, `c02cebf80c48` |
 
-Preserve A/B/69 branches and sealed evidence; G now holds the72 candidate above.
-Astra's71 review is complete; it stays out of the component loop. C's
-runtime source remains stale; I/U remain immutable. Preserved68 binaries and
-older captures are static evidence only after reuse of G/Lib/builds.
-
-## Preserved round68 checkpoint
-
-Rejected round68 is preserved on `pyjit/parity68-retained-delegation-integrated`
-at `c02cebf80c48d47a9167dd86dce9bdc0fd11a623`. Its captured native files and
-`E59/retained-delegation68-*` evidence remain sealed. G/Lib/builds have moved on;
-never execute its captured ELF against the current Lib. The
-[trial report](issues/register-semantics59/report.md) owns its complete
-qualification and rejection; the
-[contract](issues/register-semantics59/retained-delegation68.md) owns its protocol.
-
-## Closed experiments
-
-Rounds59–67 are closed and unselected. The [trial report](issues/register-semantics59/report.md)
-owns their exact sources, native captures, failed checks, qualified mechanisms
-and rejected screens. Do not restart a rejected packet or treat historical
-qualification as current build identity.
-
-Preserved round67 branches include `pyjit/parity67-native-callout`,
-`pyjit/parity67-callout-integrated`, `pyjit/parity67-anchored-self` and
-`pyjit/parity67-anchored-self-integrated`. Earlier branches and sealed evidence
-remain intact. Runtime worktrees P/W/G have moved on; their old captured
-standalone ELFs are static evidence only. **Never execute a capture against a
-changed Lib tree.** Reused builds become stale after source changes until both
-are refreshed. No candidate build is another immutable control.
-
-Only the complete current unit advances to native mechanism/ABI evidence and
-one unchanged hot8 screen. A losing screen stops without confirmation, all29,
-PMU, full suite or repair. A promising coherent winner advances under the
-[design71 selection rules](design/proposals/interpreter-parity71.md#ordered-qualification-and-selection).
+Preserve these refs and sealed `E59` receipts. Old captured ELFs are static
+reference material after their source/Lib trees or build directories move.
+Magic 64424 identifies rejected layout72; 64425 identifies rejected ABI72;
+64426 is reserved for boundary73. Never reuse an old format identity.
 
 ## Paths and immutable controls
 
@@ -209,8 +83,8 @@ A=`R/parity61-ascent`, I=`R/call55-integrated`.
 | Golden56 | `883524c180e4486b47df77ee2276c9276c0ec32c`, `R/round56-golden` | `BASE/round56-golden-release` | `E57/control-retry-build.log`, 117/79 |
 | Upstream | `3a440b65695615e9fd9912342b79cdd54fced0d2`, `R/upstream-3a440b6` | `BASE/upstream-release-devlibs-3a440b6` | `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log`, 116/78 |
 
-Keep I's debug build frozen too. Selected57 is branch `pyjit/round57-golden`,
-tag `pyjit-golden-20261114-dictionary-readers`. Selected54
+Keep I's debug build frozen too. Selected57's golden ref is `pyjit/round57-golden`; I's checkout branch is
+`pyjit/comp57-dictionary-candidate`. Its tag is `pyjit-golden-20261114-dictionary-readers`. Selected54
 `61015a9452d9069646fb5fede9ff963896833b89` and other controls remain untouched.
 The selected report/tables own current upstream comparisons and limits.
 

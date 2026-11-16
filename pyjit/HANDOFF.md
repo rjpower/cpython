@@ -24,13 +24,18 @@ Two Sol 6.1 workers now own exact source proposals and cross-review: W on
 Both new branches start at selected57 and preserve the old branches below.
 Proposals/progress use `E59/execution72-{layout,abi}-{proposal,progress}.md`.
 The [layout source contract](issues/register-semantics59/execution72-layout.md)
-has independent peer and root GO; W is implementing the complete cold map and
-allocator unit. Its initial codec commit is `c63defae27c`; it is not independently
-buildable. P has independent peer and root GO for the
+has independent peer and root GO. W's complete cold map and allocator unit is
+`1e07e1bf590e` atop codec `c63defae27c`; independent source post-review passes.
+Root integrates them in G `62b85041b8d`, branch
+`pyjit/execution72-layout-integrated`, with magic 64423. Full regeneration
+changes no products. The first release compile catches legacy list/comparison
+APIs in the new assembler helper; W is correcting those before native tests.
+Logs use `E59/execution72-layout1-*`. P has independent peer and root GO for the
 [accumulator ABI contract](issues/register-semantics59/execution72-abi.md) and
 implements nonoverlapping generator files before rebasing shared runtime edits. Root integrates only
 complete reviewed sources into G, generates and reviews products, then runs
-focused native checks and hot8. No runtime winner has landed for72 yet. Existing G/builds stay on rejected71B until integration.
+focused native checks and hot8. No runtime winner has landed for72 yet.
+Reused G builds are being refreshed and are not executable controls.
 
 Preserved round71 runtime trees:
 
@@ -38,7 +43,7 @@ Preserved round71 runtime trees:
 | --- | --- | --- |
 | W | `d33f7b2d9bd`, `pyjit/parity71-canonical-provenance` | Rejected A source |
 | P | `f337d93bd62`, `pyjit/parity71-terminal-hot-cold` | Rejected B source plus formatting |
-| G | `e8be22ec1e1`, `pyjit/parity71-terminal-integrated` | Rejected B source/products; both live builds |
+| G | `e8be22ec1e1`, `pyjit/parity71-terminal-integrated` | Preserved rejected B source/products |
 
 Preserved A integration is `ff1618987bd` on
 `pyjit/parity71-canonical-integrated`. Both candidates build 117/79 and pass

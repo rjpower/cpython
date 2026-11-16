@@ -73,8 +73,12 @@ Round71 is closed. The user has authorized the
 [execution-state design72](design/proposals/execution-state72.md). Two Sol 6.1
 workers own compiler/layout and accumulator/effect/activation work. The
 [layout source contract](issues/register-semantics59/execution72-layout.md) has
-independent review and implementation GO; its complete cold-map port is in
-progress. The [accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
+independent review and implementation GO. Its complete cold-map/allocator source
+`1e07e1bf590e` passes independent source post-review and integrates into candidate
+G `62b85041b8d` with magic 64423. Regeneration leaves handlers unchanged. Native
+build qualification is underway; the first compile found legacy container API
+uses in the new assembler helper, now being corrected. The
+[accumulator ABI contract](issues/register-semantics59/execution72-abi.md)
 also has independent peer and root GO; its generator implementation proceeds
 in parallel, with shared runtime edits deferred until the layout rebase. Root owns integration, generation, native tests
 and benchmark selection. Fresh warmed profiles compare selected57 and upstream:

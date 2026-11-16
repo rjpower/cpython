@@ -1844,6 +1844,17 @@ normal_window_result_offset(const _PyIRFormat *fmt)
     return -1;
 }
 
+static int
+is_delegated_yield_handler(int handler)
+{
+    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
+    if (boundary == NULL) {
+        return 0;
+    }
+    return boundary->ordinary == YIELD_DELEGATED ||
+           boundary->ordinary == INSTRUMENTED_YIELD_DELEGATED;
+}
+
 /* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -1882,7 +1893,7 @@ check_words(struct _PyCodeConstructor *con)
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
         int base = -1, dst = -1;
-        if ((handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) &&
+        if (is_delegated_yield_handler(handler) &&
             (i + 1 >= nwords || IR_D(word) == IR_A(word) || IR_D(word) == IR_B(word)))
         {
             PyErr_Format(PyExc_ValueError,
@@ -1995,8 +2006,7 @@ check_words(struct _PyCodeConstructor *con)
         }
         int opcode = _PyIR_BaseOpcode(handler);
         if ((opcode == YIELD_VALUE || opcode == INSTRUMENTED_YIELD_VALUE) &&
-            handler != YIELD_DELEGATED &&
-            handler != INSTRUMENTED_YIELD_DELEGATED && arg != 0)
+            !is_delegated_yield_handler(handler) && arg != 0)
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd needs an explicit delegated yield", i);
@@ -2862,7 +2872,7 @@ semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
 {
     _PyIRWord word = image->words[pc];
     int handler = IR_HANDLER(word);
-    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
+    if (is_delegated_yield_handler(handler)) {
         semantic_delegated pair = work->delegated;
         int dst = (int)IR_A(word);
         int valid = pair.kind == SEM_DELEGATED_KNOWN &&
@@ -3787,8 +3797,7 @@ normal_transfer_proof(const semantic_image *image,
                     result = -1;
                     break;
                 }
-                if (IR_HANDLER(words[i]) == YIELD_DELEGATED ||
-                    IR_HANDLER(words[i]) == INSTRUMENTED_YIELD_DELEGATED) {
+                if (is_delegated_yield_handler(IR_HANDLER(words[i]))) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has no delegated entry proof", i);
                     result = -1;

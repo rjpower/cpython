@@ -17716,16 +17716,7 @@
                 frame = tstate->current_frame = dying->previous;
                 if (generator_return) {
                     frame->phase_state = 0;
-                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
-                    }
-                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
-                    slots = _PyFrame_Slots(frame);
-                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_completed.next;
-                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                    LLTRACE_RESUME_FRAME();
-DISPATCH();
+                    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -17794,16 +17785,7 @@ DISPATCH();
                 frame = tstate->current_frame = dying->previous;
                 if (generator_return) {
                     frame->phase_state = 0;
-                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
-                    }
-                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
-                    slots = _PyFrame_Slots(frame);
-                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_completed.next;
-                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                    LLTRACE_RESUME_FRAME();
-DISPATCH();
+                    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -23005,16 +22987,7 @@ DISPATCH();
                 frame = tstate->current_frame = dying->previous;
                 if (generator_return) {
                     frame->phase_state = 0;
-                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
-                    }
-                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
-                    slots = _PyFrame_Slots(frame);
-                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_completed.next;
-                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                    LLTRACE_RESUME_FRAME();
-DISPATCH();
+                    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -23070,16 +23043,7 @@ DISPATCH();
                 frame = tstate->current_frame = dying->previous;
                 if (generator_return) {
                     frame->phase_state = 0;
-                    if (generator_outcome_target(frame, frame->instr_ptr, generator_completed_targets) != NULL) {
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
-                    }
-                    temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
-                    slots = _PyFrame_Slots(frame);
-                    _PyIRStepResult ir_completed = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
-                    next_instr = ir_completed.next;
-                    if (ir_completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                    LLTRACE_RESUME_FRAME();
-DISPATCH();
+                    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;

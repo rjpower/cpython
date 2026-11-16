@@ -77,8 +77,11 @@ Use existing logical IDs, owner-held use/def information, source IO roles and
 effect facts. Select a carried edge when its producing edge has exactly one
 owning consumer, the consumer's source role is supported, its cold home remains
 reserved, and every intervening edge preserves that identity. Same physical
-index alone is not identity. Joins, multiple uses, unsupported read roles and
-unknown effects materialize. Do not create SSA or another lifetime engine.
+index alone is not identity. A join can carry a value only when every normal
+predecessor supplies an independently proved owner at the same reserved home
+and consuming input role. Multiple uses, incomplete ingress, unsupported read
+roles and unknown effects materialize. Do not create SSA or another lifetime
+engine.
 
 Generate placement variants from one parsed handler and Storage/Local model.
 An execution variant specifies at most one ACC input role and an ACC output
@@ -90,6 +93,7 @@ Public images validate producer, consuming edge and mode together.
 Initial supported source roles are:
 
 * ADD/SUB single result, generic provider and exact-inline-int fast arm;
+* LOAD_COMMON_CONSTANT owned result, including the initial None input to SEND;
 * RETURN_VALUE/RETURN_VALUE_EMPTY `retval` (canonical owner passed into the
   existing WithResult retirement root);
 * ordinary CALL normal result, including exact Python activation and the
@@ -110,8 +114,8 @@ operand. Its variant's otherwise-unused B field has the distinct typed
 bodies are RESUME (oparg A) and JUMP_BACKWARD_NO_INTERRUPT (target CD). There is
 no previous-PC inference, new frame field or extra ABI argument. The compiler
 stores one carried logical ID per participating operation, maps it through
-existing allocation, and requires one incoming definition and one eventual
-owning consumer. The public validator checks B's bounds and agreement with the
+existing allocation, and requires one definition per incoming edge and one
+eventual owning consumer. The public validator checks B's bounds and agreement with the
 producer; source/debug operand decoding retains the ordinary instruction's
 meaning. Register actual carrier homes in the existing Storage graph; require
 their physical NULL state, not just vacated ownership.
@@ -126,6 +130,17 @@ STORE_FAST is an admitted owning consumer for the ordinary YIELD → RESUME →
 local-binding path, using existing local publication/displaced-owner semantics.
 This amendment closes actual generator control flow; tests and native receipts
 must demonstrate it rather than treating an enum or variant as a reached hit.
+
+Selection collects candidate producer-to-consumer edges before changing any
+opcode. It then removes unavailable or conflicting native modes and incomplete
+ingress groups until no further candidate is removed. This closes the initial
+None and resumed-value paths of a SEND/YIELD cycle together. Different incoming
+values may share a consumer, as at an ordinary control-flow join; each edge must
+prove its own owner. Entry and exceptional ingress remain homed. No ordinary
+dispatch lookup discovers a provider or repairs a partial group at runtime.
+Tests must reject a missing predecessor, an absent producer output and an
+incomplete group. Physical suspension snapshots precede the logical result of
+the next activation: a waiting frame has neither that future owner nor live ACC.
 
 The selection is reusable for any supported producer/consumer pair. Tests must
 include more than named ADD-to-RETURN motifs. The next bulk port would add

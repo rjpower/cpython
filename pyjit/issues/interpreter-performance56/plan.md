@@ -18,13 +18,20 @@ complete projection/select paths grow in instructions and stack. Its stable
 raytrace 3.4%; GM 1.012667. Positive committed-summary redirect coverage remains
 incomplete. Stop the executable without further qualification or repair.
 
-The next grouped Astra review must compare five concrete options against the
-new full-path evidence and select at most two bounded source units. Sol peers
-must approve exact owner/effect/observer contracts before implementation. The
-coordinator qualifies merged behavior and native cost, then measures unchanged
-workloads. Do not silently waive missing behavioral gates or substitute a head
-selection for an actual hit. No new source lane or combined parity budget is
-approved yet.
+The [round70 design](../../design/proposals/interpreter-parity70.md) and
+[review](../register-semantics59/review70.md) rank five options and order one
+proposal: ordinary CALL returns to its vacated scratch B0; existing caller
+instructions assign/discard/move it. Change compiler CFG before encoding,
+validate the new format and update producers/magic without a legacy translator.
+All consumer instructions and dispatch are charged in native comparisons.
+
+Independent adoption and exact source-contract work are active. Property,
+getitem and initializer children share Python's return publisher; the proposed
+CALL-only invariant cannot replace it universally. Resolve and price that
+boundary before implementation. Sol peers approve explicit ownership/effect/
+observer contracts; root qualifies merged behavior/native cost and measures
+unchanged workloads. No source lane is released and no combined parity budget
+is assumed.
 
 Round68's retained delegation qualified but lost its protected screen.
 Generators improved 29.2% and spectral_norm 10.7%; DeltaBlue 10.1%, coroutines
@@ -130,9 +137,9 @@ remain unselected; preserved evidence is not a dependency list.
 
 | Owner | Current task | Integration boundary |
 | --- | --- | --- |
-| Root | Close69, update canonical/Loom chain and commission grouped review | Preserve selected57 and all rejected evidence; own runtime and selection |
-| Astra | Next grouped architectural review | Five concrete options and ordered bounded units; no runtime/inner-loop work |
-| Sol-high workers | Idle until exact source-contract adoption | Proposal, independent peer, implementation, minimal tests and post-review |
+| Root | Integrate design70 and resolve source adoption | Preserve selected57/evidence; own runtime, qualification and selection |
+| Astra | Grouped70 complete | Five ranked options, one ordered proposal; no inner-loop work |
+| Sol-high producer / consumer | Exact source proposal / independent adoption | No implementation until shared return boundary and exact contract receive GO |
 
 No new runtime lane, profile/counter or compiler/flags/layout search is active.
 A losing screen stops the unit. A qualified broad winner may be selected before

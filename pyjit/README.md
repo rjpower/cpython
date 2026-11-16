@@ -11,12 +11,12 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-The selected runtime remains selected57. The latest grouped
-[round69 design](design/proposals/interpreter-parity69.md) removed child execution
-on actual guarded-summary hits, but its early protected screen loses DeltaBlue,
-logging, generators and raytrace. It is stopped without complete callback
-qualification or selection. The next grouped architectural review will choose
-new concrete changes; no source lane is released. The
+The selected runtime remains selected57. The current
+[round70 design](design/proposals/interpreter-parity70.md) proposes canonical
+CALL results plus ordinary caller consumption. Source review must resolve
+shared completion for property/getitem children before implementation GO.
+The stopped round69 summary trial removed child execution on hits but lost its
+early protected screen with callback qualification incomplete. The
 [trial report](issues/register-semantics59/report.md) owns results and limits.
 
 ## Architecture and evidence

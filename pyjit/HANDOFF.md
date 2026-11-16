@@ -11,11 +11,22 @@ this file owns execution logistics.
 
 ## Current work
 
-Round69 is stopped and unselected. Grouped architectural review70 is commissioned
-in Astra session `zfr7ow1e`, from canonical `b959c9af9b5`. It owns only proposal70
-and review70; no new source unit is released. Selected57 remains immutable/golden.
-Root owns navigation, qualification, runtime jobs and integration. Preserve all
-round69 branches/controllers/evidence; do not retry its losing executable.
+Round69 is stopped and unselected. Astra's grouped70 commit
+`3067f7181b6fd237f77b12925bbb76d5d8dd62aa` is integrated as `07941d2b663`.
+It owns only [proposal70](design/proposals/interpreter-parity70.md) and
+[review70](issues/register-semantics59/review70.md). The proposal changes ordinary
+CALL to A=B scratch plus explicit caller consumption; there is no legacy-word
+translator. Implementation is not released.
+
+Sol-high consumer owns independent adoption in `E59/round70-design-peer.md`;
+producer prepares exact source feasibility in `E59/round70-unit-proposal.md`.
+Neither edits runtime sources or launches targets. Early adoption review finds
+that property/getitem/initializer children share ordinary return publication;
+a CALL-only invariant is insufficient for a universal fast publisher. Root
+requires a precise, priced solution or changed scope before GO. Astra remains
+out of the component loop. Selected57 stays immutable/golden; preserve the
+round69 branches, controllers and evidence. Root owns navigation, qualification,
+runtime jobs and integration.
 
 ## Closed round69 checkpoint
 

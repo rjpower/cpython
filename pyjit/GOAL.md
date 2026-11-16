@@ -14,13 +14,14 @@ Current stage: **register-interpreter performance**, within stage 2 of the
 [roadmap](ROADMAP.md). The [active plan](issues/interpreter-performance56/plan.md)
 combines value transport, borrowing, call/return conventions and specialization
 under one architecture. The active [IR-semantics workstream](issues/register-semantics59/README.md)
-records the closed [round69 design](design/proposals/interpreter-parity69.md)
-and [review](issues/register-semantics59/review69.md). Guarded callee summaries
-remove child execution on actual hits, but their complete native paths cost
-more instructions and their early screen loses protected benchmarks. They
-remain rejected with callback qualification incomplete. The next grouped review
-must choose concrete IR/interpreter changes from this evidence before releasing
-new Sol units. No second lane or losing-executable rescue is queued.
+follows the [round70 design](design/proposals/interpreter-parity70.md) and
+[review](issues/register-semantics59/review70.md). One proposed unit makes ordinary
+CALL results canonical at the vacated call-window base, with assignment/discard
+as ordinary caller operations. It changes the IR format directly and preserves
+real frames. Independent adoption and exact source-contract review precede any
+implementation. Shared return publication for implicit non-CALL children is an
+open source-review obligation. No second lane or losing-executable rescue is
+queued.
 
 Selected57 remains the runtime baseline. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites

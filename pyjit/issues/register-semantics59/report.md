@@ -1,5 +1,26 @@
 # Semantic IR trial results
 
+## Round70: source adoption requires changes
+
+The [grouped design70](../../design/proposals/interpreter-parity70.md) and
+[review70](review70.md), Astra `3067f7181b6`, propose a new A=B scratch CALL format
+and explicit ordinary caller consumption. Root integrates the documents as
+`07941d2b663`. There is no legacy-word translator, runtime implementation or
+source GO.
+
+Independent source adoption is **CHANGE** in `E59/round70-design-peer.md`.
+Non-generator returns also complete property/getattribute/getitem and initializer
+children with arbitrary recipients. A CALL-only invariant does not authorize
+replacing their shared publisher. Retaining that publisher would withdraw the
+proposed Python branch removal while adding explicit caller consumers; any
+alternative discriminator needs an explicit architecture and cost amendment.
+The second obligation is the pending CALL→POP source state: the old discard
+recipe assumes the returned value is already absent, whereas pre-POP has a live
+result. Exact proof and once-only consumption must precede implementation.
+Sol source feasibility is active; neither a narrowed native-only scope nor a
+new continuation mode is approved. Selected57 and the frozen round69 evidence
+remain unchanged.
+
 ## Round69: child boundary removed; early protected screen rejected
 
 The grouped [design69](../../design/proposals/interpreter-parity69.md) and

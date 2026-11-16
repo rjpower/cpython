@@ -5,8 +5,7 @@
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
 The active runtime is selected57 at
 `0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
-tag `pyjit-golden-20261114-dictionary-readers`. No round67 or round68 candidate replaced
-it.
+tag `pyjit-golden-20261114-dictionary-readers`. No later candidate replaced it.
 
 Round69's guarded-callee summaries remove child execution on actual hits, but
 its early protected hot8 screen rejects the candidate at G
@@ -34,13 +33,19 @@ Selected57 remains golden. There is no fresh upstream result or parity claim.
 The [trial report](issues/register-semantics59/report.md) owns exact results and
 qualification limits; [handoff](HANDOFF.md) owns execution logistics.
 
-The next grouped architectural review must use the complete native paths and
-these broad losses to choose concrete changes. No new runtime lane is released.
-The closed [round69 design](design/proposals/interpreter-parity69.md),
-[source contract](issues/register-semantics59/guarded-summary69.md) and
-[review](issues/register-semantics59/review69.md) remain evidence. Round68 and
-both round67 candidates also remain rejected; their mechanisms and preserved
-measurements do not establish a combined parity budget.
+The [round70 design](design/proposals/interpreter-parity70.md) and
+[review](issues/register-semantics59/review70.md) rank five options and propose
+one common CALL-result unit: A=B at a scratch window, with explicit ordinary
+caller assignment/discard. It requires no legacy-word translator. Independent
+adoption and exact source-contract review are active; implementation is not
+released. The first source obligation is shared return publication: property,
+getitem and initializer children also use it, so a CALL-only invariant cannot
+authorize replacing every non-generator return. Resolve that boundary and its
+cost before source GO. The latest closed
+[round69 design](design/proposals/interpreter-parity69.md) and
+[source contract](issues/register-semantics59/guarded-summary69.md) remain evidence.
+Round68 and both round67 candidates also remain rejected; their mechanisms and
+preserved measurements do not establish a combined parity budget.
 
 The register interpreter and canonical eight-byte PyValues are implemented.
 Reference counting with cyclic collection is selected; extensions are rebuilt

@@ -20,14 +20,20 @@ home-elimination credit.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Clean selected57 base; root integration pending |
+| G | `pyjit/execution73-boundary-integrated` | Source integrated through `0612361b0e7`; generated-product review in progress |
 | P | `pyjit/execution73-generator-transfers` | Runtime, generator and effect-retirement implementation |
 | W | `pyjit/execution73-generator-compiler` | Compiler, public admission and focused tests |
 
 P owns the initial shared boundary header. W consumes it, adds the bounded
 common predicates and tests, and cross-reviews P. Root owns generation,
 integration, builds, target execution and timing. Workers must not run target
-jobs or alter immutable controls. No complete73 runtime has landed yet.
+jobs or alter immutable controls. Source integration includes the compiler,
+runtime, rooted low-recursion entry and monitoring identity corrections.
+Boundary2 generation and the independent metadata/table comparison pass: all
+331 existing instruction contracts and ordinary CALL/arithmetic bodies are
+preserved. Emitted-body review found a missing virtual-iterator cursor store;
+that fix and provider-result rooting are pending before compilation. No73
+executable or performance result is qualified yet.
 
 **G's build directories still contain rejected72 ELFs. Do not execute them
 until rebuilding against G's current source.** A moved source tree invalidates

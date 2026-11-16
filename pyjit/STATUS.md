@@ -6,9 +6,12 @@ Execution-boundary73 is active. The user authorized implementation of the
 complete generator cycle, preservation of specialized operations, and separation
 of callback effects from ordinary transfers. The
 [combined contract](design/proposals/execution-boundary73.md) has grouped Astra,
-independent source and root adoption GO. Two Sol 6.1 workers are implementing
-runtime/generation and compiler/public admission, respectively. No complete73
-runtime or performance result exists yet. Root completed the bounded
+independent source and root adoption GO. Root has integrated the Sol runtime
+and compiler source and generated the combined products. Independent comparison
+preserves all existing instruction contracts and ordinary CALL/arithmetic
+bodies. Emitted-body review is closing a virtual-iterator cursor publication
+bug and a provider-result rooting gap before compilation. No73 executable or
+performance result is qualified yet. Root completed the bounded
 [logging/raytrace diagnosis](issues/register-semantics59/execution73-diagnosis.md)
 on immutable selected57 and rejected72; this does not reopen72 selection.
 

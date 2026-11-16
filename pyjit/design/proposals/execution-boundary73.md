@@ -96,6 +96,19 @@ LP64:8*N reverse rows and24*N native target pointers, or11,744 B at I's367
 handlers before additions. Record the actual final size rather than assuming
 sparsity makes it free.
 
+The compiler changes only handler identities after ordinary logical lowering,
+allocation and encoding. It does not insert words or rebase control or source
+maps. A shared bounded predicate selects and validates each connected shape.
+Several shape identities may share one ordinary word-entry body; the actual
+executing word selects its private outcome. They need no forwarding adapters.
+
+`NATIVE_WINDOW_OUT` records a logical result on a checked private edge. It does
+not claim a physical store, error snapshot or initialized home. Public shape
+validation precedes logical transfer validation. Physical and error readers
+retain their existing authority. Generator contract intersections group only
+the same placement shape: adding native outcomes must not weaken ordinary
+SEND, CALL or arithmetic contracts.
+
 At a transfer, `frame` is the receiving frame, `slots` its physical base,
 `next_instr` the source site belonging to that entry, and the payload the one
 owner. The entry loads the source operands once and lowers its selected
@@ -129,9 +142,10 @@ spill again after a callback.
 ## Complete initial IR slice
 
 Use the existing logical values and all-ingress analysis. Keep allocated homes,
-NULL initialization, frame size and call-window overlap. Select a finite
-complete shape before encoding; compiler and public-image admission enforce
-the same relation. Do not infer logical absence from physical NULL.
+NULL initialization, frame size and call-window overlap. Logical source lowering
+defines the consumer before encoding; the final handler-only substitution and
+public-image admission enforce the same finite connected relation. Do not infer
+logical absence from physical NULL.
 
 The first enabled shape includes all of the following:
 

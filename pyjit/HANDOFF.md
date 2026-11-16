@@ -31,7 +31,7 @@ Root integrated the two nonoverlapping source components from selected57:
 | --- | --- | --- |
 | Sol-high producer | P, `pyjit/parity69-summary-admission` | `Objects/codeobject.c`, `pycore_ir.h`, `Python/ir.c`, focused admission tests; publish header/API first |
 | Sol-high consumer | W, `pyjit/parity69-guarded-callee-summary` | Readers, specialization, bytecodes/ceval, parser/emitter and focused tests; consumes producer interface |
-| Root | G, `pyjit/parity69-guarded-summary-integrated`, `f19b6629588` | Products committed; release/debug builds running under tag `parity69-summary4`; no candidate target pass yet |
+| Root | G, `pyjit/parity69-guarded-summary-integrated`, `c8e80771354` | Source/products and fixture corrections committed; both builds pass 117/79; focused qualification active |
 
 Producer `0e1cf75c0d6` and consumer `065f294e691` received independent actual-source
 review; correction `912aea3fa10` preserves existing canonical method-output
@@ -47,14 +47,23 @@ facts. Reviewed `a18747af84c` ports the actual disjoint-child guard proof.
 Regeneration 4 passes; root's `E59/guarded-summary69-products4.json` confirms all 331
 existing format rows unchanged,329 → 340 concrete handlers and only shared
 guard/raw-read substitutions in 20 existing bodies. Five generated products are
-committed. Independent product review and both builds are in progress. No
-candidate target pass, native hit or timing is claimed for round69.
+committed. Independent product review passes at `f19b6629588`; both builds pass
+117/79. Fixture-only `88ad28f38bc` and `c8e80771354` correct tuple-constant and
+versioned-function/prewarmed-read assumptions. The `parity69-tests5` stamp builds
+also pass 117/79. Debug passes all 18 focused methods (one skip); release has one
+finalizer-redirect failure. Root's GDB attributes rejection to `child->external`;
+the identical fixture fails on immutable selected57 release/debug too. Consumer
+is reviewing the fixture against existing debugger authority, without expanding
+the setter. Related release checks pass five modules; `test_ir_operand_modes`
+needs its shared field-reader source proof ported. Logs use
+`parity69-tests5-{new,debug,related}-*`; baseline and stopped controls use
+`guarded-summary69-redirect-*`. No native hit or timing is claimed for round69.
 
 The immutable selected57 recipient control passes 100 calls into each of a
 fresh scratch home and a virtual self hole; it is not candidate execution.
 Receipt: `E59/guarded-summary69-recipient-selected57.json`. Producer is preparing
-bounded native controls without launching targets; consumer owns independent
-product review. Root owns all builds and runtime jobs.
+bounded native controls without launching targets; consumer is preparing natural
+unchanged-kernel coverage. Root owns all builds and runtime jobs.
 
 Workers cross-review actual changes. Progress is in
 `E59/guarded-summary69-{producer,consumer}-progress.md`. They run only necessary

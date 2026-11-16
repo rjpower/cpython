@@ -1,6 +1,6 @@
 # Semantic IR trial results
 
-## Round69: integrated source; generator qualification
+## Round69: integrated source; focused runtime qualification
 
 The grouped [design69](../../design/proposals/interpreter-parity69.md) and
 [review69](review69.md) rank five alternatives and order one complete
@@ -43,12 +43,30 @@ changes are only shared type-guard/raw-read substitutions in 20 handlers. Root
 reviews and commits all five products before launching release/debug builds.
 The exact comparison is `E59/guarded-summary69-products4.json`; it supersedes the
 zero-row initial parser receipt and the earlier metadata-loss comparison. Both
-builds and independent product review are in progress.
+builds pass 117 modules/79 shared extensions; independent product review passes
+at G `f19b6629588`.
 
-No successful C build, runtime qualification, native hit, performance result or
-parity claim exists yet. Prior source GOs missed the generated recipient gap;
-the separate recipient/metadata peer addendum records that correction. Root
-must execute the corrected complete unit.
+The first 18-method native run exposed fixture errors: a common constant was
+mistaken for a tuple-backed constant, and `FunctionType` left positive-test
+functions unversioned. Independently reviewed fixture corrections preserve
+negative unversioned coverage and use actual MAKE_FUNCTION plus warmed callee
+read facts for positive coverage. G `c8e80771354` contains those corrections;
+both stamp builds pass. Debug passes all 18 focused methods (one skip). Release
+has one remaining failure: a finalizer's parent redirect crosses an external
+frame and is rejected. Root's stopped release control confirms
+`child->external=1`, discarded recipient and CALL opcode. The identical fixture,
+with only its summary-head assertion omitted, also fails on selected57 release
+and debug. This is not evidence for widening debugger authority. Preserve
+`parity69-tests5-new-release-focus.log`, `parity69-tests5-debug-debug-focus.log`,
+`guarded-summary69-redirect-release-gdb1.log` and the two selected57 baseline logs.
+
+Related release qualification passes five of six modules. The remaining
+`test_ir_operand_modes` failure asserts an inline field-read expression that
+has moved into the shared checked reader; its proof must follow both the helper
+and owning consumer. No complete runtime qualification, native hit, performance
+result or parity claim exists yet. Prior source GOs missed the generated
+recipient gap; the separate recipient/metadata peer addendum records that real
+correction independently of these fixture issues.
 
 Source-only inputs are `E59/guarded-summary69-source-peer-note.md`,
 `guarded-summary69-design-peer.md` and the exact unit proposal/peer (canonical

@@ -42,11 +42,17 @@ producer/consumer source and generated products are integrated at G `f19b6629588
 Review closed a real scratch-recipient transfer gap, including output into the
 virtual self hole, and preserved ordinary proofs after extracting shared guards.
 Full generation passes; all 331 existing format rows are unchanged, with 11 new
-summary handlers. Both builds are running; no candidate runtime pass or native
-hit is claimed. The complete unit would
+summary handlers. Both builds pass 117 modules/79 shared extensions. Fixture-only
+corrections advance G to `c8e80771354`: debug passes all 18 focused methods
+(one skip); release has one callback-redirect failure. The same fixture also
+fails on immutable selected57 because its finalizer crosses an unsupported
+external-frame debugger boundary. Related release checks pass five modules;
+the sixth has a stale source assertion after extraction of a shared field-read
+helper. These failures remain open; no native summary hit or timing is claimed.
+The complete unit would
 remove the entire child execution boundary for admitted small callback-free
 callees. Existing generated atomic completion owns results and retirement;
-ordinary CALL heads retain their existing paths. No runtime
+ordinary CALL heads retain their existing paths. No complete runtime
 qualification or performance result is claimed yet. The [trial report](issues/register-semantics59/report.md)
 owns evidence and limits; [handoff](HANDOFF.md) owns execution logistics.
 Selected57 remains unchanged.

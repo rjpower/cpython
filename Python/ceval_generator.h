@@ -1,6 +1,14 @@
 /* Generator transfer entries. Included after ir_targets.h so every outgoing
  * native target has its configured calling convention declared. */
 
+/* Private entries carry a value rather than a word. Ordinary dispatch first
+ * reloads the word and needs its own local handler index. */
+#define GENERATOR_DISPATCH() \
+    do { \
+        int opcode; \
+        DISPATCH(); \
+    } while (0)
+
 static inline PyValue
 generator_payload(_PyIRWord payload)
 {
@@ -122,7 +130,7 @@ TARGET(GEN_COMPLETE_EFFECT)
         frame = tstate->current_frame;
         slots = _PyFrame_Slots(frame);
         next_instr = frame->instr_ptr;
-        DISPATCH();
+        GENERATOR_DISPATCH();
     }
     if (remaining_count == count && !throwing &&
         _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
@@ -138,7 +146,7 @@ TARGET(GEN_COMPLETE_EFFECT)
                 PROCESS_ERROR_AT(RAISE, 0, frame->instr_ptr);
             }
             next_instr = frame->instr_ptr;
-            DISPATCH();
+            GENERATOR_DISPATCH();
         }
     }
     /* Detach every remaining owner before an overlapping A publication. */
@@ -183,7 +191,7 @@ TARGET(GEN_COMPLETE_EFFECT)
         PROCESS_ERROR_AT(RAISE, 0, frame->instr_ptr);
     }
     next_instr = frame->instr_ptr;
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 /* Sequential tests matter: one alias's decrement can make the next alias
@@ -230,7 +238,7 @@ TARGET(NAME) \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
     frame->phase_state = 0; \
-    DISPATCH(); \
+    GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_STORE(NAME, THROW) \
 TARGET(NAME) \
@@ -251,7 +259,7 @@ TARGET(NAME) \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
     frame->phase_state = 0; \
-    DISPATCH(); \
+    GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_DISCARD(NAME, THROW) \
 TARGET(NAME) \
@@ -264,7 +272,7 @@ TARGET(NAME) \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
     frame->phase_state = 0; \
-    DISPATCH(); \
+    GENERATOR_DISPATCH(); \
 }
 GENERATOR_COMPLETE_RETURN(GEN_COMPLETE_RETURN, false)
 GENERATOR_COMPLETE_HOME(GEN_COMPLETE_HOME, false)
@@ -294,7 +302,7 @@ TARGET(GEN_SEND_YIELD)
         frame->base[IR_B(word)] = result;
         _PyValue_CheckTemp(result);
         next_instr = yield;
-        DISPATCH();
+        GENERATOR_DISPATCH();
     }
     INSTRUCTION_STATS(YIELD_DELEGATED);
     frame->instr_ptr = yield + 1;
@@ -319,7 +327,7 @@ TARGET(GEN_SEND_YIELD)
     next_instr = frame->return_pc;
     if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
     LLTRACE_RESUME_FRAME();
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 /* Provider success commits the yielded edge before retiring a final sent
@@ -344,7 +352,7 @@ TARGET(GEN_YIELD_INPUT_EFFECT)
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
     next_instr = frame->instr_ptr;
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 /* A private resumed input is not an ordinary handler ABI. Generic providers
@@ -357,7 +365,7 @@ TARGET(GEN_SEND_INPUT_HOME)
     assert(PyValue_IsNull(frame->base[home]));
     frame->base[home] = result;
     _PyValue_CheckTemp(result);
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 /* The child link is committed, but its recursion debit has not happened.
@@ -401,7 +409,7 @@ TARGET(GEN_RESUME_EFFECT)
     }
     DTRACE_FUNCTION_ENTRY();
     LLTRACE_RESUME_FRAME();
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 TARGET(GEN_RESUME_SEND)
@@ -452,7 +460,7 @@ TARGET(GEN_RESUME_STORE)
     frame->phase_state = 0;
     frame->instr_ptr = next_instr;
     ++next_instr;
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 TARGET(GEN_SEND_INPUT)
@@ -506,7 +514,7 @@ TARGET(GEN_REDIRECT_EFFECT)
     slots = _PyFrame_Slots(frame);
     next_instr = frame->instr_ptr;
     LLTRACE_RESUME_FRAME();
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 TARGET(GEN_RETURN_PARENT)
@@ -531,7 +539,7 @@ TARGET(GEN_RETURN_PARENT)
         PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
     }
     LLTRACE_RESUME_FRAME();
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
 
 /* The incoming frame has been unlinked and debited by the source RETURN.
@@ -621,7 +629,7 @@ TARGET(GEN_RETURN_RETIRED)
     next_instr = completed.next; \
     if (completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); } \
     LLTRACE_RESUME_FRAME(); \
-    DISPATCH()
+    GENERATOR_DISPATCH()
 
 TARGET(GEN_RETIRE_EFFECT_SLOTS)
 {
@@ -657,7 +665,7 @@ TARGET(GEN_RETURN)
         assert(PyValue_IsNull(frame->base[home]));
         frame->base[home] = value;
         _PyValue_CheckTemp(value);
-        DISPATCH();
+        GENERATOR_DISPATCH();
     }
     INSTRUCTION_STATS(IR_HANDLER(*next_instr));
     _Py_LeaveRecursiveCallPy(tstate);
@@ -673,5 +681,7 @@ TARGET(GEN_RETURN)
     next_instr = frame->return_pc;
     if (_PyFrame_SetReturnValue(frame, value)) { next_instr = frame->return_pc; }
     LLTRACE_RESUME_FRAME();
-    DISPATCH();
+    GENERATOR_DISPATCH();
 }
+
+#undef GENERATOR_DISPATCH

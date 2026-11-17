@@ -2,7 +2,8 @@
 
 Status: implemented and protocol-qualified at `44f066f5fd5`, including return
 isolation, 2026-11-16. The complete boundary improves generator/coroutine
-throughput, but fails the protected screen on logging. Selected57 remains golden; the
+throughput, but fails the protected screen on logging. The user accepted this
+tradeoff on 2026-11-16; this exact commit is golden73 on `pyjit/round73-golden`. The
 [trial report](../../issues/register-semantics59/report.md) owns the measured
 decision. Root owns integration, generated products and qualification. The companion
 [review73](../../issues/register-semantics59/review73.md) records the evidence

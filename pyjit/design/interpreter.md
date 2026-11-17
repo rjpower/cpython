@@ -15,8 +15,12 @@ entry, cold context/owner proofs and bounded saved-local restoration.
 
 The [combined performance proposal](proposals/interpreter-performance56.md)
 and [critical audit](../issues/interpreter-performance56/review.md) describe
-the architecture and its review. The selected56 subset is described here;
-remaining storage-authority and borrowing proposals are identified in status.
+the architecture and its review. The baseline contracts below are extended by
+[selected execution-boundary73](proposals/execution-boundary73.md): complete
+generator transfers, explicit completion consumers, guarded callback-free receiver
+retirement and private generator-return routing. Its as-built design is authoritative
+for those paths. Ordinary CALL specialization and frame geometry remain unchanged;
+remaining storage and borrowing proposals are identified in status.
 
 ## Entry and dispatch
 

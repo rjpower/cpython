@@ -1,6 +1,15 @@
 # Semantic IR trial results
 
-## Execution73 final correction: generator gains retained; logging still rejects promotion
+## Golden73: generator gains selected with an accepted logging regression
+
+Selection, 2026-11-16: the user directed landing the final measured checkpoint
+and recovering logging separately. Golden branch `pyjit/round73-golden` and tag
+`pyjit-golden-20261116-generator-boundaries` point to
+`44f066f5fd55947edf709bbcf9bf17c607307e4b` and are pushed to origin.
+This accepts logging +13.73% for this checkpoint; it does not change the sealed
+NO-GO screen verdict or waive future protection rules. Selected57 and boundary10
+remain immutable controls/evidence. Broader all29/full-suite qualification and
+a fresh direct upstream comparison remain outstanding.
 
 Final candidate **`44f066f5fd55947edf709bbcf9bf17c607307e4b`** adds one reviewed
 correction to boundary10: generator-owned return routing moves from shared
@@ -12,7 +21,8 @@ parent refreshed after callbacks. No public IR format, frame layout or owner
 mode changes. Sol source/peer work and root integration follow the same contract.
 
 This corrects the shared compilation structure; it does **not** fix logging.
-Selected57 remains golden. Both complete candidates and their separate results
+Golden73 is selected by the explicit tradeoff above. Both implementations and
+their separate results
 are preserved; this report does not assemble a winner from their best cases.
 
 ### Final unchanged hot8 screen
@@ -39,8 +49,9 @@ small means are not established speedups. Boundary10's 24.69% spectral_norm gain
 is not retained here. Its 10.44% logging loss and this 13.73% loss are separate
 comparisons, not a matched causal experiment between the candidates.
 
-No unchanged retiming, winner confirmation, all29, full-suite escalation or fresh
-upstream run follows. Historical upstream ratios do not establish this candidate's
+No winner confirmation, all29, full suite or fresh upstream run has been
+performed for this checkpoint. Historical upstream ratios do not establish
+this candidate's
 position versus upstream. The wider parity objective remains open.
 
 ### Qualification and measured implementation tradeoff

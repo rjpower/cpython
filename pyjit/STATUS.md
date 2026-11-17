@@ -3,8 +3,9 @@
 ## Live state
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
-protocol-qualified and measured. Final candidate `44f066f5fd5` remains unselected;
-selected57 stays golden. Sol 6.1 workers implemented and cross-reviewed; root
+protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`
+as golden73, explicitly accepting the logging regression. Sol 6.1 workers
+implemented and cross-reviewed; root
 integrated, generated, qualified and measured both candidates.
 
 The complete generator/coroutine path handles yield, resume, return, real HOME
@@ -28,8 +29,10 @@ The final two-pair hot8 screen has 32 successful rows and stable identities.
 Candidate/selected57 GM is **0.985010**. Coroutines improve 8.70%, generators 6.73%,
 comprehensions 3.49%, raytrace 2.61%, spectral_norm 2.18% and DeltaBlue 0.87%;
 nqueens regresses 0.40%. **Logging regresses 13.73%**, failing protection in both
-pairs. Independent review rejects promotion. No winner confirmation, all29,
-full suite or fresh upstream comparison follows.
+pairs. Independent review recorded NO-GO under the original protection rules;
+the user subsequently accepted this specific tradeoff. The sealed verdict stays
+unchanged. Winner confirmation, all29, full suite and a fresh upstream comparison
+have not run for this checkpoint; broader qualification remains follow-up work.
 
 The earlier boundary10 candidate `dee619e80ab` is separately preserved, including
 its ELF copies: GM 0.962227, but logging +10.44% and raytrace +1.97%. Its natural
@@ -47,9 +50,10 @@ records the remaining common call/return cycle-cost problem. The older
 and does not reopen its selection decision.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
-The active runtime is selected57 at
-`0dcba75bb3df40c32137db453b001f7e8f101de0`, branch `pyjit/round57-golden`,
-tag `pyjit-golden-20261114-dictionary-readers`. No later candidate replaced it.
+The active runtime is golden73 at
+`44f066f5fd55947edf709bbcf9bf17c607307e4b`, branch `pyjit/round73-golden`,
+tag `pyjit-golden-20261116-generator-boundaries`, pushed to origin. Selected57
+`0dcba75bb3df40c32137db453b001f7e8f101de0` and its refs remain immutable controls.
 
 Execution72 is complete and unselected. Sol 6.1 workers implemented and
 cross-reviewed the compiler/validation and runtime/generator changes; root

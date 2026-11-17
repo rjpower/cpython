@@ -21,36 +21,65 @@ below selected57; arithmetic and exact-call whole-path counts match selected57.
 The extra generator hop is charged. Protocol, owner, native and error controls
 pass. The final protected screen improves coroutines 8.70%, generators 6.73%,
 comprehensions 3.49% and raytrace 2.61%, but loses logging 13.73%. GM 0.985010
-passes; logging protection fails. Independent review rejects promotion.
-Selected57 remains golden. The [report](../register-semantics59/report.md) owns
+passes; logging protection fails. Independent review recorded NO-GO under the
+original rules. The user subsequently accepted this specific regression and
+selected golden73 on 2026-11-16. Branch `pyjit/round73-golden` and tag
+`pyjit-golden-20261116-generator-boundaries` are pushed at this exact commit.
+The [report](../register-semantics59/report.md) owns
 both complete results and their evidence limits.
 
-## Remaining work and constraints
+## Next implementation priorities
 
-1. Preserve both implementations, source contracts and sealed evidence. Do not
-   retime either executable unchanged or combine their best individual results.
-2. The next correction needs a causal account of ordinary call/return cycle
-   cost. RETURN size reduction and equivalent instruction counts are now proved
-   insufficient as predictors. Distinguish frontend/prediction costs from native
-   dependency and state handoff before choosing another representation change;
-   do not assert which explains logging from sparse samples.
-3. Retain complete generator consumers and existing specializations in any
-   successor. No automatic third source lane, padding/flag search, renewed
-   frame-packing claim or weaker protection follows from these rejected screens.
-4. Once a changed candidate passes unchanged hot8 protection, run finite
-   confirmation, all29, full qualification and a direct upstream comparison.
-   No fresh upstream ratio or parity claim exists for this checkpoint.
+Golden73 is the new comparison baseline. Selected57 remains the recovery target
+for logging and an immutable control. This landing accepts one measured tradeoff;
+it does not turn failed historical screens into passes or authorize regressions
+in future candidates.
 
-The earlier frozen72 diagnosis is complete and remains separate. It establishes
-raytrace specialization loss there, not the cause of the current logging loss.
-Source peers review the next concrete correction before implementation; root
-owns all target execution and measured selection. Astra stays out of the
-component loop unless the architecture changes.
+1. **Ordinary call/return effect separation.** Keep the ordinary THREAD return
+   and result consumer together; enter callback-capable retirement through a
+   terminal private entry with explicit owned inputs. Preserve exact/general CALL
+   specialization, destination semantics, polling and observer/error state. The
+   objective is to avoid preserving hot VM state across cold returning C calls,
+   not merely to shrink handlers. Golden73 already isolates generator routing;
+   repeating that outline or reusing rejected generic completion is not new work.
+   Before source adoption, compare final73 against selected57 on matched logging
+   counters and complete hot call/consumer paths. The earlier boundary10 PMU is
+   not a diagnosis of final73. Reject a proposal without a concrete boundary it
+   removes; code size and instruction counts alone do not explain the regression.
+2. **Specialized native result-to-consumer lowering.** Extend the successful
+   owned-result/effect interface to one complete native CALL family and its real
+   destination/discard consumer. Carry guarded provider facts into that consumer;
+   avoid a home store/reload only where the whole path no longer requires it.
+   Keep callback roots in the reached effect path and retain all existing
+   specialization fallbacks. This needs a fresh source contract proving net work
+   removal beyond the rejected Invoke/provider/compact attempts, including the
+   added dispatches and nonparticipant cost. It is not an approved broad rollout.
+3. **Lifetime-driven frame allocation, after execution boundaries.** Separate
+   stable locals from short-lived values in compiler liveness, reuse temporary
+   homes with disjoint lifetimes, and let cold exception/observer maps describe
+   that allocation. Do not reserve universal scratch or add a per-operation bitmap
+   tax solely to simplify teardown. Source adoption requires an actual reduction
+   in frame extent or initialization for unchanged workloads. The earlier map-only
+   layout attempt did not achieve this; it is not a prerequisite to resurrect.
+
+These are ordered design directions, not implemented gains or an assumed parity
+budget. Sol 6.1 source/peer workers prepare bounded independent units; Astra
+reviews a grouped architectural change rather than the component loop. Root
+owns integration and quiet benchmark windows. Use focused opcode/ownership
+checks during implementation, merged protocol and hot8 checks at integration,
+and broader qualification at the next coherent checkpoint. Protect the newly
+selected generator/coroutine gains while recovering logging.
+
+The next measurement checkpoint also needs all29, full qualification and a fresh
+direct upstream comparison of golden73. None has run yet; the accepted landing
+does not imply those results. Keep current source/build controls frozen and use
+fresh evidence tags. Do not combine the best cases from boundary10 and final73.
 
 ## Selected baseline and closed work
 
-Selected57 remains golden. The [selected report](../comprehensions57/report.md)
-owns its qualification and upstream comparison. The
+Golden73 is selected. The [current report](../register-semantics59/report.md)
+owns its measurements and accepted tradeoff. The [selected57 report](../comprehensions57/report.md)
+owns the prior control's qualification and upstream comparison. The
 [trial report](../register-semantics59/report.md) owns rounds59–73, their
 mechanism successes, incomplete gates and measured rejections. Those packets
 are evidence, not prerequisites or runtime components selected for73.

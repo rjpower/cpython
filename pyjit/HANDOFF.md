@@ -5,7 +5,8 @@ not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
 The latest completed checkpoint is [execution-boundary73](design/proposals/execution-boundary73.md),
-implemented and protocol-qualified, but rejected by its protected screen. The
+selected as golden73 by the user on 2026-11-16 with the logging regression
+accepted. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
 this file owns execution logistics.
 
@@ -13,12 +14,13 @@ this file owns execution logistics.
 
 Boundary73 and its bounded return-isolation correction have completed source
 review, integration, generation, protocol/native qualification and separate
-protected screens. Both are unselected. The next source change requires a
-concrete causal case; do not repeat either screen or weaken its gates.
+protected screens. Final `44f066f5fd5` is golden73; earlier boundary10 stays
+unselected. The user accepted the final logging tradeoff, not a general change
+to future protection rules. Preserve both original screen verdicts.
 
 | Tree | Branch | Current responsibility |
 | --- | --- | --- |
-| G | `pyjit/execution73-boundary-integrated` | Clean final candidate `44f066f5fd55947edf709bbcf9bf17c607307e4b`; both boundary11 builds pass 117/79 |
+| G | `pyjit/execution73-boundary-integrated` | Frozen golden73 `44f066f5fd55947edf709bbcf9bf17c607307e4b`; both boundary11 builds pass 117/79 |
 | P | `pyjit/execution73-return-isolation` | Clean source `557c225602c`; all source integrated |
 | W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
 
@@ -40,8 +42,12 @@ instructions and yield ten more. See the report for the exact table.
 stable identities. GM is 0.985010; logging 1.137318 fails protection in both pairs.
 The independent verdict and whole-path audit are in
 `E59/execution73-boundary11-native-peer.md`, with screen recomputation JSON.
-No winner confirmation, all29, full suite or fresh upstream run follows. No
-target job remains; G and its build directories are frozen at this checkpoint.
+Winner confirmation, all29, full suite and a fresh upstream comparison have not
+run. These
+remain broader qualification work. No target job remains; G and its build
+directories are frozen. Use another worktree for successor source changes.
+Golden refs `pyjit/round73-golden` and
+`pyjit-golden-20261116-generator-boundaries` are pushed at `44f066f5fd5`.
 
 Earlier boundary10 is preserved at `pyjit/execution73-boundary10-measured`,
 `dee619e80abbcab1c2a69a07411e17cc0b32ccfa`. Its ELF copies are
@@ -64,7 +70,8 @@ and root integration/target jobs/selection. Preserve earlier refs and evidence.
 
 ## Closed trials and retained evidence
 
-Selected57 remains golden. Both72 units and rounds59–71 are unselected. The
+Selected57 is the prior immutable control. Both72 units and rounds59–71 are
+unselected. The
 [trial report](issues/register-semantics59/report.md) owns their source identities,
 qualification, measurements and rejection decisions. Do not repeat those
 chronologies here or make historical experiments prerequisites for current work.
@@ -96,6 +103,7 @@ A=`R/parity61-ascent`, I=`R/call55-integrated`.
 
 | Control | Source commit / tree | Release build | Module record |
 | --- | --- | --- | --- |
+| Golden73 | `44f066f5fd55947edf709bbcf9bf17c607307e4b`, G | `BASE/reg59-results-release` | `E59/execution73-boundary11-release-build.log`, 117/79 |
 | Selected57 | `0dcba75bb3df40c32137db453b001f7e8f101de0`, I | `BASE/call55-integrated-release` | `E55/comp57-dictionary-release-build.log`, 117/79 |
 | Golden56 | `883524c180e4486b47df77ee2276c9276c0ec32c`, `R/round56-golden` | `BASE/round56-golden-release` | `E57/control-retry-build.log`, 117/79 |
 | Upstream | `3a440b65695615e9fd9912342b79cdd54fced0d2`, `R/upstream-3a440b6` | `BASE/upstream-release-devlibs-3a440b6` | `BASE/pyjit-link-wave1/checkpoint-closure/checkpoint-6a0e4c12c17-final/upstream-build.log`, 116/78 |

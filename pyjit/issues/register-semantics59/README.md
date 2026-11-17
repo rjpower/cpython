@@ -1,7 +1,9 @@
 # Register semantics and interpreter parity
 
-Status: stage remains open; execution73 checkpoint completed on 2026-11-16. Selected57
-`0dcba75bb3df40c32137db453b001f7e8f101de0` remains golden. Root coordinates
+Status: stage remains open; execution73 selected on 2026-11-16. Golden73
+`44f066f5fd55947edf709bbcf9bf17c607307e4b` is pushed as `pyjit/round73-golden`.
+The user explicitly accepted its logging regression; selected57 remains a
+control. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are
@@ -19,8 +21,9 @@ owns the next architecture decision, and [handoff](../../HANDOFF.md) owns runtim
 paths and commands. Earlier59–71 attempts remain closed; their designs/reviews
 are historical evidence. Execution-boundary73 has completed grouped review,
 implementation, protocol qualification and the protected screen. Its complete
-generator/coroutine paths improve, but logging regresses; no promotion.
+generator/coroutine paths improve, but logging regresses.
 The subsequent shared-return isolation correction also fails logging protection.
+The user selected the corrected checkpoint despite that regression.
 Preserve both implementations and measured evidence; the cycle-cost cause remains
 open, and another correction requires a concrete source contract. The bounded
 [diagnosis](execution73-diagnosis.md) explains rejected72 without reopening its
@@ -32,8 +35,9 @@ ownership permits.
 The user requests repeated architecture → ordered implementation → measured
 selection cycles until upstream parity. The hot set is comprehensions,
 DeltaBlue, generators and coroutines, with logging, raytrace, spectral_norm
-and nqueens as regression sentinels. Final selection includes all29 unchanged
-workloads. Equal instruction counts are diagnostic, not the throughput gate.
+and nqueens as regression sentinels. Broader qualification includes all29 unchanged
+workloads; golden73 was selected by explicit user exception before that run.
+Equal instruction counts are diagnostic, not the throughput gate.
 
 The [preceding review](../../design/proposals/interpreter-parity58.md) identified
 lost facts and physical home traffic but constrained the existing operation
@@ -47,7 +51,7 @@ remain evidence; they are not proposed anew.
 
 | Owner | Deliverable | State |
 | --- | --- | --- |
-| Root | Completed integration, qualification and rejected screen | Own report and changed-candidate validation |
+| Root | Golden73 integrated and pushed with accepted logging tradeoff | Own broader qualification and successor validation |
 | Astra | Grouped execution-boundary review complete | Outside the component implementation loop |
 | Sol 6.1 compiler worker | Specialization preservation and continuation admission complete | Return isolation source peer complete |
 | Sol 6.1 execution worker | Complete generator transfer and retirement complete | Return isolation implemented and measured |

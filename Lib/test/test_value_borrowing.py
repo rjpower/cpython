@@ -876,5 +876,59 @@ class ProvenContainerTests(unittest.TestCase):
         self.assertEqual({a: b, "x": a, b: "y"}, {1: 2.5, "x": 1, 2.5: "y"})
 
 
+class InlineReceiverTests(unittest.TestCase):
+    """Operations that test the pointer space once and send inline values to
+    an out-of-line path."""
+
+    def test_hash_of_each_kind(self):
+        self.assertEqual(hash(5), 5)
+        self.assertEqual(hash(-1), -2)
+        self.assertEqual(hash(2.0), 2)
+        self.assertEqual(hash(1.5), hash(1.5))
+        self.assertEqual(hash("ab"), hash("ab"))
+        self.assertEqual({5: 1, 2.5: 2, "x": 3}[2.5], 2)
+        with self.assertRaises(TypeError):
+            hash([])
+
+    def test_attributes_of_inline_receivers(self):
+        self.assertEqual((5).real, 5)
+        self.assertEqual((2.5).imag, 0.0)
+        self.assertEqual((7).bit_length(), 3)
+        self.assertTrue((2.0).is_integer())
+        self.assertEqual(type(5).__name__, "int")
+        with self.assertRaises(AttributeError):
+            (5).missing
+        with self.assertRaises(AttributeError):
+            (2.5).missing()
+        self.assertIsNone(getattr(5, "missing", None))
+        with self.assertRaises(AttributeError):
+            (5).real = 1
+
+    def test_isinstance_of_inline_values(self):
+        self.assertTrue(isinstance(5, int))
+        self.assertTrue(isinstance(2.5, float))
+        self.assertFalse(isinstance(5, float))
+        self.assertTrue(isinstance(5, (str, int)))
+        self.assertTrue(isinstance(True, int))
+        self.assertTrue(isinstance(5, int | None))
+        with self.assertRaises(TypeError):
+            isinstance(5, 1)
+
+    def test_type_and_compare_of_mixed_values(self):
+        self.assertIs(type(5), int)
+        self.assertIs(type(2.5), float)
+        self.assertTrue(1 < 2.5)
+        self.assertTrue(2.5 > 1)
+        self.assertEqual(1 + 2.5, 3.5)
+        with self.assertRaises(TypeError):
+            1 < "a"
+
+    def test_subscripts_of_inline_containers(self):
+        with self.assertRaises(TypeError):
+            5[0]
+        self.assertEqual({1: "a"}[1], "a")
+        self.assertEqual({"k": 2.5}["k"], 2.5)
+
+
 if __name__ == "__main__":
     unittest.main()

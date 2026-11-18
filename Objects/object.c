@@ -1764,7 +1764,10 @@ _PyStatusValue
 {
     _PyStatusValue r = {-1, PyValue_NULL};
     PyValue descriptor = PyValue_NULL;
-    PyTypeObject *tp = PyValue_TYPE(v);
+    /* One test of the receiver; an inline receiver has no instance
+       attributes. */
+    PyObject *obj = PyValue_ObjectOrNull(v);
+    PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(v);
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
         goto done;
@@ -1777,8 +1780,7 @@ _PyStatusValue
         goto done;
     }
     (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
-    PyObject *descr = PyValue_IsObject(descriptor) ?
-        PyValue_AsKnownObjectBorrow(descriptor) : NULL;
+    PyObject *descr = PyValue_ObjectOrNull(descriptor);
     int has_get = descr != NULL && Py_TYPE(descr)->tp_descr_get != NULL;
     bool method_descriptor = descr != NULL &&
         _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR);
@@ -1787,8 +1789,6 @@ _PyStatusValue
         r.status = PyValue_IsNull(r.value) ? -1 : 0;
         goto done;
     }
-    // An inline value has no instance attributes.
-    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
     PyValue attr = PyValue_NULL;
     int handled = (obj != NULL && (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) ?
         _PyObject_TryGetInstanceValue(obj, name, &attr) : 0;
@@ -1922,8 +1922,10 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
        this method.
     */
 
-    PyTypeObject *tp = PyValue_TYPE(v);
-    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
+    /* One test of the receiver; an inline receiver has no instance
+       attributes. */
+    PyObject *obj = PyValue_ObjectOrNull(v);
+    PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(v);
     PyObject *descr = NULL;
     PyValue res = PyValue_NULL;
     int has_get = 0;
@@ -1947,7 +1949,7 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_ObjectOrNull(cref.ref);
 
     if (descr != NULL) {
         has_get = Py_TYPE(descr)->tp_descr_get != NULL;
@@ -2118,7 +2120,7 @@ int
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_ObjectOrNull(cref.ref);
 
     if (descr != NULL && Py_TYPE(descr)->tp_descr_set != NULL) {
         res = (_PyValue_DescrSet)(descr, v, value);

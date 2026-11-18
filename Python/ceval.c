@@ -904,8 +904,8 @@ value_import_level(PyValue level)
 static PyValue
 value_subscript(PyValue container, PyValue key)
 {
-    if (PyValue_IsObject(container)) {
-        PyObject *o = PyValue_AsKnownObjectBorrow(container);
+    PyObject *o = PyValue_ObjectOrNull(container);
+    if (o != NULL) {
         if (PyAnyDict_CheckExact(o)) {
             PyValue result = PyValue_NULL;
             int found = _PyDict_GetValue((PyDictObject *)o, key, &result);

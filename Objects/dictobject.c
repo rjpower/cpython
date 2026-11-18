@@ -2020,11 +2020,8 @@ dict_unhashable_type(PyObject *op, PyObject *key)
 static inline Py_hash_t
 cached_str_hash(PyValueBorrow key)
 {
-    if (!PyValue_IsObject(key)) {
-        return -1;
-    }
-    PyObject *object = PyValue_AsKnownObjectBorrow(key);
-    if (!PyUnicode_CheckExact(object)) {
+    PyObject *object = PyValue_ObjectOrNull(key);
+    if (object == NULL || !PyUnicode_CheckExact(object)) {
         return -1;
     }
     return PyUnstable_Unicode_GET_CACHED_HASH(object);

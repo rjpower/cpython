@@ -720,6 +720,16 @@ PyValue_AsKnownObjectBorrow(PyValueBorrow ref)
 }
 #define PyValue_AsKnownObjectBorrow(V0) (PyValue_AsKnownObjectBorrow)(PyValue_Borrow(V0))
 
+/* The object that v holds, borrowed, or NULL for PyValue_NULL, an inline
+   value or an index: one compare, where PyValue_IsObject() and
+   PyValue_AsKnownObjectBorrow() together make four. */
+static inline PyObject *
+PyValue_ObjectOrNull(PyValueBorrow v)
+{
+    return PyValue_IsPointerSpace(v) ? BITS_TO_PTR_MASKED(v) : NULL;
+}
+#define PyValue_ObjectOrNull(V0) (PyValue_ObjectOrNull)(PyValue_Borrow(V0))
+
 /* The object that ref holds, owned: ref's count, or a new one if ref owns
    none. ref must hold an object, as for PyValue_AsKnownObjectBorrow(). */
 static inline PyObject *
@@ -1054,14 +1064,28 @@ PyValue_IsMalformed(PyValueBorrow ref)
 }
 #define PyValue_IsMalformed(V0) (PyValue_IsMalformed)(PyValue_Borrow(V0))
 
+/* An object's type costs one compare. The inline arm stays inline:
+   operations on numbers (binary_op1, do_richcompare) need the type of an
+   inline operand often. An index aborts, as in PyValue_AsKnownObjectBorrow(). */
 static inline PyTypeObject *
 PyValue_TYPE(PyValueBorrow value) {
+    if (PyValue_IsPointerSpace(value)) {
+        return Py_TYPE(BITS_TO_PTR_MASKED(value));
+    }
     if (PyValue_IsInline(value)) {
         return PyValue_IsInlineInt(value) ? &PyLong_Type : &PyFloat_Type;
     }
-    return Py_TYPE(PyValue_AsKnownObjectBorrow(value));
+    _PyValue_FatalNotObject(value);
 }
 #define PyValue_TYPE(V0) (PyValue_TYPE)(PyValue_Borrow(V0))
+
+/* The type of a value outside pointer space: int or float for an inline
+   value; an index aborts. Out of line and cold, for operations whose
+   receiver is rarely inline: they test the pointer space once and call
+   this for the rest. */
+PyAPI_FUNC(PyTypeObject *) _Py_COLD_FUNCTION
+    _PyValue_TypeNotPointer(PyValueBorrow value);
+#define _PyValue_TypeNotPointer(V0) (_PyValue_TypeNotPointer)(PyValue_Borrow(V0))
 
 // Converts a PyValue back to a PyObject *, converting the
 // value to a new reference.

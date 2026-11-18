@@ -135,9 +135,11 @@ CFLAGS_ALIASING=@CFLAGS_ALIASING@
 CFLAGS_CEVAL=@CFLAGS_CEVAL@
 # ceval.c holds the interpreter's handlers, which tail-call one another.  A
 # frame pointer would cost every dispatch a push, a move and a leave, so the
-# handlers omit it.  Frame-pointer unwinders (perf -g) therefore stop at the
-# interpreter; DWARF unwinding (perf --call-graph dwarf, gdb) still works.
-CFLAGS_HANDLERS=-fomit-frame-pointer -momit-leaf-frame-pointer
+# handlers omit it.  In a frame-pointer build they also leave rbp alone
+# (x86-64): functions they call then link their frames to the interpreter
+# entry's, and frame-pointer unwinders still walk the whole C stack.
+CFLAGS_HANDLERS=-fomit-frame-pointer -momit-leaf-frame-pointer \
+	$(if $(findstring -fno-omit-frame-pointer,$(BASECFLAGS)),-ffixed-rbp)
 # The calling convention of the interpreter's tail-called handlers, as
 # Py_PRESERVE_NONE_CC picks it: preserve_none, no_callee_saved_registers or
 # none (plain musttail).  Measurements refuse none.

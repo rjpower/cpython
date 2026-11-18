@@ -473,18 +473,18 @@ int
         return _PyMember_SetValue((PyObject *)addr, l, v);
     }
     // The other member types store C data or an object, never a value.
-    PyObject *object = NULL;
-    if (PyValue_IsInline(v)) {
+    PyObject *object = PyValue_ObjectOrNull(v);
+    int boxed = 0;
+    if (object == NULL && !PyValue_IsNull(v)) {
+        // An inline int or float gets a box for the duration of the store.
         object = _PyValue_AsObjectAt(v, BOX_SITE_FIELD);
         if (object == NULL) {
             return -1;
         }
-    }
-    else if (!PyValue_IsNull(v)) {
-        object = PyValue_AsKnownObjectBorrow(v);
+        boxed = 1;
     }
     int res = member_set_object(addr, l, object);
-    if (PyValue_IsInline(v)) {
+    if (boxed) {
         Py_DECREF(object);
     }
     return res;

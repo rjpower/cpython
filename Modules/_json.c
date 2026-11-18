@@ -1795,6 +1795,17 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
     }
 }
 
+/* Cold: the text of an inline int or float key. */
+static PyObject *
+encoder_inline_key(PyEncoderObject *s, PyValueBorrow key_value)
+{
+    if (PyValue_IsInlineInt(key_value)) {
+        return PyUnicode_FromFormat(
+            "%lld", (long long)PyValue_InlineInt64(key_value));
+    }
+    return encoder_encode_float(s, key_value);
+}
+
 static int
 encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *first,
                          PyObject *dct, PyValueBorrow key_value,
@@ -1806,12 +1817,8 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
     int rv;
     PyObject *key = NULL;  // the key as an object; NULL for an inline key
 
-    if (PyValue_IsInlineInt(key_value)) {
-        keystr = PyUnicode_FromFormat(
-            "%lld", (long long)PyValue_InlineInt64(key_value));
-    }
-    else if (PyValue_IsInlineFloat(key_value)) {
-        keystr = encoder_encode_float(s, key_value);
+    if (PyValue_IsInline(key_value)) {
+        keystr = encoder_inline_key(s, key_value);
     }
     else if ((key = PyValue_AsKnownObjectBorrow(key_value),
               PyUnicode_Check(key))) {
@@ -1947,7 +1954,7 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     int rc;
     // gh-145244: encoder_encode_key_value() can invoke user code
     // that mutates the dict; the owning iterator snapshots each entry.
-    while ((rc = PyDict_NextValue(dct, &pos, &keyv, &valuev)) > 0) {
+    while ((rc = _PyDict_NextValue((PyDictObject *)dct, &pos, &keyv, &valuev, NULL)) > 0) {
         int rv = encoder_encode_key_value(s, writer, first, dct,
                                           PyValue_Borrow(keyv),
                                           PyValue_Borrow(valuev),

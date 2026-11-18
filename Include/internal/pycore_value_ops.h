@@ -139,10 +139,11 @@ PyAPI_FUNC(Py_ssize_t) _PyValue_AsSsize_t(PyValueBorrow v, PyObject *exc);
 static inline int
 _PyValue_IndexCheck(PyValueBorrow v)
 {
-    if (PyValue_IsInline(v)) {
-        return PyValue_IsInlineInt(v);
+    PyObject *obj = PyValue_ObjectOrNull(v);
+    if (obj != NULL) {
+        return _PyIndex_Check(obj);
     }
-    return _PyIndex_Check(PyValue_AsKnownObjectBorrow(v));
+    return PyValue_IsInlineInt(v);
 }
 #define _PyValue_IndexCheck(V) (_PyValue_IndexCheck)(PyValue_Borrow(V))
 

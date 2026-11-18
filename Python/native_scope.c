@@ -10,7 +10,6 @@ initialize_scope(_PyNativeScope *scope, PyThreadState *tstate)
 {
     *scope = (_PyNativeScope){
         .tstate = tstate,
-        .receiver = PyValue_NULL,
         .result = {
             .value = PyValue_NULL,
             .displaced = PyValue_NULL,
@@ -18,6 +17,28 @@ initialize_scope(_PyNativeScope *scope, PyThreadState *tstate)
         },
     };
     scope->objects = scope->argument_objects;
+}
+
+/* Borrow an object receiver; box an inline one into receiver_box.  callable
+   names the box's call, or is NULL before the callable is known. */
+int
+_PyNativeScope_SetReceiver(_PyNativeScope *scope, PyValueBorrow receiver,
+                           PyObject *callable)
+{
+    PyObject *object = PyValue_ObjectOrNull(receiver);
+    if (object == NULL) {
+        object = scope->receiver_box = callable != NULL
+            ? _PyValue_AsObjectFor(receiver, _PyBox_CALL_ADAPTER(callable))
+            : _PyValue_AsObjectFor(
+                  receiver,
+                  _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
+                            _Py_FUNC_ADDR(_PyNativeScope_Begin)));
+        if (object == NULL) {
+            return -1;
+        }
+    }
+    scope->receiver_object = object;
+    return 0;
 }
 
 int
@@ -43,7 +64,9 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
     scope->nargs = total_count;
     scope->positional_count = positional_count;
     if (!PyValue_IsNull(self_or_null)) {
-        scope->receiver = PyValue_DUP(self_or_null);
+        if (_PyNativeScope_SetReceiver(scope, PyValue_Borrow(self_or_null), NULL) < 0) {
+            return -1;
+        }
     }
     if (total_count != 0) {
         /* Pass an object borrowed, as upstream passes its stack: the caller
@@ -71,16 +94,9 @@ int
 _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
 {
     assert(!scope->ended);
-    *args = scope->objects;
-    if (!PyValue_IsNull(scope->receiver) && scope->receiver_object == NULL) {
-        scope->receiver_object = _PyValue_AsObjectFor(
-            scope->receiver, _PyBox_CALL_ADAPTER(scope->callable));
-        if (scope->receiver_object == NULL) {
-            return -1;
-        }
-    }
-    /* Begin set the arguments' objects: borrowed, or boxes of inline
+    /* Begin and the call set the objects: borrowed, or boxes of inline
        values that End releases. */
+    *args = scope->objects;
     return 0;
 }
 
@@ -153,9 +169,9 @@ _PyNativeScope_End(_PyNativeScope *scope)
     PyValue_CLEAR(out->displaced);
     scope->argument_objects[0] = NULL;
     Py_CLEAR(scope->argument_box);
-    Py_CLEAR(scope->receiver_object);
-    PyValue_CLEAR(scope->receiver);
-    Py_CLEAR(scope->callable);
+    scope->receiver_object = NULL;
+    Py_CLEAR(scope->receiver_box);
+    scope->callable = NULL;
     scope->objects = NULL;
     scope->nargs = 0;
 }

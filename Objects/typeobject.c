@@ -1229,6 +1229,18 @@ type_mutation_get_dict(PyTypeObject *type)
     return dict;
 }
 
+/* As type_mutation_get_dict(), but borrowed: a ready type keeps its tp_dict
+ * object for its whole life, so the setters need no owner of their own. */
+static PyObject *
+type_mutation_borrow_dict(PyTypeObject *type)
+{
+    PyObject *dict = lookup_tp_dict(type);
+    if (dict == NULL) {
+        PyErr_SetString(PyExc_SystemError, "type has no dictionary");
+    }
+    return dict;
+}
+
 int
 _PyTypeMutation_Begin(_PyTypeMutation *scope, PyTypeObject *type)
 {
@@ -1238,8 +1250,8 @@ _PyTypeMutation_Begin(_PyTypeMutation *scope, PyTypeObject *type)
         PyErr_SetString(PyExc_OverflowError, "type mutation nesting overflow");
         return -1;
     }
+    /* The caller owns type for the whole scope. */
     assert(Py_REFCNT(type) > 0);
-    Py_INCREF(type);
     interp->types.mutation_depth++;
     scope->interp = interp;
     scope->type = type;
@@ -1247,7 +1259,7 @@ _PyTypeMutation_Begin(_PyTypeMutation *scope, PyTypeObject *type)
     return 0;
 }
 
-/* Ending a scope cannot fail: it releases the type and reopens admission. */
+/* Ending a scope cannot fail: it reopens admission. */
 void
 _PyTypeMutation_End(_PyTypeMutation *scope)
 {
@@ -1255,10 +1267,8 @@ _PyTypeMutation_End(_PyTypeMutation *scope)
         return;
     }
     PyInterpreterState *interp = scope->interp;
-    PyTypeObject *type = scope->type;
     scope->type = NULL;
     scope->active = 0;
-    Py_DECREF(type);
     // No type access or callback follows reopening this scope's admission.
     assert(interp->types.mutation_depth > 0);
     interp->types.mutation_depth--;
@@ -1398,18 +1408,15 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
        Called from mro_internal, which will subsequently be called on
        each subclass when their mro is recursively updated.
      */
-    PyObject *receiver_owner = Py_NewRef((PyObject *)type);
-    PyObject *bases_owner = Py_NewRef(bases);
-    PyTypeObject *receiver = (PyTypeObject *)receiver_owner;
     Py_ssize_t i, n;
 
     ASSERT_TYPE_LOCK_HELD();
-    if (!Py_IS_TYPE(receiver, &PyType_Type) && has_custom_mro(receiver)) {
+    if (!Py_IS_TYPE(type, &PyType_Type) && has_custom_mro(type)) {
         goto clear;
     }
-    n = PyTuple_GET_SIZE(bases_owner);
+    n = PyTuple_GET_SIZE(bases);
     for (i = 0; i < n; i++) {
-        PyValueBorrow base_value = PyTuple_GET_VALUE(bases_owner, i);
+        PyValueBorrow base_value = PyTuple_GET_VALUE(bases, i);
         assert(PyValue_IsObject(base_value));
         PyObject *base_object = PyValue_AsKnownObjectBorrow(base_value);
         assert(PyType_Check(base_object));
@@ -1419,27 +1426,25 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
             goto clear;
         }
 
-        if (!is_subtype_with_mro(lookup_tp_mro(receiver), receiver, cls)) {
+        if (!is_subtype_with_mro(lookup_tp_mro(type), type, cls)) {
             goto clear;
         }
     }
-    goto done;
+    return;
 
  clear:
-    assert(!(receiver->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
-    set_version_unlocked(receiver, 0);  /* 0 is not a valid version tag */
-    _PyTypeCache_Invalidate(receiver);
-    receiver->tp_versions_used = _Py_ATTR_CACHE_UNUSED;
-    if (PyType_HasFeature(receiver, Py_TPFLAGS_HEAPTYPE)) {
+    assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
+    set_version_unlocked(type, 0);  /* 0 is not a valid version tag */
+    _PyTypeCache_Invalidate(type);
+    type->tp_versions_used = _Py_ATTR_CACHE_UNUSED;
+    if (PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
         // This field *must* be invalidated if the type is modified (see the
         // comment on struct _specialization_cache):
         FT_ATOMIC_STORE_PTR_RELAXED(
-            ((PyHeapTypeObject *)receiver)->_spec_cache.getitem, NULL);
+            ((PyHeapTypeObject *)type)->_spec_cache.getitem, NULL);
     }
- done:
-    Py_CLEAR(bases_owner);
-    Py_CLEAR(receiver_owner);
 }
+
 
 /*
 An optimizer that reads a type version from an inline cache needs the type object itself,
@@ -1773,7 +1778,6 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     _PyTypeMutation scope = {0};
     PyObject *dict = NULL;
     int result = -1;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -1781,7 +1785,7 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    dict = type_mutation_get_dict(type);
+    dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
     }
@@ -1790,8 +1794,6 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(value));
 done:
-    Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -1863,7 +1865,6 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
     PyObject *dict = NULL;
     int result = -1;
     int abstract = 0;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -1880,7 +1881,7 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
         }
     }
     PyType_Modified(type);
-    dict = type_mutation_get_dict(type);
+    dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
     }
@@ -1912,8 +1913,6 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
     END_TYPE_LOCK();
     result = 0;
 done:
-    Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -2055,32 +2054,9 @@ type_check_new_bases(PyTypeObject *type, PyObject *new_bases, PyTypeObject **bes
         PyValueBorrow item = PyTuple_GET_VALUE(new_bases, i);
         if (!PyValue_IsObject(item) ||
             !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
-            PyObject *receiver_owner = Py_NewRef((PyObject *)type);
-            PyObject *receiver_name_owner = NULL;
-            if (PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
-                receiver_name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
-            }
-            PyTypeObject *actual_type = PyValue_TYPE(item);
-            PyObject *actual_type_owner = Py_NewRef((PyObject *)actual_type);
-            PyObject *actual_name_owner = NULL;
-            if (PyType_HasFeature(actual_type, Py_TPFLAGS_HEAPTYPE)) {
-                actual_name_owner = Py_NewRef(((PyHeapTypeObject *)actual_type)->ht_name);
-            }
-            assert(receiver_owner != NULL);
-            assert(actual_type_owner != NULL);
-            assert(!PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE) ||
-                   receiver_name_owner != NULL);
-            assert(!PyType_HasFeature(actual_type, Py_TPFLAGS_HEAPTYPE) ||
-                   actual_name_owner != NULL);
-            const char *receiver_name = type->tp_name;
-            const char *actual_name = actual_type->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "%s.__bases__ must be tuple of classes, not '%s'",
-                         receiver_name, actual_name);
-            Py_CLEAR(actual_name_owner);
-            Py_CLEAR(actual_type_owner);
-            Py_CLEAR(receiver_name_owner);
-            Py_CLEAR(receiver_owner);
+                         type->tp_name, PyValue_TYPE(item)->tp_name);
             return -1;
         }
         PyObject *ob = PyValue_AsKnownObjectBorrow(item);
@@ -2183,13 +2159,12 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
     for (Py_ssize_t i = n - 1; i >= 0; i--) {
         PyValueBorrow record_value = PyList_GET_VALUE(temp, i);
         assert(PyValue_IsObject(record_value));
-        PyObject *record_owner = Py_NewRef(
-            PyValue_AsKnownObjectBorrow(record_value));
-        assert(PyTuple_CheckExact(record_owner));
-        Py_ssize_t record_size = PyTuple_GET_SIZE(record_owner);
+        PyObject *record = PyValue_AsKnownObjectBorrow(record_value);
+        assert(PyTuple_CheckExact(record));
+        Py_ssize_t record_size = PyTuple_GET_SIZE(record);
         assert(record_size == 2 || record_size == 3);
-        PyValueBorrow cls_value = PyTuple_GET_VALUE(record_owner, 0);
-        PyValueBorrow new_mro_value = PyTuple_GET_VALUE(record_owner, 1);
+        PyValueBorrow cls_value = PyTuple_GET_VALUE(record, 0);
+        PyValueBorrow new_mro_value = PyTuple_GET_VALUE(record, 1);
         assert(PyValue_IsObject(cls_value));
         assert(PyValue_IsObject(new_mro_value));
         PyObject *cls_object = PyValue_AsKnownObjectBorrow(cls_value);
@@ -2199,7 +2174,7 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
         PyTypeObject *cls = (PyTypeObject *)cls_object;
         PyObject *old_mro = NULL;
         if (record_size == 3) {
-            PyValueBorrow old_mro_value = PyTuple_GET_VALUE(record_owner, 2);
+            PyValueBorrow old_mro_value = PyTuple_GET_VALUE(record, 2);
             assert(PyValue_IsObject(old_mro_value));
             old_mro = PyValue_AsKnownObjectBorrow(old_mro_value);
             assert(PyTuple_CheckExact(old_mro));
@@ -2209,7 +2184,6 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
             set_tp_mro(cls, Py_XNewRef(old_mro), 0);
             Py_DECREF(new_mro);
         }
-        Py_CLEAR(record_owner);
     }
     Py_DECREF(temp);
 
@@ -2300,7 +2274,6 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     _PyTypeMutation scope = {0};
     PyObject *dict = NULL;
     int result = -1;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -2308,14 +2281,12 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    dict = type_mutation_get_dict(type);
+    dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
     }
     result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), PyValue_FromObjectBorrow(value));
 done:
-    Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -2372,7 +2343,6 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     _PyTypeMutation scope = {0};
     PyObject *dict = NULL;
     int result = -1;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -2403,7 +2373,6 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     result = 0;
 done:
     Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -2481,7 +2450,6 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     _PyTypeMutation scope = {0};
     PyObject *dict = NULL;
     int result = -1;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -2526,7 +2494,6 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     result = 0;
 done:
     Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -2553,7 +2520,6 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     _PyTypeMutation scope = {0};
     PyObject *dict = NULL;
     int result = -1;
-    Py_XINCREF(value);
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
@@ -2561,14 +2527,12 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    dict = type_mutation_get_dict(type);
+    dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
     }
     result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__type_params__)), PyValue_FromObjectBorrow(value));
 done:
-    Py_CLEAR(dict);
-    Py_CLEAR(value);
     _PyTypeMutation_End(&scope);
     return result;
 }
@@ -3266,12 +3230,13 @@ _PyObject_LookupSpecialMethod(_PyInterpreterFrame *frame, PyObject *attr, PyValu
 {
     assert(PyValue_IsNull(*method));
     assert(!PyValue_IsNull(*self));
-    PyObject *attr_owner = Py_NewRef(attr);
+    /* The caller owns attr. The type is read from *self, whose __class__ a
+     * descriptor can reassign while it is passed as the owner, so pin it. */
     PyTypeObject *tp = PyValue_TYPE(*self);
     Py_INCREF(tp);
     PyValue found = PyValue_NULL;
     int rc = -1;
-    (void)_PyType_LookupValueAndVersion(tp, attr_owner, &found);
+    (void)_PyType_LookupValueAndVersion(tp, attr, &found);
     if (PyValue_IsNull(found)) {
         rc = 0;
         goto done;
@@ -3325,7 +3290,6 @@ _PyObject_LookupSpecialMethod(_PyInterpreterFrame *frame, PyObject *attr, PyValu
 done:
     PyValue_XCLOSE(found);
     Py_DECREF(tp);
-    Py_DECREF(attr_owner);
     return rc;
 }
 
@@ -3420,19 +3384,13 @@ call_unbound_noarg(int unbound, PyObject *func, PyObject *self)
 static PyObject *
 call_method_noarg(PyObject *self, PyObject *attr)
 {
-    PyObject *self_owner = NULL;
-    PyObject *result = NULL;
     PyObject *func = NULL;
-    int unbound = -1;
-    self_owner = Py_NewRef(self);
-    unbound = lookup_method(self_owner, attr, &func);
+    int unbound = lookup_method(self, attr, &func);
     if (unbound < 0) {
-        goto done;
+        return NULL;
     }
-    result = call_unbound_noarg(unbound, func, self_owner);
-done:
-    Py_XDECREF(func);
-    Py_CLEAR(self_owner);
+    PyObject *result = call_unbound_noarg(unbound, func, self);
+    Py_DECREF(func);
     return result;
 }
 
@@ -3440,31 +3398,22 @@ static PyObject *
 call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self_owner = NULL, *args_owner = NULL, *kwds_owner = NULL;
-    PyObject *result = NULL;
+    PyObject *result;
     PyObject *meth = NULL;
-    int unbound = -1;
-    self_owner = Py_NewRef(self);
-    args_owner = Py_NewRef(args);
-    kwds_owner = Py_XNewRef(kwds);
-    unbound = lookup_method(self_owner, attr, &meth);
+    int unbound = lookup_method(self, attr, &meth);
     if (unbound < 0) {
-        goto done;
+        return NULL;
     }
     if (unbound) {
-        result = _PyObject_Call_Prepend(tstate, meth, self_owner, args_owner,
-                                        kwds_owner);
+        result = _PyObject_Call_Prepend(tstate, meth, self, args, kwds);
     }
     else {
-        result = _PyObject_Call(tstate, meth, args_owner, kwds_owner);
+        result = _PyObject_Call(tstate, meth, args, kwds);
     }
-done:
-    Py_XDECREF(meth);
-    Py_CLEAR(kwds_owner);
-    Py_CLEAR(args_owner);
-    Py_CLEAR(self_owner);
+    Py_DECREF(meth);
     return result;
 }
+
 
 /* A variation of PyObject_CallMethod* that uses lookup_method()
    instead of PyObject_GetAttrString().
@@ -3476,18 +3425,13 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self_owner = NULL, *result = NULL;
     PyObject *func = NULL;
-    int unbound = -1;
-    self_owner = Py_NewRef(args[0]);
-    unbound = lookup_method(self_owner, name, &func);
+    int unbound = lookup_method(args[0], name, &func);
     if (unbound < 0) {
-        goto done;
+        return NULL;
     }
-    result = vectorcall_unbound(tstate, unbound, func, args, nargs);
-done:
-    Py_XDECREF(func);
-    Py_CLEAR(self_owner);
+    PyObject *result = vectorcall_unbound(tstate, unbound, func, args, nargs);
+    Py_DECREF(func);
     return result;
 }
 
@@ -3520,15 +3464,14 @@ vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyObject *func = NULL;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_method(self_owner, name, &func);
+    int unbound = lookup_method(self, name, &func);
     if (unbound >= 0) {
         result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
     }
     Py_XDECREF(func);
-    Py_DECREF(self_owner);
     return result;
 }
 
@@ -3538,10 +3481,10 @@ vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
                        const PyValue *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
-    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyObject *func = NULL;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_maybe_method(self_owner, name, &func);
+    int unbound = lookup_maybe_method(self, name, &func);
     if (unbound < 0) {
         if (!PyErr_Occurred()) {
             result = PyValue_NotImplemented;
@@ -3551,7 +3494,6 @@ vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
         result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
     }
     Py_XDECREF(func);
-    Py_DECREF(self_owner);
     return result;
 }
 
@@ -3563,13 +3505,13 @@ maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
                          int *attr_is_none)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyObject *func = NULL;
     PyValue result = PyValue_NULL;
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    int unbound = lookup_maybe_method(self_owner, attr, &func);
+    int unbound = lookup_maybe_method(self, attr, &func);
     if (unbound >= 0) {
         if (attr_is_none != NULL) {
             *attr_is_none = (func == Py_None);
@@ -3580,7 +3522,6 @@ maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
         }
     }
     Py_XDECREF(func);
-    Py_DECREF(self_owner);
     return result;
 }
 
@@ -3591,29 +3532,23 @@ maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
 static PyObject *
 maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
 {
-    PyObject *self_owner = NULL;
     PyObject *result = NULL;
     PyObject *func = NULL;
-    int unbound = -1;
 
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    self_owner = Py_NewRef(self);
-    unbound = lookup_maybe_method(self_owner, attr, &func);
+    int unbound = lookup_maybe_method(self, attr, &func);
     if (unbound < 0) {
-        goto done;
+        return NULL;
     }
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
     if (func != Py_None || attr_is_none == NULL) {
-        result = call_unbound_noarg(unbound, func, self_owner);
+        result = call_unbound_noarg(unbound, func, self);
     }
-
-done:
-    Py_XDECREF(func);
-    Py_CLEAR(self_owner);
+    Py_DECREF(func);
     return result;
 }
 
@@ -3622,33 +3557,24 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
                            int *attr_is_none)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self_owner = NULL;
-    PyObject *arg_owner = NULL;
     PyObject *result = NULL;
     PyObject *func = NULL;
-    int unbound = -1;
 
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    self_owner = Py_NewRef(self);
-    arg_owner = Py_NewRef(arg);
-    unbound = lookup_maybe_method(self_owner, attr, &func);
+    int unbound = lookup_maybe_method(self, attr, &func);
     if (unbound < 0) {
-        goto done;
+        return NULL;
     }
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
     if (func != Py_None || attr_is_none == NULL) {
-        PyObject *args[] = { self_owner, arg_owner };
+        PyObject *args[] = { self, arg };
         result = vectorcall_unbound(tstate, unbound, func, args, 2);
     }
-
-done:
-    Py_XDECREF(func);
-    Py_CLEAR(arg_owner);
-    Py_CLEAR(self_owner);
+    Py_DECREF(func);
     return result;
 }
 
@@ -3718,25 +3644,21 @@ class_name(PyObject *cls)
 static int
 check_duplicates(PyObject *tuple)
 {
-    PyObject *owner = Py_NewRef(tuple);
-    PyObject *name = NULL;
-    PyObject *error_type = NULL;
-    int result = -1;
-    Py_ssize_t n = PyTuple_GET_SIZE(owner);
+    Py_ssize_t n = PyTuple_GET_SIZE(tuple);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyValueBorrow item = PyTuple_GET_VALUE(owner, i);
+        PyValueBorrow item = PyTuple_GET_VALUE(tuple, i);
         if (!PyValue_IsObject(item) ||
                 !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
-            error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'",
-                         error_type);
-            goto done;
+                         PyValue_TYPE(item));
+            return -1;
         }
         for (Py_ssize_t j = i + 1; j < n; j++) {
-            if (PyValue_Is(item, PyTuple_GET_VALUE(owner, j))) {
-                name = class_name(PyValue_AsKnownObjectBorrow(item));
+            if (PyValue_Is(item, PyTuple_GET_VALUE(tuple, j))) {
+                /* class_name() can run Python; the tuple is not read after. */
+                PyObject *name = class_name(PyValue_AsKnownObjectBorrow(item));
                 if (name == NULL) {
-                    goto done;
+                    return -1;
                 }
                 if (PyUnicode_Check(name)) {
                     PyErr_Format(PyExc_TypeError, "duplicate base class %U", name);
@@ -3744,16 +3666,12 @@ check_duplicates(PyObject *tuple)
                 else {
                     PyErr_SetString(PyExc_TypeError, "duplicate base class");
                 }
-                goto done;
+                Py_DECREF(name);
+                return -1;
             }
         }
     }
-    result = 0;
-done:
-    Py_CLEAR(name);
-    Py_CLEAR(error_type);
-    Py_CLEAR(owner);
-    return result;
+    return 0;
 }
 
 /* Raise a TypeError for an MRO order disagreement.
@@ -4002,33 +3920,23 @@ type_mro_impl(PyTypeObject *self)
 static int
 mro_check(PyTypeObject *type, PyObject *mro)
 {
-    PyObject *owner = Py_NewRef(mro);
-    PyObject *solid = Py_NewRef(solid_base(type));
-    PyObject *error_type = NULL;
-    int result = -1;
-    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
-        PyValueBorrow item = PyTuple_GET_VALUE(owner, i);
+    PyTypeObject *solid_type = solid_base(type);
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(mro); i++) {
+        PyValueBorrow item = PyTuple_GET_VALUE(mro, i);
         if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
-            error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError,
-                         "%N.mro() returned a non-class ('%N')", type, error_type);
-            goto done;
+                         "%N.mro() returned a non-class ('%N')", type, PyValue_TYPE(item));
+            return -1;
         }
         PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
-        PyTypeObject *solid_type = (PyTypeObject *)solid;
         if (!is_subtype_with_mro(lookup_tp_mro(solid_type), solid_type, solid_base(base))) {
             PyErr_Format(PyExc_TypeError,
                          "%N.mro() returned base with unsuitable layout ('%N')",
                          type, base);
-            goto done;
+            return -1;
         }
     }
-    result = 0;
-done:
-    Py_CLEAR(error_type);
-    Py_CLEAR(solid);
-    Py_CLEAR(owner);
-    return result;
+    return 0;
 }
 
 /* Lookups an mcls.mro method, invokes it and checks the result (if needed,
@@ -4702,21 +4610,17 @@ typedef struct {
 static int
 type_new_visit_slots(type_new_ctx *ctx)
 {
-    PyObject *slots_owner = NULL;
-    PyObject *error_type_owner = NULL;
     PyValueBorrow selected = PyValue_Borrow(PyValue_NULL);
     int result = -1;
 
-    slots_owner = Py_NewRef(ctx->slots);
     for (Py_ssize_t i = 0; i < ctx->nslot; i++) {
-        selected = PyTuple_GET_VALUE(slots_owner, i);
+        selected = PyTuple_GET_VALUE(ctx->slots, i);
         if (!PyValue_IsObject(selected) ||
                 !PyUnicode_Check(PyValue_AsKnownObjectBorrow(selected))) {
-            error_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(selected));
             char message[256];
             PyOS_snprintf(message, sizeof(message),
                           "__slots__ items must be strings, not '%.200s'",
-                          ((PyTypeObject *)error_type_owner)->tp_name);
+                          PyValue_TYPE(selected)->tp_name);
             PyErr_SetString(PyExc_TypeError, message);
             goto done;
         }
@@ -4751,8 +4655,6 @@ type_new_visit_slots(type_new_ctx *ctx)
     result = 0;
 
 done:
-    Py_CLEAR(error_type_owner);
-    Py_CLEAR(slots_owner);
     return result;
 }
 
@@ -5043,13 +4945,9 @@ type_new_set_ht_name(PyTypeObject *type, PyObject *dict)
 static int
 type_new_set_doc(PyTypeObject *type, PyObject* dict)
 {
-    PyObject *type_owner = NULL;
-    PyObject *dict_owner = NULL;
     PyValue doc = PyValue_NULL;
     int result = -1;
-    type_owner = Py_NewRef((PyObject *)type);
-    dict_owner = Py_NewRef(dict);
-    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__doc__)), &doc);
+    int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(&_Py_ID(__doc__)), &doc);
     if (found < 0) goto done;
     if (found == 0 || !PyValue_IsObject(doc) ||
             !PyUnicode_Check(PyValue_AsKnownObjectBorrow(doc))) {
@@ -5070,8 +4968,6 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     result = 0;
 done:
     PyValue_CLEAR(doc);
-    Py_CLEAR(dict_owner);
-    Py_CLEAR(type_owner);
     return result;
 }
 
@@ -5079,14 +4975,10 @@ done:
 static int
 type_new_staticmethod(PyObject *dict, PyObject *attr)
 {
-    PyObject *dict_owner = NULL;
-    PyObject *key_owner = NULL;
     PyObject *wrapper = NULL;
     PyValue selected = PyValue_NULL;
     int result = -1;
-    dict_owner = Py_NewRef(dict);
-    key_owner = Py_NewRef(attr);
-    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
+    int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(attr), &selected);
     if (found < 0) goto done;
     if (found == 0 || !PyValue_IsObject(selected) ||
             !PyFunction_Check(PyValue_AsKnownObjectBorrow(selected))) {
@@ -5095,12 +4987,10 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     }
     wrapper = PyStaticMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
-    result = PyDict_SetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), PyValue_FromObjectBorrow(wrapper));
+    result = PyDict_SetValue(dict, PyValue_FromObjectBorrow(attr), PyValue_FromObjectBorrow(wrapper));
 done:
     Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
-    Py_CLEAR(key_owner);
-    Py_CLEAR(dict_owner);
     return result;
 }
 
@@ -5108,14 +4998,10 @@ done:
 static int
 type_new_classmethod(PyObject *dict, PyObject *attr)
 {
-    PyObject *dict_owner = NULL;
-    PyObject *key_owner = NULL;
     PyObject *wrapper = NULL;
     PyValue selected = PyValue_NULL;
     int result = -1;
-    dict_owner = Py_NewRef(dict);
-    key_owner = Py_NewRef(attr);
-    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
+    int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(attr), &selected);
     if (found < 0) goto done;
     if (found == 0 || !PyValue_IsObject(selected) ||
             !PyFunction_Check(PyValue_AsKnownObjectBorrow(selected))) {
@@ -5124,12 +5010,10 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     }
     wrapper = PyClassMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
-    result = PyDict_SetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), PyValue_FromObjectBorrow(wrapper));
+    result = PyDict_SetValue(dict, PyValue_FromObjectBorrow(attr), PyValue_FromObjectBorrow(wrapper));
 done:
     Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
-    Py_CLEAR(key_owner);
-    Py_CLEAR(dict_owner);
     return result;
 }
 
@@ -5263,15 +5147,11 @@ type_new_set_slots(const type_new_ctx *ctx, PyTypeObject *type)
 static int
 type_new_set_classcell(PyTypeObject *type, PyObject *dict)
 {
-    PyObject *type_owner = NULL;
-    PyObject *dict_owner = NULL;
     PyObject *selected_type_owner = NULL;
     PyValue cell = PyValue_NULL;
     int result = -1;
-    type_owner = Py_NewRef((PyObject *)type);
-    dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(
-        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classcell__)), &cell);
+        dict, PyValue_FromObjectBorrow(&_Py_ID(__classcell__)), &cell);
     if (found < 0) goto done;
     if (found == 0) { result = 0; goto done; }
     if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
@@ -5281,29 +5161,25 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow(type_owner));
+    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow((PyObject *)type));
     if (cell_status < 0) goto done;
-    int del_status = PyDict_DelValue(dict_owner, _PyValue_FromObjectKnown(&_Py_ID(__classcell__)));
+    int del_status = PyDict_DelValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__classcell__)));
     if (del_status < 0) goto done;
     result = 0;
 done:
     Py_CLEAR(selected_type_owner);
     PyValue_CLEAR(cell);
-    Py_CLEAR(dict_owner);
-    Py_CLEAR(type_owner);
     return result;
 }
 
 static int
 type_new_set_classdictcell(PyObject *dict)
 {
-    PyObject *dict_owner = NULL;
     PyObject *selected_type_owner = NULL;
     PyValue cell = PyValue_NULL;
     int result = -1;
-    dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(
-        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classdictcell__)), &cell);
+        dict, PyValue_FromObjectBorrow(&_Py_ID(__classdictcell__)), &cell);
     if (found < 0) goto done;
     if (found == 0) { result = 0; goto done; }
     if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
@@ -5313,15 +5189,14 @@ type_new_set_classdictcell(PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow(dict_owner));
+    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow(dict));
     if (cell_status < 0) goto done;
-    int del_status = PyDict_DelValue(dict_owner, _PyValue_FromObjectKnown(&_Py_ID(__classdictcell__)));
+    int del_status = PyDict_DelValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__classdictcell__)));
     if (del_status < 0) goto done;
     result = 0;
 done:
     Py_CLEAR(selected_type_owner);
     PyValue_CLEAR(cell);
-    Py_CLEAR(dict_owner);
     return result;
 }
 
@@ -5523,10 +5398,6 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
                    PyObject **selected_metatype_owner,
                    PyObject **selected_base_owner)
 {
-    PyObject *bases_owner = NULL;
-    PyObject *initial_metatype_owner = NULL;
-    PyObject *args_owner = NULL;
-    PyObject *kwds_owner = NULL;
     PyObject *base_view = NULL;
     PyObject *winner_owner = NULL;
     PyObject *chosen_bases_owner = NULL;
@@ -5538,23 +5409,19 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
     *selected_metatype_owner = NULL;
     *selected_base_owner = NULL;
     *type = NULL;
-    bases_owner = Py_NewRef(ctx->bases);
-    initial_metatype_owner = Py_NewRef((PyObject *)ctx->metatype);
-    args_owner = Py_NewRef(ctx->args);
-    kwds_owner = Py_XNewRef(ctx->kwds);
 
-    Py_ssize_t nbases = PyTuple_GET_SIZE(bases_owner);
+    Py_ssize_t nbases = PyTuple_GET_SIZE(ctx->bases);
     if (nbases == 0) {
         chosen_base_owner = (PyObject *)Py_NewRef(&PyBaseObject_Type);
         chosen_bases_owner = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(chosen_base_owner)});
         if (chosen_bases_owner == NULL) goto done;
-        chosen_metatype_owner = Py_NewRef(initial_metatype_owner);
+        chosen_metatype_owner = Py_NewRef((PyObject *)ctx->metatype);
         result = 0;
         goto done;
     }
 
     for (Py_ssize_t i = 0; i < nbases; i++) {
-        PyValueBorrow value = PyTuple_GET_VALUE(bases_owner, i);
+        PyValueBorrow value = PyTuple_GET_VALUE(ctx->bases, i);
         if (PyValue_IsObject(value) && PyType_Check(PyValue_AsKnownObjectBorrow(value))) {
             continue;
         }
@@ -5571,8 +5438,10 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
         }
     }
 
-    PyTypeObject *winner = _PyType_CalculateMetaclass(ctx->metatype, bases_owner);
+    PyTypeObject *winner = _PyType_CalculateMetaclass(ctx->metatype, ctx->bases);
     if (winner == NULL) goto done;
+    /* The winner can be the type of a base, read from that base, and it is
+     * passed to its own tp_new, which can run Python code. */
     winner_owner = Py_NewRef((PyObject *)winner);
 
     if (winner != ctx->metatype && winner->tp_new != type_new) {
@@ -5583,26 +5452,22 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
             PyErr_SetString(PyExc_TypeError, message);
             goto done;
         }
-        delegated = winner->tp_new(winner, args_owner, kwds_owner);
+        delegated = winner->tp_new(winner, ctx->args, ctx->kwds);
         if (delegated == NULL) goto done;
         result = 1;
         goto done;
     }
 
-    PyTypeObject *base = find_best_base(bases_owner);
+    PyTypeObject *base = find_best_base(ctx->bases);
     if (base == NULL) goto done;
     chosen_base_owner = Py_NewRef((PyObject *)base);
     chosen_metatype_owner = Py_NewRef(winner_owner);
-    chosen_bases_owner = Py_NewRef(bases_owner);
+    chosen_bases_owner = Py_NewRef(ctx->bases);
     result = 0;
 
 done:
     Py_CLEAR(base_view);
     Py_CLEAR(winner_owner);
-    Py_CLEAR(initial_metatype_owner);
-    Py_CLEAR(args_owner);
-    Py_CLEAR(kwds_owner);
-    Py_CLEAR(bases_owner);
     if (result == 0) {
         ctx->base = _PyType_CAST(chosen_base_owner);
         ctx->metatype = _PyType_CAST(chosen_metatype_owner);
@@ -5631,13 +5496,10 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     assert(args != NULL && PyTuple_Check(args));
     assert(kwds == NULL || PyDict_Check(kwds));
 
-    PyObject *keywords = NULL;
     PyObject *owned_bases = NULL;
     PyObject *selected_metatype_owner = NULL;
     PyObject *selected_base_owner = NULL;
     PyObject *type = NULL;
-    PyTypeObject *error_type = NULL;
-    keywords = Py_XNewRef(kwds);
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (nargs != 3) {
         PyErr_Format(PyExc_TypeError,
@@ -5670,7 +5532,7 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         invalid_arg = 3;
     }
     if (invalid_arg != 0) {
-        error_type = (PyTypeObject *)Py_NewRef(PyValue_TYPE(invalid));
+        PyTypeObject *error_type = PyValue_TYPE(invalid);
         if (invalid_arg == 3) {
             PyErr_Format(PyExc_TypeError,
                          "type.__new__() argument 3 must be dict or frozendict, not %N",
@@ -5693,7 +5555,7 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     type_new_ctx ctx = {
         .metatype = metatype,
         .args = args,
-        .kwds = keywords,
+        .kwds = kwds,
         .orig_dict = PyValue_AsKnownObjectBorrow(dict_value),
         .name = PyValue_AsKnownObjectBorrow(name_value),
         .bases = PyValue_AsKnownObjectBorrow(bases_value),
@@ -5725,12 +5587,11 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     type = type_new_impl(&ctx);
 
 done:
-    ;
-    Py_CLEAR(error_type);
+    /* ctx.base and ctx.metatype can be read from the bases, whose types
+     * type_new_impl() runs Python code with; they stay owned until here. */
     Py_CLEAR(selected_base_owner);
     Py_CLEAR(selected_metatype_owner);
     Py_CLEAR(owned_bases);
-    Py_CLEAR(keywords);
     return type;
 }
 
@@ -5993,28 +5854,21 @@ check_basicsize_includes_size_and_offsets(PyTypeObject* type)
 static int
 check_immutable_bases(const char *type_name, PyObject *bases, int skip_first)
 {
-    PyObject *owner = Py_NewRef(bases);
-    PyObject *error_type = NULL;
-    int result = -1;
-    for (Py_ssize_t i = skip_first ? 1 : 0; i < PyTuple_GET_SIZE(owner); i++) {
-        PyValueBorrow item = PyTuple_GET_VALUE(owner, i);
+    for (Py_ssize_t i = skip_first ? 1 : 0; i < PyTuple_GET_SIZE(bases); i++) {
+        PyValueBorrow item = PyTuple_GET_VALUE(bases, i);
         if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
-            error_type = Py_NewRef(PyValue_TYPE(item));
-            PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'", error_type);
-            goto done;
+            PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'",
+                         PyValue_TYPE(item));
+            return -1;
         }
         PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (!_PyType_HasFeature(base, Py_TPFLAGS_IMMUTABLETYPE)) {
             PyErr_Format(PyExc_TypeError,
                          "Creating immutable type %s from mutable base %N", type_name, base);
-            goto done;
+            return -1;
         }
     }
-    result = 0;
-done:
-    Py_CLEAR(error_type);
-    Py_CLEAR(owner);
-    return result;
+    return 0;
 }
 
 
@@ -7339,29 +7193,23 @@ PyValue
 _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
                        int *suppress_missing_attribute)
 {
-    PyObject *type_owner = NULL, *name_owner = NULL, *metatype_owner = NULL;
-    PyObject *diagnostic_type = NULL, *diagnostic_name = NULL;
+    PyObject *metatype_owner = NULL;
     PyValue result = PyValue_NULL;
     _PyCValue result_ref, meta_attribute_ref, attribute_ref;
     PyThreadState *tstate = _PyThreadState_GET();
     int active = 0, missing = 0;
     descrgetfunc meta_get = NULL;
-    type_owner = Py_NewRef((PyObject *)type);
-    name_owner = Py_NewRef(name);
+    /* The caller owns type and name. The metatype is read from type, whose
+     * __class__ a descriptor can reassign while it is passed as the owner. */
     metatype_owner = Py_NewRef((PyObject *)Py_TYPE(type));
-    if (!PyUnicode_Check(name_owner)) {
-        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(name_owner));
-        PyTypeObject *selected = (PyTypeObject *)diagnostic_type;
-        if (selected->tp_flags & Py_TPFLAGS_HEAPTYPE) {
-            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)selected)->ht_name);
-        }
-        const char *selected_name = selected->tp_name;
+    if (!PyUnicode_Check(name)) {
         PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'", selected_name);
+                     "attribute name must be string, not '%.200s'",
+                     Py_TYPE(name)->tp_name);
         goto done;
     }
-    if (!_PyType_IsReady((PyTypeObject *)type_owner)) {
-        if (PyType_Ready((PyTypeObject *)type_owner) < 0) {
+    if (!_PyType_IsReady(type)) {
+        if (PyType_Ready(type) < 0) {
             goto done;
         }
     }
@@ -7369,19 +7217,19 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
     _PyThreadState_PushCValue(tstate, &meta_attribute_ref);
     _PyThreadState_PushCValue(tstate, &attribute_ref);
     active = 1;
-    (void)_PyType_LookupValueAndVersion((PyTypeObject *)metatype_owner, name_owner,
+    (void)_PyType_LookupValueAndVersion((PyTypeObject *)metatype_owner, name,
                                         &meta_attribute_ref.ref);
     if (PyValue_IsObject(meta_attribute_ref.ref)) {
         PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         meta_get = Py_TYPE(meta_obj)->tp_descr_get;
         if (meta_get != NULL && PyDescr_IsData(meta_obj)) {
             result_ref.ref = _PyValue_DescrGet(
-                meta_obj, PyValue_FromObjectBorrow(type_owner),
+                meta_obj, PyValue_FromObjectBorrow((PyObject *)type),
                 (PyTypeObject *)metatype_owner);
             goto done;
         }
     }
-    (void)_PyType_LookupValueAndVersion((PyTypeObject *)type_owner, name_owner,
+    (void)_PyType_LookupValueAndVersion(type, name,
                                         &attribute_ref.ref);
     if (!PyValue_IsNull(attribute_ref.ref)) {
         PyObject *attr_obj = PyValue_IsObject(attribute_ref.ref)
@@ -7397,7 +7245,7 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
                 }
             }
             result_ref.ref = _PyValue_DescrGet(attr_obj, PyValue_NULL,
-                                               (PyTypeObject *)type_owner);
+                                               type);
             goto done;
         }
         result_ref.ref = attribute_ref.ref;
@@ -7407,7 +7255,7 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
     if (meta_get != NULL) {
         PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         result_ref.ref = _PyValue_DescrGet(
-            meta_obj, PyValue_FromObjectBorrow(type_owner),
+            meta_obj, PyValue_FromObjectBorrow((PyObject *)type),
             (PyTypeObject *)metatype_owner);
         goto done;
     }
@@ -7417,15 +7265,9 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
         goto done;
     }
     if (suppress_missing_attribute == NULL) {
-        diagnostic_type = Py_NewRef(type_owner);
-        PyTypeObject *selected = (PyTypeObject *)diagnostic_type;
-        if (selected->tp_flags & Py_TPFLAGS_HEAPTYPE) {
-            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)selected)->ht_name);
-        }
-        const char *selected_name = selected->tp_name;
         PyErr_Format(PyExc_AttributeError,
                      "type object '%.100s' has no attribute '%U'",
-                     selected_name, name_owner);
+                     type->tp_name, name);
     }
     else {
         missing = 1;
@@ -7443,11 +7285,7 @@ done:
             PyValue_XCLOSE(retired);
         }
     }
-    Py_CLEAR(diagnostic_name);
-    Py_CLEAR(diagnostic_type);
     Py_CLEAR(metatype_owner);
-    Py_CLEAR(name_owner);
-    Py_CLEAR(type_owner);
     if (active) {
         result = _PyThreadState_PopCValueSteal(tstate, &result_ref);
         result_ref.ref = PyValue_NULL;
@@ -7529,9 +7367,9 @@ type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow valu
 {
     PyObject *self = PyValue_AsKnownObjectBorrow(self_value);
     PyTypeObject *type = PyTypeObject_CAST(self);
-    Py_INCREF(type);
-    PyValue value = PyValue_XDUP(value_arg);
-    PyObject *original_name = Py_NewRef(name);
+    /* The caller owns the type, the name and the value. */
+    PyValueBorrow value = value_arg;
+    PyObject *original_name = name;
     name = NULL;
     PyObject *dict = NULL;
     PyObject *candidate = NULL;
@@ -7607,12 +7445,12 @@ type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow valu
         END_TYPE_LOCK();
         Py_CLEAR(candidate);
     }
-    dict = type_mutation_get_dict(type);
+    dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
     }
     BEGIN_TYPE_DICT_LOCK(dict);
-    res = type_update_dict(type, (PyDictObject *)dict, name, PyValue_Borrow(value), &old_value);
+    res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
     assert(_PyType_CheckConsistency(type));
     if (res == 0 && is_dunder_name(name) && has_slotdef(name)) {
         res = update_slot_after_setattr(type, name);
@@ -7621,16 +7459,13 @@ type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow valu
 
 done:
     Py_CLEAR(candidate);
-    Py_CLEAR(dict);
     PyValue_XCLOSE(descr);
     // Keep admission closed through delayed retirement of the displaced value.
     PyValue_XCLOSE(old_value);
     Py_CLEAR(name);
-    Py_CLEAR(original_name);
-    PyValue_XCLOSE(value);
-    Py_DECREF(type);
     _PyTypeMutation_End(&scope);
     return res;
+
 }
 
 _Py_VALUE_THUNK_SETATTRO(type_setattro, type_setattro_value)
@@ -8816,7 +8651,6 @@ _PyType_GetSlotNames(PyTypeObject *cls)
 static PyObject *
 object_getstate_default(PyObject *obj, int required)
 {
-    PyObject *obj_owner = NULL;
     PyObject *state = NULL;
     PyObject *state2 = NULL;
     PyObject *slotnames = NULL;
@@ -8824,25 +8658,13 @@ object_getstate_default(PyObject *obj, int required)
     PyObject *name = NULL;
     PyObject *value = NULL;
     PyObject *selected_type = NULL;
-    PyObject *diagnostic_type = NULL;
-    PyObject *diagnostic_name = NULL;
     PyValue name_value = PyValue_NULL;
     int rc = -1;
 
-    obj_owner = Py_NewRef(obj);
-
     if (required && Py_TYPE(obj)->tp_itemsize) {
-        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
-        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
-                              Py_TPFLAGS_HEAPTYPE)) {
-            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
-        }
-        const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle %.200s objects",
-                     type_name);
-        Py_CLEAR(diagnostic_name);
-        Py_CLEAR(diagnostic_type);
+                     Py_TYPE(obj)->tp_name);
         goto done;
     }
 
@@ -8856,6 +8678,8 @@ object_getstate_default(PyObject *obj, int required)
         goto done;
     }
 
+    /* copyreg._slotnames() gets the type as its argument and can reassign
+     * obj.__class__, so the type read from obj is pinned for the call. */
     selected_type = Py_NewRef((PyObject *)Py_TYPE(obj));
     slotnames = _PyType_GetSlotNames((PyTypeObject *)selected_type);
     Py_CLEAR(selected_type);
@@ -8880,17 +8704,9 @@ object_getstate_default(PyObject *obj, int required)
         if (Py_TYPE(obj)->tp_basicsize > basicsize) {
             Py_CLEAR(slotnames);
             Py_CLEAR(state);
-            diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
-            if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
-                                  Py_TPFLAGS_HEAPTYPE)) {
-                diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
-            }
-            const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "cannot pickle '%.200s' object",
-                         type_name);
-            Py_CLEAR(diagnostic_name);
-            Py_CLEAR(diagnostic_type);
+                         Py_TYPE(obj)->tp_name);
             goto done;
         }
     }
@@ -8913,17 +8729,9 @@ object_getstate_default(PyObject *obj, int required)
         }
         if (!PyValue_IsObject(name_value) ||
                 !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_value))) {
-            diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(name_value));
-            if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
-                                  Py_TPFLAGS_HEAPTYPE)) {
-                diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
-            }
-            const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "attribute name must be string, not '%.200s'",
-                         type_name);
-            Py_CLEAR(diagnostic_name);
-            Py_CLEAR(diagnostic_type);
+                         PyValue_TYPE(name_value)->tp_name);
             goto done;
         }
         name = PyValue_AsKnownObjectSteal(name_value);
@@ -8973,12 +8781,9 @@ done:
     Py_CLEAR(name);
     Py_CLEAR(value);
     Py_CLEAR(selected_type);
-    Py_CLEAR(diagnostic_name);
-    Py_CLEAR(diagnostic_type);
     Py_CLEAR(slotnames);
     Py_CLEAR(slots);
     Py_CLEAR(state2);
-    Py_CLEAR(obj_owner);
     if (rc < 0) {
         Py_CLEAR(state);
         return NULL;
@@ -10304,15 +10109,10 @@ type_ready_mro(PyTypeObject *type, int initial)
             assert(PyValue_IsObject(value));
             PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(value));
             if (base->tp_flags & Py_TPFLAGS_HEAPTYPE) {
-                PyObject *base_owner = Py_NewRef((PyObject *)base);
-                PyObject *name_owner = Py_NewRef(((PyHeapTypeObject *)base)->ht_name);
-                const char *base_name = base->tp_name;
                 PyErr_Format(PyExc_TypeError,
                              "type '%.100s' is not dynamically allocated but "
                              "its base type '%.100s' is dynamically allocated",
-                             type->tp_name, base_name);
-                Py_CLEAR(name_owner);
-                Py_CLEAR(base_owner);
+                             type->tp_name, base->tp_name);
                 return -1;
             }
             assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) ||
@@ -10714,11 +10514,11 @@ type_ready_set_hash(PyTypeObject *type)
 static int
 type_ready_add_subclasses(PyTypeObject *type)
 {
-    PyObject *bases = Py_XNewRef(lookup_tp_bases(type));
-    int result = -1;
+    /* add_subclass() runs no Python code, so tp_bases stays in place. */
+    PyObject *bases = lookup_tp_bases(type);
     if (bases == NULL) {
         PyErr_SetString(PyExc_SystemError, "type has no bases tuple");
-        goto done;
+        return -1;
     }
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(bases); i++) {
         PyValueBorrow item = PyTuple_GET_VALUE(bases, i);
@@ -10726,14 +10526,11 @@ type_ready_add_subclasses(PyTypeObject *type)
             PyObject *base = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(base) &&
                     add_subclass((PyTypeObject *)base, type) < 0) {
-                goto done;
+                return -1;
             }
         }
     }
-    result = 0;
-done:
-    Py_CLEAR(bases);
-    return result;
+    return 0;
 }
 
 
@@ -11297,26 +11094,20 @@ static PyObject *
 wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
-    result = (*func)(receiver, other);
+    result = (*func)(self, other);
 
 done:
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11324,26 +11115,20 @@ static PyObject *
 wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
-    result = (*func)(receiver, other);
+    result = (*func)(self, other);
 
 done:
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11351,26 +11136,20 @@ static PyObject *
 wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
-    result = (*func)(other, receiver);
+    result = (*func)(other, self);
 
 done:
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11378,8 +11157,6 @@ static PyObject *
 wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     ternaryfunc func = (ternaryfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *third_owner = NULL;
     PyObject *third = Py_None;
@@ -11388,30 +11165,26 @@ wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
 
     /* Note: This wrapper only works for __pow__() */
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    size = check_pow_args(tuple);
+    size = check_pow_args(args);
     if (size == -1) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
     if (size == 2) {
-        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 1), BOX_SITE_TUPLE);
+        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 1), BOX_SITE_TUPLE);
         if (third_owner == NULL) {
             goto done;
         }
         third = third_owner;
     }
-    result = (*func)(receiver, other, third);
+    result = (*func)(self, other, third);
 
 done:
     Py_CLEAR(third_owner);
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11419,8 +11192,6 @@ static PyObject *
 wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 {
     ternaryfunc func = (ternaryfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *third_owner = NULL;
     PyObject *third = Py_None;
@@ -11429,30 +11200,26 @@ wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 
     /* Note: This wrapper only works for __rpow__() */
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    size = check_pow_args(tuple);
+    size = check_pow_args(args);
     if (size == -1) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
     if (size == 2) {
-        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 1), BOX_SITE_TUPLE);
+        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 1), BOX_SITE_TUPLE);
         if (third_owner == NULL) {
             goto done;
         }
         third = third_owner;
     }
-    result = (*func)(other, receiver, third);
+    result = (*func)(other, self, third);
 
 done:
     Py_CLEAR(third_owner);
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11470,18 +11237,14 @@ static PyObject *
 wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -11489,12 +11252,10 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
     if (i == -1 && PyErr_Occurred()) {
         goto done;
     }
-    result = (*func)(receiver, i);
+    result = (*func)(self, i);
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11524,33 +11285,27 @@ static PyObject *
 wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (PyTuple_GET_SIZE(tuple) == 1) {
-        operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    if (PyTuple_GET_SIZE(args) == 1) {
+        operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (operand == NULL) {
             goto done;
         }
-        i = getindex(receiver, operand);
+        i = getindex(self, operand);
         if (i == -1 && PyErr_Occurred()) {
             goto done;
         }
-        result = (*func)(receiver, i);
+        result = (*func)(self, i);
         goto done;
     }
-    check_num_args(tuple, 1);
+    check_num_args(args, 1);
     assert(PyErr_Occurred());
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11577,26 +11332,22 @@ static PyObject *
 wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeobjargproc func = (ssizeobjargproc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
-    i = getindex(receiver, operand);
+    i = getindex(self, operand);
     if (i == -1 && PyErr_Occurred()) {
         goto done;
     }
-    int res = (*func)(receiver, i, NULL);
+    int res = (*func)(self, i, NULL);
     if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
@@ -11604,8 +11355,6 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11614,22 +11363,18 @@ static PyObject *
 wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
 {
     objobjproc func = (objobjproc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
     int res;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
-    res = (*func)(receiver, operand);
+    res = (*func)(self, operand);
     if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
@@ -11637,8 +11382,6 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11661,21 +11404,17 @@ static PyObject *
 wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
 {
     objobjargproc func = (objobjargproc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
-    int res = (*func)(receiver, operand, NULL);
+    int res = (*func)(self, operand, NULL);
     if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
@@ -11683,8 +11422,6 @@ wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11738,17 +11475,9 @@ hackcheck_unlocked(PyObject *self, setattrofunc func,
         else if (base->tp_setattro != slot_tp_setattro) {
             /* 'base' is not a Python class and overrides 'func'.
                Its tp_setattro should be called instead. */
-            PyObject *type_owner = Py_NewRef((PyObject *)type);
-            PyObject *name_owner = NULL;
-            if (_PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
-                name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
-            }
-            const char *type_name = type->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "can't apply this %s to %s object",
-                         what, type_name);
-            Py_CLEAR(name_owner);
-            Py_CLEAR(type_owner);
+                         what, type->tp_name);
             return 0;
         }
     }
@@ -11797,26 +11526,22 @@ static PyObject *
 wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
 {
     setattrofunc func = (setattrofunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *name = NULL;
     PyObject *result = NULL;
     int res;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    name = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    name = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (name == NULL) {
         goto done;
     }
-    res = hackcheck(receiver, func, "__delattr__");
+    res = hackcheck(self, func, "__delattr__");
     if (!res) {
         goto done;
     }
-    res = (*func)(receiver, name, NULL);
+    res = (*func)(self, name, NULL);
     if (res < 0) {
         goto done;
     }
@@ -11824,8 +11549,6 @@ wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
 
 done:
     Py_CLEAR(name);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -11867,26 +11590,20 @@ static PyObject *
 wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
 {
     richcmpfunc func = (richcmpfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
-    result = (*func)(receiver, other, op);
+    result = (*func)(self, other, op);
 
 done:
     Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -12494,22 +12211,18 @@ static PyObject *
 wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
 {
     descrsetfunc func = (descrsetfunc)wrapped;
-    PyObject *receiver = NULL;
-    PyObject *tuple = NULL;
     PyObject *operand = NULL;
     PyObject *result = NULL;
     int ret;
 
-    receiver = Py_NewRef(self);
-    tuple = Py_NewRef(args);
-    if (!check_num_args(tuple, 1)) {
+    if (!check_num_args(args, 1)) {
         goto done;
     }
-    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
-    ret = (*func)(receiver, operand, NULL);
+    ret = (*func)(self, operand, NULL);
     if (ret < 0) {
         goto done;
     }
@@ -12517,8 +12230,6 @@ wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
 
 done:
     Py_CLEAR(operand);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
     return result;
 }
 
@@ -13613,7 +13324,7 @@ _Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
                         Py_ssize_t nargs, PyObject *kwnames)
 {
     assert(PyValue_IsObject(self));
-    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(self));
+    /* _PyObject_LookupSpecialMethod() consumes its receiver slot. */
     PyValue receiver = PyValue_DUP(self);
     PyValue meth = PyValue_NULL;
     PyValue result = PyValue_NULL;
@@ -13635,8 +13346,8 @@ _Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
 done:
     PyValue_XCLOSE(meth);
     PyValue_XCLOSE(receiver);
-    Py_DECREF(self_owner);
     if (PyValue_IsNull(result)) {
+
         return -1;
     }
     if (!PyValue_IsNone(result)) {
@@ -15374,7 +15085,6 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
                         update_callback callback, void *data)
 {
     PyObject *children = NULL;
-    PyObject *dict = NULL;
     int result = -1;
     children = _PyType_GetSubclasses(type);
     if (children == NULL) {
@@ -15385,12 +15095,12 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
         PyValueBorrow item = PyList_GET_VALUE(children, i);
         assert(PyValue_IsObject(item));
         PyTypeObject *child = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
-        dict = Py_XNewRef(lookup_tp_dict(child));
+        /* children owns child, and a type keeps its tp_dict object. */
+        PyObject *dict = lookup_tp_dict(child);
         int contains = 0;
         if (dict != NULL && PyDict_Check(dict)) {
             contains = PyDict_ContainsValue(dict, PyValue_FromObjectBorrow(attr_name));
         }
-        Py_CLEAR(dict);
         if (contains < 0) {
             goto done;
         }
@@ -15401,10 +15111,10 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
     }
     result = 0;
 done:
-    Py_CLEAR(dict);
     Py_CLEAR(children);
     return result;
 }
+
 
 static int
 slot_inherited(PyTypeObject *type, pytype_slotdef *slotdef, void **slot)

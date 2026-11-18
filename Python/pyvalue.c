@@ -129,6 +129,15 @@ Py_NO_INLINE void _Py_NO_RETURN
                          "object: %#" PRIx64, (uint64_t)ref.bits);
 }
 
+Py_NO_INLINE PyTypeObject *
+(_PyValue_TypeNotPointer)(PyValueBorrow value)
+{
+    if (PyValue_IsInline(value)) {
+        return PyValue_IsInlineInt(value) ? &PyLong_Type : &PyFloat_Type;
+    }
+    _PyValue_FatalNotObject(value);
+}
+
 uintptr_t
 _PyObject_ValueIdentity(PyObject *op)
 {

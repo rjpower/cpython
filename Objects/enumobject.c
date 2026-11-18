@@ -155,7 +155,6 @@ increment_longindex_lock_held(enumobject *en)
 static _PyStatusValue
 enum_next_long(enumobject *en, PyValue next_item)
 {
-    PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
     PyObject *next_index = NULL;
     PyObject *output = NULL;
@@ -197,7 +196,6 @@ enum_next_long(enumobject *en, PyValue next_item)
 done:
     Py_CLEAR(next_index);
     PyValue_XCLOSE(next_item);
-    Py_CLEAR(iterator_owner);
     if (output == NULL) {
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
@@ -211,7 +209,6 @@ static _PyStatusValue
 enum_next_value(PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
-    PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
     PyValue next_index = PyValue_NULL;
     PyValue next_item = PyValue_NULL;
@@ -270,7 +267,6 @@ enum_next_value(PyObject *op)
 done:
     PyValue_XCLOSE(next_index);
     PyValue_XCLOSE(next_item);
-    Py_CLEAR(iterator_owner);
     return output;
 }
 

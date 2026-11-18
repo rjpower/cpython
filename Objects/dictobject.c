@@ -1383,26 +1383,14 @@ dict_lookup_value(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
 }
 
 int
-(_PyDict_GetValue_KnownHash)(PyObject *op, PyValueBorrow key, Py_hash_t hash,
+(_PyDict_GetValue_KnownHash)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
                            PyValue *result)
 {
     *result = PyValue_NULL;
-    if (!PyAnyDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
+    assert(PyAnyDict_Check(mp));
     assert(PyValue_IsLanguageValue(key));
     assert(hash != -1);
-
-    /* Equality can remove the query's last external owner. Capture the found
-     * value before releasing our query pin, which can itself reenter. */
-    PyValue query = PyValue_XDUP(key);
-    PyValue owned = PyValue_NULL;
-    int status = dict_lookup_value((PyDictObject *)op, PyValue_Borrow(query),
-                                   hash, &owned);
-    PyValue_XCLOSE(query);
-    *result = owned;
-    return status;
+    return dict_lookup_value(mp, key, hash, result);
 }
 
 
@@ -1596,7 +1584,7 @@ _PyDict_InsertSplitValue(PyDictObject *mp, PyValue key, PyValue value,
 
 // Replace a value at an existing entry. Steals the new value reference.
 static void
-replace_value(PyDictObject *mp, PyValue key, Py_ssize_t ix,
+replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
               PyValueBorrow old_value, PyValue value)
 {
     assert(can_modify_dict(mp));
@@ -1697,7 +1685,7 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             }
         }
         if (!PyValue_IsNull(old_value)) {
-            replace_value(mp, key, ix, old_value, value);
+            replace_value(mp, PyValue_Borrow(key), ix, old_value, value);
             value = PyValue_NULL;
         }
         else if (_PyDict_HasSplitTable(mp)) {
@@ -1940,17 +1928,10 @@ _PyDict_FromValueItems(const PyValue *keys, Py_ssize_t key_stride,
                        const PyValue *values, Py_ssize_t value_stride,
                        Py_ssize_t count)
 {
-    if (count < 0 || key_stride < 0 || value_stride < 0 ||
-        (count != 0 && (keys == NULL || values == NULL))) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    Py_ssize_t max_step = PY_SSIZE_T_MAX / (Py_ssize_t)sizeof(PyValue);
-    if (count > 1 && (key_stride > max_step / (count - 1) ||
-                      value_stride > max_step / (count - 1))) {
-        PyErr_SetString(PyExc_OverflowError, "dictionary value array stride overflow");
-        return NULL;
-    }
+    /* The interpreter passes its own value window, as upstream's
+       _PyDict_FromItems(): the arguments are asserted, not tested. */
+    assert(count >= 0 && key_stride >= 0 && value_stride >= 0);
+    assert(count == 0 || (keys != NULL && values != NULL));
     /* The caller's independently owning snapshot has stable address and
      * contents through this entire call, including allocation and hashing. */
     bool unicode = true;
@@ -2039,11 +2020,8 @@ dict_unhashable_type(PyObject *op, PyObject *key)
 static inline Py_hash_t
 cached_str_hash(PyValueBorrow key)
 {
-    if (!PyValue_IsObject(key)) {
-        return -1;
-    }
-    PyObject *object = PyValue_AsKnownObjectBorrow(key);
-    if (!PyUnicode_CheckExact(object)) {
+    PyObject *object = PyValue_ObjectOrNull(key);
+    if (object == NULL || !PyUnicode_CheckExact(object)) {
         return -1;
     }
     return PyUnstable_Unicode_GET_CACHED_HASH(object);
@@ -2070,28 +2048,21 @@ dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
     *result = PyValue_NULL;
     Py_hash_t cached = cached_str_hash(key);
     if (can_use_cached_str_lookup(mp, cached)) {
-        return _PyDict_GetValue_KnownHash((PyObject *)mp, key, cached, result);
+        return _PyDict_GetValue_KnownHash(mp, key, cached, result);
     }
-    PyObject *dict_owner = Py_NewRef(mp);
-    PyValue query = PyValue_XDUP(key);
-    PyValue value = PyValue_NULL;
+    /* The caller owns the dictionary and the key for the whole call, so
+     * hashing and equality need no pins here. */
     Py_hash_t hash = cached;
     if (hash == -1) {
-        hash = _PyValue_Hash(query);
+        hash = _PyValue_Hash(key);
     }
-    int status = -1;
     if (hash != -1) {
-        status = dict_lookup_value(mp, PyValue_Borrow(query), hash, &value);
+        return dict_lookup_value(mp, key, hash, result);
     }
-    else if (PyValue_IsObject(query)) {
-        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(query));
+    if (PyValue_IsObject(key)) {
+        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
     }
-    /* Hashing and cleanup can remove the inputs' last external owners. Keep
-     * the selected snapshot independent until every local owner is retired. */
-    PyValue_XCLOSE(query);
-    Py_XDECREF(dict_owner);
-    *result = value;
-    return status;
+    return -1;
 }
 
 int
@@ -2106,6 +2077,14 @@ int
 }
 
 int
+(_PyDict_GetValue)(PyDictObject *mp, PyValueBorrow key, PyValue *result)
+{
+    assert(PyAnyDict_Check(mp));
+    assert(PyValue_IsLanguageValue(key));
+    return dict_get_value(mp, key, result);
+}
+
+int
 PyDict_GetValueString(PyObject *op, const char *key, PyValue *result)
 {
     *result = PyValue_NULL;
@@ -2113,36 +2092,41 @@ PyDict_GetValueString(PyObject *op, const char *key, PyValue *result)
         PyErr_BadInternalCall();
         return -1;
     }
-    PyObject *dict_owner = Py_NewRef(op);
     PyObject *name = PyUnicode_FromString(key);
-    PyValue value = PyValue_NULL;
-    int status = -1;
-    if (name != NULL) {
-        status = PyDict_GetValue(op, PyValue_FromObjectBorrow(name), &value);
+    if (name == NULL) {
+        return -1;
     }
-    Py_XDECREF(name);
-    Py_XDECREF(dict_owner);
-    *result = value;
+    int status = dict_get_value((PyDictObject *)op, PyValue_FromObjectBorrow(name), result);
+    Py_DECREF(name);
+    return status;
+}
+
+int
+(_PyDict_ContainsValue)(PyDictObject *mp, PyValueBorrow key)
+{
+    assert(PyAnyDict_Check(mp));
+    assert(PyValue_IsLanguageValue(key));
+    Py_hash_t cached = cached_str_hash(key);
+    if (can_use_cached_str_lookup(mp, cached)) {
+        /* As dict_contains(): no result copy, no extra owners. */
+        return _PyDict_Contains_KnownHash((PyObject *)mp,
+                                          PyValue_AsKnownObjectBorrow(key),
+                                          cached);
+    }
+    PyValue value = PyValue_NULL;
+    int status = dict_get_value(mp, key, &value);
+    PyValue_XCLOSE(value);
     return status;
 }
 
 int
 (PyDict_ContainsValue)(PyObject *op, PyValueBorrow key)
 {
-    if (!PyAnyDict_Check(op)) {
+    if (!PyAnyDict_Check(op) || !PyValue_IsLanguageValue(key)) {
         PyErr_BadInternalCall();
         return -1;
     }
-    Py_hash_t cached = cached_str_hash(key);
-    if (can_use_cached_str_lookup((PyDictObject *)op, cached)) {
-        /* As dict_contains(): no result copy, no extra owners. */
-        return _PyDict_Contains_KnownHash(op, PyValue_AsKnownObjectBorrow(key),
-                                          cached);
-    }
-    PyValue value = PyValue_NULL;
-    int status = PyDict_GetValue(op, key, &value);
-    PyValue_XCLOSE(value);
-    return status;
+    return _PyDict_ContainsValue((PyDictObject *)op, key);
 }
 
 int
@@ -2170,14 +2154,13 @@ _PyDict_LookupIndexAndOwnedValue(PyDictObject *mp, PyObject *name, PyValue *out)
     assert(PyUnicode_CheckExact(name));
     /* Caller retains the dictionary and exact Unicode metadata name. The
      * returned index remains usable only with the same current keys/layout. */
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(name));
+    PyValueBorrow query = PyValue_FromObjectBorrow(name);
     PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
-    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
+    Py_hash_t hash = _PyValue_Hash(query);
     Py_ssize_t index = hash == -1 ? DKIX_ERROR : _Py_dict_lookup(mp, query, hash, &value);
     if (index >= 0 && !PyValue_IsNull(value)) {
         *out = PyValue_DUP(value);
     }
-    PyValue_XCLOSE(query);
     return index;
 }
 
@@ -2204,9 +2187,7 @@ dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
                       PyObject **result _PyBox_AT_PARAM)
 {
     *result = NULL;
-    Py_INCREF(op);
-    Py_INCREF(key);
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
+    PyValueBorrow query = PyValue_FromObjectBorrow(key);
     PyValue value = PyValue_NULL;
     PyObject *object = NULL;
     int status = -1;
@@ -2217,7 +2198,7 @@ dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
             goto done;
         }
     }
-    status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
+    status = _PyDict_GetValue_KnownHash((PyDictObject *)op, query, hash, &value);
     if (status == 1) {
         object = _PyValue_AsObjectFor(value, at);
         if (object == NULL) {
@@ -2226,9 +2207,6 @@ dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
     }
 done:
     PyValue_XCLOSE(value);
-    PyValue_XCLOSE(query);
-    Py_XDECREF(key);
-    Py_XDECREF(op);
     if (status < 0) {
         Py_XDECREF(object);
         return -1;
@@ -2360,12 +2338,7 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
                                    PyValue value, Py_hash_t hash)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    if (!PyAnyDict_Check(mp)) {
-        PyErr_BadInternalCall();
-        PyValue_XCLOSE(value);
-        PyValue_XCLOSE(key);
-        return -1;
-    }
+    assert(PyAnyDict_Check(mp));
     assert(can_modify_dict(mp));
     assert(hash != -1);
     if (mp->ma_keys == Py_EMPTY_KEYS) {
@@ -2378,12 +2351,7 @@ static int
 setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    if (!PyAnyDict_Check(mp)) {
-        PyErr_BadInternalCall();
-        PyValue_XCLOSE(value);
-        PyValue_XCLOSE(key);
-        return -1;
-    }
+    assert(PyAnyDict_Check(mp));
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         if (PyValue_IsObject(key)) {
@@ -2430,9 +2398,15 @@ int
         }
         return -1;
     }
-    return _PyDict_SetValue_Take2((PyDictObject *)op,
-        PyValue_XDUP(key),
-        PyValue_XDUP(value));
+    return _PyDict_SetValue((PyDictObject *)op, key, value);
+}
+
+int
+(_PyDict_SetValue)(PyDictObject *mp, PyValueBorrow key, PyValueBorrow value)
+{
+    assert(PyDict_Check(mp));
+    assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+    return _PyDict_SetValue_Take2(mp, PyValue_DUP(key), PyValue_DUP(value));
 }
 
 int
@@ -2639,7 +2613,7 @@ dict_selection_matches(PyDictObject *mp, PyDictKeysObject *saved_keys,
 }
 
 static void
-dict_value_keyerror(PyValue key)
+dict_value_keyerror(PyValueBorrow key)
 {
     _PyErr_SetKeyErrorValue(key);
 }
@@ -2649,31 +2623,26 @@ dict_value_keyerror(PyValue key)
 static int
 (delvalue_knownhash_lock_held)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash)
 {
-    PyValue query = PyValue_DUP(key);
     PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
-    int status = -1;
-    Py_ssize_t ix = _Py_dict_lookup(mp, query, hash, &value);
+    Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &value);
     if (ix == DKIX_ERROR) {
-        goto done;
+        return -1;
     }
     if (PyValue_IsNull(value)) {
-        dict_value_keyerror(query);
-        goto done;
+        dict_value_keyerror(key);
+        return -1;
     }
     if (mp->_ma_watcher_tag & DICT_WATCHER_MASK) {
-        _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, query, PyValue_NULL);
-        ix = _Py_dict_lookup(mp, query, hash, &value);
+        _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, key, PyValue_NULL);
+        ix = _Py_dict_lookup(mp, key, hash, &value);
         if (ix == DKIX_ERROR) {
-            goto done;
+            return -1;
         }
     }
     if (!PyValue_IsNull(value)) {
         delitem_common(mp, hash, ix, value);
     }
-    status = 0;  /* A dict watcher may already have removed this key. */
-done:
-    PyValue_XCLOSE(query);
-    return status;
+    return 0;  /* A dict watcher may already have removed this key. */
 }
 
 int
@@ -2689,18 +2658,24 @@ int
         }
         return -1;
     }
-    PyValue query = PyValue_XDUP(key);
-    Py_hash_t hash = _PyValue_Hash(query);
-    int status = -1;
-    if (hash != -1) {
-        status = delvalue_knownhash_lock_held((PyDictObject *)op, query, hash);
-    }
-    else if (PyValue_IsObject(query)) {
-        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(query));
-    }
-    PyValue_XCLOSE(query);
-    return status;
+    return _PyDict_DelValue((PyDictObject *)op, key);
 }
+
+int
+(_PyDict_DelValue)(PyDictObject *mp, PyValueBorrow key)
+{
+    assert(PyDict_Check(mp));
+    assert(PyValue_IsLanguageValue(key));
+    Py_hash_t hash = _PyValue_Hash(key);
+    if (hash != -1) {
+        return delvalue_knownhash_lock_held(mp, key, hash);
+    }
+    if (PyValue_IsObject(key)) {
+        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
+    }
+    return -1;
+}
+
 
 int
 PyDict_DelItem(PyObject *op, PyObject *key)
@@ -2740,7 +2715,7 @@ delitemif_lock_held(PyObject *op, PyValueBorrow key,
                     int (*predicate)(PyObject *value, void *arg), void *arg)
 {
     PyDictObject *mp = _PyAnyDict_CAST(op);
-    PyValue query = PyValue_DUP(key);
+    PyValueBorrow query = key;
     PyValue selected = PyValue_NULL, selected_key = PyValue_NULL;
     PyObject *object = NULL;
     int status = -1;
@@ -2799,7 +2774,6 @@ done:
     Py_XDECREF(object);
     PyValue_XCLOSE(selected);
     PyValue_XCLOSE(selected_key);
-    PyValue_XCLOSE(query);
     return status;
 }
 /* This function promises that the predicate -> deletion sequence is atomic
@@ -2835,41 +2809,34 @@ _PyDict_ReplaceItemIf(PyObject *op, PyObject *key,
 {
     assert(PyDict_Check(op));
     PyDictObject *mp = (PyDictObject *)op;
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
-    PyValue expected_value = PyValue_DUP(PyValue_FromObjectBorrow(expected));
-    PyValue new_value = PyValue_DUP(PyValue_FromObjectBorrow(replacement));
-    int status = -1;
+    PyValueBorrow query = PyValue_FromObjectBorrow(key);
+    PyValueBorrow expected_value = PyValue_FromObjectBorrow(expected);
+    PyValueBorrow new_value = PyValue_FromObjectBorrow(replacement);
     Py_hash_t hash = _PyValue_Hash(query);
     if (hash == -1) {
-        goto done;
+        return -1;
     }
     PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
     Py_ssize_t ix = _Py_dict_lookup(mp, query, hash, &value);
     if (ix == DKIX_ERROR) {
-        goto done;
+        return -1;
     }
-    status = 0;
-    if (!PyValue_IsNull(value) && PyValue_Is(value, expected_value)) {
-        if (!PyValue_Is(value, new_value) &&
-            (mp->_ma_watcher_tag & DICT_WATCHER_MASK)) {
-            _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, mp, query, new_value);
-            ix = _Py_dict_lookup(mp, query, hash, &value);
-            if (ix == DKIX_ERROR) {
-                status = -1;
-                goto done;
-            }
-        }
-        if (!PyValue_IsNull(value) && PyValue_Is(value, expected_value)) {
-            replace_value(mp, query, ix, value, new_value);
-            new_value = PyValue_NULL;
-            status = 1;
+    if (PyValue_IsNull(value) || !PyValue_Is(value, expected_value)) {
+        return 0;
+    }
+    if (!PyValue_Is(value, new_value) &&
+        (mp->_ma_watcher_tag & DICT_WATCHER_MASK)) {
+        _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, mp, query, new_value);
+        ix = _Py_dict_lookup(mp, query, hash, &value);
+        if (ix == DKIX_ERROR) {
+            return -1;
         }
     }
-done:
-    PyValue_XCLOSE(new_value);
-    PyValue_XCLOSE(expected_value);
-    PyValue_XCLOSE(query);
-    return status;
+    if (PyValue_IsNull(value) || !PyValue_Is(value, expected_value)) {
+        return 0;
+    }
+    replace_value(mp, query, ix, value, PyValue_DUP(new_value));
+    return 1;
 }
 
 static void
@@ -3182,7 +3149,7 @@ dict_pop_knownhash(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
         *object_out = NULL;
     }
     assert(can_modify_dict(mp));
-    PyValue query = PyValue_DUP(key);
+    PyValueBorrow query = key;
     PyValue selected = PyValue_NULL, selected_key = PyValue_NULL;
     PyObject *object = NULL;
     int notified = 0, status = -1;
@@ -3237,8 +3204,8 @@ dict_pop_knownhash(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
     }
     PyValue_XCLOSE(selected);
     PyValue_XCLOSE(selected_key);
-    PyValue_XCLOSE(query);
     if (status == 1 && object_out != NULL) {
+
         *object_out = object;
         object = NULL;
     }
@@ -3377,7 +3344,7 @@ _PyDict_Pop(PyObject *dict, PyObject *key, PyObject *default_value)
 static PyDictObject *
 dict_dict_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
 {
-    PyValue default_value = PyValue_DUP(PyValue_FromObjectBorrow(value));
+    PyValueBorrow default_value = PyValue_FromObjectBorrow(value);
     uint8_t size = Py_MAX(estimate_log2_keysize(PyDict_GET_SIZE(iterable)),
                          DK_LOG_SIZE(mp->ma_keys));
     int unicode = DK_IS_UNICODE(((PyDictObject *)iterable)->ma_keys);
@@ -3396,10 +3363,8 @@ dict_dict_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     if (found < 0) {
         goto error;
     }
-    PyValue_XCLOSE(default_value);
     return mp;
 error:
-    PyValue_XCLOSE(default_value);
     Py_XDECREF((PyObject *)mp);
     return NULL;
 }
@@ -3407,7 +3372,7 @@ error:
 static PyDictObject *
 dict_set_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
 {
-    PyValue default_value = PyValue_DUP(PyValue_FromObjectBorrow(value));
+    PyValueBorrow default_value = PyValue_FromObjectBorrow(value);
     uint8_t size = Py_MAX(estimate_log2_keysize(PySet_GET_SIZE(iterable)),
                          DK_LOG_SIZE(mp->ma_keys));
     if (dictresize(mp, size, 0) < 0) {
@@ -3425,10 +3390,8 @@ dict_set_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     if (found < 0) {
         goto error;
     }
-    PyValue_XCLOSE(default_value);
     return mp;
 error:
-    PyValue_XCLOSE(default_value);
     Py_XDECREF((PyObject *)mp);
     return NULL;
 }
@@ -3666,7 +3629,6 @@ anydict_repr_impl(PyObject *self)
     if (entered != 0) {
         return entered > 0 ? PyUnicode_FromString("{...}") : NULL;
     }
-    Py_INCREF(self);
     PyDictObject *mp = (PyDictObject *)self;
     PyUnicodeWriter *writer = PyUnicodeWriter_Create(
         1 + 4 + 6 * (mp->ma_used > 0 ? mp->ma_used - 1 : 0) + 1);
@@ -3708,7 +3670,6 @@ anydict_repr_impl(PyObject *self)
     }
     Py_ReprLeave(self);
     PyObject *result = PyUnicodeWriter_Finish(writer);
-    Py_XDECREF(self);
     return result;
 error:
     Py_ReprLeave(self);
@@ -3717,7 +3678,6 @@ error:
     Py_XDECREF(value_object);
     PyValue_XCLOSE(key);
     PyValue_XCLOSE(value);
-    Py_XDECREF(self);
     return NULL;
 }
 
@@ -4195,7 +4155,7 @@ dict_dict_merge(PyDictObject *mp, PyDictObject *other, int override, PyObject **
         }
         else {
             PyValue found = PyValue_NULL;
-            int present = _PyDict_GetValue_KnownHash((PyObject *)mp, key, hash, &found);
+            int present = _PyDict_GetValue_KnownHash(mp, key, hash, &found);
             PyValue_XCLOSE(found);
             if (present < 0) {
                 status = -1;
@@ -4252,7 +4212,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
             status = PyErr_Occurred() ? -1 : 0;
             break;
         }
-        PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
+        PyValueBorrow query = PyValue_FromObjectBorrow(key);
         PyValue found = PyValue_NULL;
         PyValue value = PyValue_NULL;
         Py_hash_t hash = -1;
@@ -4263,7 +4223,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
                 dict_unhashable_type(a, key);
             }
             int present = hash == -1 ? -1 :
-                _PyDict_GetValue_KnownHash(a, query, hash, &found);
+                _PyDict_GetValue_KnownHash(mp, query, hash, &found);
             PyValue_XCLOSE(found);
             found = PyValue_NULL;
             if (present < 0) {
@@ -4315,7 +4275,6 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
             }
         }
         PyValue_XCLOSE(value);
-        PyValue_XCLOSE(query);
         Py_XDECREF(key);
         if (status != 0) {
             break;
@@ -4532,7 +4491,7 @@ dict_equal_lock_held(PyDictObject *a, PyDictObject *b)
     int found;
     while ((found = _PyDict_NextValue((PyObject *)a, &pos, &key, &left, &hash)) > 0) {
         PyValue right = PyValue_NULL;
-        int present = _PyDict_GetValue_KnownHash((PyObject *)b, key, hash, &right);
+        int present = _PyDict_GetValue_KnownHash(b, key, hash, &right);
         int equal = present > 0 ? _PyValue_RichCompareBool(left, right, Py_EQ) : present;
         PyValue_XCLOSE(key);
         PyValue_XCLOSE(left);
@@ -4634,8 +4593,9 @@ static int
     if (result != NULL) {
         *result = PyValue_NULL;
     }
-    PyValue key = PyValue_DUP(key_arg);
-    PyValue value = PyValue_DUP(value_arg);
+    /* The caller owns both arguments; references are taken at the store. */
+    PyValueBorrow key = key_arg;
+    PyValueBorrow value = value_arg;
     PyValue output = PyValue_NULL;
     int notified = 0, status = -1;
     for (;;) {
@@ -4687,20 +4647,16 @@ static int
         output = result == NULL ? PyValue_NULL : PyValue_DUP(value);
         if (_PyDict_HasSplitTable(mp)) {
             _PyValue_CheckHome(value);
-            STORE_SPLIT_VALUE(mp, ix, value);
-            value = PyValue_NULL;
+            STORE_SPLIT_VALUE(mp, ix, PyValue_DUP(value));
             _PyDictValues_AddToInsertionOrder(mp->ma_values, ix);
             STORE_USED(mp, mp->ma_used + 1);
         }
         else {
-            insert_combined_dict(mp, hash, key, value);
-            key = value = PyValue_NULL;
+            insert_combined_dict(mp, hash, PyValue_DUP(key), PyValue_DUP(value));
         }
         status = 0;
         break;
     }
-    PyValue_XCLOSE(value);
-    PyValue_XCLOSE(key);
     if (status < 0) {
         PyValue_XCLOSE(output);
         return -1;
@@ -4724,20 +4680,16 @@ int
         return -1;
     }
     assert(can_modify_dict((PyDictObject *)op));
-    PyValue key = PyValue_DUP(key_in);
-    PyValue value = PyValue_DUP(value_in);
-    Py_hash_t hash = _PyValue_Hash(key);
-    int status = -1;
+    Py_hash_t hash = _PyValue_Hash(key_in);
     if (hash != -1) {
-        status = dict_setdefault_value_lock_held((PyDictObject *)op, key, value, hash, result);
+        return dict_setdefault_value_lock_held((PyDictObject *)op, key_in,
+                                               value_in, hash, result);
     }
-    else if (PyValue_IsObject(key)) {
+    if (PyValue_IsObject(key_in)) {
         // Only an object can fail to hash.
-        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(key));
+        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(key_in));
     }
-    PyValue_XCLOSE(value);
-    PyValue_XCLOSE(key);
-    return status;
+    return -1;
 }
 
 static int
@@ -4756,11 +4708,8 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
         }
         return -1;
     }
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
-    PyValue fallback = PyValue_DUP(PyValue_FromObjectBorrow(default_value));
-    if (result != NULL) {
-        Py_INCREF(default_value);
-    }
+    PyValueBorrow query = PyValue_FromObjectBorrow(key);
+    PyValueBorrow fallback = PyValue_FromObjectBorrow(default_value);
     PyObject *object = NULL;
     PyValue output = PyValue_NULL;
     int status = -1;
@@ -4774,8 +4723,7 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
     }
     if (status == 0 && result != NULL) {
         /* The inserted value is the supplied default object. */
-        object = default_value;
-        default_value = NULL;
+        object = Py_NewRef(default_value);
     }
     else if (status == 1 && result != NULL) {
         object = _PyValue_AsObjectFor(output, at);
@@ -4784,12 +4732,8 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
         }
     }
     PyValue_XCLOSE(output);
-    PyValue_XCLOSE(fallback);
-    PyValue_XCLOSE(query);
-    if (result != NULL) {
-        Py_XDECREF(default_value);
-    }
     if (status < 0) {
+
         Py_XDECREF(object);
         return -1;
     }
@@ -5251,11 +5195,10 @@ PyDict_ContainsString(PyObject *op, const char *key)
 int
 _PyDict_Contains_KnownHash(PyObject *op, PyObject *key, Py_hash_t hash)
 {
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
     PyValue value = PyValue_NULL;
-    int status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
+    int status = _PyDict_GetValue_KnownHash((PyDictObject *)op, PyValue_FromObjectBorrow(key),
+                                            hash, &value);
     PyValue_XCLOSE(value);
-    PyValue_XCLOSE(query);
     return status;
 }
 
@@ -5766,27 +5709,15 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
 
 /* The value slot of the six dict iterator types. The reversed iterators
  * run under the dict's critical section, as their object slot did. */
+enum { DICTITER_KEYS, DICTITER_VALUES, DICTITER_ITEMS };
+
 static _PyStatusValue
-dictiter_next_value_impl(PyObject *self)
+dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
+                         int kind, int reverse)
 {
-    int keys = Py_IS_TYPE(self, &PyDictIterKey_Type) ||
-               Py_IS_TYPE(self, &PyDictRevIterKey_Type);
-    int values = Py_IS_TYPE(self, &PyDictIterValue_Type) ||
-                 Py_IS_TYPE(self, &PyDictRevIterValue_Type);
-    int items = Py_IS_TYPE(self, &PyDictIterItem_Type) ||
-                Py_IS_TYPE(self, &PyDictRevIterItem_Type);
-    int reverse = Py_IS_TYPE(self, &PyDictRevIterKey_Type) ||
-                  Py_IS_TYPE(self, &PyDictRevIterValue_Type) ||
-                  Py_IS_TYPE(self, &PyDictRevIterItem_Type);
-    if (!keys && !values && !items) {
-        PyErr_BadInternalCall();
-        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
-    }
-    dictiterobject *di = (dictiterobject *)self;
-    PyDictObject *d = di->di_dict;
-    if (d == NULL) {
-        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
-    }
+    int keys = kind == DICTITER_KEYS;
+    int values = kind == DICTITER_VALUES;
+    int items = kind == DICTITER_ITEMS;
     PyValue key = PyValue_NULL, value = PyValue_NULL;
     int found;
     if (items && !reverse) {
@@ -5815,28 +5746,42 @@ dictiter_next_value_impl(PyObject *self)
     return (_PyStatusValue){PYGEN_NEXT, keys ? key : value};
 }
 
-static _PyStatusValue
-dictiter_next_value(PyObject *self)
+/* Each iterator type has its own slot, so its kind is a constant, as in
+   upstream's one function per kind. */
+static inline _PyStatusValue
+dictiter_next_value(PyObject *self, int kind, int reverse)
 {
     dictiterobject *di = (dictiterobject *)self;
     PyDictObject *d = di->di_dict;
     if (d == NULL) {
         return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
-    if (!(Py_IS_TYPE(self, &PyDictRevIterKey_Type) ||
-          Py_IS_TYPE(self, &PyDictRevIterValue_Type) ||
-          Py_IS_TYPE(self, &PyDictRevIterItem_Type))) {
-        return dictiter_next_value_impl(self);
+    if (!reverse) {
+        return dictiter_next_value_impl(self, di, d, kind, 0);
     }
     _PyStatusValue result;
     Py_BEGIN_CRITICAL_SECTION(d);
-    result = dictiter_next_value_impl(self);
+    result = dictiter_next_value_impl(self, di, d, kind, 1);
     Py_END_CRITICAL_SECTION();
     return result;
 }
 
 /* A failed box or pair allocation consumes the entry (see listiter_next()). */
-_Py_VALUE_THUNK_ITERNEXT(dictiter_object_next, dictiter_next_value)
+#define DICTITER_NEXT(NAME, KIND, REVERSE) \
+    static _PyStatusValue \
+    NAME##_value(PyObject *self) \
+    { \
+        return dictiter_next_value(self, (KIND), (REVERSE)); \
+    } \
+    _Py_VALUE_THUNK_ITERNEXT(NAME, NAME##_value)
+
+DICTITER_NEXT(dictiter_next_key, DICTITER_KEYS, 0)
+DICTITER_NEXT(dictiter_next_val, DICTITER_VALUES, 0)
+DICTITER_NEXT(dictiter_next_item, DICTITER_ITEMS, 0)
+DICTITER_NEXT(dictreviter_next_key, DICTITER_KEYS, 1)
+DICTITER_NEXT(dictreviter_next_val, DICTITER_VALUES, 1)
+DICTITER_NEXT(dictreviter_next_item, DICTITER_ITEMS, 1)
+#undef DICTITER_NEXT
 
 PyTypeObject PyDictIterKey_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -5866,11 +5811,11 @@ PyTypeObject PyDictIterKey_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_object_next,                       /* tp_iternext */
+    dictiter_next_key,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_key_value),
     },
 };
 
@@ -5903,11 +5848,11 @@ PyTypeObject PyDictIterValue_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_object_next,                       /* tp_iternext */
+    dictiter_next_val,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_val_value),
     },
 };
 
@@ -5957,11 +5902,11 @@ PyTypeObject PyDictIterItem_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_object_next,                       /* tp_iternext */
+    dictiter_next_item,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_item_value),
     },
 };
 
@@ -5976,9 +5921,9 @@ PyTypeObject PyDictRevIterKey_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictiter_object_next,
+    .tp_iternext = dictreviter_next_key,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictreviter_next_key_value),
     },
     .tp_methods = dictiter_methods
 };
@@ -6021,9 +5966,9 @@ PyTypeObject PyDictRevIterItem_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictiter_object_next,
+    .tp_iternext = dictreviter_next_item,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictreviter_next_item_value),
     },
     .tp_methods = dictiter_methods
 };
@@ -6036,9 +5981,9 @@ PyTypeObject PyDictRevIterValue_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictiter_object_next,
+    .tp_iternext = dictreviter_next_val,
     .tp_value = {
-        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictreviter_next_val_value),
     },
     .tp_methods = dictiter_methods
 };
@@ -6420,13 +6365,12 @@ dictitems_xor_lock_held(PyObject *d1, PyObject *d2)
         Py_XDECREF(temp_dict);
         return NULL;
     }
-    Py_INCREF(d2);
     PyValue key = PyValue_NULL, val1 = PyValue_NULL, val2 = PyValue_NULL;
     Py_ssize_t pos = 0;
     Py_hash_t hash;
     int found;
     while ((found = _PyDict_NextValue(d2, &pos, &key, &val2, &hash)) > 0) {
-        int present = _PyDict_GetValue_KnownHash(temp_dict, key, hash, &val1);
+        int present = _PyDict_GetValue_KnownHash((PyDictObject *)temp_dict, key, hash, &val1);
         if (present < 0) {
             goto error;
         }
@@ -6473,7 +6417,6 @@ dictitems_xor_lock_held(PyObject *d1, PyObject *d2)
         goto error;
     }
     Py_XDECREF(temp_dict);
-    Py_XDECREF(d2);
     return result_set;
 error:
     PyValue_XCLOSE(key);
@@ -6481,7 +6424,6 @@ error:
     PyValue_XCLOSE(val2);
     Py_XDECREF(temp_dict);
     Py_XDECREF(result_set);
-    Py_XDECREF(d2);
     return NULL;
 }
 
@@ -6694,14 +6636,16 @@ dictitems_contains_value(PyObject *self, PyValueBorrow obj)
     if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
         return 0;
     }
-    PyObject *dict = Py_NewRef((PyObject *)dv->dv_dict);
-    PyValue key = PyValue_DUP(PyTuple_GET_VALUE(item, 0));
-    PyValue value = PyValue_DUP(PyTuple_GET_VALUE(item, 1));
+    /* The caller owns the view and the tuple; the view's dictionary and the
+     * tuple's items stay in place for the call, as upstream. */
+    PyObject *dict = (PyObject *)dv->dv_dict;
+    PyValueBorrow key = PyValue_Borrow(PyTuple_GET_VALUE(item, 0));
+    PyValueBorrow value = PyValue_Borrow(PyTuple_GET_VALUE(item, 1));
     PyValue found = PyValue_NULL;
     Py_hash_t hash = _PyValue_Hash(key);
     int result = -1;
     if (hash != -1) {
-        result = _PyDict_GetValue_KnownHash(dict, key, hash, &found);
+        result = _PyDict_GetValue_KnownHash((PyDictObject *)dict, key, hash, &found);
         if (result == 1) {
             result = _PyValue_RichCompareBool(found, value, Py_EQ);
         }
@@ -6710,12 +6654,10 @@ dictitems_contains_value(PyObject *self, PyValueBorrow obj)
         dict_unhashable_type(dict, PyValue_AsKnownObjectBorrow(key));
     }
     PyValue_XCLOSE(found);
-    PyValue_XCLOSE(key);
-    PyValue_XCLOSE(value);
-    Py_XDECREF(dict);
     return result;
 }
 _Py_VALUE_THUNK_CONTAINS(dictitems_contains, dictitems_contains_value)
+
 
 static PySequenceMethods dictitems_as_sequence = {
     dictview_len,                       /* sq_length */
@@ -7000,7 +6942,6 @@ shape_after_delete(PyTypeObject *tp, PyDictValues *values)
 PyDictKeysObject *
 _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
 {
-    Py_INCREF(cls);
     int log2_bytes = get_log2_bytes(NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
     Py_ssize_t usable = USABLE_FRACTION((size_t)1 << NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
     struct _instancekeysobject *shared = PyMem_Malloc(sizeof(*shared) +
@@ -7027,7 +6968,7 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
     if (cls->ht_type.tp_dict != NULL) {
         Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(__static_attributes__)));
         int found = hash == -1 ? -1 : _PyDict_GetValue_KnownHash(
-            cls->ht_type.tp_dict, PyValue_FromObjectBorrow(&_Py_ID(__static_attributes__)),
+            (PyDictObject *)cls->ht_type.tp_dict, PyValue_FromObjectBorrow(&_Py_ID(__static_attributes__)),
             hash, &attrs);
         if (found < 0) {
             goto failed;
@@ -7067,7 +7008,6 @@ failed:
     keys = NULL;
 done:
     PyValue_XCLOSE(attrs);
-    Py_XDECREF((PyObject *)cls);
     if (keys == NULL) {
         /* This optional metadata constructor reports failure by NULL
          * without an exception, as upstream's does. */
@@ -7240,7 +7180,7 @@ _PyDict_SetValue_LockHeld(PyDictObject *dict, PyObject *name,
 // depending on whether or not a dict has been materialized for
 // the object.
 static int
-store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValue value)
+store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValueBorrow value)
 {
     for (;;) {
         PyDictObject *dict = _PyObject_GetManagedDict(obj);
@@ -7328,14 +7268,7 @@ int
 {
     assert(_PyValue_IsHome(value));
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
-    Py_INCREF(obj);
-    Py_INCREF(name);
-    PyValue owner = PyValue_XDUP(value);
-    int status = store_instance_attr_lock_held(obj, name, owner);
-    PyValue_XCLOSE(owner);
-    Py_XDECREF(name);
-    Py_XDECREF(obj);
-    return status;
+    return store_instance_attr_lock_held(obj, name, value);
 }
 
 int
@@ -7685,7 +7618,6 @@ ensure_nonmanaged_dict(PyObject *obj, PyObject **dictptr)
 PyObject *
 PyObject_GenericGetDict(PyObject *obj, void *context)
 {
-    Py_INCREF(obj);
     PyObject *dict;
     if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         dict = ensure_managed_dict(obj);
@@ -7700,10 +7632,7 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
             dict = ensure_nonmanaged_dict(obj, pointer);
         }
     }
-    /* Acquire the outward owner while obj still roots the borrowed dict. */
-    Py_XINCREF(dict);
-    Py_XDECREF(obj);
-    return dict;
+    return Py_XNewRef(dict);
 }
 
 int
@@ -7878,9 +7807,8 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
                   PyDictObject *mp, PyValueBorrow key, PyValueBorrow value)
 {
     /* As upstream, a callback can be called with an exception pending and
-     * must leave it pending (PyDict_WatchCallback). */
-    PyValue key_owner = PyValue_XDUP(key);
-    PyValue value_owner = PyValue_XDUP(value);
+     * must leave it pending (PyDict_WatchCallback). Every caller owns key
+     * and value across the callbacks, as upstream. */
     PyInterpreterState *interp = _PyInterpreterState_GET();
     /* mp follows the existing metadata/resurrection protocol. In particular,
      * DEALLOCATED must not acquire an ordinary owner of a refcount-zero dict. */
@@ -7888,9 +7816,7 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
         if (watcher_bits & 1) {
             PyDict_WatchCallback cb = interp->dict_state.watchers[i];
             if (cb != NULL) {
-                int status = cb(event, (PyObject *)mp,
-                                PyValue_Borrow(key_owner),
-                                PyValue_Borrow(value_owner));
+                int status = cb(event, (PyObject *)mp, key, value);
                 if (status < 0) {
                     PyErr_FormatUnraisable(
                         "Exception ignored in %s watcher callback for <dict at %p>",
@@ -7900,8 +7826,6 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
         }
         watcher_bits >>= 1;
     }
-    PyValue_XCLOSE(value_owner);
-    PyValue_XCLOSE(key_owner);
 }
 
 #ifndef NDEBUG

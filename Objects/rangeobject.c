@@ -1332,40 +1332,35 @@ longrange_iterator___setstate___impl(longrangeiterobject *r,
         return PyValue_NULL;
     }
 
-    PyValue index = PyValue_DUP(state);
+    /* index borrows state (owned by the caller), r->len (replaced only
+     * below, after its last use) or the immediate 0. */
+    PyValueBorrow index = state;
     int cmp = _PyValue_RichCompareBool(index, PyValue_FromInt64(0), Py_LT);
     if (cmp < 0) {
-        PyValue_CLOSE(index);
         return PyValue_NULL;
     }
     if (cmp > 0) {
-        PyValue_CLOSE(index);
-        index = PyValue_FromInt64(0);
+        index = PyValue_Borrow(PyValue_FromInt64(0));
     }
     else {
         cmp = _PyValue_RichCompareBool(r->len, index, Py_LT);
         if (cmp < 0) {
-            PyValue_CLOSE(index);
             return PyValue_NULL;
         }
         if (cmp > 0) {
-            PyValue_CLOSE(index);
-            index = PyValue_DUP(r->len);
+            index = PyValue_Borrow(r->len);
         }
     }
     PyValue product = _PyValue_Multiply(index, r->step);
     if (PyValue_IsNull(product)) {
-        PyValue_CLOSE(index);
         return PyValue_NULL;
     }
     PyValue new_start = _PyValue_Add(r->start, product);
     PyValue_CLOSE(product);
     if (PyValue_IsNull(new_start)) {
-        PyValue_CLOSE(index);
         return PyValue_NULL;
     }
     PyValue new_len = _PyValue_Subtract(r->len, index);
-    PyValue_CLOSE(index);
     if (PyValue_IsNull(new_len)) {
         PyValue_CLOSE(new_start);
         return PyValue_NULL;

@@ -1484,7 +1484,7 @@ infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwd
         return NULL;
     }
     PyValue cached = PyValue_NULL;
-    int res = _PyDict_GetValue_KnownHash(self->cache, PyValue_FromObjectBorrow(key), hash, &cached);
+    int res = _PyDict_GetValue_KnownHash((PyDictObject *)self->cache, PyValue_FromObjectBorrow(key), hash, &cached);
     if (res > 0) {
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
         Py_DECREF(key);

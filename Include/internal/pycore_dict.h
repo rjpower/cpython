@@ -88,7 +88,7 @@ extern PyObject* _PyDictView_Intersect(PyObject* self, PyObject *other);
  * The output is NULL1 on absence/error; caller owns any prior output contents.
  * Like PyDict_GetItemRef(), a lookup whose keys run no Python succeeds with
  * an unrelated exception pending and leaves it pending. */
-PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValueBorrow, Py_hash_t, PyValue *);
+PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyDictObject *, PyValueBorrow, Py_hash_t, PyValue *);
 #define _PyDict_GetValue_KnownHash(D, K, H, R) \
     (_PyDict_GetValue_KnownHash)(D, PyValue_Borrow(K), H, R)
 
@@ -108,6 +108,18 @@ PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
     (PyDict_SetValue)(D, PyValue_Borrow(K), PyValue_Borrow(V))
 #define PyDict_DelValue(D, K) (PyDict_DelValue)(D, PyValue_Borrow(K))
 #define PyDict_ContainsValue(D, K) (PyDict_ContainsValue)(D, PyValue_Borrow(K))
+/* The same operations for a caller that has proven the container: a dict or
+ * frozendict for the readers, a dict for SetValue and DelValue, with a
+ * language-value key. They assert what the public entries test. */
+PyAPI_FUNC(int) _PyDict_GetValue(PyDictObject *, PyValueBorrow, PyValue *);
+PyAPI_FUNC(int) _PyDict_SetValue(PyDictObject *, PyValueBorrow, PyValueBorrow);
+PyAPI_FUNC(int) _PyDict_DelValue(PyDictObject *, PyValueBorrow);
+PyAPI_FUNC(int) _PyDict_ContainsValue(PyDictObject *, PyValueBorrow);
+#define _PyDict_GetValue(D, K, R) (_PyDict_GetValue)(D, PyValue_Borrow(K), R)
+#define _PyDict_SetValue(D, K, V) \
+    (_PyDict_SetValue)(D, PyValue_Borrow(K), PyValue_Borrow(V))
+#define _PyDict_DelValue(D, K) (_PyDict_DelValue)(D, PyValue_Borrow(K))
+#define _PyDict_ContainsValue(D, K) (_PyDict_ContainsValue)(D, PyValue_Borrow(K))
 /* As PyDict_Pop(): 1 with the removed value as an owner in *result (which may
  * be NULL), 0 if absent, -1 with an exception. */
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValueBorrow, PyValue *);

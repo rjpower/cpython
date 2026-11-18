@@ -24,9 +24,9 @@
 /* The port of PyObject_Hash(), whose value is an object: an inline value is
    an exact int or float, which _PyValue_Hash() hashes by R-inline. */
 static Py_hash_t
-hash_object_value(PyValueBorrow value)
+hash_object_value(PyObject *op, PyValueBorrow value)
 {
-    PyTypeObject *tp = PyValue_TYPE(value);
+    PyTypeObject *tp = Py_TYPE(op);
     int row = _Py_VALUE_SLOT_INDEX_hash;
     if (tp->tp_hash == NULL) {
         /* To keep to the general practice that inheriting
@@ -50,19 +50,30 @@ hash_object_value(PyValueBorrow value)
         _PyType_CHECK_VALUE_ROW(tp, row);
         return f(value);
     }
-    return tp->tp_hash(PyValue_AsKnownObjectBorrow(value));
+    return tp->tp_hash(op);
+}
+
+static _Py_COLD_FUNCTION Py_NO_INLINE Py_hash_t
+hash_inline_float(PyValueBorrow value)
+{
+    if (PyValue_IsInlineFloat(value)) {
+        return _PyFloat_ValueHash(value);
+    }
+    _PyValue_FatalNotObject(value);
 }
 
 Py_hash_t
 (_PyValue_Hash)(PyValueBorrow value)
 {
+    if (PyValue_IsPointerSpace(value)) {
+        return hash_object_value(BITS_TO_PTR_MASKED(value), value);
+    }
+    /* Inline int keys are common (ids, counters, indexes), so their hash
+       stays inline; an inline float key is rare. */
     if (PyValue_IsInlineInt(value)) {
         return _PyLong_ValueHash(value);
     }
-    if (PyValue_IsInlineFloat(value)) {
-        return _PyFloat_ValueHash(value);
-    }
-    return hash_object_value(value);
+    return hash_inline_float(value);
 }
 
 // The full dispatch and the truth of its result: kept out of line, so that

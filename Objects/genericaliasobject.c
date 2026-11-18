@@ -434,14 +434,12 @@ _unpack_args(PyObject *item)
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
     for (Py_ssize_t i = 0; i < nitems; i++) {
-        PyObject *arg;
+        /* The caller owns item; a tuple item is owned through its box. */
+        PyObject *arg = item, *arg_owner = NULL;
         if (is_tuple) {
             PyValue v = PyTuple_GetValue(item, i);
-            arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+            arg = arg_owner = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
             PyValue_XCLOSE(v);
-        }
-        else {
-            arg = Py_NewRef(item);
         }
         if (arg == NULL) {
             Py_DECREF(newargs);
@@ -457,7 +455,7 @@ _unpack_args(PyObject *item)
             {
                 int rc = PyList_SetSlice(newargs, PY_SSIZE_T_MAX, PY_SSIZE_T_MAX, subargs);
                 Py_DECREF(subargs);
-                Py_DECREF(arg);
+                Py_XDECREF(arg_owner);
                 if (rc < 0) {
                     Py_DECREF(newargs);
                     return NULL;
@@ -466,13 +464,13 @@ _unpack_args(PyObject *item)
             }
             Py_XDECREF(subargs);
             if (PyErr_Occurred()) {
-                Py_DECREF(arg);
+                Py_XDECREF(arg_owner);
                 Py_DECREF(newargs);
                 return NULL;
             }
         }
         int rc = PyList_AppendValue(newargs, PyValue_FromObjectBorrow(arg));
-        Py_DECREF(arg);
+        Py_XDECREF(arg_owner);
         if (rc < 0) {
             Py_DECREF(newargs);
             return NULL;

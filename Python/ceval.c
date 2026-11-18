@@ -429,7 +429,8 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     // - Don't cause key creation or resizing in dict subclasses like
     //   collections.defaultdict that define __missing__ (or similar).
     PyValue get = PyValue_NULL;
-    PyValue map_v = PyValue_DUP(PyValue_FromObjectBorrow(map));
+    /* The caller owns map and keys; dummy is owned here. */
+    PyValueBorrow map_v = PyValue_FromObjectBorrow(map);
     _PyStatusValue found = _PyValue_GetMethod(map_v, &_Py_ID(get));
     if (found.status < 0) {
         goto fail;
@@ -468,7 +469,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         PyValue value;
         if (PyDict_CheckExact(map)) {
             // dict.get(key, dummy) without the call
-            int r = PyDict_GetValue(map, key_v, &value);
+            int r = _PyDict_GetValue((PyDictObject *)map, key_v, &value);
             if (r < 0) {
                 goto fail;
             }
@@ -480,14 +481,13 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             }
         }
         else {
-            PyValue k = PyValue_DUP(key_v);
-            PyValue dummy_v = PyValue_DUP(PyValue_FromObjectBorrow(dummy));
-            PyValue args[] = { map_v, k, dummy_v };
+            PyValue args[3];
+            _PyValue_WindowPut(&args[0], map_v);
+            _PyValue_WindowPut(&args[1], key_v);
+            _PyValue_WindowPut(&args[2], PyValue_FromObjectBorrow(dummy));
             value = has_self
                 ? _PyValue_Vectorcall(get, args, 3, NULL)
                 : _PyValue_Vectorcall(get, &args[1], 2, NULL);
-            PyValue_CLOSE(k);
-            PyValue_CLOSE(dummy_v);
             if (PyValue_IsNull(value)) {
                 goto fail;
             }
@@ -505,14 +505,12 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     // Success:
 done:
     PyValue_CLOSE(get);
-    PyValue_CLOSE(map_v);
     Py_DECREF(seen);
     Py_DECREF(dummy);
     Py_XDECREF(key);
     return values;
 fail:
     PyValue_XCLOSE(get);
-    PyValue_XCLOSE(map_v);
     Py_XDECREF(seen);
     Py_XDECREF(dummy);
     Py_XDECREF(values);
@@ -558,9 +556,7 @@ PyObject*
     }
     assert(PyTuple_CheckExact(kwargs));
     // First, an isinstance check:
-    PyValue type_value = PyValue_DUP(PyValue_FromObjectBorrow(type));
-    int isinstance = _PyEval_IsInstanceValue(subject, type_value);
-    PyValue_CLOSE(type_value);
+    int isinstance = _PyEval_IsInstanceValue(subject, PyValue_FromObjectBorrow(type));
     if (isinstance <= 0) {
         return NULL;
     }
@@ -908,11 +904,11 @@ value_import_level(PyValue level)
 static PyValue
 value_subscript(PyValue container, PyValue key)
 {
-    if (PyValue_IsObject(container)) {
-        PyObject *o = PyValue_AsKnownObjectBorrow(container);
+    PyObject *o = PyValue_ObjectOrNull(container);
+    if (o != NULL) {
         if (PyAnyDict_CheckExact(o)) {
             PyValue result = PyValue_NULL;
-            int found = PyDict_GetValue(o, key, &result);
+            int found = _PyDict_GetValue((PyDictObject *)o, key, &result);
             if (found != 0) {
                 return result;
             }
@@ -1193,7 +1189,7 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
 
     if (PyDict_CheckExact(ns)) {
         // PyDict_SetItem() with the value as it is: an inline value needs no box.
-        return PyDict_SetValue(ns, PyValue_FromObjectBorrow(name), v);
+        return _PyDict_SetValue((PyDictObject *)ns, PyValue_FromObjectBorrow(name), v);
     }
     return _PyValue_SetItem(PyValue_FromObjectBorrow(ns),
                             PyValue_FromObjectBorrow(name), v);
@@ -3182,7 +3178,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 goto kw_fail;
             }
 
-            int err = PyDict_SetValue(kwdict, PyValue_FromObjectBorrow(keyword),
+            int err = _PyDict_SetValue((PyDictObject *)kwdict, PyValue_FromObjectBorrow(keyword),
                                       value_value);
             if (err == -1) {
                 goto kw_fail;
@@ -3256,10 +3252,16 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 continue;
             PyObject *varname = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
             if (func->func_kwdefaults != NULL) {
+                /* A stored key's __eq__ can replace __kwdefaults__; the
+                 * lookup borrows its dictionary, so pin it here. */
+                PyObject *kwdefs = Py_NewRef(func->func_kwdefaults);
                 PyValue def;
-                int found = PyDict_GetValue(func->func_kwdefaults,
+                /* Public entry: PyEval_EvalCodeEx() stores its kwdefs
+                 * argument unchecked, and a non-dict raises SystemError. */
+                int found = PyDict_GetValue(kwdefs,
                                             PyValue_FromObjectBorrow(varname),
                                             &def);
+                Py_DECREF(kwdefs);
                 if (found < 0) {
                     goto fail_post_args;
                 }
@@ -5277,8 +5279,8 @@ get_globals_builtins(PyObject *globals)
     PyObject *builtins = NULL;
     if (PyAnyDict_Check(globals)) {
         PyValue builtins_v;
-        int found = PyDict_GetValue(
-            globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
+        int found = _PyDict_GetValue(
+            (PyDictObject *)globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
             &builtins_v);
         if (found < 0) {
             return NULL;
@@ -6427,8 +6429,9 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
         return found.value;
     }
     namespace = frame->f_globals;
-    found.status = PyDict_GetValue(namespace, PyValue_FromObjectBorrow(name),
-                                   &found.value);
+    found.status = _PyDict_GetValue((PyDictObject *)namespace,
+                                    PyValue_FromObjectBorrow(name),
+                                    &found.value);
     if (found.status < 0) {
         return PyValue_NULL;
     }

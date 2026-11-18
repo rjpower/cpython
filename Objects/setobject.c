@@ -666,34 +666,28 @@ set_add_key(PySetObject *so, PyObject *key)
 }
 
 static int
-(set_contains_value)(PySetObject *so, PyValueBorrow borrowed)
+(set_contains_value)(PySetObject *so, PyValueBorrow key)
 {
-    PyValue key = PyValue_XDUP(borrowed);
+    /* The caller owns key for the whole call, as upstream. */
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(key);
-        PyValue_XCLOSE(key);
         return -1;
     }
-    int result = set_contains_entry(so, key, hash);
-    PyValue_XCLOSE(key);
-    return result;
+    return set_contains_entry(so, key, hash);
 }
 #define set_contains_value(S, K) (set_contains_value)(S, PyValue_Borrow(K))
 
 static int
-(set_discard_value)(PySetObject *so, PyValueBorrow borrowed)
+(set_discard_value)(PySetObject *so, PyValueBorrow key)
 {
-    PyValue key = PyValue_XDUP(borrowed);
+    /* The caller owns key for the whole call, as upstream. */
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(key);
-        PyValue_XCLOSE(key);
         return -1;
     }
-    int result = set_discard_entry(so, key, hash);
-    PyValue_XCLOSE(key);
-    return result;
+    return set_discard_entry(so, key, hash);
 }
 #define set_discard_value(S, K) (set_discard_value)(S, PyValue_Borrow(K))
 
@@ -2312,7 +2306,7 @@ set_difference_untracked(PySetObject *so, PyObject *other)
             key = PyValue_DUP(entry->key);
             hash = entry->hash;
             PyValue found;
-            rv = _PyDict_GetValue_KnownHash(other, key, hash, &found);
+            rv = _PyDict_GetValue_KnownHash((PyDictObject *)other, key, hash, &found);
             if (!PyValue_IsNull(found)) {
                 PyValue_XCLOSE(found);
             }

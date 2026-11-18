@@ -316,9 +316,9 @@ void
     _PyErr_Clear(tstate);
 
     // The args tuple holds the word: an inline key is not boxed.
-    PyValue key = PyValue_DUP(arg);
+    PyValue key;
+    _PyValue_WindowPut(&key, arg);
     PyObject *args = _PyTuple_FromValueArray(&key, 1);
-    PyValue_CLOSE(key);
     if (args == NULL) {
         return;
     }

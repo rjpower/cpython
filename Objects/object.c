@@ -1764,7 +1764,10 @@ _PyStatusValue
 {
     _PyStatusValue r = {-1, PyValue_NULL};
     PyValue descriptor = PyValue_NULL;
-    PyTypeObject *tp = PyValue_TYPE(v);
+    /* One test of the receiver; an inline receiver has no instance
+       attributes. */
+    PyObject *obj = PyValue_ObjectOrNull(v);
+    PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(v);
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
         goto done;
@@ -1777,8 +1780,7 @@ _PyStatusValue
         goto done;
     }
     (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
-    PyObject *descr = PyValue_IsObject(descriptor) ?
-        PyValue_AsKnownObjectBorrow(descriptor) : NULL;
+    PyObject *descr = PyValue_ObjectOrNull(descriptor);
     int has_get = descr != NULL && Py_TYPE(descr)->tp_descr_get != NULL;
     bool method_descriptor = descr != NULL &&
         _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR);
@@ -1787,8 +1789,6 @@ _PyStatusValue
         r.status = PyValue_IsNull(r.value) ? -1 : 0;
         goto done;
     }
-    // An inline value has no instance attributes.
-    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
     PyValue attr = PyValue_NULL;
     int handled = (obj != NULL && (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) ?
         _PyObject_TryGetInstanceValue(obj, name, &attr) : 0;
@@ -1811,7 +1811,7 @@ _PyStatusValue
     }
     if (dict != NULL) {
         Py_INCREF(dict);
-        int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &attr);
+        int found = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &attr);
         Py_DECREF(dict);
         if (found < 0) {
             PyValue_XCLOSE(attr);
@@ -1922,8 +1922,10 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
        this method.
     */
 
-    PyTypeObject *tp = PyValue_TYPE(v);
-    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
+    /* One test of the receiver; an inline receiver has no instance
+       attributes. */
+    PyObject *obj = PyValue_ObjectOrNull(v);
+    PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(v);
     PyObject *descr = NULL;
     PyValue res = PyValue_NULL;
     int has_get = 0;
@@ -1947,7 +1949,7 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_ObjectOrNull(cref.ref);
 
     if (descr != NULL) {
         has_get = Py_TYPE(descr)->tp_descr_get != NULL;
@@ -2014,7 +2016,7 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     }
     if (dict != NULL) {
         Py_INCREF(dict);
-        int rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &res);
+        int rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &res);
         /* Suppress the lookup's AttributeError before retirement, so a
          * later cleanup failure remains an error. */
         if (rc < 0 && PyValue_IsNull(res) && suppress &&
@@ -2118,7 +2120,7 @@ int
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_ObjectOrNull(cref.ref);
 
     if (descr != NULL && Py_TYPE(descr)->tp_descr_set != NULL) {
         res = (_PyValue_DescrSet)(descr, v, value);
@@ -2173,9 +2175,9 @@ int
     else {
         owned_dict = Py_NewRef(dict);
         if (PyValue_IsNull(value))
-            res = PyDict_DelValue(dict, PyValue_FromObjectBorrow(name));
+            res = _PyDict_DelValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name));
         else
-            res = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), value);
+            res = _PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), value);
     }
   error_check:
     if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
@@ -3234,7 +3236,8 @@ _PyObject_DebugTypeStats(FILE *out)
 int
 Py_ReprEnter(PyObject *obj)
 {
-    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
+    /* The caller owns obj; the thread-state dict lives as long as the thread. */
+    PyValueBorrow value = PyValue_FromObjectBorrow(obj);
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *candidate = NULL;
@@ -3246,13 +3249,12 @@ Py_ReprEnter(PyObject *obj)
         result = 0;
         goto done;
     }
-    Py_INCREF(dict);
     PyValueBorrow name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
     Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
     if (hash == -1) {
         goto done;
     }
-    int found = _PyDict_GetValue_KnownHash(dict, name, hash, &guard);
+    int found = _PyDict_GetValue_KnownHash((PyDictObject *)dict, name, hash, &guard);
     if (found < 0) {
         goto done;
     }
@@ -3286,8 +3288,6 @@ done:
     Py_CLEAR(candidate);
     Py_CLEAR(list);
     PyValue_XCLOSE(guard);
-    Py_CLEAR(dict);
-    PyValue_CLOSE(value);
     return result;
 }
 
@@ -3295,15 +3295,15 @@ void
 Py_ReprLeave(PyObject *obj)
 {
     PyObject *exc = PyErr_GetRaisedException();
-    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
+    /* The caller owns obj; the thread-state dict lives as long as the thread. */
+    PyValueBorrow value = PyValue_FromObjectBorrow(obj);
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *dict = PyThreadState_GetDict();
     if (dict == NULL)
         goto finally;
-    Py_INCREF(dict);
     Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
-    if (hash == -1 || _PyDict_GetValue_KnownHash(dict,
+    if (hash == -1 || _PyDict_GetValue_KnownHash((PyDictObject *)dict,
             PyValue_FromObjectBorrow(&_Py_ID(Py_Repr)), hash, &guard) <= 0) {
         goto finally;
     }
@@ -3324,8 +3324,6 @@ Py_ReprLeave(PyObject *obj)
 finally:
     Py_XDECREF(list);
     PyValue_XCLOSE(guard);
-    Py_XDECREF(dict);
-    PyValue_CLOSE(value);
     /* ignore exceptions because there is no way to report them. */
     PyErr_SetRaisedException(exc);
 }

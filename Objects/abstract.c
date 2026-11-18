@@ -444,13 +444,11 @@ PyObject_GetItem(PyObject *o, PyObject *key)
 _PyStatusValue
 (_PyValue_GetOptionalItem)(PyValueBorrow v, PyValueBorrow key)
 {
-    if (PyValue_IsObject(v)
-        && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(v)))
-    {
+    PyObject *o = PyValue_ObjectOrNull(v);
+    if (o != NULL && PyAnyDict_CheckExact(o)) {
         // The entry's word, unboxed.
         PyValue item;
-        int found = PyDict_GetValue(PyValue_AsKnownObjectBorrow(v), key,
-                                    &item);
+        int found = _PyDict_GetValue((PyDictObject *)o, key, &item);
         return (_PyStatusValue){found, found > 0 ? item : PyValue_NULL};
     }
 
@@ -499,8 +497,8 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
         /* The exact dict and list stores and deletions that take the key
            and value as they are: no box of an inline key or value. */
         if (PyDict_CheckExact(o)) {
-            return deleting ? PyDict_DelValue(o, key)
-                            : PyDict_SetValue(o, key, value);
+            return deleting ? _PyDict_DelValue((PyDictObject *)o, key)
+                            : _PyDict_SetValue((PyDictObject *)o, key, value);
         }
         if (!deleting && PyList_CheckExact(o) && PyValue_IsInlineInt(key)) {
             Py_ssize_t index = PyValue_InlineInt64(key);
@@ -3649,7 +3647,9 @@ abstract_get_bases(PyObject *cls)
 static int
 abstract_issubclass(PyObject *derived, PyObject *cls)
 {
-    PyObject *selected = Py_NewRef(derived);
+    /* The caller owns derived; only the single-base walk owns its step. */
+    PyObject *selected = derived;
+    PyObject *selected_owner = NULL;
     PyObject *bases = NULL;
     Py_ssize_t i, n;
     int r = 0;
@@ -3679,7 +3679,8 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
             }
             /* The selected child survives retirement of both the previous
              * selected object now and its containing tuple next iteration. */
-            Py_SETREF(selected, child);
+            Py_XSETREF(selected_owner, child);
+            selected = child;
             continue;
         }
         assert(n >= 2);
@@ -3703,9 +3704,10 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         _Py_LeaveRecursiveCall();
         break;
     }
-    Py_CLEAR(selected);
+    Py_XDECREF(selected_owner);
     Py_XDECREF(bases);
     return r;
+
 }
 
 static int
@@ -3798,13 +3800,10 @@ done:
 }
 
 /* isinstance() of an int or float, whose __class__ is its type. */
-static int
-object_isinstance_value(PyValueBorrow inst, PyObject *cls)
+static _Py_COLD_FUNCTION Py_NO_INLINE int
+object_isinstance_inline(PyValueBorrow inst, PyObject *cls)
 {
-    if (!PyValue_IsInline(inst)) {
-        return object_isinstance(PyValue_AsKnownObjectBorrow(inst), cls);
-    }
-    PyTypeObject *tp = PyValue_TYPE(inst);
+    PyTypeObject *tp = _PyValue_TypeNotPointer(inst);
     if (PyType_Check(cls)) {
         return PyType_IsSubtype(tp, (PyTypeObject *)cls);
     }
@@ -3812,6 +3811,16 @@ object_isinstance_value(PyValueBorrow inst, PyObject *cls)
         "isinstance() arg 2 must be a type, a tuple of types, or a union"))
         return -1;
     return abstract_issubclass((PyObject *)tp, cls);
+}
+
+static int
+object_isinstance_value(PyValueBorrow inst, PyObject *cls)
+{
+    PyObject *obj = PyValue_ObjectOrNull(inst);
+    if (obj != NULL) {
+        return object_isinstance(obj, cls);
+    }
+    return object_isinstance_inline(inst, cls);
 }
 
 static int

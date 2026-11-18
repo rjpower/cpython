@@ -2430,25 +2430,21 @@ oserror_format(PyValueBorrow error, PyValueBorrow message,
                PyValueBorrow filename, PyValueBorrow filename2,
                const char *prefix)
 {
-    PyValue error_owner = PyValue_XDUP(error);
-    PyValue message_owner = PyValue_XDUP(message);
-    PyValue file_owner = PyValue_XDUP(filename);
-    PyValue file2_owner = PyValue_XDUP(filename2);
     PyObject *error_str = NULL, *message_str = NULL;
     PyObject *file_repr = NULL, *file2_repr = NULL, *result = NULL;
-    if (PyValue_IsNull(file_owner)) {
-        PyValue_CLEAR(file2_owner);
+    if (PyValue_IsNull(filename)) {
+        filename2 = PyValue_Borrow(PyValue_NULL);
     }
-    error_str = _PyValue_Str(PyValue_IsNull(error_owner) ? PyValue_None : error_owner);
+    error_str = _PyValue_Str(PyValue_IsNull(error) ? PyValue_Borrow(PyValue_None) : error);
     if (error_str == NULL) goto done;
-    message_str = _PyValue_Str(PyValue_IsNull(message_owner) ? PyValue_None : message_owner);
+    message_str = _PyValue_Str(PyValue_IsNull(message) ? PyValue_Borrow(PyValue_None) : message);
     if (message_str == NULL) goto done;
-    if (!PyValue_IsNull(file_owner)) {
-        file_repr = _PyValue_Repr(file_owner);
+    if (!PyValue_IsNull(filename)) {
+        file_repr = _PyValue_Repr(filename);
         if (file_repr == NULL) goto done;
     }
-    if (!PyValue_IsNull(file2_owner)) {
-        file2_repr = _PyValue_Repr(file2_owner);
+    if (!PyValue_IsNull(filename2)) {
+        file2_repr = _PyValue_Repr(filename2);
         if (file2_repr == NULL) goto done;
     }
     if (file2_repr != NULL) {
@@ -2465,10 +2461,24 @@ done:
     Py_XDECREF(message_str);
     Py_XDECREF(file_repr);
     Py_XDECREF(file2_repr);
-    PyValue_XCLOSE(error_owner);
-    PyValue_XCLOSE(message_owner);
-    PyValue_XCLOSE(file_owner);
-    PyValue_XCLOSE(file2_owner);
+    return result;
+}
+
+/* The fields are read from the exception, which the str() and repr()
+   calls in oserror_format() can reassign, so they are passed as owners. */
+static PyObject *
+oserror_format_fields(PyValue error, PyValue message, PyValue filename,
+                      PyValue filename2, const char *prefix)
+{
+    PyValue owners[4] = {PyValue_XDUP(error), PyValue_XDUP(message),
+                         PyValue_XDUP(filename), PyValue_XDUP(filename2)};
+    PyObject *result = oserror_format(PyValue_Borrow(owners[0]),
+                                      PyValue_Borrow(owners[1]),
+                                      PyValue_Borrow(owners[2]),
+                                      PyValue_Borrow(owners[3]), prefix);
+    for (int i = 0; i < 4; i++) {
+        PyValue_XCLOSE(owners[i]);
+    }
     return result;
 }
 
@@ -2479,14 +2489,14 @@ OSError_str(PyObject *op)
 #ifdef MS_WINDOWS
     if (!PyValue_IsNull(self->winerror) &&
         (!PyValue_IsNull(self->filename) || !PyValue_IsNull(self->strerror))) {
-        return oserror_format(PyValue_Borrow(self->winerror), PyValue_Borrow(self->strerror),
-                              PyValue_Borrow(self->filename), PyValue_Borrow(self->filename2), "WinError");
+        return oserror_format_fields(self->winerror, self->strerror,
+                                     self->filename, self->filename2, "WinError");
     }
 #endif
     if (!PyValue_IsNull(self->filename) ||
         (!PyValue_IsNull(self->myerrno) && !PyValue_IsNull(self->strerror))) {
-        return oserror_format(PyValue_Borrow(self->myerrno), PyValue_Borrow(self->strerror),
-                              PyValue_Borrow(self->filename), PyValue_Borrow(self->filename2), "Errno");
+        return oserror_format_fields(self->myerrno, self->strerror,
+                                     self->filename, self->filename2, "Errno");
     }
     return BaseException_str(op);
 }

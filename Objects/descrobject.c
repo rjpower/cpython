@@ -1429,7 +1429,7 @@ mappingproxy_contains(PyObject *self, PyObject *key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     if (PyDict_CheckExact(pp->mapping))
-        return PyDict_ContainsValue(pp->mapping, PyValue_FromObjectBorrow(key));
+        return _PyDict_ContainsValue((PyDictObject *)pp->mapping, PyValue_FromObjectBorrow(key));
     else
         return _PyValue_Contains(PyValue_FromObjectBorrow(pp->mapping), PyValue_FromObjectBorrow(key));
 }
@@ -2162,11 +2162,13 @@ property_descr_set_value(PyObject *self, PyValueBorrow obj,
         property_missing_error(prop, obj, deleting ? "deleter" : "setter");
         return -1;
     }
-    PyValue args[2] = {PyValue_IsNull(obj) ? PyValue_NULL : PyValue_DUP(obj),
-                       PyValue_NULL};
+    /* The caller owns obj and value; the setter read from the property is
+     * pinned above because property.__init__() can replace it. */
+    PyValue args[2];
+    _PyValue_WindowPut(&args[0], obj);
     Py_ssize_t nargs = 1;
     if (!deleting) {
-        args[1] = PyValue_DUP(value);
+        _PyValue_WindowPut(&args[1], value);
         nargs = 2;
         if (PyValue_IsObject(func)) {
             EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API,
@@ -2175,9 +2177,8 @@ property_descr_set_value(PyObject *self, PyValueBorrow obj,
     }
     PyValue result = _PyValue_VectorcallTstate(_PyThreadState_GET(), func,
                                                args, nargs, NULL);
-    PyValue_CLOSE(args[0]);
-    PyValue_XCLOSE(args[1]);
     PyValue_CLOSE(func);
+
     if (PyValue_IsNull(result)) {
         return -1;
     }

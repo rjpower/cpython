@@ -27,9 +27,11 @@ call transactions, physical transfer, value-form operations that are larger
 than upstream's, and frame clearing.
 Both rounds are measured checkpoints; golden73 remains the selected baseline.
 
-In progress: a cost ledger of the call/return path, ours against upstream,
-with IBS precise sampling (`E59/execution76-call-ledger`). It is the causal
-case the next call change requires. In parallel, `pyjit/values76` applies three
+The [execution76 ledger](issues/register-semantics59/execution76-call-ledger.md)
+measures one call and return exactly. The exact shapes execute 1.27–1.36
+times upstream's instructions in fewer cycles, so the kernel losses come
+from the slow and generic paths and the helpers' footprint. Round 3
+(`pyjit/calls76`) implements the ledger's local items. In parallel, `pyjit/values76` applies three
 rules to every value-form operation, not only the hot ones. First, callees
 borrow their arguments, as the value-slot contract states: interpreter temporaries own their values, and
 `f_locals` writes keep overwritten values alive. Second, internal entry points skip public checks.

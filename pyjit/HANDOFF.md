@@ -25,6 +25,7 @@ to future protection rules. Preserve both original screen verdicts.
 | W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
 | `worktrees/call55-ir` | `pyjit/handlers75` | Handlers75 round 1 `91c9baa9600`; builds `BASE/handlers75-{release,debug}`; keep clean while it is a measurement control |
 | `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags `f78c3902c1b`, from round 1; builds `BASE/handlers75r2-{release,debug}`; keep clean while it is a measurement control |
+| `worktrees/calls76` | `pyjit/calls76` | Round 3 call-path items from the [execution76 ledger](issues/register-semantics59/execution76-call-ledger.md), from round 2; builds `BASE/calls76-{release,debug}` |
 | `worktrees/values76` | `pyjit/values76` | Universal value-operation rules from round 2: callers own and callees borrow, internal entry points, cold inline paths; then one value-slot table. Builds `BASE/values76-{release,debug}`; `pyjit/values76-draft` holds a stopped run's unverified edits |
 
 Magic remains 64427. The return correction changes no public layout, metadata or

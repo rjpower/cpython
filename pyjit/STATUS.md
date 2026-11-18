@@ -71,7 +71,7 @@ then reverted. It must be kept in step with every object-slot write; review
 and the full suite found four ways it falls out of step, two of them
 crashes, and it saved no instructions. `pyjit/slots78` keeps the object slot
 as the definition and moves the boxing adapters out of line instead.
-Checkpoint77 is in full-suite qualification.
+[Checkpoint77](issues/register-semantics59/checkpoint77.md) measures 0.9915 against golden73 and 1.1167 against upstream, the first checkpoint faster than golden73 overall. Its large single-workload moves (DeltaBlue 0.955, logging_silent 0.944) follow placement, since values77 changes instructions by under 0.5%. Checkpoint78 (`pyjit/checkpoint78`) adds slots78 and is in qualification.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

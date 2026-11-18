@@ -98,7 +98,7 @@ class GeneralReturnTests(unittest.TestCase):
             ("LOAD_FAST_AND_CLEAR", 4, 0),
             ("LOAD_FAST_AND_CLEAR", 5, 1),
             ("LOAD_FAST", 6, 2),
-            ("CALL_NO_SELF", 3, 6, 0, 0),
+            ("CALL+NO_SELF", 3, 6, 0, 0),
             ("RETURN_VALUE", 5)],
             locals=("owner", "result", "observe", "unused"),
             slots=4).replace(co_argcount=3)

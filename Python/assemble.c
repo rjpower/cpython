@@ -874,6 +874,23 @@ too_large(const char *what, int value)
     return ERROR;
 }
 
+/* The call-role flags of op's word, which the CallRoles pass proved
+ * (Python/regcfg_passes.c): IR_F_NO_SELF, and for CALL_FUNCTION_EX
+ * IR_F_NO_KW as well when the kwargs input is also virtual NULL. */
+static int
+call_role_flags(const _PyRegOp *op)
+{
+    if (!(op->flags & _PyReg_CALL_NO_SELF)) {
+        return 0;
+    }
+    assert(op->opcode == CALL || op->opcode == CALL_KW ||
+           op->opcode == CALL_FUNCTION_EX);
+    if (op->opcode == CALL_FUNCTION_EX && (op->flags & _PyReg_CALL_NO_KWARGS)) {
+        return IR_F_NO_SELF | IR_F_NO_KW;
+    }
+    return IR_F_NO_SELF;
+}
+
 /* The generic handler of op: its opcode, a form that pushes its constant
  * inline, or for BINARY_OP the handler of its operation. */
 static int
@@ -883,19 +900,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     int oparg = op->oparg;
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
-    }
-    if (op->flags & _PyReg_CALL_NO_SELF) {
-        switch (opcode) {
-            case CALL:
-                return CALL_NO_SELF;
-            case CALL_KW:
-                return CALL_KW_NO_SELF;
-            case CALL_FUNCTION_EX:
-                return op->flags & _PyReg_CALL_NO_KWARGS
-                    ? CALL_EX_NO_SELF_NO_KW : CALL_EX_NO_SELF_KW;
-            default:
-                Py_UNREACHABLE();
-        }
     }
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {
@@ -1601,7 +1605,8 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[r] = 0;
         }
     }
-    *word = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
+    *word = IR_WORD(op->handler | call_role_flags(op),
+                    fields[0], fields[1], fields[2], fields[3]);
     return SUCCESS;
 }
 

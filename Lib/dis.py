@@ -78,6 +78,20 @@ deoptmap = {
 _WORD_SIZE = 8
 _FIELD_MAX = 0xFFF
 _HANDLER_MASK = _opcode.IR_HANDLER_MASK
+# The canonical flags of the handler field, which the name of a word shows
+# after its handler's as +NAME: "CALL+NO_SELF" is a CALL whose self input is
+# virtual NULL.  The executing copy's slot-class flags are not shown.
+_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW}
+
+def _handler_name(field):
+    """The name of a word's handler field: its handler's, then its flags"""
+    return _all_opname[field & _HANDLER_MASK] + "".join(
+        "+" + name for name, bit in _WORD_FLAGS.items() if field & bit)
+
+def _handler_field(name):
+    """The handler field of the word that _handler_name() names name"""
+    handler, *flags = name.split("+")
+    return _all_opmap[handler] | sum(_WORD_FLAGS[flag] for flag in flags)
 _ROLE_DST = _opcode.IR_ROLE_DST
 _ROLE_BASE = _opcode.IR_ROLE_BASE
 _ROLE_FB = _opcode.IR_ROLE_FB
@@ -933,10 +947,13 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
 
         cache_info = _feedback_info(fb, fbinit, feedback)
         label = arg_resolver.get_label_for_offset(offset) if arg_resolver else None
+        # The flags are the code object's, which the executing copy keeps
+        flags = int.from_bytes(original_code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
+                               sys.byteorder) & ~_HANDLER_MASK
         yield Instruction(_all_opname[op], op, arg, argval, argrepr,
                           offset, offset, starts_line, line_number,
                           label, positions, cache_info,
-                          _all_opname[runs], dst, srcs, fb)
+                          _handler_name(runs | flags), dst, srcs, fb)
 
 
 def disassemble(co, lasti=-1, *, file=None, show_caches=False, adaptive=False,

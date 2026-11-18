@@ -1861,8 +1861,13 @@ get_ir(PyObject *self, PyObject *args)
         const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        /* The canonical flags follow the name, as in dis; the executing
+         * copy's slot-class flags are derived and not shown. */
+        const char *roles = (word & IR_F_NO_KW) ? "+NO_SELF+NO_KW"
+                          : (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
         PyObject *item = Py_BuildValue(
-            "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
+            "(NIIII)", PyUnicode_FromFormat("%s%s", name, roles),
+            IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
             Py_XDECREF(item);
             Py_DECREF(result);
@@ -1881,7 +1886,8 @@ ir_normal_physical_transfer(PyObject *self, PyObject *args)
                           &arg, &edge, &home, &nl, &limit)) {
         return NULL;
     }
-    if (handler < 0 || handler >= IR_NUM_HANDLERS ||
+    /* handler is the whole handler field, the id and its flags */
+    if (handler < 0 || handler > 0xFFFF || IR_HANDLER(handler) >= IR_NUM_HANDLERS ||
         a < 0 || a > IR_FIELD_MAX || b < 0 || b > IR_FIELD_MAX ||
         c < 0 || c > IR_FIELD_MAX || d < 0 || d > IR_FIELD_MAX) {
         PyErr_SetString(PyExc_ValueError, "invalid IR word field");

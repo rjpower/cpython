@@ -20,7 +20,7 @@ class EdgeNullTests(unittest.TestCase):
         return [("LOAD_CONST", 0), ("LOAD_CONST", source),
                 (name, 1, source, 5), ("IR_JUMP", 0, 0, 6),
                 ("IR_JUMP", 0, 0, 6), ("POP_TOP", 1),
-                ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+                ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
 
     def test_only_the_null_successor_releases_the_result_home(self):
         for name in ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP"):
@@ -39,7 +39,7 @@ class EdgeNullTests(unittest.TestCase):
                         prior = [("POP_TOP", 1), ("LOAD_CONST", 0), ("LOAD_CONST", 2),
                                  (name, 1, 2, 6), ("IR_JUMP", 0, 0, 7),
                                  ("IR_JUMP", 0, 0, 7), ("POP_TOP", 1),
-                                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+                                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
                         bad = prior.copy()
                         bad[0] = ("LOAD_CONST", 1)
                         self.assert_rejected(prior, bad, "virtual call input|scratch owner")

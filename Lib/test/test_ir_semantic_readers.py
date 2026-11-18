@@ -96,7 +96,7 @@ class SemanticReaderTests(unittest.TestCase):
         exceptions, _ = semantic_parts(code.co_exceptiontable)
         self.assertFalse(exceptions)
         call = next(i for i in dis.get_instructions(code)
-                    if i.handler == "CALL_NO_SELF")
+                    if i.handler == "CALL+NO_SELF")
         locations, _ = position_parts(code.co_linetable)
         records = observation_records(code)
         line = code.co_firstlineno + 3

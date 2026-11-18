@@ -22,13 +22,14 @@ def instructions_with_positions(instrs, co_positions):
 def encode_words(*words):
     """Return co_code bytes for the given (handler, a, b, c, d) words.
 
-    Missing fields are zero.  The handler may be an opcode name.
+    Missing fields are zero.  The handler may be a name, which may carry
+    word flags as dis names them ("CALL+NO_SELF").
     """
     out = bytearray()
     for word in words:
         handler, *fields = word
         if isinstance(handler, str):
-            handler = opcode.opmap[handler]
+            handler = dis._handler_field(handler)
         fields += [0] * (4 - len(fields))
         value = handler
         for shift, field in zip((16, 28, 40, 52), fields):

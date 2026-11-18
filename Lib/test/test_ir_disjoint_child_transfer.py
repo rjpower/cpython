@@ -69,7 +69,7 @@ class DisjointChildTransferTests(unittest.TestCase):
         site = next(i for i, row in enumerate(rows) if row[0] == 'LOAD_ATTR')
         name, dst, owner, feedback, arg = rows[site]
         self.assertFalse(arg & 1)
-        self.assertTrue(any(row[0] == 'CALL_EX_NO_SELF_KW' for row in rows))
+        self.assertTrue(any(row[0] == 'CALL_FUNCTION_EX+NO_SELF' for row in rows))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())
             for obj in (Plain(), Property(), Overridden()):

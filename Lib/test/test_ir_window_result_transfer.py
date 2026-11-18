@@ -30,7 +30,7 @@ class WindowResultTransferTests(unittest.TestCase):
                     producer = len(words)
                     words.extend((("BUILD_LIST", destination, 2, count, 0),
                                   ("LOAD_CONST", 1),
-                                  ("CALL_NO_SELF", 1, 1, 0, 0),
+                                  ("CALL+NO_SELF", 1, 1, 0, 0),
                                   ("RETURN_VALUE", 1)))
                     code = make_code(words, slots=6, locals=("local",))
                     for admitted in routes(code):

@@ -682,8 +682,6 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
                                         : specialized_opcode;
-    int previous = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    handler = _PyIR_CallRoleHandler(previous, handler);
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;

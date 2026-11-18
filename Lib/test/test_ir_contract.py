@@ -157,8 +157,6 @@ class ContractTests(unittest.TestCase):
 
     def test_call_normal_physical_transfer(self):
         testapi = import_helper.import_module("_testinternalcapi")
-        named = {**opcode.opmap, **opcode._specialized_opmap,
-                 **opcode._ir_opmap}
         # Pin the finite family audited for success-only window retirement.
         calls = {
             "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
@@ -173,19 +171,16 @@ class ContractTests(unittest.TestCase):
         }
         legacy = calls - {"INSTRUMENTED_CALL"}
         self.assertEqual(legacy, {name for name, row in BY_NAME.items()
-                                 if row.base == opcode.opmap["CALL"]
-                                 and row.call_input_holes == 0})
-        virtual = {"CALL_NO_SELF" + name[len("CALL"):] for name in legacy}
-        self.assertEqual(virtual, {name for name, row in BY_NAME.items()
-                                  if row.base == opcode.opmap["CALL"]
-                                  and row.call_input_holes == 2})
-        instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL_NO_SELF"}
-        self.assertEqual({BY_NAME[name].call_input_holes for name in instrumented},
-                         {0, 2})
-        self.assertEqual(legacy | virtual | instrumented,
-                         {name for name, row in BY_NAME.items()
-                          if row.base in (opcode.opmap["CALL"],
-                                          opcode.opmap["INSTRUMENTED_CALL"])})
+                                 if row.base == opcode.opmap["CALL"]})
+        self.assertEqual(calls, {name for name, row in BY_NAME.items()
+                                 if row.base in (opcode.opmap["CALL"],
+                                                 opcode.opmap["INSTRUMENTED_CALL"])})
+        # Every handler of the family admits the virtual self role, a flag
+        # of the word
+        self.assertEqual({BY_NAME[name].word_flags for name in calls},
+                         {_opcode.IR_F_NO_SELF})
+        virtual = {name + "+NO_SELF" for name in legacy}
+        instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL+NO_SELF"}
         unknown = (2, -1)
         set_null = (1, -1)
         preserve = (0, -1)
@@ -195,11 +190,11 @@ class ContractTests(unittest.TestCase):
             if encoded_arg is None:
                 encoded_arg = argc
             return testapi.ir_normal_physical_transfer(
-                named[name], dst, base, encoded_arg, 0,
+                dis._handler_field(name), dst, base, encoded_arg, 0,
                 argc, edge, home, 2, 10)
 
         for name in sorted(legacy | virtual):
-            argc = 2 if name.endswith("_ISINSTANCE") else 1
+            argc = 2 if name.split("+")[0].endswith("_ISINSTANCE") else 1
             with self.subTest(handler=name):
                 # A new result at BASE is a value, not a known NULL.
                 self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)

@@ -378,7 +378,7 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
     if (window < 0 || relative < 0 || relative >= _PyIR_Extent(fmt->reads, arg)) {
         return 0;
     }
-    if (_PyIR_CallInputRole(fmt, relative) == _PyIR_CALL_INPUT_VIRTUAL_NULL) {
+    if (_PyIR_CallInputRole(word, relative) == _PyIR_CALL_INPUT_VIRTUAL_NULL) {
         return 0;
     }
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
@@ -693,7 +693,7 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
                 return unknown;
             }
             if (home >= base && home - base < reads && home != dst) {
-                if (_PyIR_CallInputRole(fmt, home - base) ==
+                if (_PyIR_CallInputRole(word, home - base) ==
                     _PyIR_CALL_INPUT_VIRTUAL_NULL)
                 {
                     return preserve;
@@ -925,7 +925,7 @@ _PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
         return _PyIR_ABSENCE_SET_VALUE;
     }
     if (home >= base && home - base < count &&
-        _PyIR_CallInputRole(fmt, home - base) != _PyIR_CALL_INPUT_VIRTUAL_NULL)
+        _PyIR_CallInputRole(word, home - base) != _PyIR_CALL_INPUT_VIRTUAL_NULL)
     {
         return _PyIR_ABSENCE_SET_EMPTY;
     }

@@ -34,8 +34,10 @@ def handlers(func):
 
 def ordinary_handlers(func):
     contracts = _opcode.get_ir_contract()
-    return [opcode.opname[contracts[opcode.opname.index(name)].ordinary_handler]
-            for name in handlers(func)]
+    # The word flags after a handler's name stay with the ordinary handler
+    return [opcode.opname[contracts[opcode.opname.index(handler)].ordinary_handler]
+            + plus + flags
+            for handler, plus, flags in (name.partition("+") for name in handlers(func))]
 
 
 def nlocalsplus(func):
@@ -1765,7 +1767,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_PY_GENERAL+NO_SELF", handlers(caller))
         def replacement(a=5, *args, **kwargs):
             return ("new", a, args, kwargs)
         target.__code__ = replacement.__code__
@@ -1792,7 +1794,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_PY_GENERAL+NO_SELF", handlers(caller))
         testcapi.function_set_test_vectorcall(target)
         self.assertEqual(caller(target), "custom vectorcall")
 
@@ -1804,7 +1806,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             caller(target)
         if SPECIALIZES:
-            self.assertIn("CALL_NO_SELF_PY_GENERAL", handlers(caller))
+            self.assertIn("CALL_PY_GENERAL+NO_SELF", handlers(caller))
         events = []
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID
@@ -2515,7 +2517,7 @@ class RegCfgTest(unittest.TestCase):
             return 1
         self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
-        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL_NO_SELF")
+        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL+NO_SELF")
         self.assertEqual(call[1], IR_FIELD_MAX)
         first = f.__code__.co_firstlineno
         result, events = trace(f, lambda: object())

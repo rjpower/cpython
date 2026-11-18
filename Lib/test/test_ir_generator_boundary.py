@@ -22,7 +22,7 @@ ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
 
 
 def sites(function, adaptive=False):
-    return [(pc, word, CONTRACTS[HANDLERS[word[0]]])
+    return [(pc, word, CONTRACTS[HANDLERS[word[0].partition("+")[0]]])
             for pc, word in enumerate(
                 _testinternalcapi.get_ir(function.__code__, adaptive))]
 
@@ -71,7 +71,7 @@ class SpecializationPreservationTests(unittest.TestCase):
 
         for value in range(ROUNDS):
             self.assertEqual(build(value).value, value)
-        self.assertIn("CALL_NO_SELF_ALLOC_AND_ENTER_INIT", ordinary_names(build))
+        self.assertIn("CALL_ALLOC_AND_ENTER_INIT", ordinary_names(build))
         for _, _, row in sites(build):
             self.assertEqual(row.generator_boundary_flags, 0)
 

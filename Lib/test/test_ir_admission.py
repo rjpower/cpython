@@ -32,7 +32,7 @@ def construct(code, **changes):
 def replace_word(code, index, word):
     handler, *fields = word
     if isinstance(handler, str):
-        handler = HANDLERS[handler]
+        handler = dis._handler_field(handler)
     word = (handler, *fields)
     return code.co_code[:8 * index] + encode_words(word) + code.co_code[8 * (index + 1):]
 
@@ -74,7 +74,7 @@ class AdmissionTests(unittest.TestCase):
         reached = set()
         for index, word in enumerate(words):
             name, *fields = word
-            row = CONTRACT[HANDLERS[name]]
+            row = CONTRACT[HANDLERS[name.partition("+")[0]]]
             if name == "CALL":
                 reached.add(name)
                 base = row.roles.index(_opcode.IR_ROLE_BASE)

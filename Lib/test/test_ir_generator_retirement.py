@@ -28,7 +28,7 @@ class ClearedReceiverTests(unittest.TestCase):
         self.addCleanup(gc.collect)
 
     def assert_return_boundary(self, function):
-        rows = [CONTRACTS[HANDLERS[word[0]]]
+        rows = [CONTRACTS[HANDLERS[word[0].partition("+")[0]]]
                 for word in _testinternalcapi.get_ir(function.__code__)]
         self.assertTrue(any(
             row.generator_completed_consumer == _opcode.GEN_CONSUMER_RETURN

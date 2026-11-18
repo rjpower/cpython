@@ -16,7 +16,7 @@ class FoldedInputTransferTests(unittest.TestCase):
     def test_scalar_peek_preserves_unrelated_tail_absence(self):
         words = [("LOAD_CONST", 1), ("POP_TOP", 3), ("GET_LEN", 2, 1),
                  ("POP_TOP", 1), ("POP_TOP", 2), ("LOAD_CONST", 2),
-                 ("CALL_NO_SELF", 2, 2, 0, 0), ("RETURN_VALUE", 2)]
+                 ("CALL+NO_SELF", 2, 2, 0, 0), ("RETURN_VALUE", 2)]
         code = make_code(words, slots=5, locals=("value",))
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
@@ -41,7 +41,7 @@ class FoldedInputTransferTests(unittest.TestCase):
                     words = [("LOAD_CONST", base), ("POP_TOP", tail),
                              (name, base, 0, depth), ("POP_TOP", base),
                              ("LOAD_CONST", tail - 1),
-                             ("CALL_NO_SELF", tail - 1, tail - 1, 0, 0),
+                             ("CALL+NO_SELF", tail - 1, tail - 1, 0, 0),
                              ("RETURN_VALUE", tail - 1)]
                     code = make_code(words, slots=depth + 3, locals=("value",))
                     for admitted in routes(code):

@@ -277,52 +277,23 @@ def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     return groups.values()
 
 
-@dataclass(frozen=True)
-class CallRoleFamily:
-    base: str
-    member_prefix: str
-    holes: int
-
-
-# Canonical image families, unlike execution-only operand refinements. Their
-# bodies and geometry remain the existing CALL definitions; their input roles
-# survive construction, specialization misses and instrumentation.
-CALL_ROLE_FAMILIES = {
-    "CALL_NO_SELF": CallRoleFamily("CALL", "CALL", 1 << 1),
-    "CALL_KW_NO_SELF": CallRoleFamily("CALL_KW", "CALL_KW", 1 << 1),
-    "CALL_EX_NO_SELF_NO_KW": CallRoleFamily("CALL_FUNCTION_EX", "CALL_EX", (1 << 1) | (1 << 3)),
-    "CALL_EX_NO_SELF_KW": CallRoleFamily("CALL_FUNCTION_EX", "CALL_EX", 1 << 1),
+# The call families whose words carry role flags (Include/internal/pycore_ir.h):
+# IR_F_NO_SELF where the reserved self input is virtual NULL, and for
+# CALL_FUNCTION_EX IR_F_NO_KW where the kwargs input is too.  The CallRoles
+# pass proves them (Python/regcfg_passes.c) and the assembler encodes them; a
+# handler of the family computes the virtual inputs from its word, so
+# specialisation and instrumentation keep them by keeping the flags.
+CALL_ROLE_FLAGS = {
+    "CALL": ("IR_F_NO_SELF",),
+    "CALL_KW": ("IR_F_NO_SELF",),
+    "CALL_FUNCTION_EX": ("IR_F_NO_SELF", "IR_F_NO_KW"),
 }
 
 
-def call_role_variant(name: str) -> tuple[str, str, int] | None:
-    for head, role in CALL_ROLE_FAMILIES.items():
-        if name == head:
-            return role.base, head, role.holes
-        if name == "INSTRUMENTED_" + head:
-            return "INSTRUMENTED_" + role.base, head, role.holes
-        if name.startswith(head + "_"):
-            return role.member_prefix + name[len(head):], head, role.holes
-    return None
-
-
-def call_role_variants(analysis: Analysis) -> dict[str, tuple[str, str, int]]:
-    result = {}
-    for head, role in CALL_ROLE_FAMILIES.items():
-        if role.base not in analysis.instructions:
-            continue
-        for name, inst in analysis.instructions.items():
-            if name == role.base:
-                target = head
-            elif name == "INSTRUMENTED_" + role.base:
-                target = "INSTRUMENTED_" + head
-            elif inst.family is not None and inst.family.name == role.base:
-                assert name.startswith(role.member_prefix + "_"), name
-                target = head + name[len(role.member_prefix):]
-            else:
-                continue
-            result[target] = (name, head, role.holes)
-    return result
+def call_role_flags(name: str, inst: Instruction | None) -> tuple[str, ...]:
+    "The role flags that a word of handler name may carry"
+    family = inst.family.name if inst is not None and inst.family is not None else name
+    return CALL_ROLE_FLAGS.get(family.removeprefix("INSTRUMENTED_"), ())
 
 
 def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
@@ -334,9 +305,6 @@ def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
 
 def canonical_handler(name: str) -> str:
     name = name.split("_XFER_", 1)[0]
-    role = call_role_variant(name)
-    if role is not None:
-        return role[0]
     variant = EXECUTION_VARIANTS.get(name)
     return variant.base if variant is not None else name
 
@@ -1290,7 +1258,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + list(execution_variants(analysis)) + sorted(call_role_variants(analysis))
+             + list(execution_variants(analysis))
              + sorted(generator_boundaries(analysis)))
     table = analysis.numbers
     for name in names:
@@ -1309,8 +1277,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     for name, variant in execution_variants(analysis).items():
         if variant.base in result:
             result[name] = result[variant.base]
-    for name, (base, _, _) in call_role_variants(analysis).items():
-        result[name] = result[base]
     for name, boundary in generator_boundaries(analysis).items():
         result[name] = result[boundary.base]
     return result
@@ -2470,8 +2436,6 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
                 or set(variant.local_fields) & set(variant.temp_fields)):
             raise ValueError(f"invalid operand modes for {name}")
         formats[name] = fmt
-    for name, (base, _, _) in call_role_variants(analysis).items():
-        formats[name] = formats[base]
     for name, boundary in generator_boundaries(analysis).items():
         formats[name] = formats[boundary.base]
     return formats
@@ -7283,7 +7247,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     operation = None
     emitter.has_record = record
     if (name != inst.name and name not in EXECUTION_VARIANTS
-            and call_role_variant(name) is None and emitter.generator_boundary is None):
+            and emitter.generator_boundary is None):
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
@@ -7397,8 +7361,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)
         out.emit(f"int call_base = {base};\n")
         out.emit(f"int call_destination = {dst};\n")
-        role = call_role_variant(name)
-        holes = role[2] if role is not None else 0
+        # The virtual inputs are the word's role flags
+        holes = ("_PyIR_CallInputHoles(ir_word)" if call_role_flags(name, inst)
+                 else "0")
         out.emit(f"int call_state = call_transaction_begin(frame, call_base, {count}, "
                  f"call_destination, {kind}, {holes});\n")
         out.emit("(void)call_state;\n")
@@ -7789,10 +7754,6 @@ def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
     twin of its family; a twin is its own"""
     if name.startswith("INSTRUMENTED_"):
         return name
-    role = call_role_variant(name)
-    if role is not None:
-        twin = "INSTRUMENTED_" + role[1]
-        return twin if twin in ids else None
     twin = "INSTRUMENTED_" + fmt.group
     return twin if twin in ids else None
 
@@ -8040,7 +8001,7 @@ class HandlerContract:
     observer_outcome: tuple[str, str]
     transfer_kind: str
     ownership_events: tuple[OwnershipEvent, ...]
-    call_input_holes: int
+    word_flags: tuple[str, ...]
     abrupt_prefix: bool
     abrupt_operands: bool
     error_routes: tuple[str, ...]
@@ -8981,7 +8942,7 @@ def handler_contracts(analysis: Analysis,
             observer_outcome=observer_outcomes(inst, fmt),
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
-            call_input_holes=(call_role_variant(name)[2] if call_role_variant(name) else 0),
+            word_flags=call_role_flags(name, inst),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),

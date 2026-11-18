@@ -3405,7 +3405,7 @@ class TestIRCases(unittest.TestCase):
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-                ".owner_program = 0, .owner_events = 1, .call_input_holes = 0, "
+                ".owner_program = 0, .owner_events = 1, .word_flags = 0, "
                 ".error_routes = _PyIR_ERROR_COMPLETE | _PyIR_ERROR_LOCAL_DST, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
@@ -3428,7 +3428,7 @@ class TestIRCases(unittest.TestCase):
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-            ".owner_program = 0, .owner_events = 0, .call_input_holes = 0, .error_routes = 0, "
+            ".owner_program = 0, .owner_events = 0, .word_flags = 0, .error_routes = 0, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -4156,14 +4156,17 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
-        variants = ir_generator.call_role_variants(analysis)
-        self.assertEqual(len(variants), 35)
-        self.assertEqual({head for _, head, _ in variants.values()},
-                         set(ir_generator.CALL_ROLE_FAMILIES))
-        for name, (original, _, holes) in variants.items():
+        # The handlers of the call families take the role flags in the word
+        roles = {name: contract.word_flags for name, contract in contracts.items()
+                 if contract.word_flags}
+        self.assertEqual(len(roles), 31)
+        self.assertEqual(set(roles.values()),
+                         {("IR_F_NO_SELF",), ("IR_F_NO_SELF", "IR_F_NO_KW")})
+        self.assertEqual({name for name, flags in roles.items() if len(flags) == 2},
+                         {"CALL_FUNCTION_EX", "CALL_EX_PY", "CALL_EX_NON_PY_GENERAL",
+                          "INSTRUMENTED_CALL_FUNCTION_EX"})
+        for name in roles:
             with self.subTest(handler=name):
-                self.assertEqual(formats[name], formats[original])
-                self.assertEqual(contracts[name].call_input_holes, holes)
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
         self.assertEqual(contracts["BUILD_TUPLE"].ownership_events, (
@@ -4631,8 +4634,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
         self.assertEqual(len(labels), len(set(labels)))
 
     def test_exact_method_post_effect_guards_forward_prepared_roles(self):
-        for name in ("CALL_BOUND_METHOD_EXACT_ARGS",
-                     "CALL_NO_SELF_BOUND_METHOD_EXACT_ARGS"):
+        for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
             with self.subTest(handler=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 promoted = body.index("call_state |= CALL_SELF_PRESENT | CALL_EFFECTS")

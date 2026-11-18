@@ -21,7 +21,7 @@ class AbruptOperandTests(unittest.TestCase):
     def image(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 1), ("LOAD_CONST", 4),
                  ("GET_ANEXT", 5, 4), ("POP_TOP", 5), ("POP_TOP", 4),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
                  ("POP_TOP", 6), ("POP_TOP", 4), ("POP_TOP", 5),
                  ("IR_JUMP", 0, 0, 6)]
         table = exception_entry(3, 1, 8, 6 << 1)
@@ -74,7 +74,7 @@ class AbruptOperandTests(unittest.TestCase):
                 # home as a virtual hole is not.
                 valid = [("LOAD_CONST", 0), ("LOAD_CONST", 1), (name, 2, 1),
                          ("POP_TOP", 2), ("POP_TOP", 1),
-                         ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+                         ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
                 base = make_code(valid)
                 for admitted in routes(base):
                     _testinternalcapi.get_ir(admitted, True)
@@ -93,7 +93,7 @@ class AbruptOperandTests(unittest.TestCase):
                     # prefix is addressed from BASE, not from scalar index0.
                     words = [("LOAD_CONST", 1), ("LOAD_CONST", depth + 1),
                              (name, 1, depth + 1, depth), ("POP_TOP", 1),
-                             ("LOAD_CONST", 0), ("CALL_NO_SELF", 0, 0, 0, 0),
+                             ("LOAD_CONST", 0), ("CALL+NO_SELF", 0, 0, 0, 0),
                              ("RETURN_VALUE", 0)]
                     code = make_code(words, slots=depth + 4)
                     for admitted in routes(code):
@@ -133,7 +133,7 @@ class AbruptOperandTests(unittest.TestCase):
             return function(value=[item async for item in source])
 
         names = {row[0] for row in _testinternalcapi.get_ir(invoke.__code__)}
-        self.assertIn("CALL_KW_NO_SELF", names)
+        self.assertIn("CALL_KW+NO_SELF", names)
         for code in routes(invoke.__code__):
             function = types.FunctionType(code, globals())
             for values in ((), (17, 23)):

@@ -18,7 +18,10 @@ CONTRACTS = _opcode.get_ir_contract()
 
 
 def ordinary_name(name):
-    return opcode.opname[CONTRACTS[opcode.opname.index(name)].ordinary_handler]
+    # The word flags after the handler's name stay with the ordinary handler
+    handler, plus, flags = name.partition("+")
+    return (opcode.opname[CONTRACTS[opcode.opname.index(handler)].ordinary_handler]
+            + plus + flags)
 
 
 class SendTransferTests(unittest.TestCase):
@@ -35,8 +38,8 @@ class SendTransferTests(unittest.TestCase):
     def test_send_completion_cursor_and_result_are_distinct(self):
         words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
                  ("SEND", 0, 0, 0, 4), ("POP_TOP", 2), ("POP_TOP", 1),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
         code = make_code(words, slots=6)
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
@@ -51,7 +54,7 @@ class SendTransferTests(unittest.TestCase):
     def test_throw_completion_preserves_only_prior_empty_outside_tail(self):
         words = [("LOAD_CONST", 0), ("LOAD_CONST", 2), ("LOAD_CONST", 3),
                  ("POP_TOP", 4), ("CLEANUP_THROW", 0, 0, 5, 0),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
         code = make_code(words, slots=6)
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),

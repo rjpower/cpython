@@ -24,7 +24,7 @@ class UnpackTransferTests(unittest.TestCase):
                 words.extend(("POP_TOP", base + i)
                              for i in range(max(count, 1)))
                 words.extend((("LOAD_CONST", base),
-                              ("CALL_NO_SELF", base, base, 0, 0),
+                              ("CALL+NO_SELF", base, base, 0, 0),
                               ("RETURN_VALUE", base)))
                 code = make_code(words, slots=count + 4, locals=("local",))
                 for admitted in routes(code):
@@ -50,7 +50,7 @@ class UnpackTransferTests(unittest.TestCase):
                 words = [("LOAD_CONST", nl),
                          ("UNPACK_SEQUENCE", nl, count, 0, 0),
                          ("LOAD_CONST", nl),
-                         ("CALL_NO_SELF", nl, nl, 0, 0),
+                         ("CALL+NO_SELF", nl, nl, 0, 0),
                          ("RETURN_VALUE", nl)]
                 code = make_code(words, slots=count + 4,
                                  locals=tuple(f"local{i}" for i in range(nl)))

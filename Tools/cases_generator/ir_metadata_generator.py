@@ -27,8 +27,6 @@ from ir_generator import (
     BINARY_OP_FAMILY,
     EXECUTION_VARIANTS,
     canonical_handler,
-    call_role_variant,
-    call_role_variants,
     FUSED_SHADOWS,
     first_ir_only_handler,
     Extent,
@@ -93,9 +91,6 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             original = ordinary[len("INSTRUMENTED_"):]
             if original in ids:
                 base = original
-        call_role = call_role_variant(ordinary)
-        if call_role is not None:
-            base = call_role[1]
         bases[name] = base
         parts = ["_PyIR_H_METADATA"]
         if name in dispatch:
@@ -109,7 +104,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
         if name in binary:
             parts.append("_PyIR_H_BINARY_OP")
         if (name in analysis.ir_only or name in EXECUTION_VARIANTS
-                or name in boundaries or call_role is not None):
+                or name in boundaries):
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
@@ -182,7 +177,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".output_kind = {contract.output_kind}, "
         f".transfer_kind = {contract.transfer_kind}, "
         f".owner_program = {owner_program[0]}, .owner_events = {owner_program[1]}, "
-        f".call_input_holes = {contract.call_input_holes}, "
+        f".word_flags = {bits(list(contract.word_flags))}, "
         f".error_routes = {bits(list(contract.error_routes))}, "
         f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
@@ -309,17 +304,6 @@ def generate_ir_metadata(
                 out.emit(f"static_assert({name} == _PyIR_BINARY_OP_FIRST + NB_{op}, "
                          f'"{name}");\n')
             out.emit("\n")
-
-        out.emit("PyAPI_DATA(const uint16_t) _PyIR_CallRoleHandlers[2][256];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const uint16_t _PyIR_CallRoleHandlers[2][256] = {\n")
-        for row, holes in enumerate((2, 10)):
-            out.emit(f"[{row}] = {{\n")
-            for name, (base, _, mask) in sorted(call_role_variants(analysis).items()):
-                if mask == holes:
-                    out.emit(f"[{base}] = {name},\n")
-            out.emit("},\n")
-        out.emit("};\n#endif\n\n")
 
         layouts = sorted({(fmt.group, fmt.fb_layout) for fmt in formats.values()
                           if fmt.fb_layout is not None})

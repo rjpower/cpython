@@ -21,7 +21,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         # needs its incoming absence retained below the suspension footprint.
         words = [("LOAD_CONST", 0), ("POP_TOP", 1), ("LOAD_CONST", 4),
                  ("YIELD_VALUE", 4, 4, 0), ("POP_TOP", 4), ("POP_TOP", 1),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
                  ("POP_TOP", 6), ("POP_TOP", 4), ("POP_TOP", 5),
                  ("IR_JUMP", 0, 0, 6)]
         table = exception_entry(3, 1, 8, 6 << 1)
@@ -115,7 +115,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         async def foo():
             return ident(val=await Awaitable())
 
-        self.assertTrue(any(row[0] == "CALL_KW_NO_SELF"
+        self.assertTrue(any(row[0] == "CALL_KW+NO_SELF"
                             for row in _testinternalcapi.get_ir(foo.__code__)))
         for code in routes(foo.__code__):
             function = types.FunctionType(code, globals(), closure=foo.__closure__)

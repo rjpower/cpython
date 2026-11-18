@@ -1,5 +1,6 @@
 """Normal-edge initialization and owner transport under NULL shadow authority."""
 
+import dis
 import marshal
 import opcode
 import struct
@@ -14,7 +15,7 @@ HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
 
 
 def encoded(words):
-    return encode_words(*((HANDLERS[name], *fields) for name, *fields in words))
+    return encode_words(*((dis._handler_field(name), *fields) for name, *fields in words))
 
 
 def make_code(words, *, slots=4, locals=(), consts=(None,)):

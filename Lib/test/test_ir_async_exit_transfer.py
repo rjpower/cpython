@@ -18,7 +18,7 @@ class AsyncExitTransferTests(unittest.TestCase):
         # from END_ASYNC_FOR. These raw images are never executed.
         words = [("LOAD_CONST", 0), ("LOAD_CONST", 1), ("POP_TOP", 2),
                  ("END_ASYNC_FOR", 0, 0, 8, 0), ("LOAD_CONST", 0),
-                 ("CALL_NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
+                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
                  ("IR_JUMP", 0, 0, 7), ("SEND", 0, 0, 0, 0),
                  ("RETURN_VALUE", 0)]
         code = make_code(words, slots=4)
@@ -66,7 +66,7 @@ class AsyncExitTransferTests(unittest.TestCase):
             return result
 
         names = {row[0] for row in _testinternalcapi.get_ir(outer.__code__)}
-        self.assertTrue({"END_ASYNC_FOR", "CALL_NO_SELF"} <= names)
+        self.assertTrue({"END_ASYNC_FOR", "CALL+NO_SELF"} <= names)
         for admitted in routes(outer.__code__):
             function = types.FunctionType(admitted, globals())
             seen = []

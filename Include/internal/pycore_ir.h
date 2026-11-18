@@ -157,6 +157,16 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_F_LOCAL_C    (1 << 11)
 #define IR_F_LOCAL_D    (1 << 12)
 #define IR_F_LOCAL_MASK (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C | IR_F_LOCAL_D)
+
+/* Call-role flags of a call-family word, which the code object's words and
+ * the .pyc carry: the reserved self input of the window is virtual NULL
+ * (IR_F_NO_SELF), and for CALL_FUNCTION_EX so is the kwargs input
+ * (IR_F_NO_KW, only with IR_F_NO_SELF).  The handler neither reads nor
+ * rechecks a virtual input (_PyIR_CallInputHoles()).  The handlers that
+ * admit them have them in _PyIRFormat.word_flags.  Bit 15 is reserved. */
+#define IR_F_NO_SELF    (1 << 13)
+#define IR_F_NO_KW      (1 << 14)
+#define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
 #define IR_B(W)         ((uint32_t)((W) >> 28) & IR_FIELD_MAX)
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
@@ -466,7 +476,8 @@ typedef struct _PyIRFormat {
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     uint32_t owner_program;
     uint16_t owner_events;
-    uint8_t call_input_holes; // canonical virtual-NULL window inputs
+    uint16_t word_flags;    // the canonical flags a word of the handler
+                            // may carry: IR_F_CALL_ROLES or a subset
     uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
@@ -493,11 +504,20 @@ typedef enum {
     _PyIR_CALL_INPUT_VIRTUAL_NULL,
 } _PyIRCallInputRole;
 
+/* The window inputs of a call word that are virtual NULL, from its role
+ * flags: bit k is input k. */
+static inline unsigned int
+_PyIR_CallInputHoles(_PyIRWord word)
+{
+    return ((word & IR_F_NO_SELF) ? _PyIR_CALL_HOLE_SELF : 0)
+         | ((word & IR_F_NO_KW) ? _PyIR_CALL_HOLE_KWARGS : 0);
+}
+
 static inline _PyIRCallInputRole
-_PyIR_CallInputRole(const _PyIRFormat *fmt, int offset)
+_PyIR_CallInputRole(_PyIRWord word, int offset)
 {
     return (offset == 1 || offset == 3) &&
-        (fmt->call_input_holes & (1u << offset))
+        (_PyIR_CallInputHoles(word) & (1u << offset))
         ? _PyIR_CALL_INPUT_VIRTUAL_NULL : _PyIR_CALL_INPUT_VALUE;
 }
 
@@ -764,9 +784,6 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
-/* Cold specialization/instrumentation preserves the image's virtual inputs. */
-PyAPI_FUNC(int) _PyIR_CallRoleHandler(int handler, int opcode);
-
 /* The opcode that sys.monitoring sees the word as: the base opcode, except
  * for a fused compare-and-jump, which is a conditional jump
  * (POP_JUMP_IF_FALSE, or INSTRUMENTED_ for its twin). */
@@ -873,12 +890,15 @@ _PyIR_FormatOf(int handler)
     return &_PyIR_Formats[handler];
 }
 
-/* Whether the flags of a canonical word are ones its handler admits.  No
- * handler admits a flag yet. */
+/* Whether the flags of a canonical word, whose handler is valid, are ones
+ * its handler admits: call-role flags on a call-family handler, IR_F_NO_KW
+ * only with IR_F_NO_SELF.  The slot-class flags are the executing copy's. */
 static inline int
 _PyIR_CanonicalFlagsValid(_PyIRWord word)
 {
-    return IR_FLAGS(word) == 0;
+    int flags = IR_FLAGS(word);
+    return (flags & ~_PyIR_FormatOf(IR_HANDLER(word))->word_flags) == 0
+        && (!(flags & IR_F_NO_KW) || (flags & IR_F_NO_SELF));
 }
 
 /* The slot-class flags of word in an executing copy of code with

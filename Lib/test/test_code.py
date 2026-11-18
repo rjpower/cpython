@@ -1683,7 +1683,7 @@ class ConstSlotsTest(unittest.TestCase):
                 code = original.__code__
                 first = code.co_firstlineno
                 rows = _testinternalcapi.get_ir(code)
-                calls = [row for row in rows if row[0] == "CALL_NO_SELF"]
+                calls = [row for row in rows if row[0] == "CALL+NO_SELF"]
                 self.assertEqual(len(calls), 1)
                 optional_self = calls[0][2] + 1
                 self.assertGreaterEqual(optional_self, code.co_nlocals)

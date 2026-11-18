@@ -215,10 +215,19 @@ class OperandModeTests(unittest.TestCase):
     def test_metadata_domain(self):
         import _opcode
         h = opcode._ir_opmap[VARIANT]
+        base_handler = opcode._specialized_opmap["LOAD_ATTR_SHAPE"]
         row = _opcode.get_ir_contract()[h]
-        base = _opcode.get_ir_contract()[opcode._specialized_opmap["LOAD_ATTR_SHAPE"]]
+        base = _opcode.get_ir_contract()[base_handler]
         self.assertGreater(h, 255)
-        self.assertEqual(row, base)
+        # The variant has the contract of its base, except that the source
+        # handler of each, outside generator boundaries, is itself
+        self.assertEqual((row.ordinary_handler, base.ordinary_handler),
+                         (h, base_handler))
+        fields = [name for name in dir(type(row))
+                  if not name.startswith(("_", "n_")) and name not in
+                  ("count", "index", "ordinary_handler")]
+        self.assertEqual([getattr(row, name) for name in fields],
+                         [getattr(base, name) for name in fields])
 
 
 @unittest.skipIf(test_tools.basepath is None, "needs the source tree")

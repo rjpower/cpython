@@ -2931,11 +2931,11 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
 {
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (inspect && fmt->call_input_holes) {
+    if (inspect && _PyIR_CallInputHoles(word)) {
         int base = (int)IR_B(word);
         int arg = admitted_word_arg(word, image->fbinit, image->nfb);
         for (int k = 0; k < _PyIR_Extent(fmt->reads, arg); k++) {
-            if (_PyIR_CallInputRole(fmt, k) == _PyIR_CALL_INPUT_VIRTUAL_NULL &&
+            if (_PyIR_CallInputRole(word, k) == _PyIR_CALL_INPUT_VIRTUAL_NULL &&
                 !(semantic_home_facts(work, state, base + k, image->nl) &
                   (1u << SEM_NO_HOME)))
             {
@@ -3811,7 +3811,7 @@ normal_transfer_proof(const semantic_image *image,
                     result = -1;
                     break;
                 }
-                if (_PyIR_FormatOf(IR_HANDLER(words[i]))->call_input_holes) {
+                if (_PyIR_CallInputHoles(words[i])) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has no virtual call entry proof", i);
                     result = -1;

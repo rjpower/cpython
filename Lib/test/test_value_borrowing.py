@@ -448,6 +448,173 @@ class BinaryOpTests(unittest.TestCase):
         self.assertEqual(holder, [])
 
 
+class TypeSlotTests(unittest.TestCase):
+    """Slot wrappers, slot functions and type attributes borrow their operands."""
+
+    def test_slot_wrapper_operand_eq_drops_receiver(self):
+        holder = [[EqHook(5, lambda: (holder.clear(), gc.collect()))]]
+        self.assertTrue(list.__contains__(holder[0], 5))
+        self.assertEqual(holder, [])
+
+    def test_slot_wrapper_richcompare_drops_receiver(self):
+        holder = []
+
+        class Other:
+            def __eq__(self, other):
+                holder.clear()
+                gc.collect()
+                return True
+
+        holder.append([1])
+        self.assertTrue(list.__eq__(holder[0], [Other()]))
+        self.assertEqual(holder, [])
+
+    def test_call_slot_drops_receiver(self):
+        holder = []
+
+        class C:
+            def __call__(self, *args, **kwargs):
+                holder.clear()
+                gc.collect()
+                return (args, kwargs)
+
+        holder.append(C())
+        self.assertEqual(holder[0](1, k=2), ((1,), {"k": 2}))
+        self.assertEqual(holder, [])
+
+    def test_init_slot_drops_instance_holder(self):
+        holder = []
+
+        class C:
+            def __init__(self, value):
+                holder.clear()
+                gc.collect()
+                self.value = value
+
+        holder.append(C)
+        self.assertEqual(holder[0](3).value, 3)
+
+    def test_len_and_getitem_slots_drop_receiver(self):
+        holder = []
+
+        class C:
+            def __len__(self):
+                holder.clear()
+                gc.collect()
+                return 2
+
+            def __getitem__(self, i):
+                holder.clear()
+                gc.collect()
+                return i
+
+        holder.append(C())
+        self.assertEqual(len(holder[0]), 2)
+        holder.append(C())
+        self.assertEqual(holder[0][7], 7)
+
+    def test_type_setattr_old_value_del_drops_class(self):
+        holder = []
+
+        class Dropper:
+            def __del__(self):
+                holder.clear()
+                gc.collect()
+
+        def make():
+            class C:
+                attr = Dropper()
+            return C
+
+        holder.append(make())
+        holder[0].attr = 1
+        self.assertEqual(holder, [])
+
+    def test_type_setattr_doc_and_module(self):
+        def make():
+            class C:
+                pass
+            return C
+
+        holder = [make()]
+        holder[0].__doc__ = "doc"
+        holder[0].__module__ = "mod"
+        holder[0].__type_params__ = ()
+        self.assertEqual(holder[0].__doc__, "doc")
+        self.assertEqual(holder[0].__module__, "mod")
+
+    def test_type_getattr_metaclass_descriptor_reassigns_class(self):
+        class OtherMeta(type):
+            pass
+
+        def make():
+            class Desc:
+                def __get__(self, obj, owner):
+                    if obj is not None:
+                        obj.__class__ = OtherMeta
+                        gc.collect()
+                    return "meta"
+
+                def __set__(self, obj, value):
+                    raise AttributeError
+
+            class Meta(type):
+                attr = Desc()
+
+            return Meta("C", (), {})
+
+        cls = make()
+        self.assertEqual(cls.attr, "meta")
+        self.assertIs(type(cls), OtherMeta)
+
+    def test_set_name_mutates_namespace(self):
+        events = []
+
+        class Named:
+            def __set_name__(self, owner, name):
+                for key in ("a", "b"):
+                    if hasattr(owner, key):
+                        delattr(owner, key)
+                gc.collect()
+                events.append(name)
+
+        class C:
+            a = Named()
+            b = Named()
+
+        self.assertEqual(len(events), 2)
+
+    def test_bases_assignment_with_mro_override(self):
+        class A:
+            pass
+
+        class B:
+            pass
+
+        class Meta(type):
+            def mro(cls):
+                gc.collect()
+                return type.mro(cls)
+
+        class C(A, metaclass=Meta):
+            pass
+
+        C.__bases__ = (B,)
+        self.assertEqual(C.__mro__, (C, B, object))
+
+    def test_getstate_default_slots(self):
+        import copy
+
+        class S:
+            __slots__ = ("x", "y")
+
+        s = S()
+        s.x = 1
+        c = copy.copy(s)
+        self.assertEqual(c.x, 1)
+        self.assertFalse(hasattr(c, "y"))
+
+
 class VectorcallMethodTests(unittest.TestCase):
 
     def test_write_method_drops_receiver(self):

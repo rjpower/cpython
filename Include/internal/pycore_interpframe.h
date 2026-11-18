@@ -601,6 +601,9 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame);
 // Abort if a live slot of the frame holds a malformed value.
 // Exported for lltrace in _testinternalcapi, which includes ceval.h.
 PyAPI_FUNC(void) _PyValue_CheckFrame(_PyInterpreterFrame *frame);
+// The same for the first extent slots.
+PyAPI_FUNC(void) _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame,
+                                           int extent);
 #endif
 
 /* A refcount test only proves a close callback-free while holding the GIL. */
@@ -623,6 +626,38 @@ enum {
     _Py_FRAME_CLEAR_LOCALS = -3,
     _Py_FRAME_CLEAR_FUNCTION = -4,
 };
+
+/* Close the owners of the first remaining slots, from the top, then the
+ * locals mapping and the function. Stop before the first close that can call
+ * Python, which stays in its home, and return the stage reached. The caller
+ * owns the phase publication of the unlinked frame. */
+static inline int
+_PyFrame_TryCloseOwnersNoReentry(_PyInterpreterFrame *frame, int remaining)
+{
+    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
+    if (FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj) != NULL) {
+        return _Py_FRAME_CLEAR_ASSOCIATION;
+    }
+#ifdef Py_DEBUG
+    _PyValue_CheckFrameExtent(frame, remaining);
+#endif
+    while (remaining > 0) {
+        PyValue ref = frame->base[remaining - 1];
+        if (!_PyValue_TryXCloseNoReentry(ref)) {
+            return remaining;
+        }
+        frame->base[--remaining] = PyValue_NULL;
+    }
+    if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
+        return _Py_FRAME_CLEAR_LOCALS;
+    }
+    Py_CLEAR(frame->f_locals);
+    if (_PyFrame_ObjectMayReenter((PyObject *)frame->f_funcobj)) {
+        return _Py_FRAME_CLEAR_FUNCTION;
+    }
+    Py_CLEAR(frame->f_funcobj);
+    return _Py_FRAME_CLEAR_DONE;
+}
 
 struct _PyTransitionRoots;
 int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);

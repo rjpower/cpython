@@ -461,7 +461,7 @@ class TestIRCases(unittest.TestCase):
                     self.assertNotIn("generator_outcome_target(", body)
                     self.assertNotIn("_PyEval_FrameClear", route)
                     self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
-                    clear = ("_PyEval_FrameClearAndPopWithResult" if name.endswith("_EMPTY")
+                    clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
                              else "_PyEval_FrameClearAndPopGeneralWithResult")
                     self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
                     self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
@@ -1546,7 +1546,7 @@ class TestIRCases(unittest.TestCase):
                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
-                helper = ("_PyEval_FrameClearAndPopWithResult" if name.endswith("_EMPTY")
+                helper = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
                           else "_PyEval_FrameClearAndPopGeneralWithResult")
                 retired = handler.index(f"temp = {helper}(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")

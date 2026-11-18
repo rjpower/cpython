@@ -13608,7 +13608,6 @@
                 retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
@@ -13622,9 +13621,9 @@
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
-                frame->phase_state = 0;
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
+                    frame->phase_state = 0;
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
                     if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
@@ -13677,7 +13676,6 @@
                 retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
@@ -13689,11 +13687,11 @@
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
-                frame->phase_state = 0;
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
+                    frame->phase_state = 0;
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
                     if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
@@ -18879,7 +18877,6 @@
                 retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
@@ -18893,9 +18890,9 @@
                 frame->phase_state = 0;
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
-                frame->phase_state = 0;
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
+                    frame->phase_state = 0;
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
                     if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
@@ -18935,7 +18932,6 @@
                 retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                frame->phase_state = 0;
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
@@ -18947,11 +18943,11 @@
                 }
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+                temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
-                frame->phase_state = 0;
                 assert(_PyValue_IsHome(temp));
                 if (generator_return) {
+                    frame->phase_state = 0;
                     _PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, temp);
                     next_instr = ir_step_result.next;
                     if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }

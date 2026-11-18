@@ -415,6 +415,12 @@ _PyValue_CheckFrame(_PyInterpreterFrame *frame)
 {
     check_frame_extent(frame, _PyFrame_NumSlots(frame));
 }
+
+void
+_PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
+{
+    check_frame_extent(frame, extent);
+}
 #endif
 
 /* Release the first n slots of frame, from the top, so that a finalizer
@@ -456,28 +462,7 @@ try_clear_except_code(_PyInterpreterFrame *frame, int remaining)
     assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
            FT_ATOMIC_LOAD_INT8_RELAXED(
                _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) == FRAME_CLEARED);
-    if (FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj) != NULL) {
-        return _Py_FRAME_CLEAR_ASSOCIATION;
-    }
-#ifdef Py_DEBUG
-    check_frame_extent(frame, remaining);
-#endif
-    while (remaining > 0) {
-        PyValue ref = frame->base[remaining - 1];
-        if (!_PyValue_TryXCloseNoReentry(ref)) {
-            return remaining;
-        }
-        frame->base[--remaining] = PyValue_NULL;
-    }
-    if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
-        return _Py_FRAME_CLEAR_LOCALS;
-    }
-    Py_CLEAR(frame->f_locals);
-    if (_PyFrame_ObjectMayReenter((PyObject *)frame->f_funcobj)) {
-        return _Py_FRAME_CLEAR_FUNCTION;
-    }
-    Py_CLEAR(frame->f_funcobj);
-    return _Py_FRAME_CLEAR_DONE;
+    return _PyFrame_TryCloseOwnersNoReentry(frame, remaining);
 }
 
 int

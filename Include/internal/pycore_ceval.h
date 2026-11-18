@@ -357,6 +357,9 @@ PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, 
 /* The returned owner remains C-owned until ordinary result publication. */
 PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopWithResult(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
+/* Certified empty-scratch returns retire a thread frame's locals only. */
+PyAPI_FUNC(PyValue) _PyEval_RetireThreadFrameWithResult(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
 /* General returns also retire the leaf frame's initialized scratch homes. */
 PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopGeneralWithResult(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);

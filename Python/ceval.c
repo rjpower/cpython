@@ -3564,6 +3564,33 @@ _PyEval_FrameClearAndPopGeneralWithResult(PyThreadState *tstate,
     return result;
 }
 
+/* Certified RETURN_VALUE_EMPTY retires a thread frame whose scratch is
+ * empty, so only the code's locals can own values. The frame is already
+ * unlinked and nothing reads its phase publication before it is popped; the
+ * slow continuation resets the publication before it publishes roots. */
+PyValue
+_PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, PyValue result)
+{
+    assert(!PyValue_IsNull(result));
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    assert(tstate->current_frame != frame);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
+    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
+    int extent = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    int stage = _PyFrame_TryCloseOwnersNoReentry(frame, extent);
+    if (stage != _Py_FRAME_CLEAR_DONE ||
+        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
+    {
+        return clear_thread_frame_slow(tstate, frame, stage, result,
+                                      _PyIR_RETIRE_NORMAL_RETURN, extent);
+    }
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopFrame(tstate, frame);
+    return result;
+}
+
 void
 _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         uint8_t reason)

@@ -1497,7 +1497,7 @@ dummy_func(
             if (generator_return) {
                 IR_FINISH_GENERATOR_RETURN(temp, dying);
             }
-            temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+            temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
             RELOAD_STACK();
             IR_RETURN_TO_CALLER(temp, generator_return);
         }

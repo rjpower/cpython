@@ -528,6 +528,7 @@ RELEASES = {
     "IR_BINARY_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
     "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
+    "_PyEval_RetireThreadFrameWithResult",
     "_PyErr_Clear",
 }
 NOT_RELEASES = {
@@ -3551,6 +3552,7 @@ class IREmitter(Emitter):
         self.ownership_events: list[OwnershipEvent] = []
         self.disjoint_child_publication: Uop | None = None
         self.disjoint_child_drained = False
+        self.dying_frame_save = False
 
     def ownership_event(self, kind, *, flags=0, dst=0, src=0, extent=0):
         self.ownership_events.append(OwnershipEvent(
@@ -3560,7 +3562,18 @@ class IREmitter(Emitter):
         self.emit(f"frame->phase_state = _PyIR_PHASE_PUBLISHED | {phase};\n")
 
     def save_stack(self, tkn, tkn_iter, uop, storage, inst):
-        result = super().save_stack(tkn, tkn_iter, uop, storage, inst)
+        # A canonical return saves the dying frame just before unlinking it.
+        # Nothing observes that frame's publication again: each retirement
+        # path resets it before its first callback (the shared clear and the
+        # slow-path roots), and the thread fast path pops it unobserved.
+        stack = storage.stack
+        self.dying_frame_save = (
+            uop.name in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"} and
+            isinstance(stack, IRStack) and stack.layout.canonical_frame_transfer)
+        try:
+            result = super().save_stack(tkn, tkn_iter, uop, storage, inst)
+        finally:
+            self.dying_frame_save = False
         if uop is self.disjoint_child_publication:
             stack = storage.stack
             assert isinstance(stack, IRStack)
@@ -3572,8 +3585,9 @@ class IREmitter(Emitter):
     def emit_save(self, storage: Storage) -> None:
         # A frame switch or unsupported escape cannot inherit a publication
         # made at an earlier callback boundary, even if its PC still matches.
-        self.out.start_line()
-        self.emit("frame->phase_state = 0;\n")
+        if not self.dying_frame_save:
+            self.out.start_line()
+            self.emit("frame->phase_state = 0;\n")
         super().emit_save(storage)
 
     def checked_home_array(self, tkn, uop, storage):
@@ -5121,7 +5135,11 @@ class IREmitter(Emitter):
             "IR_RESTORE_VALUE_INPUTS", "IR_ABORT_VALUE_READER",
             "INSTRUMENTED_JUMP",
         } for t in stmt.contents)
-        if escape is not None or phase_barrier:
+        # The return's caller was reset before retirement, the only code that
+        # can run after the switch; return_to_caller resets it again only
+        # before its own escaping completion.
+        returns_to_caller = bool(stmt.contents) and stmt.contents[0].text == "IR_RETURN_TO_CALLER"
+        if (escape is not None or phase_barrier) and not returns_to_caller:
             self.out.start_line()
             self.emit("frame->phase_state = 0;\n")
         if escape is not None and self.pending_owner is not None:
@@ -5726,6 +5744,7 @@ class IREmitter(Emitter):
         else:
             self.emit(f"assert(_PyValue_IsHome({value}));\n")
         self.emit(f"if ({generator_return}) {{\n")
+        self.emit("frame->phase_state = 0;\n")
         self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
         self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
@@ -7154,13 +7173,14 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         if (generator_return) {
             IR_FINISH_GENERATOR_RETURN(temp, dying);
         }
-        temp = _PyEval_FrameClearAndPopWithResult(tstate, dying, temp);
+        temp = RETIRE_HELPER(tstate, dying, temp);
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
-    if parts[1].name == "_RETURN_VALUE":
-        expected_body = expected_body.replace("_PyEval_FrameClearAndPopWithResult",
-                                              "_PyEval_FrameClearAndPopGeneralWithResult")
+    expected_body = expected_body.replace("RETIRE_HELPER", (
+        "_PyEval_FrameClearAndPopGeneralWithResult"
+        if parts[1].name == "_RETURN_VALUE"
+        else "_PyEval_RetireThreadFrameWithResult"))
     if body != [t.text for t in tokenize(expected_body)]:
         return False
     if parts[0].name == "_MAKE_HEAP_SAFE":

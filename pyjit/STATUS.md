@@ -52,12 +52,21 @@ raytrace and pickle are unchanged. Where a callee can run Python that
 rewrites the storage an argument came from, the count stays
 (`E59/values76-inventory.md`).
 
-Checkpoint76 (`76fc2b68918`, `pyjit/checkpoint76`) merges both; it is in
-qualification. `pyjit/values77` finishes the rules' remaining rows and the
-native call scope. In parallel, `pyjit/slots77` makes the value-slot table
-complete: every value slot takes its owner type, readiness fills each empty
-value slot with a generated adapter, and dispatch becomes one call
-(`E59/values76-slot-design.md`).
+[Checkpoint76](issues/register-semantics59/checkpoint76.md)
+(`013fb42c922`, `pyjit/checkpoint76`) merges both. It also restores the
+frame chain that round 1 broke for frame-pointer unwinders: handlers keep no
+frame pointer but reserve `rbp`. The full suite passes in both roles, apart
+from known failures. All-29: 1.0067 against golden73 and 1.1292 against
+upstream (round 2: 1.0088 and 1.1383). DeltaBlue regresses to 1.118 against
+golden73 although round 3 cut its instructions 4.4%. The cause is op-cache
+placement: round 3 alone runs DeltaBlue in 14% fewer cycles than round 2,
+and reserving `rbp` halves op-cache delivery at the same instruction count.
+
+Checkpoint77 (`feb572b0541`, `pyjit/checkpoint77`) adds `pyjit/values77`
+(the rules' remaining rows; the native call scope borrows) and
+`pyjit/slots77` (every value slot takes its owner type, readiness fills each
+empty value slot with a generated adapter, and dispatch is one call). It is
+in full-suite qualification and review.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

@@ -27,9 +27,10 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags `f78c3902c1b`, from round 1; builds `BASE/handlers75r2-{release,debug}`; keep clean while it is a measurement control |
 | `worktrees/calls76` | `pyjit/calls76` | Round 3 call path `ba2d7938541` (pushed), from round 2; builds `BASE/calls76-{release,debug}`; qualified (`E59/calls76-*-focus`); keep clean while it is a measurement control |
 | `worktrees/values76` | `pyjit/values76` | Value rules 1–3, first pass, `0d18fff7a07`, from round 2; builds `BASE/values76-{release,debug}`; `pyjit/values76-draft` holds a stopped run's unverified edits |
-| `worktrees/checkpoint76` | `pyjit/checkpoint76` | Merge of calls76 and values76, `76fc2b68918`; regeneration leaves products unchanged; builds `BASE/checkpoint76-{release,debug}`; full suite and timing next; keep clean |
-| `worktrees/values77` | `pyjit/values77` | Remaining rule 1–3 rows and the native call scope, from checkpoint76; builds `BASE/values77-{release,debug}`; worker deadline 08:45 PST |
-| `worktrees/slots77` | `pyjit/slots77` | One value-slot table (`E59/values76-slot-design.md`), from checkpoint76; builds `BASE/slots77-{release,debug}`; worker deadline 09:45 PST |
+| `worktrees/checkpoint76` | `pyjit/checkpoint76` | Round 3 + values76, frame-chain and self-test fixes, `013fb42c922` (pushed); builds `BASE/checkpoint76-{release,debug}`; [record](issues/register-semantics59/checkpoint76.md); measurement control, keep clean. Variant builds `BASE/{calls76fp,calls76fpfull,checkpoint76nofp}-release` are attribution copies only |
+| `worktrees/values77` | `pyjit/values77` | Remaining rule 1–3 rows and the borrowing native scope, `35b4666037f`, from `76fc2b68918`; builds `BASE/values77-{release,debug}`; merged into checkpoint77 |
+| `worktrees/slots77` | `pyjit/slots77` | One value-slot table, `d9054a5b0e4`, from `76fc2b68918` (`E59/slots77-notes.md`); builds `BASE/slots77-{release,debug}`; merged into checkpoint77 |
+| `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77 + slots77, `feb572b0541`; builds `BASE/checkpoint77-{release,debug}`; full suite and two reviews (slot design; ownership use-after-free) running |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

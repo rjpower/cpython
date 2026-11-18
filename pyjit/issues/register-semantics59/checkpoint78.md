@@ -106,3 +106,44 @@ campaigns. json_dumps moves from 1.355 to 1.170 against upstream between
 checkpoints 77 and 78, while its ratio against golden73 moves from 0.999 to
 0.992. Single upstream ratios carry roughly ±10% campaign-to-campaign
 variation; the geomean moves by less than 0.5%.
+
+## Counters
+
+Per-loop counts on CPU 15 (`E59/execution78-checkpoint-pmu-diff`). The
+protocol-driven PMU campaigns stopped at their load check, because other
+sessions kept the system load above 4. These counts use the differencing
+method of the DeltaBlue attribution.
+
+| Kernel | Build | Cycles | Instructions | IPC | Op-cache share |
+| --- | --- | ---: | ---: | ---: | ---: |
+| DeltaBlue | checkpoint78 | 16.42M | 50.57M | 3.08 | 43% |
+| | checkpoint77 | 16.70M | 50.57M | 3.03 | 40% |
+| | checkpoint76 | 18.13M | 50.61M | 2.79 | 28% |
+| | golden73 | 17.25M | 53.17M | 3.08 | 56% |
+| | upstream | 15.35M | 39.02M | 2.54 | 58% |
+| logging_silent | checkpoint78 | 3,051 | 13,078 | 4.29 | 99% |
+| | checkpoint77 | 3,556 | 13,078 | 3.68 | 68% |
+| | checkpoint76 | 4,064 | 13,078 | 3.22 | 28% |
+| | golden73 | 3,921 | 13,501 | 3.44 | 52% |
+| | upstream | 4,919 | 13,945 | 2.83 | 59% |
+| coroutines | checkpoint78 | 125.0M | 383.8M | 3.07 | 56% |
+| | checkpoint77 | 142.0M | 383.8M | 2.70 | 30% |
+| | checkpoint76 | 135.4M | 383.8M | 2.83 | 30% |
+| | golden73 | 126.3M | 379.9M | 3.01 | 32% |
+| | upstream | 108.6M | 294.6M | 2.71 | 42% |
+| deepcopy_memo | checkpoint78 | 155.4K | 449.8K | 2.89 | 19% |
+| | checkpoint77 | 155.2K | 450.0K | 2.90 | 21% |
+| | checkpoint76 | 158.4K | 450.2K | 2.84 | 16% |
+| | golden73 | 153.0K | 460.1K | 3.01 | 30% |
+| | upstream | 126.6K | 347.4K | 2.74 | 33% |
+
+Op-cache share is op-cache µops over all dispatched µops.
+
+The three checkpoints retire the same instructions on logging_silent and
+coroutines. Yet cycles differ by 33% and 14%, tracking op-cache share.
+Placement, not executed work, decides these workloads between checkpoints.
+
+Against upstream, the remaining gap is executed work. DeltaBlue retires 1.30
+times upstream's instructions, coroutines 1.30 and deepcopy_memo 1.29, while
+our IPC is higher. logging_silent is the exception: we retire 6% fewer
+instructions than upstream and take 38% fewer cycles.

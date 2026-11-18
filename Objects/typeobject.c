@@ -257,13 +257,11 @@ type_from_ref(PyObject *ref)
 
 /* helpers for static builtin types */
 
-#ifndef NDEBUG
 static inline int
 managed_static_type_index_is_set(PyTypeObject *self)
 {
     return self->tp_subclasses != NULL;
 }
-#endif
 
 static inline size_t
 managed_static_type_index_get(PyTypeObject *self)
@@ -1303,12 +1301,15 @@ next_nonzero_subclass(PyTypeObject *type)
     return NULL;
 }
 
+static void type_clear_unpaired_value_rows(PyTypeObject *type);
+
 static void
 type_modified_recursive(PyTypeObject *type)
 {
     ASSERT_NEW_TYPE_OR_LOCKED(type);
     assert(_PyInterpreterState_GET()->types.mutation_depth != 0);
     if (type->tp_version_tag == 0) {
+        type_clear_unpaired_value_rows(type);
         return;
     }
     assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
@@ -1321,6 +1322,7 @@ type_modified_recursive(PyTypeObject *type)
         Py_DECREF(child);
         // A watcher may have changed the subclasses: restart from the first.
     }
+    type_clear_unpaired_value_rows(type);
     if (type->tp_version_tag == 0) {
         // A child's callback may have completed this parent's invalidation.
         // Do not emit a second notification without an intervening admission.
@@ -10342,17 +10344,6 @@ type_ready_inherit_value(PyTypeObject *type)
     return own;
 }
 
-#ifdef Py_DEBUG
-static void _Py_NO_RETURN
-value_slot_invariant_failed(PyTypeObject *type, int row, const char *problem)
-{
-    char message[200];
-    PyOS_snprintf(message, sizeof(message),
-                  "type %.80s: value slot %s %s", type->tp_name,
-                  value_slot_rows[row].name, problem);
-    _PyObject_ASSERT_FAILED_MSG((PyObject *)type, message);
-}
-
 // Whether (object, value) is a pair that the type may hold in row.
 static int
 value_slot_pair_is_known(PyTypeObject *type, int row, void *object,
@@ -10379,6 +10370,17 @@ value_slot_pair_is_known(PyTypeObject *type, int row, void *object,
         }
     }
     return 0;
+}
+
+#ifdef Py_DEBUG
+static void _Py_NO_RETURN
+value_slot_invariant_failed(PyTypeObject *type, int row, const char *problem)
+{
+    char message[200];
+    PyOS_snprintf(message, sizeof(message),
+                  "type %.80s: value slot %s %s", type->tp_name,
+                  value_slot_rows[row].name, problem);
+    _PyObject_ASSERT_FAILED_MSG((PyObject *)type, message);
 }
 
 // Check one row of the invariant; own is whether it is the type's own.
@@ -14334,7 +14336,6 @@ has_slotdef(PyObject *name)
     return false;
 }
 
-#ifdef Py_DEBUG
 /* Whether the slot descriptor that update_one_slot() finds in the MRO for a
    slotdef of row carries the pair (object, value). */
 static int
@@ -14352,7 +14353,16 @@ value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
         int found = 0;
         if (PyValue_IsObject(descr_ref)) {
             PyObject *descr = PyValue_AsKnownObjectBorrow(descr_ref);
-            if (Py_IS_TYPE(descr, &PyWrapperDescr_Type)) {
+            if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)
+                && !Py_IS_TYPE(descr, &PyWrapperDescr_Type))
+            {
+                /* A static type may name a slot with another kind of
+                   attribute: a method descriptor (dict.__getitem__ and
+                   __contains__, METH_COEXIST) or a builtin function
+                   (__new__). It neither pairs nor contradicts the slot. */
+                found = 1;
+            }
+            else if (Py_IS_TYPE(descr, &PyWrapperDescr_Type)) {
                 PyWrapperDescrObject *d = (PyWrapperDescrObject *)descr;
                 found = (d->d_wrapped == object
                          && (_Py_valuefunc)d->d_wrapped_value == value);
@@ -14361,7 +14371,7 @@ value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
                    first slotdef in the table. The other row is
                    not rewritten from it: PyType_Ready checked its pair,
                    as for the static list. */
-                if (!found && (type->tp_flags & Py_TPFLAGS_HEAPTYPE)
+                if (!found
                     && slotdef_values[d->d_base - slotdefs].row != row
                     && d->d_base->name_strobj == p->name_strobj)
                 {
@@ -14377,13 +14387,87 @@ value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
     return 0;
 }
 
+/* Whether the non-zero value field of row of type forms a pair with the
+   type's object slot, which is not NULL: a pair of the pair table, of a slot_*
+   function of the slotdef table, of a base in the MRO, or of the slot
+   descriptor that update_one_slot() finds, which is how a type's own pairs
+   stay visible after PyType_Ready. A static type belongs here too: an
+   extension patches its object slots after PyType_Ready, and the object slot
+   is the definition (PyType_Modified() clears a field that no longer pairs). */
+static int
+value_row_is_paired(PyTypeObject *type, int row)
+{
+    _Py_valuefunc value = *value_slot_field(type, row);
+    void *object = value_slot_object(type, row);
+    assert(value != NULL && object != NULL);
+    /* The generic call thunk is the object slot of a value form that it
+       calls, which is the definition (_PyValue_TpCallThunk()). */
+    if (object == (void *)_PyValue_TpCallThunk) {
+        return 1;
+    }
+    if (value_slot_pair_is_known(type, row, object, value)) {
+        return 1;
+    }
+    int named = 0;
+    for (pytype_slotdef *p = slotdefs; p->name; p++) {
+        slotdef_value *v = &slotdef_values[p - slotdefs];
+        if (v->row != row) {
+            continue;
+        }
+        named = 1;
+        if (p->function == object && v->function == value) {
+            return 1;
+        }
+    }
+    /* A row that no slotdef names (send: am_send has no dunder) is
+       written only before PyType_Ready, whose check_value_invariant()
+       checked the type's own pair; nothing rewrites it after. */
+    if (!named) {
+        return 1;
+    }
+    return value_pair_in_slot_descriptor(type, row, object, value);
+}
+
+/* PyType_Modified() keeps the value fields paired: a field that no longer
+   pairs with the object slot beside it is cleared, so that the dispatchers
+   call the object slot through the adapter. */
+static void
+type_clear_unpaired_value_rows(PyTypeObject *type)
+{
+    /* A type that PyType_Ready is still filling has no slot descriptors yet,
+       and the value pass of PyType_Ready pairs its fields. */
+    if (!slotdef_values_ready || !(type->tp_flags & Py_TPFLAGS_READY)
+        || is_readying(type))
+    {
+        return;
+    }
+    if ((type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN)
+        && !managed_static_type_index_is_set(type))
+    {
+        return;
+    }
+    if (lookup_tp_mro(type) == NULL) {
+        return;
+    }
+    for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
+        _Py_valuefunc *field = value_slot_field(type, row);
+        if (*field == NULL) {
+            continue;
+        }
+        if (value_slot_object(type, row) == NULL
+            || !value_row_is_paired(type, row))
+        {
+            *field = NULL;
+        }
+    }
+}
+
+#ifdef Py_DEBUG
 /* One row of the invariant (section 4.4) for a type that PyType_Ready has
    finished: a row that update_one_slot() writes, and every row after
    fixup_slot_dispatchers() and for the target of a __class__ assignment.
    A non-zero value field must sit beside a non-NULL object slot and form
-   with it a pair of the pair table, of a slot_* function, of a base in the
-   MRO, or of the slot descriptor that update_one_slot() finds, which is how
-   a type's own pairs stay visible after PyType_Ready. */
+   with it a pair (value_row_is_paired()). */
 static void
 check_ready_value_row(PyTypeObject *type, int row)
 {
@@ -14399,39 +14483,11 @@ check_ready_value_row(PyTypeObject *type, int row)
     {
         return;
     }
-    void *object = value_slot_object(type, row);
-    if (object == NULL) {
+    if (value_slot_object(type, row) == NULL) {
         value_slot_invariant_failed(type, row,
                                     "is set beside a NULL object slot");
     }
-    if (value_slot_pair_is_known(type, row, object, value)) {
-        return;
-    }
-    /* A static type is immutable: nothing rewrites its slots after
-       PyType_Ready, which checked its own pairs. Its slot descriptor may
-       also be another function's, as list.__setitem__ (mp_ass_subscript's)
-       beside sq_ass_item. */
-    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
-        return;
-    }
-    int named = 0;
-    for (pytype_slotdef *p = slotdefs; p->name; p++) {
-        slotdef_value *v = &slotdef_values[p - slotdefs];
-        if (v->row != row) {
-            continue;
-        }
-        named = 1;
-        if (p->function == object && v->function == value) {
-            return;
-        }
-    }
-    /* A row that no slotdef names (send: am_send has no dunder) is
-       written only before PyType_Ready, whose check_value_invariant()
-       checked the type's own pair; nothing rewrites it after. */
-    if (!named) {
-        return;
-    }
-    if (!value_pair_in_slot_descriptor(type, row, object, value)) {
+    if (!value_row_is_paired(type, row)) {
         value_slot_invariant_failed(type, row,
                                     "does not pair with its object slot");
     }

@@ -721,8 +721,10 @@ PyValue_AsKnownObjectBorrow(PyValueBorrow ref)
 #define PyValue_AsKnownObjectBorrow(V0) (PyValue_AsKnownObjectBorrow)(PyValue_Borrow(V0))
 
 /* The object that v holds, borrowed, or NULL for PyValue_NULL, an inline
-   value or an index: one compare, where PyValue_IsObject() and
-   PyValue_AsKnownObjectBorrow() together make four. */
+   value or an index: one range compare. GCC already folds the test of
+   PyValue_AsKnownObjectBorrow() after PyValue_IsObject(), so replacing that
+   pair saves nothing; this helper pays off where it replaces a
+   PyValue_IsInline() test followed by PyValue_AsKnownObjectBorrow(). */
 static inline PyObject *
 PyValue_ObjectOrNull(PyValueBorrow v)
 {

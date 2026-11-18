@@ -1309,7 +1309,6 @@ type_modified_recursive(PyTypeObject *type)
     ASSERT_NEW_TYPE_OR_LOCKED(type);
     assert(_PyInterpreterState_GET()->types.mutation_depth != 0);
     if (type->tp_version_tag == 0) {
-        type_clear_unpaired_value_rows(type);
         return;
     }
     assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
@@ -1322,7 +1321,6 @@ type_modified_recursive(PyTypeObject *type)
         Py_DECREF(child);
         // A watcher may have changed the subclasses: restart from the first.
     }
-    type_clear_unpaired_value_rows(type);
     if (type->tp_version_tag == 0) {
         // A child's callback may have completed this parent's invalidation.
         // Do not emit a second notification without an intervening admission.
@@ -1364,11 +1362,26 @@ _PyType_Modified_Unlocked(PyTypeObject *type)
     _PyTypeMutation_End(&scope);
 }
 
+/* The interpreter's own invalidation.  Its slot changes go through
+   update_one_slot(), which keeps the value fields paired. */
+static void
+type_modified(PyTypeObject *type)
+{
+    BEGIN_TYPE_LOCK();
+    _PyType_Modified_Unlocked(type);
+    END_TYPE_LOCK();
+}
+
+/* The C API's: an extension that stored an object slot by hand calls this,
+   so a value field that no longer pairs with its object slot is cleared.
+   Subclasses hold their own copies of the object slots, so their pairs are
+   unaffected. */
 void
 PyType_Modified(PyTypeObject *type)
 {
     BEGIN_TYPE_LOCK();
     _PyType_Modified_Unlocked(type);
+    type_clear_unpaired_value_rows(type);
     END_TYPE_LOCK();
 }
 
@@ -1786,7 +1799,7 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (!check_set_special_type_attr(type, value, "__module__")) {
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
@@ -1882,7 +1895,7 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
             goto done;
         }
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2282,7 +2295,7 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (!check_set_special_type_attr(type, value, "__doc__")) {
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2326,7 +2339,7 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
     }
     else {
         annotate = Py_NewRef(Py_None);
-        PyType_Modified(type);
+        type_modified(type);
         if (_PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), PyValue_FromObjectBorrow(annotate)) < 0) {
             Py_CLEAR(annotate);
             goto done;
@@ -2362,7 +2375,7 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         PyErr_SetString(PyExc_TypeError, "__annotate__ must be callable or None");
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_get_dict(type);
     if (dict == NULL ||
         _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), PyValue_FromObjectBorrow(value)) < 0) {
@@ -2432,7 +2445,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
                 goto done;
             }
         }
-        PyType_Modified(type);
+        type_modified(type);
         if (_PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations_cache__)), PyValue_FromObjectBorrow(annotations)) < 0) {
             Py_CLEAR(annotations);
             goto done;
@@ -2461,7 +2474,7 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
                      type->tp_name);
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2528,7 +2541,7 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (!check_set_special_type_attr(type, value, "__type_params__")) {
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     dict = type_mutation_borrow_dict(type);
     if (dict == NULL) {
         goto done;
@@ -7430,7 +7443,7 @@ type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow valu
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
     }
-    PyType_Modified(type);
+    type_modified(type);
     if (lookup_tp_dict(type) == NULL) {
         candidate = PyDict_New();
         if (candidate == NULL) {
@@ -7924,7 +7937,7 @@ type_clear(PyObject *self)
            A tuple of strings can't be part of a cycle.
     */
 
-    PyType_Modified(type);
+    type_modified(type);
     PyObject *dict = lookup_tp_dict(type);
     if (dict) {
         PyDict_Clear(dict);

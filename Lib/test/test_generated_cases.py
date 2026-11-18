@@ -1083,6 +1083,51 @@ class TestIRCases(unittest.TestCase):
                     variant_formats["RENAMED_LOCAL_DUP"])
                 self.assertEqual(contract is not None, valid)
 
+    def test_canonical_common_constant_source(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        contract = ir_generator.canonical_result_source(
+            analysis.instructions["LOAD_COMMON_CONSTANT"],
+            formats["LOAD_COMMON_CONSTANT"])
+        self.assertIsNotNone(contract)
+        handler = self.handler(out.getvalue(), "LOAD_COMMON_CONSTANT")
+        self.assertIn("IR_STORE_CANONICAL_DST(ir_word, A, value);", handler)
+        self.assertNotIn("_PyValue_Publish", handler)
+
+        template = """
+        pure inst(RENAMED_COMMON_CONSTANT, (-- result)) {
+            assert(oparg < NUM_COMMON_CONSTANTS);
+            result = PyValue_DUP(tstate->interp->common_consts[oparg]);
+        }
+        """
+        variants = (
+            (template, True),
+            (template.replace("common_consts[oparg]", "other_consts[oparg]"),
+             False),
+            (template.replace("common_consts[oparg]", "common_consts[oparg + 1]"),
+             False),
+            (template.replace("(-- result)", "(value -- result)"), False),
+        )
+        for text, valid in variants:
+            with self.subTest(source=text), mock.patch.dict(
+                ir_generator.FEEDBACK_LAYOUTS,
+                {"RENAMED_COMMON_CONSTANT": ir_generator.FB_HEADER}
+            ):
+                with handle_stderr():
+                    variant = analyzer.analyze_forest(
+                        parse_src(text), SequentialNumbers())
+                variant_formats = ir_generator.compute_formats(variant)
+                contract = ir_generator.canonical_result_source(
+                    variant.instructions["RENAMED_COMMON_CONSTANT"],
+                    variant_formats["RENAMED_COMMON_CONSTANT"])
+                self.assertEqual(contract is not None, valid)
+
     def test_canonical_frame_transfer_provenance_fails_closed(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

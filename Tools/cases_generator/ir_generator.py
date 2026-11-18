@@ -6980,6 +6980,19 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
               if token.kind != "COMMENT"]
     if any(token.kind.startswith("CMACRO") for token in tokens):
         return None
+    # The interpreter publishes its common constants canonically when it
+    # creates them (pylifecycle.c), and they are immortal.
+    if (len(parts) == 1 and not inputs and fmt.n_inputs == 0
+            and producer.properties.pure
+            and len(producer.stack.outputs) == 1):
+        expected = f"""{{
+            assert(oparg < NUM_COMMON_CONSTANTS);
+            {result} = PyValue_DUP(tstate->interp->common_consts[oparg]);
+        }}"""
+        if ([token.text for token in producer.body.tokens()
+             if token.kind != "COMMENT"]
+                == [token.text for token in tokenize(expected)]):
+            return CanonicalResult(producer, result)
     local_field = fmt.field_of(ROLE_LOCAL_IN)
     home_helpers = {"GETLOCAL", "PyValue_DUP", "assert", "PyValue_IsNull"}
     if (len(parts) == 1 and not inputs and fmt.n_inputs == 0

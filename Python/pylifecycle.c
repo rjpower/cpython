@@ -931,7 +931,10 @@ pycore_init_builtins(PyThreadState *tstate)
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         assert(common_objs[i] != NULL);
         _Py_SetImmortal(common_objs[i]);
-        interp->common_consts[i] = PyValue_DUP(PyValue_FromObjectBorrow(common_objs[i]));
+        PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(common_objs[i]));
+        // -1 becomes its inline form
+        interp->common_consts[i] = _PyValue_Publish(&value);
+        assert(_PyValue_IsHome(PyValue_Borrow(interp->common_consts[i])));
     }
 
     /* The static types' dicts keep these descriptors alive; the cache

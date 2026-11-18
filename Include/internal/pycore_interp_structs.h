@@ -1003,6 +1003,8 @@ struct _is {
     struct ast_state ast;
     struct types_state types;
     struct callable_cache callable_cache;
+    /* Canonical homes of immortal objects: LOAD_COMMON_CONSTANT stores them
+     * without publication. */
     PyValue common_consts[NUM_COMMON_CONSTANTS];
 
     _PyOptimizationConfig opt_config;

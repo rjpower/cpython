@@ -16059,7 +16059,7 @@
             PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
-            IR_STORE_DST(ir_word, A, value);
+            IR_STORE_CANONICAL_DST(ir_word, A, value);
             if (!PyValue_IsNull(ir_displaced)) {
                 frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {

@@ -832,5 +832,49 @@ class RemainingOperationTests(unittest.TestCase):
         self.assertIn((1, 2.5, None, ..., "x", (1, 2.5)), code.co_consts)
 
 
+class ProvenContainerTests(unittest.TestCase):
+    """Core callers that have proven the container use the internal dict
+    entries; the public entries keep their checks."""
+
+    def test_dict_iterators_of_each_kind(self):
+        d = {1: "a", 2.5: "b", "c": 3}
+        self.assertEqual(list(iter(d)), [1, 2.5, "c"])
+        self.assertEqual(list(d.values()), ["a", "b", 3])
+        self.assertEqual(list(d.items()), [(1, "a"), (2.5, "b"), ("c", 3)])
+        self.assertEqual(list(reversed(d)), ["c", 2.5, 1])
+        self.assertEqual(list(reversed(d.values())), [3, "b", "a"])
+        self.assertEqual(list(reversed(d.items())),
+                         [("c", 3), (2.5, "b"), (1, "a")])
+
+    def test_store_global_into_frozendict_globals_raises(self):
+        code = compile("global x\nx = 1", "<s>", "exec")
+        with self.assertRaises(TypeError):
+            exec(code, frozendict({"__builtins__": __builtins__}))
+
+    def test_exact_dict_store_delete_contains(self):
+        d = {}
+        d[5] = 1
+        d["k"] = 2
+        self.assertIn(5, d)
+        self.assertNotIn(6, d)
+        del d[5]
+        with self.assertRaises(KeyError):
+            del d[5]
+        with self.assertRaises(TypeError):
+            d[[]] = 1
+        with self.assertRaises(TypeError):
+            [] in d
+        self.assertEqual(d, {"k": 2})
+
+    def test_mappingproxy_contains(self):
+        proxy = type("T", (), {"a": 1}).__dict__
+        self.assertIn("a", proxy)
+        self.assertNotIn("b", proxy)
+
+    def test_build_map(self):
+        a, b = 1, 2.5
+        self.assertEqual({a: b, "x": a, b: "y"}, {1: 2.5, "x": 1, 2.5: "y"})
+
+
 if __name__ == "__main__":
     unittest.main()

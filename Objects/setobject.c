@@ -2306,7 +2306,7 @@ set_difference_untracked(PySetObject *so, PyObject *other)
             key = PyValue_DUP(entry->key);
             hash = entry->hash;
             PyValue found;
-            rv = _PyDict_GetValue_KnownHash(other, key, hash, &found);
+            rv = _PyDict_GetValue_KnownHash((PyDictObject *)other, key, hash, &found);
             if (!PyValue_IsNull(found)) {
                 PyValue_XCLOSE(found);
             }

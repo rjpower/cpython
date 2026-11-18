@@ -90,7 +90,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     PyErr_Clear();
     Py_XDECREF(result);
     PyValue found = PyValue_NULL;
-    status = _PyDict_GetValue_KnownHash(dict, query, hash, &found);
+    status = _PyDict_GetValue_KnownHash((PyDictObject *)dict, query, hash, &found);
     valid = valid && status == 1 && PyValue_IsInlineInt(found) &&
             PyValue_InlineInt64(found) == INT32_MAX && PyDict_GET_SIZE(dict) == 1;
     PyValue_XCLOSE(found);
@@ -269,7 +269,7 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
     Py_XDECREF(result);
     result = NULL;
     PyValue found = PyValue_NULL;
-    valid = valid && _PyDict_GetValue_KnownHash(dict,
+    valid = valid && _PyDict_GetValue_KnownHash((PyDictObject *)dict,
         PyValue_FromObjectBorrow(key), hash, &found) == 1 &&
         PyValue_IsInlineInt(found) && PyValue_InlineInt64(found) == INT32_MAX;
     PyValue_XCLOSE(found);

@@ -1811,7 +1811,7 @@ _PyStatusValue
     }
     if (dict != NULL) {
         Py_INCREF(dict);
-        int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &attr);
+        int found = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &attr);
         Py_DECREF(dict);
         if (found < 0) {
             PyValue_XCLOSE(attr);
@@ -2014,7 +2014,7 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     }
     if (dict != NULL) {
         Py_INCREF(dict);
-        int rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &res);
+        int rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &res);
         /* Suppress the lookup's AttributeError before retirement, so a
          * later cleanup failure remains an error. */
         if (rc < 0 && PyValue_IsNull(res) && suppress &&
@@ -2173,9 +2173,9 @@ int
     else {
         owned_dict = Py_NewRef(dict);
         if (PyValue_IsNull(value))
-            res = PyDict_DelValue(dict, PyValue_FromObjectBorrow(name));
+            res = _PyDict_DelValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name));
         else
-            res = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), value);
+            res = _PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), value);
     }
   error_check:
     if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
@@ -3252,7 +3252,7 @@ Py_ReprEnter(PyObject *obj)
     if (hash == -1) {
         goto done;
     }
-    int found = _PyDict_GetValue_KnownHash(dict, name, hash, &guard);
+    int found = _PyDict_GetValue_KnownHash((PyDictObject *)dict, name, hash, &guard);
     if (found < 0) {
         goto done;
     }
@@ -3301,7 +3301,7 @@ Py_ReprLeave(PyObject *obj)
     if (dict == NULL)
         goto finally;
     Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
-    if (hash == -1 || _PyDict_GetValue_KnownHash(dict,
+    if (hash == -1 || _PyDict_GetValue_KnownHash((PyDictObject *)dict,
             PyValue_FromObjectBorrow(&_Py_ID(Py_Repr)), hash, &guard) <= 0) {
         goto finally;
     }

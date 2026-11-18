@@ -1429,7 +1429,7 @@ mappingproxy_contains(PyObject *self, PyObject *key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     if (PyDict_CheckExact(pp->mapping))
-        return PyDict_ContainsValue(pp->mapping, PyValue_FromObjectBorrow(key));
+        return _PyDict_ContainsValue((PyDictObject *)pp->mapping, PyValue_FromObjectBorrow(key));
     else
         return _PyValue_Contains(PyValue_FromObjectBorrow(pp->mapping), PyValue_FromObjectBorrow(key));
 }

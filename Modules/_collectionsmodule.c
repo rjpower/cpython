@@ -2749,7 +2749,7 @@ _collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
             }
 
             PyValue oldv;
-            int found = _PyDict_GetValue_KnownHash(mapping_obj, key, hash, &oldv);
+            int found = _PyDict_GetValue_KnownHash((PyDictObject *)mapping_obj, key, hash, &oldv);
             if (found < 0) {
                 PyValue_CLOSE(key);
                 goto error;

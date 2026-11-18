@@ -262,7 +262,7 @@ framelocalsproxy_getitem(PyObject *self, PyObject *key)
     PyObject *extra = Py_XNewRef(frame->f_extra_locals);
     if (extra != NULL) {
         PyValue ev;
-        int found = PyDict_GetValue(extra, PyValue_FromObjectBorrow(key), &ev);
+        int found = _PyDict_GetValue((PyDictObject *)extra, PyValue_FromObjectBorrow(key), &ev);
         Py_DECREF(extra);
         if (found < 0) {
             return NULL;
@@ -381,9 +381,9 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
     assert(PyDict_Check(extra));
 
     if (value == NULL) {
-        return PyDict_DelValue(extra, PyValue_FromObjectBorrow(key));
+        return _PyDict_DelValue((PyDictObject *)extra, PyValue_FromObjectBorrow(key));
     } else {
-        return PyDict_SetValue(extra, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
+        return _PyDict_SetValue((PyDictObject *)extra, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
     }
 }
 
@@ -867,7 +867,7 @@ framelocalsproxy_contains(PyObject *self, PyObject *key)
     /* As framelocalsproxy_getitem(): pin f_extra_locals for the lookup. */
     PyObject *extra = Py_XNewRef(frame->f_extra_locals);
     if (extra != NULL) {
-        int found = PyDict_ContainsValue(extra, PyValue_FromObjectBorrow(key));
+        int found = _PyDict_ContainsValue((PyDictObject *)extra, PyValue_FromObjectBorrow(key));
         Py_DECREF(extra);
         return found;
     }

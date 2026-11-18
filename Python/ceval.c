@@ -469,7 +469,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         PyValue value;
         if (PyDict_CheckExact(map)) {
             // dict.get(key, dummy) without the call
-            int r = PyDict_GetValue(map, key_v, &value);
+            int r = _PyDict_GetValue((PyDictObject *)map, key_v, &value);
             if (r < 0) {
                 goto fail;
             }
@@ -908,7 +908,7 @@ value_subscript(PyValue container, PyValue key)
         PyObject *o = PyValue_AsKnownObjectBorrow(container);
         if (PyAnyDict_CheckExact(o)) {
             PyValue result = PyValue_NULL;
-            int found = PyDict_GetValue(o, key, &result);
+            int found = _PyDict_GetValue((PyDictObject *)o, key, &result);
             if (found != 0) {
                 return result;
             }
@@ -1189,7 +1189,7 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
 
     if (PyDict_CheckExact(ns)) {
         // PyDict_SetItem() with the value as it is: an inline value needs no box.
-        return PyDict_SetValue(ns, PyValue_FromObjectBorrow(name), v);
+        return _PyDict_SetValue((PyDictObject *)ns, PyValue_FromObjectBorrow(name), v);
     }
     return _PyValue_SetItem(PyValue_FromObjectBorrow(ns),
                             PyValue_FromObjectBorrow(name), v);
@@ -3153,7 +3153,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 goto kw_fail;
             }
 
-            int err = PyDict_SetValue(kwdict, PyValue_FromObjectBorrow(keyword),
+            int err = _PyDict_SetValue((PyDictObject *)kwdict, PyValue_FromObjectBorrow(keyword),
                                       value_value);
             if (err == -1) {
                 goto kw_fail;
@@ -3231,6 +3231,8 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                  * lookup borrows its dictionary, so pin it here. */
                 PyObject *kwdefs = Py_NewRef(func->func_kwdefaults);
                 PyValue def;
+                /* Public entry: PyEval_EvalCodeEx() stores its kwdefs
+                 * argument unchecked, and a non-dict raises SystemError. */
                 int found = PyDict_GetValue(kwdefs,
                                             PyValue_FromObjectBorrow(varname),
                                             &def);
@@ -5203,8 +5205,8 @@ get_globals_builtins(PyObject *globals)
     PyObject *builtins = NULL;
     if (PyAnyDict_Check(globals)) {
         PyValue builtins_v;
-        int found = PyDict_GetValue(
-            globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
+        int found = _PyDict_GetValue(
+            (PyDictObject *)globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
             &builtins_v);
         if (found < 0) {
             return NULL;
@@ -6353,8 +6355,9 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
         return found.value;
     }
     namespace = frame->f_globals;
-    found.status = PyDict_GetValue(namespace, PyValue_FromObjectBorrow(name),
-                                   &found.value);
+    found.status = _PyDict_GetValue((PyDictObject *)namespace,
+                                    PyValue_FromObjectBorrow(name),
+                                    &found.value);
     if (found.status < 0) {
         return PyValue_NULL;
     }

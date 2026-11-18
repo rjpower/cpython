@@ -3069,7 +3069,7 @@ dummy_func(
                 UNLOCK_OBJECT(dict);
                 INPUTS_DEAD();
                 SYNC_SP();
-                int err = PyDict_SetValue((PyObject *)dict,
+                int err = _PyDict_SetValue(dict,
                     PyValue_FromObjectBorrow(name), release_value);
                 if (err < 0) {
                     /* ERROR_NO_POP kept these temporary owners until the
@@ -3299,7 +3299,7 @@ dummy_func(
             assert(PyAnyDict_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
             // The key is looked up as a value: an inline key needs no box.
-            int res = PyDict_ContainsValue(right_o, left);
+            int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }

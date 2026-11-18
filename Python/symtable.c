@@ -38,7 +38,7 @@ symtable_get_flags(PyObject *dict, PyObject *name, long *flags)
     if (hash == -1) {
         return -1;
     }
-    int found = _PyDict_GetValue_KnownHash(dict, PyValue_FromObjectBorrow(name),
+    int found = _PyDict_GetValue_KnownHash((PyDictObject *)dict, PyValue_FromObjectBorrow(name),
                                           hash, &value);
     if (found <= 0) {
         return found;

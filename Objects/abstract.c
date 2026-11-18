@@ -449,8 +449,8 @@ _PyStatusValue
     {
         // The entry's word, unboxed.
         PyValue item;
-        int found = PyDict_GetValue(PyValue_AsKnownObjectBorrow(v), key,
-                                    &item);
+        int found = _PyDict_GetValue(
+            (PyDictObject *)PyValue_AsKnownObjectBorrow(v), key, &item);
         return (_PyStatusValue){found, found > 0 ? item : PyValue_NULL};
     }
 
@@ -499,8 +499,8 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
         /* The exact dict and list stores and deletions that take the key
            and value as they are: no box of an inline key or value. */
         if (PyDict_CheckExact(o)) {
-            return deleting ? PyDict_DelValue(o, key)
-                            : PyDict_SetValue(o, key, value);
+            return deleting ? _PyDict_DelValue((PyDictObject *)o, key)
+                            : _PyDict_SetValue((PyDictObject *)o, key, value);
         }
         if (!deleting && PyList_CheckExact(o) && PyValue_IsInlineInt(key)) {
             Py_ssize_t index = PyValue_InlineInt64(key);

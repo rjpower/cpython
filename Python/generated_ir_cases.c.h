@@ -9820,7 +9820,7 @@
                 STAT_INC(CONTAINS_OP, hit);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                int res = PyDict_ContainsValue(right_o, left);
+                int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -9993,7 +9993,7 @@
                 STAT_INC(CONTAINS_OP, hit);
                 frame->phase_state = 0;
                 frame->phase_state = 0;
-                int res = PyDict_ContainsValue(right_o, left);
+                int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
                 if (res < 0) {frame->phase_state = 0;
                     frame->phase_state = 0;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -20468,7 +20468,7 @@
                     UNLOCK_OBJECT(dict);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    int err = PyDict_SetValue((PyObject *)dict,
+                    int err = _PyDict_SetValue(dict,
                         PyValue_FromObjectBorrow(name), release_value);
                     if (err < 0) {
                         frame->phase_state = 0;

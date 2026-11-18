@@ -1062,7 +1062,7 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
 
     if (PyODict_CheckExact(self)) {
         PyValue result_value;
-        int rc = PyDict_GetValue((PyObject *)self, key, &result_value);
+        int rc = _PyDict_GetValue((PyDictObject *)self, key, &result_value);
         if (rc > 0) {
             result = _PyValue_AsObjectAt(result_value, BOX_SITE_DICT);
             PyValue_CLOSE(result_value);
@@ -1328,8 +1328,8 @@ OrderedDict_copy_impl(PyObject *od)
             Py_hash_t hash = _odictnode_HASH(node);
             PyObject *value = NULL;
             PyValue value_v;
-            int rc = PyDict_GetValue((PyObject *)od, PyValue_FromObjectBorrow(key),
-                                     &value_v);
+            int rc = _PyDict_GetValue((PyDictObject *)od, PyValue_FromObjectBorrow(key),
+                                      &value_v);
             if (rc > 0) {
                 value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
                 PyValue_CLOSE(value_v);
@@ -1925,7 +1925,7 @@ odictiter_iternext_lock_held(odictiterobject *di)
     /* A reentrant next() from the key's __eq__ can clear di_odict; the
      * lookup borrows its dictionary, so pin it here. */
     PyObject *od = Py_NewRef((PyObject *)di->di_odict);
-    int value_rc = PyDict_GetValue(od, PyValue_FromObjectBorrow(key), &value_v);
+    int value_rc = _PyDict_GetValue((PyDictObject *)od, PyValue_FromObjectBorrow(key), &value_v);
     Py_DECREF(od);
     if (value_rc != 1) {
         if (!PyErr_Occurred())

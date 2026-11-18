@@ -2,76 +2,45 @@
 
 ## Live state
 
-**Active: [handlers75](issues/register-semantics59/handlers75.md), 2026-11-18.**
-[Execution74](issues/register-semantics59/execution74-diagnosis.md) traced
-golden73's logging regression to op-cache placement and measured golden73 at
-1.1355 of upstream. Handlers75 makes handlers smaller and fewer. Round 1
-(`91c9baa9600`, branch `pyjit/handlers75`) has four parts:
+**Latest: [checkpoint78](issues/register-semantics59/checkpoint78.md), 2026-11-18.**
+`99a04733128` (`pyjit/checkpoint78`, pushed) measures **0.9856 against
+golden73** (17 of 29 workloads faster) and **1.1123 against upstream**. The
+full suite passes in both roles apart from known failures. Golden73 remains
+the selected baseline; no checkpoint has been selected over it.
 
-- Slow paths are marked cold.
-- A displaced leaf object is freed at once instead of deferred.
-- Handlers are compiled without frame pointers.
-- `PyList_GET_VALUE` is inline.
+| Checkpoint | Adds | vs golden73 | vs upstream |
+| --- | --- | ---: | ---: |
+| Round 2 (`f78c3902c1b`) | [handlers75](issues/register-semantics59/handlers75.md): cold slow paths, word flags instead of handler variants | 1.0088 | 1.1383 |
+| [76](issues/register-semantics59/checkpoint76.md) (`013fb42c922`) | Round 3 call path ([ledger](issues/register-semantics59/execution76-call-ledger.md)), value rules first pass, frame-chain fix | 1.0067 | 1.1292 |
+| [77](issues/register-semantics59/checkpoint77.md) (`3c8abb64776`) | Value rules' remaining rows; borrowing native scope | 0.9915 | 1.1167 |
+| [78](issues/register-semantics59/checkpoint78.md) (`99a04733128`) | Value fields paired with object slots; cold out-of-line adapters | 0.9856 | 1.1123 |
 
-Hot handler code shrinks 5.7% and instructions 0.5–1.3%. The all-29 geomean is
-0.9973 against golden73 and 1.1236 against upstream. Its regressions
-(coroutines 1.070, deepcopy_memo 1.052) coincide with collapses in op-cache
-delivery. Round 2 (`f78c3902c1b`, `pyjit/handlers75-r2`, magic 64428) moves per-site
-facts into word flags: a 9-bit handler id, slot-class flags that the executing
-copy derives, and call-role flags. It deletes the 35 NO_SELF handlers, leaving
-hot handler code at 264 KB. Its all-29 geomean is 1.0088 against golden73 and
-1.1383 against upstream, and it retires 0.4–2.4% more instructions than round
-1. Placement still swings single workloads. The 90% hot footprint is about
-1.6 times upstream's, and 60% of it is runtime helpers rather than handlers:
-call transactions, physical transfer, value-form operations that are larger
-than upstream's, and frame clearing.
-Both rounds are measured checkpoints; golden73 remains the selected baseline.
+What these rounds established:
 
-The [execution76 ledger](issues/register-semantics59/execution76-call-ledger.md)
-measures one call and return exactly. The exact shapes execute 1.27–1.36
-times upstream's instructions in fewer cycles, so the kernel losses come
-from the slow and generic paths and the helpers' footprint. Round 3
-(`ba2d7938541`, `pyjit/calls76`, pushed) implements the ledger's local
-items. Per call it saves 26–60 instructions, and DeltaBlue and raytrace
-retire 4.6% and 3.3% fewer instructions per loop.
+- **Placement dominates single workloads.** Op-cache placement moves single
+  workloads by ±10–15% at a constant instruction count. Round 3 alone runs
+  DeltaBlue in 14% fewer cycles than round 2. Reserving `rbp` for the frame
+  chain adds 0.5% instructions yet halves op-cache delivery
+  ([checkpoint76](issues/register-semantics59/checkpoint76.md#deltablue-placement-not-work)).
+  Until hot-code layout is controlled, the geomean is the only reliable
+  signal, and per-change attribution needs cycle and op-cache counts.
+- **The hot footprint** is about 1.6 times upstream's. 60% of it is runtime
+  helpers rather than handlers.
+- **Exact calls** execute 1.27–1.36 times upstream's instructions in fewer
+  cycles. The remaining call losses are the slow and generic paths. 3,568
+  generic calls per DeltaBlue loop are `list.append`/`list.pop` on a list
+  subclass; upstream misses them too.
+- **The value rules** ([record](issues/register-semantics59/values77.md))
+  apply to every value-form function:
+  - callers own and callees borrow;
+  - public entries validate and internal entries assert;
+  - a value's pointer space is tested once.
 
-`pyjit/values76` (`0d18fff7a07`) applies three rules to every value-form
-operation, not only the hot ones:
-
-- Callees borrow their arguments, as the value-slot contract states:
-  interpreter temporaries own their values, and `f_locals` writes keep
-  overwritten values alive.
-- Internal entry points skip public checks.
-- A value's pointer space is tested once, with inline cases on cold paths.
-
-It removes callee-owned counts from 92 functions in `dictobject.c`,
-`typeobject.c` and 18 other files, adds internal dictionary entries, and
-splits the dictionary iterators by kind. Code shrinks 12.8 KB. Instructions
-per loop fall 1.2% on deepcopy, 0.5% on json and xml and 0.2% on DeltaBlue;
-raytrace and pickle are unchanged. Where a callee can run Python that
-rewrites the storage an argument came from, the count stays
-(`E59/values76-inventory.md`).
-
-[Checkpoint76](issues/register-semantics59/checkpoint76.md)
-(`013fb42c922`, `pyjit/checkpoint76`) merges both. It also restores the
-frame chain that round 1 broke for frame-pointer unwinders: handlers keep no
-frame pointer but reserve `rbp`. The full suite passes in both roles, apart
-from known failures. All-29: 1.0067 against golden73 and 1.1292 against
-upstream (round 2: 1.0088 and 1.1383). DeltaBlue regresses to 1.118 against
-golden73 although round 3 cut its instructions 4.4%. The cause is op-cache
-placement: round 3 alone runs DeltaBlue in 14% fewer cycles than round 2,
-and reserving `rbp` halves op-cache delivery at the same instruction count.
-
-Checkpoint77 (`3c8abb64776`, `pyjit/checkpoint77`) adds `pyjit/values77`:
-the rules' remaining rows, and a native call scope that borrows its
-arguments ([record](issues/register-semantics59/values77.md)). An
-adversarial review of the ownership changes found no use-after-free in about
-5,400 cases. The complete value-slot table (`pyjit/slots77`) was merged and
-then reverted. It must be kept in step with every object-slot write; review
-and the full suite found four ways it falls out of step, two of them
-crashes, and it saved no instructions. `pyjit/slots78` keeps the object slot
-as the definition and moves the boxing adapters out of line instead.
-[Checkpoint77](issues/register-semantics59/checkpoint77.md) measures 0.9915 against golden73 and 1.1167 against upstream, the first checkpoint faster than golden73 overall. Its large single-workload moves (DeltaBlue 0.955, logging_silent 0.944) follow placement, since values77 changes instructions by under 0.5%. Checkpoint78 (`pyjit/checkpoint78`) adds slots78 and is in qualification.
+  An adversarial review found no use-after-free in about 5,400 cases.
+- **A complete value-slot table**, kept in step with every object-slot write,
+  was implemented and reverted: it falls out of step in four ways, two of
+  them crashes, and saved no instructions. A value field is now an optional
+  native pair of the object slot, which stays the definition.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

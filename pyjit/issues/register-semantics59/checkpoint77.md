@@ -21,7 +21,7 @@ unchanged (64428).
 ## Qualification
 
 Full suite at `3c8abb64776` (`E59/checkpoint77r-*-full.log`): the release
-role ran 667 of 678 files and failed only the six known ones; the debug role is running
+and debug roles each ran 667 of 678 files and failed only the six known ones
 ([checkpoint76](checkpoint76.md#qualification)).
 
 ## Performance

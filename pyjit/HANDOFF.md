@@ -30,8 +30,9 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/checkpoint76` | `pyjit/checkpoint76` | Round 3 + values76, frame-chain and self-test fixes, `013fb42c922` (pushed); builds `BASE/checkpoint76-{release,debug}`; [record](issues/register-semantics59/checkpoint76.md); measurement control, keep clean. Variant builds `BASE/{calls76fp,calls76fpfull,checkpoint76nofp}-release` are attribution copies only |
 | `worktrees/values77` | `pyjit/values77` | Remaining rule 1–3 rows and the borrowing native scope, `35b4666037f`, from `76fc2b68918`; builds `BASE/values77-{release,debug}`; merged into checkpoint77 |
 | `worktrees/slots77` | `pyjit/slots77` | Complete value-slot table, `d9054a5b0e4`, from `76fc2b68918` (`E59/slots77-notes.md`); merged and reverted ([record](issues/register-semantics59/values77.md)); builds `BASE/slots77-{release,debug}` |
-| `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77, `3c8abb64776` (`feb572b0541` merged slots77; its full-suite logs are `E59/checkpoint77-*-full.log`); builds `BASE/checkpoint77-{release,debug}`; full suite then timing |
-| `worktrees/slots78` | `pyjit/slots78` | Value fields paired with object slots, cold out-of-line adapters, `PyType_Modified` keeps pairs; from `3c8abb64776`; builds `BASE/slots78-{release,debug}`; worker deadline 09:15 PST |
+| `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77, `3c8abb64776` (pushed; `feb572b0541` merged and `3c8abb64776` reverts slots77); builds `BASE/checkpoint77-{release,debug}`; [record](issues/register-semantics59/checkpoint77.md); measurement control, keep clean |
+| `worktrees/slots78` | `pyjit/slots78` | Paired value fields and cold out-of-line adapters, `99a04733128` (pushed), from `3c8abb64776`; builds `BASE/slots78-{release,debug}` predate the frame-chain flag (attribution only) |
+| `worktrees/checkpoint78` | `pyjit/checkpoint78` | checkpoint77 + slots78, `99a04733128` (pushed); builds `BASE/checkpoint78-{release,debug}`; [record](issues/register-semantics59/checkpoint78.md); latest measured checkpoint, keep clean |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

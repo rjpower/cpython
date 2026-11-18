@@ -2193,9 +2193,9 @@ BORROW_TESTS = {
         #include "{SRCDIR}/Python/ceval.h"
         #include "{SRCDIR}/Python/ceval_macros.h"
         void f(PyThreadState *tstate, _PyInterpreterFrame *frame,
-               PyValue *slots, PyValueBorrow b) {{
+               PyValue *slots, uint64_t ir_word, PyValueBorrow b) {{
             PyValue ir_displaced = PyValue_NULL;
-            IR_STORE_DST(0, b);  /* rejected */
+            IR_STORE_DST(ir_word, A, b);  /* rejected */
             (void)ir_displaced;
         }}""", r"passing argument 1 of '_PyValue_Publish' from incompatible "
               r"pointer type|incompatible pointer types passing "

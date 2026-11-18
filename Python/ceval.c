@@ -3937,6 +3937,48 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     return child;
 }
 
+/* PyDict_New can run Python. Pin the selected code and revalidate after
+ * preparing kwargs; no window owner has been detached yet. Returns 0 with
+ * *kwdict set, 1 to fall back and -1 on error, refreshed in both cases. */
+static Py_NO_INLINE int
+call_overlap_prepare_kwargs(_PyCallTransaction *call, PyFunctionObject *func,
+                            PyCodeObject *code, int nargs, PyObject **kwdict)
+{
+    int status = 1;
+    Py_INCREF(code);
+    PyObject *dict = PyDict_New();
+    if (dict == NULL || call_record_refresh(call) < 0) {
+        status = -1;
+        goto cleanup;
+    }
+    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
+    if (!PyValue_IsObject(homes[0]) ||
+        Py_TYPE(PyValue_AsKnownObjectBorrow(homes[0])) != &PyFunction_Type ||
+        (PyObject *)func != PyValue_AsKnownObjectBorrow(homes[0]) ||
+        func->func_code != (PyObject *)code ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        IS_PEP523_HOOKED(call->tstate) || code->_co_exec == NULL ||
+        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
+        goto cleanup;
+    }
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    if (nargs < code->co_argcount - ndefaults) {
+        goto cleanup;
+    }
+    Py_DECREF(code);  /* The function still owns it. */
+    *kwdict = dict;
+    return 0;
+
+cleanup:
+    Py_XDECREF(dict);
+    Py_DECREF(code);
+    if (call_record_refresh(call) < 0) {
+        return -1;
+    }
+    return status;
+}
+
 /* The caller owns its whole window until the final non-reentrant commit. */
 static int
 call_transaction_overlap_python(_PyCallTransaction *call,
@@ -3963,35 +4005,24 @@ call_transaction_overlap_python(_PyCallTransaction *call,
         !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
         return 1;
     }
-
-    /* Allocation can run Python. Pin the selected code and revalidate after
-     * preparing kwargs; no window owner has been detached yet. */
+    /* Without **kwargs nothing runs between these tests, with the caller's
+     * function, PEP 523 and vectorcall tests, and the commit below, so they
+     * still hold there: the window's function owns the code, and no code pin
+     * or second admission is needed. Only kwargs preparation can call back,
+     * and like all generic preparation it refreshes and revalidates after
+     * (call-and-frame-lifetimes.md, "Known Python binding and generic
+     * providers"). */
     PyObject *kwdict = NULL;
-    int status = 1;
-    Py_INCREF(code);
     if (flags & CO_VARKEYWORDS) {
-        kwdict = PyDict_New();
-        if (kwdict == NULL || call_record_refresh(call) < 0) {
-            status = -1;
-            goto cleanup;
+        int status = call_overlap_prepare_kwargs(call, func, code, nargs,
+                                                 &kwdict);
+        if (status != 0) {
+            return status;
         }
+        homes = _PyFrame_Slots(call->frame) + call->base;
+        defaults = func->func_defaults;
+        ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
     }
-    homes = _PyFrame_Slots(call->frame) + call->base;
-    if (!PyValue_IsObject(homes[0]) ||
-        Py_TYPE(PyValue_AsKnownObjectBorrow(homes[0])) != &PyFunction_Type ||
-        (PyObject *)func != PyValue_AsKnownObjectBorrow(homes[0]) ||
-        func->func_code != (PyObject *)code ||
-        func->vectorcall != _PyFunction_Vectorcall ||
-        IS_PEP523_HOOKED(call->tstate) || code->_co_exec == NULL ||
-        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
-        goto cleanup;
-    }
-    defaults = func->func_defaults;
-    ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-    if (nargs < code->co_argcount - ndefaults) {
-        goto cleanup;
-    }
-    Py_DECREF(code);  /* The function still owns it. */
 
     /* No callback, release or failure is allowed until child is current. */
     PyValue function = homes[0];
@@ -4015,14 +4046,6 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     call->tstate->current_frame = child;
     *out = child;
     return 0;
-
-cleanup:
-    Py_XDECREF(kwdict);
-    Py_DECREF(code);
-    if (call_record_refresh(call) < 0) {
-        return -1;
-    }
-    return status;
 #endif
 }
 

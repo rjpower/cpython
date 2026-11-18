@@ -133,10 +133,23 @@ own exact head/log. Report each control separately; observed ranges are not CIs.
 
 The harness strips inherited PYTHON variables/LD_PRELOAD, sets hash seed 0 and
 LD_BIND_NOW, pins each child to CPU 15, checks JIT off and native method admission
-off, and takes seven samples per invocation. It alternates role order per pair,
-requires load below 3 before starting and below 4 after each invocation, and
-retains exact commands, driver hashes, source/native/config/module identity and
-pre/post equality. Sources and builds must remain untouched throughout timing.
+off, and takes seven samples per invocation. It alternates role order per pair
+and retains exact commands, driver hashes, source/native/config/module identity
+and pre/post equality. Sources and builds must remain untouched throughout timing.
+
+Since 2026-11-18 the harness gates on interference at the measured core, not on
+the system load average (`core_quiet.py`, beside `measure.py`). It reads
+per-CPU busy time from `/proc/stat` for CPU 15, its SMT sibling CPU 7 and the
+six other CPUs sharing its L3 (4–6, 12–14). Before each invocation it waits for
+a one-second window that passes the limits. Afterwards it subtracts the child's
+own CPU time from CPU 15's busy time. It rejects the run if foreign time on
+CPU 15 exceeds 2% of wall time plus two ticks, if CPU 7 was more than 3% busy,
+or if the L3 peers averaged more than 25%. A rejected invocation is rerun up to
+five times. Its output stays as `*-rejectedN-*` files and its journal row keeps
+the gate values; it never enters a paired ratio. Load on the other L3 domain
+(CPUs 0–3, 8–11) is not gated. It still lowers boost clocks: eight busy CPUs
+there slowed upstream nqueens about 4.5% in absolute time, while its paired
+ratio moved from 1.221 to 1.232 (`E59/execution74-core-gate-check`).
 
 ## PMU after a complete matched campaign
 

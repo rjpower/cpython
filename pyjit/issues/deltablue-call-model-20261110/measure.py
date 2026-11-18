@@ -14,6 +14,10 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[2]
+# Each invocation may wait this long for its core to become quiet, and is
+# rerun at most this many times if other work disturbed it.
+QUIET_WAIT_S = 20 * 60
+MAX_ATTEMPTS = 5
 
 
 def load(name, path):
@@ -61,6 +65,7 @@ def main(argv=None):
         {'mode': 'single-pair-confirmation' if args.single_pair_confirmation else 'balanced',
          'requested_rounds': args.rounds}, indent=2))
     checkpoint = load('checkpoint_measure', ROOT / 'issues/checkpoint-closure/measure.py')
+    quiet = load('core_quiet', Path(__file__).with_name('core_quiet.py'))
     bench = load('kernel_registry', ROOT / 'bench/run.py')
     roster = {item.name: item for item in bench.BENCHMARKS if item.group == args.group}
     names = args.cases.split(',')
@@ -97,7 +102,7 @@ def main(argv=None):
     def snapshot():
         value = checkpoint.snapshot_all(builds, env, logs)
         paths = sorted((ROOT / 'bench').rglob('*.py'))
-        paths += [Path(__file__), Path(checkpoint.__file__), driver_path]
+        paths += [Path(__file__), Path(checkpoint.__file__), Path(quiet.__file__), driver_path]
         value['driver_sources'] = {str(path): digest(path) for path in paths}
         return value
 
@@ -111,7 +116,9 @@ def main(argv=None):
         raise RuntimeError(f"preflight rejected: {before['errors']}")
     journal = []
     pairs = {name: [] for name in names}
-    deadline = time.monotonic() + 30 * 60
+    gate = quiet.CoreGate(args.cpu)
+    journal.append({'phase': 'core-gate', 'cpu': args.cpu, 'siblings': sorted(gate.siblings),
+                    'l3_peers': sorted(gate.l3), 'limits': vars(gate.limits)})
     failure = None
     try:
         for round_index in range(args.rounds):
@@ -121,36 +128,45 @@ def main(argv=None):
                 order = tuple(builds) if round_index % 2 == 0 else tuple(reversed(builds))
                 means = {}
                 for role in order:
-                    while os.getloadavg()[0] >= 3:
-                        journal.append({'phase': 'quiet-wait', 'load': os.getloadavg()})
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError('quiet-load deadline expired')
-                        time.sleep(5)
-                    assert time.monotonic() < deadline
                     python = Path(before['builds'][role]['python'])
                     command = ['taskset', '-c', str(args.cpu), str(python), '-S', '-B',
                                str(driver_path), 'time', str(item.path), str(loops),
                                '7', *([item.variant] if item.variant is not None else [])]
                     stem = f'r{round_index + 1}-{name}-{role}'
-                    row = {'round': round_index + 1, 'case': name, 'role': role,
-                           'command': command, 'load_before': os.getloadavg(), 'started': time.time()}
-                    journal.append(row)
-                    with subprocess.Popen(command, env=env, stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE, text=True,
-                                          start_new_session=True) as child:
-                        try:
-                            stdout, stderr = child.communicate(timeout=120)
-                        except subprocess.TimeoutExpired:
-                            os.killpg(child.pid, signal.SIGKILL)
-                            stdout, stderr = child.communicate()
-                            (args.output / f'{stem}-stdout.txt').write_text(stdout)
-                            (args.output / f'{stem}-stderr.txt').write_text(stderr)
-                            row['failure'] = 'timeout'
-                            raise
-                    row.update(returncode=child.returncode, load_after=os.getloadavg(), finished=time.time())
+                    # Retry an invocation whose core was disturbed. Rejected attempts
+                    # stay in the journal and on disk and never enter a paired ratio.
+                    for attempt in range(1, MAX_ATTEMPTS + 1):
+                        gate.wait_quiet(time.monotonic() + QUIET_WAIT_S, journal)
+                        row = {'round': round_index + 1, 'case': name, 'role': role,
+                               'attempt': attempt, 'command': command,
+                               'load_before': os.getloadavg(), 'started': time.time()}
+                        journal.append(row)
+                        token = gate.begin()
+                        with subprocess.Popen(command, env=env, stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE, text=True,
+                                              start_new_session=True) as child:
+                            try:
+                                stdout, stderr = child.communicate(timeout=120)
+                            except subprocess.TimeoutExpired:
+                                os.killpg(child.pid, signal.SIGKILL)
+                                stdout, stderr = child.communicate()
+                                (args.output / f'{stem}-stdout.txt').write_text(stdout)
+                                (args.output / f'{stem}-stderr.txt').write_text(stderr)
+                                row['failure'] = 'timeout'
+                                raise
+                        row.update(returncode=child.returncode, core_gate=gate.end(token),
+                                   load_after=os.getloadavg(), finished=time.time())
+                        assert child.returncode == 0, row
+                        if row['core_gate']['ok']:
+                            break
+                        row['rejected'] = 'core interference'
+                        (args.output / f'{stem}-rejected{attempt}-stdout.txt').write_text(stdout)
+                        (args.output / f'{stem}-rejected{attempt}-stderr.txt').write_text(stderr)
+                        (args.output / 'commands.json').write_text(json.dumps(journal, indent=2))
+                    else:
+                        raise RuntimeError(f'{stem}: core interference in all {MAX_ATTEMPTS} attempts')
                     (args.output / f'{stem}-stdout.txt').write_text(stdout)
                     (args.output / f'{stem}-stderr.txt').write_text(stderr)
-                    assert child.returncode == 0 and row['load_after'][0] < 4, row
                     lines = stdout.strip().splitlines()
                     assert len(lines) == 2, (
                         f"{name}/{role}: unexpected benchmark output; "

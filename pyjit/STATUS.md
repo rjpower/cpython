@@ -16,9 +16,15 @@ golden73's logging regression to op-cache placement and measured golden73 at
 Hot handler code shrinks 5.7% and instructions 0.5–1.3%. The all-29 geomean is
 0.9973 against golden73 and 1.1236 against upstream. Its regressions
 (coroutines 1.070, deepcopy_memo 1.052) coincide with collapses in op-cache
-delivery. Round 1 is a measured checkpoint; golden73 remains the selected
-baseline. Round 2, which replaces handler variants with word flags, is in
-progress in `BASE/worktrees/handlers75-r2`.
+delivery. Round 2 (`f78c3902c1b`, `pyjit/handlers75-r2`, magic 64428) moves per-site
+facts into word flags: a 9-bit handler id, slot-class flags that the executing
+copy derives, and call-role flags. It deletes the 35 NO_SELF handlers, leaving
+hot handler code at 264 KB. Its all-29 geomean is 1.0088 against golden73 and
+1.1383 against upstream, and it retires 0.4–2.4% more instructions than round
+1. Placement still swings single workloads. The 90% hot footprint is about
+1.6 times upstream's, and 60% of it is runtime helpers rather than handlers:
+call transactions, physical transfer, value-form wrappers and frame clearing.
+Both rounds are measured checkpoints; golden73 remains the selected baseline.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

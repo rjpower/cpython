@@ -106,24 +106,127 @@ Round 2 targets that.
 
 ## Round 2: word flags instead of handler variants
 
-Today a per-site fact becomes another handler. Examples: whether a call has a
-self argument (35 `*_NO_SELF*` handlers, 27 KB), whether a destination is a
-local (`*_LOCAL_TEMP`), or which consumer receives a generator's completion.
-Separately, each handler decides whether its destination is a local with two
-dependent loads from the code object.
+Before this round, each per-site fact became another handler. Whether a call
+has a self argument took 35 `*_NO_SELF*` handlers (27 KB). Whether a
+destination is a local took `*_LOCAL_TEMP` variants. Which consumer receives a
+generator's completion took one variant per consumer. Separately, each handler
+decided whether a field names a local with two dependent loads from the code
+object.
 
-Round 2 splits the 16-bit handler field into a 9-bit handler id and 7 flag
-bits. Dispatch masks the id, so the table keeps 512 entries.
+Branch `pyjit/handlers75-r2` in `BASE/worktrees/handlers75-r2`, from round 1;
+builds `BASE/handlers75r2-{release,debug}`. Magic 64428.
 
-- Slot-class flags, one per field, say whether the field names a local. They
-  depend only on the fields and `nlocalsplus`, so `make_exec` derives them for
-  the executing copy. The destination and input tests then read the word in
-  the handler's register.
-- Call-role flags (`NO_SELF`, `NO_KW`) are compiler proofs, so the encoder
-  writes them into canonical words. The 35 NO_SELF handlers are deleted, and
-  call handlers derive their skipped homes from the word.
+- `eb68d15190e` splits the 16-bit handler field into a 9-bit handler id
+  (`IR_HANDLER_MASK`) and seven flag bits. Dispatch indexes a 512-entry table
+  with the id. Specialization, instrumentation, the free-threaded CAS and
+  generator boundary placement rewrite only the id. dis and the tests mask
+  with constants that `_opcode` exports.
+- `769514b07c7` adds slot-class flags `IR_F_LOCAL_A..D`: field X names a slot
+  below `co_nlocalsplus`. They depend only on the fields and `nlocalsplus`, so
+  `make_exec` derives them for the executing copy. Code objects and .pyc files
+  never carry them. The result and input macros take the word and field letter
+  and test the flag in the handler's register. A debug assertion checks each
+  test against the old comparison.
+- `f78c3902c1b` adds call-role flags `IR_F_NO_SELF` and `IR_F_NO_KW`. They are
+  compiler proofs, so the assembler writes them into canonical words.
+  `_PyIRFormat.word_flags` lists the flags each handler admits, and validators
+  reject any other flag. Call handlers derive their virtual inputs from the
+  word (`_PyIR_CallInputHoles`). The 35 NO_SELF ids, their role tables and
+  their generator families are removed. dis and `get_ir` name a flagged word
+  `CALL+NO_SELF`. Bit 15 is reserved.
 
-Executable words keep physical slots; logical values belong to the compiler
-before slot allocation. Follow-ups are a single generic `BINARY_OP` (26
-identical 1,027-byte bodies today) and one generator-completion handler
-whose consumer is a word code.
+| Release `_TAIL_CALL_*` | Golden73 | Round 1 | Round 2 |
+| --- | ---: | ---: | ---: |
+| Hot bytes | 299,868 | 282,691 | 264,211 |
+| Handlers | 368 | 368 | 333 |
+| Cold bytes | 0 | 44,341 | 41,196 |
+
+Step 1 adds 2.9 KB (`and $0x1ff` replaces `movzwl` at each dispatch) and step
+2 adds 3.8 KB. Each flag test is a 6-byte `test $imm,%reg`, where the old code
+reused one loaded `nlocalsplus` in 2-byte compares, and GCC's inlining shifted:
+`STORE_NAME` now inlines `_PyEval_StoreName` (252 → 1,108 bytes). The
+fast paths lose two dependent loads per test; field decoding also improved,
+with one `shr` and `and $0x7ff8` producing the scaled slot offset. Step 3
+removes 25 KB.
+
+Qualification (`handlers75-r2-{release,debug}-focus`): 83 release / 82 debug
+modules, adding `test_import`, `test_compile` and `test_peepholer`. Only the
+pre-existing `test_ir_error_effects` (five subtests) and, in release, the two
+`test_generated_cases` methods fail. Round 2 fixes the two stale tests.
+
+### Round 2 performance
+
+| Campaign | Geomean | Wins | Rejected invocations | Round 1 |
+| --- | ---: | ---: | ---: | ---: |
+| Round 2 / golden73 (`execution75-handlers-r2-all29-golden73`) | **1.0088** | 10/29 | 7 | 0.9973 |
+| Round 2 / upstream (`execution75-handlers-r2-all29-upstream`) | **1.1383** | 7/29 | 22 | 1.1236 |
+
+Single workloads swing again in both directions. Against golden73,
+spectral_norm goes from 0.878 to 1.043, logging_silent from 0.913 to 1.048 and
+generators from 0.987 to 1.030. In the other direction, unpickle goes from 1.033
+to 0.986, deepcopy_memo from 1.052 to 1.015 and comprehensions from 1.008 to
+0.979. Coroutines (1.078) and DeltaBlue (1.048) remain the largest
+regressions.
+
+PMU counts per hot loop (`execution75-handlers-r2-pmu`, four roles in one
+campaign):
+
+| Workload | Event | Golden73 | Round 1 | Round 2 | R2/R1 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| logging_silent | cycles | 3,753 | 3,417 | 3,926 | 1.149 |
+| | instructions | 13,502 | 13,439 | 13,760 | 1.024 |
+| | op-cache µops | 6,627 | 10,887 | 6,810 | 0.626 |
+| deltablue | cycles | 17.36M | 17.74M | 18.01M | 1.016 |
+| | instructions | 53.04M | 52.37M | 52.76M | 1.008 |
+| | op-cache µops | 28.65M | 21.51M | 18.76M | 0.872 |
+| coroutines | cycles | 125.4M | 134.6M | 134.5M | 0.999 |
+| | instructions | 378.6M | 381.6M | 383.2M | 1.004 |
+| | op-cache µops | 117.1M | 55.7M | 74.2M | 1.331 |
+| deepcopy_memo | cycles | 153.2K | 161.3K | 155.6K | 0.965 |
+| | instructions | 459.5K | 453.9K | 460.5K | 1.015 |
+| | op-cache µops | 123.0K | 71.7K | 102.3K | 1.426 |
+
+Round 2 retires 0.4–2.4% more instructions than round 1. Flag tests replace
+loads one for one, so the increase is elsewhere. Flat instruction samples
+cannot place it: at the kernel's 11,000/s cap the counts track time, and
+Zen 2's skid moves dispatch samples into the next handler. AMD IBS op sampling
+would attribute it precisely. Cycles again follow op-cache delivery.
+Removing 25 KB of handler variants did not stabilize placement, which the
+footprint below explains.
+
+## Where the hot code is
+
+Total handler bytes are not what the op cache sees.
+`E59/execution75-footprint` counts the distinct 64-byte lines that hold 90%
+of retired instructions, from long sampled runs on CPU 2:
+
+| Workload | Golden73 | Round 1 | Round 2 | Upstream |
+| --- | ---: | ---: | ---: | ---: |
+| coroutines | 119 | 123 | 131 | 88 |
+| deltablue | 435 | 413 | 404 | 254 |
+
+Zen 2's op cache holds 4K µops, on the order of 500 lines. DeltaBlue's hot
+set sits near that capacity; upstream's sits well below it. That fits the
+placement sensitivity measured since execution74.
+
+In round 2's DeltaBlue set, 162 lines are handlers, against 98 for upstream's
+entire `_PyEval_EvalFrameDefault`. The other 244 are runtime helpers, against
+139 for upstream. 166 of those helper lines are in functions with no hot
+upstream counterpart:
+
+- **Call transactions and physical transfer:** `call_transaction_native`,
+  `_run_vector`, `_overlap_python` and `_PyIR_NormalPhysicalTransfer`, about
+  43 lines.
+- **Value-form wrappers of object operations:** `_PyValue_GetMethod`,
+  `_PyValue_RichCompare`, `PyDict_GetValue`, `type_call_value`,
+  `method_value_vectorcall_descr`. Each is hot next to the object form it
+  shadows.
+- **Frame clearing:** `_PyFrame_TryClearExceptCode` alone takes 5.6% of
+  samples.
+
+Handler variants are therefore the smaller part of the excess. Collapsing the
+remaining duplicate handlers saves about 25 KB of generic `BINARY_OP` bodies
+(identical except for a constant) and about 5 KB of generator completion and
+retirement variants (`GEN_*COMPLETE_STORE`/`_STORE_FAST`, `_DISCARD`/`_POP_TOP`,
+three identical `GEN_RETIRE_EFFECT_*`). The larger lever is the call/transfer path and the
+value/object duplication in the runtime.

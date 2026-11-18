@@ -143,9 +143,12 @@ per-CPU busy time from `/proc/stat` for CPU 15, its SMT sibling CPU 7 and the
 six other CPUs sharing its L3 (4–6, 12–14). Before each invocation it waits for
 a one-second window that passes the limits. Afterwards it subtracts the child's
 own CPU time from CPU 15's busy time. It rejects the run if foreign time on
-CPU 15 exceeds 2% of wall time plus two ticks, if CPU 7 was more than 3% busy,
-or if the L3 peers averaged more than 25%. A rejected invocation is rerun up to
-five times. Its output stays as `*-rejectedN-*` files and its journal row keeps
+CPU 15 exceeds 2% of wall time plus two ticks, if CPU 7 was busy for more than
+3% of wall time plus two ticks, or if the L3 peers averaged more than 25%.
+A rejected invocation is rerun up to eight times. The sibling margin and the
+eight attempts date from `E59/execution75-handlers-r1-all29-golden73`, whose
+last invocation was rejected five times with CPU 7 3.3–5.7% busy: a few ticks
+of other sessions' browser and database threads. Its output stays as `*-rejectedN-*` files and its journal row keeps
 the gate values; it never enters a paired ratio. Load on the other L3 domain
 (CPUs 0–3, 8–11) is not gated. It still lowers boost clocks: eight busy CPUs
 there slowed upstream nqueens about 4.5% in absolute time, while its paired

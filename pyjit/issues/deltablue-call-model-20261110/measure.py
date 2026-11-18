@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # Each invocation may wait this long for its core to become quiet, and is
 # rerun at most this many times if other work disturbed it.
 QUIET_WAIT_S = 20 * 60
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 8
 
 
 def load(name, path):

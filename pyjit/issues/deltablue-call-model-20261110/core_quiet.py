@@ -58,8 +58,8 @@ def child_cpu_seconds() -> float:
 
 @dataclass(frozen=True)
 class Limits:
-    # Fractions of wall time. One /proc/stat tick is 10 ms, so the foreign
-    # allowance also carries a fixed two-tick quantization margin.
+    # Fractions of wall time. One /proc/stat tick is 10 ms, so the foreign and
+    # sibling allowances also carry a fixed two-tick quantization margin.
     foreign: float = 0.02
     sibling: float = 0.03
     l3_mean: float = 0.25
@@ -84,7 +84,7 @@ class CoreGate:
         }
         limits = self.limits
         sample['ok'] = (foreign <= limits.foreign * wall + limits.margin_s
-                        and sample['sibling_busy'] <= limits.sibling
+                        and sibling <= limits.sibling * wall + limits.margin_s
                         and sample['l3_mean_busy'] <= limits.l3_mean)
         return sample
 

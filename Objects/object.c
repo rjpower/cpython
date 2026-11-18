@@ -3234,7 +3234,8 @@ _PyObject_DebugTypeStats(FILE *out)
 int
 Py_ReprEnter(PyObject *obj)
 {
-    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
+    /* The caller owns obj; the thread-state dict lives as long as the thread. */
+    PyValueBorrow value = PyValue_FromObjectBorrow(obj);
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *candidate = NULL;
@@ -3246,7 +3247,6 @@ Py_ReprEnter(PyObject *obj)
         result = 0;
         goto done;
     }
-    Py_INCREF(dict);
     PyValueBorrow name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
     Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
     if (hash == -1) {
@@ -3286,8 +3286,6 @@ done:
     Py_CLEAR(candidate);
     Py_CLEAR(list);
     PyValue_XCLOSE(guard);
-    Py_CLEAR(dict);
-    PyValue_CLOSE(value);
     return result;
 }
 
@@ -3295,13 +3293,13 @@ void
 Py_ReprLeave(PyObject *obj)
 {
     PyObject *exc = PyErr_GetRaisedException();
-    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
+    /* The caller owns obj; the thread-state dict lives as long as the thread. */
+    PyValueBorrow value = PyValue_FromObjectBorrow(obj);
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *dict = PyThreadState_GetDict();
     if (dict == NULL)
         goto finally;
-    Py_INCREF(dict);
     Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
     if (hash == -1 || _PyDict_GetValue_KnownHash(dict,
             PyValue_FromObjectBorrow(&_Py_ID(Py_Repr)), hash, &guard) <= 0) {
@@ -3324,8 +3322,6 @@ Py_ReprLeave(PyObject *obj)
 finally:
     Py_XDECREF(list);
     PyValue_XCLOSE(guard);
-    Py_XDECREF(dict);
-    PyValue_CLOSE(value);
     /* ignore exceptions because there is no way to report them. */
     PyErr_SetRaisedException(exc);
 }

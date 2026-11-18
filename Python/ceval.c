@@ -429,7 +429,8 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     // - Don't cause key creation or resizing in dict subclasses like
     //   collections.defaultdict that define __missing__ (or similar).
     PyValue get = PyValue_NULL;
-    PyValue map_v = PyValue_DUP(PyValue_FromObjectBorrow(map));
+    /* The caller owns map and keys; dummy is owned here. */
+    PyValueBorrow map_v = PyValue_FromObjectBorrow(map);
     _PyStatusValue found = _PyValue_GetMethod(map_v, &_Py_ID(get));
     if (found.status < 0) {
         goto fail;
@@ -480,14 +481,13 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             }
         }
         else {
-            PyValue k = PyValue_DUP(key_v);
-            PyValue dummy_v = PyValue_DUP(PyValue_FromObjectBorrow(dummy));
-            PyValue args[] = { map_v, k, dummy_v };
+            PyValue args[3];
+            _PyValue_WindowPut(&args[0], map_v);
+            _PyValue_WindowPut(&args[1], key_v);
+            _PyValue_WindowPut(&args[2], PyValue_FromObjectBorrow(dummy));
             value = has_self
                 ? _PyValue_Vectorcall(get, args, 3, NULL)
                 : _PyValue_Vectorcall(get, &args[1], 2, NULL);
-            PyValue_CLOSE(k);
-            PyValue_CLOSE(dummy_v);
             if (PyValue_IsNull(value)) {
                 goto fail;
             }
@@ -505,14 +505,12 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     // Success:
 done:
     PyValue_CLOSE(get);
-    PyValue_CLOSE(map_v);
     Py_DECREF(seen);
     Py_DECREF(dummy);
     Py_XDECREF(key);
     return values;
 fail:
     PyValue_XCLOSE(get);
-    PyValue_XCLOSE(map_v);
     Py_XDECREF(seen);
     Py_XDECREF(dummy);
     Py_XDECREF(values);
@@ -558,9 +556,7 @@ PyObject*
     }
     assert(PyTuple_CheckExact(kwargs));
     // First, an isinstance check:
-    PyValue type_value = PyValue_DUP(PyValue_FromObjectBorrow(type));
-    int isinstance = _PyEval_IsInstanceValue(subject, type_value);
-    PyValue_CLOSE(type_value);
+    int isinstance = _PyEval_IsInstanceValue(subject, PyValue_FromObjectBorrow(type));
     if (isinstance <= 0) {
         return NULL;
     }

@@ -59,9 +59,10 @@ struct unicode_formatter_t {
     /* The tuple, mapping or single object argument; NULL when the single
        argument is an inline value (then only single holds it). */
     PyObject *args;
-    /* The argument when it is not a tuple, or the value that a "%(key)"
-       lookup found: owned. */
+    /* The argument when it is not a tuple (the caller owns it), or the
+       value that a "%(key)" lookup found (owned by single_owner). */
     PyValue single;
+    PyValue single_owner;
     Py_ssize_t arglen, argidx;
     PyObject *dict;
     /* Owns the tuple item most recently returned by
@@ -566,7 +567,8 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
                                         PyValue_FromObjectBorrow(arg->key));
         if (PyValue_IsNull(item))
             return -1;
-        PyValue_XCLOSE(ctx->single);
+        PyValue_XCLOSE(ctx->single_owner);
+        ctx->single_owner = item;
         ctx->single = item;
         ctx->arglen = -3;
         ctx->argidx = -4;
@@ -1293,7 +1295,8 @@ _PyUnicode_FormatValue(PyObject *format, PyValueBorrow args_value)
         ctx.arglen = -1;
         ctx.argidx = -2;
     }
-    ctx.single = PyValue_DUP(args_value);
+    _PyValue_WindowPut(&ctx.single, args_value);
+    ctx.single_owner = PyValue_NULL;
     ctx.curarg = NULL;
     if (args != NULL && _PyValue_MappingCheck(PyValue_FromObjectBorrow(args)) && !PyTuple_Check(args)
         && !PyUnicode_Check(args))
@@ -1338,12 +1341,12 @@ _PyUnicode_FormatValue(PyObject *format, PyValueBorrow args_value)
     }
 
     Py_XDECREF(ctx.curarg);
-    PyValue_XCLOSE(ctx.single);
+    PyValue_XCLOSE(ctx.single_owner);
     return _PyUnicodeWriter_Finish(&ctx.writer);
 
   onError:
     _PyUnicodeWriter_Dealloc(&ctx.writer);
     Py_XDECREF(ctx.curarg);
-    PyValue_XCLOSE(ctx.single);
+    PyValue_XCLOSE(ctx.single_owner);
     return NULL;
 }

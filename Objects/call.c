@@ -204,7 +204,7 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
     assert(nargs >= 0 && (nargs == 0 || args != NULL));
     assert(keywords == NULL || PyTuple_Check(keywords) || PyDict_Check(keywords));
     PyObject *argstuple = NULL;
-    PyObject *kwdict = NULL;
+    PyObject *kwdict = NULL, *kwdict_owner = NULL;
     PyObject *result = NULL;
     ternaryfunc call = Py_TYPE(callable)->tp_call;
     if (call == NULL) {
@@ -216,11 +216,12 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
         goto done;
     }
     if (keywords == NULL || PyDict_Check(keywords)) {
-        kwdict = Py_XNewRef(keywords);
+        /* The caller owns a keyword dict, as upstream. */
+        kwdict = keywords;
     }
     else if (PyTuple_GET_SIZE(keywords) != 0) {
         assert(args != NULL);
-        kwdict = _PyStack_AsDict(args + nargs, keywords);
+        kwdict = kwdict_owner = _PyStack_AsDict(args + nargs, keywords);
         if (kwdict == NULL) {
             goto done;
         }
@@ -233,9 +234,10 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
         _Py_LeaveRecursiveCallTstate(tstate);
     }
 done:
-    Py_CLEAR(kwdict);
+    Py_XDECREF(kwdict_owner);
     Py_CLEAR(argstuple);
     return _Py_CheckFunctionResult(tstate, callable, result, NULL);
+
 }
 
 

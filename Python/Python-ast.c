@@ -1544,7 +1544,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     Py_ssize_t i, numfields = 0, size = -1, num_keywords = 0;
     int res = -1;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *keywords = Py_XNewRef(kw);
+    PyObject *keywords = kw;  // owned by the caller
     PyObject *positional_keys = NULL, *key = NULL, *value = NULL;
     PyObject *fields = NULL, *attributes = NULL, *remaining_fields = NULL;
     PyObject *field_types = NULL, *remaining_list = NULL, *missing_names = NULL;
@@ -1801,7 +1801,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     Py_CLEAR(attributes);
     Py_CLEAR(fields);
     Py_CLEAR(remaining_fields);
-    Py_CLEAR(keywords);
     return res;
 }
 

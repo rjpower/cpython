@@ -633,5 +633,204 @@ class VectorcallMethodTests(unittest.TestCase):
         self.assertEqual(out[0], "x")
 
 
+class RemainingOperationTests(unittest.TestCase):
+
+    def test_oserror_str_field_repr_reassigns_fields(self):
+        # OSError.__str__ formats its fields with %R; a field's __repr__ can
+        # reassign them, so the formatter retains them at the call site.
+        err = OSError(2, "msg")
+
+        class F:
+            def __repr__(self):
+                err.filename = None
+                err.strerror = None
+                gc.collect()
+                return "f"
+
+        err.filename = F()
+        self.assertEqual(str(err), "[Errno 2] msg: f")
+        self.assertIsNone(err.filename)
+
+    def test_set_contains_and_discard_drop_set(self):
+        for op in ("contains", "discard"):
+            holder = [{EqHook(5)}]
+
+            def drop():
+                holder.clear()
+                gc.collect()
+
+            s = holder[0]
+            next(iter(s)).hook = drop
+            del s
+            key = EqHook(5)
+            if op == "contains":
+                self.assertTrue(key in holder[0] if holder else True)
+            else:
+                target = holder[0]
+                target.discard(key)
+                self.assertEqual(target, set())
+            self.assertEqual(holder, [])
+
+    def test_issubclass_bases_getter_drops_child(self):
+        class Node:
+            def __init__(self, parent):
+                self.parent = parent
+                self.hook = None
+
+            @property
+            def __bases__(self):
+                hook, self.hook = self.hook, None
+                if hook is not None:
+                    hook()
+                return (self.parent,) if self.parent is not None else ()
+
+        root = Node(None)
+        holder = [Node(Node(root))]
+
+        def drop():
+            holder.clear()
+            gc.collect()
+
+        holder[0].parent.hook = drop
+        self.assertTrue(issubclass(holder[0], root))
+        self.assertEqual(holder, [])
+
+    def test_repr_guard_element_drops_container(self):
+        holder = []
+
+        class X:
+            def __repr__(self):
+                holder.clear()
+                gc.collect()
+                return "x"
+
+        holder.append([X()])
+        holder[0].append(holder[0])
+        self.assertEqual(repr(holder[0]), "[x, [...]]")
+        self.assertEqual(holder, [])
+
+    def test_percent_format_mapping_item_owned(self):
+        class S:
+            def __str__(self):
+                gc.collect()
+                return "s"
+
+        class M:
+            def __getitem__(self, key):
+                return S()
+
+        self.assertEqual("%(a)s-%(b)s" % M(), "s-s")
+        self.assertEqual("%s" % (S(),), "s")
+        self.assertEqual("%d" % 5, "5")
+
+    def test_match_mapping_get_drops_subject(self):
+        holder = []
+
+        class M(dict):
+            def get(self, key, default=None):
+                holder.clear()
+                gc.collect()
+                return dict.get(self, key, default)
+
+        holder.append(M(a=1, b=2))
+        match holder[0]:
+            case {"a": a, "b": b}:
+                self.assertEqual((a, b), (1, 2))
+            case _:
+                self.fail("no match")
+        self.assertEqual(holder, [])
+
+    def test_match_class_pattern(self):
+        class P:
+            __match_args__ = ("x",)
+
+            def __init__(self, x):
+                self.x = x
+
+        match P(3):
+            case P(x):
+                self.assertEqual(x, 3)
+            case _:
+                self.fail("no match")
+        match 5:
+            case int(v):
+                self.assertEqual(v, 5)
+
+    def test_enumerate_next_drops_iterator_reference(self):
+        holder = []
+
+        class It:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                holder.clear()
+                gc.collect()
+                return 1
+
+        holder.append(enumerate(It(), 10**20))
+        e = holder[0]
+        self.assertEqual(next(e), (10**20, 1))
+        e = enumerate(It())
+        self.assertEqual(next(e), (0, 1))
+
+    def test_property_setter_reinitialises_property(self):
+        calls = []
+
+        def other(obj, value):
+            calls.append(("other", value))
+
+        def setter(obj, value):
+            prop.__init__(None, other)
+            gc.collect()
+            calls.append(("setter", value))
+
+        prop = property(None, setter)
+
+        class C:
+            p = prop
+
+        C().p = 1
+        C().p = 2
+        self.assertEqual(calls, [("setter", 1), ("other", 2)])
+
+    def test_long_range_iterator_setstate(self):
+        it = iter(range(10**20, 10**20 + 5))
+        it.__setstate__(-1)
+        self.assertEqual(next(it), 10**20)
+        it.__setstate__(10**30)
+        self.assertEqual(list(it), [])
+
+    def test_type_call_with_keywords(self):
+        class C:
+            def __init__(self, **kw):
+                self.kw = kw
+
+        self.assertEqual(C(a=1, b=2).kw, {"a": 1, "b": 2})
+        self.assertEqual(dict(**{"a": 1}, b=2), {"a": 1, "b": 2})
+
+    def test_generic_alias_unpacks_tuple(self):
+        from typing import TypeVarTuple
+        Ts = TypeVarTuple("Ts")
+        alias = tuple[int, *Ts][*tuple[str, bytes]]
+        self.assertEqual(alias.__args__, (int, str, bytes))
+        self.assertEqual(list[*Ts][str, bytes].__args__, (str, bytes))
+
+    def test_keyerror_inline_key(self):
+        with self.assertRaises(KeyError) as cm:
+            {}[5]
+        self.assertEqual(cm.exception.args, (5,))
+
+    def test_ast_node_keywords(self):
+        import ast
+        node = ast.Name(id="x", ctx=ast.Load())
+        self.assertEqual(node.id, "x")
+        self.assertIsInstance(node.ctx, ast.Load)
+
+    def test_compile_merges_constants(self):
+        code = compile("a = (1, 2.5, None, ..., 'x', (1, 2.5))", "<s>", "exec")
+        self.assertIn((1, 2.5, None, ..., "x", (1, 2.5)), code.co_consts)
+
+
 if __name__ == "__main__":
     unittest.main()

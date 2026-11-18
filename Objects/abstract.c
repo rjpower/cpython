@@ -3649,7 +3649,9 @@ abstract_get_bases(PyObject *cls)
 static int
 abstract_issubclass(PyObject *derived, PyObject *cls)
 {
-    PyObject *selected = Py_NewRef(derived);
+    /* The caller owns derived; only the single-base walk owns its step. */
+    PyObject *selected = derived;
+    PyObject *selected_owner = NULL;
     PyObject *bases = NULL;
     Py_ssize_t i, n;
     int r = 0;
@@ -3679,7 +3681,8 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
             }
             /* The selected child survives retirement of both the previous
              * selected object now and its containing tuple next iteration. */
-            Py_SETREF(selected, child);
+            Py_XSETREF(selected_owner, child);
+            selected = child;
             continue;
         }
         assert(n >= 2);
@@ -3703,9 +3706,10 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         _Py_LeaveRecursiveCall();
         break;
     }
-    Py_CLEAR(selected);
+    Py_XDECREF(selected_owner);
     Py_XDECREF(bases);
     return r;
+
 }
 
 static int

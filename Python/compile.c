@@ -431,15 +431,16 @@ static PyValue
 (const_cache_insert)(PyObject *const_cache, PyValueBorrow constant, bool recursive)
 {
     assert(PyDict_CheckExact(const_cache));
-    PyValue input = PyValue_DUP(constant);
+    /* The caller owns constant for the whole call: a word, no count. */
+    PyValue input;
+    _PyValue_WindowPut(&input, constant);
     PyObject *o = PyValue_IsObject(input) ? PyValue_AsKnownObjectBorrow(input) : NULL;
     if (o == Py_None || o == Py_Ellipsis) {
-        return input;
+        return PyValue_DUP(input);
     }
 
     PyValue key = _PyCode_ConstantValueKey(input);
     if (PyValue_IsNull(key)) {
-        PyValue_CLOSE(input);
         return PyValue_NULL;
     }
 
@@ -447,13 +448,11 @@ static PyValue
     int res = _PyDict_SetDefaultValue(const_cache, key, key, &selected);
     if (res != 0) {
         PyValue_CLOSE(key);
-        PyValue_CLOSE(input);
         return selected;
     }
     PyValue_CLOSE(selected);
 
     if (!recursive) {
-        PyValue_CLOSE(input);
         return key;
     }
 
@@ -514,11 +513,9 @@ static PyValue
         }
     }
 
-    PyValue_CLOSE(input);
     return key;
 error:
     PyValue_CLOSE(key);
-    PyValue_CLOSE(input);
     return PyValue_NULL;
 }
 

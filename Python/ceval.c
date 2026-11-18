@@ -1705,6 +1705,10 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
 static int
 call_transaction_native(_PyCallTransaction *call)
 {
+    /* Each preparation step before this one (method expansion, tuple
+     * preparation, the CALL event, a declined Python push) refreshed after
+     * its last callback, so the record is current on entry. The refreshes
+     * below follow only a step that can run Python or that allocates. */
     PyValue small[8];
     PyValue *retired = small;
     PyValue local_result = PyValue_NULL;
@@ -1722,6 +1726,7 @@ call_transaction_native(_PyCallTransaction *call)
         if (retired == NULL) {
             PyErr_NoMemory();
         }
+        /* Allocation is fallible preparation: refresh after it. */
         if (retired == NULL || call_record_refresh(call) < 0) {
             goto done;
         }
@@ -1749,10 +1754,7 @@ call_transaction_native(_PyCallTransaction *call)
         monitor_argument = PyValue_IsNull(first)
             ? borrowed_word(&_PyInstrumentation_MISSING) : first;
     }
-    if (call_record_refresh(call) < 0) {
-        goto abort;
-    }
-    homes = _PyFrame_Slots(call->frame) + call->base;
+    /* Only counts were taken since entry: the record is still current. */
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         PyObject *kwargs = call->state & CALL_KWARGS_PRESENT
@@ -1790,9 +1792,12 @@ call_transaction_native(_PyCallTransaction *call)
                      callable, monitor_argument) < 0) {
             failed_call = 1;
         }
+        /* The event can run Python too. */
+        if (!failed_call && refreshed == 0) {
+            refreshed = call_record_refresh(call);
+        }
     }
-    if (failed_call || refreshed < 0 ||
-        call_record_refresh(call) < 0) {
+    if (failed_call || refreshed < 0) {
         goto abort;
     }
     call_transaction_detach(call, retired);
@@ -1828,12 +1833,14 @@ done:
     if (retired != NULL) {
         call_transaction_retire(retired, retired_count, small);
     }
+    /* Retiring the window and the callable can run a finalizer. */
     int failed = call_record_refresh(call);
     if (call_status < 0) {
         assert(PyValue_IsNull(local_result));
         return -1;
     }
     if (failed == 0 && call->periodic) {
+        /* Signal handlers and the GC can run Python. */
         int periodic = check_periodics_at_end(call->tstate,
                                               call->frame);
         failed = call_record_refresh(call);

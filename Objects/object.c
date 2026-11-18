@@ -768,6 +768,22 @@ PyObject_Dump(PyObject* op)
    of a row if it is set, else the object slot through the adapter, and the
    object function is its thunk. */
 
+/* The adapters of this file (D9): the cold path of a dispatcher whose value
+   field is 0. Each takes the object slot that the dispatcher loaded, boxes
+   an inline operand and calls that slot; none reads a type again. */
+
+Py_NO_INLINE static PyObject *
+adapt_repr(reprfunc slot, PyValueBorrow v)
+{
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_REPR, slot);
+    if (a == NULL) {
+        return NULL;
+    }
+    PyObject *res = slot(a);
+    _PyValue_AdapterRelease(v, a);
+    return res;
+}
+
 PyObject *
 _PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
 {
@@ -776,13 +792,7 @@ _PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
         _PyType_CHECK_VALUE_ROW(t, row);
         return f(v);
     }
-    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_REPR, slot);
-    if (a == NULL) {
-        return NULL;
-    }
-    PyObject *res = slot(a);
-    _PyValue_AdapterRelease(v, a);
-    return res;
+    return adapt_repr(slot, v);
 }
 
 PyObject *
@@ -1099,17 +1109,9 @@ static const char * const opstrings[] = {"<", "<=", "==", "!=", ">", ">="};
    do_richcompare(); value_ops.c's _PyValue_RichCompareBool() returns its
    truth. */
 
-PyValue
-_PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
-                         PyValueBorrow v, PyValueBorrow w, int op)
+Py_NO_INLINE static PyValue
+adapt_richcompare(richcmpfunc slot, PyValueBorrow v, PyValueBorrow w, int op)
 {
-    int row = _Py_VALUE_SLOT_INDEX_richcompare;
-    _Py_richcmpvaluefunc f =
-        (_Py_richcmpvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
-    if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(t, row);
-        return f(v, w, op);
-    }
     PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_COMPARE, slot);
     if (a == NULL) {
         return PyValue_NULL;
@@ -1123,6 +1125,20 @@ _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
     _PyValue_AdapterRelease(w, b);
     _PyValue_AdapterRelease(v, a);
     return _PyValue_FromObjectResult(res);
+}
+
+PyValue
+_PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
+                         PyValueBorrow v, PyValueBorrow w, int op)
+{
+    int row = _Py_VALUE_SLOT_INDEX_richcompare;
+    _Py_richcmpvaluefunc f =
+        (_Py_richcmpvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v, w, op);
+    }
+    return adapt_richcompare(slot, v, w, op);
 }
 
 /* Perform a rich comparison, raising TypeError when the requested comparison
@@ -1399,6 +1415,33 @@ _PyObject_CheckAttributeName(PyObject *name)
     return 0;
 }
 
+Py_NO_INLINE static PyValue
+adapt_getattro(getattrofunc slot, PyValueBorrow v, PyObject *name)
+{
+    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, slot);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = slot(self, name);
+    _PyValue_AdapterRelease(v, self);
+    return _PyValue_FromObjectResult(result);
+}
+
+// The legacy tp_getattr, which takes a C string.
+Py_NO_INLINE static PyValue
+adapt_getattr(getattrfunc slot, PyValueBorrow v, PyObject *name)
+{
+    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, slot);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
+    const char *name_str = PyUnicode_AsUTF8(name);
+    PyObject *result = name_str == NULL ? NULL
+                                        : slot(self, (char *)name_str);
+    _PyValue_AdapterRelease(v, self);
+    return _PyValue_FromObjectResult(result);
+}
+
 /* The getattro of tp, the type of v: its value slot, or its object slot or
    tp_getattr through the adapter. Neither slot: AttributeError. */
 static PyValue
@@ -1409,29 +1452,18 @@ call_getattro(PyTypeObject *tp, PyValueBorrow v, PyObject *name)
         _PyType_CHECK_VALUE_ROW(tp, _Py_VALUE_SLOT_INDEX_getattro);
         return f(v, name);
     }
-    if (tp->tp_getattro == NULL && tp->tp_getattr == NULL) {
-        PyErr_Format(PyExc_AttributeError,
-                     "'%.100s' object has no attribute '%U'",
-                     tp->tp_name, name);
-        return PyValue_NULL;
+    getattrofunc getattro = tp->tp_getattro;
+    if (getattro != NULL) {
+        return adapt_getattro(getattro, v, name);
     }
-    PyObject *self = tp->tp_getattro != NULL
-        ? _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattro)
-        : _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattr);
-    if (self == NULL) {
-        return PyValue_NULL;
+    getattrfunc getattr = tp->tp_getattr;
+    if (getattr != NULL) {
+        return adapt_getattr(getattr, v, name);
     }
-    PyObject *result;
-    if (tp->tp_getattro != NULL) {
-        result = tp->tp_getattro(self, name);
-    }
-    else {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        result = name_str == NULL ? NULL
-                                  : tp->tp_getattr(self, (char *)name_str);
-    }
-    _PyValue_AdapterRelease(v, self);
-    return _PyValue_FromObjectResult(result);
+    PyErr_Format(PyExc_AttributeError,
+                 "'%.100s' object has no attribute '%U'",
+                 tp->tp_name, name);
+    return PyValue_NULL;
 }
 
 PyValue
@@ -1553,6 +1585,61 @@ PyObject_HasAttr(PyObject *obj, PyObject *name)
     return rc;
 }
 
+/* The setattr adapters box the receiver and an inline value. value is
+   PyValue_NULL to delete. */
+Py_NO_INLINE static int
+adapt_setattro(setattrofunc slot, PyValueBorrow v, PyObject *name,
+               PyValueBorrow value)
+{
+    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, slot);
+    if (self == NULL) {
+        return -1;
+    }
+    PyObject *w = NULL;
+    if (!PyValue_IsNull(value)) {
+        w = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, slot);
+        if (w == NULL) {
+            _PyValue_AdapterRelease(v, self);
+            return -1;
+        }
+    }
+    int err = slot(self, name, w);
+    if (w != NULL) {
+        _PyValue_AdapterRelease(value, w);
+    }
+    _PyValue_AdapterRelease(v, self);
+    return err;
+}
+
+// The legacy tp_setattr, which takes a C string.
+Py_NO_INLINE static int
+adapt_setattr(setattrfunc slot, PyValueBorrow v, PyObject *name,
+              PyValueBorrow value)
+{
+    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, slot);
+    if (self == NULL) {
+        return -1;
+    }
+    PyObject *w = NULL;
+    if (!PyValue_IsNull(value)) {
+        w = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, slot);
+        if (w == NULL) {
+            _PyValue_AdapterRelease(v, self);
+            return -1;
+        }
+    }
+    int err = -1;
+    const char *name_str = PyUnicode_AsUTF8(name);
+    if (name_str != NULL) {
+        err = slot(self, (char *)name_str, w);
+    }
+    if (w != NULL) {
+        _PyValue_AdapterRelease(value, w);
+    }
+    _PyValue_AdapterRelease(v, self);
+    return err;
+}
+
 int
 (_PyValue_SetAttr)(PyValueBorrow v, PyObject *name, PyValueBorrow value)
 {
@@ -1582,39 +1669,15 @@ int
         Py_DECREF(name);
         return err;
     }
-    if (tp->tp_setattro != NULL || tp->tp_setattr != NULL) {
-        // The adapter: an inline receiver or value is boxed for the call.
-        PyObject *self = tp->tp_setattro != NULL
-            ? _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattro)
-            : _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattr);
-        PyObject *w = NULL;
-        err = -1;
-        if (self == NULL) {
-            goto adapted;
-        }
-        if (!PyValue_IsNull(value)) {
-            w = tp->tp_setattro != NULL
-                ? _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattro)
-                : _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattr);
-            if (w == NULL) {
-                _PyValue_AdapterRelease(v, self);
-                goto adapted;
-            }
-        }
-        if (tp->tp_setattro != NULL) {
-            err = tp->tp_setattro(self, name, w);
-        }
-        else {
-            const char *name_str = PyUnicode_AsUTF8(name);
-            if (name_str != NULL) {
-                err = tp->tp_setattr(self, (char *)name_str, w);
-            }
-        }
-        if (w != NULL) {
-            _PyValue_AdapterRelease(value, w);
-        }
-        _PyValue_AdapterRelease(v, self);
-    adapted:
+    setattrofunc setattro = tp->tp_setattro;
+    if (setattro != NULL) {
+        err = adapt_setattro(setattro, v, name, value);
+        Py_DECREF(name);
+        return err;
+    }
+    setattrfunc setattr = tp->tp_setattr;
+    if (setattr != NULL) {
+        err = adapt_setattr(setattr, v, name, value);
         Py_DECREF(name);
         return err;
     }
@@ -1650,25 +1713,7 @@ _PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
         _PyType_CHECK_VALUE_ROW(base, row);
         return f(self, name, value);
     }
-
-    PyObject *self_obj = _PyValue_AdapterBox(self, BOX_SITE_ATTRIBUTE, slot);
-    if (self_obj == NULL) {
-        return -1;
-    }
-    PyObject *value_obj = NULL;
-    if (!PyValue_IsNull(value)) {
-        value_obj = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, slot);
-        if (value_obj == NULL) {
-            _PyValue_AdapterRelease(self, self_obj);
-            return -1;
-        }
-    }
-    int result = slot(self_obj, name, value_obj);
-    if (value_obj != NULL) {
-        _PyValue_AdapterRelease(value, value_obj);
-    }
-    _PyValue_AdapterRelease(self, self_obj);
-    return result;
+    return adapt_setattro(slot, self, name, value);
 }
 
 int
@@ -1851,17 +1896,10 @@ _PyStatusValue
     return r;
 }
 
-PyValue
-(_PyValue_DescrGet)(PyObject *descr, PyValueBorrow obj, PyTypeObject *type)
+Py_NO_INLINE static PyValue
+adapt_descr_get(descrgetfunc get, PyObject *descr, PyValueBorrow obj,
+                PyTypeObject *type)
 {
-    PyTypeObject *dt = Py_TYPE(descr);
-    _Py_descrgetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_get);
-    if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_get);
-        return f(descr, obj, (PyObject *)type);
-    }
-    descrgetfunc get = dt->tp_descr_get;
-    assert(get != NULL);
     PyObject *o = NULL;
     if (!PyValue_IsNull(obj)) {
         o = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, get);
@@ -1876,17 +1914,24 @@ PyValue
     return _PyValue_FromObjectResult(result);
 }
 
-int
-(_PyValue_DescrSet)(PyObject *descr, PyValueBorrow obj, PyValueBorrow value)
+PyValue
+(_PyValue_DescrGet)(PyObject *descr, PyValueBorrow obj, PyTypeObject *type)
 {
     PyTypeObject *dt = Py_TYPE(descr);
-    _Py_descrsetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_set);
+    _Py_descrgetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_get);
     if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_set);
-        return f(descr, obj, value);
+        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_get);
+        return f(descr, obj, (PyObject *)type);
     }
-    descrsetfunc set = dt->tp_descr_set;
-    assert(set != NULL);
+    descrgetfunc get = dt->tp_descr_get;
+    assert(get != NULL);
+    return adapt_descr_get(get, descr, obj, type);
+}
+
+Py_NO_INLINE static int
+adapt_descr_set(descrsetfunc set, PyObject *descr, PyValueBorrow obj,
+                PyValueBorrow value)
+{
     PyObject *o = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, set);
     if (o == NULL) {
         return -1;
@@ -1905,6 +1950,20 @@ int
     }
     _PyValue_AdapterRelease(obj, o);
     return res;
+}
+
+int
+(_PyValue_DescrSet)(PyObject *descr, PyValueBorrow obj, PyValueBorrow value)
+{
+    PyTypeObject *dt = Py_TYPE(descr);
+    _Py_descrsetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_set);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_set);
+        return f(descr, obj, value);
+    }
+    descrsetfunc set = dt->tp_descr_set;
+    assert(set != NULL);
+    return adapt_descr_set(set, descr, obj, value);
 }
 
 
@@ -2240,6 +2299,18 @@ PyObject_GenericSetDict(PyObject *obj, PyObject *value, void *context)
 /* Test a value used as condition, e.g., in a while or if statement.
    Return -1 if an error occurred */
 
+Py_NO_INLINE static Py_ssize_t
+adapt_bool(inquiry slot, PyValueBorrow v)
+{
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_NUMBER, slot);
+    if (a == NULL) {
+        return -1;
+    }
+    int res = slot(a);
+    _PyValue_AdapterRelease(v, a);
+    return res;
+}
+
 static Py_ssize_t
 call_bool(PyTypeObject *t, inquiry slot, PyValueBorrow v)
 {
@@ -2250,13 +2321,7 @@ call_bool(PyTypeObject *t, inquiry slot, PyValueBorrow v)
         _PyType_CHECK_VALUE_ROW(t, row);
         return f(v);
     }
-    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_NUMBER, slot);
-    if (a == NULL) {
-        return -1;
-    }
-    int res = slot(a);
-    _PyValue_AdapterRelease(v, a);
-    return res;
+    return adapt_bool(slot, v);
 }
 
 int

@@ -67,6 +67,18 @@ null_error(void)
 
 static void value_type_error(const char *msg, PyValueBorrow v);
 
+Py_NO_INLINE static PyValue
+adapt_subscript(binaryfunc slot, PyObject *o, PyValueBorrow key)
+{
+    PyObject *k = seq_adapter_box(key, slot);
+    if (k == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = slot(o, k);
+    seq_adapter_release(key, k);
+    return _PyValue_FromObjectResult(res);
+}
+
 static PyValue
 call_subscript(PyObject *o, binaryfunc slot, PyValueBorrow key)
 {
@@ -76,13 +88,7 @@ call_subscript(PyObject *o, binaryfunc slot, PyValueBorrow key)
         _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_subscript);
         return f(o, key);
     }
-    PyObject *k = seq_adapter_box(key, slot);
-    if (k == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = slot(o, k);
-    seq_adapter_release(key, k);
-    return _PyValue_FromObjectResult(res);
+    return adapt_subscript(slot, o, key);
 }
 
 static PyValue
@@ -98,16 +104,10 @@ call_item(PyObject *o, ssizeargfunc slot, Py_ssize_t i)
 }
 
 // value is PyValue_NULL to delete.
-static int
-call_ass_subscript(PyObject *o, objobjargproc slot, PyValueBorrow key,
-                   PyValueBorrow value)
+Py_NO_INLINE static int
+adapt_ass_subscript(objobjargproc slot, PyObject *o, PyValueBorrow key,
+              PyValueBorrow value)
 {
-    PyTypeObject *t = Py_TYPE(o);
-    _Py_asssubscriptvaluefunc f = _PyType_VALUE_SLOT(t, ass_subscript);
-    if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_subscript);
-        return f(o, key, value);
-    }
     PyObject *k = seq_adapter_box(key, slot);
     if (k == NULL) {
         return -1;
@@ -128,17 +128,24 @@ call_ass_subscript(PyObject *o, objobjargproc slot, PyValueBorrow key,
     return res;
 }
 
-// value is PyValue_NULL to delete.
 static int
-call_ass_item(PyObject *o, ssizeobjargproc slot, Py_ssize_t i,
-              PyValueBorrow value)
+call_ass_subscript(PyObject *o, objobjargproc slot, PyValueBorrow key,
+                   PyValueBorrow value)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _Py_assitemvaluefunc f = _PyType_VALUE_SLOT(t, ass_item);
+    _Py_asssubscriptvaluefunc f = _PyType_VALUE_SLOT(t, ass_subscript);
     if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_item);
-        return f(o, i, value);
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_subscript);
+        return f(o, key, value);
     }
+    return adapt_ass_subscript(slot, o, key, value);
+}
+
+// value is PyValue_NULL to delete.
+Py_NO_INLINE static int
+adapt_ass_item(ssizeobjargproc slot, PyObject *o, Py_ssize_t i,
+              PyValueBorrow value)
+{
     if (PyValue_IsNull(value)) {
         return slot(o, i, NULL);
     }
@@ -152,14 +159,21 @@ call_ass_item(PyObject *o, ssizeobjargproc slot, Py_ssize_t i,
 }
 
 static int
-call_contains(PyObject *o, objobjproc slot, PyValueBorrow item)
+call_ass_item(PyObject *o, ssizeobjargproc slot, Py_ssize_t i,
+              PyValueBorrow value)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _Py_containsvaluefunc f = _PyType_VALUE_SLOT(t, contains);
+    _Py_assitemvaluefunc f = _PyType_VALUE_SLOT(t, ass_item);
     if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_contains);
-        return f(o, item);
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_item);
+        return f(o, i, value);
     }
+    return adapt_ass_item(slot, o, i, value);
+}
+
+Py_NO_INLINE static int
+adapt_contains(objobjproc slot, PyObject *o, PyValueBorrow item)
+{
     PyObject *x = seq_adapter_box(item, slot);
     if (x == NULL) {
         return -1;
@@ -169,10 +183,22 @@ call_contains(PyObject *o, objobjproc slot, PyValueBorrow item)
     return res;
 }
 
+static int
+call_contains(PyObject *o, objobjproc slot, PyValueBorrow item)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_containsvaluefunc f = _PyType_VALUE_SLOT(t, contains);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_contains);
+        return f(o, item);
+    }
+    return adapt_contains(slot, o, item);
+}
+
 /* The ITERNEXT adapter: an object tp_iternext's item is NEXT; NULL with
    nothing pending is RETURN with no value; NULL with any exception, a
    StopIteration included, is ERROR with the exception untouched (R11). */
-static _PyStatusValue
+Py_NO_INLINE static _PyStatusValue
 adapt_iternext(iternextfunc slot, PyObject *it)
 {
     PyObject *res = slot(it);
@@ -185,15 +211,9 @@ adapt_iternext(iternextfunc slot, PyObject *it)
     return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
 }
 
-static _PyStatusValue
-call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
+Py_NO_INLINE static _PyStatusValue
+adapt_send(sendfunc slot, PyObject *it, PyValueBorrow arg)
 {
-    PyTypeObject *t = Py_TYPE(it);
-    _Py_sendvaluefunc f = _PyType_VALUE_SLOT(t, send);
-    if (f != NULL) {
-        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_send);
-        return f(it, arg);
-    }
     PyObject *a = iter_adapter_box(arg, slot);
     if (a == NULL) {
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
@@ -206,6 +226,18 @@ call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
     return (_PyStatusValue){status, PyValue_FromObjectSteal(res)};
+}
+
+static _PyStatusValue
+call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
+{
+    PyTypeObject *t = Py_TYPE(it);
+    _Py_sendvaluefunc f = _PyType_VALUE_SLOT(t, send);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_send);
+        return f(it, arg);
+    }
+    return adapt_send(slot, it, arg);
 }
 
 /* Operations on any object */
@@ -1292,7 +1324,7 @@ value_type_error(const char *msg, PyValueBorrow v)
 #define adapter_box(v, f) _PyValue_AdapterBox((v), BOX_SITE_NUMBER, (f))
 #define adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
 
-static PyValue
+Py_NO_INLINE static PyValue
 adapt_unary(unaryfunc f, PyValueBorrow v)
 {
     PyObject *a = adapter_box(v, f);
@@ -1304,7 +1336,7 @@ adapt_unary(unaryfunc f, PyValueBorrow v)
     return _PyValue_FromObjectResult(res);
 }
 
-static PyValue
+Py_NO_INLINE static PyValue
 adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
 {
     PyObject *a = adapter_box(v, f);
@@ -1322,7 +1354,7 @@ adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
     return _PyValue_FromObjectResult(res);
 }
 
-static PyValue
+Py_NO_INLINE static PyValue
 adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
               PyValueBorrow z)
 {
@@ -1349,7 +1381,7 @@ adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
 }
 
 // The sequence stays an object; an inline other operand is boxed.
-static PyValue
+Py_NO_INLINE static PyValue
 adapt_concat(binaryfunc f, PyObject *seq, PyValueBorrow w)
 {
     PyObject *b = adapter_box(w, f);

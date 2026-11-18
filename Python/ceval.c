@@ -1087,8 +1087,8 @@ static_assert(offsetof(_PyEntryFrame, stack) ==
               "the entry frame's stack must follow owned_slots[0]");
 
 /* The entry frame's words.  Its slot 1 is a temporary, which
- * INTERPRETER_EXIT takes; the header precedes the words, as in every
- * executing copy, for IR_IS_LOCAL(). */
+ * INTERPRETER_EXIT takes, so the word carries no slot-class flag; the header
+ * precedes the words, as in every executing copy, for IR_IS_LOCAL(). */
 static const struct {
     _PyCodeExec exec;
     _PyIRWord words[1];

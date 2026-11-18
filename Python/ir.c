@@ -43,8 +43,9 @@ static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit")
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
  * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and
  * RETURN_VALUE returns slot 0. The explicit continuation names the first
- * real word. Both slots are temporaries, and the header precedes the words,
- * as in every executing copy, for IR_IS_LOCAL(). */
+ * real word. Both slots are temporaries, so the words carry no slot-class
+ * flag, and the header precedes the words, as in every executing copy, for
+ * IR_IS_LOCAL(). */
 _PyIRStaticExec _PyIR_InitCleanup = {
     .exec = {
         .words = _PyIR_InitCleanup.words,
@@ -782,7 +783,13 @@ make_exec(PyCodeObject *co)
         _PyMem_NoScanFree(exec);
         return NULL;
     }
-    memcpy(words, _PyCode_WORDS(co), words_size);
+    /* The slot-class flags are a cache of the fields and nlocalsplus,
+     * which handlers test in the word instead of loading nlocalsplus. */
+    const _PyIRWord *source = _PyCode_WORDS(co);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        assert(!(source[i] & IR_F_LOCAL_MASK));
+        words[i] = source[i] | _PyIR_ExecLocalFlags(source[i], exec->nlocalsplus);
+    }
     if (fb_size == 0) {
         return exec;
     }

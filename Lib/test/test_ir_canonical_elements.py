@@ -48,8 +48,8 @@ class CanonicalElementTests(unittest.TestCase):
                 with self.subTest(kind=kind, record=record):
                     body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT", record)
                     self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
-                    self.assertIn("IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), res);", body)
-                    self.assertIn("IR_STORE_CANONICAL_DST(IR_A(ir_word), res);", body)
+                    self.assertIn("IR_STORE_CANONICAL_TEMP_DST(ir_word, A, res);", body)
+                    self.assertIn("IR_STORE_CANONICAL_DST(ir_word, A, res);", body)
                     self.assertNotIn("IR_STORE_TEMP_DST(", body)
                     self.assertNotIn("IR_STORE_DST(", body)
                     self.assertLess(body.index("IR_STORE_CANONICAL_TEMP_DST("),

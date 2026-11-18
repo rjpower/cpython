@@ -201,7 +201,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 self.assertLess(load, acquire)
                 self.assertLess(acquire, publish)
                 self.assertLess(publish, retire)
-                self.assertIn("IR_STORE_DST(IR_A(ir_word), attr)", handler[retire:])
+                self.assertIn("IR_STORE_DST(ir_word, A, attr)", handler[retire:])
                 self.assertIn("if (retire_failed < 0)", handler[retire:])
                 self.assertIn("_PyIRWord* this_instr = next_instr;", handler)
                 self.assertNotIn("_PyIRWord* const this_instr", handler)

@@ -535,7 +535,9 @@ gen_try_set_executing(PyGenObject *gen)
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
- * F is a field, IR_A(ir_word) and so on. */
+ * F is the value of a field, IR_A(ir_word) and so on.  The result and input
+ * macros take the word W and the letter X of the field instead, so that they
+ * test the word's slot-class flag. */
 
 /* The slot that a slot field names, an lvalue.  `slots` is the frame's
  * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */
@@ -549,24 +551,33 @@ gen_try_set_executing(PyGenObject *gen)
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
+/* The value of field X of word W */
+#define IR_FIELD(W, X) IR_##X(W)
+
+/* IR_IS_LOCAL(IR_FIELD(W, X)) from the slot-class flag of W, an executing
+ * word, which saves the loads of the header (_PyIR_ExecLocalFlags()). */
+#define IR_IS_LOCAL_FIELD(W, X) \
+    (assert(!((W) & IR_F_LOCAL_##X) == !IR_IS_LOCAL(IR_FIELD(W, X))), \
+     ((W) & IR_F_LOCAL_##X) != 0)
+
 /* The view of an input that the handler reads through field F, which may
  * name a local (the instruction's borrow_mask): the slot's bits, as a
  * PyValueBorrow, which only C locals hold and nothing releases.  The one
  * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
 #define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
 
-/* The handler takes the input V that it read through field F: the owner
+/* The handler takes the input V that it read through field X of W: the owner
  * of a temporary's value, whose slot becomes NULL, or PyValue_NULL for a
  * local, which keeps its value and owns it.  The generator assigns it to
  * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
-#define IR_CONSUME_INPUT(F, V) \
-    (IR_IS_LOCAL(F) ? PyValue_NULL \
-                    : _PyFrame_TakeKnownHome(frame, &IR_SLOT(F), PyValue_Borrow(V)))
+#define IR_CONSUME_INPUT(W, X, V) \
+    (IR_IS_LOCAL_FIELD(W, X) ? PyValue_NULL \
+        : _PyFrame_TakeKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(V)))
 
 /* Selected only by the checked interpreter-exit native-home contract. */
-#define IR_CONSUME_NATIVE_INPUT(F, V) \
+#define IR_CONSUME_NATIVE_INPUT(W, X, V) \
     (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
-     IR_SLOT(F) = PyValue_NULL, _PyIR_AdoptTemp(V))
+     IR_SLOT(IR_FIELD(W, X)) = PyValue_NULL, _PyIR_AdoptTemp(V))
 
 /* The DSL's TAKE(V) of view V, whose field's owner is OWN: a value with a
  * count of its own, for a home.  A local's (OWN is NULL) takes a new
@@ -633,66 +644,66 @@ ir_retire_last_owner(PyValue old)
         } \
     } while (0)
 
-/* The result V goes to dst field F, which may name a local (a folded
+/* The result V goes to dst field X of W, which may name a local (a folded
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
  * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
  * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
-#define IR_STORE_DST_IMPL(F, V, VALUE) \
+#define IR_STORE_DST_IMPL(W, X, V, VALUE) \
     do { \
-        if (IR_IS_LOCAL(F)) { \
-            PyValue ir_old = IR_SLOT(F); \
-            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(F), PyValue_Borrow(ir_old), (VALUE)); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
+            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(ir_old), (VALUE)); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
             IR_RETIRE_LOCAL(ir_old); \
         } \
-        else if ((F) == IR_NO_DST) { \
+        else if (IR_FIELD(W, X) == IR_NO_DST) { \
             PyValue_XCLOSE(V); \
         } \
         else { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
-                   || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (VALUE); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
+                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
+            IR_SLOT(IR_FIELD(W, X)) = (VALUE); \
+            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
 
-#define IR_STORE_DST(F, V) \
-    IR_STORE_DST_IMPL(F, V, _PyValue_Publish(&(V)))
+#define IR_STORE_DST(W, X, V) \
+    IR_STORE_DST_IMPL(W, X, V, _PyValue_Publish(&(V)))
 
 /* Only a checked canonical-result proof selects this owner transfer. */
-#define IR_STORE_CANONICAL_DST(F, V) \
-    IR_STORE_DST_IMPL(F, V, (V))
+#define IR_STORE_CANONICAL_DST(W, X, V) \
+    IR_STORE_DST_IMPL(W, X, V, (V))
 
 /* Observation sees the committed binding; its displaced or ignored owner
  * stays in C until the terminal adapter has published its continuation. */
-#define IR_COMMIT_OBSERVED_DST(F, V, RETIRED) \
+#define IR_COMMIT_OBSERVED_DST(W, X, V, RETIRED) \
     do { \
         assert(PyValue_IsNull(RETIRED)); \
-        if (IR_IS_LOCAL(F)) { \
-            (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
+            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
         } \
-        else if ((F) == IR_NO_DST) { \
+        else if (IR_FIELD(W, X) == IR_NO_DST) { \
             (RETIRED) = (V); \
         } \
         else { \
-            assert(PyValue_IsNull(IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
+            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
 
-#define IR_MOVE_OBSERVED_DST(F, SLOT, RETIRED) \
+#define IR_MOVE_OBSERVED_DST(W, X, SLOT, RETIRED) \
     do { \
         assert(PyValue_IsNull(RETIRED)); \
-        if (IR_IS_LOCAL(F)) { \
-            (RETIRED) = IR_SLOT(F); \
-            IR_SLOT(F) = (SLOT); \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
+            IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
             (SLOT) = PyValue_NULL; \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
         } \
-        else if ((F) == IR_NO_DST) { \
+        else if (IR_FIELD(W, X) == IR_NO_DST) { \
             (RETIRED) = (SLOT); \
             (SLOT) = PyValue_NULL; \
         } \
@@ -703,38 +714,38 @@ ir_retire_last_owner(PyValue old)
     (assert(_PyValue_IsHome(V)), PyValue_XDUP(V))
 
 /* The checked producer already owns canonical bits. */
-#define IR_STORE_CANONICAL_TEMP_DST(F, V) \
+#define IR_STORE_CANONICAL_TEMP_DST(W, X, V) \
     do { \
-        if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
-                   || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = (V); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+        if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
+            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
+                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
+            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
 
-/* Before code that may run other code, the result V goes to dst field F
- * if F names a temporary.  A local gets it at the end, IR_STORE_DST. */
-#define IR_STORE_TEMP_DST(F, V) \
+/* Before code that may run other code, the result V goes to dst field X
+ * of W if it names a temporary.  A local gets it at the end, IR_STORE_DST. */
+#define IR_STORE_TEMP_DST(W, X, V) \
     do { \
-        if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
-                   || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
+        if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
+            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
+                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
+            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
 
-/* A window-style handler whose dst field F may name a local moves its
+/* A window-style handler whose dst field X of W may name a local moves its
  * result from SLOT of its window there, releasing the local's old value
  * as IR_STORE_DST does. */
-#define IR_MOVE_TO_DST(F, SLOT) \
+#define IR_MOVE_TO_DST(W, X, SLOT) \
     do { \
-        if (IR_IS_LOCAL(F)) { \
-            PyValue ir_old = IR_SLOT(F); \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+            IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
@@ -742,17 +753,17 @@ ir_retire_last_owner(PyValue old)
 
 /* IR_MOVE_TO_DST for a call, whose dst may be IR_NO_DST (_PyIR_DISCARDS):
  * nothing reads the result, which the handler releases from SLOT. */
-#define IR_MOVE_TO_DST_OR_DISCARD(F, SLOT) \
+#define IR_MOVE_TO_DST_OR_DISCARD(W, X, SLOT) \
     do { \
-        if (IR_IS_LOCAL(F)) { \
-            PyValue ir_old = IR_SLOT(F); \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
             assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(F) = (SLOT); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+            IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \
-        else if ((F) == IR_NO_DST) { \
+        else if (IR_FIELD(W, X) == IR_NO_DST) { \
             PyValue ir_result = (SLOT); \
             (SLOT) = PyValue_NULL; \
             PyValue_XCLOSE(ir_result); \

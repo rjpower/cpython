@@ -909,7 +909,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # INSTRUMENTED_INSTRUCTION may have displaced, has the format of
             # the code object's
             runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
-                                  sys.byteorder)
+                                  sys.byteorder) & _HANDLER_MASK
             # A handler of the IR only, such as BINARY_OP_ADD,
             # shows as the instruction that it runs; a specialisation shows
             # as itself

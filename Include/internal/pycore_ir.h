@@ -146,6 +146,17 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_HANDLER(W)   ((int)((W) & IR_HANDLER_MASK))
 #define IR_FLAGS(W)     ((int)((W) & IR_FLAGS_MASK))
 
+/* Slot-class flags: field X of the word names a local, a cell or a free
+ * variable, a slot below co_nlocalsplus, rather than a temporary.  They
+ * depend only on the fields and co_nlocalsplus, so the executing copy
+ * derives them (_PyIR_ExecLocalFlags()) and the code object's words, which
+ * the .pyc holds, never carry them.  IR_NO_DST is never below
+ * co_nlocalsplus, so a discarded result has no flag. */
+#define IR_F_LOCAL_A    (1 << 9)
+#define IR_F_LOCAL_B    (1 << 10)
+#define IR_F_LOCAL_C    (1 << 11)
+#define IR_F_LOCAL_D    (1 << 12)
+#define IR_F_LOCAL_MASK (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C | IR_F_LOCAL_D)
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
 #define IR_B(W)         ((uint32_t)((W) >> 28) & IR_FIELD_MAX)
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
@@ -538,7 +549,8 @@ _PyFb_HasEntry(int opcode)
  * with a feedback vector set up from the code object's feedback table.
  * Specialisation and instrumentation rewrite the handler id of the copy
  * only, so the code object's words are the generic handlers that both
- * restore.  Frames keep the words and entries of the copy in ir_words and
+ * restore.  The copy also carries the slot-class flags (IR_F_LOCAL_A..D),
+ * derived from the fields, which the code object's words do not.  Frames keep the words and entries of the copy in ir_words and
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
@@ -734,8 +746,8 @@ PyAPI_DATA(int) _PyIR_MaxSlots;
 
 /* Decoding the words of a code object (co_words), by word index.  These
  * read the code object only, never its executing copy, whose handler ids
- * specialisation and instrumentation rewrite but whose fields are the
- * same. */
+ * specialisation and instrumentation rewrite and whose slot-class flags
+ * the copy derives, but whose fields are the same. */
 
 /* The generic handler of the instruction at index i: the head of its
  * family, the handler of a BINARY_OP operation, or an inline constant form,
@@ -867,6 +879,17 @@ static inline int
 _PyIR_CanonicalFlagsValid(_PyIRWord word)
 {
     return IR_FLAGS(word) == 0;
+}
+
+/* The slot-class flags of word in an executing copy of code with
+ * nlocalsplus locals. */
+static inline _PyIRWord
+_PyIR_ExecLocalFlags(_PyIRWord word, uint32_t nlocalsplus)
+{
+    return (IR_A(word) < nlocalsplus ? IR_F_LOCAL_A : 0)
+         | (IR_B(word) < nlocalsplus ? IR_F_LOCAL_B : 0)
+         | (IR_C(word) < nlocalsplus ? IR_F_LOCAL_C : 0)
+         | (IR_D(word) < nlocalsplus ? IR_F_LOCAL_D : 0);
 }
 
 /* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */

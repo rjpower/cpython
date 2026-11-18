@@ -162,6 +162,14 @@ def first_ir_only_handler(analysis: Analysis) -> int:
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
 FIELDS = ("A", "B", "C", "D")
 FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
+# The arguments that name a field to the result and input macros, which test
+# its slot-class flag in the word (Python/ceval_macros.h)
+FIELD_ARGS = {f: f"ir_word, {f}" for f in FIELDS}
+
+
+def is_local(field: str) -> str:
+    "The C test that field of ir_word names a local"
+    return f"IR_IS_LOCAL_FIELD(ir_word, {field})"
 
 
 @dataclass(frozen=True)
@@ -3088,7 +3096,7 @@ class IRStack(Stack):
         field = self.layout.in_fields[p]
         macro = "IR_CONSUME_NATIVE_INPUT" if self.layout.native_entry else "IR_CONSUME_INPUT"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"{macro}({f}, {names[-1]})")
+                   f"{macro}({FIELD_ARGS[field]}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
         self.take_field(field)
 
@@ -3179,15 +3187,15 @@ class IRStack(Stack):
             if self.final:
                 if self.published_temporary_result:
                     field = FIELD_VARS[lay.dst]
-                    out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
+                    out.emit(f"if ({is_local(lay.dst)} || {field} == IR_NO_DST) {{\n")
                 macro = ("IR_STORE_CANONICAL_DST"
                          if (var.name == canonical_result or var.name == lay.canonical_result
                              or var.name in lay.canonical_outputs) else "IR_STORE_DST")
                 if self.observer_deferred is not None:
                     macro = "IR_COMMIT_OBSERVED_DST"
-                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name}, {self.observer_deferred})"
+                    expression = f"{macro}({FIELD_ARGS[lay.dst]}, {var.name}, {self.observer_deferred})"
                 else:
-                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name})"
+                    expression = f"{macro}({FIELD_ARGS[lay.dst]}, {var.name})"
                 self.dst_stores.append(expression)
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
@@ -3199,7 +3207,7 @@ class IRStack(Stack):
             macro = ("IR_STORE_CANONICAL_TEMP_DST" if (var.name == canonical_result
                      or var.name in lay.canonical_outputs)
                      else "IR_STORE_TEMP_DST")
-            out.emit(f"{macro}({FIELD_VARS[lay.dst]}, {var.name});\n")
+            out.emit(f"{macro}({FIELD_ARGS[lay.dst]}, {var.name});\n")
             self.publish_field(lay.dst, var, temporary=True,
                 canonical=macro == "IR_STORE_CANONICAL_TEMP_DST")
             return False
@@ -3852,7 +3860,8 @@ class IREmitter(Emitter):
             if (self.execution_variant is None or
                     fmt.field_of(ROLE_DST) not in self.execution_variant.temp_fields):
                 failure_result = (
-                    f"((IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) ? {result_name} : PyValue_NULL)")
+                    f"(({is_local(fmt.field_of(ROLE_DST))} || {dst} == IR_NO_DST) "
+                    f"? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
         window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -4234,7 +4243,7 @@ class IREmitter(Emitter):
                 fmt.field_of(ROLE_DST) is None):
             raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
+        self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
         self.emit(f"int ir_n = {count};\n")
         macro = "IR_UNPACK_CANONICAL_TO_LOCALS" if canonical else "IR_UNPACK_TO_LOCALS"
         self.emit(f"int ir_rest = {macro}(&IR_SLOT({dst}), "
@@ -4258,16 +4267,16 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit("PyValue ir_leaf_result = _PyDict_TryGetFirstProbeValue(dict_st, sub_st);\n")
         self.emit("if (!PyValue_IsNull(ir_leaf_result)) {\n")
-        self.emit("PyValue ir_leaf_dict = IR_CONSUME_INPUT(IR_B(ir_word), dict_st);\n")
-        self.emit("PyValue ir_leaf_key = IR_CONSUME_INPUT(IR_C(ir_word), sub_st);\n")
+        self.emit("PyValue ir_leaf_dict = IR_CONSUME_INPUT(ir_word, B, dict_st);\n")
+        self.emit("PyValue ir_leaf_key = IR_CONSUME_INPUT(ir_word, C, sub_st);\n")
         self.emit("STAT_INC(BINARY_OP, hit);\n")
-        self.emit("IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);\n")
+        self.emit("IR_STORE_CANONICAL_TEMP_DST(ir_word, A, ir_leaf_result);\n")
         self.emit_ordered_retirement(
             "ir_leaf_key", "ir_leaf_dict",
-            "((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
+            "((IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
             "NULL", None)
-        self.emit("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {\n")
-        self.emit("IR_STORE_DST(IR_A(ir_word), ir_leaf_result);\n")
+        self.emit("if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {\n")
+        self.emit("IR_STORE_DST(ir_word, A, ir_leaf_result);\n")
         self.release_displaced()
         self.emit("}\n")
         self.emit("DISPATCH();\n")
@@ -6650,7 +6659,7 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     stack.final = True
     stack.flush(out)
     if mode == STORE_RESULT and fmt.window:
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
         if stack.observer_deferred is not None:
             expression = (f"IR_MOVE_OBSERVED_DST({dst}, window[{fmt.dst_offset}], "
                           f"{stack.observer_deferred})")
@@ -7400,12 +7409,12 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        out.emit(f"if (IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) {{\n")
+        out.emit(f"if ({is_local(fmt.field_of(ROLE_DST))} || {dst} == IR_NO_DST) {{\n")
         emitter.emit_jump_to_predicted(inst)
         out.emit("}\n")
     elif mode == STORE_NEVER:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        out.emit(f"assert(!IR_IS_LOCAL({dst}) && {dst} != IR_NO_DST);\n")
+        out.emit(f"assert(!{is_local(fmt.field_of(ROLE_DST))} && {dst} != IR_NO_DST);\n")
     declare_variables(inst, out, emitter.declared_roles)
     if emitter.execution_variant is not None and emitter.execution_variant.shape_cases:
         out.emit("uint32_t ir_shape_offset;\n")

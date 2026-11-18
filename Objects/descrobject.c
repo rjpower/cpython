@@ -155,7 +155,7 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
 }
 
 static PyValue
-method_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+method_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
     if (PyValue_IsNull(obj)) {
@@ -182,10 +182,10 @@ method_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     }
 }
 
-_Py_VALUE_THUNK_DESCRGET(method_get, method_get_value)
+_Py_VALUE_THUNK_DESCRGET(method_get, PyMethodDescr_Type, method_get_value)
 
 static PyValue
-member_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+member_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
     if (PyValue_IsNull(obj)) {
@@ -208,10 +208,10 @@ member_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     return _PyMember_GetOneValue((char *)object, descr->d_member);
 }
 
-_Py_VALUE_THUNK_DESCRGET(member_get, member_get_value)
+_Py_VALUE_THUNK_DESCRGET(member_get, PyMemberDescr_Type, member_get_value)
 
 static PyValue
-getset_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+getset_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (PyValue_IsNull(obj)) {
@@ -241,7 +241,7 @@ getset_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     return PyValue_NULL;
 }
 
-_Py_VALUE_THUNK_DESCRGET(getset_get, getset_get_value)
+_Py_VALUE_THUNK_DESCRGET(getset_get, PyGetSetDescr_Type, getset_get_value)
 
 PyObject *
 _PyGetSet_ValueGet(PyObject *self, void *record)
@@ -275,7 +275,7 @@ wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
 }
 
 static int
-member_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
+member_set_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyValueBorrow value)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
     assert(!PyValue_IsNull(obj));
@@ -287,10 +287,10 @@ member_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
                                  descr->d_member, value);
 }
 
-_Py_VALUE_THUNK_DESCRSET(member_set, member_set_value)
+_Py_VALUE_THUNK_DESCRSET(member_set, PyMemberDescr_Type, member_set_value)
 
 static int
-getset_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
+getset_set_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyValueBorrow value)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     assert(!PyValue_IsNull(obj));
@@ -332,7 +332,7 @@ getset_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
     return -1;
 }
 
-_Py_VALUE_THUNK_DESCRSET(getset_set, getset_set_value)
+_Py_VALUE_THUNK_DESCRSET(getset_set, PyGetSetDescr_Type, getset_set_value)
 
 
 /* Vectorcall functions for each of the PyMethodDescr calling conventions.
@@ -723,7 +723,7 @@ method_value_vectorcall_descr_O(PyThreadState *tstate, PyObject *func,
    we implement this simply by calling __get__ and then calling the result.
 */
 static PyValue
-classmethoddescr_value_call(PyThreadState *tstate, PyObject *callable,
+classmethoddescr_value_call(PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
                             const PyValue *args, size_t nargsf,
                             PyObject *kwnames)
 {
@@ -778,7 +778,8 @@ wrapperdescr_value_raw_call(PyWrapperDescrObject *descr, PyValueBorrow self,
     if (descr->d_wrapped_value != NULL) {
         _Py_wrappervaluefunc vw = _PyType_ValueWrapper(descr->d_base);
         if (vw != NULL) {
-            return vw(self, args, nargs, kwnames, descr->d_wrapped_value);
+            return vw(descr->d_common.d_type, self, args, nargs, kwnames,
+                      descr->d_wrapped_value);
         }
     }
 
@@ -820,7 +821,7 @@ exit_scope:
 }
 
 static PyValue
-wrapperdescr_value_call(PyThreadState *tstate, PyObject *callable,
+wrapperdescr_value_call(PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
                         const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)callable;
@@ -1384,12 +1385,12 @@ mappingproxy_len(PyObject *self)
 }
 
 static PyValue
-mappingproxy_getitem_value(PyObject *self, PyValueBorrow key)
+mappingproxy_getitem_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     return _PyValue_GetItem(PyValue_FromObjectBorrow(pp->mapping), key);
 }
-_Py_VALUE_THUNK_SUBSCRIPT(mappingproxy_getitem, mappingproxy_getitem_value)
+_Py_VALUE_THUNK_SUBSCRIPT(mappingproxy_getitem, PyDictProxy_Type, mappingproxy_getitem_value)
 
 static PyMappingMethods mappingproxy_as_mapping = {
     mappingproxy_len,                           /* mp_length */
@@ -1809,7 +1810,7 @@ static PyGetSetDef wrapper_getsets[] = {
 };
 
 static PyValue
-wrapper_value_call(PyThreadState *tstate, PyObject *callable,
+wrapper_value_call(PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
                    const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     wrapperobject *wp = (wrapperobject *)callable;
@@ -2129,7 +2130,7 @@ property_missing_error(propertyobject *prop, PyValueBorrow obj,
 }
 
 static PyValue
-property_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+property_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     propertyobject *prop = (propertyobject *)self;
     if (PyValue_IsNull(obj) || PyValue_IsNone(obj)) {
@@ -2150,7 +2151,7 @@ property_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 }
 
 static int
-property_descr_set_value(PyObject *self, PyValueBorrow obj,
+property_descr_set_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj,
                          PyValueBorrow value)
 {
     propertyobject *prop = (propertyobject *)self;
@@ -2191,7 +2192,7 @@ property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyValue value = obj == NULL ? PyValue_NULL :
         PyValue_FromObjectSteal(Py_NewRef(obj));
-    PyValue result = property_descr_get_value(self, PyValue_Borrow(value),
+    PyValue result = property_descr_get_value(NULL, self, PyValue_Borrow(value),
                                               type);
     PyValue_XCLOSE(value);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_ATTRIBUTE);
@@ -2204,7 +2205,7 @@ property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
         PyValue_FromObjectSteal(Py_NewRef(obj));
     PyValue field_value = value == NULL ? PyValue_NULL :
         PyValue_FromObjectSteal(Py_NewRef(value));
-    int result = property_descr_set_value(self, PyValue_Borrow(obj_value),
+    int result = property_descr_set_value(NULL, self, PyValue_Borrow(obj_value),
                                           PyValue_Borrow(field_value));
     PyValue_XCLOSE(obj_value);
     PyValue_XCLOSE(field_value);

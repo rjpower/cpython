@@ -1240,7 +1240,7 @@ value_as_ssize_t(PyValueBorrow arg, Py_ssize_t *result)
 }
 
 static PyValue
-scanner_call(PyThreadState *tstate, PyObject *self, const PyValue *args,
+scanner_call(PyTypeObject *owner, PyThreadState *tstate, PyObject *self, const PyValue *args,
              size_t nargsf, PyObject *kwnames)
 {
     /* Python callable interface to scan_once_{str,unicode} */
@@ -1509,7 +1509,7 @@ write_newline_indent(PyUnicodeWriter *writer,
 
 
 static PyValue
-encoder_call(PyThreadState *tstate, PyObject *op, const PyValue *args,
+encoder_call(PyTypeObject *owner, PyThreadState *tstate, PyObject *op, const PyValue *args,
              size_t nargsf, PyObject *kwnames)
 {
     /* Python callable interface to encoder_listencode_obj */
@@ -1715,9 +1715,8 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
             // Fast-path for exact integers
             return PyUnicodeWriter_WriteRepr(writer, obj);
         }
-        PyObject *encoded = _PyValue_CallRepr(&PyLong_Type,
-                PyLong_Type.tp_repr, _Py_VALUE_SLOT_INDEX_repr,
-                PyValue_FromObjectBorrow(obj));
+        PyObject *encoded = _PyType_CALL_VALUE_SLOT(
+                &PyLong_Type, repr, PyValue_FromObjectBorrow(obj));
         if (encoded == NULL)
             return -1;
         return _steal_accumulate(writer, encoded);
@@ -1833,9 +1832,8 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
         keystr = _encoded_const(key);
     }
     else if (PyLong_Check(key)) {
-        keystr = _PyValue_CallRepr(&PyLong_Type, PyLong_Type.tp_repr,
-                                   _Py_VALUE_SLOT_INDEX_repr,
-                                   PyValue_FromObjectBorrow(key));
+        keystr = _PyType_CALL_VALUE_SLOT(&PyLong_Type, repr,
+                                         PyValue_FromObjectBorrow(key));
     }
     else if (s->skipkeys) {
         return 0;

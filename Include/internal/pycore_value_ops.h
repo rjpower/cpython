@@ -102,9 +102,6 @@ PyAPI_FUNC(PyValue) _PyValue_Power(PyValueBorrow v, PyValueBorrow w,
                                    PyValueBorrow z);
 PyAPI_FUNC(PyValue) _PyValue_InPlacePower(PyValueBorrow v, PyValueBorrow w,
                                           PyValueBorrow z);
-PyAPI_FUNC(PyValue) _PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
-                                          PyValueBorrow v, PyValueBorrow w,
-                                          PyValueBorrow z);
 #define _PyValue_Power(V, W, Z) \
     (_PyValue_Power)(PyValue_Borrow(V), PyValue_Borrow(W), PyValue_Borrow(Z))
 #define _PyValue_InPlacePower(V, W, Z) \
@@ -158,26 +155,14 @@ PyAPI_FUNC(int) _PyValue_RichCompareBool(PyValueBorrow v, PyValueBorrow w,
 #define _PyValue_RichCompareBool(V, W, OP) \
     (_PyValue_RichCompareBool)(PyValue_Borrow(V), PyValue_Borrow(W), OP)
 
-/* The compare and repr pairs of type t (object.c): the value slot of the
-   row if it is set, else the object slot through the adapter. object's own
-   value sides call them for the receiver's type (typeobject.c). */
-PyAPI_FUNC(PyValue) _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
-                                             PyValueBorrow v, PyValueBorrow w,
-                                             int op);
-PyAPI_FUNC(PyObject *) _PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
-                                        PyValueBorrow v);
-PyAPI_FUNC(int) _PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
-                                         PyValueBorrow self, PyObject *name,
-                                         PyValueBorrow value);
-
 /* object's value sides (typeobject.c), which NoneType and the sentinel type
    inherit: upstream's object_richcompare() (== is identity, else
    NotImplemented; != inverts the receiver type's ==) and object_str() (the
    type's repr). Their object sides are _Py_BaseObject_RichCompare() and
    object_str(). */
-PyAPI_FUNC(PyValue) _PyObject_ValueRichCompare(PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyObject_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v,
                                                PyValueBorrow w, int op);
-PyAPI_FUNC(PyObject *) _PyObject_ValueStr(PyValueBorrow v);
+PyAPI_FUNC(PyObject *) _PyObject_ValueStr(PyTypeObject *owner, PyValueBorrow v);
 
 /* PyObject_IsTrue(): the truth of v, or -1 with an exception set. The
    bool, None, int and float arms are inline for every caller; any other
@@ -282,20 +267,21 @@ PyAPI_FUNC(_PyStatusValue) _PyValue_LookupSpecial(PyValueBorrow self,
    deletes. _PyObject_GenericLookupAttrValue() reads dict, if not NULL, as
    the instance dict; a missing attribute gives status 0 without an
    exception. */
-PyAPI_FUNC(PyValue) _PyObject_GenericGetAttrValue(PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyObject_GenericGetAttrValue(PyTypeObject *owner, PyValueBorrow v,
                                                   PyObject *name);
 PyAPI_FUNC(_PyStatusValue) _PyObject_GenericLookupAttrValue(
     PyValueBorrow v, PyObject *name, PyObject *dict);
-PyAPI_FUNC(int) _PyObject_GenericSetAttrValue(PyValueBorrow v, PyObject *name,
+PyAPI_FUNC(int) _PyObject_GenericSetAttrValue(PyTypeObject *owner, PyValueBorrow v, PyObject *name,
                                               PyValueBorrow value);
 PyAPI_FUNC(int) _PyObject_GenericSetAttrWithDictValue(
     PyValueBorrow v, PyObject *name, PyValueBorrow value, PyObject *dict);
 #define _PyObject_GenericGetAttrValue(V, N) \
-    (_PyObject_GenericGetAttrValue)(PyValue_Borrow(V), N)
+    (_PyObject_GenericGetAttrValue)(NULL, PyValue_Borrow(V), N)
 #define _PyObject_GenericLookupAttrValue(V, N, D) \
     (_PyObject_GenericLookupAttrValue)(PyValue_Borrow(V), N, D)
 #define _PyObject_GenericSetAttrValue(V, N, W) \
-    (_PyObject_GenericSetAttrValue)(PyValue_Borrow(V), N, PyValue_Borrow(W))
+    (_PyObject_GenericSetAttrValue)(NULL, PyValue_Borrow(V), N, \
+                                    PyValue_Borrow(W))
 #define _PyObject_GenericSetAttrWithDictValue(V, N, W, D) \
     (_PyObject_GenericSetAttrWithDictValue)(PyValue_Borrow(V), N, \
                                             PyValue_Borrow(W), D)
@@ -323,8 +309,8 @@ extern int _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValueBorrow value);
 /* The value sides of the pair table's hash functions
    (pyjit/design/proposals/value-api-v2a0.md, section 4.3):
    PyObject_HashNotImplemented() and PyObject_GenericHash(). */
-PyAPI_FUNC(Py_hash_t) _PyValue_HashNotImplemented(PyValueBorrow value);
-PyAPI_FUNC(Py_hash_t) _PyValue_GenericHash(PyValueBorrow value);
+PyAPI_FUNC(Py_hash_t) _PyValue_HashNotImplemented(PyTypeObject *owner, PyValueBorrow value);
+PyAPI_FUNC(Py_hash_t) _PyValue_GenericHash(PyTypeObject *owner, PyValueBorrow value);
 
 /* Subscript, item, contains, size, iteration and send
    (pyjit/design/proposals/value-api-m1b-m2.md, section 1.2). A receiver
@@ -406,7 +392,7 @@ PyAPI_FUNC(_PyStatusValue) _PyValue_Send(PyObject *it, PyValueBorrow arg);
 
 /* The value side of _PyObject_NextNotImplemented() in the pair table: the
    iternext of a type that is not an iterator. */
-PyAPI_FUNC(_PyStatusValue) _PyValue_NextNotImplemented(PyObject *it);
+PyAPI_FUNC(_PyStatusValue) _PyValue_NextNotImplemented(PyTypeObject *owner, PyObject *it);
 
 /* The thin value forms of the rest of the sequence, mapping and iteration
    families follow. */

@@ -1509,7 +1509,7 @@ deque_item_impl(dequeobject *deque, Py_ssize_t i)
 
 /* The value sq_item row: the item's owner, or PyValue_NULL with IndexError. */
 static PyValue
-deque_item_value(PyObject *op, Py_ssize_t i)
+deque_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
 {
     PyValue item;
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -1751,7 +1751,7 @@ deque_repr(PyObject *deque)
 }
 
 static PyValue
-deque_richcompare_value(PyValueBorrow v, PyValueBorrow w, int op)
+deque_richcompare_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, int op)
 {
     PyObject *it1 = NULL, *it2 = NULL;
     Py_ssize_t vs, ws;
@@ -1843,7 +1843,7 @@ done:
     return PyValue_NULL;
 }
 
-_Py_VALUE_THUNK_RICHCMP(deque_richcompare, deque_richcompare_value)
+_Py_VALUE_THUNK_RICHCMP(deque_richcompare, *Py_TYPE(left), deque_richcompare_value)
 
 /*[clinic input]
 @critical_section
@@ -2106,7 +2106,7 @@ dequeiter_next_lock_held(dequeiterobject *it, dequeobject *deque)
 }
 
 static _PyStatusValue
-dequeiter_next_value(PyObject *op)
+dequeiter_next_value(PyTypeObject *owner, PyObject *op)
 {
     _PyStatusValue result;
     dequeiterobject *it = dequeiterobject_CAST(op);
@@ -2120,7 +2120,7 @@ dequeiter_next_value(PyObject *op)
 }
 
 /* A failed box consumes the element. */
-_Py_VALUE_THUNK_ITERNEXT(dequeiter_next, dequeiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(dequeiter_next, *Py_TYPE(self), dequeiter_next_value)
 
 static PyObject *
 dequeiter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -2138,7 +2138,7 @@ dequeiter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        _PyStatusValue r = dequeiter_next_value((PyObject *)it);
+        _PyStatusValue r = dequeiter_next_value(NULL, (PyObject *)it);
         if (r.status == PYGEN_NEXT) {
             PyValue_CLOSE(r.value);
         } else {
@@ -2260,7 +2260,7 @@ dequereviter_next_lock_held(dequeiterobject *it, dequeobject *deque)
 }
 
 static _PyStatusValue
-dequereviter_next_value(PyObject *self)
+dequereviter_next_value(PyTypeObject *owner, PyObject *self)
 {
     _PyStatusValue result;
     dequeiterobject *it = dequeiterobject_CAST(self);
@@ -2274,7 +2274,7 @@ dequereviter_next_value(PyObject *self)
 }
 
 /* A failed box consumes the element. */
-_Py_VALUE_THUNK_ITERNEXT(dequereviter_next, dequereviter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(dequereviter_next, *Py_TYPE(self), dequereviter_next_value)
 
 static PyObject *
 dequereviter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -2292,7 +2292,7 @@ dequereviter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        _PyStatusValue r = dequereviter_next_value((PyObject *)it);
+        _PyStatusValue r = dequereviter_next_value(NULL, (PyObject *)it);
         if (r.status == PYGEN_NEXT) {
             PyValue_CLOSE(r.value);
         } else {
@@ -2502,9 +2502,8 @@ defdict_repr(PyObject *op)
     PyObject *baserepr;
     PyObject *defrepr;
     PyObject *result;
-    baserepr = _PyValue_CallRepr(&PyDict_Type, PyDict_Type.tp_repr,
-                                _Py_VALUE_SLOT_INDEX_repr,
-                                PyValue_FromObjectBorrow(op));
+    baserepr = _PyType_CALL_VALUE_SLOT(&PyDict_Type, repr,
+                                       PyValue_FromObjectBorrow(op));
     if (baserepr == NULL)
         return NULL;
     if (dd->default_factory == NULL)
@@ -2879,7 +2878,7 @@ tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyValueBorrow doc)
 }
 
 static PyValue
-tuplegetter_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+tuplegetter_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     Py_ssize_t index = tuplegetterobject_CAST(self)->index;
 
@@ -2906,7 +2905,7 @@ tuplegetter_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     return PyTuple_GetValue(tuple, index);
 }
 
-_Py_VALUE_THUNK_DESCRGET(tuplegetter_descr_get, tuplegetter_descr_get_value)
+_Py_VALUE_THUNK_DESCRGET(tuplegetter_descr_get, *Py_TYPE(descr), tuplegetter_descr_get_value)
 
 static int
 tuplegetter_descr_set(PyObject *self, PyObject *obj, PyObject *value)

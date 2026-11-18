@@ -124,7 +124,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_dict.h"          // export _PyDict_SizeOf()
 #include "pycore_freelist.h"      // _PyFreeListState_GET()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
-#include "pycore_long_value.h"    // _PyLong_ValueHash()
+#include "pycore_long_value.h"    // _PyLong_ValueHash(NULL)
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_RELAXED
@@ -520,7 +520,7 @@ _PyDict_TryGetFirstProbeValue(PyValueBorrow container, PyValueBorrow key)
     if (keys->dk_kind != DICT_KEYS_GENERAL || dict->ma_values != NULL) {
         return PyValue_NULL;
     }
-    Py_hash_t hash = _PyLong_ValueHash(key);
+    Py_hash_t hash = _PyLong_ValueHash(NULL, key);
     Py_ssize_t index = dictkeys_get_index(keys, (size_t)hash & DK_MASK(keys));
     if (index < 0) {
         return PyValue_NULL;
@@ -3748,7 +3748,7 @@ frozendict_length(PyObject *self)
 }
 
 static PyValue
-dict_subscript_value(PyObject *self, PyValueBorrow key)
+dict_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
 {
     PyValue value;
     int status = PyDict_GetValue(self, key, &value);
@@ -3775,7 +3775,7 @@ static PyValue
 dict_getitem_value(PyValueBorrow self, const PyValue *args,
                    Py_ssize_t Py_UNUSED(nargs), PyObject *Py_UNUSED(kwnames))
 {
-    return dict_subscript_value(PyValue_AsKnownObjectBorrow(self),
+    return dict_subscript_value(NULL, PyValue_AsKnownObjectBorrow(self),
                                 PyValue_Borrow(args[0]));
 }
 
@@ -3795,12 +3795,12 @@ _PyDict_IsBuiltinGetItemDescriptor(PyObject *descr)
 Py_VALUE_ENTRY PyObject *
 _PyDict_Subscript(PyObject *self, PyObject *key)
 {
-    return _PyValue_THUNK_EXIT(dict_subscript_value(self, _Py_VALUE_ARG(key)),
+    return _PyValue_THUNK_EXIT(dict_subscript_value(NULL, self, _Py_VALUE_ARG(key)),
                                BOX_SITE_DICT);
 }
 
 static int
-dict_ass_subscript_value(PyObject *mp, PyValueBorrow key, PyValueBorrow value)
+dict_ass_subscript_value(PyTypeObject *owner, PyObject *mp, PyValueBorrow key, PyValueBorrow value)
 {
     if (PyValue_IsNull(value)) {
         return PyDict_DelValue(mp, key);
@@ -3811,7 +3811,7 @@ dict_ass_subscript_value(PyObject *mp, PyValueBorrow key, PyValueBorrow value)
 Py_VALUE_ENTRY int
 _PyDict_StoreSubscript(PyObject *mp, PyObject *v, PyObject *w)
 {
-    return dict_ass_subscript_value(mp, _Py_VALUE_ARG(v), _Py_VALUE_ARG(w));
+    return dict_ass_subscript_value(NULL, mp, _Py_VALUE_ARG(v), _Py_VALUE_ARG(w));
 }
 
 static PyMappingMethods dict_as_mapping = {
@@ -5151,7 +5151,7 @@ _Py_VALUE_NOTIMPL_BINARY(frozendict_or_value, frozendict_or)
 /* d |= other takes any iterable of pairs or mapping; an inline other is
    boxed to fail as a value that is not one. */
 static PyValue
-dict_ior_value(PyValueBorrow self, PyValueBorrow other)
+dict_ior_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow other)
 {
     PyObject *other_object = _PyValue_AsObjectAt(other, BOX_SITE_DICT);
     if (other_object == NULL) {
@@ -5199,12 +5199,12 @@ static PyMethodDef mapp_methods[] = {
 };
 
 static int
-dict_contains_value(PyObject *op, PyValueBorrow key)
+dict_contains_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
 {
     return PyDict_ContainsValue(op, key);
 }
 
-_Py_VALUE_THUNK_CONTAINS(dict_contains, dict_contains_value)
+_Py_VALUE_THUNK_CONTAINS(dict_contains, PyDict_Type, dict_contains_value)
 
 /* Return 1 if `key` is in dict `op`, 0 if not, and -1 on error. */
 int
@@ -5215,7 +5215,7 @@ PyDict_Contains(PyObject *op, PyObject *key)
         return -1;
     }
 
-    return dict_contains_value(op, PyValue_FromObjectBorrow(key));
+    return dict_contains_value(NULL, op, PyValue_FromObjectBorrow(key));
 }
 
 int
@@ -5808,11 +5808,11 @@ dictiter_next_value(PyObject *self, int kind, int reverse)
 /* A failed box or pair allocation consumes the entry (see listiter_next()). */
 #define DICTITER_NEXT(NAME, KIND, REVERSE) \
     static _PyStatusValue \
-    NAME##_value(PyObject *self) \
+    NAME##_value(PyTypeObject *owner, PyObject *self) \
     { \
         return dictiter_next_value(self, (KIND), (REVERSE)); \
     } \
-    _Py_VALUE_THUNK_ITERNEXT(NAME, NAME##_value)
+    _Py_VALUE_THUNK_ITERNEXT(NAME, *Py_TYPE(self), NAME##_value)
 
 DICTITER_NEXT(dictiter_next_key, DICTITER_KEYS, 0)
 DICTITER_NEXT(dictiter_next_val, DICTITER_VALUES, 0)
@@ -6230,14 +6230,14 @@ dictkeys_iter(PyObject *self)
 }
 
 static int
-dictkeys_contains_value(PyObject *self, PyValueBorrow obj)
+dictkeys_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj)
 {
     _PyDictViewObject *dv = (_PyDictViewObject *)self;
     if (dv->dv_dict == NULL)
         return 0;
-    return dict_contains_value((PyObject *)dv->dv_dict, obj);
+    return dict_contains_value(NULL, (PyObject *)dv->dv_dict, obj);
 }
-_Py_VALUE_THUNK_CONTAINS(dictkeys_contains, dictkeys_contains_value)
+_Py_VALUE_THUNK_CONTAINS(dictkeys_contains, PyDictKeys_Type, dictkeys_contains_value)
 
 static PySequenceMethods dictkeys_as_sequence = {
     dictview_len,                       /* sq_length */
@@ -6665,7 +6665,7 @@ dictitems_iter(PyObject *self)
 }
 
 static int
-dictitems_contains_value(PyObject *self, PyValueBorrow obj)
+dictitems_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj)
 {
     _PyDictViewObject *dv = (_PyDictViewObject *)self;
     if (dv->dv_dict == NULL || !PyValue_IsObject(obj)) {
@@ -6695,7 +6695,7 @@ dictitems_contains_value(PyObject *self, PyValueBorrow obj)
     PyValue_XCLOSE(found);
     return result;
 }
-_Py_VALUE_THUNK_CONTAINS(dictitems_contains, dictitems_contains_value)
+_Py_VALUE_THUNK_CONTAINS(dictitems_contains, PyDictItems_Type, dictitems_contains_value)
 
 
 static PySequenceMethods dictitems_as_sequence = {

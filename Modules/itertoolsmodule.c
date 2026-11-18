@@ -218,7 +218,7 @@ batched_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-batched_next_value(PyObject *op)
+batched_next_value(PyTypeObject *owner, PyObject *op)
 {
     batchedobject *bo = batchedobject_CAST(op);
     Py_ssize_t i;
@@ -273,7 +273,7 @@ batched_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, _PyValue_FromObjectResult(result)};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(batched_next, batched_next_value)
+_Py_VALUE_THUNK_ITERNEXT(batched_next, *Py_TYPE(self), batched_next_value)
 
 static PyType_Slot batched_slots[] = {
     {Py_tp_dealloc, batched_dealloc},
@@ -371,7 +371,7 @@ pairwise_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-pairwise_next_value(PyObject *op)
+pairwise_next_value(PyTypeObject *owner, PyObject *op)
 {
     pairwiseobject *po = pairwiseobject_CAST(op);
     PyObject *it = po->it;
@@ -437,7 +437,7 @@ pairwise_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(result)};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(pairwise_next, pairwise_next_value)
+_Py_VALUE_THUNK_ITERNEXT(pairwise_next, *Py_TYPE(self), pairwise_next_value)
 
 static PyType_Slot pairwise_slots[] = {
     {Py_tp_dealloc, pairwise_dealloc},
@@ -717,7 +717,7 @@ _grouper_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-_grouper_next_value(PyObject *op)
+_grouper_next_value(PyTypeObject *owner, PyObject *op)
 {
     _grouperobject *igo = _grouperobject_CAST(op);
     groupbyobject *gbo = groupbyobject_CAST(igo->parent);
@@ -759,7 +759,7 @@ _grouper_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, r};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(_grouper_next, _grouper_next_value)
+_Py_VALUE_THUNK_ITERNEXT(_grouper_next, *Py_TYPE(self), _grouper_next_value)
 
 static PyType_Slot _grouper_slots[] = {
     {Py_tp_dealloc, _grouper_dealloc},
@@ -1021,7 +1021,7 @@ static PyType_Spec teedataobject_spec = {
 
 
 static _PyStatusValue
-tee_next_value(PyObject *op)
+tee_next_value(PyTypeObject *owner, PyObject *op)
 {
     teeobject *to = teeobject_CAST(op);
     _PyStatusValue value;
@@ -1087,7 +1087,7 @@ tee_next_value(PyObject *op)
 #endif
 }
 
-_Py_VALUE_THUNK_ITERNEXT(tee_next, tee_next_value)
+_Py_VALUE_THUNK_ITERNEXT(tee_next, *Py_TYPE(self), tee_next_value)
 
 static int
 tee_traverse(PyObject *op, visitproc visit, void *arg)
@@ -1350,7 +1350,7 @@ cycle_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-cycle_next_value(PyObject *op)
+cycle_next_value(PyTypeObject *owner, PyObject *op)
 {
     cycleobject *lz = cycleobject_CAST(op);
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(lz->index);
@@ -1385,7 +1385,7 @@ cycle_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, saved_item};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(cycle_next, cycle_next_value)
+_Py_VALUE_THUNK_ITERNEXT(cycle_next, *Py_TYPE(self), cycle_next_value)
 
 static PyType_Slot cycle_slots[] = {
     {Py_tp_dealloc, cycle_dealloc},
@@ -1481,7 +1481,7 @@ dropwhile_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-dropwhile_next_value(PyObject *op)
+dropwhile_next_value(PyTypeObject *owner, PyObject *op)
 {
     dropwhileobject *lz = dropwhileobject_CAST(op);
     PyObject *it = lz->it;
@@ -1510,7 +1510,7 @@ dropwhile_next_value(PyObject *op)
     }
 }
 
-_Py_VALUE_THUNK_ITERNEXT(dropwhile_next, dropwhile_next_value)
+_Py_VALUE_THUNK_ITERNEXT(dropwhile_next, *Py_TYPE(self), dropwhile_next_value)
 
 static PyType_Slot dropwhile_slots[] = {
     {Py_tp_dealloc, dropwhile_dealloc},
@@ -1608,7 +1608,7 @@ takewhile_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-takewhile_next_value(PyObject *op)
+takewhile_next_value(PyTypeObject *owner, PyObject *op)
 {
     takewhileobject *lz = takewhileobject_CAST(op);
     if (lz->stop == 1)
@@ -1637,7 +1637,7 @@ takewhile_next_value(PyObject *op)
                             PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(takewhile_next, takewhile_next_value)
+_Py_VALUE_THUNK_ITERNEXT(takewhile_next, *Py_TYPE(self), takewhile_next_value)
 
 static PyType_Slot takewhile_slots[] = {
     {Py_tp_dealloc, takewhile_dealloc},
@@ -1782,7 +1782,7 @@ islice_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-islice_next_value(PyObject *op)
+islice_next_value(PyTypeObject *owner, PyObject *op)
 {
     isliceobject *lz = isliceobject_CAST(op);
     PyObject *it = lz->it;
@@ -1820,7 +1820,7 @@ islice_next_value(PyObject *op)
     return item;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(islice_next, islice_next_value)
+_Py_VALUE_THUNK_ITERNEXT(islice_next, *Py_TYPE(self), islice_next_value)
 
 PyDoc_STRVAR(islice_doc,
 "islice(iterable, stop) --> islice object\n\
@@ -1927,7 +1927,7 @@ starmap_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-starmap_next_value(PyObject *op)
+starmap_next_value(PyTypeObject *owner, PyObject *op)
 {
     starmapobject *lz = starmapobject_CAST(op);
     _PyStatusValue step = _PyValue_IterStep(lz->it);
@@ -1950,7 +1950,7 @@ starmap_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, result};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(starmap_next, starmap_next_value)
+_Py_VALUE_THUNK_ITERNEXT(starmap_next, *Py_TYPE(self), starmap_next_value)
 
 static PyType_Slot starmap_slots[] = {
     {Py_tp_dealloc, starmap_dealloc},
@@ -2096,7 +2096,7 @@ chain_next_lock_held(chainobject *lz)
 }
 
 static _PyStatusValue
-chain_next_value(PyObject *op)
+chain_next_value(PyTypeObject *owner, PyObject *op)
 {
     _PyStatusValue result;
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -2104,7 +2104,7 @@ chain_next_value(PyObject *op)
     Py_END_CRITICAL_SECTION();
     return result;
 }
-_Py_VALUE_THUNK_ITERNEXT(chain_next, chain_next_value)
+_Py_VALUE_THUNK_ITERNEXT(chain_next, *Py_TYPE(self), chain_next_value)
 
 PyDoc_STRVAR(chain_doc,
 "chain(*iterables)\n\
@@ -3305,7 +3305,7 @@ accumulate_next_impl(accumulateobject *self)
 }
 
 static _PyStatusValue
-accumulate_next_value(PyObject *op)
+accumulate_next_value(PyTypeObject *owner, PyObject *op)
 {
     _PyStatusValue r;
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -3416,7 +3416,7 @@ compress_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-compress_next_value(PyObject *op)
+compress_next_value(PyTypeObject *owner, PyObject *op)
 {
     compressobject *lz = compressobject_CAST(op);
     PyObject *data = lz->data, *selectors = lz->selectors;
@@ -3448,7 +3448,7 @@ compress_next_value(PyObject *op)
     }
 }
 
-_Py_VALUE_THUNK_ITERNEXT(compress_next, compress_next_value)
+_Py_VALUE_THUNK_ITERNEXT(compress_next, *Py_TYPE(self), compress_next_value)
 
 static PyType_Slot compress_slots[] = {
     {Py_tp_dealloc, compress_dealloc},
@@ -3542,7 +3542,7 @@ filterfalse_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-filterfalse_next_value(PyObject *op)
+filterfalse_next_value(PyTypeObject *owner, PyObject *op)
 {
     filterfalseobject *lz = filterfalseobject_CAST(op);
     PyObject *it = lz->it;
@@ -3575,7 +3575,7 @@ filterfalse_next_value(PyObject *op)
     }
 }
 
-_Py_VALUE_THUNK_ITERNEXT(filterfalse_next, filterfalse_next_value)
+_Py_VALUE_THUNK_ITERNEXT(filterfalse_next, *Py_TYPE(self), filterfalse_next_value)
 
 static PyType_Slot filterfalse_slots[] = {
     {Py_tp_dealloc, filterfalse_dealloc},
@@ -3749,7 +3749,7 @@ count_next_lock_held(countobject *lz)
 }
 
 static _PyStatusValue
-count_next_value(PyObject *op)
+count_next_value(PyTypeObject *owner, PyObject *op)
 {
     countobject *lz = countobject_CAST(op);
     _PyStatusValue r;
@@ -3759,7 +3759,7 @@ count_next_value(PyObject *op)
     return r;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(count_next, count_next_value)
+_Py_VALUE_THUNK_ITERNEXT(count_next, *Py_TYPE(self), count_next_value)
 
 /* Is step an integer equal to 1?  The repr omits it then. */
 static int
@@ -3894,7 +3894,7 @@ repeat_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-repeat_next_value(PyObject *op)
+repeat_next_value(PyTypeObject *owner, PyObject *op)
 {
     repeatobject *ro = repeatobject_CAST(op);
     Py_ssize_t cnt = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->cnt);
@@ -3908,7 +3908,7 @@ repeat_next_value(PyObject *op)
     return (_PyStatusValue){PYGEN_NEXT, PyValue_DUP(ro->element)};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(repeat_next, repeat_next_value)
+_Py_VALUE_THUNK_ITERNEXT(repeat_next, *Py_TYPE(self), repeat_next_value)
 
 static PyObject *
 repeat_repr(PyObject *op)
@@ -4192,7 +4192,7 @@ zip_longest_next_impl(ziplongestobject *self)
 }
 
 static _PyStatusValue
-zip_longest_next_value(PyObject *op)
+zip_longest_next_value(PyTypeObject *owner, PyObject *op)
 {
     _PyStatusValue r;
     Py_BEGIN_CRITICAL_SECTION(op);

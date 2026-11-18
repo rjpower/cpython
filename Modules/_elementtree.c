@@ -2136,7 +2136,7 @@ element_subscr_object(PyObject *op, PyObject *item)
 }
 
 static PyValue
-element_subscr_value(PyObject *op, PyValueBorrow key)
+element_subscr_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
 {
     if (PyValue_IsInlineInt(key)) {
         ElementObject *self = _Element_CAST(op);
@@ -2153,7 +2153,7 @@ element_subscr_value(PyObject *op, PyValueBorrow key)
         element_subscr_object(op, PyValue_AsKnownObjectBorrow(key)));
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(element_subscr, element_subscr_value)
+_Py_VALUE_THUNK_SUBSCRIPT(element_subscr, *Py_TYPE(self), element_subscr_value)
 
 static int
 element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)

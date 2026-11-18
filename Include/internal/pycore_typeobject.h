@@ -145,7 +145,7 @@ _PyType_IsReady(PyTypeObject *type)
 /* type's getattro: the value slot, its object thunk, and the body, which
    can suppress a missing attribute's AttributeError. */
 // Export the pair for '_testinternalcapi' shared extension
-PyAPI_FUNC(PyValue) _Py_type_getattro_value(PyValueBorrow type, PyObject *name);
+PyAPI_FUNC(PyValue) _Py_type_getattro_value(PyTypeObject *owner, PyValueBorrow type, PyObject *name);
 PyAPI_FUNC(PyObject*) _Py_type_getattro(PyObject *type, PyObject *name);
 extern PyValue _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
                                       int *suppress_missing_attribute);
@@ -154,24 +154,24 @@ Py_VALUE_ENTRY extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObj
 
 // Export the pairs for '_testinternalcapi' shared extension
 int _Py_object_init(PyObject *, PyObject *, PyObject *);
-int _Py_object_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
+int _Py_object_init_value(PyTypeObject *owner, PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
 int _Py_slot_tp_init(PyObject *, PyObject *, PyObject *);
-int _Py_slot_tp_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
+int _Py_slot_tp_init_value(PyTypeObject *owner, PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
 PyObject *_Py_type_call(PyObject *, PyObject *, PyObject *);
-PyValue _Py_type_call_value(PyThreadState *, PyObject *, const PyValue *,
+PyValue _Py_type_call_value(PyTypeObject *owner, PyThreadState *, PyObject *, const PyValue *,
                             size_t, PyObject *);
 int _PyType_CallWithOriginalDict(PyThreadState *, PyObject *, PyObject *,
                                 PyObject *, PyValue *);
 PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
-PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
+PyValue _Py_slot_tp_new_value(PyTypeObject *owner, PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
 
 PyAPI_FUNC(PyObject*) _Py_slot_tp_getattro(PyObject *self, PyObject *name);
 PyAPI_FUNC(PyObject*) _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
 /* Their value sides; the pair table names the first, which the hook
    installs in place of itself. */
-PyAPI_FUNC(PyValue) _Py_slot_tp_getattro_value(PyValueBorrow self,
+PyAPI_FUNC(PyValue) _Py_slot_tp_getattro_value(PyTypeObject *owner, PyValueBorrow self,
                                                PyObject *name);
-PyAPI_FUNC(PyValue) _Py_slot_tp_getattr_hook_value(PyValueBorrow self,
+PyAPI_FUNC(PyValue) _Py_slot_tp_getattr_hook_value(PyTypeObject *owner, PyValueBorrow self,
                                                    PyObject *name);
 
 extern int _PyType_HasSlotTpIternext(PyTypeObject *type);

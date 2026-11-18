@@ -748,7 +748,7 @@ filter_traverse(PyObject *self, visitproc visit, void *arg)
 /* The value iternext slot of filter (R16): the inner iterator's end, with
    its return value, or its error is filter's. */
 static _PyStatusValue
-filter_next_value(PyObject *self)
+filter_next_value(PyTypeObject *owner, PyObject *self)
 {
     filterobject *lz = _filterobject_CAST(self);
     _PyStatusValue item;
@@ -782,7 +782,7 @@ filter_next_value(PyObject *self)
     }
 }
 
-_Py_VALUE_THUNK_ITERNEXT(filter_next, filter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(filter_next, PyFilter_Type, filter_next_value)
 
 static PyObject *
 filter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -1780,7 +1780,7 @@ map_traverse(PyObject *self, visitproc visit, void *arg)
 /* The value iternext slot of map (R16): without strict, the end of an
    inner iterator, with its return value, or its error is map's. */
 static _PyStatusValue
-map_next_value(PyObject *self)
+map_next_value(PyTypeObject *owner, PyObject *self)
 {
     mapobject *lz = _mapobject_CAST(self);
     Py_ssize_t i;
@@ -1888,7 +1888,7 @@ exit:
     return result;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(map_next, map_next_value)
+_Py_VALUE_THUNK_ITERNEXT(map_next, PyMap_Type, map_next_value)
 
 static PyObject *
 map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -3656,7 +3656,7 @@ zip_traverse(PyObject *self, visitproc visit, void *arg)
    inner iterator, with its return value, or its error is zip's. The result
    tuple holds the items' words. */
 static _PyStatusValue
-zip_next_value(PyObject *self)
+zip_next_value(PyTypeObject *owner, PyObject *self)
 {
     zipobject *lz = _zipobject_CAST(self);
 
@@ -3752,7 +3752,7 @@ check:
     return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(zip_next, zip_next_value)
+_Py_VALUE_THUNK_ITERNEXT(zip_next, PyZip_Type, zip_next_value)
 
 static PyObject *
 zip_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))

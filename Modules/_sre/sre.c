@@ -2770,12 +2770,12 @@ _sre_SRE_Match_group_impl(MatchObject *self, const PyValue *args,
 }
 
 static PyValue
-match_getitem_value(PyObject *op, PyValueBorrow name)
+match_getitem_value(PyTypeObject *owner, PyObject *op, PyValueBorrow name)
 {
     MatchObject *self = _MatchObject_CAST(op);
     return _PyValue_FromObjectResult(match_getslice(self, name, Py_None));
 }
-_Py_VALUE_THUNK_SUBSCRIPT(match_getitem, match_getitem_value)
+_Py_VALUE_THUNK_SUBSCRIPT(match_getitem, *Py_TYPE(self), match_getitem_value)
 
 /*[clinic input]
 _sre.SRE_Match.groups

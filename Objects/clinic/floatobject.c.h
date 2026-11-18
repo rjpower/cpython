@@ -254,7 +254,7 @@ static PyValue
 float_new_impl(PyTypeObject *type, PyValueBorrow x);
 
 static PyValue
-float_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+float_new_value(PyTypeObject *owner, PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = &PyFloat_Type;
@@ -283,7 +283,7 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(float_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+        return _PyValue_THUNK_EXIT(float_new_value(NULL, type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -291,7 +291,7 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (window == NULL) {
         return NULL;
     }
-    PyValue result = float_new_value(type, window, nargs, kwnames);
+    PyValue result = float_new_value(NULL, type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
@@ -305,7 +305,7 @@ float_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
      * vectorcall doesn't deal e.g. with users reassigning __init__. */
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    return float_new_value(_PyType_CAST(type), args, nargs, kwnames);
+    return float_new_value(NULL, _PyType_CAST(type), args, nargs, kwnames);
 }
 
 PyDoc_STRVAR(float_from_number__doc__,

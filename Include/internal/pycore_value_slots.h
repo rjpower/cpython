@@ -23,35 +23,49 @@ extern "C" {
  * that are never inline (a container, an iterator, a descriptor) stay
  * PyObject *. */
 
-typedef PyValue (*_Py_unaryvaluefunc)(PyValueBorrow);
-typedef PyValue (*_Py_binaryvaluefunc)(PyValueBorrow, PyValueBorrow);
-typedef PyValue (*_Py_ternaryvaluefunc)(PyValueBorrow, PyValueBorrow,
-                                        PyValueBorrow);
-typedef int (*_Py_inquiryvaluefunc)(PyValueBorrow);
-typedef PyValue (*_Py_richcmpvaluefunc)(PyValueBorrow, PyValueBorrow, int);
-typedef Py_hash_t (*_Py_hashvaluefunc)(PyValueBorrow);
+/* Every value slot takes owner first: the type whose tp_value the caller
+ * loaded the slot from. A native function ignores it; the adapter that
+ * PyType_Ready installs beside an object slot with no value form reads that
+ * object slot from owner. */
+typedef PyValue (*_Py_unaryvaluefunc)(PyTypeObject *owner, PyValueBorrow);
+typedef PyValue (*_Py_binaryvaluefunc)(PyTypeObject *owner, PyValueBorrow,
+                                       PyValueBorrow);
+typedef PyValue (*_Py_ternaryvaluefunc)(PyTypeObject *owner, PyValueBorrow,
+                                        PyValueBorrow, PyValueBorrow);
+typedef int (*_Py_inquiryvaluefunc)(PyTypeObject *owner, PyValueBorrow);
+typedef PyValue (*_Py_richcmpvaluefunc)(PyTypeObject *owner, PyValueBorrow,
+                                        PyValueBorrow, int);
+typedef Py_hash_t (*_Py_hashvaluefunc)(PyTypeObject *owner, PyValueBorrow);
 /* repr and str: the result is a str object. */
-typedef PyObject *(*_Py_reprvaluefunc)(PyValueBorrow);
-typedef PyValue (*_Py_getattrovaluefunc)(PyValueBorrow, PyObject *);
-/* A PyValue_NULL value deletes. */
-typedef int (*_Py_setattrovaluefunc)(PyValueBorrow, PyObject *, PyValueBorrow);
-typedef PyValue (*_Py_descrgetvaluefunc)(PyObject *, PyValueBorrow,
+typedef PyObject *(*_Py_reprvaluefunc)(PyTypeObject *owner, PyValueBorrow);
+typedef PyValue (*_Py_getattrovaluefunc)(PyTypeObject *owner, PyValueBorrow,
                                          PyObject *);
-typedef int (*_Py_descrsetvaluefunc)(PyObject *, PyValueBorrow,
+/* A PyValue_NULL value deletes. */
+typedef int (*_Py_setattrovaluefunc)(PyTypeObject *owner, PyValueBorrow,
+                                     PyObject *, PyValueBorrow);
+typedef PyValue (*_Py_descrgetvaluefunc)(PyTypeObject *owner, PyObject *,
+                                         PyValueBorrow, PyObject *);
+typedef int (*_Py_descrsetvaluefunc)(PyTypeObject *owner, PyObject *,
+                                     PyValueBorrow, PyValueBorrow);
+typedef PyValue (*_Py_subscriptvaluefunc)(PyTypeObject *owner, PyObject *,
+                                          PyValueBorrow);
+typedef int (*_Py_asssubscriptvaluefunc)(PyTypeObject *owner, PyObject *,
+                                         PyValueBorrow, PyValueBorrow);
+typedef PyValue (*_Py_itemvaluefunc)(PyTypeObject *owner, PyObject *,
+                                     Py_ssize_t);
+typedef int (*_Py_assitemvaluefunc)(PyTypeObject *owner, PyObject *,
+                                    Py_ssize_t, PyValueBorrow);
+typedef int (*_Py_containsvaluefunc)(PyTypeObject *owner, PyObject *,
                                      PyValueBorrow);
-typedef PyValue (*_Py_subscriptvaluefunc)(PyObject *, PyValueBorrow);
-typedef int (*_Py_asssubscriptvaluefunc)(PyObject *, PyValueBorrow,
-                                         PyValueBorrow);
-typedef PyValue (*_Py_itemvaluefunc)(PyObject *, Py_ssize_t);
-typedef int (*_Py_assitemvaluefunc)(PyObject *, Py_ssize_t, PyValueBorrow);
-typedef int (*_Py_containsvaluefunc)(PyObject *, PyValueBorrow);
 /* iternext and send return _PyStatusValue (pycore_value.h), as am_send
    does: PYGEN_NEXT with the item, PYGEN_RETURN with the return value,
    PYGEN_ERROR with PyValue_NULL and an exception set. An iternext slot
    returns PYGEN_RETURN with PyValue_NULL for a None return (R11); a send
    slot returns the None. */
-typedef _PyStatusValue (*_Py_iternextvaluefunc)(PyObject *);
-typedef _PyStatusValue (*_Py_sendvaluefunc)(PyObject *, PyValueBorrow);
+typedef _PyStatusValue (*_Py_iternextvaluefunc)(PyTypeObject *owner,
+                                                PyObject *);
+typedef _PyStatusValue (*_Py_sendvaluefunc)(PyTypeObject *owner, PyObject *,
+                                            PyValueBorrow);
 /* The value vectorcall (value-api-m3.md, section 1.1): args is a window of
    words that the caller owns for the call; the callee borrows each one
    (PyValue_Borrow(args[i])) and takes a count (PyValue_DUP) to keep one.
@@ -60,12 +74,19 @@ typedef _PyStatusValue (*_Py_sendvaluefunc)(PyObject *, PyValueBorrow);
 typedef PyValue (*_Py_vectorcallvaluefunc)(
     PyThreadState *tstate, PyObject *callable,
     const PyValue *args, size_t nargsf, PyObject *kwnames);
+/* The call row's value slot: a value vectorcall that also takes its owner.
+   A per-instance value vectorcall (tp_value_vectorcall_offset) is not a
+   slot of the table and has no owner. */
+typedef PyValue (*_Py_callvaluefunc)(
+    PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
+    const PyValue *args, size_t nargsf, PyObject *kwnames);
 /* sq_concat and sq_inplace_concat: the receiver is the sequence. */
-typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
-typedef PyValue (*_Py_newvaluefunc)(PyTypeObject *, const PyValue *,
-                                    Py_ssize_t, PyObject *);
-typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
-                                 Py_ssize_t, PyObject *);
+typedef PyValue (*_Py_concatvaluefunc)(PyTypeObject *owner, PyObject *,
+                                       PyValueBorrow);
+typedef PyValue (*_Py_newvaluefunc)(PyTypeObject *owner, PyTypeObject *,
+                                    const PyValue *, Py_ssize_t, PyObject *);
+typedef int (*_Py_initvaluefunc)(PyTypeObject *owner, PyValueBorrow,
+                                 const PyValue *, Py_ssize_t, PyObject *);
 
 #define _Py_VALUE_KIND_INIT _Py_initvaluefunc
 #define _Py_VALUE_KIND_NEW _Py_newvaluefunc
@@ -87,7 +108,7 @@ typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
 #define _Py_VALUE_KIND_CONTAINS _Py_containsvaluefunc
 #define _Py_VALUE_KIND_ITERNEXT _Py_iternextvaluefunc
 #define _Py_VALUE_KIND_SEND _Py_sendvaluefunc
-#define _Py_VALUE_KIND_VECTORCALL _Py_vectorcallvaluefunc
+#define _Py_VALUE_KIND_VECTORCALL _Py_callvaluefunc
 #define _Py_VALUE_KIND_CONCAT _Py_concatvaluefunc
 
 /* The slot table: X(field, object slot, kind, wrapper), one row per field of
@@ -237,6 +258,30 @@ PyAPI_FUNC(void) _PyType_CheckValueRow(PyTypeObject *type, int row);
 #  define _PyType_CHECK_VALUE_ROW(type, row) ((void)0)
 #endif
 
+/* Call the value slot of field of type t, with t as its owner:
+ * _PyType_CALL_VALUE_SLOT(&PyLong_Type, repr, v) calls int's value repr.
+ * A dispatcher that reads the type of its operand, and a caller that wants
+ * the implementation of a particular base type (an override then does not
+ * redispatch), both write it. The value slot is non-zero beside every
+ * object slot that is set (PyType_Ready installs the row's adapter), so
+ * there is nothing to test. t is evaluated twice. */
+#define _PyType_CALL_VALUE_SLOT(t, field, ...) \
+    (_PyType_CHECK_VALUE_ROW((t), _Py_VALUE_SLOT_INDEX_##field), \
+     _PyType_VALUE_SLOT((t), field)((t), __VA_ARGS__))
+
+/* The adapter of each row (Objects/typeobject.c), or NULL for send and
+ * new_. PyType_Ready installs it in a value field that has no value form
+ * beside a set object slot. A caller that wants to tell an adapter from a
+ * native function compares with the entry of its row. */
+PyAPI_DATA(const _Py_valuefunc) _PyValueSlot_Adapters[];
+
+/* Install the row's adapter in every value field of type that is still 0
+ * beside a non-NULL object slot (the second part of the value pass of
+ * PyType_Ready). _PyTypes_InitTypes() runs it over the static builtin types
+ * before readying any of them, since the first types readied already hash
+ * and compare instances of types that are not ready yet. */
+PyAPI_FUNC(void) _PyType_InstallValueAdapters(PyTypeObject *type);
+
 /* The offset in PyTypeObject of the value field beside the object slot at
  * offset, an offset of slotdefs (from PyHeapTypeObject), or -1 if that
  * object slot has none. */
@@ -251,7 +296,7 @@ extern Py_ssize_t _PyType_ValueSlotFromObjectOffset(Py_ssize_t offset);
  * check once. The result is owned, or PyValue_NULL with an exception set;
  * a wrapper over a three-state slot turns "absent" into the exception. */
 typedef PyValue (*_Py_wrappervaluefunc)(
-    PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+    PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyObject *kwnames, void *wrapped_value);
 
 /* The value wrapper that a slot descriptor of base calls with its
@@ -384,67 +429,67 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
  * both names valuefn in tp_value and name in the object slot, so that the
  * two form a pair. */
 
-#define _Py_VALUE_THUNK_UNARY(name, valuefn) \
+#define _Py_VALUE_THUNK_UNARY(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(_Py_VALUE_ARG(self)), \
+        return _PyValue_THUNK_EXIT((valuefn)(&(owner_type), _Py_VALUE_ARG(self)), \
                                    BOX_SITE_NUMBER); \
     }
 
-#define _Py_VALUE_THUNK_BINARY(name, valuefn) \
+#define _Py_VALUE_THUNK_BINARY(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *left, PyObject *right) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right)), \
+            (valuefn)(&(owner_type), _Py_VALUE_ARG(left), _Py_VALUE_ARG(right)), \
             BOX_SITE_NUMBER); \
     }
 
-#define _Py_VALUE_THUNK_TERNARY(name, valuefn) \
+#define _Py_VALUE_THUNK_TERNARY(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *base, PyObject *exponent, PyObject *modulus) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(_Py_VALUE_ARG(base), _Py_VALUE_ARG(exponent), \
+            (valuefn)(&(owner_type), _Py_VALUE_ARG(base), _Py_VALUE_ARG(exponent), \
                       _Py_VALUE_ARG(modulus)), BOX_SITE_NUMBER); \
     }
 
-#define _Py_VALUE_THUNK_INQUIRY(name, valuefn) \
+#define _Py_VALUE_THUNK_INQUIRY(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *self) \
     { \
-        return (valuefn)(_Py_VALUE_ARG(self)); \
+        return (valuefn)(&(owner_type), _Py_VALUE_ARG(self)); \
     }
 
-#define _Py_VALUE_THUNK_RICHCMP(name, valuefn) \
+#define _Py_VALUE_THUNK_RICHCMP(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *left, PyObject *right, int op) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right), op), \
+            (valuefn)(&(owner_type), _Py_VALUE_ARG(left), _Py_VALUE_ARG(right), op), \
             BOX_SITE_COMPARE); \
     }
 
-#define _Py_VALUE_THUNK_HASH(name, valuefn) \
+#define _Py_VALUE_THUNK_HASH(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static Py_hash_t \
     name(PyObject *self) \
     { \
-        return (valuefn)(_Py_VALUE_ARG(self)); \
+        return (valuefn)(&(owner_type), _Py_VALUE_ARG(self)); \
     }
 
-#define _Py_VALUE_THUNK_REPR(name, valuefn) \
+#define _Py_VALUE_THUNK_REPR(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self) \
     { \
-        return (valuefn)(_Py_VALUE_ARG(self)); \
+        return (valuefn)(&(owner_type), _Py_VALUE_ARG(self)); \
     }
 
-#define _Py_VALUE_THUNK_CONCAT(name, valuefn) \
+#define _Py_VALUE_THUNK_CONCAT(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self, PyObject *other) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(other)), \
+        return _PyValue_THUNK_EXIT((valuefn)(&(owner_type), self, _Py_VALUE_ARG(other)), \
                                    BOX_SITE_SEQUENCE); \
     }
 
@@ -453,55 +498,55 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
    argument of ASSSUBSCRIPT or ASSITEM, which deletes, becomes
    PyValue_NULL. */
 
-#define _Py_VALUE_THUNK_SUBSCRIPT(name, valuefn) \
+#define _Py_VALUE_THUNK_SUBSCRIPT(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self, PyObject *key) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(key)), \
+        return _PyValue_THUNK_EXIT((valuefn)(&(owner_type), self, _Py_VALUE_ARG(key)), \
                                    BOX_SITE_SEQUENCE); \
     }
 
-#define _Py_VALUE_THUNK_ITEM(name, valuefn) \
+#define _Py_VALUE_THUNK_ITEM(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self, Py_ssize_t i) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(self, i), BOX_SITE_SEQUENCE); \
+        return _PyValue_THUNK_EXIT((valuefn)(&(owner_type), self, i), BOX_SITE_SEQUENCE); \
     }
 
-#define _Py_VALUE_THUNK_ASSSUBSCRIPT(name, valuefn) \
+#define _Py_VALUE_THUNK_ASSSUBSCRIPT(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *self, PyObject *key, PyObject *value) \
     { \
-        return (valuefn)(self, _Py_VALUE_ARG(key), _Py_VALUE_ARG(value)); \
+        return (valuefn)(&(owner_type), self, _Py_VALUE_ARG(key), _Py_VALUE_ARG(value)); \
     }
 
-#define _Py_VALUE_THUNK_ASSITEM(name, valuefn) \
+#define _Py_VALUE_THUNK_ASSITEM(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *self, Py_ssize_t i, PyObject *value) \
     { \
-        return (valuefn)(self, i, _Py_VALUE_ARG(value)); \
+        return (valuefn)(&(owner_type), self, i, _Py_VALUE_ARG(value)); \
     }
 
-#define _Py_VALUE_THUNK_CONTAINS(name, valuefn) \
+#define _Py_VALUE_THUNK_CONTAINS(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *self, PyObject *item) \
     { \
-        return (valuefn)(self, _Py_VALUE_ARG(item)); \
+        return (valuefn)(&(owner_type), self, _Py_VALUE_ARG(item)); \
     }
 
-#define _Py_VALUE_THUNK_ITERNEXT(name, valuefn) \
+#define _Py_VALUE_THUNK_ITERNEXT(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self) \
     { \
-        return _PyValue_IterNextThunkExit((valuefn)(self)); \
+        return _PyValue_IterNextThunkExit((valuefn)(&(owner_type), self)); \
     }
 
-#define _Py_VALUE_THUNK_SEND(name, valuefn) \
+#define _Py_VALUE_THUNK_SEND(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PySendResult \
     name(PyObject *self, PyObject *arg, PyObject **result) \
     { \
         return (PySendResult)_PyValue_THUNK_EXIT_STATUS( \
-            (valuefn)(self, _Py_VALUE_ARG(arg)), result, \
+            (valuefn)(&(owner_type), self, _Py_VALUE_ARG(arg)), result, \
             BOX_SITE_ITERATION); \
     }
 
@@ -509,35 +554,35 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
 /* The attribute thunks (value-api-m1b-m2.md, section 2.2). A NULL obj
    (class access) or value (deletion) becomes PyValue_NULL. */
 
-#define _Py_VALUE_THUNK_GETATTRO(name, valuefn) \
+#define _Py_VALUE_THUNK_GETATTRO(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self, PyObject *attr) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(_Py_VALUE_ARG(self), attr), \
+        return _PyValue_THUNK_EXIT((valuefn)(&(owner_type), _Py_VALUE_ARG(self), attr), \
                                    BOX_SITE_ATTRIBUTE); \
     }
 
-#define _Py_VALUE_THUNK_SETATTRO(name, valuefn) \
+#define _Py_VALUE_THUNK_SETATTRO(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *self, PyObject *attr, PyObject *value) \
     { \
-        return (valuefn)(_Py_VALUE_ARG(self), attr, _Py_VALUE_ARG(value)); \
+        return (valuefn)(&(owner_type), _Py_VALUE_ARG(self), attr, _Py_VALUE_ARG(value)); \
     }
 
-#define _Py_VALUE_THUNK_DESCRGET(name, valuefn) \
+#define _Py_VALUE_THUNK_DESCRGET(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static PyObject * \
     name(PyObject *descr, PyObject *obj, PyObject *type) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(descr, _Py_VALUE_ARG(obj), type), \
+            (valuefn)(&(owner_type), descr, _Py_VALUE_ARG(obj), type), \
             BOX_SITE_ATTRIBUTE); \
     }
 
-#define _Py_VALUE_THUNK_DESCRSET(name, valuefn) \
+#define _Py_VALUE_THUNK_DESCRSET(name, owner_type, valuefn) \
     Py_VALUE_ENTRY static int \
     name(PyObject *descr, PyObject *obj, PyObject *value) \
     { \
-        return (valuefn)(descr, _Py_VALUE_ARG(obj), _Py_VALUE_ARG(value)); \
+        return (valuefn)(&(owner_type), descr, _Py_VALUE_ARG(obj), _Py_VALUE_ARG(value)); \
     }
 
 /* NotImplemented sides (D12, script class N): _Py_VALUE_NOTIMPL_<kind>(name,
@@ -552,7 +597,7 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
 
 #define _Py_VALUE_NOTIMPL_BINARY(name, objfn) \
     static PyValue \
-    name(PyValueBorrow left, PyValueBorrow right) \
+    name(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right) \
     { \
         if (PyValue_IsInline(left) || PyValue_IsInline(right)) { \
             return PyValue_NotImplemented; \
@@ -564,7 +609,7 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
 
 #define _Py_VALUE_NOTIMPL_RICHCMP(name, objfn) \
     static PyValue \
-    name(PyValueBorrow left, PyValueBorrow right, int op) \
+    name(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right, int op) \
     { \
         if (PyValue_IsInline(left) || PyValue_IsInline(right)) { \
             return PyValue_NotImplemented; \
@@ -576,7 +621,7 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
 
 #define _Py_VALUE_NOTIMPL_TERNARY(name, objfn) \
     static PyValue \
-    name(PyValueBorrow base, PyValueBorrow exponent, PyValueBorrow modulus) \
+    name(PyTypeObject *owner, PyValueBorrow base, PyValueBorrow exponent, PyValueBorrow modulus) \
     { \
         if (PyValue_IsInline(base) || PyValue_IsInline(exponent)) { \
             return PyValue_NotImplemented; \

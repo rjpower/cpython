@@ -478,12 +478,12 @@ static _PyStatusValue
 
 /* The value send slot of generators, coroutines and async generators. */
 static _PyStatusValue
-gen_am_send_value(PyObject *self, PyValueBorrow arg)
+gen_am_send_value(PyTypeObject *owner, PyObject *self, PyValueBorrow arg)
 {
     return gen_send_value(_PyGen_CAST(self), arg);
 }
 
-_Py_VALUE_THUNK_SEND(PyGen_am_send, gen_am_send_value)
+_Py_VALUE_THUNK_SEND(PyGen_am_send, PyGen_Type, gen_am_send_value)
 
 /* The object of an owned value, for an object-form result: an inline value
    is boxed, which can fail. PyValue_NULL gives NULL. */
@@ -885,13 +885,13 @@ gen_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
 /* The value iternext slot of generators (R11): a `return None` ends with
    PyValue_NULL; the thunk raises StopIteration(v) for a `return v`. */
 static _PyStatusValue
-gen_iternext_value(PyObject *self)
+gen_iternext_value(PyTypeObject *owner, PyObject *self)
 {
     assert(PyGen_CheckExact(self) || PyCoro_CheckExact(self));
     return gen_send_value(_PyGen_CAST(self), PyValue_NULL);
 }
 
-_Py_VALUE_THUNK_ITERNEXT(gen_iternext, gen_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(gen_iternext, PyGen_Type, gen_iternext_value)
 
 /*
  * Set StopIteration with specified value.  Value can be arbitrary object
@@ -1635,13 +1635,13 @@ coro_wrapper_dealloc(PyObject *self)
 }
 
 static _PyStatusValue
-coro_wrapper_iternext_value(PyObject *self)
+coro_wrapper_iternext_value(PyTypeObject *owner, PyObject *self)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    return gen_iternext_value((PyObject *)cw->cw_coroutine);
+    return gen_iternext_value(NULL, (PyObject *)cw->cw_coroutine);
 }
 
-_Py_VALUE_THUNK_ITERNEXT(coro_wrapper_iternext, coro_wrapper_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(coro_wrapper_iternext, _PyCoroWrapper_Type, coro_wrapper_iternext_value)
 
 static PyObject *
 coro_wrapper_send(PyObject *self, PyObject *arg)
@@ -2227,7 +2227,7 @@ async_gen_asend_traverse(PyObject *self, visitproc visit, void *arg)
 
 /* The value send slot of asend() awaitables. */
 static _PyStatusValue
-async_gen_asend_send_value(PyObject *self, PyValueBorrow arg)
+async_gen_asend_send_value(PyTypeObject *owner, PyObject *self, PyValueBorrow arg)
 {
     PyAsyncGenASend *o = _PyAsyncGenASend_CAST(self);
 
@@ -2282,7 +2282,7 @@ Py_VALUE_ENTRY PySendResult
 _PyAsyncGenASend_Send(PyObject *self, PyObject *arg, PyObject **presult)
 {
     return (PySendResult)_PyValue_THUNK_EXIT_STATUS(
-        async_gen_asend_send_value(self, _Py_VALUE_ARG(arg)), presult,
+        async_gen_asend_send_value(NULL, self, _Py_VALUE_ARG(arg)), presult,
         BOX_SITE_ITERATION);
 }
 
@@ -2290,18 +2290,17 @@ static PyObject *
 async_gen_asend_send(PyObject *self, PyObject *arg)
 {
     return async_gen_awaitable_result(
-        async_gen_asend_send_value(self, _Py_VALUE_ARG(arg)));
+        async_gen_asend_send_value(NULL, self, _Py_VALUE_ARG(arg)));
 }
 
 
 static _PyStatusValue
-async_gen_asend_iternext_value(PyObject *ags)
+async_gen_asend_iternext_value(PyTypeObject *owner, PyObject *ags)
 {
-    return async_gen_asend_send_value(ags, PyValue_Borrow(PyValue_NULL));
+    return async_gen_asend_send_value(NULL, ags, PyValue_Borrow(PyValue_NULL));
 }
 
-_Py_VALUE_THUNK_ITERNEXT(async_gen_asend_iternext,
-                         async_gen_asend_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(async_gen_asend_iternext, _PyAsyncGenASend_Type, async_gen_asend_iternext_value)
 
 
 static PyObject *
@@ -2827,13 +2826,12 @@ do_throw:
 
 
 static _PyStatusValue
-async_gen_athrow_iternext_value(PyObject *agt)
+async_gen_athrow_iternext_value(PyTypeObject *owner, PyObject *agt)
 {
     return async_gen_athrow_send_value(agt, PyValue_Borrow(PyValue_None));
 }
 
-_Py_VALUE_THUNK_ITERNEXT(async_gen_athrow_iternext,
-                         async_gen_athrow_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(async_gen_athrow_iternext, _PyAsyncGenAThrow_Type, async_gen_athrow_iternext_value)
 
 
 static PyObject *

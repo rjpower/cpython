@@ -1212,9 +1212,8 @@ _structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_str
         }
     }
 
-    return _PyValue_CallSetAttrBase(
-        &PyType_Type, PyType_Type.tp_setattro,
-        PyValue_FromObjectBorrow(self), key,
+    return _PyType_CALL_VALUE_SLOT(
+        &PyType_Type, setattro, PyValue_FromObjectBorrow(self), key,
         PyValue_FromObjectBorrow(value));
 }
 

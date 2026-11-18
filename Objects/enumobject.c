@@ -206,7 +206,7 @@ done:
    its return value, or its error is enumerate's. The pair holds the index
    and the item as words. */
 static _PyStatusValue
-enum_next_value(PyObject *op)
+enum_next_value(PyTypeObject *owner, PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
     PyObject *result = en->en_result;
@@ -270,7 +270,7 @@ done:
     return output;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(enum_next, enum_next_value)
+_Py_VALUE_THUNK_ITERNEXT(enum_next, PyEnum_Type, enum_next_value)
 
 static PyObject *
 enum_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -428,7 +428,7 @@ reversed_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-reversed_next_value(PyObject *op)
+reversed_next_value(PyTypeObject *owner, PyObject *op)
 {
     reversedobject *ro = _reversedobject_CAST(op);
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->index);
@@ -452,7 +452,7 @@ reversed_next_value(PyObject *op)
                             PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(reversed_next, reversed_next_value)
+_Py_VALUE_THUNK_ITERNEXT(reversed_next, PyReversed_Type, reversed_next_value)
 
 static PyObject *
 reversed_len(PyObject *op, PyObject *Py_UNUSED(ignored))

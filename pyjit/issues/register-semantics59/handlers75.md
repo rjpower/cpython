@@ -217,10 +217,15 @@ upstream counterpart:
 - **Call transactions and physical transfer:** `call_transaction_native`,
   `_run_vector`, `_overlap_python` and `_PyIR_NormalPhysicalTransfer`, about
   43 lines.
-- **Value-form wrappers of object operations:** `_PyValue_GetMethod`,
-  `_PyValue_RichCompare`, `PyDict_GetValue`, `type_call_value`,
-  `method_value_vectorcall_descr`. Each is hot next to the object form it
-  shadows.
+- **Value-form operations:** `_PyValue_GetMethod`, `_PyValue_RichCompare`,
+  `PyDict_GetValue`, `type_call_value`, `method_value_vectorcall_descr`. These
+  are the implementations; the object API is a thin thunk over them, so the
+  object forms are not hot. They are larger than upstream's counterparts:
+  `PyDict_GetValue` is 1,073 bytes against `PyDict_GetItemRef`'s 302,
+  `_PyValue_SetAttr` 1,536 against 648, `type_call_value` 986 against 463,
+  `_PyType_LookupValueAndVersion` 547 against 302. `PyDict_GetValue`, for
+  example, takes its own counts of the dict and the key on every lookup, and
+  checks the public API's preconditions on internal calls.
 - **Frame clearing:** `_PyFrame_TryClearExceptCode` alone takes 5.6% of
   samples.
 
@@ -228,5 +233,5 @@ Handler variants are therefore the smaller part of the excess. Collapsing the
 remaining duplicate handlers saves about 25 KB of generic `BINARY_OP` bodies
 (identical except for a constant) and about 5 KB of generator completion and
 retirement variants (`GEN_*COMPLETE_STORE`/`_STORE_FAST`, `_DISCARD`/`_POP_TOP`,
-three identical `GEN_RETIRE_EFFECT_*`). The larger lever is the call/transfer path and the
-value/object duplication in the runtime.
+three identical `GEN_RETIRE_EFFECT_*`). The larger levers are the call/transfer path and the size
+of the value-form operations.

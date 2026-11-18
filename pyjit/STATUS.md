@@ -23,7 +23,8 @@ hot handler code at 264 KB. Its all-29 geomean is 1.0088 against golden73 and
 1.1383 against upstream, and it retires 0.4–2.4% more instructions than round
 1. Placement still swings single workloads. The 90% hot footprint is about
 1.6 times upstream's, and 60% of it is runtime helpers rather than handlers:
-call transactions, physical transfer, value-form wrappers and frame clearing.
+call transactions, physical transfer, value-form operations that are larger
+than upstream's, and frame clearing.
 Both rounds are measured checkpoints; golden73 remains the selected baseline.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,

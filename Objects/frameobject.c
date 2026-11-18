@@ -257,10 +257,14 @@ framelocalsproxy_getitem(PyObject *self, PyObject *key)
 
     // Okay not in the fast locals, try extra locals
 
-    PyObject *extra = frame->f_extra_locals;
+    /* frame.clear() from a key's __eq__ can drop f_extra_locals; the
+     * lookup borrows its dictionary, so pin it here. */
+    PyObject *extra = Py_XNewRef(frame->f_extra_locals);
     if (extra != NULL) {
         PyValue ev;
-        if (PyDict_GetValue(extra, PyValue_FromObjectBorrow(key), &ev) < 0) {
+        int found = PyDict_GetValue(extra, PyValue_FromObjectBorrow(key), &ev);
+        Py_DECREF(extra);
+        if (found < 0) {
             return NULL;
         }
         if (!PyValue_IsNull(ev)) {
@@ -860,9 +864,12 @@ framelocalsproxy_contains(PyObject *self, PyObject *key)
         return 1;
     }
 
-    PyObject *extra = frame->f_extra_locals;
+    /* As framelocalsproxy_getitem(): pin f_extra_locals for the lookup. */
+    PyObject *extra = Py_XNewRef(frame->f_extra_locals);
     if (extra != NULL) {
-        return PyDict_ContainsValue(extra, PyValue_FromObjectBorrow(key));
+        int found = PyDict_ContainsValue(extra, PyValue_FromObjectBorrow(key));
+        Py_DECREF(extra);
+        return found;
     }
 
     return 0;

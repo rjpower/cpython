@@ -180,49 +180,6 @@ class DictCanonicalReadTests(unittest.TestCase):
         self.capi.dict_owned_entry_contract()
         self.capi.dict_owned_entry_boxing_oom()
 
-    def test_hash_drops_last_input_owners(self):
-        for mode in (0, 2):
-            events = []
-            holder = []
-
-            class Result:
-                def __del__(self):
-                    events.append('result')
-
-            class Mapping(dict):
-                def __del__(self):
-                    events.append('mapping')
-
-            class Stored:
-                def __hash__(self):
-                    return 37
-
-                def __eq__(self, other):
-                    return True
-
-            class Query:
-                def __hash__(self):
-                    holder.clear()
-                    return 37
-
-                def __del__(self):
-                    events.append('query')
-
-            result = Result()
-            reference = weakref.ref(result)
-            holder.extend((Mapping({Stored(): result}), Query()))
-            del result
-            status, result = self.capi.dict_public_value_retirement(holder, mode)
-            self.assertEqual(status, 1)
-            self.assertEqual(holder, [])
-            self.assertEqual(events[:2], ['query', 'mapping'])
-            if mode == 0:
-                self.assertIs(result, reference())
-                self.assertEqual(events, ['query', 'mapping'])
-                del result
-            self.assertEqual(events, ['query', 'mapping', 'result'])
-            self.assertIsNone(reference())
-
     def test_string_query_allocation_failure(self):
         self.capi.dict_public_value_string_oom()
 

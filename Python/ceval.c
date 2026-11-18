@@ -3231,10 +3231,14 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 continue;
             PyObject *varname = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
             if (func->func_kwdefaults != NULL) {
+                /* A stored key's __eq__ can replace __kwdefaults__; the
+                 * lookup borrows its dictionary, so pin it here. */
+                PyObject *kwdefs = Py_NewRef(func->func_kwdefaults);
                 PyValue def;
-                int found = PyDict_GetValue(func->func_kwdefaults,
+                int found = PyDict_GetValue(kwdefs,
                                             PyValue_FromObjectBorrow(varname),
                                             &def);
+                Py_DECREF(kwdefs);
                 if (found < 0) {
                     goto fail_post_args;
                 }

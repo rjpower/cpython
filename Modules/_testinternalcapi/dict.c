@@ -870,57 +870,6 @@ done:
 }
 
 static PyObject *
-dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
-{
-    if (nargs != 2) {
-        PyErr_SetString(PyExc_TypeError, "expected [dictionary, query], operation");
-        return NULL;
-    }
-    long mode = PyLong_AsLong(args[1]);
-    if ((mode == -1 && PyErr_Occurred()) || (mode != 0 && mode != 2)) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_ValueError, "expected GetValue or ContainsValue");
-        }
-        return NULL;
-    }
-    if (!PyList_CheckExact(args[0]) || PyList_GET_SIZE(args[0]) != 2) {
-        PyErr_SetString(PyExc_TypeError, "expected [dictionary, query]");
-        return NULL;
-    }
-    /* Read both borrows without callbacks. Only the provider pins their owners;
-     * hashing deliberately clears the holder and removes its last references. */
-    PyValueBorrow source = PyList_GET_VALUE(args[0], 0);
-    PyValueBorrow query = PyList_GET_VALUE(args[0], 1);
-    if (!PyValue_IsObject(source)) {
-        PyErr_SetString(PyExc_TypeError, "expected dictionary object");
-        return NULL;
-    }
-    PyObject *dict = PyValue_AsKnownObjectBorrow(source);
-    PyValue value = PyValue_NULL;
-    int status = mode == 0 ? PyDict_GetValue(dict, query, &value)
-                           : PyDict_ContainsValue(dict, query);
-    /* No access to dict, query or list element addresses after the provider. */
-    PyObject *object = NULL, *report = NULL;
-    if (status >= 0 && !PyErr_Occurred()) {
-        if (!PyValue_IsNull(value)) {
-            object = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
-            if (object == NULL || PyErr_Occurred()) {
-                goto done;
-            }
-        }
-        report = Py_BuildValue("iO", status, object != NULL ? object : Py_None);
-    }
-done:
-    PyValue_XCLOSE(value);
-    Py_XDECREF(object);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(report);
-        return NULL;
-    }
-    return report;
-}
-
-static PyObject *
 dict_public_value_string_oom(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
     if (nargs != 0) {
@@ -1035,7 +984,6 @@ static PyMethodDef methods[] = {
     {"dict_public_value_read", _PyCFunction_CAST(dict_public_value_read), METH_FASTCALL},
     {"dict_public_value_next", _PyCFunction_CAST(dict_public_value_next), METH_FASTCALL},
     {"dict_public_value_pending", _PyCFunction_CAST(dict_public_value_pending), METH_FASTCALL},
-    {"dict_public_value_retirement", _PyCFunction_CAST(dict_public_value_retirement), METH_FASTCALL},
     {"dict_public_value_string_oom", _PyCFunction_CAST(dict_public_value_string_oom), METH_FASTCALL},
     {"dict_owned_migration", dict_owned_migration, METH_O},
     {"dict_owned_entry", dict_owned_entry, METH_O},

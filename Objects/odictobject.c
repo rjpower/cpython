@@ -1922,8 +1922,11 @@ odictiter_iternext_lock_held(odictiterobject *di)
         return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(key)};
     }
 
-    int value_rc = PyDict_GetValue((PyObject *)di->di_odict,
-                                   PyValue_FromObjectBorrow(key), &value_v);
+    /* A reentrant next() from the key's __eq__ can clear di_odict; the
+     * lookup borrows its dictionary, so pin it here. */
+    PyObject *od = Py_NewRef((PyObject *)di->di_odict);
+    int value_rc = PyDict_GetValue(od, PyValue_FromObjectBorrow(key), &value_v);
+    Py_DECREF(od);
     if (value_rc != 1) {
         if (!PyErr_Occurred())
             PyErr_SetObject(PyExc_KeyError, key);

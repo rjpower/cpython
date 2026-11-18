@@ -31,16 +31,33 @@ The [execution76 ledger](issues/register-semantics59/execution76-call-ledger.md)
 measures one call and return exactly. The exact shapes execute 1.27–1.36
 times upstream's instructions in fewer cycles, so the kernel losses come
 from the slow and generic paths and the helpers' footprint. Round 3
-(`pyjit/calls76`) implements the ledger's local items. In parallel, `pyjit/values76` applies three
-rules to every value-form operation, not only the hot ones. First, callees
-borrow their arguments, as the value-slot contract states: interpreter temporaries own their values, and
-`f_locals` writes keep overwritten values alive. Second, internal entry points skip public checks.
-Third, inline receivers move to cold paths. Its heuristic scope
-(`E59/values76-scope.txt`): about 60 functions over upstream's count that
-retain their own arguments, most in `typeobject.c` and `dictobject.c`, and 43
-functions with repeated tag tests. A single value-slot table, with every
-slot filled at type readiness so that dispatch is one call, follows as its
-own change (247 slot initializers, 224 thunk uses).
+(`ba2d7938541`, `pyjit/calls76`, pushed) implements the ledger's local
+items. Per call it saves 26–60 instructions, and DeltaBlue and raytrace
+retire 4.6% and 3.3% fewer instructions per loop.
+
+`pyjit/values76` (`0d18fff7a07`) applies three rules to every value-form
+operation, not only the hot ones:
+
+- Callees borrow their arguments, as the value-slot contract states:
+  interpreter temporaries own their values, and `f_locals` writes keep
+  overwritten values alive.
+- Internal entry points skip public checks.
+- A value's pointer space is tested once, with inline cases on cold paths.
+
+It removes callee-owned counts from 92 functions in `dictobject.c`,
+`typeobject.c` and 18 other files, adds internal dictionary entries, and
+splits the dictionary iterators by kind. Code shrinks 12.8 KB. Instructions
+per loop fall 1.2% on deepcopy, 0.5% on json and xml and 0.2% on DeltaBlue;
+raytrace and pickle are unchanged. Where a callee can run Python that
+rewrites the storage an argument came from, the count stays
+(`E59/values76-inventory.md`).
+
+Checkpoint76 (`76fc2b68918`, `pyjit/checkpoint76`) merges both; it is in
+qualification. `pyjit/values77` finishes the rules' remaining rows and the
+native call scope. In parallel, `pyjit/slots77` makes the value-slot table
+complete: every value slot takes its owner type, readiness fills each empty
+value slot with a generated adapter, and dispatch becomes one call
+(`E59/values76-slot-design.md`).
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

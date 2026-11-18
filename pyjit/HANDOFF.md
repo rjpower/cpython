@@ -25,8 +25,11 @@ to future protection rules. Preserve both original screen verdicts.
 | W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
 | `worktrees/call55-ir` | `pyjit/handlers75` | Handlers75 round 1 `91c9baa9600`; builds `BASE/handlers75-{release,debug}`; keep clean while it is a measurement control |
 | `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags `f78c3902c1b`, from round 1; builds `BASE/handlers75r2-{release,debug}`; keep clean while it is a measurement control |
-| `worktrees/calls76` | `pyjit/calls76` | Round 3 call-path items from the [execution76 ledger](issues/register-semantics59/execution76-call-ledger.md), from round 2; builds `BASE/calls76-{release,debug}` |
-| `worktrees/values76` | `pyjit/values76` | Universal value-operation rules from round 2: callers own and callees borrow, internal entry points, cold inline paths; then one value-slot table. Builds `BASE/values76-{release,debug}`; `pyjit/values76-draft` holds a stopped run's unverified edits |
+| `worktrees/calls76` | `pyjit/calls76` | Round 3 call path `ba2d7938541` (pushed), from round 2; builds `BASE/calls76-{release,debug}`; qualified (`E59/calls76-*-focus`); keep clean while it is a measurement control |
+| `worktrees/values76` | `pyjit/values76` | Value rules 1–3, first pass, `0d18fff7a07`, from round 2; builds `BASE/values76-{release,debug}`; `pyjit/values76-draft` holds a stopped run's unverified edits |
+| `worktrees/checkpoint76` | `pyjit/checkpoint76` | Merge of calls76 and values76, `76fc2b68918`; regeneration leaves products unchanged; builds `BASE/checkpoint76-{release,debug}`; full suite and timing next; keep clean |
+| `worktrees/values77` | `pyjit/values77` | Remaining rule 1–3 rows and the native call scope, from checkpoint76; builds `BASE/values77-{release,debug}`; worker deadline 08:45 PST |
+| `worktrees/slots77` | `pyjit/slots77` | One value-slot table (`E59/values76-slot-design.md`), from checkpoint76; builds `BASE/slots77-{release,debug}`; worker deadline 09:45 PST |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

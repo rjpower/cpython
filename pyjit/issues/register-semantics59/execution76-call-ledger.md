@@ -83,3 +83,51 @@ its own, about 6 instructions per heap argument more than upstream. The values76
 rule "callers own, callees borrow" covers that case, but applying it to frame
 bindings changes the frame ABI: bindings can be rebound, observed through
 `f_locals` and copied into generators. That decision belongs to values76.
+
+## Round 3 result
+
+`pyjit/calls76` (`ba2d7938541`, from round 2) implements items 1–6. Its
+measurements are in `E59/calls76-measurements`. Item 6b is not done: a
+`RETURN_NONE` handler or a constant operand on `RETURN_VALUE_EMPTY` needs a
+new handler id, its own empty-return certification, an instrumented twin and
+a magic bump. The magic number is unchanged (64428).
+
+Instructions per call, net of the loop:
+
+| Case | Round 2 | Round 3 | Change |
+| --- | ---: | ---: | ---: |
+| `f(x, y)` | 455 | 424 | −31 |
+| `o.m(x)` | 423 | 391 | −32 |
+| Keyword argument | 760 | 734 | −26 |
+| `o.store(x)`, returns None | 540 | 490 | −50 |
+| Class with a Python `__init__` | 1,633 | 1,585 | −48 |
+| Callee whose local dies at return | 1,004 | 958 | −46 |
+| Polymorphic call site | 860 | 799 | −60 |
+| Two `append` calls on a list subclass | 1,674 | 1,541 | −133 |
+
+DeltaBlue falls from 52.90M to 50.46M instructions per loop (−4.6%), and
+raytrace from 3,503M to 3,388M (−3.3%). Thread-frame retirement accounts for
+28 of each return's saving. Common constants stored canonically save 18 per
+`return None`.
+
+Three premises did not hold:
+
+- More tests than `test_ir_error_scope` read the retirement-shadow status;
+  all four now turn observation on.
+- With `IR_F_NO_SELF` clear, the exact call must still test a NULL self,
+  because a method-form load can leave it NULL at run time. That test is
+  semantic.
+- The `oparg`, `framesize`, `code` and `next_instr` spills remain. Both
+  rejected variants either grew the handler or cost more per call.
+
+At every DeltaBlue site, both builds reach the same specializations. About
+6,350 generic calls per loop remain. 3,568 of them are `list.append` and
+`list.pop` on `OrderedCollection`, a `list` subclass that fails the exact
+receiver guard in upstream too.
+
+Qualification (`calls76-{release,debug}-focus`, 89 release and 88 debug
+modules, adding `test_sys_settrace`, `test_call`, `test_extcall`,
+`test_class`, `test_descr` and `test_super`): only the baseline failures
+fail. These are `test_ir_error_effects` (five subtests), the two release
+`test_generated_cases` methods, and `test_sys_settrace`'s six debugger-jump
+errors. The jump errors fail identically on golden73, round 1 and round 2.

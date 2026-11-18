@@ -123,7 +123,7 @@ PySys_GetAttr(PyObject *name)
     }
     PyObject *value;
     PyValue value_v;
-    int rc = PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(name), &value_v);
+    int rc = _PyDict_GetValue((PyDictObject *)sysdict, _PyValue_FromObjectKnown(name), &value_v);
     if (sysdict_result_object(rc, value_v, &value) == 0) {
         PyErr_Format(PyExc_RuntimeError, "lost sys.%U", name);
     }
@@ -165,7 +165,7 @@ PySys_GetOptionalAttr(PyObject *name, PyObject **value)
         return 0;
     }
     PyValue value_v;
-    int rc = PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(name), &value_v);
+    int rc = _PyDict_GetValue((PyDictObject *)sysdict, _PyValue_FromObjectKnown(name), &value_v);
     return sysdict_result_object(rc, value_v, value);
 }
 
@@ -195,13 +195,13 @@ sys_set_object(PyInterpreterState *interp, PyObject *key, PyObject *v)
         return -1;
     }
     if (v == NULL) {
-        if (PyDict_PopValue(sd, PyValue_FromObjectBorrow(key), NULL) < 0) {
+        if (_PyDict_PopValue((PyDictObject *)sd, PyValue_FromObjectBorrow(key), NULL) < 0) {
             return -1;
         }
         return 0;
     }
     else {
-        return PyDict_SetValue(sd, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(v));
+        return _PyDict_SetValue((PyDictObject *)sd, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(v));
     }
 }
 
@@ -3974,7 +3974,7 @@ make_abi_info(void)
     if (value == NULL) {
         goto error;
     }
-    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(pointer_bits)), PyValue_FromObjectBorrow(value)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)abi_info, _PyValue_FromObjectKnown(&_Py_ID(pointer_bits)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
     Py_DECREF(value);
@@ -3984,7 +3984,7 @@ make_abi_info(void)
 #else
     value = Py_False;
 #endif
-    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(free_threaded)), PyValue_FromObjectBorrow(value)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)abi_info, _PyValue_FromObjectKnown(&_Py_ID(free_threaded)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -3993,7 +3993,7 @@ make_abi_info(void)
 #else
     value = Py_False;
 #endif
-    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(debug)), PyValue_FromObjectBorrow(value)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)abi_info, _PyValue_FromObjectKnown(&_Py_ID(debug)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -4002,7 +4002,7 @@ make_abi_info(void)
 #else
     value = &_Py_ID(little);
 #endif
-    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(byteorder)), PyValue_FromObjectBorrow(value)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)abi_info, _PyValue_FromObjectKnown(&_Py_ID(byteorder)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -4456,7 +4456,7 @@ _PySys_SetPreliminaryStderr(PyObject *sysdict)
     if (pstderr == NULL) {
         goto error;
     }
-    if (PyDict_SetValue(sysdict, _PyValue_FromObjectKnown(&_Py_ID(stderr)), PyValue_FromObjectBorrow(pstderr)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)sysdict, _PyValue_FromObjectKnown(&_Py_ID(stderr)), PyValue_FromObjectBorrow(pstderr)) < 0) {
         goto error;
     }
     if (PyDict_SetValueString(sysdict, "__stderr__", PyValue_FromObjectBorrow(pstderr)) < 0) {

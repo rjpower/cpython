@@ -879,7 +879,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
 
     for (Py_ssize_t i = 0; i < annotations_len; i++) {
         /* Recorded AST pointer values stay tagged in the constants list. */
-        PyValue ptr_v = PyList_GetValue(deferred_anno, i);
+        PyValue ptr_v = _PyList_GetValue((PyListObject *)deferred_anno, i);
         if (PyValue_IsNull(ptr_v)) {
             return ERROR;
         }
@@ -4088,7 +4088,7 @@ load_args_for_super(compiler *c, expr_ty e) {
     // load self (first argument)
     Py_ssize_t i = 0;
     PyValue key = PyValue_NULL;
-    int status = _PyDict_NextValue(METADATA(c)->u_varnames, &i,
+    int status = _PyDict_NextValue((PyDictObject *)METADATA(c)->u_varnames, &i,
                                    &key, NULL, NULL);
     if (status <= 0) {
         if (status == 0) {
@@ -5032,10 +5032,10 @@ codegen_push_inlined_comprehension_name(compiler *c, location loc,
     if (scope == CELL) {
         ADDOP_NAME(c, loc, MAKE_CELL, name, cellvars);
     }
-    RETURN_IF_ERROR(PyList_AppendValue(state->pushed_locals, PyValue_FromObjectBorrow(name)));
+    RETURN_IF_ERROR(_PyList_AppendValue((PyListObject *)state->pushed_locals, PyValue_FromObjectBorrow(name)));
     if (METADATA(c)->u_fasthidden != NULL) {
         /* Module/class comprehension bindings must remain hidden in assembly. */
-        RETURN_IF_ERROR(PySet_AddValue(METADATA(c)->u_fasthidden, PyValue_FromObjectBorrow(name)));
+        RETURN_IF_ERROR(_PySet_AddValue((PySetObject *)METADATA(c)->u_fasthidden, PyValue_FromObjectBorrow(name)));
     }
     return SUCCESS;
 }
@@ -5049,7 +5049,7 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
     PyValue key = PyValue_NULL;
     PyValue value = PyValue_NULL;
     int status;
-    while ((status = _PyDict_NextValue(comp->ste_symbols, &pos,
+    while ((status = _PyDict_NextValue((PyDictObject *)comp->ste_symbols, &pos,
                                        &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
@@ -6200,7 +6200,7 @@ codegen_pattern_helper_store_name(compiler *c, location loc,
     // Rotate this object underneath any items we need to preserve:
     Py_ssize_t rotations = pc->on_top + PyList_GET_SIZE(pc->stores) + 1;
     RETURN_IF_ERROR(codegen_pattern_helper_rotate(c, loc, rotations));
-    RETURN_IF_ERROR(PyList_AppendValue(pc->stores, PyValue_FromObjectBorrow(n)));
+    RETURN_IF_ERROR(_PyList_AppendValue((PyListObject *)pc->stores, PyValue_FromObjectBorrow(n)));
     return SUCCESS;
 }
 
@@ -6445,13 +6445,13 @@ codegen_pattern_mapping_key(compiler *c, PyObject *seen, pattern_ty p, Py_ssize_
     }
 
     if (key->kind == Constant_kind) {
-        int in_seen = PySet_ContainsValue(seen, PyValue_FromObjectBorrow(key->v.Constant.value));
+        int in_seen = _PySet_ContainsValue((PySetObject *)seen, PyValue_FromObjectBorrow(key->v.Constant.value));
         RETURN_IF_ERROR(in_seen);
         if (in_seen) {
             const char *e = "mapping pattern checks duplicate key (%R)";
             return _PyCompile_Error(c, LOC(p), e, key->v.Constant.value);
         }
-        RETURN_IF_ERROR(PySet_AddValue(seen, PyValue_FromObjectBorrow(key->v.Constant.value)));
+        RETURN_IF_ERROR(_PySet_AddValue((PySetObject *)seen, PyValue_FromObjectBorrow(key->v.Constant.value)));
     }
     else if (key->kind != Attribute_kind) {
         const char *e = "mapping pattern keys may only match literals and attribute lookups";
@@ -6700,7 +6700,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
             codegen_error_duplicate_store(c, LOC(p), name);
             goto error;
         }
-        if (PyList_AppendValue(pc->stores, PyValue_FromObjectBorrow(name))) {
+        if (_PyList_AppendValue((PyListObject *)pc->stores, PyValue_FromObjectBorrow(name))) {
             goto error;
         }
     }

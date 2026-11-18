@@ -56,7 +56,7 @@ symtable_set_flags(PyObject *dict, PyObject *name, long flags)
 {
     /* DEF_* and USE occupy the low bits; the largest scope is CELL << 12. */
     assert(0 <= flags && flags <= INT32_MAX);
-    return PyDict_SetValue(dict, PyValue_FromObjectBorrow(name),
+    return _PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name),
                            PyValue_FromInlineInt(flags));
 }
 
@@ -65,7 +65,7 @@ symtable_next_symbol(PyObject *dict, Py_ssize_t *pos, PyValue *key, long *flags)
 {
     assert(PyValue_IsNull(*key));
     PyValue value = PyValue_NULL;
-    int status = _PyDict_NextValue(dict, pos, key, &value, NULL);
+    int status = _PyDict_NextValue((PyDictObject *)dict, pos, key, &value, NULL);
     if (status <= 0) {
         return status;
     }
@@ -247,7 +247,7 @@ ste_new(struct symtable *st, identifier name, _Py_block_ty block,
         || ste->ste_children == NULL)
         goto fail;
 
-    if (PyDict_SetValue(st->st_blocks, PyValue_FromObjectBorrow(ste->ste_id), _PyValue_FromObjectKnown((PyObject *)ste)) < 0)
+    if (_PyDict_SetValue((PyDictObject *)st->st_blocks, PyValue_FromObjectBorrow(ste->ste_id), _PyValue_FromObjectKnown((PyObject *)ste)) < 0)
         goto fail;
 
     return ste;
@@ -618,7 +618,7 @@ _PySymtable_Lookup(struct symtable *st, void *key)
     k = PyLong_FromVoidPtr(key);
     if (k == NULL)
         return NULL;
-    int found = PyDict_GetValue(st->st_blocks, PyValue_FromObjectBorrow(k), &entry);
+    int found = _PyDict_GetValue((PyDictObject *)st->st_blocks, PyValue_FromObjectBorrow(k), &entry);
     if (found == 0) {
         PyErr_SetString(PyExc_KeyError,
                         "unknown symbol table entry");
@@ -643,7 +643,7 @@ _PySymtable_LookupOptional(struct symtable *st, void *key,
         return -1;
     }
     PyValue entry;
-    int result = PyDict_GetValue(st->st_blocks, PyValue_FromObjectBorrow(k), &entry);
+    int result = _PyDict_GetValue((PyDictObject *)st->st_blocks, PyValue_FromObjectBorrow(k), &entry);
     PyObject *found = NULL;
     if (result > 0) {
         found = _PyValue_AsObjectAt(entry, BOX_SITE_DICT);
@@ -805,9 +805,9 @@ analyze_name(PySTEntryObject *ste, PyObject *scopes, PyObject *name, long flags,
             return error_at_directive(ste, name);
         }
         SET_SCOPE(scopes, name, GLOBAL_EXPLICIT);
-        if (PySet_AddValue(global, PyValue_FromObjectBorrow(name)) < 0)
+        if (_PySet_AddValue((PySetObject *)global, PyValue_FromObjectBorrow(name)) < 0)
             return 0;
-        if (bound && (PySet_DiscardValue(bound, PyValue_FromObjectBorrow(name)) < 0))
+        if (bound && (_PySet_DiscardValue((PySetObject *)bound, PyValue_FromObjectBorrow(name)) < 0))
             return 0;
         return 1;
     }
@@ -817,7 +817,7 @@ analyze_name(PySTEntryObject *ste, PyObject *scopes, PyObject *name, long flags,
                          "nonlocal declaration not allowed at module level");
             return error_at_directive(ste, name);
         }
-        contains = PySet_ContainsValue(bound, PyValue_FromObjectBorrow(name));
+        contains = _PySet_ContainsValue((PySetObject *)bound, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             return 0;
         }
@@ -828,7 +828,7 @@ analyze_name(PySTEntryObject *ste, PyObject *scopes, PyObject *name, long flags,
 
             return error_at_directive(ste, name);
         }
-        contains = PySet_ContainsValue(type_params, PyValue_FromObjectBorrow(name));
+        contains = _PySet_ContainsValue((PySetObject *)type_params, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             return 0;
         }
@@ -839,20 +839,20 @@ analyze_name(PySTEntryObject *ste, PyObject *scopes, PyObject *name, long flags,
             return error_at_directive(ste, name);
         }
         SET_SCOPE(scopes, name, FREE);
-        return PySet_AddValue(free, PyValue_FromObjectBorrow(name)) >= 0;
+        return _PySet_AddValue((PySetObject *)free, PyValue_FromObjectBorrow(name)) >= 0;
     }
     if (flags & DEF_BOUND) {
         SET_SCOPE(scopes, name, LOCAL);
-        if (PySet_AddValue(local, PyValue_FromObjectBorrow(name)) < 0)
+        if (_PySet_AddValue((PySetObject *)local, PyValue_FromObjectBorrow(name)) < 0)
             return 0;
-        if (PySet_DiscardValue(global, PyValue_FromObjectBorrow(name)) < 0)
+        if (_PySet_DiscardValue((PySetObject *)global, PyValue_FromObjectBorrow(name)) < 0)
             return 0;
         if (flags & DEF_TYPE_PARAM) {
-            if (PySet_AddValue(type_params, PyValue_FromObjectBorrow(name)) < 0)
+            if (_PySet_AddValue((PySetObject *)type_params, PyValue_FromObjectBorrow(name)) < 0)
                 return 0;
         }
         else {
-            if (PySet_DiscardValue(type_params, PyValue_FromObjectBorrow(name)) < 0)
+            if (_PySet_DiscardValue((PySetObject *)type_params, PyValue_FromObjectBorrow(name)) < 0)
                 return 0;
         }
         return 1;
@@ -884,20 +884,20 @@ analyze_name(PySTEntryObject *ste, PyObject *scopes, PyObject *name, long flags,
        is nested.
     */
     if (bound) {
-        contains = PySet_ContainsValue(bound, PyValue_FromObjectBorrow(name));
+        contains = _PySet_ContainsValue((PySetObject *)bound, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             return 0;
         }
         if (contains) {
             SET_SCOPE(scopes, name, FREE);
-            return PySet_AddValue(free, PyValue_FromObjectBorrow(name)) >= 0;
+            return _PySet_AddValue((PySetObject *)free, PyValue_FromObjectBorrow(name)) >= 0;
         }
     }
     /* If a parent has a global statement, then call it global
        explicit?  It could also be global implicit.
      */
     if (global) {
-        contains = PySet_ContainsValue(global, PyValue_FromObjectBorrow(name));
+        contains = _PySet_ContainsValue((PySetObject *)global, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             return 0;
         }
@@ -964,7 +964,7 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
         PyObject *k = PyValue_AsKnownObjectBorrow(key);
         int scope = SYMBOL_TO_SCOPE(comp_flags);
         if (scope == CELL) {
-            if (PySet_AddValue(inlined_cells, PyValue_FromObjectBorrow(k)) < 0) {
+            if (_PySet_AddValue((PySetObject *)inlined_cells, PyValue_FromObjectBorrow(k)) < 0) {
                 goto error;
             }
         }
@@ -983,7 +983,7 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                 goto error;
             }
             if (!child_needs_free) {
-                if (PySet_DiscardValue(comp_free, PyValue_FromObjectBorrow(k)) < 0) {
+                if (_PySet_DiscardValue((PySetObject *)comp_free, PyValue_FromObjectBorrow(k)) < 0) {
                     goto error;
                 }
             }
@@ -1009,19 +1009,19 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                 goto error;
             }
             if (!ok) {
-                int in_newfree = PySet_ContainsValue(outer_newfree, PyValue_FromObjectBorrow(k));
+                int in_newfree = _PySet_ContainsValue((PySetObject *)outer_newfree, PyValue_FromObjectBorrow(k));
                 if (in_newfree < 0) {
                     goto error;
                 }
                 if (!in_newfree) {
-                    if (PySet_DiscardValue(comp_free, PyValue_FromObjectBorrow(k)) < 0) {
+                    if (_PySet_DiscardValue((PySetObject *)comp_free, PyValue_FromObjectBorrow(k)) < 0) {
                         goto error;
                     }
                 }
             }
         }
         else if (!existing) {
-            assert(scope != FREE || PySet_ContainsValue(comp_free, PyValue_FromObjectBorrow(k)) == 1);
+            assert(scope != FREE || _PySet_ContainsValue((PySetObject *)comp_free, PyValue_FromObjectBorrow(k)) == 1);
         }
         PyValue_CLEAR(key);
     }
@@ -1055,12 +1055,12 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
             PyValue_CLEAR(key);
             continue;
         }
-        int contains = PySet_ContainsValue(free, PyValue_FromObjectBorrow(name));
+        int contains = _PySet_ContainsValue((PySetObject *)free, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             goto error;
         }
         if (!contains) {
-            contains = PySet_ContainsValue(inlined_cells, PyValue_FromObjectBorrow(name));
+            contains = _PySet_ContainsValue((PySetObject *)inlined_cells, PyValue_FromObjectBorrow(name));
             if (contains < 0) {
                 goto error;
             }
@@ -1073,7 +1073,7 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
         if (symtable_set_flags(scopes, name, CELL) < 0) {
             goto error;
         }
-        if (PySet_DiscardValue(free, PyValue_FromObjectBorrow(name)) < 0) {
+        if (_PySet_DiscardValue((PySetObject *)free, PyValue_FromObjectBorrow(name)) < 0) {
             goto error;
         }
         PyValue_CLEAR(key);
@@ -1088,17 +1088,17 @@ static int
 drop_class_free(PySTEntryObject *ste, PyObject *free)
 {
     int res;
-    res = PySet_DiscardValue(free, _PyValue_FromObjectKnown(&_Py_ID(__class__)));
+    res = _PySet_DiscardValue((PySetObject *)free, _PyValue_FromObjectKnown(&_Py_ID(__class__)));
     if (res < 0)
         return 0;
     if (res)
         ste->ste_needs_class_closure = 1;
-    res = PySet_DiscardValue(free, _PyValue_FromObjectKnown(&_Py_ID(__classdict__)));
+    res = _PySet_DiscardValue((PySetObject *)free, _PyValue_FromObjectKnown(&_Py_ID(__classdict__)));
     if (res < 0)
         return 0;
     if (res)
         ste->ste_needs_classdict = 1;
-    res = PySet_DiscardValue(free, _PyValue_FromObjectKnown(&_Py_ID(__conditional_annotations__)));
+    res = _PySet_DiscardValue((PySetObject *)free, _PyValue_FromObjectKnown(&_Py_ID(__conditional_annotations__)));
     if (res < 0)
         return 0;
     if (res) {
@@ -1165,7 +1165,7 @@ update_symbols(PyObject *symbols, PyObject *scopes,
             continue;
         }
         if (bound) {
-            int contains = PySet_ContainsValue(bound, PyValue_FromObjectBorrow(name));
+            int contains = _PySet_ContainsValue((PySetObject *)bound, PyValue_FromObjectBorrow(name));
             if (contains < 0) {
                 goto error;
             }
@@ -1328,11 +1328,11 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     }
     else {
         /* Special-case __class__ and __classdict__ */
-        if (PySet_AddValue(newbound, _PyValue_FromObjectKnown(&_Py_ID(__class__))) < 0)
+        if (_PySet_AddValue((PySetObject *)newbound, _PyValue_FromObjectKnown(&_Py_ID(__class__))) < 0)
             goto error;
-        if (PySet_AddValue(newbound, _PyValue_FromObjectKnown(&_Py_ID(__classdict__))) < 0)
+        if (_PySet_AddValue((PySetObject *)newbound, _PyValue_FromObjectKnown(&_Py_ID(__classdict__))) < 0)
             goto error;
-        if (PySet_AddValue(newbound, _PyValue_FromObjectKnown(&_Py_ID(__conditional_annotations__))) < 0)
+        if (_PySet_AddValue((PySetObject *)newbound, _PyValue_FromObjectKnown(&_Py_ID(__conditional_annotations__))) < 0)
             goto error;
     }
 
@@ -1387,7 +1387,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
                                           &key, &flags)) > 0) {
         PyObject *name = PyValue_AsKnownObjectBorrow(key);
-        int contains = PyDict_ContainsValue(scopes, PyValue_FromObjectBorrow(name));
+        int contains = _PyDict_ContainsValue((PyDictObject *)scopes, PyValue_FromObjectBorrow(name));
         if (contains < 0) {
             goto error;
         }
@@ -1530,7 +1530,7 @@ symtable_exit_block(struct symtable *st)
 static int
 symtable_enter_existing_block(struct symtable *st, PySTEntryObject* ste, bool add_to_children)
 {
-    if (PyList_AppendValue(st->st_stack, _PyValue_FromObjectKnown((PyObject *)ste)) < 0) {
+    if (_PyList_AppendValue((PyListObject *)st->st_stack, _PyValue_FromObjectKnown((PyObject *)ste)) < 0) {
         return 0;
     }
     PySTEntryObject *prev = st->st_cur;
@@ -1560,7 +1560,7 @@ symtable_enter_existing_block(struct symtable *st, PySTEntryObject* ste, bool ad
         st->st_global = st->st_cur->ste_symbols;
 
     if (add_to_children && prev) {
-        if (PyList_AppendValue(prev->ste_children, _PyValue_FromObjectKnown((PyObject *)ste)) < 0) {
+        if (_PyList_AppendValue((PyListObject *)prev->ste_children, _PyValue_FromObjectKnown((PyObject *)ste)) < 0) {
             symtable_exit_block(st);
             return 0;
         }
@@ -1663,7 +1663,7 @@ symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _s
     }
 
     if (flag & DEF_PARAM) {
-        if (PyList_AppendValue(ste->ste_varnames, PyValue_FromObjectBorrow(mangled)) < 0)
+        if (_PyList_AppendValue((PyListObject *)ste->ste_varnames, PyValue_FromObjectBorrow(mangled)) < 0)
             goto error;
     }
     else if (flag & DEF_GLOBAL) {
@@ -1734,7 +1734,7 @@ symtable_add_def_ctx(struct symtable *st, PyObject *name, int flag,
         return 0;
     }
     if ((flag & DEF_TYPE_PARAM) && st->st_cur->ste_mangled_names != NULL) {
-        if(PySet_AddValue(st->st_cur->ste_mangled_names, PyValue_FromObjectBorrow(name)) < 0) {
+        if(_PySet_AddValue((PySetObject *)st->st_cur->ste_mangled_names, PyValue_FromObjectBorrow(name)) < 0) {
             return 0;
         }
     }
@@ -1895,7 +1895,7 @@ symtable_record_directive(struct symtable *st, identifier name, _Py_SourceLocati
                                     loc.end_lineno, loc.end_col_offset);
     if (!data)
         return 0;
-    res = PyList_AppendValue(st->st_cur->ste_directives, PyValue_FromObjectBorrow(data));
+    res = _PyList_AppendValue((PyListObject *)st->st_cur->ste_directives, PyValue_FromObjectBorrow(data));
     Py_DECREF(data);
     return res == 0;
 }
@@ -3367,7 +3367,7 @@ _Py_MaybeMangle(PyObject *privateobj, PySTEntryObject *ste, PyObject *name)
      * any other names that appear within the type parameter scope.
      */
     if (ste->ste_mangled_names != NULL) {
-        int result = PySet_ContainsValue(ste->ste_mangled_names, PyValue_FromObjectBorrow(name));
+        int result = _PySet_ContainsValue((PySetObject *)ste->ste_mangled_names, PyValue_FromObjectBorrow(name));
         if (result < 0) {
             return NULL;
         }

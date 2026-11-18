@@ -181,7 +181,7 @@ _PyInstructionSequence_AddNested(instr_sequence *seq, instr_sequence *nested)
             return ERROR;
         }
     }
-    if (PyList_AppendValue(seq->s_nested, PyValue_FromObjectBorrow((PyObject*)nested)) < 0) {
+    if (_PyList_AppendValue((PyListObject *)seq->s_nested, PyValue_FromObjectBorrow((PyObject*)nested)) < 0) {
         return ERROR;
     }
     return SUCCESS;
@@ -400,7 +400,7 @@ InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self)
             goto error;
         }
 
-        int res = PyList_AppendValue(instructions, PyValue_FromObjectBorrow(inst_tuple));
+        int res = _PyList_AppendValue((PyListObject *)instructions, PyValue_FromObjectBorrow(inst_tuple));
         Py_DECREF(inst_tuple);
         if (res != 0) {
             goto error;

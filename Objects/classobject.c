@@ -81,10 +81,8 @@ method_value_vectorcall(PyThreadState *tstate, PyObject *method,
 PyObject *
 (_PyMethod_NewValue)(PyObject *func, PyValueBorrow self)
 {
-    if (PyValue_IsNull(self)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
+    /* PyMethod_New() rejects a NULL self; the core callers pass a bound one. */
+    assert(!PyValue_IsNull(self));
     PyMethodObject *im = _Py_FREELIST_POP(PyMethodObject, pymethodobjects);
     if (im == NULL) {
         im = PyObject_GC_New(PyMethodObject, &PyMethod_Type);

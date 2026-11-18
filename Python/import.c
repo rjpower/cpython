@@ -629,7 +629,7 @@ _modules_by_index_set(PyInterpreterState *interp,
         }
     }
 
-    return PyList_SetValue(MODULES_BY_INDEX(interp), index, PyValue_DUP(PyValue_FromObjectBorrow(module)));
+    return _PyList_SetItemTakeValue((PyListObject *)MODULES_BY_INDEX(interp), index, PyValue_DUP(PyValue_FromObjectBorrow(module)));
 }
 
 static int
@@ -640,7 +640,7 @@ _modules_by_index_clear_one(PyInterpreterState *interp, Py_ssize_t index)
         Py_FatalError(err);
         return -1;
     }
-    return PyList_SetValue(MODULES_BY_INDEX(interp), index, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
+    return _PyList_SetItemTakeValue((PyListObject *)MODULES_BY_INDEX(interp), index, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
 }
 
 
@@ -2735,7 +2735,7 @@ _PyImport_GetBuiltinModuleNames(void)
             Py_DECREF(list);
             return NULL;
         }
-        if (PyList_AppendValue(list, PyValue_FromObjectBorrow(name)) < 0) {
+        if (_PyList_AppendValue((PyListObject *)list, PyValue_FromObjectBorrow(name)) < 0) {
             Py_DECREF(name);
             Py_DECREF(list);
             return NULL;
@@ -3032,7 +3032,7 @@ list_frozen_module_names(void)
         if (nameobj == NULL) { \
             goto error; \
         } \
-        int res = PyList_AppendValue(names, PyValue_FromObjectBorrow(nameobj)); \
+        int res = _PyList_AppendValue((PyListObject *)names, PyValue_FromObjectBorrow(nameobj)); \
         Py_DECREF(nameobj); \
         if (res != 0) { \
             goto error; \
@@ -3082,7 +3082,7 @@ list_frozen_module_names(void)
                 Py_DECREF(nameobj);
             }
             else {
-                int res = PyList_AppendValue(names, PyValue_FromObjectBorrow(nameobj));
+                int res = _PyList_AppendValue((PyListObject *)names, PyValue_FromObjectBorrow(nameobj));
                 Py_DECREF(nameobj);
                 if (res != 0) {
                     goto error;
@@ -4337,7 +4337,7 @@ register_from_lazy_on_parent(PyThreadState *tstate, PyObject *existing_module,
     // already resolved or tracked by their own placeholders, so skip the alias.
     int rc = 0;
     if (existing_module != NULL && PyModule_Check(existing_module)) {
-        rc = PyDict_ContainsValue(_PyModule_GetDict(existing_module), PyValue_FromObjectBorrow(from));
+        rc = _PyDict_ContainsValue((PyDictObject *)_PyModule_GetDict(existing_module), PyValue_FromObjectBorrow(from));
         if (rc != 0) {
             return rc < 0 ? -1 : 0;
         }
@@ -5196,7 +5196,7 @@ _imp_extension_suffixes_impl(PyObject *module)
             Py_DECREF(list);
             return PyValue_NULL;
         }
-        if (PyList_AppendValue(list, PyValue_FromObjectBorrow(item)) < 0) {
+        if (_PyList_AppendValue((PyListObject *)list, PyValue_FromObjectBorrow(item)) < 0) {
             Py_DECREF(list);
             Py_DECREF(item);
             return PyValue_NULL;

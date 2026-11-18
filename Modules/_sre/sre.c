@@ -2850,7 +2850,7 @@ _sre_SRE_Match_groupdict_impl(MatchObject *self, PyValueBorrow default_value)
     }
 
     Py_BEGIN_CRITICAL_SECTION(self->pattern->groupindex);
-    while ((rc = _PyDict_NextValue(self->pattern->groupindex, &pos,
+    while ((rc = _PyDict_NextValue((PyDictObject *)self->pattern->groupindex, &pos,
                                        &key, NULL, &hash)) > 0)
     {
         int status;
@@ -2860,7 +2860,7 @@ _sre_SRE_Match_groupdict_impl(MatchObject *self, PyValueBorrow default_value)
             Py_CLEAR(result);
             goto exit;
         }
-        status = _PyDict_SetValue_KnownHash(result, key, PyValue_FromObjectBorrow(value), hash);
+        status = _PyDict_SetValue_KnownHash((PyDictObject *)result, key, PyValue_FromObjectBorrow(value), hash);
         Py_DECREF(value);
         PyValue_CLOSE(key);
         if (status < 0) {

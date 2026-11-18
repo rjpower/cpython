@@ -1387,8 +1387,8 @@ value_attribute_error_context(PyValueBorrow v, PyObject *name)
     Py_DECREF(obj);
 }
 
-static int
-check_attribute_name(PyObject *name)
+int
+_PyObject_CheckAttributeName(PyObject *name)
 {
     if (!PyUnicode_Check(name)) {
         PyErr_Format(PyExc_TypeError,
@@ -1437,7 +1437,7 @@ call_getattro(PyTypeObject *tp, PyValueBorrow v, PyObject *name)
 PyValue
 (_PyValue_GetAttr)(PyValueBorrow v, PyObject *name)
 {
-    if (check_attribute_name(name) < 0) {
+    if (_PyObject_CheckAttributeName(name) < 0) {
         return PyValue_NULL;
     }
     PyValue result = call_getattro(PyValue_TYPE(v), v, name);
@@ -1456,7 +1456,7 @@ PyObject_GetAttr(PyObject *v, PyObject *name)
 _PyStatusValue
 (_PyValue_GetOptionalAttr)(PyValueBorrow v, PyObject *name)
 {
-    if (check_attribute_name(name) < 0) {
+    if (_PyObject_CheckAttributeName(name) < 0) {
         return (_PyStatusValue){-1, PyValue_NULL};
     }
     PyTypeObject *tp = PyValue_TYPE(v);
@@ -1569,7 +1569,7 @@ int
     PyTypeObject *tp = PyValue_TYPE(v);
     int err;
 
-    if (check_attribute_name(name) < 0) {
+    if (_PyObject_CheckAttributeName(name) < 0) {
         return -1;
     }
     Py_INCREF(name);
@@ -1930,9 +1930,10 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     PyValue res = PyValue_NULL;
     int has_get = 0;
 
-    if (check_attribute_name(name) < 0) {
-        return PyValue_NULL;
-    }
+    /* The public entries (PyObject_GenericGetAttr() and
+       _PyObject_GenericGetAttrWithDict()) test the name; the value slot is
+       reached from _PyValue_GetAttr(), which has. */
+    assert(PyUnicode_Check(name));
 
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp)) {
@@ -2081,6 +2082,9 @@ Py_VALUE_ENTRY PyObject *
 _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
                                  PyObject *dict, int suppress)
 {
+    if (_PyObject_CheckAttributeName(name) < 0) {
+        return NULL;
+    }
     return _PyValue_THUNK_EXIT(
         generic_getattr_value(_Py_VALUE_ARG(obj), name, dict, suppress), BOX_SITE_ATTRIBUTE);
 }
@@ -2097,15 +2101,15 @@ int
 {
     PyTypeObject *tp = PyValue_TYPE(v);
     // An inline value has no instance dict.
-    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
+    PyObject *obj = PyValue_ObjectOrNull(v);
     PyObject *owned_dict = NULL;
     PyObject *descr;
     int res = -1;
 
     assert(!PyType_IsSubtype(tp, &PyType_Type));
-    if (check_attribute_name(name) < 0) {
-        return -1;
-    }
+    /* The public entries test the name; the value slot is reached from
+       _PyValue_SetAttr(), which has. */
+    assert(PyUnicode_Check(name));
 
     _Py_INCREF_TYPE(tp);
     if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
@@ -2205,6 +2209,9 @@ int
 _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
                                  PyObject *value, PyObject *dict)
 {
+    if (_PyObject_CheckAttributeName(name) < 0) {
+        return -1;
+    }
     return (_PyObject_GenericSetAttrWithDictValue)(
         _Py_VALUE_ARG(obj), name, _Py_VALUE_ARG(value), dict);
 }
@@ -2212,6 +2219,9 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
 int
 PyObject_GenericSetAttr(PyObject *obj, PyObject *name, PyObject *value)
 {
+    if (_PyObject_CheckAttributeName(name) < 0) {
+        return -1;
+    }
     return (_PyObject_GenericSetAttrValue)(_Py_VALUE_ARG(obj), name,
                                            _Py_VALUE_ARG(value));
 }
@@ -2253,7 +2263,10 @@ int
 (_PyValue_IsTrueSlow)(PyValueBorrow v)
 {
     Py_ssize_t res;
-    PyTypeObject *tp = PyValue_TYPE(v);
+    /* The inline callers have answered for an int or float: v holds an
+       object, and the one test of its tag is this. */
+    PyObject *obj = PyValue_AsKnownObjectBorrow(v);
+    PyTypeObject *tp = Py_TYPE(obj);
     if (PyValue_Is(v, PyValue_True))
         return 1;
     if (PyValue_Is(v, PyValue_False))
@@ -2263,13 +2276,12 @@ int
     else if (tp->tp_as_number != NULL &&
              tp->tp_as_number->nb_bool != NULL)
         res = call_bool(tp, tp->tp_as_number->nb_bool, v);
-    /* An inline value's type has nb_bool, so v holds an object below. */
     else if (tp->tp_as_mapping != NULL &&
              tp->tp_as_mapping->mp_length != NULL)
-        res = (*tp->tp_as_mapping->mp_length)(PyValue_AsKnownObjectBorrow(v));
+        res = (*tp->tp_as_mapping->mp_length)(obj);
     else if (tp->tp_as_sequence != NULL &&
              tp->tp_as_sequence->sq_length != NULL)
-        res = (*tp->tp_as_sequence->sq_length)(PyValue_AsKnownObjectBorrow(v));
+        res = (*tp->tp_as_sequence->sq_length)(obj);
     else
         return 1;
     /* if it is negative, it should be either -1 or -2 */
@@ -2808,7 +2820,7 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
     // Cache __reduce__ from PyBaseObject_Type object
     PyObject *baseobj_dict = _PyType_GetDict(&PyBaseObject_Type);
     PyValue baseobj_reduce_value;
-    int found = PyDict_GetValue(baseobj_dict,
+    int found = _PyDict_GetValue((PyDictObject *)baseobj_dict,
                                 _PyValue_FromObjectKnown(&_Py_ID(__reduce__)),
                                 &baseobj_reduce_value);
     if (found < 0) {

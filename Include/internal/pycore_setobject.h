@@ -10,7 +10,7 @@ extern "C" {
 
 // Owns the returned key; no scalar boxing.
 PyAPI_FUNC(int) _PySet_NextValue(
-    PyObject *set,
+    PySetObject *set,
     Py_ssize_t *pos,
     PyValue *key,
     Py_hash_t *hash);
@@ -45,6 +45,15 @@ PyAPI_FUNC(int) PySet_AddValue(PyObject *set, PyValueBorrow key);
 #define PySet_AddValue(S, K) (PySet_AddValue)(S, PyValue_Borrow(K))
 PyAPI_FUNC(int) PySet_DiscardValue(PyObject *set, PyValueBorrow key);
 #define PySet_DiscardValue(S, K) (PySet_DiscardValue)(S, PyValue_Borrow(K))
+// The same for a caller that holds the set (a local, or a field the core fills
+// only with a set): they assert the type instead of testing it.
+// _PySet_AddValue() is for a set, not a frozenset.
+PyAPI_FUNC(int) _PySet_ContainsValue(PySetObject *so, PyValueBorrow key);
+#define _PySet_ContainsValue(S, K) (_PySet_ContainsValue)(S, PyValue_Borrow(K))
+PyAPI_FUNC(int) _PySet_AddValue(PySetObject *so, PyValueBorrow key);
+#define _PySet_AddValue(S, K) (_PySet_AddValue)(S, PyValue_Borrow(K))
+PyAPI_FUNC(int) _PySet_DiscardValue(PySetObject *so, PyValueBorrow key);
+#define _PySet_DiscardValue(S, K) (_PySet_DiscardValue)(S, PyValue_Borrow(K))
 
 // Clears the set without acquiring locks. Used by _PyCode_Fini.
 extern void _PySet_ClearInternal(PySetObject *so);

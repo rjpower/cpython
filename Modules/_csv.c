@@ -183,7 +183,7 @@ static PyObject *
 get_dialect_from_registry(PyObject *name_obj, _csvstate *module_state)
 {
     PyValue dialect;
-    int found = PyDict_GetValue(module_state->dialects,
+    int found = _PyDict_GetValue((PyDictObject *)module_state->dialects,
                                 PyValue_FromObjectBorrow(name_obj), &dialect);
     if (found == 0) {
         PyErr_SetString(module_state->error_obj, "unknown dialect");
@@ -1800,7 +1800,7 @@ _csv_register_dialect_impl(PyObject *module, PyValueBorrow name_obj,
     dialect = _call_dialect(module_state, dialect_obj, fmtparams);
     if (dialect == NULL)
         return PyValue_NULL;
-    if (PyDict_SetValue(module_state->dialects, name_obj, PyValue_FromObjectBorrow(dialect)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)module_state->dialects, name_obj, PyValue_FromObjectBorrow(dialect)) < 0) {
         Py_DECREF(dialect);
         return PyValue_NULL;
     }
@@ -1826,7 +1826,7 @@ _csv_unregister_dialect_impl(PyObject *module, PyValueBorrow name)
     if (name_obj == NULL) {
         return PyValue_NULL;
     }
-    int rc = PyDict_PopValue(module_state->dialects, PyValue_FromObjectBorrow(name_obj), NULL);
+    int rc = _PyDict_PopValue((PyDictObject *)module_state->dialects, PyValue_FromObjectBorrow(name_obj), NULL);
     Py_DECREF(name_obj);
     if (rc < 0) {
         return PyValue_NULL;

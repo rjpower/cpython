@@ -964,7 +964,7 @@ w_complex_object(PyObject *v, WFILE *p)
         bool changed = false;
         int rc;
         Py_BEGIN_CRITICAL_SECTION(v);
-        while ((rc = _PySet_NextValue(v, &pos, &value_val, &hash)) > 0) {
+        while ((rc = _PySet_NextValue((PySetObject *)v, &pos, &value_val, &hash)) > 0) {
             value = _PyValue_AsObjectAt(value_val, BOX_SITE_SET);
             PyValue_CLOSE(value_val);
             if (value == NULL) {
@@ -1577,7 +1577,7 @@ r_ref_insert(PyObject *o, Py_ssize_t idx, int flag, RFILE *p)
         return NULL;
     }
     if (flag) { /* currently only FLAG_REF is defined */
-        int status = PyList_SetValue(p->refs, idx, PyValue_DUP(PyValue_FromObjectBorrow(o)));
+        int status = _PyList_SetItemTakeValue((PyListObject *)p->refs, idx, PyValue_DUP(PyValue_FromObjectBorrow(o)));
         if (status < 0) {
             Py_XDECREF(o);
             return NULL;
@@ -1937,7 +1937,7 @@ r_value(RFILE *p)
                 PyValue_CLOSE(key);
                 break;
             }
-            int status = PyDict_SetValue(v, key, val);
+            int status = _PyDict_SetValue((PyDictObject *)v, key, val);
             PyValue_CLOSE(key);
             PyValue_CLOSE(val);
             if (status < 0)

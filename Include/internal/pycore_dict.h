@@ -123,7 +123,9 @@ PyAPI_FUNC(int) _PyDict_ContainsValue(PyDictObject *, PyValueBorrow);
 /* As PyDict_Pop(): 1 with the removed value as an owner in *result (which may
  * be NULL), 0 if absent, -1 with an exception. */
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValueBorrow, PyValue *);
+PyAPI_FUNC(int) _PyDict_PopValue(PyDictObject *, PyValueBorrow, PyValue *);
 #define PyDict_PopValue(D, K, R) (PyDict_PopValue)(D, PyValue_Borrow(K), R)
+#define _PyDict_PopValue(D, K, R) (_PyDict_PopValue)(D, PyValue_Borrow(K), R)
 /* As PyDict_SetItemString(): retains its borrowed value. */
 PyAPI_FUNC(int) PyDict_SetValueString(PyObject *, const char *, PyValueBorrow);
 #define PyDict_SetValueString(D, S, V) \
@@ -133,7 +135,7 @@ PyAPI_FUNC(int) PyDict_SetValueString(PyObject *, const char *, PyValueBorrow);
  * them to NULL1. Capture is allocation-free; only success advances the cursor.
  * As with dict iteration, owners do not make key mutation during iteration
  * safe. The borrowed dict must remain live throughout each call. */
-PyAPI_FUNC(int) _PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *, Py_hash_t *);
+PyAPI_FUNC(int) _PyDict_NextValue(PyDictObject *, Py_ssize_t *, PyValue *, PyValue *, Py_hash_t *);
 /* Borrowed iteration for core code that must not allocate or fail, such as
  * finalization and fault dumps: return 1 with borrowed key/value views, or 0
  * at the end. Never sets an exception. The views are valid only while the
@@ -153,7 +155,7 @@ PyAPI_FUNC(int) _PyDict_SetDefaultValue(PyObject *, PyValueBorrow, PyValueBorrow
 #define _PyDict_SetDefaultValue(D, K, V, R) \
     (_PyDict_SetDefaultValue)(D, PyValue_Borrow(K), PyValue_Borrow(V), R)
 
-PyAPI_FUNC(int) _PyDict_SetValue_KnownHash(PyObject *, PyValueBorrow, PyValueBorrow, Py_hash_t);
+PyAPI_FUNC(int) _PyDict_SetValue_KnownHash(PyDictObject *, PyValueBorrow, PyValueBorrow, Py_hash_t);
 #define _PyDict_SetValue_KnownHash(D, K, V, H) \
     (_PyDict_SetValue_KnownHash)(D, PyValue_Borrow(K), PyValue_Borrow(V), H)
 PyAPI_FUNC(int) _PyDict_SetValue_Take2(PyDictObject *, PyValue, PyValue);
@@ -243,6 +245,8 @@ PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupSplit(PyDictKeysObject* dictkeys,
 PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, PyObject *, PyValue *);
 
 // Loads the __builtins__ object from the globals dict. Returns a new reference.
+// Every caller takes `globals` from a public entry (PyEval_EvalCode*,
+// PyFrame_New, PyFunction_NewWithQualName), so this keeps its check.
 extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
 
 /* Consumes references to key and value */

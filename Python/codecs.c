@@ -170,7 +170,7 @@ PyObject *_PyCodec_Lookup(const char *encoding)
     /* First, try to lookup the name in the registry dictionary */
     PyObject *result;
     PyValue result_v;
-    int cache_rc = PyDict_GetValue(interp->codecs.search_cache,
+    int cache_rc = _PyDict_GetValue((PyDictObject *)interp->codecs.search_cache,
                                    _PyValue_FromObjectKnown(v), &result_v);
     if (cache_rc < 0) {
         goto onError;
@@ -235,7 +235,7 @@ PyObject *_PyCodec_Lookup(const char *encoding)
     _PyUnicode_InternImmortal(interp, &v);
 
     /* Cache and return the result */
-    if (PyDict_SetValue(interp->codecs.search_cache, PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(result)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)interp->codecs.search_cache, PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(result)) < 0) {
         Py_DECREF(result);
         goto onError;
     }

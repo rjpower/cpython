@@ -2755,7 +2755,7 @@ _collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
                 goto error;
             }
             if (found == 0) {
-                if (_PyDict_SetValue_KnownHash(mapping_obj, key,
+                if (_PyDict_SetValue_KnownHash((PyDictObject *)mapping_obj, key,
                         PyValue_FromObjectBorrow(_PyLong_GetOne()), hash) < 0) {
                     PyValue_CLOSE(key);
                     goto error;
@@ -2768,7 +2768,7 @@ _collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
                     PyValue_CLOSE(key);
                     goto error;
                 }
-                int set_res = _PyDict_SetValue_KnownHash(mapping_obj, key,
+                int set_res = _PyDict_SetValue_KnownHash((PyDictObject *)mapping_obj, key,
                                                          newv, hash);
                 PyValue_CLOSE(newv);
                 if (set_res < 0) {

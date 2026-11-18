@@ -680,6 +680,8 @@ PyLong_FromDouble(double dval)
  * of the digit loops that they replace.
  */
 
+// The row's object function (PyLong_AsLong() and its siblings) rejects a NULL
+// argument; the row asserts it.
 // NAME's row for an int that is an inline word or a span; ERR is the error
 // return; PRE runs first; PARAMS and ARGS are an extra parameter and its
 // use, or empty; INDEX says whether __index__ is accepted.
@@ -689,10 +691,7 @@ CTYPE \
 (NAME)(PyValueBorrow v PARAMS) \
 { \
     PRE \
-    if (PyValue_IsNull(v)) { \
-        PyErr_BadInternalCall(); \
-        return ERR; \
-    } \
+    assert(!PyValue_IsNull(v)); \
     if (PyValue_IsInlineInt(v)) { \
         return FROM_WORD(PyValue_InlineInt64(v) ARGS); \
     } \
@@ -939,42 +938,71 @@ _Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsDouble, double, -1.0, ,
 long
 PyLong_AsLongAndOverflow(PyObject *vv, int *overflow)
 {
+    *overflow = 0;
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_AsLongAndOverflow(_Py_VALUE_ARG(vv), overflow);
 }
 
 long
 PyLong_AsLong(PyObject *obj)
 {
+    if (obj == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_AsLong(_Py_VALUE_ARG(obj));
 }
 
 int
 PyLong_AsInt(PyObject *obj)
 {
+    if (obj == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_AsInt(_Py_VALUE_ARG(obj));
 }
 
 Py_ssize_t
 PyLong_AsSsize_t(PyObject *vv)
 {
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_IntAsSsize_t(_Py_VALUE_ARG(vv));
 }
 
 unsigned long
 PyLong_AsUnsignedLong(PyObject *vv)
 {
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return (unsigned long)-1;
+    }
     return _PyValue_IntAsUnsignedLong(_Py_VALUE_ARG(vv));
 }
 
 size_t
 PyLong_AsSize_t(PyObject *vv)
 {
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return (size_t)-1;
+    }
     return _PyValue_IntAsSize_t(_Py_VALUE_ARG(vv));
 }
 
 unsigned long
 PyLong_AsUnsignedLongMask(PyObject *op)
 {
+    if (op == NULL) {
+        PyErr_BadInternalCall();
+        return (unsigned long)-1;
+    }
     return _PyValue_AsUnsignedLongMask(_Py_VALUE_ARG(op));
 }
 
@@ -1703,24 +1731,41 @@ PyLong_FromSsize_t(Py_ssize_t ival)
 long long
 PyLong_AsLongLong(PyObject *vv)
 {
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_AsLongLong(_Py_VALUE_ARG(vv));
 }
 
 unsigned long long
 PyLong_AsUnsignedLongLong(PyObject *vv)
 {
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return (unsigned long long)-1;
+    }
     return _PyValue_IntAsUnsignedLongLong(_Py_VALUE_ARG(vv));
 }
 
 unsigned long long
 PyLong_AsUnsignedLongLongMask(PyObject *op)
 {
+    if (op == NULL) {
+        PyErr_BadInternalCall();
+        return (unsigned long long)-1;
+    }
     return _PyValue_AsUnsignedLongLongMask(_Py_VALUE_ARG(op));
 }
 
 long long
 PyLong_AsLongLongAndOverflow(PyObject *vv, int *overflow)
 {
+    *overflow = 0;
+    if (vv == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_AsLongLongAndOverflow(_Py_VALUE_ARG(vv), overflow);
 }
 
@@ -3672,6 +3717,10 @@ _PyLong_SpanHash(_PyLongSpan a)
 double
 PyLong_AsDouble(PyObject *v)
 {
+    if (v == NULL) {
+        PyErr_BadInternalCall();
+        return -1.0;
+    }
     return _PyValue_IntAsDouble(_Py_VALUE_ARG(v));
 }
 

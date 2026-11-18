@@ -93,7 +93,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     }
 
     if (cell != NULL) {
-        PyValue cv = PyCell_GetValue(cell);
+        PyValue cv = _PyCell_GetValue((PyCellObject *)cell);
         value = PyValue_IsNull(cv) ? NULL : _PyValue_AsObjectAt(cv, BOX_SITE_CELL);
         PyValue_XCLOSE(cv);
     }
@@ -128,14 +128,14 @@ framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static int
 framelocalsproxy_is_first_occurrence(PyObject *seen, PyObject *name)
 {
-    int found = PySet_ContainsValue(seen, PyValue_FromObjectBorrow(name));
+    int found = _PySet_ContainsValue((PySetObject *)seen, PyValue_FromObjectBorrow(name));
     if (found < 0) {
         return -1;
     }
     if (found) {
         return 0;
     }
-    if (PySet_AddValue(seen, PyValue_FromObjectBorrow(name)) < 0) {
+    if (_PySet_AddValue((PySetObject *)seen, PyValue_FromObjectBorrow(name)) < 0) {
         return -1;
     }
     return 1;
@@ -463,7 +463,7 @@ framelocalsproxy_keys(PyObject *self, PyObject *Py_UNUSED(ignored))
                 goto error;
             }
             if (first) {
-                if (PyList_AppendValue(names, PyValue_FromObjectBorrow(name)) < 0) {
+                if (_PyList_AppendValue((PyListObject *)names, PyValue_FromObjectBorrow(name)) < 0) {
                     goto error;
                 }
             }
@@ -480,8 +480,8 @@ framelocalsproxy_keys(PyObject *self, PyObject *Py_UNUSED(ignored))
         PyValue value = PyValue_NULL;
 
         int rc;
-        while ((rc = PyDict_NextValue(frame->f_extra_locals, &i, &key, &value)) > 0) {
-            int err = PyList_AppendValue(names, key);
+        while ((rc = _PyDict_NextValue((PyDictObject *)frame->f_extra_locals, &i, &key, &value, NULL)) > 0) {
+            int err = _PyList_AppendValue((PyListObject *)names, key);
             PyValue_CLOSE(key);
             PyValue_CLOSE(value);
             if (err < 0) {
@@ -701,7 +701,7 @@ framelocalsproxy_values(PyObject *self, PyObject *Py_UNUSED(ignored))
             PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
             int first = framelocalsproxy_is_first_occurrence(seen, name);
             if (first == 1) {
-                if (PyList_AppendValue(values, PyValue_FromObjectBorrow(value)) < 0) {
+                if (_PyList_AppendValue((PyListObject *)values, PyValue_FromObjectBorrow(value)) < 0) {
                     Py_DECREF(value);
                     goto error;
                 }
@@ -720,8 +720,8 @@ framelocalsproxy_values(PyObject *self, PyObject *Py_UNUSED(ignored))
         PyValue key = PyValue_NULL;
         PyValue value = PyValue_NULL;
         int rc;
-        while ((rc = PyDict_NextValue(frame->f_extra_locals, &j, &key, &value)) > 0) {
-            int err = PyList_AppendValue(values, value);
+        while ((rc = _PyDict_NextValue((PyDictObject *)frame->f_extra_locals, &j, &key, &value, NULL)) > 0) {
+            int err = _PyList_AppendValue((PyListObject *)values, value);
             PyValue_CLOSE(key);
             PyValue_CLOSE(value);
             if (err < 0) {
@@ -793,7 +793,7 @@ framelocalsproxy_items(PyObject *self, PyObject *Py_UNUSED(ignored))
         PyValue key = PyValue_NULL;
         PyValue value = PyValue_NULL;
         int rc;
-        while ((rc = PyDict_NextValue(frame->f_extra_locals, &j, &key, &value)) > 0) {
+        while ((rc = _PyDict_NextValue((PyDictObject *)frame->f_extra_locals, &j, &key, &value, NULL)) > 0) {
             PyObject *pair = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_Borrow(key), PyValue_Borrow(value)});
             PyValue_CLOSE(key);
             PyValue_CLOSE(value);
@@ -992,7 +992,7 @@ framelocalsproxy_pop(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
     }
 
     PyValue popped;
-    if (PyDict_PopValue(frame->f_extra_locals, PyValue_FromObjectBorrow(key), &popped) < 0) {
+    if (_PyDict_PopValue((PyDictObject *)frame->f_extra_locals, PyValue_FromObjectBorrow(key), &popped) < 0) {
         return NULL;
     }
 
@@ -4311,7 +4311,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));
-            PyValue cv = PyCell_GetValue(value);
+            PyValue cv = _PyCell_GetValue((PyCellObject *)value);
             value = PyValue_IsNull(cv) ? NULL : _PyValue_AsObjectAt(cv, BOX_SITE_CELL);
             PyValue_XCLOSE(cv);
         }
@@ -4319,7 +4319,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
             if (value != NULL) {
                 if (PyCell_Check(value)) {
                     assert(!_PyFrame_IsIncomplete(frame));
-                    PyValue cv = PyCell_GetValue(value);
+                    PyValue cv = _PyCell_GetValue((PyCellObject *)value);
                     value = PyValue_IsNull(cv) ? NULL : _PyValue_AsObjectAt(cv, BOX_SITE_CELL);
                     PyValue_XCLOSE(cv);
                 }

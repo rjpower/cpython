@@ -47,6 +47,11 @@ _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem);
    borrows alike. */
 PyAPI_FUNC(int) PyList_AppendValue(PyObject *list, PyValueBorrow item);
 #define PyList_AppendValue(L, V) (PyList_AppendValue)(L, PyValue_Borrow(V))
+/* The same for a caller that holds a list (a local or a field the core only
+   fills with a list); the item is not NULL. PyList_AppendValue() validates the
+   list and the item, then calls this. */
+PyAPI_FUNC(int) _PyList_AppendValue(PyListObject *list, PyValueBorrow item);
+#define _PyList_AppendValue(L, V) (_PyList_AppendValue)(L, PyValue_Borrow(V))
 PyAPI_FUNC(int) PyList_InsertValue(PyObject *list, Py_ssize_t where,
                                    PyValueBorrow item);
 #define PyList_InsertValue(L, I, V) \

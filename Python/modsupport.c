@@ -178,7 +178,7 @@ do_mkdict(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n)
             return NULL;
         }
         v = do_mkvalue(p_format, p_va);
-        if (v == NULL || PyDict_SetValue(d, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
+        if (v == NULL || _PyDict_SetValue((PyDictObject *)d, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
             do_ignore(p_format, p_va, endchar, n - i - 2);
             Py_DECREF(k);
             Py_XDECREF(v);

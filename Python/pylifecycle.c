@@ -861,7 +861,7 @@ pycore_init_builtins(PyThreadState *tstate)
     // later "del builtins.isinstance" cannot free them. The callable caches
     // compare by identity only; all and any become immortal below.
     PyValue isinstance_v;
-    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(isinstance)),
+    if (_PyDict_GetValue((PyDictObject *)builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(isinstance)),
                         &isinstance_v) <= 0) {
         goto error;
     }
@@ -874,7 +874,7 @@ pycore_init_builtins(PyThreadState *tstate)
     Py_DECREF(isinstance);
 
     PyValue len_v;
-    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(len)),
+    if (_PyDict_GetValue((PyDictObject *)builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(len)),
                         &len_v) <= 0) {
         goto error;
     }
@@ -887,7 +887,7 @@ pycore_init_builtins(PyThreadState *tstate)
     Py_DECREF(len);
 
     PyValue all_v;
-    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(all)),
+    if (_PyDict_GetValue((PyDictObject *)builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(all)),
                         &all_v) <= 0) {
         goto error;
     }
@@ -899,7 +899,7 @@ pycore_init_builtins(PyThreadState *tstate)
     Py_DECREF(all);
 
     PyValue any_v;
-    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(any)),
+    if (_PyDict_GetValue((PyDictObject *)builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(any)),
                         &any_v) <= 0) {
         goto error;
     }
@@ -1574,7 +1574,7 @@ init_interp_main_impl(PyThreadState *tstate)
                 return _PyStatus_ERR("can't initialize sys.path[0]");
             }
             PyValue sys_path_v;
-            if (PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(&_Py_ID(path)),
+            if (_PyDict_GetValue((PyDictObject *)sysdict, _PyValue_FromObjectKnown(&_Py_ID(path)),
                                 &sys_path_v) <= 0) {
                 Py_DECREF(path0);
                 return _PyStatus_ERR("can't initialize sys.path[0]");
@@ -1800,7 +1800,7 @@ finalize_remove_modules(PyObject *modules, int verbose)
             PyObject *wr = PyWeakref_NewRef(mod, NULL); \
             if (wr) { \
                 PyObject *tup = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(wr)}); \
-                if (!tup || PyList_AppendValue(weaklist, PyValue_FromObjectBorrow(tup)) < 0) { \
+                if (!tup || _PyList_AppendValue((PyListObject *)weaklist, PyValue_FromObjectBorrow(tup)) < 0) { \
                     PyErr_FormatUnraisable("Exception ignored while removing modules"); \
                 } \
                 Py_XDECREF(tup); \

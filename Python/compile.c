@@ -281,7 +281,7 @@ _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
         assert(u);
         if (u->u_scope_type == COMPILE_SCOPE_CLASS) {
             assert(u->u_static_attributes);
-            RETURN_IF_ERROR(PySet_AddValue(u->u_static_attributes, PyValue_FromObjectBorrow(e->v.Attribute.attr)));
+            RETURN_IF_ERROR(_PySet_AddValue((PySetObject *)u->u_static_attributes, PyValue_FromObjectBorrow(e->v.Attribute.attr)));
             break;
         }
     }
@@ -416,7 +416,7 @@ constant_from_key(PyValue key)
 {
     if (PyValue_IsObject(key) &&
         PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(key))) {
-        return PyTuple_GetValue(PyValue_AsKnownObjectBorrow(key), 1);
+        return _PyTuple_GetValue(PyValue_AsKnownObjectBorrow(key), 1);
     }
     return PyValue_DUP(key);
 }
@@ -459,7 +459,7 @@ static PyValue
     if (o != NULL && PyTuple_CheckExact(o)) {
         Py_ssize_t len = PyTuple_GET_SIZE(o);
         for (Py_ssize_t i = 0; i < len; i++) {
-            PyValue item = PyTuple_GetValue(o, i);
+            PyValue item = _PyTuple_GetValue(o, i);
             PyValue child_key = const_cache_insert(const_cache, item, true);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(child_key)) {
@@ -484,7 +484,7 @@ static PyValue
             PyValue item;
             Py_hash_t hash;
             int next;
-            while ((next = _PySet_NextValue(o, &pos, &item, &hash)) > 0) {
+            while ((next = _PySet_NextValue((PySetObject *)o, &pos, &item, &hash)) > 0) {
                 PyValue child_key = const_cache_insert(const_cache, item, true);
                 PyValue_CLOSE(item);
                 if (PyValue_IsNull(child_key)) {
@@ -592,7 +592,7 @@ list2dict(PyObject *list)
             return NULL;
         }
         k = compiler_metadata_item(list, i);
-        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
+        if (_PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
             Py_DECREF(v);
             Py_DECREF(dict);
             return NULL;
@@ -641,7 +641,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 
     for (key_i = 0; key_i < num_keys; key_i++) {
         k = Py_NewRef(compiler_metadata_item(sorted_keys, key_i));
-        int found = PyDict_GetValue(src, PyValue_FromObjectBorrow(k), &value);
+        int found = _PyDict_GetValue((PyDictObject *)src, PyValue_FromObjectBorrow(k), &value);
         if (found <= 0) {
             if (found == 0) {
                 PyErr_SetObject(PyExc_KeyError, k);
@@ -661,7 +661,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
                 goto error;
             }
             i++;
-            if (PyDict_SetValue(dest, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(item)) < 0) {
+            if (_PyDict_SetValue((PyDictObject *)dest, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(item)) < 0) {
                 Py_DECREF(item);
                 goto error;
             }
@@ -686,7 +686,7 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
     Py_ssize_t pos = 0;
     PyValue key = PyValue_NULL, value = PyValue_NULL;
     int status;
-    while ((status = _PyDict_NextValue(symbols, &pos, &key, &value, NULL)) > 0) {
+    while ((status = _PyDict_NextValue((PyDictObject *)symbols, &pos, &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
@@ -696,7 +696,7 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
             goto error;
         }
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_AddValue(names, key) < 0) {
+            if (_PySet_AddValue((PySetObject *)names, key) < 0) {
                 goto error;
             }
         }
@@ -886,7 +886,7 @@ _PyCompile_EnterScope(compiler *c, identifier name, int scope_type,
         if (!capsule
             || _PyCapsule_SetTraverse(capsule, compiler_unit_capsule_traverse,
                                       compiler_unit_capsule_clear) < 0
-            || PyList_AppendValue(c->c_stack, PyValue_FromObjectBorrow(capsule)) < 0)
+            || _PyList_AppendValue((PyListObject *)c->c_stack, PyValue_FromObjectBorrow(capsule)) < 0)
         {
             Py_XDECREF(capsule);
             compiler_unit_free(u);
@@ -1142,7 +1142,7 @@ static int
 dict_lookup_arg(PyObject *dict, PyObject *name)
 {
     PyValue value;
-    if (PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &value) <= 0) {
+    if (_PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &value) <= 0) {
         return ERROR;
     }
     assert(PyValue_LongCheckExact(value));
@@ -1326,7 +1326,7 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
     if (ptr == NULL) {
         return ERROR;
     }
-    if (PyList_AppendValue(c->u->u_deferred_annotations, PyValue_FromObjectBorrow(ptr)) < 0) {
+    if (_PyList_AppendValue((PyListObject *)c->u->u_deferred_annotations, PyValue_FromObjectBorrow(ptr)) < 0) {
         Py_DECREF(ptr);
         return ERROR;
     }
@@ -1346,7 +1346,7 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
             return ERROR;
         }
     }
-    int rc = PyList_AppendValue(c->u->u_conditional_annotation_indices, PyValue_FromObjectBorrow(index));
+    int rc = _PyList_AppendValue((PyListObject *)c->u->u_conditional_annotation_indices, PyValue_FromObjectBorrow(index));
     Py_DECREF(index);
     RETURN_IF_ERROR(rc);
     return SUCCESS;
@@ -1545,7 +1545,7 @@ consts_dict_keys_inorder(PyObject *dict)
         return NULL;
     PyValue key, index;
     int next;
-    while ((next = _PyDict_NextValue(dict, &pos, &key, &index, NULL)) > 0) {
+    while ((next = _PyDict_NextValue((PyDictObject *)dict, &pos, &key, &index, NULL)) > 0) {
         Py_ssize_t i = PyValue_IsInlineInt(index)
                        ? PyValue_InlineInt64(index)
                        : _PyValue_IntAsSsize_t(index);
@@ -1604,7 +1604,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
     if (PyTuple_CheckExact(o)) {
         Py_ssize_t len = PyTuple_GET_SIZE(o);
         for (Py_ssize_t i = 0; i < len; i++) {
-            PyValue item = PyTuple_GetValue(o, i);
+            PyValue item = _PyTuple_GetValue(o, i);
             PyValue replacement = intern_constant(const_cache, item);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(replacement)) {
@@ -1642,7 +1642,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
             PyValue item;
             Py_hash_t hash;
             int next;
-            while ((next = _PySet_NextValue(o, &pos, &item, &hash)) > 0) {
+            while ((next = _PySet_NextValue((PySetObject *)o, &pos, &item, &hash)) > 0) {
                 PyTuple_SET_VALUE(items, i++, item);
             }
             if (next < 0) {
@@ -1661,7 +1661,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
     bool modified = false;
     Py_ssize_t len = PyTuple_GET_SIZE(items);
     for (Py_ssize_t i = 0; i < len; i++) {
-        PyValue item = PyTuple_GetValue(items, i);
+        PyValue item = _PyTuple_GetValue(items, i);
         PyValue replacement = intern_constant(const_cache, item);
         if (PyValue_IsNull(replacement)) {
             PyValue_CLOSE(item);
@@ -1682,7 +1682,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
             new = PyFrozenSet_New(NULL);
             if (new != NULL) {
                 for (Py_ssize_t i = 0; i < len; i++) {
-                    PyValue item = PyTuple_GetValue(items, i);
+                    PyValue item = _PyTuple_GetValue(items, i);
                     int status = PySet_AddValue(new, item);
                     PyValue_CLOSE(item);
                     if (status < 0) {
@@ -1738,7 +1738,7 @@ intern_final_constants(PyObject *const_cache, PyObject *consts)
     assert(PyList_CheckExact(consts));
     Py_ssize_t len = PyList_GET_SIZE(consts);
     for (Py_ssize_t i = 0; i < len; i++) {
-        PyValue item = PyList_GetValue(consts, i);
+        PyValue item = _PyList_GetValue((PyListObject *)consts, i);
         PyValue replacement = intern_constant(const_cache, item);
         PyValue_CLOSE(item);
         if (PyValue_IsNull(replacement)) {

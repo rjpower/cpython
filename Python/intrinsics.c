@@ -294,7 +294,7 @@ add_conditional_annotation(PyThreadState* tstate, PyObject *conditional_annotati
                       conditional_annotations);
         return NULL;
     }
-    if (PySet_AddValue(conditional_annotations, PyValue_FromObjectBorrow(index)) < 0) {
+    if (_PySet_AddValue((PySetObject *)conditional_annotations, PyValue_FromObjectBorrow(index)) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;
@@ -388,8 +388,8 @@ set_attr(PyThreadState* Py_UNUSED(ignored), PyObject *value, PyObject *target)
 {
     assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
     // The elements may be inline values, which get a box
-    PyValue owner_value = PyTuple_GetValue(target, 0);
-    PyValue name_value = PyTuple_GetValue(target, 1);
+    PyValue owner_value = _PyTuple_GetValue(target, 0);
+    PyValue name_value = _PyTuple_GetValue(target, 1);
     PyObject *owner = PyValue_AsObject(owner_value);
     PyObject *name = PyValue_AsObject(name_value);
     PyValue_CLOSE(owner_value);

@@ -44,6 +44,11 @@ extern "C" {
    assert(_PyObject_CheckConsistency(obj, 1)); */
 extern int _PyObject_CheckConsistency(PyObject *op, int check_content);
 
+/* Raise TypeError unless name is a str. The public attribute entries call it;
+   the generic value slots assume it, so a value slot reached by a direct
+   tp_getattro call (module, super) calls it itself. Return 0 or -1. */
+extern int _PyObject_CheckAttributeName(PyObject *name);
+
 extern void _PyDebugAllocatorStats(FILE *out, const char *block_name,
                                    int num_blocks, size_t sizeof_block);
 

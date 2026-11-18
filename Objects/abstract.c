@@ -226,10 +226,7 @@ PyObject_Type(PyObject *o)
 Py_ssize_t
 (_PyValue_Size)(PyValueBorrow v)
 {
-    if (PyValue_IsNull(v)) {
-        null_error();
-        return -1;
-    }
+    assert(!PyValue_IsNull(v));
     if (PyValue_IsInline(v)) {
         // As PyMapping_Size() reports for int and float.
         value_type_error("object of type '%.200s' has no len()", v);
@@ -250,6 +247,10 @@ Py_ssize_t
 Py_ssize_t
 PyObject_Size(PyObject *o)
 {
+    if (o == NULL) {
+        null_error();
+        return -1;
+    }
     return _PyValue_Size(_Py_VALUE_ARG(o));
 }
 
@@ -257,6 +258,10 @@ PyObject_Size(PyObject *o)
 Py_ssize_t
 PyObject_Length(PyObject *o)
 {
+    if (o == NULL) {
+        null_error();
+        return -1;
+    }
     return _PyValue_Size(_Py_VALUE_ARG(o));
 }
 #define PyObject_Length PyObject_Size
@@ -393,10 +398,7 @@ value_class_getitem(PyObject *o, PyValueBorrow key)
 PyValue
 (_PyValue_GetItem)(PyValueBorrow v, PyValueBorrow key)
 {
-    if (PyValue_IsNull(v) || PyValue_IsNull(key)) {
-        null_error();
-        return PyValue_NULL;
-    }
+    assert(!PyValue_IsNull(v) && !PyValue_IsNull(key));
     if (PyValue_IsInline(v)) {
         value_type_error("'%.200s' object is not subscriptable", v);
         return PyValue_NULL;
@@ -437,6 +439,10 @@ PyValue
 Py_VALUE_ENTRY PyObject *
 PyObject_GetItem(PyObject *o, PyObject *key)
 {
+    if (o == NULL || key == NULL) {
+        null_error();
+        return NULL;
+    }
     return _PyValue_THUNK_EXIT(
         _PyValue_GetItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key)), BOX_SITE_SEQUENCE);
 }
@@ -487,10 +493,7 @@ static int
 value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
 {
     int deleting = PyValue_IsNull(value);
-    if (PyValue_IsNull(v) || PyValue_IsNull(key)) {
-        null_error();
-        return -1;
-    }
+    assert(!PyValue_IsNull(v) && !PyValue_IsNull(key));
     if (!PyValue_IsInline(v)) {
         PyObject *o = PyValue_AsKnownObjectBorrow(v);
         PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
@@ -548,10 +551,7 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
 int
 (_PyValue_SetItem)(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
 {
-    if (PyValue_IsNull(value)) {
-        null_error();
-        return -1;
-    }
+    assert(!PyValue_IsNull(value));
     return value_ass_item(v, key, value);
 }
 
@@ -564,6 +564,10 @@ int
 int
 PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
 {
+    if (o == NULL || key == NULL || value == NULL) {
+        null_error();
+        return -1;
+    }
     return _PyValue_SetItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key),
                             _Py_VALUE_ARG(value));
 }
@@ -571,6 +575,10 @@ PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
 int
 PyObject_DelItem(PyObject *o, PyObject *key)
 {
+    if (o == NULL || key == NULL) {
+        null_error();
+        return -1;
+    }
     return _PyValue_DelItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key));
 }
 
@@ -3187,12 +3195,7 @@ PySequence_Count(PyObject *s, PyObject *o)
 int
 (_PyValue_Contains)(PyValueBorrow seq, PyValueBorrow ob)
 {
-    if (PyValue_IsNull(ob)) {
-        /* A NULL operand is a bad call even for an empty container, as
-           PyObject_RichCompare() reports upstream. */
-        PyErr_BadInternalCall();
-        return -1;
-    }
+    assert(!PyValue_IsNull(ob));
     if (!PyValue_IsInline(seq)) {
         PyObject *o = PyValue_AsKnownObjectBorrow(seq);
         PySequenceMethods *sqm = Py_TYPE(o)->tp_as_sequence;
@@ -3209,6 +3212,12 @@ int
 int
 PySequence_Contains(PyObject *seq, PyObject *ob)
 {
+    if (ob == NULL) {
+        /* A NULL operand is a bad call even for an empty container, as
+           PyObject_RichCompare() reports upstream. */
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_Contains(_Py_VALUE_ARG(seq), _Py_VALUE_ARG(ob));
 }
 
@@ -3217,6 +3226,10 @@ PySequence_Contains(PyObject *seq, PyObject *ob)
 int
 PySequence_In(PyObject *w, PyObject *v)
 {
+    if (v == NULL) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     return _PyValue_Contains(_Py_VALUE_ARG(w), _Py_VALUE_ARG(v));
 }
 
@@ -3813,10 +3826,20 @@ object_isinstance_inline(PyValueBorrow inst, PyObject *cls)
     return abstract_issubclass((PyObject *)tp, cls);
 }
 
-static int
-object_isinstance_value(PyValueBorrow inst, PyObject *cls)
+/* An int or float is no class: object_isinstance()'s check_class(). */
+static _Py_COLD_FUNCTION Py_NO_INLINE int
+isinstance_cls_not_object(PyThreadState *tstate)
 {
-    PyObject *obj = PyValue_ObjectOrNull(inst);
+    _PyErr_SetString(tstate, PyExc_TypeError,
+        "isinstance() arg 2 must be a type, a tuple of types, or a union");
+    return -1;
+}
+
+/* obj is inst's object, or NULL for an inline inst, whose type is tp; the
+   tests of inst's tag are made once, by the caller. */
+static int
+object_isinstance_value(PyValueBorrow inst, PyObject *obj, PyObject *cls)
+{
     if (obj != NULL) {
         return object_isinstance(obj, cls);
     }
@@ -3825,25 +3848,22 @@ object_isinstance_value(PyValueBorrow inst, PyObject *cls)
 
 static int
 object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
+                                  PyObject *obj, PyTypeObject *tp,
                                   PyValueBorrow cls_value)
 {
-    if (PyValue_IsInline(cls_value)) {
-        // An int or float is no class: object_isinstance()'s check_class().
-        _PyErr_SetString(tstate, PyExc_TypeError,
-            "isinstance() arg 2 must be a type, a tuple of types, "
-            "or a union");
-        return -1;
+    PyObject *cls = PyValue_ObjectOrNull(cls_value);
+    if (cls == NULL) {
+        return isinstance_cls_not_object(tstate);
     }
-    PyObject *cls = PyValue_AsKnownObjectBorrow(cls_value);
 
     /* Quick test for an exact match */
-    if (PyValue_TYPE(inst) == (PyTypeObject *)cls) {
+    if (tp == (PyTypeObject *)cls) {
         return 1;
     }
 
     /* We know what type's __instancecheck__ does. */
     if (PyType_CheckExact(cls)) {
-        return object_isinstance_value(inst, cls);
+        return object_isinstance_value(inst, obj, cls);
     }
 
     if (_PyUnion_Check(cls)) {
@@ -3860,7 +3880,7 @@ object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
             PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
-            r = object_recursive_isinstance_value(tstate, inst, item);
+            r = object_recursive_isinstance_value(tstate, inst, obj, tp, item);
             if (r != 0) {
                 /* either found it, or got an error */
                 break;
@@ -3883,14 +3903,17 @@ object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
     }
 
     /* cls has no __instancecheck__() method */
-    return object_isinstance_value(inst, cls);
+    return object_isinstance_value(inst, obj, cls);
 }
 
 int
 (_PyValue_IsInstance)(PyValueBorrow inst, PyValueBorrow cls)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    return object_recursive_isinstance_value(tstate, inst, cls);
+    /* The one test of inst's tag. */
+    PyObject *obj = PyValue_ObjectOrNull(inst);
+    PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(inst);
+    return object_recursive_isinstance_value(tstate, inst, obj, tp, cls);
 }
 
 int

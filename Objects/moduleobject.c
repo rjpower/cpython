@@ -155,15 +155,15 @@ module_init_dict(PyModuleObject *mod, PyObject *md_dict,
     if (PyValue_IsNull(doc))
         doc = PyValue_FromObjectBorrow(Py_None);
 
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__name__)), PyValue_FromObjectBorrow(name)) != 0)
+    if (_PyDict_SetValue((PyDictObject *)md_dict, _PyValue_FromObjectKnown(&_Py_ID(__name__)), PyValue_FromObjectBorrow(name)) != 0)
         return -1;
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), doc) != 0)
+    if (_PyDict_SetValue((PyDictObject *)md_dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), doc) != 0)
         return -1;
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__package__)), _PyValue_FromObjectKnown(Py_None)) != 0)
+    if (_PyDict_SetValue((PyDictObject *)md_dict, _PyValue_FromObjectKnown(&_Py_ID(__package__)), _PyValue_FromObjectKnown(Py_None)) != 0)
         return -1;
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__loader__)), _PyValue_FromObjectKnown(Py_None)) != 0)
+    if (_PyDict_SetValue((PyDictObject *)md_dict, _PyValue_FromObjectKnown(&_Py_ID(__loader__)), _PyValue_FromObjectKnown(Py_None)) != 0)
         return -1;
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__spec__)), _PyValue_FromObjectKnown(Py_None)) != 0)
+    if (_PyDict_SetValue((PyDictObject *)md_dict, _PyValue_FromObjectKnown(&_Py_ID(__spec__)), _PyValue_FromObjectKnown(Py_None)) != 0)
         return -1;
     if (PyUnicode_CheckExact(name)) {
         Py_XSETREF(mod->md_name, Py_NewRef(name));
@@ -882,7 +882,7 @@ static int
 module_dict_get_object(PyObject *dict, PyObject *key, PyObject **result)
 {
     PyValue v;
-    int rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(key), &v);
+    int rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(key), &v);
     *result = NULL;
     if (rc > 0) {
         *result = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
@@ -1086,7 +1086,7 @@ _PyModule_ClearDict(PyObject *d)
     /* First, clear only names starting with a single underscore */
     pos = 0;
     int rc;
-    while ((rc = PyDict_NextValue(d, &pos, &key_value, &value)) > 0) {
+    while ((rc = _PyDict_NextValue((PyDictObject *)d, &pos, &key_value, &value, NULL)) > 0) {
         PyObject *key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
         PyValue_CLOSE(key_value);
         if (key == NULL) {
@@ -1104,7 +1104,7 @@ _PyModule_ClearDict(PyObject *d)
                     else
                         PyErr_Clear();
                 }
-                if (PyDict_SetValue(d, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None)) != 0) {
+                if (_PyDict_SetValue((PyDictObject *)d, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None)) != 0) {
                     PyErr_FormatUnraisable("Exception ignored while "
                                            "clearing module dict");
                 }
@@ -1120,7 +1120,7 @@ _PyModule_ClearDict(PyObject *d)
 
     /* Next, clear all names except for __builtins__ */
     pos = 0;
-    while ((rc = PyDict_NextValue(d, &pos, &key_value, &value)) > 0) {
+    while ((rc = _PyDict_NextValue((PyDictObject *)d, &pos, &key_value, &value, NULL)) > 0) {
         PyObject *key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
         PyValue_CLOSE(key_value);
         if (key == NULL) {
@@ -1139,7 +1139,7 @@ _PyModule_ClearDict(PyObject *d)
                     else
                         PyErr_Clear();
                 }
-                if (PyDict_SetValue(d, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None)) != 0) {
+                if (_PyDict_SetValue((PyDictObject *)d, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None)) != 0) {
                     PyErr_FormatUnraisable("Exception ignored while "
                                            "clearing module dict");
                 }
@@ -1630,6 +1630,10 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
 PyValue
 _Py_module_getattro_value(PyValueBorrow self, PyObject *name)
 {
+    // The generic read below does not test the name.
+    if (_PyObject_CheckAttributeName(name) < 0) {
+        return PyValue_NULL;
+    }
     return _Py_module_getattro_impl(
         _PyModule_CAST(PyValue_AsKnownObjectBorrow(self)), name, 0);
 }
@@ -1756,7 +1760,7 @@ module_get_annotate(PyObject *self, void *Py_UNUSED(ignored))
     PyObject *annotate;
     if (module_dict_get_object(dict, &_Py_ID(__annotate__), &annotate) == 0) {
         annotate = Py_None;
-        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), PyValue_FromObjectBorrow(annotate)) == -1) {
+        if (_PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), PyValue_FromObjectBorrow(annotate)) == -1) {
             Py_CLEAR(annotate);
         }
     }
@@ -1784,12 +1788,12 @@ module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
         return -1;
     }
 
-    if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), PyValue_FromObjectBorrow(value)) == -1) {
+    if (_PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), PyValue_FromObjectBorrow(value)) == -1) {
         Py_DECREF(dict);
         return -1;
     }
     if (!Py_IsNone(value)) {
-        if (PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), NULL) == -1) {
+        if (_PyDict_PopValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), NULL) == -1) {
             Py_DECREF(dict);
             return -1;
         }
@@ -1859,7 +1863,7 @@ module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
         Py_XDECREF(annotate);
         // Do not cache annotations if the module is still initializing
         if (annotations && !is_initializing) {
-            int result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), PyValue_FromObjectBorrow(annotations));
+            int result = _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), PyValue_FromObjectBorrow(annotations));
             if (result) {
                 Py_CLEAR(annotations);
             }
@@ -1882,11 +1886,11 @@ module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored)
     int ret = -1;
     if (value != NULL) {
         /* set */
-        ret = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), PyValue_FromObjectBorrow(value));
+        ret = _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), PyValue_FromObjectBorrow(value));
     }
     else {
         /* delete */
-        ret = PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), NULL);
+        ret = _PyDict_PopValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), NULL);
         if (ret == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__annotations__));
             ret = -1;
@@ -1895,7 +1899,7 @@ module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored)
             ret = 0;
         }
     }
-    if (ret == 0 && PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), NULL) < 0) {
+    if (ret == 0 && _PyDict_PopValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), NULL) < 0) {
         ret = -1;
     }
 

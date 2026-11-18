@@ -1360,7 +1360,7 @@ get_const_value_value(int opcode, int oparg, PyObject *co_consts)
                          oparg, n);
             return PyValue_NULL;
         }
-        return PyList_GetValue(co_consts, oparg);
+        return _PyList_GetValue((PyListObject *)co_consts, oparg);
     }
     if (opcode == LOAD_SMALL_INT) {
         return PyValue_FromInt64(oparg);
@@ -2440,7 +2440,7 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
                              inst->i_oparg, n);
                 return ERROR;
             }
-            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
+            PyValue constant = _PyList_GetValue((PyListObject *)consts, inst->i_oparg);
             if (PyValue_IsNull(constant)) {
                 return ERROR;
             }
@@ -2571,7 +2571,7 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
             }
         }
         if (inst->i_opcode == LOAD_CONST) {
-            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
+            PyValue constant = _PyList_GetValue((PyListObject *)consts, inst->i_oparg);
             if (PyValue_IsNull(constant)) {
                 return ERROR;
             }
@@ -3492,7 +3492,7 @@ remove_unused_consts(basicblock *entryblock, PyObject *consts)
         Py_ssize_t old_index = index_map[i];
         assert(i <= old_index && old_index < nconsts);
         if (i != old_index) {
-            PyValue value = PyList_GetValue(consts, index_map[i]);
+            PyValue value = _PyList_GetValue((PyListObject *)consts, index_map[i]);
             if (PyValue_IsNull(value) ||
                 _PyList_SetItemTakeValue((PyListObject *)consts, i, value) < 0) {
                 goto end;
@@ -4096,11 +4096,11 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
 
     Py_ssize_t pos = 0;
     int status;
-    while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
+    while ((status = _PyDict_NextValue((PyDictObject *)umd->u_cellvars, &pos,
                                       &key, &cellindex, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
-        if (PyDict_GetValue(umd->u_varnames, key, &varindex) < 0) {
+        if (_PyDict_GetValue((PyDictObject *)umd->u_varnames, key, &varindex) < 0) {
             goto error;
         }
         if (PyValue_IsNull(varindex)) {

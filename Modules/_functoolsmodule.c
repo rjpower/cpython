@@ -1435,7 +1435,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     }
     if (kwds_size) {
         PyTuple_SET_VALUE(key, key_pos++, PyValue_DUP(PyValue_FromObjectBorrow(kwd_mark)));
-        for (pos = 0; _PyDict_NextValue(kwds, &pos, &keyword, &value, NULL) > 0;) {
+        for (pos = 0; _PyDict_NextValue((PyDictObject *)kwds, &pos, &keyword, &value, NULL) > 0;) {
             PyTuple_SET_VALUE(key, key_pos++, keyword);
             PyTuple_SET_VALUE(key, key_pos++, value);
         }
@@ -1447,7 +1447,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
             PyTuple_SET_VALUE(key, key_pos++, PyValue_DUP(PyValue_FromObjectBorrow(item)));
         }
         if (kwds_size) {
-            for (pos = 0; _PyDict_NextValue(kwds, &pos, NULL, &value, NULL) > 0;) {
+            for (pos = 0; _PyDict_NextValue((PyDictObject *)kwds, &pos, NULL, &value, NULL) > 0;) {
                 PyObject *item = Py_NewRef((PyObject *)PyValue_TYPE(value));
                 PyValue_CLOSE(value);
                 PyTuple_SET_VALUE(key, key_pos++, PyValue_PrepareOwned(item));
@@ -1500,7 +1500,7 @@ infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwd
         Py_DECREF(key);
         return NULL;
     }
-    if (_PyDict_SetValue_KnownHash(self->cache, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(result), hash) < 0) {
+    if (_PyDict_SetValue_KnownHash((PyDictObject *)self->cache, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(result), hash) < 0) {
         Py_DECREF(result);
         Py_DECREF(key);
         return NULL;

@@ -1152,7 +1152,7 @@ _PyStack_AsDict(PyObject *const *values, PyObject *kwnames)
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
         /* Vectorcall kwnames hold only str, which is never inline. */
         PyObject *key = _PyTuple_GET_OBJECT(kwnames, i);
-        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(values[i])) < 0) {
+        if (_PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(values[i])) < 0) {
             Py_DECREF(dict);
             return NULL;
         }

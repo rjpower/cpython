@@ -585,7 +585,7 @@ abc_abc_init_body(PyObject *module, PyObject *self)
         PyTypeObject *cls = (PyTypeObject *)self;
         PyObject *dict = _PyType_GetDict(cls);
         PyValue flags = PyValue_NULL;
-        if (PyDict_PopValue(dict, PyValue_FromObjectBorrow(&_Py_ID(__abc_tpflags__)),
+        if (_PyDict_PopValue((PyDictObject *)dict, PyValue_FromObjectBorrow(&_Py_ID(__abc_tpflags__)),
                             &flags) < 0) {
             return PyValue_NULL;
         }
@@ -1014,7 +1014,7 @@ subclasscheck_check_registry(_abc_data *impl, PyObject *subclass,
     Py_hash_t hash;
     int rc;
 
-    while ((rc = _PySet_NextValue(registry, &pos, &keyv, &hash)) > 0) {
+    while ((rc = _PySet_NextValue((PySetObject *)registry, &pos, &keyv, &hash)) > 0) {
         PyValue key_v = keyv;
         PyObject *key = PyValue_IsNull(key_v) ? NULL : _PyValue_AsObjectStealAt(key_v, BOX_SITE_FIELD);
         if (key == NULL) {

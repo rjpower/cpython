@@ -156,7 +156,7 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         }
 
         PyValue meta_v;
-        int pop_rc = PyDict_PopValue(mkw, _PyValue_FromObjectKnown(&_Py_ID(metaclass)),
+        int pop_rc = _PyDict_PopValue((PyDictObject *)mkw, _PyValue_FromObjectKnown(&_Py_ID(metaclass)),
                                      &meta_v);
         if (pop_rc < 0) {
             goto error;
@@ -241,7 +241,7 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         PyObject *margs[3] = {name, bases, ns};
         cls = PyObject_VectorcallDict(meta, margs, 3, mkw);
         if (cls != NULL && PyType_Check(cls) && PyCell_Check(cell)) {
-            PyValue cell_cls_v = PyCell_GetValue(cell);
+            PyValue cell_cls_v = _PyCell_GetValue((PyCellObject *)cell);
             PyObject *cell_cls = PyValue_IsNull(cell_cls_v) ? NULL
                 : _PyValue_AsObjectAt(cell_cls_v, BOX_SITE_CELL);
             PyValue_XCLOSE(cell_cls_v);
@@ -406,7 +406,7 @@ builtin___lazy_import___impl(PyObject *module, PyValueBorrow name,
     PyObject *globals_o = PyValue_AsKnownObjectBorrow(globals);
 
     PyValue builtins_v;
-    int builtins_rc = PyDict_GetValue(globals_o,
+    int builtins_rc = _PyDict_GetValue((PyDictObject *)globals_o,
                                       _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
                                       &builtins_v);
     if (builtins_rc < 0) {
@@ -3966,7 +3966,7 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
             Py_DECREF(name);
             goto done;
         }
-        int r = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), func);
+        int r = _PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), func);
         PyValue_CLOSE(func);
         Py_DECREF(name);
         if (r < 0) {

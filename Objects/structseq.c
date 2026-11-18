@@ -35,7 +35,7 @@ static Py_ssize_t
 get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
 {
     PyValue value;
-    int rc = PyDict_GetValue(_PyType_GetDict(tp), PyValue_FromObjectBorrow(name), &value);
+    int rc = _PyDict_GetValue((PyDictObject *)_PyType_GetDict(tp), PyValue_FromObjectBorrow(name), &value);
 
     if (rc < 0) {
         return -1;
@@ -412,7 +412,7 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
         // As PyDict_SetItemString(), so that the dict is the same.
         _PyUnicode_InternImmortal(_PyInterpreterState_GET(), &key);
         // The dict holds the field's value, so an inline value needs no box.
-        int stored = PyDict_SetValue(dict, _PyValue_FromObjectKnown(key),
+        int stored = _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(key),
                                      self->ob_item[i]);
         Py_DECREF(key);
         if (stored < 0) goto error;

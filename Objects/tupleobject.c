@@ -537,7 +537,7 @@ tuple_length(PyObject *self)
 }
 
 static int
-tuple_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow query)
+tuple_contains_value(PyObject *self, PyValueBorrow query)
 {
     PyTupleObject *a = _PyTuple_CAST(self);
     int cmp = 0;
@@ -547,10 +547,10 @@ tuple_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow query)
     return cmp;
 }
 
-_Py_VALUE_THUNK_CONTAINS(tuple_contains, PyTuple_Type, tuple_contains_value)
+_Py_VALUE_THUNK_CONTAINS(tuple_contains, tuple_contains_value)
 
 static PyValue
-tuple_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
+tuple_item_value(PyObject *op, Py_ssize_t i)
 {
     PyTupleObject *a = _PyTuple_CAST(op);
     if (i < 0 || i >= Py_SIZE(a)) {
@@ -560,7 +560,7 @@ tuple_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
     return PyValue_DUP(a->ob_item[i]);
 }
 
-_Py_VALUE_THUNK_ITEM(tuple_item, PyTuple_Type, tuple_item_value)
+_Py_VALUE_THUNK_ITEM(tuple_item, tuple_item_value)
 
 PyObject *
 _PyTuple_FromValueArray(const PyValue *src, Py_ssize_t n)
@@ -988,7 +988,7 @@ tuple_subtype_new(PyTypeObject *type, PyValueBorrow iterable)
 }
 
 static PyValue
-tuple_concat_value(PyTypeObject *owner, PyObject *aa, PyValueBorrow bb)
+tuple_concat_value(PyObject *aa, PyValueBorrow bb)
 {
     if (!PyValue_IsObject(bb)
         || !PyTuple_Check(PyValue_AsKnownObjectBorrow(bb)))
@@ -1002,7 +1002,7 @@ tuple_concat_value(PyTypeObject *owner, PyObject *aa, PyValueBorrow bb)
         _PyTuple_Concat(aa, PyValue_AsKnownObjectBorrow(bb)));
 }
 
-_Py_VALUE_THUNK_CONCAT(tuple_concat, PyTuple_Type, tuple_concat_value)
+_Py_VALUE_THUNK_CONCAT(tuple_concat, tuple_concat_value)
 
 static PySequenceMethods tuple_as_sequence = {
     tuple_length,                               /* sq_length */
@@ -1027,7 +1027,7 @@ _PyTuple_IterValue(PyObject *obj, Py_ssize_t index)
 }
 
 static PyValue
-tuple_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow item)
+tuple_subscript_value(PyObject *op, PyValueBorrow item)
 {
     PyTupleObject *self = _PyTuple_CAST(op);
     if (_PyValue_IndexCheck(item)) {
@@ -1036,7 +1036,7 @@ tuple_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow item)
             return PyValue_NULL;
         if (i < 0)
             i += PyTuple_GET_SIZE(self);
-        return tuple_item_value(NULL, op, i);
+        return tuple_item_value(op, i);
     }
     else if (PyValue_IsObject(item)
              && PySlice_Check(PyValue_AsKnownObjectBorrow(item)))
@@ -1084,7 +1084,7 @@ tuple_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow item)
     }
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(tuple_subscript, PyTuple_Type, tuple_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(tuple_subscript, tuple_subscript_value)
 
 /*[clinic input]
 tuple.__getnewargs__
@@ -1288,7 +1288,7 @@ tupleiter_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-tupleiter_next_value(PyTypeObject *owner, PyObject *self)
+tupleiter_next_value(PyObject *self)
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
     PyTupleObject *seq = it->it_seq;
@@ -1308,7 +1308,7 @@ tupleiter_next_value(PyTypeObject *owner, PyObject *self)
 }
 
 /* A failed box consumes the item (see listiter_next()). */
-_Py_VALUE_THUNK_ITERNEXT(tupleiter_next, PyTupleIter_Type, tupleiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(tupleiter_next, tupleiter_next_value)
 
 static PyObject *
 tupleiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))

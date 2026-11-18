@@ -4,7 +4,7 @@
 
 #include "Python.h"
 #include "pycore_long.h"          // FALSE_TAG TRUE_TAG
-#include "pycore_long_value.h"    // _PyLong_ValueAnd(NULL)
+#include "pycore_long_value.h"    // _PyLong_ValueAnd()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _Py_FatalRefcountError()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -74,7 +74,7 @@ bool_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
 /* Arithmetic operations redefined to return bool if both args are bool. */
 
 static PyValue
-_PyBool_ValueInvert(PyTypeObject *owner, PyValueBorrow v)
+_PyBool_ValueInvert(PyValueBorrow v)
 {
     if (PyErr_WarnEx(PyExc_DeprecationWarning,
                      "Bitwise inversion '~' on bool is deprecated and will be removed in "
@@ -86,40 +86,40 @@ _PyBool_ValueInvert(PyTypeObject *owner, PyValueBorrow v)
                      1) < 0) {
         return PyValue_NULL;
     }
-    return _PyLong_ValueInvert(NULL, v);
+    return _PyLong_ValueInvert(v);
 }
 
 static PyValue
-_PyBool_ValueAnd(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+_PyBool_ValueAnd(PyValueBorrow a, PyValueBorrow b)
 {
     if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
-        return _PyLong_ValueAnd(NULL, a, b);
+        return _PyLong_ValueAnd(a, b);
     }
     return PyValue_FromBool(PyValue_IsTrue(a) && PyValue_IsTrue(b));
 }
 
 static PyValue
-_PyBool_ValueOr(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+_PyBool_ValueOr(PyValueBorrow a, PyValueBorrow b)
 {
     if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
-        return _PyLong_ValueOr(NULL, a, b);
+        return _PyLong_ValueOr(a, b);
     }
     return PyValue_FromBool(PyValue_IsTrue(a) || PyValue_IsTrue(b));
 }
 
 static PyValue
-_PyBool_ValueXor(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+_PyBool_ValueXor(PyValueBorrow a, PyValueBorrow b)
 {
     if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
-        return _PyLong_ValueXor(NULL, a, b);
+        return _PyLong_ValueXor(a, b);
     }
     return PyValue_FromBool(PyValue_IsTrue(a) != PyValue_IsTrue(b));
 }
 
-_Py_VALUE_THUNK_UNARY(bool_invert, PyBool_Type, _PyBool_ValueInvert)
-_Py_VALUE_THUNK_BINARY(bool_and, PyBool_Type, _PyBool_ValueAnd)
-_Py_VALUE_THUNK_BINARY(bool_or, PyBool_Type, _PyBool_ValueOr)
-_Py_VALUE_THUNK_BINARY(bool_xor, PyBool_Type, _PyBool_ValueXor)
+_Py_VALUE_THUNK_UNARY(bool_invert, _PyBool_ValueInvert)
+_Py_VALUE_THUNK_BINARY(bool_and, _PyBool_ValueAnd)
+_Py_VALUE_THUNK_BINARY(bool_or, _PyBool_ValueOr)
+_Py_VALUE_THUNK_BINARY(bool_xor, _PyBool_ValueXor)
 
 /* Doc string */
 

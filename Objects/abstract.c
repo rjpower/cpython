@@ -54,58 +54,137 @@ null_error(void)
    families (pyjit/design/proposals/value-api-m1b-m2.md, sections 1.2 and
    1.3). Their receivers are objects: no int or float defines these slots,
    so a dispatcher whose receiver is a value raises upstream's TypeError
-   for an inline one before it reads a slot (R1). The caller has tested
-   the object slot; PyType_Ready gave the type a value slot beside it, an
-   adapter if the type has no value form (values76-slot-design.md, section
-   3), so each dispatcher calls the value slot unconditionally. send has no
-   adapter and keeps its object-slot fallback. */
+   for an inline one before it reads a slot (R1). A type's value slot is
+   called if it is set, else its object slot through the adapter below,
+   which boxes only an inline key, item or value (SLOT_ADAPTER, under the
+   class SEQUENCE or ITERATION). */
+
+#define seq_adapter_box(v, SLOT) \
+    _PyValue_AdapterBox((v), BOX_SITE_SEQUENCE, (SLOT))
+#define iter_adapter_box(v, SLOT) \
+    _PyValue_AdapterBox((v), BOX_SITE_ITERATION, (SLOT))
+#define seq_adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
 
 static void value_type_error(const char *msg, PyValueBorrow v);
 
-static inline PyValue
-call_subscript(PyObject *o, PyValueBorrow key)
+static PyValue
+call_subscript(PyObject *o, binaryfunc slot, PyValueBorrow key)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_subscript);
-    return _PyType_VALUE_SLOT(t, subscript)(t, o, key);
+    _Py_subscriptvaluefunc f = _PyType_VALUE_SLOT(t, subscript);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_subscript);
+        return f(o, key);
+    }
+    PyObject *k = seq_adapter_box(key, slot);
+    if (k == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = slot(o, k);
+    seq_adapter_release(key, k);
+    return _PyValue_FromObjectResult(res);
 }
 
-static inline PyValue
-call_item(PyObject *o, Py_ssize_t i)
+static PyValue
+call_item(PyObject *o, ssizeargfunc slot, Py_ssize_t i)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_item);
-    return _PyType_VALUE_SLOT(t, item)(t, o, i);
+    _Py_itemvaluefunc f = _PyType_VALUE_SLOT(t, item);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_item);
+        return f(o, i);
+    }
+    return _PyValue_FromObjectResult(slot(o, i));
 }
 
 // value is PyValue_NULL to delete.
-static inline int
-call_ass_subscript(PyObject *o, PyValueBorrow key, PyValueBorrow value)
+static int
+call_ass_subscript(PyObject *o, objobjargproc slot, PyValueBorrow key,
+                   PyValueBorrow value)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_subscript);
-    return _PyType_VALUE_SLOT(t, ass_subscript)(t, o, key, value);
+    _Py_asssubscriptvaluefunc f = _PyType_VALUE_SLOT(t, ass_subscript);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_subscript);
+        return f(o, key, value);
+    }
+    PyObject *k = seq_adapter_box(key, slot);
+    if (k == NULL) {
+        return -1;
+    }
+    PyObject *v = NULL;
+    if (!PyValue_IsNull(value)) {
+        v = seq_adapter_box(value, slot);
+        if (v == NULL) {
+            seq_adapter_release(key, k);
+            return -1;
+        }
+    }
+    int res = slot(o, k, v);
+    if (v != NULL) {
+        seq_adapter_release(value, v);
+    }
+    seq_adapter_release(key, k);
+    return res;
 }
 
 // value is PyValue_NULL to delete.
-static inline int
-call_ass_item(PyObject *o, Py_ssize_t i, PyValueBorrow value)
+static int
+call_ass_item(PyObject *o, ssizeobjargproc slot, Py_ssize_t i,
+              PyValueBorrow value)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_item);
-    return _PyType_VALUE_SLOT(t, ass_item)(t, o, i, value);
+    _Py_assitemvaluefunc f = _PyType_VALUE_SLOT(t, ass_item);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_item);
+        return f(o, i, value);
+    }
+    if (PyValue_IsNull(value)) {
+        return slot(o, i, NULL);
+    }
+    PyObject *v = seq_adapter_box(value, slot);
+    if (v == NULL) {
+        return -1;
+    }
+    int res = slot(o, i, v);
+    seq_adapter_release(value, v);
+    return res;
 }
 
-static inline int
-call_contains(PyObject *o, PyValueBorrow item)
+static int
+call_contains(PyObject *o, objobjproc slot, PyValueBorrow item)
 {
     PyTypeObject *t = Py_TYPE(o);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_contains);
-    return _PyType_VALUE_SLOT(t, contains)(t, o, item);
+    _Py_containsvaluefunc f = _PyType_VALUE_SLOT(t, contains);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_contains);
+        return f(o, item);
+    }
+    PyObject *x = seq_adapter_box(item, slot);
+    if (x == NULL) {
+        return -1;
+    }
+    int res = slot(o, x);
+    seq_adapter_release(item, x);
+    return res;
 }
 
-/* am_send has no value-side wrapper and so no adapter: a type with the
-   object slot only is called through the boxing here. */
+/* The ITERNEXT adapter: an object tp_iternext's item is NEXT; NULL with
+   nothing pending is RETURN with no value; NULL with any exception, a
+   StopIteration included, is ERROR with the exception untouched (R11). */
+static _PyStatusValue
+adapt_iternext(iternextfunc slot, PyObject *it)
+{
+    PyObject *res = slot(it);
+    if (res != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
+    }
+    if (!PyErr_Occurred()) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+}
+
 static _PyStatusValue
 call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
 {
@@ -113,15 +192,15 @@ call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
     _Py_sendvaluefunc f = _PyType_VALUE_SLOT(t, send);
     if (f != NULL) {
         _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_send);
-        return f(t, it, arg);
+        return f(it, arg);
     }
-    PyObject *a = _PyValue_AdapterBox(arg, BOX_SITE_ITERATION, slot);
+    PyObject *a = iter_adapter_box(arg, slot);
     if (a == NULL) {
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
     PyObject *res = NULL;
     PySendResult status = slot(it, a, &res);
-    _PyValue_AdapterRelease(arg, a);
+    seq_adapter_release(arg, a);
     if (status == PYGEN_ERROR) {
         assert(res == NULL);
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
@@ -328,7 +407,7 @@ PyValue
 
     PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
     if (m && m->mp_subscript) {
-        PyValue item = call_subscript(o, key);
+        PyValue item = call_subscript(o, m->mp_subscript, key);
         assert(_Py_CheckSlotResult(o, "__getitem__", !PyValue_IsNull(item)));
         return item;
     }
@@ -437,7 +516,7 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
             return err;
         }
         if (m && m->mp_ass_subscript) {
-            int res = call_ass_subscript(o, key, value);
+            int res = call_ass_subscript(o, m->mp_ass_subscript, key, value);
             assert(_Py_CheckSlotResult(o, deleting ? "__delitem__"
                                                    : "__setitem__",
                                        res >= 0));
@@ -1205,57 +1284,159 @@ value_type_error(const char *msg, PyValueBorrow v)
     PyErr_Format(PyExc_TypeError, msg, PyValue_TYPE(v)->tp_name);
 }
 
-/* The number slots of a type are called through its value slot. Every
-   object slot has one beside it (PyType_Ready installs the row's adapter
-   if the type has no value form), so these calls need no adapter. */
+/* The adapter (D9), one function per signature kind: an object slot called
+   with value operands, boxed under site class NUMBER (_PyValue_AdapterBox()).
+   The result becomes a value through PyValue_FromObjectSteal(), which
+   makes an exact int or float inline. */
+
+#define adapter_box(v, f) _PyValue_AdapterBox((v), BOX_SITE_NUMBER, (f))
+#define adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
+
+static PyValue
+adapt_unary(unaryfunc f, PyValueBorrow v)
+{
+    PyObject *a = adapter_box(v, f);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+static PyValue
+adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
+{
+    PyObject *a = adapter_box(v, f);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *b = adapter_box(w, f);
+    if (b == NULL) {
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a, b);
+    adapter_release(w, b);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+static PyValue
+adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
+              PyValueBorrow z)
+{
+    PyObject *a = adapter_box(v, f);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *b = adapter_box(w, f);
+    if (b == NULL) {
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *c = adapter_box(z, f);
+    if (c == NULL) {
+        adapter_release(w, b);
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a, b, c);
+    adapter_release(z, c);
+    adapter_release(w, b);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+// The sequence stays an object; an inline other operand is boxed.
+static PyValue
+adapt_concat(binaryfunc f, PyObject *seq, PyValueBorrow w)
+{
+    PyObject *b = adapter_box(w, f);
+    if (b == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = f(seq, b);
+    adapter_release(w, b);
+    return _PyValue_FromObjectResult(res);
+}
+
+/* Call the slot of row of type t, whose object side is slot: the value
+   slot if it is set, else slot through the adapter. */
 
 static inline PyValue
-call_unary(PyTypeObject *t, int row, PyValueBorrow v)
+call_unary(PyTypeObject *t, unaryfunc slot, int row, PyValueBorrow v)
 {
     _Py_unaryvaluefunc f = (_Py_unaryvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
-    _PyType_CHECK_VALUE_ROW(t, row);
-    return f(t, v);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v);
+    }
+    return adapt_unary(slot, v);
 }
 
 /* The value field of row of type t. The binary and ternary dispatchers
    read it where they read the object slot beside it, as a pair: a slot
    that they call first can run Python code that changes the type, and
-   upstream then still calls the object slot that it read before. The
-   identity tests of the dispatchers compare the object slots, never the
-   value fields: two extension types may hold the same adapter and still
-   have different object slots (values76-slot-design.md, section 5). */
+   upstream then still calls the object slot that it read before. */
 static inline _Py_valuefunc
 read_value_field(PyTypeObject *t, int row)
 {
     _Py_valuefunc f = _PyType_VALUE_FIELD_AT(t, row);
-    _PyType_CHECK_VALUE_ROW(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+    }
     return f;
 }
 
-// Call the value slot read by read_value_field(), of the type t.
+// Call the pair (slot, value) read by read_value_field().
 static inline PyValue
-call_binary(PyTypeObject *t, _Py_valuefunc value,
+call_binary(binaryfunc slot, _Py_valuefunc value,
             PyValueBorrow v, PyValueBorrow w)
 {
-    return ((_Py_binaryvaluefunc)value)(t, v, w);
+    if (value != NULL) {
+        return ((_Py_binaryvaluefunc)value)(v, w);
+    }
+    return adapt_binary(slot, v, w);
 }
 
 static inline PyValue
-call_ternary(PyTypeObject *t, _Py_valuefunc value,
+call_ternary(ternaryfunc slot, _Py_valuefunc value,
              PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
-    return ((_Py_ternaryvaluefunc)value)(t, v, w, z);
+    if (value != NULL) {
+        return ((_Py_ternaryvaluefunc)value)(v, w, z);
+    }
+    return adapt_ternary(slot, v, w, z);
+}
+
+PyValue
+_PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
+                       PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+{
+    int row = _Py_VALUE_SLOT_INDEX_nb_power;
+    _Py_ternaryvaluefunc f =
+        (_Py_ternaryvaluefunc)_PyType_VALUE_FIELD_AT(base, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(base, row);
+        return f(v, w, z);
+    }
+    return adapt_ternary(slot, v, w, z);
 }
 
 // sq_concat and sq_inplace_concat; v holds the sequence, an object.
 static inline PyValue
-call_concat(PyTypeObject *t, int row, PyValueBorrow v, PyValueBorrow w)
+call_concat(PyTypeObject *t, binaryfunc slot, int row,
+            PyValueBorrow v, PyValueBorrow w)
 {
     PyObject *seq = PyValue_AsKnownObjectBorrow(v);
     _Py_concatvaluefunc f =
         (_Py_concatvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
-    _PyType_CHECK_VALUE_ROW(t, row);
-    return f(t, seq, w);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(seq, w);
+    }
+    return adapt_concat(slot, seq, w);
 }
 
 /*
@@ -1298,13 +1479,13 @@ binary_op1(PyValueBorrow v, PyValueBorrow w, const int op_slot,
     if (slotv) {
         PyValue x;
         if (slotw && PyType_IsSubtype(tw, tv)) {
-            x = call_binary(tw, valuew, v, w);
+            x = call_binary(slotw, valuew, v, w);
             if (!value_is_notimplemented(x))
                 return x;
             PyValue_CLOSE(x); /* can't do it */
             slotw = NULL;
         }
-        x = call_binary(tv, valuev, v, w);
+        x = call_binary(slotv, valuev, v, w);
         assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
         if (!value_is_notimplemented(x)) {
             return x;
@@ -1312,7 +1493,7 @@ binary_op1(PyValueBorrow v, PyValueBorrow w, const int op_slot,
         PyValue_CLOSE(x); /* can't do it */
     }
     if (slotw) {
-        PyValue x = call_binary(tw, valuew, v, w);
+        PyValue x = call_binary(slotw, valuew, v, w);
         assert(check_value_slot_result(tw, op_name, !PyValue_IsNull(x)));
         if (!value_is_notimplemented(x)) {
             return x;
@@ -1400,14 +1581,14 @@ ternary_op(PyValueBorrow v,
     if (slotv) {
         PyValue x;
         if (slotw && PyType_IsSubtype(tw, tv)) {
-            x = call_ternary(tw, valuew, v, w, z);
+            x = call_ternary(slotw, valuew, v, w, z);
             if (!value_is_notimplemented(x)) {
                 return x;
             }
             PyValue_CLOSE(x); /* can't do it */
             slotw = NULL;
         }
-        x = call_ternary(tv, valuev, v, w, z);
+        x = call_ternary(slotv, valuev, v, w, z);
         assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
         if (!value_is_notimplemented(x)) {
             return x;
@@ -1415,7 +1596,7 @@ ternary_op(PyValueBorrow v,
         PyValue_CLOSE(x); /* can't do it */
     }
     if (slotw) {
-        PyValue x = call_ternary(tw, valuew, v, w, z);
+        PyValue x = call_ternary(slotw, valuew, v, w, z);
         assert(check_value_slot_result(tw, op_name, !PyValue_IsNull(x)));
         if (!value_is_notimplemented(x)) {
             return x;
@@ -1431,7 +1612,7 @@ ternary_op(PyValueBorrow v,
             slotz = NULL;
         }
         if (slotz) {
-            PyValue x = call_ternary(tz, read_value_field(tz, row),
+            PyValue x = call_ternary(slotz, read_value_field(tz, row),
                                      v, w, z);
             assert(check_value_slot_result(tz, op_name, !PyValue_IsNull(x)));
             if (!value_is_notimplemented(x)) {
@@ -1500,7 +1681,8 @@ PyValue
     PyTypeObject *tv = PyValue_TYPE(v);
     PySequenceMethods *m = tv->tp_as_sequence;
     if (m && m->sq_concat) {
-        result = call_concat(tv, _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
+        result = call_concat(tv, m->sq_concat, _Py_VALUE_SLOT_INDEX_sq_concat,
+                             v, w);
         assert(check_value_slot_result(tv, "+", !PyValue_IsNull(result)));
         return result;
     }
@@ -1611,7 +1793,7 @@ binary_iop1(PyValueBorrow v, PyValueBorrow w, const int iop_slot,
     if (mv != NULL) {
         binaryfunc slot = NB_BINOP(mv, iop_slot);
         if (slot) {
-            PyValue x = call_binary(tv, read_value_field(tv, iop_row),
+            PyValue x = call_binary(slot, read_value_field(tv, iop_row),
                                     v, w);
             assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
             if (!value_is_notimplemented(x)) {
@@ -1656,7 +1838,7 @@ ternary_iop(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z,
     if (mv != NULL) {
         ternaryfunc slot = NB_TERNOP(mv, iop_slot);
         if (slot) {
-            PyValue x = call_ternary(tv, read_value_field(tv, iop_row),
+            PyValue x = call_ternary(slot, read_value_field(tv, iop_row),
                                      v, w, z);
             if (!value_is_notimplemented(x)) {
                 return x;
@@ -1709,7 +1891,7 @@ PyValue
                 row = _Py_VALUE_SLOT_INDEX_sq_concat;
             }
             if (func != NULL) {
-                result = call_concat(tv, row, v, w);
+                result = call_concat(tv, func, row, v, w);
                 assert(check_value_slot_result(tv, "+=",
                                                !PyValue_IsNull(result)));
                 return result;
@@ -1842,7 +2024,7 @@ static_assert(Py_ARRAY_LENGTH(_PyValue_BinaryOps) == NB_SUBSCR + 1,
         PyTypeObject *t = PyValue_TYPE(o);                               \
         PyNumberMethods *m = t->tp_as_number;                            \
         if (m && m->op) {                                                \
-            PyValue res = call_unary(t, NB_ROW(op), o);           \
+            PyValue res = call_unary(t, m->op, NB_ROW(op), o);           \
             assert(check_value_slot_result(t, #meth_name,                \
                                            !PyValue_IsNull(res)));       \
             return res;                                                  \
@@ -1910,7 +2092,8 @@ PyValue
         return PyValue_NULL;
     }
 
-    PyValue result = call_unary(t, NB_ROW(nb_index), item);
+    PyValue result = call_unary(t, t->tp_as_number->nb_index,
+                                NB_ROW(nb_index), item);
     assert(check_value_slot_result(t, "__index__", !PyValue_IsNull(result)));
     if (PyValue_IsNull(result) || value_long_check_exact(result)) {
         return result;
@@ -2053,7 +2236,7 @@ PyValue
     if (m && m->nb_int) { /* This should include subclasses of int */
         /* Convert using the nb_int slot, which should return something
            of exact type int. */
-        result = call_unary(t, NB_ROW(nb_int), o);
+        result = call_unary(t, m->nb_int, NB_ROW(nb_int), o);
         assert(check_value_slot_result(t, "__int__", !PyValue_IsNull(result)));
         if (PyValue_IsNull(result) || value_long_check_exact(result)) {
             return result;
@@ -2154,7 +2337,7 @@ PyValue
 
     PyNumberMethods *m = t->tp_as_number;
     if (m && m->nb_float) { /* This should include subclasses of float */
-        PyValue res = call_unary(t, NB_ROW(nb_float), o);
+        PyValue res = call_unary(t, m->nb_float, NB_ROW(nb_float), o);
         assert(check_value_slot_result(t, "__float__", !PyValue_IsNull(res)));
         if (PyValue_IsNull(res) || PyValue_TYPE(res) == &PyFloat_Type) {
             return res;
@@ -2308,7 +2491,8 @@ PyValue
     PyTypeObject *tv = PyValue_TYPE(v);
     PySequenceMethods *m = tv->tp_as_sequence;
     if (m && m->sq_concat) {
-        PyValue res = call_concat(tv, _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
+        PyValue res = call_concat(tv, m->sq_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
         assert(check_value_slot_result(tv, "+", !PyValue_IsNull(res)));
         return res;
     }
@@ -2390,12 +2574,15 @@ PyValue
     PyTypeObject *tv = PyValue_TYPE(v);
     PySequenceMethods *m = tv->tp_as_sequence;
     if (m && m->sq_inplace_concat) {
-        PyValue res = call_concat(tv, _Py_VALUE_SLOT_INDEX_sq_inplace_concat, v, w);
+        PyValue res = call_concat(tv, m->sq_inplace_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_inplace_concat,
+                                  v, w);
         assert(check_value_slot_result(tv, "+=", !PyValue_IsNull(res)));
         return res;
     }
     if (m && m->sq_concat) {
-        PyValue res = call_concat(tv, _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
+        PyValue res = call_concat(tv, m->sq_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
         assert(check_value_slot_result(tv, "+", !PyValue_IsNull(res)));
         return res;
     }
@@ -2491,7 +2678,7 @@ PyValue
                 i += l;
             }
         }
-        PyValue res = call_item(s, i);
+        PyValue res = call_item(s, m->sq_item, i);
         assert(_Py_CheckSlotResult(s, "__getitem__", !PyValue_IsNull(res)));
         return res;
     }
@@ -2522,15 +2709,28 @@ PyValue
     PyTypeObject *type = Py_TYPE(s);
     PyMappingMethods *mp = type->tp_as_mapping;
     binaryfunc object_subscript = mp ? mp->mp_subscript : NULL;
+    _Py_subscriptvaluefunc value_subscript =
+        _PyType_VALUE_SLOT(type, subscript);
     if (object_subscript != NULL) {
-        _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_subscript);
+        if (value_subscript != NULL) {
+            _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_subscript);
+        }
         PyObject *slice = _PySlice_FromIndices(i1, i2);
         if (!slice) {
             return PyValue_NULL;
         }
-        PyValue res = _PyType_VALUE_SLOT(type, subscript)(
-            type, s, PyValue_FromObjectBorrow(slice));
-        assert(_Py_CheckSlotResult(s, "__getitem__", !PyValue_IsNull(res)));
+        PyValue res;
+        if (value_subscript != NULL) {
+            res = value_subscript(s, PyValue_FromObjectBorrow(slice));
+            assert(_Py_CheckSlotResult(s, "__getitem__",
+                                       !PyValue_IsNull(res)));
+        }
+        else {
+            PyObject *object_result = object_subscript(s, slice);
+            assert(_Py_CheckSlotResult(s, "__getitem__",
+                                       object_result != NULL));
+            res = _PyValue_FromObjectResult(object_result);
+        }
         Py_DECREF(slice);
         return res;
     }
@@ -2572,7 +2772,7 @@ value_sequence_ass_item(PyValueBorrow v, Py_ssize_t i, PyValueBorrow value)
                     i += l;
                 }
             }
-            int res = call_ass_item(s, i, value);
+            int res = call_ass_item(s, m->sq_ass_item, i, value);
             assert(_Py_CheckSlotResult(s, deleting ? "__delitem__"
                                                    : "__setitem__",
                                        res >= 0));
@@ -3000,7 +3200,7 @@ int
         PyObject *o = PyValue_AsKnownObjectBorrow(seq);
         PySequenceMethods *sqm = Py_TYPE(o)->tp_as_sequence;
         if (sqm != NULL && sqm->sq_contains != NULL) {
-            int res = call_contains(o, ob);
+            int res = call_contains(o, sqm->sq_contains, ob);
             assert(_Py_CheckSlotResult(o, "__contains__", res >= 0));
             return res;
         }
@@ -3876,8 +4076,9 @@ PyObject_GetAIter(PyObject *o) {
     return it;
 }
 
-/* A presence test reads the object slot; the identity test of the pair
-   table's _PyObject_NextNotImplemented reads its value side
+/* A presence test reads the object slot, which an extension iterator
+   fills while its value slot is 0 (the adapter); the identity test of the
+   pair table's _PyObject_NextNotImplemented reads its value side
    (value-api-m1b-m2.md, section 2.6). */
 int
 PyIter_Check(PyObject *obj)
@@ -3900,11 +4101,15 @@ _PyStatusValue
 _PyValue_IterStep(PyObject *it)
 {
     PyTypeObject *t = Py_TYPE(it);
-    _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_iternext);
-    _PyStatusValue r = _PyType_VALUE_SLOT(t, iternext)(t, it);
-    assert(r.status != PYGEN_NEXT || !PyValue_IsNull(r.value));
-    assert(r.status != PYGEN_ERROR || PyValue_IsNull(r.value));
-    return r;
+    _Py_iternextvaluefunc f = _PyType_VALUE_SLOT(t, iternext);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_iternext);
+        _PyStatusValue r = f(it);
+        assert(r.status != PYGEN_NEXT || !PyValue_IsNull(r.value));
+        assert(r.status != PYGEN_ERROR || PyValue_IsNull(r.value));
+        return r;
+    }
+    return adapt_iternext(t->tp_iternext, it);
 }
 
 /* When the iterator is exhausted it gives RETURN, whose value the
@@ -3930,7 +4135,7 @@ _PyValue_IterNext(PyObject *it)
 }
 
 _PyStatusValue
-_PyValue_NextNotImplemented(PyTypeObject *owner, PyObject *it)
+_PyValue_NextNotImplemented(PyObject *it)
 {
     PyErr_Format(PyExc_TypeError,
                  "'%.200s' object is not iterable",

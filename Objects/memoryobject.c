@@ -2756,7 +2756,7 @@ ptr_from_tuple(const Py_buffer *view, PyObject *tup)
    with the type specified by view->format. Otherwise, the item is a sub-view.
    The function is used in memory_subscript() and memory_as_sequence. */
 static PyValue
-memory_item_value(PyTypeObject *owner, PyObject *_self, Py_ssize_t index)
+memory_item_value(PyObject *_self, Py_ssize_t index)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view = &(self->view);
@@ -2784,7 +2784,7 @@ memory_item_value(PyTypeObject *owner, PyObject *_self, Py_ssize_t index)
     return PyValue_NULL;
 }
 
-_Py_VALUE_THUNK_ITEM(memory_item, PyMemoryView_Type, memory_item_value)
+_Py_VALUE_THUNK_ITEM(memory_item, memory_item_value)
 
 /* Return the item at position *key* (a tuple of indices). */
 static PyValue
@@ -2894,7 +2894,7 @@ is_multiindex(PyObject *key)
    0-d memoryview objects can be referenced using mv[...] or mv[()]
    but not with anything else. */
 static PyValue
-memory_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_value)
+memory_subscript_value(PyObject *_self, PyValueBorrow key_value)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view;
@@ -2906,7 +2906,7 @@ memory_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_v
         Py_ssize_t index = _PyValue_AsSsize_t(key_value, PyExc_IndexError);
         if (index == -1 && PyErr_Occurred())
             return PyValue_NULL;
-        return memory_item_value(NULL, (PyObject *)self, index);
+        return memory_item_value((PyObject *)self, index);
     }
     if (!PyValue_IsObject(key_value)) {
         /* An inline number is no key of any other kind. */
@@ -2939,7 +2939,7 @@ memory_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_v
         index = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(key), PyExc_IndexError);
         if (index == -1 && PyErr_Occurred())
             return PyValue_NULL;
-        return memory_item_value(NULL, (PyObject *)self, index);
+        return memory_item_value((PyObject *)self, index);
     }
     else if (PySlice_Check(key)) {
         CHECK_RESTRICTED_VALUE(self);
@@ -2980,10 +2980,10 @@ memory_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_v
     return PyValue_NULL;
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(memory_subscript, PyMemoryView_Type, memory_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(memory_subscript, memory_subscript_value)
 
 static int
-memory_ass_sub_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_value,
+memory_ass_sub_value(PyObject *_self, PyValueBorrow key_value,
                      PyValueBorrow value)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
@@ -3107,7 +3107,7 @@ memory_ass_sub_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key_val
     return -1;
 }
 
-_Py_VALUE_THUNK_ASSSUBSCRIPT(memory_ass_sub, PyMemoryView_Type, memory_ass_sub_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(memory_ass_sub, memory_ass_sub_value)
 
 static Py_ssize_t
 memory_length(PyObject *_self)
@@ -3246,7 +3246,7 @@ memoryview_index_impl(PyMemoryViewObject *self, PyValueBorrow value,
             // entire loop.
             assert(index < n);
 
-            PyValue item = memory_item_value(NULL, obj, index);
+            PyValue item = memory_item_value(obj, index);
             if (PyValue_IsNull(item)) {
                 return PyValue_NULL;
             }
@@ -3901,7 +3901,7 @@ memoryiter_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-memoryiter_next_value(PyTypeObject *owner, PyObject *self)
+memoryiter_next_value(PyObject *self)
 {
     memoryiterobject *it = (memoryiterobject *)self;
     PyMemoryViewObject *seq;
@@ -3934,7 +3934,7 @@ memoryiter_next_value(PyTypeObject *owner, PyObject *self)
     return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(memoryiter_next, _PyMemoryIter_Type, memoryiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(memoryiter_next, memoryiter_next_value)
 
 static PyObject *
 memory_iter(PyObject *seq)

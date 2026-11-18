@@ -14398,7 +14398,7 @@ static PyMethodDef unicode_methods[] = {
 
 /* v % w: w may be an inline value, which the formatter reads as it is. */
 static PyValue
-unicode_mod_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+unicode_mod_value(PyValueBorrow v, PyValueBorrow w)
 {
     if (!PyValue_IsObject(v)
         || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(v)))
@@ -14409,7 +14409,7 @@ unicode_mod_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
         _PyUnicode_FormatValue(PyValue_AsKnownObjectBorrow(v), w));
 }
 
-_Py_VALUE_THUNK_BINARY(unicode_mod, PyUnicode_Type, unicode_mod_value)
+_Py_VALUE_THUNK_BINARY(unicode_mod, unicode_mod_value)
 
 static PyNumberMethods unicode_as_number = {
     0,              /*nb_add*/
@@ -14419,7 +14419,7 @@ static PyNumberMethods unicode_as_number = {
 };
 
 static PyValue
-unicode_concat_value(PyTypeObject *owner, PyObject *left, PyValueBorrow right)
+unicode_concat_value(PyObject *left, PyValueBorrow right)
 {
     if (!PyValue_IsObject(right)
         || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(right)))
@@ -14434,7 +14434,7 @@ unicode_concat_value(PyTypeObject *owner, PyObject *left, PyValueBorrow right)
 }
 
 static int
-unicode_contains_value(PyTypeObject *owner, PyObject *str, PyValueBorrow substr)
+unicode_contains_value(PyObject *str, PyValueBorrow substr)
 {
     if (!PyValue_IsObject(substr)
         || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(substr)))
@@ -14517,7 +14517,7 @@ unicode_slice_subscript(PyObject *self, PyObject *item)
 }
 
 static PyValue
-unicode_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
+unicode_subscript_value(PyObject *self, PyValueBorrow item)
 {
     if (_PyValue_IndexCheck(item)) {
         Py_ssize_t i = _PyValue_AsSsize_t(item, PyExc_IndexError);
@@ -14538,7 +14538,7 @@ unicode_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
     return PyValue_NULL;
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(unicode_subscript, PyUnicode_Type, unicode_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(unicode_subscript, unicode_subscript_value)
 
 static PyMappingMethods unicode_as_mapping = {
     unicode_length,     /* mp_length */
@@ -14608,8 +14608,7 @@ unicode_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
         // Fallback to unicode_new()
-        return _PyValue_TpCallAdapter(tstate, Py_TYPE(type)->tp_call, type, args,
-                                      nargsf, kwnames);
+        return _PyValue_TpCallAdapter(tstate, type, args, nargsf, kwnames);
     }
     if (!_PyArg_CheckPositional("str", nargs, 0, 3)) {
         return PyValue_NULL;

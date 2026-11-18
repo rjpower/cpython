@@ -22,7 +22,7 @@ static PyValue
 long_new_impl(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase);
 
 static PyValue
-long_new_value(PyTypeObject *owner, PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+long_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -77,7 +77,7 @@ long_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(long_new_value(NULL, type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+        return _PyValue_THUNK_EXIT(long_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -85,7 +85,7 @@ long_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (window == NULL) {
         return NULL;
     }
-    PyValue result = long_new_value(NULL, type, window, nargs, kwnames);
+    PyValue result = long_new_value(type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }

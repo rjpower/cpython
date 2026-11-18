@@ -113,7 +113,7 @@ internal_bisect_right(PyObject *list, PyValueBorrow item, Py_ssize_t lo,
         assert(mid >= 0);
         // PySequence_GetItem, but the two selected slot rows are cached.
         if (value_item != NULL) {
-            litem = value_item(list_type, list, mid);
+            litem = value_item(list, mid);
             if (PyValue_IsNull(litem)) {
                 goto error;
             }
@@ -361,7 +361,7 @@ internal_bisect_left(PyObject *list, PyValueBorrow item, Py_ssize_t lo,
         assert(mid >= 0);
         // PySequence_GetItem, but the two selected slot rows are cached.
         if (value_item != NULL) {
-            litem = value_item(list_type, list, mid);
+            litem = value_item(list, mid);
             if (PyValue_IsNull(litem)) {
                 goto error;
             }

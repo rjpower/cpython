@@ -757,7 +757,7 @@ signaldict_iter(PyObject *self)
 }
 
 static PyValue
-signaldict_getitem_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
+signaldict_getitem_value(PyObject *self, PyValueBorrow key)
 {
     if (SdFlagAddr(self) == NULL) {
         (void)value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
@@ -771,10 +771,10 @@ signaldict_getitem_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
     }
     return SdFlags(self) & flag ? PyValue_True : PyValue_False;
 }
-_Py_VALUE_THUNK_SUBSCRIPT(signaldict_getitem, *Py_TYPE(self), signaldict_getitem_value)
+_Py_VALUE_THUNK_SUBSCRIPT(signaldict_getitem, signaldict_getitem_value)
 
 static int
-signaldict_setitem_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key, PyValueBorrow value)
+signaldict_setitem_value(PyObject *self, PyValueBorrow key, PyValueBorrow value)
 {
     if (SdFlagAddr(self) == NULL) {
         return value_error_int(INVALID_SIGNALDICT_ERROR_MSG);
@@ -803,7 +803,7 @@ signaldict_setitem_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key,
     }
     return 0;
 }
-_Py_VALUE_THUNK_ASSSUBSCRIPT(signaldict_setitem, *Py_TYPE(self), signaldict_setitem_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(signaldict_setitem, signaldict_setitem_value)
 
 static void
 signaldict_dealloc(PyObject *self)
@@ -843,7 +843,7 @@ signaldict_repr(PyObject *self)
 }
 
 static PyValue
-signaldict_richcompare_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right, int op)
+signaldict_richcompare_value(PyValueBorrow left, PyValueBorrow right, int op)
 {
     PyObject *v = PyValue_AsKnownObjectBorrow(left);
     decimal_state *state = get_module_state_by_def(Py_TYPE(v));
@@ -885,7 +885,7 @@ signaldict_richcompare_value(PyTypeObject *owner, PyValueBorrow left, PyValueBor
     int equal = (SdFlags(v) == flags) ^ (op == Py_NE);
     return equal ? PyValue_True : PyValue_False;
 }
-_Py_VALUE_THUNK_RICHCMP(signaldict_richcompare, *Py_TYPE(left), signaldict_richcompare_value)
+_Py_VALUE_THUNK_RICHCMP(signaldict_richcompare, signaldict_richcompare_value)
 
 static PyObject *
 signaldict_copy(PyObject *self, PyObject *Py_UNUSED(dummy))
@@ -1343,7 +1343,7 @@ context_setallcr_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(clos
 #endif
 
 static PyValue
-context_getattr_value(PyTypeObject *owner, PyValueBorrow receiver, PyObject *name)
+context_getattr_value(PyValueBorrow receiver, PyObject *name)
 {
     PyObject *self = PyValue_AsKnownObjectBorrow(receiver);
     if (PyUnicode_Check(name)) {
@@ -1358,10 +1358,10 @@ context_getattr_value(PyTypeObject *owner, PyValueBorrow receiver, PyObject *nam
     }
     return _PyObject_GenericGetAttrValue(receiver, name);
 }
-_Py_VALUE_THUNK_GETATTRO(context_getattr, *Py_TYPE(self), context_getattr_value)
+_Py_VALUE_THUNK_GETATTRO(context_getattr, context_getattr_value)
 
 static int
-context_setattr_value(PyTypeObject *owner, PyValueBorrow receiver, PyObject *name,
+context_setattr_value(PyValueBorrow receiver, PyObject *name,
                       PyValueBorrow value)
 {
     if (PyValue_IsNull(value)) {
@@ -1385,7 +1385,7 @@ context_setattr_value(PyTypeObject *owner, PyValueBorrow receiver, PyObject *nam
     }
     return _PyObject_GenericSetAttrValue(receiver, name, value);
 }
-_Py_VALUE_THUNK_SETATTRO(context_setattr, *Py_TYPE(self), context_setattr_value)
+_Py_VALUE_THUNK_SETATTRO(context_setattr, context_setattr_value)
 
 /* In the constructor None means "not specified". */
 #define NONE_TO_NULL(x) (PyValue_IsNone(x) ? PyValue_Borrow(PyValue_NULL) : (x))
@@ -4444,7 +4444,7 @@ _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls)
     if (PyValue_IsNull(exponent)) {
         goto error;
     }
-    PyValue power = _PyLong_ValuePower(NULL, PyValue_Borrow(PyValue_FromInt64(10)),
+    PyValue power = _PyLong_ValuePower(PyValue_Borrow(PyValue_FromInt64(10)),
                                         PyValue_Borrow(exponent),
                                         PyValue_Borrow(PyValue_None));
     PyValue_CLOSE(exponent);
@@ -4453,7 +4453,7 @@ _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls)
         goto error;
     }
     if (exp >= 0) {
-        PyValue product = _PyLong_ValueMultiply(NULL, PyValue_Borrow(numerator),
+        PyValue product = _PyLong_ValueMultiply(PyValue_Borrow(numerator),
                                                   PyValue_Borrow(exponent));
         PyValue_CLOSE(numerator);
         numerator = product;
@@ -4471,14 +4471,14 @@ _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls)
         if (PyValue_IsNull(divisor)) {
             goto error;
         }
-        PyValue quotient = _PyLong_ValueFloorDivide(NULL, PyValue_Borrow(numerator),
+        PyValue quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(numerator),
                                                      PyValue_Borrow(divisor));
         PyValue_CLOSE(numerator);
         numerator = quotient;
         if (PyValue_IsNull(numerator)) {
             goto error;
         }
-        quotient = _PyLong_ValueFloorDivide(NULL, PyValue_Borrow(denominator),
+        quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(denominator),
                                              PyValue_Borrow(divisor));
         PyValue_CLOSE(denominator);
         denominator = quotient;
@@ -4644,7 +4644,7 @@ _decimal_Decimal_to_integral_exact_impl(PyObject *self, PyTypeObject *cls,
 
 /* Decimal's own string form is ASCII and has no whitespace or underscores. */
 static PyValue
-PyDec_AsFloatValue(PyTypeObject *owner, PyValueBorrow value)
+PyDec_AsFloatValue(PyValueBorrow value)
 {
     PyObject *dec = PyValue_AsKnownObjectBorrow(value);
     PyObject *s;
@@ -4683,7 +4683,7 @@ PyDec_AsFloatValue(PyTypeObject *owner, PyValueBorrow value)
     return PyValue_FromDouble(result);
 }
 
-_Py_VALUE_THUNK_UNARY(PyDec_AsFloat, *Py_TYPE(self), PyDec_AsFloatValue)
+_Py_VALUE_THUNK_UNARY(PyDec_AsFloat, PyDec_AsFloatValue)
 
 /*[clinic input]
 @value_function
@@ -4862,7 +4862,7 @@ out:
 /* Unary number method that uses the default module context. */
 #define Dec_UnaryNumberMethod(MPDFUNC) \
 static PyValue                                                                    \
-nm_##MPDFUNC##_value(PyTypeObject *owner, PyValueBorrow value)                    \
+nm_##MPDFUNC##_value(PyValueBorrow value)                                         \
 {                                                                                 \
     PyObject *self = PyValue_AsKnownObjectBorrow(value);                          \
     uint32_t status = 0;                                                          \
@@ -4882,13 +4882,12 @@ nm_##MPDFUNC##_value(PyTypeObject *owner, PyValueBorrow value)                  
     }                                                                             \
     return PyValue_FromObjectSteal(result);                                       \
 }                                                                                 \
-_Py_VALUE_THUNK_UNARY(nm_##MPDFUNC, *Py_TYPE(self), nm_##MPDFUNC##_value)
+_Py_VALUE_THUNK_UNARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
 
 /* Binary number method that uses default module context. */
 #define Dec_BinaryNumberMethod(MPDFUNC) \
 static PyValue                                                                    \
-nm_##MPDFUNC##_value(PyTypeObject *owner, PyValueBorrow self,                    \
-                     PyValueBorrow other)                                         \
+nm_##MPDFUNC##_value(PyValueBorrow self, PyValueBorrow other)                     \
 {                                                                                 \
     PyObject *a, *b, *result;                                                     \
     uint32_t status = 0;                                                          \
@@ -4920,7 +4919,7 @@ nm_##MPDFUNC##_value(PyTypeObject *owner, PyValueBorrow self,                   
     }                                                                             \
     return PyValue_FromObjectSteal(result);                                       \
 }                                                                                 \
-_Py_VALUE_THUNK_BINARY(nm_##MPDFUNC, *Py_TYPE(left), nm_##MPDFUNC##_value)
+_Py_VALUE_THUNK_BINARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
 
 /* Boolean function without a context arg.
    Argument Clinic provides PyObject *self
@@ -5115,7 +5114,7 @@ Dec_BinaryNumberMethod(mpd_qrem)
 Dec_BinaryNumberMethod(mpd_qdivint)
 
 static PyValue
-nm_dec_as_long_value(PyTypeObject *owner, PyValueBorrow value)
+nm_dec_as_long_value(PyValueBorrow value)
 {
     PyObject *dec = PyValue_AsKnownObjectBorrow(value);
     decimal_state *state = get_module_state_by_def(Py_TYPE(dec));
@@ -5126,18 +5125,18 @@ nm_dec_as_long_value(PyTypeObject *owner, PyValueBorrow value)
     return dec_as_long_value(dec, context, MPD_ROUND_DOWN);
 }
 
-_Py_VALUE_THUNK_UNARY(nm_dec_as_long, *Py_TYPE(self), nm_dec_as_long_value)
+_Py_VALUE_THUNK_UNARY(nm_dec_as_long, nm_dec_as_long_value)
 
 static int
-nm_nonzero_value(PyTypeObject *owner, PyValueBorrow value)
+nm_nonzero_value(PyValueBorrow value)
 {
     return !mpd_iszero(MPD(PyValue_AsKnownObjectBorrow(value)));
 }
 
-_Py_VALUE_THUNK_INQUIRY(nm_nonzero, *Py_TYPE(self), nm_nonzero_value)
+_Py_VALUE_THUNK_INQUIRY(nm_nonzero, nm_nonzero_value)
 
 static PyValue
-nm_mpd_qdivmod_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right)
+nm_mpd_qdivmod_value(PyValueBorrow left, PyValueBorrow right)
 {
     PyObject *a, *b, *q, *r;
     uint32_t status = 0;
@@ -5184,10 +5183,10 @@ nm_mpd_qdivmod_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow righ
     return PyValue_FromObjectSteal(result);
 }
 
-_Py_VALUE_THUNK_BINARY(nm_mpd_qdivmod, *Py_TYPE(left), nm_mpd_qdivmod_value)
+_Py_VALUE_THUNK_BINARY(nm_mpd_qdivmod, nm_mpd_qdivmod_value)
 
 static PyValue
-nm_mpd_qpow_value(PyTypeObject *owner, PyValueBorrow base, PyValueBorrow exp, PyValueBorrow mod)
+nm_mpd_qpow_value(PyValueBorrow base, PyValueBorrow exp, PyValueBorrow mod)
 {
     PyObject *a, *b, *c = NULL, *result;
     uint32_t status = 0;
@@ -5236,7 +5235,7 @@ nm_mpd_qpow_value(PyTypeObject *owner, PyValueBorrow base, PyValueBorrow exp, Py
     return PyValue_FromObjectSteal(result);
 }
 
-_Py_VALUE_THUNK_TERNARY(nm_mpd_qpow, *Py_TYPE(base), nm_mpd_qpow_value)
+_Py_VALUE_THUNK_TERNARY(nm_mpd_qpow, nm_mpd_qpow_value)
 
 
 /******************************************************************************/
@@ -6417,7 +6416,7 @@ _decimal_Decimal_quantize_impl(PyObject *self, PyTypeObject *cls,
 
 /* Special methods */
 static PyValue
-dec_richcompare_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow w, int op)
+dec_richcompare_value(PyValueBorrow left, PyValueBorrow w, int op)
 {
     PyObject *a;
     PyObject *b;
@@ -6485,7 +6484,7 @@ dec_richcompare_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow w, 
     return r ? PyValue_True : PyValue_False;
 }
 
-_Py_VALUE_THUNK_RICHCMP(dec_richcompare, *Py_TYPE(left), dec_richcompare_value)
+_Py_VALUE_THUNK_RICHCMP(dec_richcompare, dec_richcompare_value)
 
 /*[clinic input]
 @value_function
@@ -6527,7 +6526,7 @@ static PyValue
 _decimal_Decimal___complex___impl(PyObject *self)
 /*[clinic end generated code: output=a2f4c127690eacca input=35da284cd3bc0673]*/
 {
-    PyValue f = PyDec_AsFloatValue(NULL, PyValue_FromObjectBorrow(self));
+    PyValue f = PyDec_AsFloatValue(PyValue_FromObjectBorrow(self));
     if (PyValue_IsNull(f)) {
         return PyValue_NULL;
     }

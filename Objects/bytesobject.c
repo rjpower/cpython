@@ -1666,7 +1666,7 @@ _PyBytes_Concat(PyObject *a, PyObject *b)
 }
 
 static PyValue
-bytes_concat_value(PyTypeObject *owner, PyObject *a, PyValueBorrow b)
+bytes_concat_value(PyObject *a, PyValueBorrow b)
 {
     if (PyValue_IsInline(b)) {
         PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
@@ -1677,7 +1677,7 @@ bytes_concat_value(PyTypeObject *owner, PyObject *a, PyValueBorrow b)
         _PyBytes_Concat(a, PyValue_AsKnownObjectBorrow(b)));
 }
 
-_Py_VALUE_THUNK_CONCAT(bytes_concat, PyBytes_Type, bytes_concat_value)
+_Py_VALUE_THUNK_CONCAT(bytes_concat, bytes_concat_value)
 
 PyObject *
 _PyBytes_Repeat(PyObject *self, Py_ssize_t n)
@@ -1713,16 +1713,16 @@ _PyBytes_Repeat(PyObject *self, Py_ssize_t n)
 }
 
 static int
-bytes_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow arg)
+bytes_contains_value(PyObject *self, PyValueBorrow arg)
 {
     return _Py_bytes_contains_value(PyBytes_AS_STRING(self),
                                     PyBytes_GET_SIZE(self), arg);
 }
 
-_Py_VALUE_THUNK_CONTAINS(bytes_contains, PyBytes_Type, bytes_contains_value)
+_Py_VALUE_THUNK_CONTAINS(bytes_contains, bytes_contains_value)
 
 static PyValue
-bytes_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i)
+bytes_item_value(PyObject *self, Py_ssize_t i)
 {
     PyBytesObject *a = _PyBytes_CAST(self);
     if (i < 0 || i >= Py_SIZE(a)) {
@@ -1732,7 +1732,7 @@ bytes_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i)
     return PyValue_FromInt64((unsigned char)a->ob_sval[i]);
 }
 
-_Py_VALUE_THUNK_ITEM(bytes_item, PyBytes_Type, bytes_item_value)
+_Py_VALUE_THUNK_ITEM(bytes_item, bytes_item_value)
 
 static int
 bytes_compare_eq(PyBytesObject *a, PyBytesObject *b)
@@ -1828,7 +1828,7 @@ bytes_hash(PyObject *self)
 }
 
 static PyValue
-bytes_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
+bytes_subscript_value(PyObject *op, PyValueBorrow key)
 {
     PyBytesObject *self = _PyBytes_CAST(op);
     if (_PyValue_IndexCheck(key)) {
@@ -1895,7 +1895,7 @@ bytes_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
 }
 
 
-_Py_VALUE_THUNK_SUBSCRIPT(bytes_subscript, PyBytes_Type, bytes_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(bytes_subscript, bytes_subscript_value)
 
 static int
 bytes_buffer_getbuffer(PyObject *op, Py_buffer *view, int flags)
@@ -3004,7 +3004,7 @@ bytes_methods[] = {
 };
 
 static PyValue
-bytes_mod_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow arg)
+bytes_mod_value(PyValueBorrow self, PyValueBorrow arg)
 {
     if (!PyValue_IsObject(self)
         || !PyBytes_Check(PyValue_AsKnownObjectBorrow(self))) {
@@ -3029,7 +3029,7 @@ bytes_mod_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow arg)
     return _PyValue_FromObjectResult(res);
 }
 
-_Py_VALUE_THUNK_BINARY(bytes_mod, PyBytes_Type, bytes_mod_value)
+_Py_VALUE_THUNK_BINARY(bytes_mod, bytes_mod_value)
 
 static PyNumberMethods bytes_as_number = {
     0,              /*nb_add*/
@@ -3730,7 +3730,7 @@ striter_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-striter_next_value(PyTypeObject *owner, PyObject *op)
+striter_next_value(PyObject *op)
 {
     striterobject *it = _striterobject_CAST(op);
     PyBytesObject *seq;
@@ -3751,7 +3751,7 @@ striter_next_value(PyTypeObject *owner, PyObject *op)
     return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(striter_next, PyBytesIter_Type, striter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(striter_next, striter_next_value)
 
 static PyObject *
 striter_len(PyObject *op, PyObject *Py_UNUSED(ignored))

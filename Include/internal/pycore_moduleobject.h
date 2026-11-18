@@ -84,7 +84,7 @@ extern Py_ssize_t _PyModule_GetFilenameUTF8(
    value slot; its object thunk. */
 PyValue _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
 // Export the pair for '_testinternalcapi' shared extension
-PyAPI_FUNC(PyValue) _Py_module_getattro_value(PyTypeObject *owner, PyValueBorrow m, PyObject *name);
+PyAPI_FUNC(PyValue) _Py_module_getattro_value(PyValueBorrow m, PyObject *name);
 PyAPI_FUNC(PyObject*) _Py_module_getattro(PyObject *m, PyObject *name);
 
 #ifdef __cplusplus

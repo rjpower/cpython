@@ -11,7 +11,7 @@
 #include "pycore_long_value.h"    // _PyLong_SpanPathBinary()
 #include "pycore_pyerrors.h"      // _PyErr_SetKeyErrorValue()
 #include "pycore_value.h"         // PyValue
-#include "pycore_value_ops.h"     // _PyValue_GenericHash(NULL)
+#include "pycore_value_ops.h"     // _PyValue_GenericHash()
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "pycore_slots.h"         // _Py_value_nb_add
 #include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
@@ -155,7 +155,7 @@ vint_arith(PyValueBorrow a, PyValueBorrow b, char op, long long extra)
 }
 
 static PyValue
-vint_add_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+vint_add_value(PyValueBorrow a, PyValueBorrow b)
 {
     if (log_call("VInt.add") < 0) {
         return PyValue_NULL;
@@ -164,7 +164,7 @@ vint_add_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
 }
 
 static PyValue
-vint_multiply_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+vint_multiply_value(PyValueBorrow a, PyValueBorrow b)
 {
     if (log_call("VInt.multiply") < 0) {
         return PyValue_NULL;
@@ -173,7 +173,7 @@ vint_multiply_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
 }
 
 static PyValue
-vint_richcompare_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, int op)
+vint_richcompare_value(PyValueBorrow a, PyValueBorrow b, int op)
 {
     if (log_call("VInt.richcompare") < 0) {
         return PyValue_NULL;
@@ -206,7 +206,7 @@ vint_richcompare_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, in
 }
 
 static Py_hash_t
-vint_hash_value(PyTypeObject *owner, PyValueBorrow self)
+vint_hash_value(PyValueBorrow self)
 {
     if (log_call("VInt.hash") < 0) {
         return -1;
@@ -216,7 +216,7 @@ vint_hash_value(PyTypeObject *owner, PyValueBorrow self)
 }
 
 static PyObject *
-vint_repr_value(PyTypeObject *owner, PyValueBorrow self)
+vint_repr_value(PyValueBorrow self)
 {
     if (log_call("VInt.repr") < 0) {
         return NULL;
@@ -226,7 +226,7 @@ vint_repr_value(PyTypeObject *owner, PyValueBorrow self)
 }
 
 static PyValue
-vint_negative_value(PyTypeObject *owner, PyValueBorrow self)
+vint_negative_value(PyValueBorrow self)
 {
     if (log_call("VInt.negative") < 0) {
         return PyValue_NULL;
@@ -239,7 +239,7 @@ vint_negative_value(PyTypeObject *owner, PyValueBorrow self)
  * handles, at least one VInt among x and y, y >= 0 and m > 0; else
  * NotImplemented. */
 static PyValue
-vint_power_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
+vint_power_value(PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
 {
     if (log_call("VInt.power") < 0) {
         return PyValue_NULL;
@@ -276,7 +276,7 @@ vint_power_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, PyValueB
 }
 
 static int
-vint_bool_value(PyTypeObject *owner, PyValueBorrow self)
+vint_bool_value(PyValueBorrow self)
 {
     if (log_call("VInt.bool") < 0) {
         return -1;
@@ -284,14 +284,14 @@ vint_bool_value(PyTypeObject *owner, PyValueBorrow self)
     return ((VIntObject *)PyValue_AsKnownObjectBorrow(self))->value != 0;
 }
 
-_Py_VALUE_THUNK_BINARY(vint_add, VInt_Type, vint_add_value)
-_Py_VALUE_THUNK_BINARY(vint_multiply, VInt_Type, vint_multiply_value)
-_Py_VALUE_THUNK_RICHCMP(vint_richcompare, VInt_Type, vint_richcompare_value)
-_Py_VALUE_THUNK_HASH(vint_hash, VInt_Type, vint_hash_value)
-_Py_VALUE_THUNK_REPR(vint_repr, VInt_Type, vint_repr_value)
-_Py_VALUE_THUNK_UNARY(vint_negative, VInt_Type, vint_negative_value)
-_Py_VALUE_THUNK_TERNARY(vint_power, VInt_Type, vint_power_value)
-_Py_VALUE_THUNK_INQUIRY(vint_bool, VInt_Type, vint_bool_value)
+_Py_VALUE_THUNK_BINARY(vint_add, vint_add_value)
+_Py_VALUE_THUNK_BINARY(vint_multiply, vint_multiply_value)
+_Py_VALUE_THUNK_RICHCMP(vint_richcompare, vint_richcompare_value)
+_Py_VALUE_THUNK_HASH(vint_hash, vint_hash_value)
+_Py_VALUE_THUNK_REPR(vint_repr, vint_repr_value)
+_Py_VALUE_THUNK_UNARY(vint_negative, vint_negative_value)
+_Py_VALUE_THUNK_TERNARY(vint_power, vint_power_value)
+_Py_VALUE_THUNK_INQUIRY(vint_bool, vint_bool_value)
 
 static PyNumberMethods vint_as_number = {
     .nb_add = vint_add,
@@ -399,7 +399,7 @@ static PyTypeObject VIntCopyAdd_Type = {
 /* VIntSpec: both sides through internal spec slot ids */
 
 static PyValue
-vintspec_add_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+vintspec_add_value(PyValueBorrow a, PyValueBorrow b)
 {
     if (log_call("VIntSpec.add") < 0) {
         return PyValue_NULL;
@@ -407,7 +407,7 @@ vintspec_add_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
     return _PyValue_FromObjectResult(vint_arith(a, b, '+', 1));
 }
 
-_Py_VALUE_THUNK_BINARY(vintspec_add, *Py_TYPE(left), vintspec_add_value)
+_Py_VALUE_THUNK_BINARY(vintspec_add, vintspec_add_value)
 
 static PyType_Slot vintspec_slots[] = {
     {Py_nb_add, vintspec_add},
@@ -722,7 +722,7 @@ split_sub_object(PyObject *a, PyObject *b)
 }
 
 static PyValue
-split_sub_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+split_sub_value(PyValueBorrow a, PyValueBorrow b)
 {
     if (log_call("Split.sub.value") < 0) {
         return PyValue_NULL;
@@ -742,7 +742,7 @@ split_isub_object(PyObject *a, PyObject *b)
 }
 
 static PyValue
-split_isub_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b)
+split_isub_value(PyValueBorrow a, PyValueBorrow b)
 {
     if (log_call("Split.isub.value") < 0) {
         return PyValue_NULL;
@@ -763,7 +763,7 @@ split_pow_object(PyObject *a, PyObject *b, PyObject *c)
 }
 
 static PyValue
-split_pow_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
+split_pow_value(PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
 {
     if (log_call("Split.pow.value") < 0) {
         return PyValue_NULL;
@@ -783,7 +783,7 @@ split_neg_object(PyObject *self)
 }
 
 static PyValue
-split_neg_value(PyTypeObject *owner, PyValueBorrow self)
+split_neg_value(PyValueBorrow self)
 {
     if (log_call("Split.neg.value") < 0) {
         return PyValue_NULL;
@@ -803,7 +803,7 @@ split_index_object(PyObject *self)
 }
 
 static PyValue
-split_index_value(PyTypeObject *owner, PyValueBorrow self)
+split_index_value(PyValueBorrow self)
 {
     if (log_call("Split.index.value") < 0) {
         return PyValue_NULL;
@@ -823,7 +823,7 @@ split_bool_object(PyObject *self)
 }
 
 static int
-split_bool_value(PyTypeObject *owner, PyValueBorrow self)
+split_bool_value(PyValueBorrow self)
 {
     if (log_call("Split.bool.value") < 0) {
         return -1;
@@ -843,7 +843,7 @@ split_hash_object(PyObject *self)
 }
 
 static Py_hash_t
-split_hash_value(PyTypeObject *owner, PyValueBorrow self)
+split_hash_value(PyValueBorrow self)
 {
     if (log_call("Split.hash.value") < 0) {
         return -1;
@@ -870,7 +870,7 @@ split_richcompare_object(PyObject *a, PyObject *b, int op)
 }
 
 static PyValue
-split_richcompare_value(PyTypeObject *owner, PyValueBorrow a, PyValueBorrow b, int op)
+split_richcompare_value(PyValueBorrow a, PyValueBorrow b, int op)
 {
     if (log_call("Split.richcompare.value") < 0) {
         return PyValue_NULL;
@@ -897,7 +897,7 @@ split_repr_object(PyObject *self)
 }
 
 static PyObject *
-split_repr_value(PyTypeObject *owner, PyValueBorrow self)
+split_repr_value(PyValueBorrow self)
 {
     if (log_call("Split.repr.value") < 0) {
         return NULL;
@@ -915,7 +915,7 @@ split_str_object(PyObject *self)
 }
 
 static PyObject *
-split_str_value(PyTypeObject *owner, PyValueBorrow self)
+split_str_value(PyValueBorrow self)
 {
     if (log_call("Split.str.value") < 0) {
         return NULL;
@@ -1042,7 +1042,7 @@ splitseq_concat_object(PyObject *self, PyObject *other)
 }
 
 static PyValue
-splitseq_concat_value(PyTypeObject *owner, PyObject *self, PyValueBorrow other)
+splitseq_concat_value(PyObject *self, PyValueBorrow other)
 {
     if (log_call("SplitSeq.concat.value") < 0) {
         return PyValue_NULL;
@@ -1060,7 +1060,7 @@ splitseq_iconcat_object(PyObject *self, PyObject *other)
 }
 
 static PyValue
-splitseq_iconcat_value(PyTypeObject *owner, PyObject *self, PyValueBorrow other)
+splitseq_iconcat_value(PyObject *self, PyValueBorrow other)
 {
     if (log_call("SplitSeq.iconcat.value") < 0) {
         return PyValue_NULL;
@@ -1125,7 +1125,7 @@ vseq_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 /* VSeq(self.value * 1000 + n) for an int or VInt n; a sequence raises
  * TypeError for anything else. */
 static PyValue
-vseq_concat_value(PyTypeObject *owner, PyObject *self, PyValueBorrow other)
+vseq_concat_value(PyObject *self, PyValueBorrow other)
 {
     if (log_call("VSeq.concat") < 0) {
         return PyValue_NULL;
@@ -1148,7 +1148,7 @@ vseq_concat_value(PyTypeObject *owner, PyObject *self, PyValueBorrow other)
     return _PyValue_FromObjectResult((PyObject *)result);
 }
 
-_Py_VALUE_THUNK_CONCAT(vseq_concat, VSeq_Type, vseq_concat_value)
+_Py_VALUE_THUNK_CONCAT(vseq_concat, vseq_concat_value)
 
 static PySequenceMethods vseq_as_sequence = {
     .sq_concat = vseq_concat,
@@ -1340,90 +1340,6 @@ value_slot(PyObject *Py_UNUSED(module), PyObject *args)
     return address_to_int(fn);
 }
 
-/* value_slot_adapter(name): the address of the adapter that PyType_Ready
-   installs in the row's value field beside an object slot with no value
-   form, or 0 for a row that has none (send, new_). */
-static PyObject *
-value_slot_adapter(PyObject *Py_UNUSED(module), PyObject *name)
-{
-    if (!PyUnicode_Check(name)) {
-        PyErr_SetString(PyExc_TypeError, "value_slot_adapter(name)");
-        return NULL;
-    }
-    const slot_row *row = find_row(name);
-    if (row == NULL) {
-        return NULL;
-    }
-    return address_to_int((void *)_PyValueSlot_Adapters[row - slot_rows]);
-}
-
-/* make_static_type(name): a ready, non-heap type with number methods and no
- * slots of its own, to store object slots into after PyType_Ready. The type
- * is never freed, as a static type's storage is not. */
-typedef struct {
-    PyTypeObject type;
-    PyNumberMethods as_number;
-} static_probe;
-
-static PyObject *
-make_static_type(PyObject *Py_UNUSED(module), PyObject *name)
-{
-    const char *s = PyUnicode_Check(name) ? PyUnicode_AsUTF8(name) : NULL;
-    if (s == NULL) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_TypeError, "make_static_type(name)");
-        }
-        return NULL;
-    }
-    static_probe *probe = PyMem_RawCalloc(1, sizeof(static_probe));
-    char *tp_name = PyMem_RawMalloc(strlen(s) + 1);
-    if (probe == NULL || tp_name == NULL) {
-        return PyErr_NoMemory();
-    }
-    strcpy(tp_name, s);
-    probe->type = (PyTypeObject){
-        PyVarObject_HEAD_INIT(NULL, 0)
-        .tp_name = tp_name,
-        .tp_basicsize = sizeof(PyObject),
-        .tp_flags = Py_TPFLAGS_DEFAULT,
-        .tp_new = PyType_GenericNew,
-        .tp_as_number = &probe->as_number,
-    };
-    if (PyType_Ready(&probe->type) < 0) {
-        return NULL;
-    }
-    return Py_NewRef((PyObject *)&probe->type);
-}
-
-/* store_object_slot(type, name, address, modified): store an object slot
- * after the type is ready, and call PyType_Modified() if modified is true. */
-static PyObject *
-store_object_slot(PyObject *Py_UNUSED(module), PyObject *args)
-{
-    PyTypeObject *type;
-    PyObject *name;
-    unsigned long long address;
-    int modified;
-    if (!PyArg_ParseTuple(args, "O!UKp:store_object_slot", &PyType_Type,
-                          &type, &name, &address, &modified)) {
-        return NULL;
-    }
-    const slot_row *row = find_row(name);
-    if (row == NULL) {
-        return NULL;
-    }
-    void **ptr = object_slotptr(type, row->object_offset);
-    if (ptr == NULL) {
-        PyErr_SetString(PyExc_ValueError, "type has no such slot table");
-        return NULL;
-    }
-    *ptr = (void *)(uintptr_t)address;
-    if (modified) {
-        PyType_Modified(type);
-    }
-    Py_RETURN_NONE;
-}
-
 static PyObject *
 object_slot(PyObject *Py_UNUSED(module), PyObject *args)
 {
@@ -1502,37 +1418,37 @@ call_value_slot(PyObject *Py_UNUSED(module), PyObject *const *args,
     switch (row->kind) {
     case KIND_UNARY:
         EXPECT(1);
-        return value_result(((_Py_unaryvaluefunc)fn)(tp, v[0]));
+        return value_result(((_Py_unaryvaluefunc)fn)(v[0]));
     case KIND_BINARY:
         EXPECT(2);
-        return value_result(((_Py_binaryvaluefunc)fn)(tp, v[0], v[1]));
+        return value_result(((_Py_binaryvaluefunc)fn)(v[0], v[1]));
     case KIND_TERNARY:
         EXPECT(3);
-        return value_result(((_Py_ternaryvaluefunc)fn)(tp, v[0], v[1], v[2]));
+        return value_result(((_Py_ternaryvaluefunc)fn)(v[0], v[1], v[2]));
     case KIND_CONCAT:
         EXPECT(2);
-        return value_result(((_Py_concatvaluefunc)fn)(tp, args[2], v[1]));
+        return value_result(((_Py_concatvaluefunc)fn)(args[2], v[1]));
     case KIND_RICHCMP: {
         EXPECT(3);
         int op = PyLong_AsInt(args[4]);
         if (op == -1 && PyErr_Occurred()) {
             return NULL;
         }
-        return value_result(((_Py_richcmpvaluefunc)fn)(tp, v[0], v[1], op));
+        return value_result(((_Py_richcmpvaluefunc)fn)(v[0], v[1], op));
     }
     case KIND_INQUIRY: {
         EXPECT(1);
-        int res = ((_Py_inquiryvaluefunc)fn)(tp, v[0]);
+        int res = ((_Py_inquiryvaluefunc)fn)(v[0]);
         return res < 0 ? NULL : PyBool_FromLong(res);
     }
     case KIND_HASH: {
         EXPECT(1);
-        Py_hash_t res = ((_Py_hashvaluefunc)fn)(tp, v[0]);
+        Py_hash_t res = ((_Py_hashvaluefunc)fn)(v[0]);
         return res == -1 ? NULL : PyLong_FromSsize_t(res);
     }
     case KIND_REPR:
         EXPECT(1);
-        return ((_Py_reprvaluefunc)fn)(tp, v[0]);
+        return ((_Py_reprvaluefunc)fn)(v[0]);
     default:
         PyErr_Format(PyExc_NotImplementedError,
                      "call_value_slot does not call %s", row->name);
@@ -2414,7 +2330,7 @@ vmap_subscript(PyObject *Py_UNUSED(self), PyObject *key)
 }
 
 static PyValue
-vmap_subscript_value(PyTypeObject *owner, PyObject *Py_UNUSED(self), PyValueBorrow key)
+vmap_subscript_value(PyObject *Py_UNUSED(self), PyValueBorrow key)
 {
     if (log_call("VMap.subscript.value") < 0) {
         return PyValue_NULL;
@@ -2432,7 +2348,7 @@ vmap_ass_subscript(PyObject *self, PyObject *key, PyObject *value)
 }
 
 static int
-vmap_ass_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key,
+vmap_ass_subscript_value(PyObject *self, PyValueBorrow key,
                          PyValueBorrow value)
 {
     if (log_call("VMap.ass_subscript.value") < 0) {
@@ -2451,7 +2367,7 @@ vmap_contains(PyObject *self, PyObject *item)
 }
 
 static int
-vmap_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
+vmap_contains_value(PyObject *self, PyValueBorrow item)
 {
     if (log_call("VMap.contains.value") < 0) {
         return -1;
@@ -2459,10 +2375,8 @@ vmap_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
     return _PyValue_Contains(vstore_store(self), item);
 }
 
-static PyTypeObject VItems_Type;
-
 static int
-vitems_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
+vitems_contains_value(PyObject *self, PyValueBorrow item)
 {
     if (log_call("VItems.contains") < 0) {
         return -1;
@@ -2470,10 +2384,10 @@ vitems_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow item)
     return _PyValue_Contains(vstore_store(self), item);
 }
 
-_Py_VALUE_THUNK_CONTAINS(vitems_contains, VItems_Type, vitems_contains_value)
+_Py_VALUE_THUNK_CONTAINS(vitems_contains, vitems_contains_value)
 
 static PyValue
-vitems_item_value(PyTypeObject *owner, PyObject *Py_UNUSED(self), Py_ssize_t i)
+vitems_item_value(PyObject *Py_UNUSED(self), Py_ssize_t i)
 {
     if (log_call("VItems.item") < 0) {
         return PyValue_NULL;
@@ -2485,10 +2399,10 @@ vitems_item_value(PyTypeObject *owner, PyObject *Py_UNUSED(self), Py_ssize_t i)
     return _PyValue_FromObjectResult(Py_BuildValue("(sn)", "item", i));
 }
 
-_Py_VALUE_THUNK_ITEM(vitems_item, VItems_Type, vitems_item_value)
+_Py_VALUE_THUNK_ITEM(vitems_item, vitems_item_value)
 
 static int
-vitems_ass_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i, PyValueBorrow value)
+vitems_ass_item_value(PyObject *self, Py_ssize_t i, PyValueBorrow value)
 {
     if (log_call("VItems.ass_item") < 0) {
         return -1;
@@ -2502,7 +2416,7 @@ vitems_ass_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i, PyValue
     return res;
 }
 
-_Py_VALUE_THUNK_ASSITEM(vitems_ass_item, VItems_Type, vitems_ass_item_value)
+_Py_VALUE_THUNK_ASSITEM(vitems_ass_item, vitems_ass_item_value)
 
 static Py_ssize_t
 vitems_length(PyObject *Py_UNUSED(self))
@@ -2714,9 +2628,6 @@ static PyMethodDef methods[] = {
     {"set_value_slots_log", set_value_slots_log, METH_O},
     {"value_slot_names", value_slot_names, METH_NOARGS},
     {"value_slot", value_slot, METH_VARARGS},
-    {"value_slot_adapter", value_slot_adapter, METH_O},
-    {"make_static_type", make_static_type, METH_O},
-    {"store_object_slot", store_object_slot, METH_VARARGS},
     {"object_slot", object_slot, METH_VARARGS},
     {"value_functions", value_functions, METH_NOARGS},
     {"wrapper_pair", wrapper_pair, METH_O},

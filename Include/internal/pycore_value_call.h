@@ -95,7 +95,7 @@ PyAPI_FUNC(PyValue) _PyValue_CallAdapter(
  * keyword dict, calls tp_call in a borrow scope, checks the result. Raises
  * upstream's "not callable" when tp_call is NULL. */
 PyAPI_FUNC(PyValue) _PyValue_TpCallAdapter(
-    PyThreadState *tstate, ternaryfunc call, PyObject *callable,
+    PyThreadState *tstate, PyObject *callable,
     const PyValue *args, size_t nargsf, PyObject *kwnames);
 
 /* The dispatcher (section 1.3): the value form of
@@ -103,8 +103,8 @@ PyAPI_FUNC(PyValue) _PyValue_TpCallAdapter(
  * callable whose type has Py_TPFLAGS_HAVE_VECTORCALL is called through its
  * value vectorcall field, or through the call adapter on its object field
  * when the value field is NULL; any other through the type's value call
- * slot (the tp_call adapter if the type has no value form) inside
- * upstream's tp_call recursion guard. Never calls a thunk. */
+ * slot, or the tp_call adapter, inside upstream's tp_call recursion guard.
+ * Never calls a thunk. */
 static inline PyValue
 (_PyValue_VectorcallTstate)(PyThreadState *tstate, PyValueBorrow callable,
                           const PyValue *args, size_t nargsf,
@@ -135,19 +135,20 @@ static inline PyValue
             return _PyValue_CallAdapter(tstate, c, of, args, nargsf, kwnames);
         }
     }
-    _Py_callvaluefunc vf = _PyType_VALUE_SLOT(tp, call);
-    if (vf == NULL) {
-        return _PyValue_NotCallable(tstate, callable);
-    }
     /* Type-level calls get upstream's tp_call guard; vectorcall callees
        above keep their own, as upstream's do. */
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
         return PyValue_NULL;
     }
-    /* The value call slot is set whenever tp_call is: a type with an object
-       tp_call only holds the call adapter. */
-    PyValue res = vf(tp, tstate, c, args, nargsf, kwnames);
-    _PyValue_ASSERT_RESULT(tstate, res);
+    PyValue res;
+    _Py_vectorcallvaluefunc vf = _PyType_VALUE_SLOT(tp, call);
+    if (vf != NULL) {
+        res = vf(tstate, c, args, nargsf, kwnames);
+        _PyValue_ASSERT_RESULT(tstate, res);
+    }
+    else {
+        res = _PyValue_TpCallAdapter(tstate, c, args, nargsf, kwnames);
+    }
     _Py_LeaveRecursiveCallTstate(tstate);
     return res;
 }
@@ -238,7 +239,7 @@ PyAPI_FUNC(PyObject *) _PyValue_StackAsDict(const PyValue *values,
 /* The value side of the tp_call row's pair with PyVectorcall_Call (V2a-0
  * D14): calls the instance's value vectorcall, or the call adapter on its
  * object vectorcall when the value field is NULL. */
-extern PyValue _PyValue_InstanceVectorcall(PyTypeObject *owner, 
+extern PyValue _PyValue_InstanceVectorcall(
     PyThreadState *tstate, PyObject *callable,
     const PyValue *args, size_t nargsf, PyObject *kwnames);
 

@@ -14,7 +14,7 @@
 #include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
-#include "pycore_long_value.h"    // _PyLong_ValueAdd(NULL)
+#include "pycore_long_value.h"    // _PyLong_ValueAdd()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_runtime.h"       // _PY_NSMALLPOSINTS
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
@@ -6068,9 +6068,9 @@ _PyLong_ValueGCD(PyValueBorrow left, PyValueBorrow right)
     PyValueBorrow word = left_overflow ? right : left;
     int64_t word_number = left_overflow ? right_word : left_word;
     if (word_number == 0) {
-        return _PyLong_ValueAbsolute(NULL, huge);
+        return _PyLong_ValueAbsolute(huge);
     }
-    PyValue rem = _PyLong_ValueRemainder(NULL, huge, word);
+    PyValue rem = _PyLong_ValueRemainder(huge, word);
     if (PyValue_IsNull(rem)) {
         return PyValue_NULL;
     }
@@ -6419,7 +6419,7 @@ int___round___impl(PyValueBorrow self, PyValueBorrow o_ndigits)
     if (PyValue_IsNull(remv)) {
         return PyValue_NULL;
     }
-    PyValue diff = _PyLong_ValueSubtract(NULL, self, PyValue_Borrow(remv));
+    PyValue diff = _PyLong_ValueSubtract(self, PyValue_Borrow(remv));
     PyValue_CLOSE(remv);
 
     return diff;
@@ -6727,8 +6727,7 @@ long_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (kwnames != NULL) {
-        return _PyValue_TpCallAdapter(tstate, Py_TYPE(type)->tp_call, type, args,
-                                      nargsf, kwnames);
+        return _PyValue_TpCallAdapter(tstate, type, args, nargsf, kwnames);
     }
     switch (nargs) {
         case 0:
@@ -6840,7 +6839,7 @@ long_add_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueAdd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueAdd(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -6988,7 +6987,7 @@ long_floordiv_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueFloorDivide(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueFloorDivide(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7023,7 +7022,7 @@ long_pow_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValuePower(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+_PyLong_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
     CHECK_BINOP_VALUE(v, w);
     bool modular;
@@ -7042,7 +7041,7 @@ _PyLong_ValuePower(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, PyValu
         if (b.neg) {
             /* A negative exponent and no modulus: a float, by float's
                slot, which converts its arguments to double. */
-            return _PyFloat_ValuePower(NULL, v, w, z);
+            return _PyFloat_ValuePower(v, w, z);
         }
         int64_t x, y, result;
         if (_PyLong_WordOperands(v, w, &x, &y)
@@ -7075,7 +7074,7 @@ long_sub_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueSubtract(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueSubtract(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7095,7 +7094,7 @@ long_mul_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueMultiply(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueMultiply(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7116,7 +7115,7 @@ long_mod_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueRemainder(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueRemainder(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7127,7 +7126,7 @@ _PyLong_ValueRemainder(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueDivmod(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueDivmod(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     PyValue items[2];
@@ -7171,7 +7170,7 @@ long_true_divide_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueTrueDivide(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueTrueDivide(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7228,7 +7227,7 @@ long_lshift_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueLshift(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueLshift(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, n;
@@ -7276,7 +7275,7 @@ long_rshift_span_path(PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueRshift(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueRshift(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, n;
@@ -7301,7 +7300,7 @@ long_bitwise_span_path(PyValueBorrow v, char op, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueAnd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueAnd(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7312,7 +7311,7 @@ _PyLong_ValueAnd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueXor(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueXor(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7323,7 +7322,7 @@ _PyLong_ValueXor(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 }
 
 PyValue
-_PyLong_ValueOr(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
+_PyLong_ValueOr(PyValueBorrow v, PyValueBorrow w)
 {
     CHECK_BINOP_VALUE(v, w);
     int64_t a, b;
@@ -7338,7 +7337,7 @@ _PyLong_ValueOr(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
    in magnitude. */
 
 PyValue
-_PyLong_ValueNegative(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueNegative(PyValueBorrow v)
 {
     int64_t a;
     if (_PyLong_WordOf(v, &a)) {
@@ -7349,7 +7348,7 @@ _PyLong_ValueNegative(PyTypeObject *owner, PyValueBorrow v)
 }
 
 PyValue
-_PyLong_ValueAbsolute(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueAbsolute(PyValueBorrow v)
 {
     int64_t a;
     if (_PyLong_WordOf(v, &a)) {
@@ -7360,7 +7359,7 @@ _PyLong_ValueAbsolute(PyTypeObject *owner, PyValueBorrow v)
 }
 
 PyValue
-_PyLong_ValueInvert(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueInvert(PyValueBorrow v)
 {
     int64_t a;
     if (_PyLong_WordOf(v, &a)) {
@@ -7380,7 +7379,7 @@ _PyLong_ValueInvert(PyTypeObject *owner, PyValueBorrow v)
 }
 
 PyValue
-_PyLong_ValueFloat(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueFloat(PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
         return PyValue_FromDouble((double)PyValue_InlineInt64(v));
@@ -7394,13 +7393,13 @@ _PyLong_ValueFloat(PyTypeObject *owner, PyValueBorrow v)
 }
 
 PyValue
-_PyLong_ValueLong(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueLong(PyValueBorrow v)
 {
     return long_exact_value(v);
 }
 
 int
-_PyLong_ValueBool(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueBool(PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
         return PyValue_InlineInt64(v) != 0;
@@ -7409,7 +7408,7 @@ _PyLong_ValueBool(PyTypeObject *owner, PyValueBorrow v)
 }
 
 PyObject *
-_PyLong_ValueRepr(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueRepr(PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
         /* At most 16 digits: neither the _pylong switch nor the
@@ -7468,7 +7467,7 @@ _PyLong_SpanPathBinary(int op, PyValueBorrow v, PyValueBorrow w)
         case NB_POWER: {
             digit w_digits[_PyLong_WORD_DIGITS];
             if (SPAN_OF_VALUE(w).neg) {
-                return _PyFloat_ValuePower(NULL, v, w, PyValue_Borrow(PyValue_None));
+                return _PyFloat_ValuePower(v, w, PyValue_Borrow(PyValue_None));
             }
             return long_pow_span_path(v, w);
         }
@@ -7479,28 +7478,28 @@ _PyLong_SpanPathBinary(int op, PyValueBorrow v, PyValueBorrow w)
 }
 
 /* Thunks: the object slots of PyLong_Type. */
-_Py_VALUE_THUNK_BINARY(long_add_method, PyLong_Type, _PyLong_ValueAdd)
-_Py_VALUE_THUNK_BINARY(long_sub_method, PyLong_Type, _PyLong_ValueSubtract)
-_Py_VALUE_THUNK_BINARY(long_mul_method, PyLong_Type, _PyLong_ValueMultiply)
-_Py_VALUE_THUNK_BINARY(long_mod, PyLong_Type, _PyLong_ValueRemainder)
-_Py_VALUE_THUNK_BINARY(long_divmod, PyLong_Type, _PyLong_ValueDivmod)
-_Py_VALUE_THUNK_BINARY(long_div, PyLong_Type, _PyLong_ValueFloorDivide)
-_Py_VALUE_THUNK_BINARY(long_true_divide, PyLong_Type, _PyLong_ValueTrueDivide)
-_Py_VALUE_THUNK_BINARY(long_lshift_method, PyLong_Type, _PyLong_ValueLshift)
-_Py_VALUE_THUNK_BINARY(long_rshift, PyLong_Type, _PyLong_ValueRshift)
-_Py_VALUE_THUNK_BINARY(long_and, PyLong_Type, _PyLong_ValueAnd)
-_Py_VALUE_THUNK_BINARY(long_xor, PyLong_Type, _PyLong_ValueXor)
-_Py_VALUE_THUNK_BINARY(long_or, PyLong_Type, _PyLong_ValueOr)
-_Py_VALUE_THUNK_TERNARY(long_pow, PyLong_Type, _PyLong_ValuePower)
-_Py_VALUE_THUNK_UNARY(long_neg_method, PyLong_Type, _PyLong_ValueNegative)
-_Py_VALUE_THUNK_UNARY(long_abs_method, PyLong_Type, _PyLong_ValueAbsolute)
-_Py_VALUE_THUNK_UNARY(long_invert, PyLong_Type, _PyLong_ValueInvert)
-_Py_VALUE_THUNK_UNARY(long_float, PyLong_Type, _PyLong_ValueFloat)
-_Py_VALUE_THUNK_UNARY(long_long_slot, PyLong_Type, _PyLong_ValueLong)
-_Py_VALUE_THUNK_INQUIRY(long_bool, PyLong_Type, _PyLong_ValueBool)
-_Py_VALUE_THUNK_RICHCMP(long_richcompare, PyLong_Type, _PyLong_ValueRichCompare)
-_Py_VALUE_THUNK_HASH(long_hash, PyLong_Type, _PyLong_ValueHash)
-_Py_VALUE_THUNK_REPR(long_repr, PyLong_Type, _PyLong_ValueRepr)
+_Py_VALUE_THUNK_BINARY(long_add_method, _PyLong_ValueAdd)
+_Py_VALUE_THUNK_BINARY(long_sub_method, _PyLong_ValueSubtract)
+_Py_VALUE_THUNK_BINARY(long_mul_method, _PyLong_ValueMultiply)
+_Py_VALUE_THUNK_BINARY(long_mod, _PyLong_ValueRemainder)
+_Py_VALUE_THUNK_BINARY(long_divmod, _PyLong_ValueDivmod)
+_Py_VALUE_THUNK_BINARY(long_div, _PyLong_ValueFloorDivide)
+_Py_VALUE_THUNK_BINARY(long_true_divide, _PyLong_ValueTrueDivide)
+_Py_VALUE_THUNK_BINARY(long_lshift_method, _PyLong_ValueLshift)
+_Py_VALUE_THUNK_BINARY(long_rshift, _PyLong_ValueRshift)
+_Py_VALUE_THUNK_BINARY(long_and, _PyLong_ValueAnd)
+_Py_VALUE_THUNK_BINARY(long_xor, _PyLong_ValueXor)
+_Py_VALUE_THUNK_BINARY(long_or, _PyLong_ValueOr)
+_Py_VALUE_THUNK_TERNARY(long_pow, _PyLong_ValuePower)
+_Py_VALUE_THUNK_UNARY(long_neg_method, _PyLong_ValueNegative)
+_Py_VALUE_THUNK_UNARY(long_abs_method, _PyLong_ValueAbsolute)
+_Py_VALUE_THUNK_UNARY(long_invert, _PyLong_ValueInvert)
+_Py_VALUE_THUNK_UNARY(long_float, _PyLong_ValueFloat)
+_Py_VALUE_THUNK_UNARY(long_long_slot, _PyLong_ValueLong)
+_Py_VALUE_THUNK_INQUIRY(long_bool, _PyLong_ValueBool)
+_Py_VALUE_THUNK_RICHCMP(long_richcompare, _PyLong_ValueRichCompare)
+_Py_VALUE_THUNK_HASH(long_hash, _PyLong_ValueHash)
+_Py_VALUE_THUNK_REPR(long_repr, _PyLong_ValueRepr)
 
 static PyNumberMethods long_as_number = {
     long_add_method,            /*nb_add*/

@@ -22,7 +22,7 @@
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_unicodeobject.h" // _PyUnicodeASCIIIter_Type
-#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue(NULL)
+#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
 #include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
 
 #include <stdlib.h> // rand()

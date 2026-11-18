@@ -276,32 +276,32 @@ _PyLong_CompareResult(Py_ssize_t cmp, int op)
 /* int's value slots (section 2.1). The object slots of PyLong_Type are
    their thunks. */
 
-PyAPI_FUNC(PyValue) _PyLong_ValueAdd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueSubtract(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueMultiply(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueAdd(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueSubtract(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueMultiply(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueGCD(PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueRemainder(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueDivmod(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueFloorDivide(PyTypeObject *owner, PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyLong_ValueRemainder(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueDivmod(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueFloorDivide(PyValueBorrow v,
                                              PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueTrueDivide(PyTypeObject *owner, PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyLong_ValueTrueDivide(PyValueBorrow v,
                                             PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueLshift(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueRshift(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueAnd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueXor(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValueOr(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyLong_ValuePower(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w,
+PyAPI_FUNC(PyValue) _PyLong_ValueLshift(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueRshift(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueAnd(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueXor(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueOr(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValuePower(PyValueBorrow v, PyValueBorrow w,
                                        PyValueBorrow z);
-PyAPI_FUNC(PyValue) _PyLong_ValueNegative(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(PyValue) _PyLong_ValueAbsolute(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(PyValue) _PyLong_ValueInvert(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(PyValue) _PyLong_ValueFloat(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyLong_ValueNegative(PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyLong_ValueAbsolute(PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyLong_ValueInvert(PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyLong_ValueFloat(PyValueBorrow v);
 // nb_positive, nb_int and nb_index: an exact int of the same value.
-PyAPI_FUNC(PyValue) _PyLong_ValueLong(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(int) _PyLong_ValueBool(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyLong_ValueLong(PyValueBorrow v);
+PyAPI_FUNC(int) _PyLong_ValueBool(PyValueBorrow v);
 // A str.
-PyAPI_FUNC(PyObject *) _PyLong_ValueRepr(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyObject *) _PyLong_ValueRepr(PyValueBorrow v);
 /* Write the decimal repr of v, an int value, to writer: an inline int's word
    span through the decimal kernel (R-inline in _PyValue_WriteRepr()). 0, or
    -1 with an exception set. */
@@ -327,7 +327,7 @@ PyAPI_FUNC(PyValue) _PyLong_ValueRichCompareSlow(PyValueBorrow v,
    whose type the encoding fixes; int's tp_value stores the same
    functions. */
 static inline PyValue
-_PyLong_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, int op)
+_PyLong_ValueRichCompare(PyValueBorrow v, PyValueBorrow w, int op)
 {
     if (PyValue_BothInlineInt(v, w)) {
         return _PyLong_CompareResult(
@@ -338,7 +338,7 @@ _PyLong_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, 
 }
 
 static inline Py_hash_t
-_PyLong_ValueHash(PyTypeObject *owner, PyValueBorrow v)
+_PyLong_ValueHash(PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
         return _PyLong_WordHash(PyValue_InlineInt64(v));
@@ -350,27 +350,27 @@ _PyLong_ValueHash(PyTypeObject *owner, PyValueBorrow v)
 
 /* float's value slots. */
 
-PyAPI_FUNC(PyValue) _PyFloat_ValueAdd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueSubtract(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueMultiply(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueTrueDivide(PyTypeObject *owner, PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyFloat_ValueAdd(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyFloat_ValueSubtract(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyFloat_ValueMultiply(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyFloat_ValueTrueDivide(PyValueBorrow v,
                                              PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueRemainder(PyTypeObject *owner, PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyFloat_ValueRemainder(PyValueBorrow v,
                                             PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueDivmod(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValueFloorDivide(PyTypeObject *owner, PyValueBorrow v,
+PyAPI_FUNC(PyValue) _PyFloat_ValueDivmod(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyFloat_ValueFloorDivide(PyValueBorrow v,
                                               PyValueBorrow w);
-PyAPI_FUNC(PyValue) _PyFloat_ValuePower(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w,
+PyAPI_FUNC(PyValue) _PyFloat_ValuePower(PyValueBorrow v, PyValueBorrow w,
                                         PyValueBorrow z);
-PyAPI_FUNC(PyValue) _PyFloat_ValueNegative(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(PyValue) _PyFloat_ValueAbsolute(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyFloat_ValueNegative(PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyFloat_ValueAbsolute(PyValueBorrow v);
 // nb_positive and nb_float: an exact float of the same value.
-PyAPI_FUNC(PyValue) _PyFloat_ValueFloat(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyFloat_ValueFloat(PyValueBorrow v);
 // nb_int: the integral part.
-PyAPI_FUNC(PyValue) _PyFloat_ValueInt(PyTypeObject *owner, PyValueBorrow v);
-PyAPI_FUNC(int) _PyFloat_ValueBool(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyFloat_ValueInt(PyValueBorrow v);
+PyAPI_FUNC(int) _PyFloat_ValueBool(PyValueBorrow v);
 // A str.
-PyAPI_FUNC(PyObject *) _PyFloat_ValueRepr(PyTypeObject *owner, PyValueBorrow v);
+PyAPI_FUNC(PyObject *) _PyFloat_ValueRepr(PyValueBorrow v);
 PyAPI_FUNC(PyValue) _PyFloat_ValueRichCompareSlow(PyValueBorrow v,
                                                   PyValueBorrow w, int op);
 PyAPI_FUNC(Py_hash_t) _PyFloat_HashObject(PyObject *op);
@@ -399,7 +399,7 @@ _PyFloat_CompareResult(double a, double b, int op)
 /* R-inline: two inline floats, or an inline float and an inline int (exact
    as doubles), compare as doubles. */
 static inline PyValue
-_PyFloat_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, int op)
+_PyFloat_ValueRichCompare(PyValueBorrow v, PyValueBorrow w, int op)
 {
     /* Both are set whenever the call returns true; the initialisers quiet
        -Wmaybe-uninitialized, which cannot see through the inlined test. */
@@ -411,7 +411,7 @@ _PyFloat_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w,
 }
 
 static inline Py_hash_t
-_PyFloat_ValueHash(PyTypeObject *owner, PyValueBorrow v)
+_PyFloat_ValueHash(PyValueBorrow v)
 {
     if (PyValue_IsInlineFloat(v)) {
         // An inline float is never NaN, the one hash that reads the object.

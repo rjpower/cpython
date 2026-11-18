@@ -504,9 +504,9 @@ math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
         goto error;
     }
     PyObject *cmp = _PyValue_AsObjectResultAt(
-        _PyType_CALL_VALUE_SLOT(&PyLong_Type, richcompare,
-                                PyValue_FromObjectBorrow(n),
-                                PyValue_FromObjectBorrow(b), Py_LT),
+        _PyValue_CallRichCompare(&PyLong_Type, PyLong_Type.tp_richcompare,
+                                 PyValue_FromObjectBorrow(n),
+                                 PyValue_FromObjectBorrow(b), Py_LT),
         BOX_SITE_COMPARE);
     Py_DECREF(b);
     if (cmp == NULL) {
@@ -654,7 +654,7 @@ factorial_partial_product(unsigned long start, unsigned long stop,
     right = factorial_partial_product(midpoint, stop, max_bits);
     if (PyValue_IsNull(right))
         goto error;
-    result = _PyLong_ValueMultiply(NULL, PyValue_Borrow(left), PyValue_Borrow(right));
+    result = _PyLong_ValueMultiply(PyValue_Borrow(left), PyValue_Borrow(right));
 
   error:
     PyValue_XCLOSE(left);
@@ -689,7 +689,7 @@ factorial_odd_part(unsigned long n)
         /* inner *= partial */
         if (PyValue_IsNull(partial))
             goto error;
-        tmp = _PyLong_ValueMultiply(NULL, PyValue_Borrow(inner), PyValue_Borrow(partial));
+        tmp = _PyLong_ValueMultiply(PyValue_Borrow(inner), PyValue_Borrow(partial));
         PyValue_CLOSE(partial);
         if (PyValue_IsNull(tmp))
             goto error;
@@ -699,7 +699,7 @@ factorial_odd_part(unsigned long n)
            n/2**i], giving the inner product in the formula above. */
 
         /* outer *= inner; */
-        tmp = _PyLong_ValueMultiply(NULL, PyValue_Borrow(outer), PyValue_Borrow(inner));
+        tmp = _PyLong_ValueMultiply(PyValue_Borrow(outer), PyValue_Borrow(inner));
         if (PyValue_IsNull(tmp))
             goto error;
         PyValue_CLOSE(outer);
@@ -775,7 +775,7 @@ math_integer_factorial_impl(PyObject *module, PyValueBorrow arg)
         PyValue_CLOSE(odd_part);
         return PyValue_NULL;
     }
-    result = _PyLong_ValueLshift(NULL, PyValue_Borrow(odd_part), PyValue_Borrow(shift));
+    result = _PyLong_ValueLshift(PyValue_Borrow(odd_part), PyValue_Borrow(shift));
     PyValue_CLOSE(odd_part);
     PyValue_CLOSE(shift);
     return result;

@@ -13,8 +13,8 @@
 
 #include "Python.h"
 #include "pycore_typeobject.h"    // _Py_slot_tp_getattro()
-#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue(NULL)
-#include "pycore_value_call.h"    // _PyValue_InstanceVectorcall(NULL)
+#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
+#include "pycore_value_call.h"    // _PyValue_InstanceVectorcall()
 #include "pycore_value_slots.h"   // _PyValueSlotPair
 
 const _PyValueSlotPair _PyValueSlot_Pairs[] = {

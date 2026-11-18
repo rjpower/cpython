@@ -491,7 +491,7 @@ range_item_compact(rangeobject *r, int64_t i, PyValue *res)
 }
 
 static PyValue
-range_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
+range_item_value(PyObject *op, Py_ssize_t i)
 {
     PyValue res;
     if (range_item_compact((rangeobject *)op, i, &res)) {
@@ -499,7 +499,7 @@ range_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
     }
     return _PyValue_FromObjectResult(range_item_object(op, i));
 }
-_Py_VALUE_THUNK_ITEM(range_item, PyRange_Type, range_item_value)
+_Py_VALUE_THUNK_ITEM(range_item, range_item_value)
 
 /* r[slice] for a compact range and a slice of inline ints and None, in
    machine arithmetic (no int object is made). Returns 0 if the case does not
@@ -655,7 +655,7 @@ range_contains_object(PyObject *self, PyObject *ob)
 }
 
 static int
-range_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow ob)
+range_contains_value(PyObject *self, PyValueBorrow ob)
 {
     rangeobject *r = (rangeobject *)self;
     int64_t start, step, length;
@@ -675,7 +675,7 @@ range_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow ob)
     Py_DECREF(obj);
     return result;
 }
-_Py_VALUE_THUNK_CONTAINS(range_contains, PyRange_Type, range_contains_value)
+_Py_VALUE_THUNK_CONTAINS(range_contains, range_contains_value)
 
 /* Compare two range objects.  Return 1 for equal, 0 for not equal
    and -1 on error.  The algorithm is roughly the C equivalent of
@@ -937,7 +937,7 @@ range_subscript_object(PyObject *op, PyObject *item)
 }
 
 static PyValue
-range_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
+range_subscript_value(PyObject *op, PyValueBorrow key)
 {
     PyValue res;
     if (PyValue_IsInlineInt(key) &&
@@ -952,7 +952,7 @@ range_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
     Py_DECREF(item);
     return _PyValue_FromObjectResult(result);
 }
-_Py_VALUE_THUNK_SUBSCRIPT(range_subscript, PyRange_Type, range_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(range_subscript, range_subscript_value)
 
 
 static PyMappingMethods range_as_mapping = {
@@ -1072,7 +1072,7 @@ PyTypeObject PyRange_Type = {
 */
 
 static _PyStatusValue
-rangeiter_next_value(PyTypeObject *owner, PyObject *op)
+rangeiter_next_value(PyObject *op)
 {
     _PyStatusValue ret = {PYGEN_RETURN, PyValue_NULL};
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -1088,7 +1088,7 @@ rangeiter_next_value(PyTypeObject *owner, PyObject *op)
     return ret;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(rangeiter_next, PyRangeIter_Type, rangeiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(rangeiter_next, rangeiter_next_value)
 
 /*[clinic input]
 @critical_section
@@ -1418,7 +1418,7 @@ longrangeiter_step(longrangeiterobject *r)
 }
 
 static _PyStatusValue
-longrangeiter_next_value(PyTypeObject *owner, PyObject *self)
+longrangeiter_next_value(PyObject *self)
 {
     PyValue result;
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1431,7 +1431,7 @@ longrangeiter_next_value(PyTypeObject *owner, PyObject *self)
                             PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(longrangeiter_next, PyLongRangeIter_Type, longrangeiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(longrangeiter_next, longrangeiter_next_value)
 
 static int
 longrangeiter_traverse(PyObject *op, visitproc visit, void *arg)

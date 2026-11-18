@@ -61,7 +61,7 @@ iter_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-iter_iternext_value(PyTypeObject *owner, PyObject *iterator)
+iter_iternext_value(PyObject *iterator)
 {
     seqiterobject *it;
     PyObject *seq;
@@ -109,7 +109,7 @@ iter_iternext_value(PyTypeObject *owner, PyObject *iterator)
     return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(iter_iternext, PySeqIter_Type, iter_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(iter_iternext, iter_iternext_value)
 
 static PyObject *
 iter_len(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -279,7 +279,7 @@ calliter_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-calliter_iternext_value(PyTypeObject *owner, PyObject *op)
+calliter_iternext_value(PyObject *op)
 {
     calliterobject *it = (calliterobject*)op;
     PyValue result;
@@ -319,7 +319,7 @@ calliter_iternext_value(PyTypeObject *owner, PyObject *op)
                             PyValue_NULL};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(calliter_iternext, PyCallIter_Type, calliter_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(calliter_iternext, calliter_iternext_value)
 
 static PyObject *
 calliter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))

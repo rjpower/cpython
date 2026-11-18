@@ -2662,7 +2662,7 @@ delta_hash(PyObject *op)
 }
 
 static PyValue
-delta_multiply_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right)
+delta_multiply_value(PyValueBorrow left, PyValueBorrow right)
 {
     PyObject *result = NULL;
 
@@ -2689,10 +2689,10 @@ delta_multiply_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow righ
         return PyValue_NotImplemented;
     return _PyValue_FromObjectResult(result);
 }
-_Py_VALUE_THUNK_BINARY(delta_multiply, PyDateTime_DeltaType, delta_multiply_value)
+_Py_VALUE_THUNK_BINARY(delta_multiply, delta_multiply_value)
 
 static PyValue
-delta_divide_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right)
+delta_divide_value(PyValueBorrow left, PyValueBorrow right)
 {
     if (value_is_delta(left)) {
         PyDateTime_Delta *delta =
@@ -2706,10 +2706,10 @@ delta_divide_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right)
     }
     return PyValue_NotImplemented;
 }
-_Py_VALUE_THUNK_BINARY(delta_divide, PyDateTime_DeltaType, delta_divide_value)
+_Py_VALUE_THUNK_BINARY(delta_divide, delta_divide_value)
 
 static PyValue
-delta_truedivide_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow right)
+delta_truedivide_value(PyValueBorrow left, PyValueBorrow right)
 {
     if (value_is_delta(left)) {
         PyDateTime_Delta *delta =
@@ -2726,7 +2726,7 @@ delta_truedivide_value(PyTypeObject *owner, PyValueBorrow left, PyValueBorrow ri
     }
     return PyValue_NotImplemented;
 }
-_Py_VALUE_THUNK_BINARY(delta_truedivide, PyDateTime_DeltaType, delta_truedivide_value)
+_Py_VALUE_THUNK_BINARY(delta_truedivide, delta_truedivide_value)
 
 static PyObject *
 delta_remainder(PyObject *left, PyObject *right)

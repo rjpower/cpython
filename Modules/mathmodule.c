@@ -2398,10 +2398,20 @@ math_sumprod_bool(PyValueBorrow value)
 }
 
 static _PyStatusValue
-math_sumprod_iter_step(PyTypeObject *type, PyObject *iter,
+math_sumprod_iter_step(PyObject *iter, iternextfunc object_next,
                        _Py_iternextvaluefunc value_next)
 {
-    return value_next(type, iter);
+    if (value_next != NULL) {
+        return value_next(iter);
+    }
+    PyObject *item = object_next(iter);
+    if (item != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(item)};
+    }
+    if (!PyErr_Occurred()) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
 }
 
 /*[clinic input]
@@ -2429,6 +2439,7 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
     PyValue term_i = PyValue_NULL, new_total = PyValue_NULL;
     PyObject *p_it, *q_it;
     PyValue total;
+    iternextfunc p_next, q_next;
     _Py_iternextvaluefunc p_next_value, q_next_value;
     bool p_stopped = false, q_stopped = false;
     bool int_path_enabled = true, int_total_in_use = false;
@@ -2454,6 +2465,8 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
     /* Capture both rows to preserve the original cached-slot behavior. */
     PyTypeObject *p_type = Py_TYPE(p_it);
     PyTypeObject *q_type = Py_TYPE(q_it);
+    p_next = p_type->tp_iternext;
+    q_next = q_type->tp_iternext;
     p_next_value = _PyType_VALUE_SLOT(p_type, iternext);
     q_next_value = _PyType_VALUE_SLOT(q_type, iternext);
     if (p_next_value != NULL) {
@@ -2475,7 +2488,7 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
         assert (!PyValue_IsNull(total));
 
         _PyStatusValue p_step = math_sumprod_iter_step(
-            p_type, p_it, p_next_value);
+            p_it, p_next, p_next_value);
         if (p_step.status == PYGEN_NEXT) {
             p_i = p_step.value;
         }
@@ -2492,7 +2505,7 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
             goto err_exit;
         }
         _PyStatusValue q_step = math_sumprod_iter_step(
-            q_type, q_it, q_next_value);
+            q_it, q_next, q_next_value);
         if (q_step.status == PYGEN_NEXT) {
             q_i = q_step.value;
         }

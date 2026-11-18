@@ -729,8 +729,7 @@ complex_cval(PyValueBorrow v)
 
 #define COMPLEX_BINOP(NAME, FUNC)                                   \
     static PyValue                                                  \
-    complex_##NAME##_value(PyTypeObject *owner, PyValueBorrow v,   \
-                           PyValueBorrow w)                         \
+    complex_##NAME##_value(PyValueBorrow v, PyValueBorrow w)        \
     {                                                               \
         Py_complex a;                                               \
         errno = 0;                                                  \
@@ -766,8 +765,7 @@ complex_cval(PyValueBorrow v)
         }                                                           \
         return PyValue_FromObjectSteal(PyComplex_FromCComplex(a));  \
    }                                                                \
-   _Py_VALUE_THUNK_BINARY(complex_##NAME, PyComplex_Type,           \
-                          complex_##NAME##_value)
+   _Py_VALUE_THUNK_BINARY(complex_##NAME, complex_##NAME##_value)
 
 COMPLEX_BINOP(add, sum)
 COMPLEX_BINOP(mul, prod)
@@ -786,7 +784,7 @@ complex_any_operand(PyValueBorrow v, Py_complex *c)
 }
 
 static PyValue
-complex_pow_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+complex_pow_value(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
     Py_complex p;
     Py_complex a, b;
@@ -829,20 +827,20 @@ complex_pow_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, PyValue
     }
     return PyValue_FromObjectSteal(PyComplex_FromCComplex(p));
 }
-_Py_VALUE_THUNK_TERNARY(complex_pow, PyComplex_Type, complex_pow_value)
+_Py_VALUE_THUNK_TERNARY(complex_pow, complex_pow_value)
 
 static PyValue
-complex_neg_value(PyTypeObject *owner, PyValueBorrow op)
+complex_neg_value(PyValueBorrow op)
 {
     Py_complex neg = complex_cval(op);
     neg.real = -neg.real;
     neg.imag = -neg.imag;
     return PyValue_FromObjectSteal(PyComplex_FromCComplex(neg));
 }
-_Py_VALUE_THUNK_UNARY(complex_neg, PyComplex_Type, complex_neg_value)
+_Py_VALUE_THUNK_UNARY(complex_neg, complex_neg_value)
 
 static PyValue
-complex_pos_value(PyTypeObject *owner, PyValueBorrow op)
+complex_pos_value(PyValueBorrow op)
 {
     PyObject *v = PyValue_AsKnownObjectBorrow(op);
     if (PyComplex_CheckExact(v)) {
@@ -850,10 +848,10 @@ complex_pos_value(PyTypeObject *owner, PyValueBorrow op)
     }
     return PyValue_FromObjectSteal(PyComplex_FromCComplex(complex_cval(op)));
 }
-_Py_VALUE_THUNK_UNARY(complex_pos, PyComplex_Type, complex_pos_value)
+_Py_VALUE_THUNK_UNARY(complex_pos, complex_pos_value)
 
 static PyValue
-complex_abs_value(PyTypeObject *owner, PyValueBorrow op)
+complex_abs_value(PyValueBorrow op)
 {
     double result;
 
@@ -866,18 +864,18 @@ complex_abs_value(PyTypeObject *owner, PyValueBorrow op)
     }
     return PyValue_FromDouble(result);
 }
-_Py_VALUE_THUNK_UNARY(complex_abs, PyComplex_Type, complex_abs_value)
+_Py_VALUE_THUNK_UNARY(complex_abs, complex_abs_value)
 
 static int
-complex_bool_value(PyTypeObject *owner, PyValueBorrow op)
+complex_bool_value(PyValueBorrow op)
 {
     Py_complex c = complex_cval(op);
     return c.real != 0.0 || c.imag != 0.0;
 }
-_Py_VALUE_THUNK_INQUIRY(complex_bool, PyComplex_Type, complex_bool_value)
+_Py_VALUE_THUNK_INQUIRY(complex_bool, complex_bool_value)
 
 static PyValue
-complex_richcompare_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, int op)
+complex_richcompare_value(PyValueBorrow v, PyValueBorrow w, int op)
 {
     Py_complex i;
     int equal;
@@ -916,7 +914,7 @@ complex_richcompare_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w,
 
     return PyValue_FromBool(equal == (op == Py_EQ));
 }
-_Py_VALUE_THUNK_RICHCMP(complex_richcompare, PyComplex_Type, complex_richcompare_value)
+_Py_VALUE_THUNK_RICHCMP(complex_richcompare, complex_richcompare_value)
 
 /*[clinic input]
 @permit_long_summary

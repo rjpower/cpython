@@ -3,7 +3,7 @@
 #define Py_VALUE_ADAPTER 1
 
 #include "Python.h"
-#include "pycore_long_value.h"    // _PyLong_ValueHash(NULL)
+#include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_object.h"        // _Py_SwappedOp
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
@@ -36,30 +36,28 @@ hash_object_value(PyObject *op, PyValueBorrow value)
          */
         if (_PyType_IsReady(tp)) {
             /* Otherwise, the object can't be hashed */
-            return _PyValue_HashNotImplemented(NULL, value);
+            return _PyValue_HashNotImplemented(value);
         }
         if (PyType_Ready(tp) < 0) {
             return -1;
         }
         if (tp->tp_hash == NULL) {
-            return _PyValue_HashNotImplemented(NULL, value);
+            return _PyValue_HashNotImplemented(value);
         }
     }
-    _Py_hashvaluefunc f = _PyType_VALUE_SLOT(tp, hash);
-    if (f == NULL) {
-        /* A type that is not ready has tp_hash but no value slot yet, as
-           upstream's PyObject_Hash() accepts it: take the adapter. */
-        f = (_Py_hashvaluefunc)_PyValueSlot_Adapters[row];
+    _Py_hashvaluefunc f = (_Py_hashvaluefunc)_PyType_VALUE_FIELD_AT(tp, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(tp, row);
+        return f(value);
     }
-    _PyType_CHECK_VALUE_ROW(tp, row);
-    return f(tp, value);
+    return tp->tp_hash(op);
 }
 
 static _Py_COLD_FUNCTION Py_NO_INLINE Py_hash_t
 hash_inline_float(PyValueBorrow value)
 {
     if (PyValue_IsInlineFloat(value)) {
-        return _PyFloat_ValueHash(NULL, value);
+        return _PyFloat_ValueHash(value);
     }
     _PyValue_FatalNotObject(value);
 }
@@ -73,7 +71,7 @@ Py_hash_t
     /* Inline int keys are common (ids, counters, indexes), so their hash
        stays inline; an inline float key is rare. */
     if (PyValue_IsInlineInt(value)) {
-        return _PyLong_ValueHash(NULL, value);
+        return _PyLong_ValueHash(value);
     }
     return hash_inline_float(value);
 }
@@ -147,7 +145,7 @@ int
     }
     PyObject *repr;
     if (PyValue_IsInlineFloat(value)) {
-        repr = _PyFloat_ValueRepr(NULL, value);
+        repr = _PyFloat_ValueRepr(value);
     }
     else if (PyValue_IsNone(value)) {
         return PyUnicodeWriter_WriteASCII(writer, "None", 4);
@@ -167,7 +165,7 @@ int
 }
 
 Py_hash_t
-_PyValue_HashNotImplemented(PyTypeObject *owner, PyValueBorrow value)
+_PyValue_HashNotImplemented(PyValueBorrow value)
 {
     PyErr_Format(PyExc_TypeError, "unhashable type: '%.200s'",
                  PyValue_TYPE(value)->tp_name);
@@ -175,7 +173,7 @@ _PyValue_HashNotImplemented(PyTypeObject *owner, PyValueBorrow value)
 }
 
 Py_hash_t
-_PyValue_GenericHash(PyTypeObject *owner, PyValueBorrow value)
+_PyValue_GenericHash(PyValueBorrow value)
 {
     PyObject *obj = PyValue_ObjectOrNull(value);
     if (obj != NULL) {

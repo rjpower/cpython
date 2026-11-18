@@ -39,7 +39,7 @@
 #include "pycore_stats.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
-#include "pycore_value_ops.h"     // _PyValue_GenericHash(NULL)
+#include "pycore_value_ops.h"     // _PyValue_GenericHash()
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "opcode.h"               // MAKE_CELL
 
@@ -229,7 +229,7 @@ releasebuffer_call_python(PyObject *self, Py_buffer *buffer);
 
 PyObject *
 _Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
-PyValue _Py_slot_tp_new_value(PyTypeObject *owner, PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
+PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
 
 static int
 slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value);
@@ -238,12 +238,11 @@ static PyObject *
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds);
 
 static PyValue
-slot_tp_call_value(PyTypeObject *owner, PyThreadState *tstate, PyObject *self,
+slot_tp_call_value(PyThreadState *tstate, PyObject *self,
                    const PyValue *args, size_t nargsf, PyObject *kwnames);
 
 static void **
 slotptr(PyTypeObject *type, int ioffset);
-
 
 static inline PyTypeObject *
 type_from_ref(PyObject *ref)
@@ -1356,15 +1355,6 @@ type_modified_recursive(PyTypeObject *type)
 void
 _PyType_Modified_Unlocked(PyTypeObject *type)
 {
-    /* An extension may store an object slot of a static type after
-       PyType_Ready: PyType_Modified() is its contract for that, so the value
-       slot of the new object slot gets its adapter here (design section 4).
-       A heap type's slots change only through update_one_slot(). */
-    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)
-        && (type->tp_flags & Py_TPFLAGS_READY))
-    {
-        _PyType_InstallValueAdapters(type);
-    }
     _PyTypeMutation scope = {0};
     if (_PyTypeMutation_Begin(&scope, type) == 0) {
         type_modified_recursive(type);
@@ -5640,7 +5630,7 @@ type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
     _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new_);
     if (value_new != NULL) {
         _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
-        result = value_new(type, type, args, nargs, kwnames);
+        result = value_new(type, args, nargs, kwnames);
         _PyValue_ASSERT_RESULT(tstate, result);
     }
     else {
@@ -5652,12 +5642,18 @@ type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
     if (!PyValue_IsNull(result)) {
         PyTypeObject *result_type = PyValue_TYPE(result);
         if (result_type == type || PyType_IsSubtype(result_type, type)) {
-            if (result_type->tp_init != NULL) {
-                /* tp_init has a value slot, the adapter if it has no value
-                   form. */
-                int status = _PyType_CALL_VALUE_SLOT(
-                    result_type, init_, PyValue_Borrow(result), args, nargs,
-                    kwnames);
+            initproc init = result_type->tp_init;
+            if (init != NULL) {
+                _Py_initvaluefunc value_init = _PyType_VALUE_SLOT(result_type, init_);
+                int status;
+                if (value_init != NULL) {
+                    _PyType_CHECK_VALUE_ROW(result_type, _Py_VALUE_SLOT_INDEX_init_);
+                    status = value_init(PyValue_Borrow(result), args, nargs, kwnames);
+                }
+                else {
+                    assert(PyValue_IsObject(result));
+                    status = init(PyValue_AsKnownObjectBorrow(result), tuple, kwds);
+                }
                 if (status < 0) {
                     PyValue_CLOSE(result);
                     result = PyValue_NULL;
@@ -5673,7 +5669,7 @@ done:
 }
 
 PyValue
-_Py_type_call_value(PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
+_Py_type_call_value(PyThreadState *tstate, PyObject *callable,
                      const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     return type_call_value(tstate, (PyTypeObject *)callable, args,
@@ -5704,8 +5700,8 @@ type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
                                  nargs, kwnames);
     }
     else {
-        result = _PyValue_TpCallAdapter(tstate, selected_call, metatype,
-                                        args, nargsf, kwnames);
+        result = _PyValue_TpCallAdapter(tstate, metatype, args, nargsf,
+                                         kwnames);
     }
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
@@ -7298,7 +7294,7 @@ done:
 }
 
 PyValue
-_Py_type_getattro_value(PyTypeObject *owner, PyValueBorrow type, PyObject *name)
+_Py_type_getattro_value(PyValueBorrow type, PyObject *name)
 {
     return _Py_type_getattro_impl(
         (PyTypeObject *)PyValue_AsKnownObjectBorrow(type), name, NULL);
@@ -7307,7 +7303,7 @@ _Py_type_getattro_value(PyTypeObject *owner, PyValueBorrow type, PyObject *name)
 Py_VALUE_ENTRY PyObject *
 _Py_type_getattro(PyObject *type, PyObject *name)
 {
-    return _PyValue_THUNK_EXIT(_Py_type_getattro_value(NULL, _Py_VALUE_ARG(type),
+    return _PyValue_THUNK_EXIT(_Py_type_getattro_value(_Py_VALUE_ARG(type),
                                                        name), BOX_SITE_ATTRIBUTE);
 }
 
@@ -7364,7 +7360,7 @@ update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 }
 
 static int
-type_setattro_value(PyTypeObject *owner, PyValueBorrow self_value, PyObject *name, PyValueBorrow value_arg)
+type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow value_arg)
 {
     PyObject *self = PyValue_AsKnownObjectBorrow(self_value);
     PyTypeObject *type = PyTypeObject_CAST(self);
@@ -7469,7 +7465,7 @@ done:
 
 }
 
-_Py_VALUE_THUNK_SETATTRO(type_setattro, PyType_Type, type_setattro_value)
+_Py_VALUE_THUNK_SETATTRO(type_setattro, type_setattro_value)
 
 static void
 type_dealloc_common(PyTypeObject *type)
@@ -8079,7 +8075,7 @@ _Py_object_init(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 int
-_Py_object_init_value(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+_Py_object_init_value(PyValueBorrow self, const PyValue *args,
                        Py_ssize_t nargs, PyObject *kwnames)
 {
     PyTypeObject *type = PyValue_TYPE(self);
@@ -8211,19 +8207,20 @@ object_repr(PyObject *self)
    pass gives them object's value side. */
 
 PyObject *
-_PyObject_ValueStr(PyTypeObject *owner, PyValueBorrow v)
+_PyObject_ValueStr(PyValueBorrow v)
 {
     PyTypeObject *tp = PyValue_TYPE(v);
-    if (tp->tp_repr == NULL) {
-        tp = &PyBaseObject_Type;
+    reprfunc f = tp->tp_repr;
+    if (f == NULL) {
+        f = object_repr;
     }
-    return _PyType_CALL_VALUE_SLOT(tp, repr, v);
+    return _PyValue_CallRepr(tp, f, _Py_VALUE_SLOT_INDEX_repr, v);
 }
 
-_Py_VALUE_THUNK_REPR(object_str, PyBaseObject_Type, _PyObject_ValueStr)
+_Py_VALUE_THUNK_REPR(object_str, _PyObject_ValueStr)
 
 PyValue
-_PyObject_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, int op)
+_PyObject_ValueRichCompare(PyValueBorrow v, PyValueBorrow w, int op)
 {
     switch (op) {
 
@@ -8240,7 +8237,8 @@ _PyObject_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w
         if (tp->tp_richcompare == NULL) {
             return PyValue_NotImplemented;
         }
-        PyValue res = _PyType_CALL_VALUE_SLOT(tp, richcompare, v, w, Py_EQ);
+        PyValue res = _PyValue_CallRichCompare(tp, tp->tp_richcompare,
+                                               v, w, Py_EQ);
         if (PyValue_IsNull(res) || PyValue_Is(res, PyValue_NotImplemented)) {
             return res;
         }
@@ -8263,7 +8261,7 @@ _PyObject_ValueRichCompare(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w
 Py_VALUE_ENTRY PyObject *
 _Py_BaseObject_RichCompare(PyObject *self, PyObject *other, int op)
 {
-    return _PyValue_THUNK_EXIT(_PyObject_ValueRichCompare(NULL, 
+    return _PyValue_THUNK_EXIT(_PyObject_ValueRichCompare(
         _Py_VALUE_ARG(self), _Py_VALUE_ARG(other), op), BOX_SITE_COMPARE);
 }
 
@@ -10305,551 +10303,6 @@ mro_type_at(PyObject *mro, Py_ssize_t i)
     return PyType_Check(base) ? (PyTypeObject *)base : NULL;
 }
 
-/* Given a type pointer and an offset gotten from a slotdef entry, return a
-   pointer to the actual slot.  This is not quite the same as simply adding
-   the offset to the type pointer, since it takes care to indirect through the
-   proper indirection pointer (as_buffer, etc.); it returns NULL if the
-   indirection pointer is NULL. */
-static inline Py_ALWAYS_INLINE void **
-slotptr_inline(PyTypeObject *type, size_t ioffset)
-{
-    char *ptr;
-    long offset = ioffset;
-
-    /* Note: this depends on the order of the members of PyHeapTypeObject! */
-    assert(offset >= 0);
-    assert((size_t)offset < offsetof(PyHeapTypeObject, ht_name));
-    if ((size_t)offset >= offsetof(PyHeapTypeObject, as_buffer)) {
-        ptr = (char *)type->tp_as_buffer;
-        offset -= offsetof(PyHeapTypeObject, as_buffer);
-    }
-    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_sequence)) {
-        ptr = (char *)type->tp_as_sequence;
-        offset -= offsetof(PyHeapTypeObject, as_sequence);
-    }
-    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_mapping)) {
-        ptr = (char *)type->tp_as_mapping;
-        offset -= offsetof(PyHeapTypeObject, as_mapping);
-    }
-    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_number)) {
-        ptr = (char *)type->tp_as_number;
-        offset -= offsetof(PyHeapTypeObject, as_number);
-    }
-    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_async)) {
-        ptr = (char *)type->tp_as_async;
-        offset -= offsetof(PyHeapTypeObject, as_async);
-    }
-    else {
-        ptr = (char *)type;
-    }
-    if (ptr != NULL)
-        ptr += offset;
-    return (void **)ptr;
-}
-
-
-/* The value-slot adapters (pyjit/rebuild round 3, values76-slot-design.md,
- * section 2). A row whose object slot is set but has no value form gets its
- * generic adapter in the value field, so a value slot is non-zero exactly
- * when its object slot is non-NULL (send and new_, which have no object-side
- * wrapper, are the exceptions). The adapter reads the object slot from its
- * owner argument, boxes an inline operand for the call, and turns the result
- * into a value. One adapter per row (the row's object slot is a constant
- * inside it) tail calls the per-kind body below; the bodies are the boxing
- * halves of the dispatchers that used to carry them. */
-
-#define ADAPTER_BOX(v, site, f) _PyValue_AdapterBox((v), site, (f))
-#define ADAPTER_RELEASE(v, obj) _PyValue_AdapterRelease((v), (obj))
-
-static Py_NO_INLINE PyValue
-adapt_unary(unaryfunc f, PyValueBorrow v)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_NUMBER, f);
-    if (a == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = f(a);
-    ADAPTER_RELEASE(v, a);
-    return _PyValue_FromObjectResult(res);
-}
-
-static Py_NO_INLINE PyValue
-adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_NUMBER, f);
-    if (a == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *b = ADAPTER_BOX(w, BOX_SITE_NUMBER, f);
-    if (b == NULL) {
-        ADAPTER_RELEASE(v, a);
-        return PyValue_NULL;
-    }
-    PyObject *res = f(a, b);
-    ADAPTER_RELEASE(w, b);
-    ADAPTER_RELEASE(v, a);
-    return _PyValue_FromObjectResult(res);
-}
-
-static Py_NO_INLINE PyValue
-adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
-              PyValueBorrow z)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_NUMBER, f);
-    if (a == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *b = ADAPTER_BOX(w, BOX_SITE_NUMBER, f);
-    if (b == NULL) {
-        ADAPTER_RELEASE(v, a);
-        return PyValue_NULL;
-    }
-    PyObject *c = ADAPTER_BOX(z, BOX_SITE_NUMBER, f);
-    if (c == NULL) {
-        ADAPTER_RELEASE(w, b);
-        ADAPTER_RELEASE(v, a);
-        return PyValue_NULL;
-    }
-    PyObject *res = f(a, b, c);
-    ADAPTER_RELEASE(z, c);
-    ADAPTER_RELEASE(w, b);
-    ADAPTER_RELEASE(v, a);
-    return _PyValue_FromObjectResult(res);
-}
-
-static Py_NO_INLINE int
-adapt_inquiry(inquiry f, PyValueBorrow v)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_NUMBER, f);
-    if (a == NULL) {
-        return -1;
-    }
-    int res = f(a);
-    ADAPTER_RELEASE(v, a);
-    return res;
-}
-
-static Py_NO_INLINE PyValue
-adapt_richcmp(richcmpfunc f, PyValueBorrow v, PyValueBorrow w, int op)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_COMPARE, f);
-    if (a == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *b = ADAPTER_BOX(w, BOX_SITE_COMPARE, f);
-    if (b == NULL) {
-        ADAPTER_RELEASE(v, a);
-        return PyValue_NULL;
-    }
-    PyObject *res = f(a, b, op);
-    ADAPTER_RELEASE(w, b);
-    ADAPTER_RELEASE(v, a);
-    return _PyValue_FromObjectResult(res);
-}
-
-static Py_NO_INLINE Py_hash_t
-adapt_hash(hashfunc f, PyValueBorrow v)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_UNATTRIBUTED, f);
-    if (a == NULL) {
-        return -1;
-    }
-    Py_hash_t res = f(a);
-    ADAPTER_RELEASE(v, a);
-    return res;
-}
-
-static Py_NO_INLINE PyObject *
-adapt_repr(reprfunc f, PyValueBorrow v)
-{
-    PyObject *a = ADAPTER_BOX(v, BOX_SITE_REPR, f);
-    if (a == NULL) {
-        return NULL;
-    }
-    PyObject *res = f(a);
-    ADAPTER_RELEASE(v, a);
-    return res;
-}
-
-static Py_NO_INLINE PyValue
-adapt_getattro(getattrofunc f, PyValueBorrow v, PyObject *name)
-{
-    PyObject *self = ADAPTER_BOX(v, BOX_SITE_ATTRIBUTE, f);
-    if (self == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = f(self, name);
-    ADAPTER_RELEASE(v, self);
-    return _PyValue_FromObjectResult(res);
-}
-
-// value is PyValue_NULL to delete.
-static Py_NO_INLINE int
-adapt_setattro(setattrofunc f, PyValueBorrow v, PyObject *name,
-               PyValueBorrow value)
-{
-    PyObject *self = ADAPTER_BOX(v, BOX_SITE_ATTRIBUTE, f);
-    if (self == NULL) {
-        return -1;
-    }
-    PyObject *w = NULL;
-    if (!PyValue_IsNull(value)) {
-        w = ADAPTER_BOX(value, BOX_SITE_ATTRIBUTE, f);
-        if (w == NULL) {
-            ADAPTER_RELEASE(v, self);
-            return -1;
-        }
-    }
-    int err = f(self, name, w);
-    if (w != NULL) {
-        ADAPTER_RELEASE(value, w);
-    }
-    ADAPTER_RELEASE(v, self);
-    return err;
-}
-
-// obj is PyValue_NULL for a class access.
-static Py_NO_INLINE PyValue
-adapt_descr_get(descrgetfunc f, PyObject *descr, PyValueBorrow obj,
-                PyObject *type)
-{
-    PyObject *o = NULL;
-    if (!PyValue_IsNull(obj)) {
-        o = ADAPTER_BOX(obj, BOX_SITE_ATTRIBUTE, f);
-        if (o == NULL) {
-            return PyValue_NULL;
-        }
-    }
-    PyObject *res = f(descr, o, type);
-    if (o != NULL) {
-        ADAPTER_RELEASE(obj, o);
-    }
-    return _PyValue_FromObjectResult(res);
-}
-
-static Py_NO_INLINE int
-adapt_descr_set(descrsetfunc f, PyObject *descr, PyValueBorrow obj,
-                PyValueBorrow value)
-{
-    PyObject *o = ADAPTER_BOX(obj, BOX_SITE_ATTRIBUTE, f);
-    if (o == NULL) {
-        return -1;
-    }
-    PyObject *w = NULL;
-    if (!PyValue_IsNull(value)) {
-        w = ADAPTER_BOX(value, BOX_SITE_ATTRIBUTE, f);
-        if (w == NULL) {
-            ADAPTER_RELEASE(obj, o);
-            return -1;
-        }
-    }
-    int res = f(descr, o, w);
-    if (w != NULL) {
-        ADAPTER_RELEASE(value, w);
-    }
-    ADAPTER_RELEASE(obj, o);
-    return res;
-}
-
-static Py_NO_INLINE PyValue
-adapt_subscript(binaryfunc f, PyObject *o, PyValueBorrow key)
-{
-    PyObject *k = ADAPTER_BOX(key, BOX_SITE_SEQUENCE, f);
-    if (k == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = f(o, k);
-    ADAPTER_RELEASE(key, k);
-    return _PyValue_FromObjectResult(res);
-}
-
-// value is PyValue_NULL to delete.
-static Py_NO_INLINE int
-adapt_ass_subscript(objobjargproc f, PyObject *o, PyValueBorrow key,
-                    PyValueBorrow value)
-{
-    PyObject *k = ADAPTER_BOX(key, BOX_SITE_SEQUENCE, f);
-    if (k == NULL) {
-        return -1;
-    }
-    PyObject *v = NULL;
-    if (!PyValue_IsNull(value)) {
-        v = ADAPTER_BOX(value, BOX_SITE_SEQUENCE, f);
-        if (v == NULL) {
-            ADAPTER_RELEASE(key, k);
-            return -1;
-        }
-    }
-    int res = f(o, k, v);
-    if (v != NULL) {
-        ADAPTER_RELEASE(value, v);
-    }
-    ADAPTER_RELEASE(key, k);
-    return res;
-}
-
-static Py_NO_INLINE PyValue
-adapt_item(ssizeargfunc f, PyObject *o, Py_ssize_t i)
-{
-    return _PyValue_FromObjectResult(f(o, i));
-}
-
-// value is PyValue_NULL to delete.
-static Py_NO_INLINE int
-adapt_ass_item(ssizeobjargproc f, PyObject *o, Py_ssize_t i,
-               PyValueBorrow value)
-{
-    if (PyValue_IsNull(value)) {
-        return f(o, i, NULL);
-    }
-    PyObject *v = ADAPTER_BOX(value, BOX_SITE_SEQUENCE, f);
-    if (v == NULL) {
-        return -1;
-    }
-    int res = f(o, i, v);
-    ADAPTER_RELEASE(value, v);
-    return res;
-}
-
-static Py_NO_INLINE int
-adapt_contains(objobjproc f, PyObject *o, PyValueBorrow item)
-{
-    PyObject *x = ADAPTER_BOX(item, BOX_SITE_SEQUENCE, f);
-    if (x == NULL) {
-        return -1;
-    }
-    int res = f(o, x);
-    ADAPTER_RELEASE(item, x);
-    return res;
-}
-
-/* The ITERNEXT adapter: an object tp_iternext's item is NEXT; NULL with
-   nothing pending is RETURN with no value; NULL with any exception, a
-   StopIteration included, is ERROR with the exception untouched (R11). */
-static Py_NO_INLINE _PyStatusValue
-adapt_iternext(iternextfunc f, PyObject *it)
-{
-    PyObject *res = f(it);
-    if (res != NULL) {
-        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
-    }
-    if (!PyErr_Occurred()) {
-        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
-    }
-    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
-}
-
-// The sequence stays an object; an inline other operand is boxed.
-static Py_NO_INLINE PyValue
-adapt_concat(binaryfunc f, PyObject *seq, PyValueBorrow w)
-{
-    PyObject *b = ADAPTER_BOX(w, BOX_SITE_NUMBER, f);
-    if (b == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = f(seq, b);
-    ADAPTER_RELEASE(w, b);
-    return _PyValue_FromObjectResult(res);
-}
-
-/* tp_init through its adapter: the argument window becomes the tuple and
-   dict that the object slot takes. */
-static Py_NO_INLINE int
-adapt_init(initproc f, PyValueBorrow self, const PyValue *args,
-           Py_ssize_t nargs, PyObject *kwnames)
-{
-    PyObject *tuple = _PyTuple_FromValueArray(args, nargs);
-    if (tuple == NULL) {
-        return -1;
-    }
-    PyObject *kwds = NULL;
-    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
-        kwds = _PyValue_StackAsDict(args + nargs, kwnames);
-        if (kwds == NULL) {
-            Py_DECREF(tuple);
-            return -1;
-        }
-    }
-    assert(PyValue_IsObject(self));
-    int res = f(PyValue_AsKnownObjectBorrow(self), tuple, kwds);
-    Py_XDECREF(kwds);
-    Py_DECREF(tuple);
-    return res;
-}
-
-/* The object slot of row of owner, as the row's own type, read where the
-   adapter runs: the offset is a constant, so the read folds to a load
-   through the right as_* pointer. */
-#define ADAPTER_SLOT(owner, PATH, TYPE) \
-    ((TYPE)*slotptr_inline((owner), offsetof(PyHeapTypeObject, PATH)))
-
-#define VALUE_ADAPTER_UNARY(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v) \
-    { return adapt_unary(ADAPTER_SLOT(owner, PATH, unaryfunc), v); }
-#define VALUE_ADAPTER_BINARY(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v, \
-                                   PyValueBorrow w) \
-    { return adapt_binary(ADAPTER_SLOT(owner, PATH, binaryfunc), v, w); }
-#define VALUE_ADAPTER_TERNARY(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v, \
-                                   PyValueBorrow w, PyValueBorrow z) \
-    { return adapt_ternary(ADAPTER_SLOT(owner, PATH, ternaryfunc), v, w, z); }
-#define VALUE_ADAPTER_INQUIRY(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v) \
-    { return adapt_inquiry(ADAPTER_SLOT(owner, PATH, inquiry), v); }
-#define VALUE_ADAPTER_RICHCMP(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v, \
-                                   PyValueBorrow w, int op) \
-    { return adapt_richcmp(ADAPTER_SLOT(owner, PATH, richcmpfunc), v, w, op); }
-#define VALUE_ADAPTER_HASH(FIELD, PATH) \
-    static Py_hash_t adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v) \
-    { return adapt_hash(ADAPTER_SLOT(owner, PATH, hashfunc), v); }
-#define VALUE_ADAPTER_REPR(FIELD, PATH) \
-    static PyObject *adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v) \
-    { return adapt_repr(ADAPTER_SLOT(owner, PATH, reprfunc), v); }
-#define VALUE_ADAPTER_GETATTRO(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v, \
-                                   PyObject *name) \
-    { return adapt_getattro(ADAPTER_SLOT(owner, PATH, getattrofunc), v, name); }
-#define VALUE_ADAPTER_SETATTRO(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyValueBorrow v, \
-                               PyObject *name, PyValueBorrow value) \
-    { \
-        return adapt_setattro(ADAPTER_SLOT(owner, PATH, setattrofunc), v, \
-                              name, value); \
-    }
-#define VALUE_ADAPTER_DESCRGET(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyObject *descr, \
-                                   PyValueBorrow obj, PyObject *type) \
-    { \
-        return adapt_descr_get(ADAPTER_SLOT(owner, PATH, descrgetfunc), \
-                               descr, obj, type); \
-    }
-#define VALUE_ADAPTER_DESCRSET(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyObject *descr, \
-                               PyValueBorrow obj, PyValueBorrow value) \
-    { \
-        return adapt_descr_set(ADAPTER_SLOT(owner, PATH, descrsetfunc), \
-                               descr, obj, value); \
-    }
-#define VALUE_ADAPTER_SUBSCRIPT(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyObject *o, \
-                                   PyValueBorrow key) \
-    { return adapt_subscript(ADAPTER_SLOT(owner, PATH, binaryfunc), o, key); }
-#define VALUE_ADAPTER_ASSSUBSCRIPT(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyObject *o, \
-                               PyValueBorrow key, PyValueBorrow value) \
-    { \
-        return adapt_ass_subscript( \
-            ADAPTER_SLOT(owner, PATH, objobjargproc), o, key, value); \
-    }
-#define VALUE_ADAPTER_ITEM(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyObject *o, \
-                                   Py_ssize_t i) \
-    { return adapt_item(ADAPTER_SLOT(owner, PATH, ssizeargfunc), o, i); }
-#define VALUE_ADAPTER_ASSITEM(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyObject *o, \
-                               Py_ssize_t i, PyValueBorrow value) \
-    { \
-        return adapt_ass_item(ADAPTER_SLOT(owner, PATH, ssizeobjargproc), \
-                              o, i, value); \
-    }
-#define VALUE_ADAPTER_CONTAINS(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyObject *o, \
-                               PyValueBorrow item) \
-    { return adapt_contains(ADAPTER_SLOT(owner, PATH, objobjproc), o, item); }
-#define VALUE_ADAPTER_ITERNEXT(FIELD, PATH) \
-    static _PyStatusValue adapter_##FIELD(PyTypeObject *owner, PyObject *it) \
-    { return adapt_iternext(ADAPTER_SLOT(owner, PATH, iternextfunc), it); }
-#define VALUE_ADAPTER_CONCAT(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, PyObject *seq, \
-                                   PyValueBorrow w) \
-    { return adapt_concat(ADAPTER_SLOT(owner, PATH, binaryfunc), seq, w); }
-#define VALUE_ADAPTER_VECTORCALL(FIELD, PATH) \
-    static PyValue adapter_##FIELD(PyTypeObject *owner, \
-                                   PyThreadState *tstate, PyObject *callable, \
-                                   const PyValue *args, size_t nargsf, \
-                                   PyObject *kwnames) \
-    { \
-        return _PyValue_TpCallAdapter( \
-            tstate, ADAPTER_SLOT(owner, PATH, ternaryfunc), callable, args, \
-            nargsf, kwnames); \
-    }
-#define VALUE_ADAPTER_INIT(FIELD, PATH) \
-    static int adapter_##FIELD(PyTypeObject *owner, PyValueBorrow self, \
-                               const PyValue *args, Py_ssize_t nargs, \
-                               PyObject *kwnames) \
-    { \
-        return adapt_init(ADAPTER_SLOT(owner, PATH, initproc), self, args, \
-                          nargs, kwnames); \
-    }
-// send and new_ have no object-side wrapper and no adapter.
-#define VALUE_ADAPTER_SEND(FIELD, PATH)
-#define VALUE_ADAPTER_NEW(FIELD, PATH)
-
-#define VALUE_ADAPTER_DEFINE(FIELD, PATH, KIND, WRAPPER) \
-    VALUE_ADAPTER_##KIND(FIELD, PATH)
-_Py_VALUE_SLOT_TABLE(VALUE_ADAPTER_DEFINE)
-#undef VALUE_ADAPTER_DEFINE
-
-// The adapter of each row, or NULL for send and new_.
-#define VALUE_ADAPTER_REF_SEND(FIELD) NULL
-#define VALUE_ADAPTER_REF_NEW(FIELD) NULL
-#define VALUE_ADAPTER_REF_UNARY(FIELD) _Py_VALUE_SLOT_INIT(FIELD, adapter_##FIELD)
-#define VALUE_ADAPTER_REF_BINARY(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_TERNARY(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_INQUIRY(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_RICHCMP(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_HASH(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_REPR(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_GETATTRO(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_SETATTRO(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_DESCRGET(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_DESCRSET(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_SUBSCRIPT(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_ASSSUBSCRIPT(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_ITEM(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_ASSITEM(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_CONTAINS(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_ITERNEXT(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_CONCAT(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_VECTORCALL(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-#define VALUE_ADAPTER_REF_INIT(FIELD) VALUE_ADAPTER_REF_UNARY(FIELD)
-
-const _Py_valuefunc _PyValueSlot_Adapters[_Py_VALUE_SLOT_COUNT] = {
-#define VALUE_ADAPTER_ENTRY(FIELD, PATH, KIND, WRAPPER) \
-    [_Py_VALUE_SLOT_INDEX_##FIELD] = VALUE_ADAPTER_REF_##KIND(FIELD),
-    _Py_VALUE_SLOT_TABLE(VALUE_ADAPTER_ENTRY)
-#undef VALUE_ADAPTER_ENTRY
-};
-
-// The adapter of row, or NULL if the row has none (send and new_).
-static inline _Py_valuefunc
-value_slot_adapter(int row)
-{
-    return _PyValueSlot_Adapters[row];
-}
-
-/* The second part of the value pass (section 4): every value field that is
-   still 0 beside a non-NULL object slot takes the row's adapter, so that a
-   value slot is non-zero exactly when its object slot is non-NULL. Also run
-   by PyType_Modified() for a static type, whose extension may have stored an
-   object slot after PyType_Ready. */
-void
-_PyType_InstallValueAdapters(PyTypeObject *type)
-{
-    for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
-        _Py_valuefunc *field = value_slot_field(type, row);
-        if (*field != NULL) {
-            continue;
-        }
-        _Py_valuefunc adapter = value_slot_adapter(row);
-        if (adapter != NULL && value_slot_object(type, row) != NULL) {
-            *field = adapter;
-        }
-    }
-}
-
 /* Inherit the value slots, once the object slots are final (section 4.4).
    A value field that is set already is the type's own definition. A field
    that is 0 takes the pair table's value side for its object slot, if the
@@ -10865,11 +10318,6 @@ type_ready_inherit_value(PyTypeObject *type)
     uint64_t own = 0;
     for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
         _Py_valuefunc *field = value_slot_field(type, row);
-        if (*field == value_slot_adapter(row)) {
-            /* The early pass of _PyTypes_InitTypes() may have installed it;
-               the type's own, inherited or paired value form comes first. */
-            *field = NULL;
-        }
         if (*field != NULL) {
             own |= (uint64_t)1 << row;
             continue;
@@ -10891,7 +10339,6 @@ type_ready_inherit_value(PyTypeObject *type)
             }
         }
     }
-    _PyType_InstallValueAdapters(type);
     return own;
 }
 
@@ -10911,10 +10358,6 @@ static int
 value_slot_pair_is_known(PyTypeObject *type, int row, void *object,
                          _Py_valuefunc value)
 {
-    if (value == value_slot_adapter(row)) {
-        // The adapter reads whatever object slot its owner holds.
-        return 1;
-    }
     for (size_t i = 0; i < _PyValueSlot_PairCount; i++) {
         if (_PyValueSlot_Pairs[i].row == row
             && _PyValueSlot_Pairs[i].object == object
@@ -10944,12 +10387,6 @@ check_value_row(PyTypeObject *type, int row, int own)
 {
     _Py_valuefunc value = *value_slot_field(type, row);
     if (value == NULL) {
-        if (value_slot_adapter(row) != NULL
-            && value_slot_object(type, row) != NULL)
-        {
-            value_slot_invariant_failed(type, row,
-                                        "is 0 beside an object slot");
-        }
         return;
     }
     void *object = value_slot_object(type, row);
@@ -12226,7 +11663,7 @@ check_pow_args_value(Py_ssize_t nargs)
 }
 
 static PyValue
-wrap_binaryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_binaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                  void *wrapped, int reflected)
 {
     _Py_binaryvaluefunc func = (_Py_binaryvaluefunc)wrapped;
@@ -12235,25 +11672,25 @@ wrap_binaryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, P
         return PyValue_NULL;
     }
     PyValueBorrow other = PyValue_Borrow(args[0]);
-    return reflected ? func(owner, other, self) : func(owner, self, other);
+    return reflected ? func(other, self) : func(self, other);
 }
 
 static PyValue
-wrap_binaryvalue_l(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_binaryvalue_l(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                    PyObject *kwnames, void *wrapped)
 {
-    return wrap_binaryvalue(owner, self, args, nargs, wrapped, 0);
+    return wrap_binaryvalue(self, args, nargs, wrapped, 0);
 }
 
 static PyValue
-wrap_binaryvalue_r(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_binaryvalue_r(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                    PyObject *kwnames, void *wrapped)
 {
-    return wrap_binaryvalue(owner, self, args, nargs, wrapped, 1);
+    return wrap_binaryvalue(self, args, nargs, wrapped, 1);
 }
 
 static PyValue
-wrap_ternaryvalue_impl(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+wrap_ternaryvalue_impl(PyValueBorrow self, const PyValue *args,
                        Py_ssize_t nargs, void *wrapped, int reflected)
 {
     _Py_ternaryvaluefunc func = (_Py_ternaryvaluefunc)wrapped;
@@ -12265,25 +11702,25 @@ wrap_ternaryvalue_impl(PyTypeObject *owner, PyValueBorrow self, const PyValue *a
     PyValueBorrow other = PyValue_Borrow(args[0]);
     PyValueBorrow third = size == 2
         ? PyValue_Borrow(args[1]) : PyValue_FromObjectBorrow(Py_None);
-    return reflected ? func(owner, other, self, third) : func(owner, self, other, third);
+    return reflected ? func(other, self, third) : func(self, other, third);
 }
 
 static PyValue
-wrap_ternaryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_ternaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped)
 {
-    return wrap_ternaryvalue_impl(owner, self, args, nargs, wrapped, 0);
+    return wrap_ternaryvalue_impl(self, args, nargs, wrapped, 0);
 }
 
 static PyValue
-wrap_ternaryvalue_r(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_ternaryvalue_r(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                     PyObject *kwnames, void *wrapped)
 {
-    return wrap_ternaryvalue_impl(owner, self, args, nargs, wrapped, 1);
+    return wrap_ternaryvalue_impl(self, args, nargs, wrapped, 1);
 }
 
 static PyValue
-wrap_unaryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_unaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                 PyObject *kwnames, void *wrapped)
 {
     _Py_unaryvaluefunc func = (_Py_unaryvaluefunc)wrapped;
@@ -12291,11 +11728,11 @@ wrap_unaryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py
     if (!check_num_args_value(nargs, 0)) {
         return PyValue_NULL;
     }
-    return func(owner, self);
+    return func(self);
 }
 
 static PyValue
-wrap_inquiryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_inquiryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped)
 {
     _Py_inquiryvaluefunc func = (_Py_inquiryvaluefunc)wrapped;
@@ -12303,7 +11740,7 @@ wrap_inquiryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
     if (!check_num_args_value(nargs, 0)) {
         return PyValue_NULL;
     }
-    int res = func(owner, self);
+    int res = func(self);
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
@@ -12311,7 +11748,7 @@ wrap_inquiryvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
 }
 
 static PyValue
-wrap_hashvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_hashvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames, void *wrapped)
 {
     _Py_hashvaluefunc func = (_Py_hashvaluefunc)wrapped;
@@ -12319,7 +11756,7 @@ wrap_hashvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_
     if (!check_num_args_value(nargs, 0)) {
         return PyValue_NULL;
     }
-    Py_hash_t res = func(owner, self);
+    Py_hash_t res = func(self);
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
@@ -12327,7 +11764,7 @@ wrap_hashvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_
 }
 
 static PyValue
-wrap_richcmpvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_richcmpvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   void *wrapped, int op)
 {
     _Py_richcmpvaluefunc func = (_Py_richcmpvaluefunc)wrapped;
@@ -12335,16 +11772,16 @@ wrap_richcmpvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    return func(owner, self, PyValue_Borrow(args[0]), op);
+    return func(self, PyValue_Borrow(args[0]), op);
 }
 
 #undef RICHCMP_VALUE_WRAPPER
 #define RICHCMP_VALUE_WRAPPER(NAME, OP) \
 static PyValue \
-wrap_richcmpvalue_##NAME(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, \
+wrap_richcmpvalue_##NAME(PyValueBorrow self, const PyValue *args, \
                          Py_ssize_t nargs, PyObject *kwnames, void *wrapped) \
 { \
-    return wrap_richcmpvalue(owner, self, args, nargs, wrapped, OP); \
+    return wrap_richcmpvalue(self, args, nargs, wrapped, OP); \
 }
 
 RICHCMP_VALUE_WRAPPER(lt, Py_LT)
@@ -12355,7 +11792,7 @@ RICHCMP_VALUE_WRAPPER(gt, Py_GT)
 RICHCMP_VALUE_WRAPPER(ge, Py_GE)
 
 static PyValue
-wrap_reprvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_reprvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames, void *wrapped)
 {
     _Py_reprvaluefunc func = (_Py_reprvaluefunc)wrapped;
@@ -12363,12 +11800,12 @@ wrap_reprvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_
     if (!check_num_args_value(nargs, 0)) {
         return PyValue_NULL;
     }
-    return _PyValue_FromObjectResult(func(owner, self));
+    return _PyValue_FromObjectResult(func(self));
 }
 
 // sq_concat and sq_inplace_concat: the sequence stays an object.
 static PyValue
-wrap_concatvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_concatvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                  PyObject *kwnames, void *wrapped)
 {
     _Py_concatvaluefunc func = (_Py_concatvaluefunc)wrapped;
@@ -12376,23 +11813,23 @@ wrap_concatvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, P
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    return func(owner, PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]));
+    return func(PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]));
 }
 
 // __call__: the receiver is a callable object; wrapped is its value
 // vectorcall slot.
 static PyValue
-wrap_callvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_callvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames, void *wrapped)
 {
-    _Py_callvaluefunc func = (_Py_callvaluefunc)wrapped;
+    _Py_vectorcallvaluefunc func = (_Py_vectorcallvaluefunc)wrapped;
 
     if (!PyValue_IsObject(self)) {
         PyErr_Format(PyExc_TypeError, "'%.200s' object is not callable",
                      PyValue_TYPE(self)->tp_name);
         return PyValue_NULL;
     }
-    return func(owner, _PyThreadState_GET(), PyValue_AsKnownObjectBorrow(self),
+    return func(_PyThreadState_GET(), PyValue_AsKnownObjectBorrow(self),
                 args, nargs, kwnames);
 }
 
@@ -12431,18 +11868,18 @@ getindex_value(PyObject *self, PyValueBorrow arg)
 }
 
 static PyValue
-wrap_subscriptvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_subscriptvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                     PyObject *kwnames, void *wrapped_value)
 {
     _Py_subscriptvaluefunc func = (_Py_subscriptvaluefunc)wrapped_value;
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    return func(owner, PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]));
+    return func(PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]));
 }
 
 static PyValue
-wrap_sq_itemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_sq_itemvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped_value)
 {
     _Py_itemvaluefunc func = (_Py_itemvaluefunc)wrapped_value;
@@ -12454,11 +11891,11 @@ wrap_sq_itemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
     if (i == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
-    return func(owner, obj, i);
+    return func(obj, i);
 }
 
 static PyValue
-wrap_asssubscriptvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+wrap_asssubscriptvalue(PyValueBorrow self, const PyValue *args,
                        Py_ssize_t nargs, PyObject *kwnames,
                        void *wrapped_value)
 {
@@ -12467,7 +11904,7 @@ wrap_asssubscriptvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *a
         set_unpack_2_error("__setitem__", nargs);
         return PyValue_NULL;
     }
-    int res = func(owner, PyValue_AsKnownObjectBorrow(self),
+    int res = func(PyValue_AsKnownObjectBorrow(self),
                    PyValue_Borrow(args[0]), PyValue_Borrow(args[1]));
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
@@ -12476,14 +11913,14 @@ wrap_asssubscriptvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *a
 }
 
 static PyValue
-wrap_delitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_delitemvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped_value)
 {
     _Py_asssubscriptvaluefunc func = (_Py_asssubscriptvaluefunc)wrapped_value;
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    int res = func(owner, PyValue_AsKnownObjectBorrow(self),
+    int res = func(PyValue_AsKnownObjectBorrow(self),
                    PyValue_Borrow(args[0]), PyValue_Borrow(PyValue_NULL));
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
@@ -12492,7 +11929,7 @@ wrap_delitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
 }
 
 static PyValue
-wrap_sq_setitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+wrap_sq_setitemvalue(PyValueBorrow self, const PyValue *args,
                      Py_ssize_t nargs, PyObject *kwnames,
                      void *wrapped_value)
 {
@@ -12506,7 +11943,7 @@ wrap_sq_setitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *arg
     if (i == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
-    int res = func(owner, obj, i, PyValue_Borrow(args[1]));
+    int res = func(obj, i, PyValue_Borrow(args[1]));
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
@@ -12514,7 +11951,7 @@ wrap_sq_setitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *arg
 }
 
 static PyValue
-wrap_sq_delitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+wrap_sq_delitemvalue(PyValueBorrow self, const PyValue *args,
                      Py_ssize_t nargs, PyObject *kwnames,
                      void *wrapped_value)
 {
@@ -12527,7 +11964,7 @@ wrap_sq_delitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *arg
     if (i == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
-    int res = func(owner, obj, i, PyValue_Borrow(PyValue_NULL));
+    int res = func(obj, i, PyValue_Borrow(PyValue_NULL));
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
     }
@@ -12535,14 +11972,14 @@ wrap_sq_delitemvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *arg
 }
 
 static PyValue
-wrap_containsvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_containsvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                    PyObject *kwnames, void *wrapped_value)
 {
     _Py_containsvaluefunc func = (_Py_containsvaluefunc)wrapped_value;
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    int res = func(owner, PyValue_AsKnownObjectBorrow(self),
+    int res = func(PyValue_AsKnownObjectBorrow(self),
                    PyValue_Borrow(args[0]));
     if (res == -1 && PyErr_Occurred()) {
         return PyValue_NULL;
@@ -12553,14 +11990,14 @@ wrap_containsvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
 // tp_iternext: exhaustion and a return value become StopIteration, as the
 // object wrapper's NULL result does.
 static PyValue
-wrap_nextvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_nextvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames, void *wrapped_value)
 {
     _Py_iternextvaluefunc func = (_Py_iternextvaluefunc)wrapped_value;
     if (!check_num_args_value(nargs, 0)) {
         return PyValue_NULL;
     }
-    _PyStatusValue r = func(owner, PyValue_AsKnownObjectBorrow(self));
+    _PyStatusValue r = func(PyValue_AsKnownObjectBorrow(self));
     switch (r.status) {
     case PYGEN_NEXT:
         return r.value;
@@ -12595,7 +12032,7 @@ wrapper_arg_box(PyValueBorrow v)
 
 // __getattribute__: wrapped is the getattro value side.
 static PyValue
-wrap_getattrvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_getattrvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped)
 {
     _Py_getattrovaluefunc func = (_Py_getattrovaluefunc)wrapped;
@@ -12613,13 +12050,13 @@ wrap_getattrvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, 
         _PyValue_AdapterRelease(name, name_obj);
         return PyValue_NULL;
     }
-    PyValue res = func(owner, self, name_obj);
+    PyValue res = func(self, name_obj);
     _PyValue_AdapterRelease(name, name_obj);
     return res;
 }
 
 static PyValue
-setattr_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow name, PyValueBorrow value,
+setattr_value(PyValueBorrow self, PyValueBorrow name, PyValueBorrow value,
               void *wrapped, const char *what)
 {
     _Py_setattrovaluefunc func = (_Py_setattrovaluefunc)wrapped;
@@ -12640,39 +12077,39 @@ setattr_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow name, PyVal
         _PyValue_AdapterRelease(name, name_obj);
         return PyValue_NULL;
     }
-    int res = func(owner, self, name_obj, value);
+    int res = func(self, name_obj, value);
     _PyValue_AdapterRelease(name, name_obj);
     return res < 0 ? PyValue_NULL : PyValue_None;
 }
 
 // __setattr__: wrapped is the setattro value side.
 static PyValue
-wrap_setattrvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_setattrvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped)
 {
     if (!_PyArg_CheckPositional("__setattr__", nargs, 2, 2)) {
         return PyValue_NULL;
     }
-    return setattr_value(owner, self, PyValue_Borrow(args[0]),
+    return setattr_value(self, PyValue_Borrow(args[0]),
                          PyValue_Borrow(args[1]), wrapped, "__setattr__");
 }
 
 // __delattr__: the setattro value side with PyValue_NULL.
 static PyValue
-wrap_delattrvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_delattrvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                   PyObject *kwnames, void *wrapped)
 {
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    return setattr_value(owner, self, PyValue_Borrow(args[0]),
+    return setattr_value(self, PyValue_Borrow(args[0]),
                          PyValue_Borrow(PyValue_NULL), wrapped,
                          "__delattr__");
 }
 
 // __get__: the receiver is a descriptor, which is never inline.
 static PyValue
-wrap_descr_getvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_descr_getvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                     PyObject *kwnames, void *wrapped)
 {
     _Py_descrgetvaluefunc func = (_Py_descrgetvaluefunc)wrapped;
@@ -12700,7 +12137,7 @@ wrap_descr_getvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args
             return PyValue_NULL;
         }
     }
-    PyValue res = func(owner, PyValue_AsKnownObjectBorrow(self), obj, type_obj);
+    PyValue res = func(PyValue_AsKnownObjectBorrow(self), obj, type_obj);
     if (type_obj != NULL) {
         _PyValue_AdapterRelease(type, type_obj);
     }
@@ -12709,7 +12146,7 @@ wrap_descr_getvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args
 
 // __set__: the receiver is a descriptor, which is never inline.
 static PyValue
-wrap_descr_setvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_descr_setvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                     PyObject *kwnames, void *wrapped)
 {
     _Py_descrsetvaluefunc func = (_Py_descrsetvaluefunc)wrapped;
@@ -12717,14 +12154,14 @@ wrap_descr_setvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args
     if (!_PyArg_CheckPositional("__set__", nargs, 2, 2)) {
         return PyValue_NULL;
     }
-    int res = func(owner, PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]),
+    int res = func(PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]),
                    PyValue_Borrow(args[1]));
     return res < 0 ? PyValue_NULL : PyValue_None;
 }
 
 // __delete__: the descr_set value side with PyValue_NULL.
 static PyValue
-wrap_descr_deletevalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+wrap_descr_deletevalue(PyValueBorrow self, const PyValue *args,
                        Py_ssize_t nargs, PyObject *kwnames, void *wrapped)
 {
     _Py_descrsetvaluefunc func = (_Py_descrsetvaluefunc)wrapped;
@@ -12732,7 +12169,7 @@ wrap_descr_deletevalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *a
     if (!check_num_args_value(nargs, 1)) {
         return PyValue_NULL;
     }
-    int res = func(owner, PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]),
+    int res = func(PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]),
                    PyValue_Borrow(PyValue_NULL));
     return res < 0 ? PyValue_NULL : PyValue_None;
 }
@@ -12881,11 +12318,11 @@ wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
 }
 
 static PyValue
-wrap_initvalue(PyTypeObject *owner, PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+wrap_initvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames, void *wrapped)
 {
     _Py_initvaluefunc func = (_Py_initvaluefunc)wrapped;
-    int status = func(owner, self, args, nargs, kwnames);
+    int status = func(self, args, nargs, kwnames);
     return status < 0 ? PyValue_NULL : PyValue_None;
 }
 
@@ -12973,7 +12410,7 @@ tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyObject *object_result = NULL;
     if (value_new != NULL) {
         _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
-        result = value_new(type, subtype, args + 1, nargs - 1, kwnames);
+        result = value_new(subtype, args + 1, nargs - 1, kwnames);
         _PyValue_ASSERT_RESULT(tstate, result);
     }
     else {
@@ -13065,7 +12502,7 @@ method_is_overloaded(PyTypeObject *left, PyTypeObject *right, PyObject *name)
    so the operand that receives the call is an object. */
 #define SLOT1BINFULL_VALUE(VALUEFUNC, TESTFUNC, SLOTNAME, DUNDER, RDUNDER) \
 static PyValue \
-VALUEFUNC(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow other) \
+VALUEFUNC(PyValueBorrow self, PyValueBorrow other) \
 { \
     PyValue stack[2]; \
     PyThreadState *tstate = _PyThreadState_GET(); \
@@ -13111,35 +12548,33 @@ VALUEFUNC(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow other) \
 }
 
 #define SLOT1BIN(FUNCNAME, SLOTNAME, DUNDER, RDUNDER) \
-    static PyValue FUNCNAME##_value(PyTypeObject *, PyValueBorrow, \
-                                    PyValueBorrow); \
-    _Py_VALUE_THUNK_BINARY(FUNCNAME, *Py_TYPE(left), FUNCNAME##_value) \
+    static PyValue FUNCNAME##_value(PyValueBorrow, PyValueBorrow); \
+    _Py_VALUE_THUNK_BINARY(FUNCNAME, FUNCNAME##_value) \
     SLOT1BINFULL_VALUE(FUNCNAME##_value, FUNCNAME, SLOTNAME, DUNDER, RDUNDER)
 
 /* The in-place forms: the receiver is the heap-type operand, the other is
    any value. */
 #define SLOT1INPLACE(FUNCNAME, DUNDER) \
 static PyValue \
-FUNCNAME##_value(PyTypeObject *owner, PyValueBorrow self, \
-                  PyValueBorrow arg1) \
+FUNCNAME##_value(PyValueBorrow self, PyValueBorrow arg1) \
 { \
     PyValue stack[2]; \
     _PyValue_WindowPut(&stack[0], self); \
     _PyValue_WindowPut(&stack[1], arg1); \
     return vectorcall_method_value(&_Py_ID(DUNDER), stack, 2); \
 } \
-_Py_VALUE_THUNK_BINARY(FUNCNAME, *Py_TYPE(left), FUNCNAME##_value)
+_Py_VALUE_THUNK_BINARY(FUNCNAME, FUNCNAME##_value)
 
 /* The unary forms; a dunder's result can be inline. */
 #define SLOT0UNARY(FUNCNAME, DUNDER) \
 static PyValue \
-FUNCNAME##_value(PyTypeObject *owner, PyValueBorrow self) \
+FUNCNAME##_value(PyValueBorrow self) \
 { \
     PyValue stack[1]; \
     _PyValue_WindowPut(&stack[0], self); \
     return vectorcall_method_value(&_Py_ID(DUNDER), stack, 1); \
 } \
-_Py_VALUE_THUNK_UNARY(FUNCNAME, *Py_TYPE(self), FUNCNAME##_value)
+_Py_VALUE_THUNK_UNARY(FUNCNAME, FUNCNAME##_value)
 
 static Py_ssize_t
 slot_sq_length(PyObject *self)
@@ -13178,12 +12613,12 @@ slot_sq_length(PyObject *self)
    B8): the receiver is the heap-type instance, an object; the key, index or
    value goes to the dunder as a word, so an inline operand needs no box. A
    PyValue_NULL value deletes. */
-static PyValue slot_sq_item_value(PyTypeObject *owner, PyObject *, Py_ssize_t);
+static PyValue slot_sq_item_value(PyObject *, Py_ssize_t);
 
-_Py_VALUE_THUNK_ITEM(slot_sq_item, *Py_TYPE(self), slot_sq_item_value)
+_Py_VALUE_THUNK_ITEM(slot_sq_item, slot_sq_item_value)
 
 static PyValue
-slot_sq_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i)
+slot_sq_item_value(PyObject *self, Py_ssize_t i)
 {
     PyValue ival = PyValue_FromInt64(i);
     if (PyValue_IsNull(ival)) {
@@ -13197,12 +12632,12 @@ slot_sq_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t i)
     return retval;
 }
 
-static int slot_sq_ass_item_value(PyTypeObject *owner, PyObject *, Py_ssize_t, PyValueBorrow);
+static int slot_sq_ass_item_value(PyObject *, Py_ssize_t, PyValueBorrow);
 
-_Py_VALUE_THUNK_ASSITEM(slot_sq_ass_item, *Py_TYPE(self), slot_sq_ass_item_value)
+_Py_VALUE_THUNK_ASSITEM(slot_sq_ass_item, slot_sq_ass_item_value)
 
 static int
-slot_sq_ass_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t index, PyValueBorrow value)
+slot_sq_ass_item_value(PyObject *self, Py_ssize_t index, PyValueBorrow value)
 {
     PyValue stack[3];
     PyValue res;
@@ -13229,12 +12664,12 @@ slot_sq_ass_item_value(PyTypeObject *owner, PyObject *self, Py_ssize_t index, Py
     return 0;
 }
 
-static int slot_sq_contains_value(PyTypeObject *owner, PyObject *, PyValueBorrow);
+static int slot_sq_contains_value(PyObject *, PyValueBorrow);
 
-_Py_VALUE_THUNK_CONTAINS(slot_sq_contains, *Py_TYPE(self), slot_sq_contains_value)
+_Py_VALUE_THUNK_CONTAINS(slot_sq_contains, slot_sq_contains_value)
 
 static int
-slot_sq_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow value)
+slot_sq_contains_value(PyObject *self, PyValueBorrow value)
 {
     int attr_is_none = 0;
     PyValue stack[2];
@@ -13262,12 +12697,12 @@ slot_sq_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow value)
 
 #define slot_mp_length slot_sq_length
 
-static PyValue slot_mp_subscript_value(PyTypeObject *owner, PyObject *, PyValueBorrow);
+static PyValue slot_mp_subscript_value(PyObject *, PyValueBorrow);
 
-_Py_VALUE_THUNK_SUBSCRIPT(slot_mp_subscript, *Py_TYPE(self), slot_mp_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(slot_mp_subscript, slot_mp_subscript_value)
 
 static PyValue
-slot_mp_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
+slot_mp_subscript_value(PyObject *self, PyValueBorrow key)
 {
     PyValue stack[2];
     _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
@@ -13275,13 +12710,14 @@ slot_mp_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
     return vectorcall_method_value(&_Py_ID(__getitem__), stack, 2);
 }
 
-static int slot_mp_ass_subscript_value(PyTypeObject *owner, PyObject *, PyValueBorrow,
+static int slot_mp_ass_subscript_value(PyObject *, PyValueBorrow,
                                        PyValueBorrow);
 
-_Py_VALUE_THUNK_ASSSUBSCRIPT(slot_mp_ass_subscript, *Py_TYPE(self), slot_mp_ass_subscript_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(slot_mp_ass_subscript,
+                             slot_mp_ass_subscript_value)
 
 static int
-slot_mp_ass_subscript_value(PyTypeObject *owner, PyObject *self, PyValueBorrow key,
+slot_mp_ass_subscript_value(PyObject *self, PyValueBorrow key,
                             PyValueBorrow value)
 {
     PyValue stack[3];
@@ -13315,16 +12751,16 @@ static PyObject *slot_nb_power(PyObject *, PyObject *, PyObject *);
 SLOT1BINFULL_VALUE(slot_nb_power_binary_value, slot_nb_power, nb_power,
                    __pow__, __rpow__)
 
-static PyValue slot_nb_power_value(PyTypeObject *owner, PyValueBorrow, PyValueBorrow, PyValueBorrow);
+static PyValue slot_nb_power_value(PyValueBorrow, PyValueBorrow, PyValueBorrow);
 
-_Py_VALUE_THUNK_TERNARY(slot_nb_power, *Py_TYPE(base), slot_nb_power_value)
+_Py_VALUE_THUNK_TERNARY(slot_nb_power, slot_nb_power_value)
 
 static PyValue
-slot_nb_power_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow other,
+slot_nb_power_value(PyValueBorrow self, PyValueBorrow other,
                     PyValueBorrow modulus)
 {
     if (PyValue_Is(modulus, _PyValue_FromObjectKnown(Py_None)))
-        return slot_nb_power_binary_value(owner, self, other);
+        return slot_nb_power_binary_value(self, other);
 
     /* The following code is a copy of SLOT1BINFULL, but for three arguments. */
     PyValue stack[3];
@@ -13376,12 +12812,12 @@ SLOT0UNARY(slot_nb_negative, __neg__)
 SLOT0UNARY(slot_nb_positive, __pos__)
 SLOT0UNARY(slot_nb_absolute, __abs__)
 
-static int slot_nb_bool_value(PyTypeObject *owner, PyValueBorrow);
+static int slot_nb_bool_value(PyValueBorrow);
 
-_Py_VALUE_THUNK_INQUIRY(slot_nb_bool, *Py_TYPE(self), slot_nb_bool_value)
+_Py_VALUE_THUNK_INQUIRY(slot_nb_bool, slot_nb_bool_value)
 
 static int
-slot_nb_bool_value(PyTypeObject *owner, PyValueBorrow self)
+slot_nb_bool_value(PyValueBorrow self)
 {
     PyObject *self_object = PyValue_AsKnownObjectBorrow(self);
     int using_len = 0;
@@ -13447,7 +12883,7 @@ SLOT1INPLACE(slot_nb_inplace_matrix_multiply, __imatmul__)
 SLOT1INPLACE(slot_nb_inplace_remainder, __imod__)
 /* Can't use SLOT1INPLACE here, because nb_inplace_power is ternary */
 static PyValue
-slot_nb_inplace_power_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow arg1,
+slot_nb_inplace_power_value(PyValueBorrow self, PyValueBorrow arg1,
                             PyValueBorrow arg2)
 {
     PyValue stack[2];
@@ -13455,7 +12891,7 @@ slot_nb_inplace_power_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorr
     _PyValue_WindowPut(&stack[1], arg1);
     return vectorcall_method_value(&_Py_ID(__ipow__), stack, 2);
 }
-_Py_VALUE_THUNK_TERNARY(slot_nb_inplace_power, *Py_TYPE(base), slot_nb_inplace_power_value)
+_Py_VALUE_THUNK_TERNARY(slot_nb_inplace_power, slot_nb_inplace_power_value)
 SLOT1INPLACE(slot_nb_inplace_lshift, __ilshift__)
 SLOT1INPLACE(slot_nb_inplace_rshift, __irshift__)
 SLOT1INPLACE(slot_nb_inplace_and, __iand__)
@@ -13480,12 +12916,12 @@ slot_result_object(PyValue result)
     return object;
 }
 
-static PyObject *slot_tp_repr_value(PyTypeObject *owner, PyValueBorrow);
+static PyObject *slot_tp_repr_value(PyValueBorrow);
 
-_Py_VALUE_THUNK_REPR(slot_tp_repr, *Py_TYPE(self), slot_tp_repr_value)
+_Py_VALUE_THUNK_REPR(slot_tp_repr, slot_tp_repr_value)
 
 static PyObject *
-slot_tp_repr_value(PyTypeObject *owner, PyValueBorrow self)
+slot_tp_repr_value(PyValueBorrow self)
 {
     PyValue stack[1];
     _PyValue_WindowPut(&stack[0], self);
@@ -13501,12 +12937,12 @@ slot_tp_repr_value(PyTypeObject *owner, PyValueBorrow self)
                                 Py_TYPE(self_object)->tp_name, self_object);
 }
 
-static PyObject *slot_tp_str_value(PyTypeObject *owner, PyValueBorrow);
+static PyObject *slot_tp_str_value(PyValueBorrow);
 
-_Py_VALUE_THUNK_REPR(slot_tp_str, *Py_TYPE(self), slot_tp_str_value)
+_Py_VALUE_THUNK_REPR(slot_tp_str, slot_tp_str_value)
 
 static PyObject *
-slot_tp_str_value(PyTypeObject *owner, PyValueBorrow self)
+slot_tp_str_value(PyValueBorrow self)
 {
     PyValue stack[1];
     _PyValue_WindowPut(&stack[0], self);
@@ -13514,12 +12950,12 @@ slot_tp_str_value(PyTypeObject *owner, PyValueBorrow self)
         vectorcall_method_value(&_Py_ID(__str__), stack, 1));
 }
 
-static Py_hash_t slot_tp_hash_value(PyTypeObject *owner, PyValueBorrow);
+static Py_hash_t slot_tp_hash_value(PyValueBorrow);
 
-_Py_VALUE_THUNK_HASH(slot_tp_hash, *Py_TYPE(self), slot_tp_hash_value)
+_Py_VALUE_THUNK_HASH(slot_tp_hash, slot_tp_hash_value)
 
 static Py_hash_t
-slot_tp_hash_value(PyTypeObject *owner, PyValueBorrow self)
+slot_tp_hash_value(PyValueBorrow self)
 {
     int attr_is_none = 0;
     PyValue stack[1];
@@ -13530,7 +12966,7 @@ slot_tp_hash_value(PyTypeObject *owner, PyValueBorrow self)
         if (PyErr_Occurred()) {
             return -1;
         }
-        return _PyValue_HashNotImplemented(NULL, self);
+        return _PyValue_HashNotImplemented(self);
     }
     /* An inline int is its own hash. */
     if (PyValue_IsInlineInt(res)) {
@@ -13573,7 +13009,7 @@ slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyValue
-slot_tp_call_value(PyTypeObject *owner, PyThreadState *tstate, PyObject *self,
+slot_tp_call_value(PyThreadState *tstate, PyObject *self,
                    const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     PyObject *meth = NULL;
@@ -13616,7 +13052,7 @@ _PyType_IsGenericCallPair(PyTypeObject *type)
 /* The value sides of both need no value call: an instance of a Python
    class is never inline. */
 PyValue
-_Py_slot_tp_getattro_value(PyTypeObject *owner, PyValueBorrow self, PyObject *name)
+_Py_slot_tp_getattro_value(PyValueBorrow self, PyObject *name)
 {
     assert(!PyValue_IsInline(self));
     PyObject *stack[2] = {PyValue_AsKnownObjectBorrow(self), name};
@@ -13628,7 +13064,7 @@ Py_VALUE_ENTRY PyObject *
 _Py_slot_tp_getattro(PyObject *self, PyObject *name)
 {
     return _PyValue_THUNK_EXIT(
-        _Py_slot_tp_getattro_value(NULL, _Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
+        _Py_slot_tp_getattro_value(_Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
 }
 
 static inline PyObject *
@@ -13657,7 +13093,7 @@ call_attribute(PyObject *self, PyObject *attr, PyObject *name)
 }
 
 PyValue
-_Py_slot_tp_getattr_hook_value(PyTypeObject *owner, PyValueBorrow self_value, PyObject *name)
+_Py_slot_tp_getattr_hook_value(PyValueBorrow self_value, PyObject *name)
 {
     assert(!PyValue_IsInline(self_value));
     // The generic read below does not test the name.
@@ -13683,7 +13119,7 @@ _Py_slot_tp_getattr_hook_value(PyTypeObject *owner, PyValueBorrow self_value, Py
             tp, _Py_VALUE_SLOT_INDEX_getattro, (void *)_Py_slot_tp_getattro,
             _Py_VALUE_SLOT_INIT(getattro, _Py_slot_tp_getattro_value));
 #endif
-        return _Py_slot_tp_getattro_value(NULL, self_value, name);
+        return _Py_slot_tp_getattro_value(self_value, name);
     }
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
@@ -13725,15 +13161,15 @@ Py_VALUE_ENTRY PyObject *
 _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
 {
     return _PyValue_THUNK_EXIT(
-        _Py_slot_tp_getattr_hook_value(NULL, _Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
+        _Py_slot_tp_getattr_hook_value(_Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
 }
 
-static int slot_tp_setattro_value(PyTypeObject *owner, PyValueBorrow, PyObject *, PyValueBorrow);
+static int slot_tp_setattro_value(PyValueBorrow, PyObject *, PyValueBorrow);
 
-_Py_VALUE_THUNK_SETATTRO(slot_tp_setattro, *Py_TYPE(self), slot_tp_setattro_value)
+_Py_VALUE_THUNK_SETATTRO(slot_tp_setattro, slot_tp_setattro_value)
 
 static int
-slot_tp_setattro_value(PyTypeObject *owner, PyValueBorrow self, PyObject *name, PyValueBorrow value)
+slot_tp_setattro_value(PyValueBorrow self, PyObject *name, PyValueBorrow value)
 {
     PyValue stack[3];
     PyValue res;
@@ -13762,12 +13198,12 @@ static PyObject *name_op[] = {
     &_Py_ID(__ge__),
 };
 
-static PyValue slot_tp_richcompare_value(PyTypeObject *owner, PyValueBorrow, PyValueBorrow, int);
+static PyValue slot_tp_richcompare_value(PyValueBorrow, PyValueBorrow, int);
 
-_Py_VALUE_THUNK_RICHCMP(slot_tp_richcompare, *Py_TYPE(left), slot_tp_richcompare_value)
+_Py_VALUE_THUNK_RICHCMP(slot_tp_richcompare, slot_tp_richcompare_value)
 
 static PyValue
-slot_tp_richcompare_value(PyTypeObject *owner, PyValueBorrow self, PyValueBorrow other, int op)
+slot_tp_richcompare_value(PyValueBorrow self, PyValueBorrow other, int op)
 {
     PyValue stack[2];
     _PyValue_WindowPut(&stack[0], self);
@@ -13824,7 +13260,7 @@ slot_tp_iter(PyObject *self)
    StopIteration included, as the object slot leaves it (R11). The object
    slot_tp_iternext is its thunk and keeps its name. */
 static _PyStatusValue
-slot_tp_iternext_value(PyTypeObject *owner, PyObject *self)
+slot_tp_iternext_value(PyObject *self)
 {
     PyObject *stack[1] = {self};
     PyObject *res = vectorcall_method(&_Py_ID(__next__), stack, 1);
@@ -13835,7 +13271,7 @@ slot_tp_iternext_value(PyTypeObject *owner, PyObject *self)
     return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(slot_tp_iternext, *Py_TYPE(self), slot_tp_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(slot_tp_iternext, slot_tp_iternext_value)
 
 int
 _PyType_HasSlotTpIternext(PyTypeObject *type)
@@ -13843,12 +13279,12 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
     return type->tp_iternext == slot_tp_iternext;
 }
 
-static PyValue slot_tp_descr_get_value(PyTypeObject *owner, PyObject *, PyValueBorrow, PyObject *);
+static PyValue slot_tp_descr_get_value(PyObject *, PyValueBorrow, PyObject *);
 
-_Py_VALUE_THUNK_DESCRGET(slot_tp_descr_get, *Py_TYPE(descr), slot_tp_descr_get_value)
+_Py_VALUE_THUNK_DESCRGET(slot_tp_descr_get, slot_tp_descr_get_value)
 
 static PyValue
-slot_tp_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
+slot_tp_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyTypeObject *tp = Py_TYPE(self);
     _PyStatusValue found = _PyType_LookupValue(tp, &_Py_ID(__get__));
@@ -13878,12 +13314,12 @@ slot_tp_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, 
     return res;
 }
 
-static int slot_tp_descr_set_value(PyTypeObject *owner, PyObject *, PyValueBorrow, PyValueBorrow);
+static int slot_tp_descr_set_value(PyObject *, PyValueBorrow, PyValueBorrow);
 
-_Py_VALUE_THUNK_DESCRSET(slot_tp_descr_set, *Py_TYPE(descr), slot_tp_descr_set_value)
+_Py_VALUE_THUNK_DESCRSET(slot_tp_descr_set, slot_tp_descr_set_value)
 
 static int
-slot_tp_descr_set_value(PyTypeObject *owner, PyObject *self, PyValueBorrow target,
+slot_tp_descr_set_value(PyObject *self, PyValueBorrow target,
                         PyValueBorrow value)
 {
     PyValue stack[3];
@@ -13905,7 +13341,7 @@ slot_tp_descr_set_value(PyTypeObject *owner, PyObject *self, PyValueBorrow targe
 }
 
 int
-_Py_slot_tp_init_value(PyTypeObject *owner, PyValueBorrow self, const PyValue *args,
+_Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
                         Py_ssize_t nargs, PyObject *kwnames)
 {
     assert(PyValue_IsObject(self));
@@ -13965,7 +13401,7 @@ _Py_slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
         return 0;
     }
     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
-        return _Py_slot_tp_init_value(NULL, PyValue_FromObjectBorrow(self),
+        return _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
                                       _PyTuple_ITEMS(args), nargs, NULL);
     }
     PyThreadState *tstate = _PyThreadState_GET();
@@ -13975,14 +13411,14 @@ _Py_slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
     if (window == NULL) {
         return -1;
     }
-    int result = _Py_slot_tp_init_value(NULL, PyValue_FromObjectBorrow(self),
+    int result = _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
                                          window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return result;
 }
 
 PyValue
-_Py_slot_tp_new_value(PyTypeObject *owner, PyTypeObject *type, const PyValue *args,
+_Py_slot_tp_new_value(PyTypeObject *type, const PyValue *args,
                        Py_ssize_t nargs, PyObject *kwnames)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -14019,7 +13455,7 @@ _Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     PyValue result;
     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
-        result = _Py_slot_tp_new_value(NULL, type, _PyTuple_ITEMS(args), nargs, NULL);
+        result = _Py_slot_tp_new_value(type, _PyTuple_ITEMS(args), nargs, NULL);
     }
     else {
         PyObject *kwnames;
@@ -14028,7 +13464,7 @@ _Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         if (window == NULL) {
             return NULL;
         }
-        result = _Py_slot_tp_new_value(NULL, type, window, nargs, kwnames);
+        result = _Py_slot_tp_new_value(type, window, nargs, kwnames);
         _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     }
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
@@ -14851,7 +14287,38 @@ _PyType_ValueWrapper(const struct wrapperbase *base)
 static void **
 slotptr(PyTypeObject *type, int ioffset)
 {
-    return slotptr_inline(type, ioffset);
+    char *ptr;
+    long offset = ioffset;
+
+    /* Note: this depends on the order of the members of PyHeapTypeObject! */
+    assert(offset >= 0);
+    assert((size_t)offset < offsetof(PyHeapTypeObject, ht_name));
+    if ((size_t)offset >= offsetof(PyHeapTypeObject, as_buffer)) {
+        ptr = (char *)type->tp_as_buffer;
+        offset -= offsetof(PyHeapTypeObject, as_buffer);
+    }
+    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_sequence)) {
+        ptr = (char *)type->tp_as_sequence;
+        offset -= offsetof(PyHeapTypeObject, as_sequence);
+    }
+    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_mapping)) {
+        ptr = (char *)type->tp_as_mapping;
+        offset -= offsetof(PyHeapTypeObject, as_mapping);
+    }
+    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_number)) {
+        ptr = (char *)type->tp_as_number;
+        offset -= offsetof(PyHeapTypeObject, as_number);
+    }
+    else if ((size_t)offset >= offsetof(PyHeapTypeObject, as_async)) {
+        ptr = (char *)type->tp_as_async;
+        offset -= offsetof(PyHeapTypeObject, as_async);
+    }
+    else {
+        ptr = (char *)type;
+    }
+    if (ptr != NULL)
+        ptr += offset;
+    return (void **)ptr;
 }
 
 // Return true if "name" corresponds to at least one slot definition.  This is
@@ -14921,21 +14388,15 @@ static void
 check_ready_value_row(PyTypeObject *type, int row)
 {
     _Py_valuefunc value = *value_slot_field(type, row);
+    if (value == NULL) {
+        return;
+    }
     /* A static builtin type that finalization has cleared has no MRO or
        dict left to check against, but an object dump at exit still calls
        its slots (int's repr, for one). */
     if ((type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN)
         && !managed_static_type_index_is_set(type))
     {
-        return;
-    }
-    if (value == NULL) {
-        if (value_slot_adapter(row) != NULL
-            && value_slot_object(type, row) != NULL)
-        {
-            value_slot_invariant_failed(type, row,
-                                        "is 0 beside an object slot");
-        }
         return;
     }
     void *object = value_slot_object(type, row);
@@ -15264,12 +14725,6 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
     }
     _Py_valuefunc *value_ptr = row < 0 ? NULL : value_slot_field(type, row);
     assert(value_ptr != NULL || value_side == NULL);
-    if (value_side == NULL && slot_value != NULL && row >= 0) {
-        /* An object slot with no value side of its own (an extension type's
-           function, or descriptors that disagree on the value side) takes
-           the row's adapter (section 4). */
-        value_side = value_slot_adapter(row);
-    }
 
 #ifdef Py_GIL_DISABLED
     if (queued_updates != NULL) {
@@ -15744,11 +15199,7 @@ slotdef_value_side(PyTypeObject *type, const pytype_slotdef *p, void *object)
         return NULL;
     }
     _Py_valuefunc value = *value_slot_field(type, row);
-    if (value == NULL || value == value_slot_adapter(row)) {
-        /* An adapter stands for the object slot of its owner, so a
-           descriptor carries the object function alone, as for a type with
-           no value form (the early pass of _PyTypes_InitTypes() installs
-           adapters before PyType_Ready fills the dict). */
+    if (value == NULL) {
         value = value_slot_pair_side(row, object);
     }
     return (void *)value;
@@ -16004,7 +15455,7 @@ do_super_lookup(superobject *su, PyTypeObject *su_type, PyValueBorrow su_obj,
 }
 
 static PyValue
-super_getattro_value(PyTypeObject *owner, PyValueBorrow self, PyObject *name)
+super_getattro_value(PyValueBorrow self, PyObject *name)
 {
     superobject *su = superobject_CAST(PyValue_AsKnownObjectBorrow(self));
 
@@ -16025,7 +15476,7 @@ super_getattro_value(PyTypeObject *owner, PyValueBorrow self, PyObject *name)
     return r.value;
 }
 
-_Py_VALUE_THUNK_GETATTRO(super_getattro, PySuper_Type, super_getattro_value)
+_Py_VALUE_THUNK_GETATTRO(super_getattro, super_getattro_value)
 
 static PyTypeObject *
 supercheck(PyTypeObject *type, PyValueBorrow obj)
@@ -16130,7 +15581,7 @@ _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj, PyObject *name, int *me
 }
 
 static PyValue
-super_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, PyObject *type)
+super_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     superobject *su = superobject_CAST(self);
 
@@ -16173,7 +15624,7 @@ super_descr_get_value(PyTypeObject *owner, PyObject *self, PyValueBorrow obj, Py
     }
 }
 
-_Py_VALUE_THUNK_DESCRGET(super_descr_get, PySuper_Type, super_descr_get_value)
+_Py_VALUE_THUNK_DESCRGET(super_descr_get, super_descr_get_value)
 
 static int
 super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,

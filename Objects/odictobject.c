@@ -1603,9 +1603,10 @@ odict_richcompare_lock_held(PyObject *v, PyObject *w, int op)
         int eq;
 
         cmp = _PyValue_AsObjectResultAt(
-            _PyType_CALL_VALUE_SLOT(&PyDict_Type, richcompare,
-                                    PyValue_FromObjectBorrow(v),
-                                    PyValue_FromObjectBorrow(w), op),
+            _PyValue_CallRichCompare(&PyDict_Type,
+                                     PyDict_Type.tp_richcompare,
+                                     PyValue_FromObjectBorrow(v),
+                                     PyValue_FromObjectBorrow(w), op),
             BOX_SITE_COMPARE);
         if (cmp == NULL)
             return NULL;
@@ -1969,7 +1970,7 @@ error:
 }
 
 static _PyStatusValue
-odictiter_iternext_value(PyTypeObject *owner, PyObject *self)
+odictiter_iternext_value(PyObject *self)
 {
     _PyStatusValue r;
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1978,7 +1979,7 @@ odictiter_iternext_value(PyTypeObject *owner, PyObject *self)
     return r;
 }
 
-_Py_VALUE_THUNK_ITERNEXT(odictiter_iternext, PyODictIter_Type, odictiter_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(odictiter_iternext, odictiter_iternext_value)
 
 
 /* No need for tp_clear because odictiterobject is not mutable. */

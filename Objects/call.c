@@ -268,7 +268,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
     Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
     PyValue res;
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        res = _PyValue_InstanceVectorcall(NULL, tstate, callable,
+        res = _PyValue_InstanceVectorcall(tstate, callable,
                                           _PyTuple_ITEMS(tuple), nargs, NULL);
     }
     else {
@@ -278,7 +278,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
         if (window == NULL) {
             return NULL;
         }
-        res = _PyValue_InstanceVectorcall(NULL, 
+        res = _PyValue_InstanceVectorcall(
             tstate, callable, window, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
             kwnames);
         _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
@@ -1324,10 +1324,10 @@ value_tp_call(PyThreadState *tstate, PyObject *callable, ternaryfunc call,
 }
 
 PyValue
-_PyValue_TpCallAdapter(PyThreadState *tstate, ternaryfunc call,
-                       PyObject *callable, const PyValue *args,
-                       size_t nargsf, PyObject *kwnames)
+_PyValue_TpCallAdapter(PyThreadState *tstate, PyObject *callable,
+                       const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
+    ternaryfunc call = Py_TYPE(callable)->tp_call;
     if (call == NULL) {
         object_is_not_callable(tstate, callable);
         return PyValue_NULL;
@@ -1425,14 +1425,8 @@ value_call_has_vectorcall(PyObject *callable)
 static inline int
 value_call_is_tp_call(PyObject *callable)
 {
-    if (value_call_has_vectorcall(callable)) {
-        return 0;
-    }
-    /* A type with only an object tp_call (or none) holds the row's adapter
-       (or nothing) in its value call slot. */
-    _Py_valuefunc f = _PyType_VALUE_FIELD_AT(Py_TYPE(callable),
-                                             _Py_VALUE_SLOT_INDEX_call);
-    return f == NULL || f == _PyValueSlot_Adapters[_Py_VALUE_SLOT_INDEX_call];
+    return !value_call_has_vectorcall(callable) &&
+           _PyType_VALUE_SLOT(Py_TYPE(callable), call) == NULL;
 }
 
 static int
@@ -1604,7 +1598,7 @@ _PyValue_StackAsDict(const PyValue *values, PyObject *kwnames)
 }
 
 PyValue
-_PyValue_InstanceVectorcall(PyTypeObject *owner, PyThreadState *tstate, PyObject *callable,
+_PyValue_InstanceVectorcall(PyThreadState *tstate, PyObject *callable,
                             const PyValue *args, size_t nargsf,
                             PyObject *kwnames)
 {
@@ -1636,14 +1630,13 @@ Py_VALUE_ENTRY PyObject *
 _PyValue_TpCallThunk(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyTypeObject *tp = Py_TYPE(callable);
-    _Py_callvaluefunc f = _PyType_VALUE_SLOT(tp, call);
+    _Py_vectorcallvaluefunc f = _PyType_VALUE_SLOT(Py_TYPE(callable), call);
     assert(f != NULL);
     assert(PyTuple_Check(args));
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyValue res;
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        res = f(tp, tstate, callable, _PyTuple_ITEMS(args), nargs, NULL);
+        res = f(tstate, callable, _PyTuple_ITEMS(args), nargs, NULL);
     }
     else {
         PyObject *kwnames;
@@ -1652,7 +1645,7 @@ _PyValue_TpCallThunk(PyObject *callable, PyObject *args, PyObject *kwargs)
         if (window == NULL) {
             return NULL;
         }
-        res = f(tp, tstate, callable, window,
+        res = f(tstate, callable, window,
                 nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
         _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     }

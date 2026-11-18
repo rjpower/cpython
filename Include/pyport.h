@@ -372,6 +372,19 @@ extern "C" {
 #define _Py_HOT_FUNCTION
 #endif
 
+/* _Py_COLD_FUNCTION
+ * The cold attribute marks a function that handles rare cases, such as raising
+ * an error or a cleanup that can run Python code. The compiler treats every
+ * path that calls it as unlikely and moves those paths out of the hot code of
+ * the caller, so the common path stays short and dense.
+ */
+#if defined(__GNUC__) \
+    && ((__GNUC__ >= 5) || (__GNUC__ == 4) && (__GNUC_MINOR__ >= 3))
+#define _Py_COLD_FUNCTION __attribute__((cold))
+#else
+#define _Py_COLD_FUNCTION
+#endif
+
 // Ask the compiler to always inline a static inline function. The compiler can
 // ignore it and decides to not inline the function.
 //

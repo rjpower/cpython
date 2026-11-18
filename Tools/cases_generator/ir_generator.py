@@ -3868,11 +3868,11 @@ class IREmitter(Emitter):
         """Retire owners in order, checking each after the preceding close."""
         self.emit("{\n")
         boxes = " || value_temps->count != 0" if temps != "NULL" else ""
-        self.emit(f"int retire_needed = _PyValue_MayDealloc({first}){boxes};\n")
+        self.emit(f"int retire_needed = _PyValue_CloseMayReenter({first}){boxes};\n")
         self.emit("if (!retire_needed) {\n")
         self.emit(f"PyValue_XCLOSE({first}); {first} = PyValue_NULL;\n")
         if second is not None:
-            self.emit(f"retire_needed = _PyValue_MayDealloc({second});\n")
+            self.emit(f"retire_needed = _PyValue_CloseMayReenter({second});\n")
         self.emit("}\n")
         self.emit("if (retire_needed) {\n")
         # The values pass by value and are dead after the call (R-a)

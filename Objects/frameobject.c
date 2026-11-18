@@ -3852,7 +3852,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
 #ifdef Py_GIL_DISABLED
         if (PyValue_RefcountOnObject(value)) {
 #else
-        if (_PyValue_MayDealloc(value)) {
+        if (_PyValue_CloseMayReenter(value)) {
 #endif
             retire_redirect_values_slow(self->f_frame, retired, i, nretired);
             break;

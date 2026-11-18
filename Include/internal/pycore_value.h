@@ -95,17 +95,32 @@ typedef struct _PyValueTemps {
     Py_ssize_t capacity;
 } _PyValueTemps;
 
-/* Can releasing owner deallocate its object? Releasing a scalar, an
- * immortal or an owner that is not the last cannot run Python. */
+/* Can destroying op run Python code?  Exact int, float, complex, str and
+ * bytes objects own no references, have no finalizer and cannot be weakly
+ * referenced, so destroying one cannot.  Any other object may run a
+ * finalizer, a weakref callback or the destructor of an object it owns. */
 static inline int
-_PyValue_MayDealloc(PyValueBorrow owner)
+_PyObject_DestroyMayReenter(PyObject *op)
+{
+    PyTypeObject *type = Py_TYPE(op);
+    return !(type == &PyFloat_Type || type == &PyLong_Type
+             || type == &PyUnicode_Type || type == &PyBytes_Type
+             || type == &PyComplex_Type);
+}
+
+/* Can releasing owner run Python code?  Only releasing the last owner of an
+ * object whose destruction may reenter (_PyObject_DestroyMayReenter) can;
+ * releasing a scalar, an immortal or any other owner cannot. */
+static inline int
+_PyValue_CloseMayReenter(PyValueBorrow owner)
 {
     if (PyValue_IsObject(owner) && (owner.bits & 1) == 0) {
-        return Py_REFCNT((PyObject *)owner.bits) == 1;
+        PyObject *op = (PyObject *)owner.bits;
+        return Py_REFCNT(op) == 1 && _PyObject_DestroyMayReenter(op);
     }
     return 0;
 }
-#define _PyValue_MayDealloc(V0) (_PyValue_MayDealloc)(PyValue_Borrow(V0))
+#define _PyValue_CloseMayReenter(V0) (_PyValue_CloseMayReenter)(PyValue_Borrow(V0))
 
 PyAPI_FUNC(void) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
 PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps,
@@ -889,7 +904,7 @@ _PyValue_TryXCloseNoReentry(PyValue ref)
     return false;
 #else
     PyObject *object = BITS_TO_PTR(ref);
-    if (Py_REFCNT(object) <= 1) {
+    if (Py_REFCNT(object) <= 1 && _PyObject_DestroyMayReenter(object)) {
         return false;
     }
     Py_DECREF_MORTAL(object);

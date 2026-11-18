@@ -604,13 +604,13 @@ gen_try_set_executing(PyGenObject *gen)
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
-/* OLD, the value that a result displaced from a local.  Releasing a last
- * reference can run __del__, so that value waits in ir_displaced until the
- * handler finishes (release_displaced in the generator); any other value
- * cannot deallocate and is released at once. */
+/* OLD, the value that a result displaced from a local.  Releasing it may run
+ * Python (_PyValue_CloseMayReenter), so that value waits in ir_displaced until
+ * the handler finishes (release_displaced in the generator); any other value
+ * is released at once. */
 #define IR_RETIRE_LOCAL(OLD) \
     do { \
-        if (_PyValue_MayDealloc(OLD)) { \
+        if (_PyValue_CloseMayReenter(OLD)) { \
             assert(PyValue_IsNull(ir_displaced)); \
             ir_displaced = (OLD); \
         } \
@@ -750,7 +750,7 @@ gen_try_set_executing(PyGenObject *gen)
  * STORE_FAST words that the unpack replaces would store them.  The old value
  * of a local is released at once if that cannot run Python.  Returns -1 when
  * all are stored, or the index of the first element whose local's old value
- * may run __del__ (a last reference): nothing from it on is stored, and
+ * may run Python (_PyValue_CloseMayReenter): nothing from it on is stored, and
  * finish_unpack_to_locals() does the rest out of line, so that the release
  * sees the locals as the STORE_FAST sequence leaves them. */
 static inline int
@@ -758,7 +758,7 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
 {
     for (int i = 0; i < n; i++) {
         PyValue old = locals[i];
-        if (_PyValue_MayDealloc(old)) {
+        if (_PyValue_CloseMayReenter(old)) {
             return i;
         }
         PyValue *element = &window[n - 1 - i];

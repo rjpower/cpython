@@ -2034,7 +2034,7 @@ retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * line, so that the address of displaced is taken in this function's frame
  * and not in the handler's, which would then need a frame and a canary on
  * every entry (register-ir-v2-a3.md, 3.4). */
-static Py_NO_INLINE int
+static _Py_COLD_FUNCTION Py_NO_INLINE int
 finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *next, _PyValueTemps *temps,
                        PyValue displaced)
@@ -2240,7 +2240,7 @@ error_scope_clear(_PyInterpreterFrame *frame, _PyTransitionRoots *scope,
 
 /* Entered before the generic label bridge finisher. All descriptors are local
  * to this reached cold scope; no successful handler gains an owner record. */
-static Py_NO_INLINE _PyIRErrorResult
+static _Py_COLD_FUNCTION Py_NO_INLINE _PyIRErrorResult
 _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *origin, uint32_t entry,
                      _PyValueTemps *value_temps)
@@ -3272,7 +3272,7 @@ fail_post_args:
 /* This continuation is reached only when a remaining release may reenter.
  * Its record protects the result and retiring reservation through the final
  * code/exception close, whose referents can themselves invoke Python. */
-static Py_NO_INLINE PyValue
+static _Py_COLD_FUNCTION Py_NO_INLINE PyValue
 clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         int stage, PyValue result, uint8_t reason,
                         int initial_extent)

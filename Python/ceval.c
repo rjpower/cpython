@@ -3293,8 +3293,7 @@ clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
     roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
-    roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
-    assert(roots.shadow_status != _PyIR_SHADOW_MISMATCH);
+    roots.shadow_status = _PyIR_ObserveShadowRetirement(frame, reason);
     if (stage != _Py_FRAME_CLEAR_DONE) {
         _PyFrame_FinishClearExceptCode(frame, stage, &roots);
     }

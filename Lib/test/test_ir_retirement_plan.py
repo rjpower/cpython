@@ -26,6 +26,13 @@ def retiring_states():
             if state[0] == RETIRING]
 
 
+def setUpModule():
+    # Retirement records carry their shadow comparison only while observed.
+    previous = _testinternalcapi.set_retirement_shadow_observed(True)
+    unittest.addModuleCleanup(
+        _testinternalcapi.set_retirement_shadow_observed, previous)
+
+
 class RetirementPlanTests(unittest.TestCase):
     def routes(self, code):
         return (code, construct(code), code.replace(),

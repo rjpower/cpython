@@ -13,6 +13,13 @@ ERROR_SCOPE = 1 << 14
 NULL_CONTROL_READABLE = 3
 
 
+def setUpModule():
+    # Retirement records carry their shadow comparison only while observed.
+    previous = _testinternalcapi.set_retirement_shadow_observed(True)
+    unittest.addModuleCleanup(
+        _testinternalcapi.set_retirement_shadow_observed, previous)
+
+
 class ErrorScopeTests(unittest.TestCase):
     @support.requires_gil_enabled("foreign native scopes require the GIL or STW")
     def test_foreign_error_selection_during_head_locked_gc_walk(self):

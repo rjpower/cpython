@@ -638,8 +638,8 @@ TARGET(GEN_RETURN_RETIRED)
                            generator_payload(ir_word), &roots); \
     roots.retire_reason = _PyIR_RETIRE_NORMAL_RETURN; \
     _PyThreadState_PushTransitionRoots(tstate, &roots); \
-    roots.shadow_status = _PyIR_ShadowRetirement(dying, _PyIR_RETIRE_NORMAL_RETURN); \
-    assert(roots.shadow_status != _PyIR_SHADOW_MISMATCH); \
+    roots.shadow_status = _PyIR_ObserveShadowRetirement( \
+        dying, _PyIR_RETIRE_NORMAL_RETURN); \
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(dying); \
     Py_BEGIN_CRITICAL_SECTION(gen); \
     if (stage != _Py_FRAME_CLEAR_DONE) { \

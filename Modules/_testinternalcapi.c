@@ -4815,6 +4815,20 @@ get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
     return ids;
 }
 
+/* Make retirement records carry their shadow comparison; return the
+ * previous setting. */
+static PyObject *
+set_retirement_shadow_observed(PyObject *self, PyObject *arg)
+{
+    int observed = PyObject_IsTrue(arg);
+    if (observed < 0) {
+        return NULL;
+    }
+    int previous = _PyIR_ShadowRetirementObserved;
+    _PyIR_ShadowRetirementObserved = observed;
+    return PyBool_FromLong(previous);
+}
+
 /* Observe every node, including prefix-only and disarmed provider records.
  * Code and frame geometry may already be gone; do not rerun a shadow check. */
 static PyObject *
@@ -5359,6 +5373,7 @@ static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
+    {"set_retirement_shadow_observed", set_retirement_shadow_observed, METH_O},
     {"check_delegated_frame_copy", check_delegated_frame_copy, METH_VARARGS},
     {"check_clipped_delegated_frame_copy", check_clipped_delegated_frame_copy, METH_VARARGS},
     {"has_delegated_frame_phase", has_delegated_frame_phase, METH_O},

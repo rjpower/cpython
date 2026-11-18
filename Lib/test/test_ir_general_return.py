@@ -26,6 +26,13 @@ def general_code():
         locals=("owner", "result"), slots=2).replace(co_argcount=2)
 
 
+def setUpModule():
+    # Retirement records carry their shadow comparison only while observed.
+    previous = _testinternalcapi.set_retirement_shadow_observed(True)
+    unittest.addModuleCleanup(
+        _testinternalcapi.set_retirement_shadow_observed, previous)
+
+
 class GeneralReturnTests(unittest.TestCase):
     def test_remaining_owner_is_valid_but_not_an_empty_return(self):
         code = general_code()

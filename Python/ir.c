@@ -885,6 +885,8 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
     return res;
 }
 
+int _PyIR_ShadowRetirementObserved = 0;
+
 uint8_t
 _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
 {

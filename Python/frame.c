@@ -566,8 +566,7 @@ clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason
     _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
     roots.retire_reason = reason;
     _PyThreadState_PushTransitionRoots(tstate, &roots);
-    roots.shadow_status = _PyIR_ShadowRetirement(frame, reason);
-    assert(roots.shadow_status != _PyIR_SHADOW_MISMATCH);
+    roots.shadow_status = _PyIR_ObserveShadowRetirement(frame, reason);
     Py_BEGIN_CRITICAL_SECTION(gen);
     if (stage != _Py_FRAME_CLEAR_DONE) {
         _PyFrame_FinishClearExceptCode(frame, stage, &roots);

@@ -16,6 +16,13 @@ from test.support.script_helper import assert_python_failure
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 
+def setUpModule():
+    # Retirement records carry their shadow comparison only while observed.
+    previous = _testinternalcapi.set_retirement_shadow_observed(True)
+    unittest.addModuleCleanup(
+        _testinternalcapi.set_retirement_shadow_observed, previous)
+
+
 class Number(int):
     pass
 

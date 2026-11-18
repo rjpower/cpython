@@ -1142,17 +1142,20 @@ _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
 }
 
 /* Perform a rich comparison, raising TypeError when the requested comparison
-   operator is not supported. */
+   operator is not supported. As upstream, each step reads the types of the
+   operands again: a slot that an earlier step called can run Python code
+   that assigns __class__ or replaces a slot. NotImplemented is immortal, so
+   the results that are dropped own nothing. */
 static PyValue
-do_richcompare(PyThreadState *tstate, PyValueBorrow v, PyValueBorrow w,
-               int op)
+do_richcompare(PyValueBorrow v, PyValueBorrow w, int op)
 {
-    PyTypeObject *tv = PyValue_TYPE(v);
-    PyTypeObject *tw = PyValue_TYPE(w);
+    PyTypeObject *tv, *tw;
     richcmpfunc f;
     PyValue res;
     int checked_reverse_op = 0;
 
+    tv = PyValue_TYPE(v);
+    tw = PyValue_TYPE(w);
     if (tv != tw &&
         PyType_IsSubtype(tw, tv) &&
         (f = tw->tp_richcompare) != NULL) {
@@ -1160,19 +1163,21 @@ do_richcompare(PyThreadState *tstate, PyValueBorrow v, PyValueBorrow w,
         res = _PyValue_CallRichCompare(tw, f, w, v, _Py_SwappedOp[op]);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        PyValue_CLOSE(res);
+        assert(!_PyValue_OwnsCountNotNull(res));
     }
+    tv = PyValue_TYPE(v);
     if ((f = tv->tp_richcompare) != NULL) {
         res = _PyValue_CallRichCompare(tv, f, v, w, op);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        PyValue_CLOSE(res);
+        assert(!_PyValue_OwnsCountNotNull(res));
     }
+    tw = PyValue_TYPE(w);
     if (!checked_reverse_op && (f = tw->tp_richcompare) != NULL) {
         res = _PyValue_CallRichCompare(tw, f, w, v, _Py_SwappedOp[op]);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        PyValue_CLOSE(res);
+        assert(!_PyValue_OwnsCountNotNull(res));
     }
     /* If neither object implements it, provide a sensible default
        for == and !=, but raise an exception for ordering. */
@@ -1182,11 +1187,11 @@ do_richcompare(PyThreadState *tstate, PyValueBorrow v, PyValueBorrow w,
     case Py_NE:
         return PyValue_Is(v, w) ? PyValue_False : PyValue_True;
     default:
-        _PyErr_Format(tstate, PyExc_TypeError,
-                      "'%s' not supported between instances of '%.100s' and '%.100s'",
-                      opstrings[op],
-                      tv->tp_name,
-                      tw->tp_name);
+        PyErr_Format(PyExc_TypeError,
+                     "'%s' not supported between instances of '%.100s' and '%.100s'",
+                     opstrings[op],
+                     PyValue_TYPE(v)->tp_name,
+                     PyValue_TYPE(w)->tp_name);
         return PyValue_NULL;
     }
 }
@@ -1209,7 +1214,7 @@ PyValue
     if (_Py_EnterRecursiveCallTstate(tstate, " in comparison")) {
         return PyValue_NULL;
     }
-    PyValue res = do_richcompare(tstate, v, w, op);
+    PyValue res = do_richcompare(v, w, op);
     _Py_LeaveRecursiveCallTstate(tstate);
     return res;
 }

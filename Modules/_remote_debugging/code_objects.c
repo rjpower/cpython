@@ -491,7 +491,7 @@ parse_code_object(RemoteUnwinderObject *unwinder,
         uint64_t word = 0;
         if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, ip,
                                                    sizeof(uint64_t), &word) == 0) {
-            opcode_obj = PyLong_FromLong((long)(word & 0xFFFF));
+            opcode_obj = PyLong_FromLong((long)IR_HANDLER(word));
             if (!opcode_obj) {
                 Py_DECREF(location);
                 set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to create opcode object");

@@ -1,5 +1,6 @@
 """Semantic iterator completion and explicit generator resume recipients."""
 
+import _opcode
 import dis
 import gc
 import struct
@@ -713,7 +714,7 @@ class SemanticCompletionTests(unittest.TestCase):
                 dis._all_opmap['INSTRUMENTED_RETURN_VALUE_EMPTY']:
                     dis.opmap['INSTRUMENTED_RETURN_VALUE'],
             }
-            words = [(word & ~0xffff) | general_return.get(word & 0xffff, word & 0xffff)
+            words = [(word & ~_opcode.IR_HANDLER_MASK) | general_return.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK)
                      for word in words]
             instruction = next(i for i in dis.get_instructions(code)
                                if i.opname == site_name)
@@ -825,7 +826,7 @@ class SemanticCompletionTests(unittest.TestCase):
                 words = struct.unpack(f'<{len(func.__code__.co_code) // 8}Q',
                                       func.__code__.co_code)
                 helpers = {offset for offset, word in enumerate(words)
-                           if word & 65535 == dis._ir_opmap['IR_JUMP']}
+                           if word & _opcode.IR_HANDLER_MASK == dis._ir_opmap['IR_JUMP']}
                 self.assertTrue(helpers)
                 observed = []
                 def trace(frame, event, arg):

@@ -2034,7 +2034,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                  * recovered handler, never a family-wide NULL capability. */
                 _PyInstr *instr = _PyFrame_InstrAt(frame, i);
                 int real_handler = _PyIR_RealHandler(frame, instr);
-                _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | real_handler;
+                _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
                 for (int j = 0; j < nt; j++) {
                     int home = nl + j;
                     bool nullable = _PyIR_NullableHome(actual, arg, home);

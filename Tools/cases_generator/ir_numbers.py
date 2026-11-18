@@ -114,8 +114,10 @@ def load_table() -> NumberTable:
     return parse_table(TABLE_PATH.read_text())
 
 
-# The IR-only region must stay below the 12-bit handler field of design B3.
-IR_LIMIT = 4096
+# Handler ids fit in the low IR_HANDLER_BITS (9) bits of the handler field;
+# the bits above them are per-site flags (Include/internal/pycore_ir.h).  The
+# dispatch table has an entry for every id the field can hold.
+IR_LIMIT = 512
 
 
 def lookup(table: "NumberTable", name: str, low: int, high: int,

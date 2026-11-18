@@ -9218,7 +9218,10 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
-    out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}];\n")
+    # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
+    # id the mask yields; ids past n are UNKNOWN_OPCODE.
+    out.emit("static py_tail_call_funcptr "
+             f"instruction_funcptr_handler_table[{ir_numbers.IR_LIMIT}];\n")
     out.emit("\n")
     for name in analysis.labels:
         out.emit(f"{function_proto(name)};\n")
@@ -9276,8 +9279,9 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("}\n")
     out.emit("\n")
     by_index = {i: name for name, i in ids.items()}
-    out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}] = {{\n")
-    for i in range(n):
+    out.emit("static py_tail_call_funcptr "
+             f"instruction_funcptr_handler_table[{ir_numbers.IR_LIMIT}] = {{\n")
+    for i in range(ir_numbers.IR_LIMIT):
         name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
         out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
     out.emit("};\n")

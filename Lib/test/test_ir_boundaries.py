@@ -1,5 +1,6 @@
 """Compact executable offsets and source-only LINE edges."""
 
+import _opcode
 import dis
 import marshal
 import struct
@@ -386,7 +387,7 @@ class CompactBoundaryTests(unittest.TestCase):
         for handler in ('RESUME', 'INSTRUMENTED_RESUME'):
             with self.subTest(handler=handler):
                 encoded = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-                encoded[entry.offset] = ((encoded[entry.offset] & ~65535) |
+                encoded[entry.offset] = ((encoded[entry.offset] & ~_opcode.IR_HANDLER_MASK) |
                                          dis._all_opmap[handler])
                 with self.assertRaisesRegex(ValueError, 'semantic recovery.*entry RESUME'):
                     code.replace(co_code=struct.pack(f'<{len(encoded)}Q', *encoded),

@@ -1328,7 +1328,7 @@ class RelaxationTest(unittest.TestCase):
             source_words = [int.from_bytes(code.co_code[off:off + 8], "little")
                             for off in range(0, len(code.co_code), 8)]
             source_bytes = b"".join(
-                ((word & ~0xffff) | return_general.get(word & 0xffff, word & 0xffff))
+                ((word & ~_opcode.IR_HANDLER_MASK) | return_general.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK))
                 .to_bytes(8, "little") for word in source_words)
             word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
                                   "little")

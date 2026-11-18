@@ -132,7 +132,20 @@ extern int _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords,
 #define IR_MAX_FORWARD  2047
 #define IR_MIN_DISTANCE (-2048)
 
-#define IR_HANDLER(W)   ((int)((W) & 0xFFFF))
+/* The 16-bit handler field holds the handler id in its low IR_HANDLER_BITS
+ * bits and per-site flags in the rest (IR_FLAGS_MASK).  Dispatch indexes the
+ * table with the id alone, and a handler tests its flags in ir_word, so one
+ * handler serves every variant of a site that a flag distinguishes.
+ * Specialisation and instrumentation rewrite the id and keep the flags. */
+#define IR_HANDLER_BITS 9
+#define IR_HANDLER_MASK ((1 << IR_HANDLER_BITS) - 1)
+#define IR_FLAGS_MASK   (0xFFFF & ~IR_HANDLER_MASK)
+static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
+              "handler ids must fit in IR_HANDLER_BITS");
+
+#define IR_HANDLER(W)   ((int)((W) & IR_HANDLER_MASK))
+#define IR_FLAGS(W)     ((int)((W) & IR_FLAGS_MASK))
+
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
 #define IR_B(W)         ((uint32_t)((W) >> 28) & IR_FIELD_MAX)
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
@@ -523,7 +536,7 @@ _PyFb_HasEntry(int opcode)
  *     | _PyCodeExec | words | _PyFbBlock | entries |
  *
  * with a feedback vector set up from the code object's feedback table.
- * Specialisation and instrumentation rewrite the handler field of the copy
+ * Specialisation and instrumentation rewrite the handler id of the copy
  * only, so the code object's words are the generic handlers that both
  * restore.  Frames keep the words and entries of the copy in ir_words and
  * ir_feedback, which handlers index with their jump targets and feedback
@@ -720,7 +733,7 @@ PyAPI_DATA(int) _PyIR_MaxForward;
 PyAPI_DATA(int) _PyIR_MaxSlots;
 
 /* Decoding the words of a code object (co_words), by word index.  These
- * read the code object only, never its executing copy, whose handlers
+ * read the code object only, never its executing copy, whose handler ids
  * specialisation and instrumentation rewrite but whose fields are the
  * same. */
 
@@ -832,7 +845,8 @@ PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode);
 static inline void
 _PyIR_SetHandler(_PyIRWord *instr, int handler)
 {
-    _PyIRWord word = (*instr & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
+    assert(handler >= 0 && handler <= IR_HANDLER_MASK);
+    _PyIRWord word = (*instr & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)handler;
 #ifdef Py_GIL_DISABLED
     _Py_atomic_store_uint64_relaxed(instr, word);
 #else
@@ -845,6 +859,14 @@ _PyIR_FormatOf(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return &_PyIR_Formats[handler];
+}
+
+/* Whether the flags of a canonical word are ones its handler admits.  No
+ * handler admits a flag yet. */
+static inline int
+_PyIR_CanonicalFlagsValid(_PyIRWord word)
+{
+    return IR_FLAGS(word) == 0;
 }
 
 /* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */

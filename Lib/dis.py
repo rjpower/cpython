@@ -77,6 +77,7 @@ deoptmap = {
 # Include/internal/pycore_ir.h
 _WORD_SIZE = 8
 _FIELD_MAX = 0xFFF
+_HANDLER_MASK = _opcode.IR_HANDLER_MASK
 _ROLE_DST = _opcode.IR_ROLE_DST
 _ROLE_BASE = _opcode.IR_ROLE_BASE
 _ROLE_FB = _opcode.IR_ROLE_FB
@@ -441,7 +442,7 @@ def _unpack_words(code):
         word = int.from_bytes(code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE],
                               sys.byteorder)
         fields = tuple((word >> shift) & _FIELD_MAX for shift in (16, 28, 40, 52))
-        yield offset, word & 0xFFFF, fields
+        yield offset, word & _HANDLER_MASK, fields
 
 def _unpack_opargs(code, fbinit=None):
     """Generate (offset, handler, arg, dst, srcs, fb) for the words of code"""

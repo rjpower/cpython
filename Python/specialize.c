@@ -332,7 +332,7 @@ set_opcode(_PyInstr *instr, int opcode)
         /* Lost race with instrumentation */
         return 0;
     }
-    _PyIRWord new = (old & ~(_PyIRWord)0xFFFF) | (uint16_t)opcode;
+    _PyIRWord new = (old & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)opcode;
     if (!_Py_atomic_compare_exchange_uint64(instr, &old, new)) {
         /* Lost race with instrumentation */
         return 0;

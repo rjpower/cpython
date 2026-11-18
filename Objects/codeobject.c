@@ -847,6 +847,7 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
     for (int i = 0; i < nwords; i++) {
         int handler = IR_HANDLER(words[i]);
         if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID) ||
+            !_PyIR_CanonicalFlagsValid(words[i]) ||
             (handler != MATERIALIZE_KWARGS && kwargs_word_access(words[i], slot) < 0) ||
             (handler == MATERIALIZE_KWARGS && IR_A(words[i]) != (uint32_t)slot))
         {
@@ -1425,7 +1426,8 @@ validate_code_structure(struct _PyCodeConstructor *con)
     Py_ssize_t nwords = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
     for (Py_ssize_t i = 0; i < nwords; i++) {
         int handler = IR_HANDLER(words[i]);
-        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID)) {
+        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID) ||
+            !_PyIR_CanonicalFlagsValid(words[i])) {
             PyErr_SetString(PyExc_ValueError, "code: invalid executable handler");
             return -1;
         }
@@ -1889,6 +1891,12 @@ check_words(struct _PyCodeConstructor *con)
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has no handler %d", i, handler);
+            goto error;
+        }
+        if (!_PyIR_CanonicalFlagsValid(word)) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has invalid flags 0x%x for handler %d",
+                         i, IR_FLAGS(word), handler);
             goto error;
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];

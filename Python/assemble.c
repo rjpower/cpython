@@ -1625,7 +1625,7 @@ place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
         int handler = _PyIR_GeneratorBoundaryCandidate(
             words, nwords, nlocalsplus, pc);
         if (handler >= 0) {
-            words[pc] = (words[pc] & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
+            words[pc] = (words[pc] & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)handler;
         }
     }
     /* Only removals follow nomination. A missing throw/join/loop sibling
@@ -1644,7 +1644,7 @@ place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
             {
                 continue;
             }
-            words[pc] = (words[pc] & ~(_PyIRWord)0xFFFF) | boundary->ordinary;
+            words[pc] = (words[pc] & ~(_PyIRWord)IR_HANDLER_MASK) | boundary->ordinary;
             changed = 1;
         }
     } while (changed);

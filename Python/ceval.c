@@ -2399,6 +2399,9 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
+static_assert(Py_ARRAY_LENGTH(instruction_funcptr_handler_table)
+              == IR_HANDLER_MASK + 1,
+              "dispatch covers every id that IR_HANDLER yields");
 #include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 

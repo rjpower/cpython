@@ -228,7 +228,7 @@ class GeneratorBoundaryTests(unittest.TestCase):
                     if row.generator_resume_consumer == _opcode.GEN_CONSUMER_SEND]
         self.assertEqual(len(selected), 1)
         pc, row = selected[0]
-        words[pc] = (words[pc] & ~65535) | row.ordinary_handler
+        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
         self.assert_rejected_image(delegated.__code__, words)
 
     def test_public_partial_send_cycle_is_rejected(self):
@@ -238,7 +238,7 @@ class GeneratorBoundaryTests(unittest.TestCase):
                     if row.generator_yielded_consumer == _opcode.GEN_CONSUMER_DELEGATED]
         self.assertEqual(len(selected), 1)
         pc, row = selected[0]
-        words[pc] = (words[pc] & ~65535) | row.ordinary_handler
+        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
         self.assert_rejected_image(code, words)
 
     def test_public_partial_throw_completion_is_rejected(self):
@@ -249,7 +249,7 @@ class GeneratorBoundaryTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         pc, row = selected[0]
         self.assertEqual(row.generator_completed_consumer, _opcode.GEN_CONSUMER_RETURN)
-        words[pc] = (words[pc] & ~65535) | row.ordinary_handler
+        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
         self.assert_rejected_image(code, words)
 
     def test_public_completion_join_requires_the_same_recipient_and_window(self):

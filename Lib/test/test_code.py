@@ -206,6 +206,7 @@ import textwrap
 import weakref
 from test.support.ir_semantics import (observation_tables, semantic_parts,
                                        semantic_table)
+import _opcode
 import dis
 import struct
 
@@ -281,7 +282,7 @@ class CodeTest(unittest.TestCase):
             words = []
             for i in range(0, len(c.co_code), 8):
                 word = int.from_bytes(c.co_code[i:i+8], 'little')
-                handler = word & 0xFFFF
+                handler = word & _opcode.IR_HANDLER_MASK
                 row = contract[handler]
                 roles = row.roles
                 self.assertFalse(row.flags & _opcode.IR_JUMPS)
@@ -2775,7 +2776,7 @@ class ConstSlotsTest(unittest.TestCase):
             dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
                 dis._all_opmap["INSTRUMENTED_RETURN_VALUE"],
         }
-        words = [(word & ~65535) | return_forms.get(word & 65535, word & 65535)
+        words = [(word & ~_opcode.IR_HANDLER_MASK) | return_forms.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK)
                  for word in words]
         matching_recovery = memoryview(original.co_exceptiontable).tobytes()
         self.assertEqual(matching_recovery, original.co_exceptiontable)

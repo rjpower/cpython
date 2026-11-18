@@ -159,7 +159,7 @@ Since 2026-11-18 (user approval) CPUs 7 and 15 are also reserved:
 to the other fourteen CPUs. These are runtime properties, so a reboot clears
 them; `reserve-cpus.sh status` shows the state. Campaigns run through
 `bench-run.sh`, which starts the command in `bench.slice`, the only cgroup
-allowed on CPUs 7 and 15, pinned to CPU 7. `measure.py` still pins each
+allowed on CPUs 7 and 15. `measure.py` still pins each
 timed child to CPU 15, and the core gate still applies; it now mostly sees
 kernel work and the L3 peers. Boost stays enabled.
 

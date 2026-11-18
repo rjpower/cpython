@@ -24,8 +24,21 @@ from test.support import import_helper, script_helper
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 _testcapi = import_helper.import_module('_testcapi')
 
-value_slot = _testinternalcapi.value_slot
+raw_value_slot = _testinternalcapi.value_slot
+value_slot_adapter = _testinternalcapi.value_slot_adapter
 object_slot = _testinternalcapi.object_slot
+make_static_type = _testinternalcapi.make_static_type
+store_object_slot = _testinternalcapi.store_object_slot
+
+
+def value_slot(t, name):
+    # A field holding the row's generated adapter has no native value
+    # implementation: report it as 0, as the tests below classify rows by
+    # native implementations.  AdapterTests inspect the raw field.
+    got = raw_value_slot(t, name)
+    return 0 if got == value_slot_adapter(name) else got
+
+
 value_slot_names = _testinternalcapi.value_slot_names
 VInt = _testinternalcapi.VInt
 VIntSubNothing = _testinternalcapi.VIntSubNothing
@@ -275,6 +288,71 @@ class VIntTests(unittest.TestCase):
         self.assertEqual(value_slot(VIntSpec, 'nb_multiply'),
                          value_slot(VInt, 'nb_multiply'))
         self.assertEqual((VIntSpec(1) + VIntSpec(2)).value, 4)
+
+
+class AdapterTests(unittest.TestCase):
+    """PyType_Ready installs the row's adapter in a value field left 0
+    beside an object slot, so dispatchers call value slots unconditionally."""
+
+    def test_extension_type_has_adapter(self):
+        for name in ('nb_index', 'nb_add'):
+            with self.subTest(name=name):
+                for t in (ObjIndex, ObjNotImpl):
+                    if object_slot(t, name):
+                        self.assertEqual(raw_value_slot(t, name),
+                                         value_slot_adapter(name))
+        self.assertNotEqual(value_slot_adapter('nb_index'), 0)
+        self.assertEqual(raw_value_slot(ObjIndex, 'nb_index'),
+                         value_slot_adapter('nb_index'))
+
+    def test_rows_without_adapter(self):
+        for name in ('send', 'new_'):
+            self.assertEqual(value_slot_adapter(name), 0)
+
+    def test_int_subclass_inherits_native_slot(self):
+        class C(int):
+            pass
+        for name in ('nb_add', 'nb_multiply', 'richcompare', 'hash'):
+            with self.subTest(name=name):
+                self.assertEqual(raw_value_slot(C, name),
+                                 raw_value_slot(int, name))
+                self.assertNotEqual(raw_value_slot(C, name),
+                                    value_slot_adapter(name))
+
+    def test_distinct_binary_slots_share_adapter(self):
+        self.assertNotEqual(object_slot(ObjNotImpl, 'nb_add'),
+                            object_slot(ObjAdd, 'nb_add'))
+        self.assertEqual(raw_value_slot(ObjNotImpl, 'nb_add'),
+                         value_slot_adapter('nb_add'))
+        self.assertEqual(raw_value_slot(ObjAdd, 'nb_add'),
+                         value_slot_adapter('nb_add'))
+        # The identity rule compares object slots, so the second operand's
+        # slot still runs.
+        self.assertEqual(ObjNotImpl() + ObjAdd(),
+                         'ObjAdd.add(_testcapi.ObjNotImpl, _testcapi.ObjAdd)')
+
+    def test_object_slot_stored_after_ready(self):
+        add = object_slot(ObjAdd, 'nb_add')
+        t = make_static_type('_testinternalcapi.Probe')
+        self.assertEqual(raw_value_slot(t, 'nb_add'), 0)
+        # Without PyType_Modified() the field stays 0: the adapter pass
+        # runs at PyType_Ready() and PyType_Modified() only.
+        store_object_slot(t, 'nb_add', add, False)
+        self.assertEqual(raw_value_slot(t, 'nb_add'), 0)
+        store_object_slot(t, 'nb_add', add, True)
+        self.assertEqual(raw_value_slot(t, 'nb_add'),
+                         value_slot_adapter('nb_add'))
+        self.assertEqual(t() + 1, 'ObjAdd.add(_testinternalcapi.Probe, int)')
+
+    def test_typed_base_call(self):
+        # The value slot is called with its owning type, and a subclass
+        # instance reaches the base implementation.
+        class C(VInt):
+            def __repr__(self):
+                return 'overridden'
+        base = call_value_slot(VInt, 'repr', VInt(7))
+        self.assertEqual(call_value_slot(VInt, 'repr', C(7)), base)
+        self.assertEqual(repr(C(7)), 'overridden')
 
 
 class IntSubtypeTests(unittest.TestCase):

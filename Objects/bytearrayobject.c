@@ -53,23 +53,6 @@ _getbytevalue(PyValueBorrow arg, int *value)
     return 1;
 }
 
-static _PyStatusValue
-bytearray_iter_next_saved(PyObject *it, iternextfunc object_next,
-                          _Py_iternextvaluefunc value_next)
-{
-    if (value_next != NULL) {
-        return value_next(it);
-    }
-    PyObject *item = object_next(it);
-    if (item != NULL) {
-        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(item)};
-    }
-    if (!PyErr_Occurred()) {
-        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
-    }
-    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
-}
-
 static inline void
 bytearray_write_trailing_null_byte(PyByteArrayObject *self)
 {
@@ -437,7 +420,7 @@ PyByteArray_Concat(PyObject *a, PyObject *b)
 }
 
 static PyValue
-bytearray_concat_value(PyObject *a, PyValueBorrow b)
+bytearray_concat_value(PyTypeObject *owner, PyObject *a, PyValueBorrow b)
 {
     if (PyValue_IsInline(b)) {
         PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
@@ -448,7 +431,7 @@ bytearray_concat_value(PyObject *a, PyValueBorrow b)
         PyByteArray_Concat(a, PyValue_AsKnownObjectBorrow(b)));
 }
 
-_Py_VALUE_THUNK_CONCAT(bytearray_concat, bytearray_concat_value)
+_Py_VALUE_THUNK_CONCAT(bytearray_concat, PyByteArray_Type, bytearray_concat_value)
 
 /* Functions stuffed into the type object */
 
@@ -487,7 +470,7 @@ bytearray_iconcat_lock_held(PyByteArrayObject *self, PyObject *other)
 }
 
 static PyValue
-bytearray_iconcat_value(PyObject *op, PyValueBorrow other)
+bytearray_iconcat_value(PyTypeObject *owner, PyObject *op, PyValueBorrow other)
 {
     if (PyValue_IsInline(other)) {
         PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
@@ -502,7 +485,7 @@ bytearray_iconcat_value(PyObject *op, PyValueBorrow other)
     return _PyValue_FromObjectResult(ret);
 }
 
-_Py_VALUE_THUNK_CONCAT(bytearray_iconcat, bytearray_iconcat_value)
+_Py_VALUE_THUNK_CONCAT(bytearray_iconcat, PyByteArray_Type, bytearray_iconcat_value)
 
 /*[clinic input]
 @critical_section
@@ -570,7 +553,7 @@ bytearray_irepeat_impl(PyByteArrayObject *self, Py_ssize_t count)
 }
 
 static PyValue
-bytearray_item_value(PyObject *op, Py_ssize_t i)
+bytearray_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
 {
     PyByteArrayObject *self = _PyByteArray_CAST(op);
     PyValue ret;
@@ -586,7 +569,7 @@ bytearray_item_value(PyObject *op, Py_ssize_t i)
     return ret;
 }
 
-_Py_VALUE_THUNK_ITEM(bytearray_item, bytearray_item_value)
+_Py_VALUE_THUNK_ITEM(bytearray_item, PyByteArray_Type, bytearray_item_value)
 
 static PyValue
 bytearray_subscript_lock_held(PyObject *op, PyValueBorrow index)
@@ -651,7 +634,7 @@ bytearray_subscript_lock_held(PyObject *op, PyValueBorrow index)
 }
 
 static PyValue
-bytearray_subscript_value(PyObject *op, PyValueBorrow index)
+bytearray_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow index)
 {
     PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -661,7 +644,7 @@ bytearray_subscript_value(PyObject *op, PyValueBorrow index)
 
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(bytearray_subscript, bytearray_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(bytearray_subscript, PyByteArray_Type, bytearray_subscript_value)
 
 static int
 bytearray_setslice_linear(PyByteArrayObject *self,
@@ -834,7 +817,7 @@ bytearray_ass_item_lock_held(PyByteArrayObject *self, Py_ssize_t i,
 }
 
 static int
-bytearray_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow value)
+bytearray_ass_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i, PyValueBorrow value)
 {
     int ret;
     Py_BEGIN_CRITICAL_SECTION(op);
@@ -843,7 +826,7 @@ bytearray_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow value)
     return ret;
 }
 
-_Py_VALUE_THUNK_ASSITEM(bytearray_ass_item, bytearray_ass_item_value)
+_Py_VALUE_THUNK_ASSITEM(bytearray_ass_item, PyByteArray_Type, bytearray_ass_item_value)
 
 static int
 bytearray_ass_subscript_lock_held(PyObject *op, PyValueBorrow index,
@@ -1020,7 +1003,7 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyValueBorrow index,
 }
 
 static int
-bytearray_ass_subscript_value(PyObject *op, PyValueBorrow index,
+bytearray_ass_subscript_value(PyTypeObject *owner, PyObject *op, PyValueBorrow index,
                               PyValueBorrow values)
 {
     int ret;
@@ -1038,8 +1021,7 @@ bytearray_ass_subscript_value(PyObject *op, PyValueBorrow index,
     return ret;
 }
 
-_Py_VALUE_THUNK_ASSSUBSCRIPT(bytearray_ass_subscript,
-                               bytearray_ass_subscript_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(bytearray_ass_subscript, PyByteArray_Type, bytearray_ass_subscript_value)
 
 static PyObject *
 bytearray_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -1072,7 +1054,6 @@ bytearray___init___impl(PyByteArrayObject *self, PyValueBorrow arg,
 {
     Py_ssize_t count;
     PyObject *it;
-    iternextfunc iternext;
     _Py_iternextvaluefunc iternext_value;
 
     /* Disallow any __init__ call if the object is not resizable (has exports)
@@ -1240,11 +1221,9 @@ slowpath:
     }
     PyTypeObject *it_type = Py_TYPE(it);
     /* Preserve the original cached-slot behavior across iterator callbacks. */
-    iternext = it_type->tp_iternext;
     iternext_value = _PyType_VALUE_SLOT(it_type, iternext);
-    if (iternext_value != NULL) {
-        _PyType_CHECK_VALUE_ROW(it_type, _Py_VALUE_SLOT_INDEX_iternext);
-    }
+    assert(iternext_value != NULL);
+    _PyType_CHECK_VALUE_ROW(it_type, _Py_VALUE_SLOT_INDEX_iternext);
 
     /* Run the iterator to exhaustion */
     for (;;) {
@@ -1253,7 +1232,7 @@ slowpath:
         int rc, value;
 
         /* Get the next item */
-        step = bytearray_iter_next_saved(it, iternext, iternext_value);
+        step = iternext_value(it_type, it);
         if (step.status == PYGEN_RETURN) {
             PyValue_XCLOSE(step.value);
             break;
@@ -1559,7 +1538,7 @@ bytearray_rindex_impl(PyByteArrayObject *self, PyValueBorrow sub,
 }
 
 static int
-bytearray_contains_value(PyObject *self, PyValueBorrow arg)
+bytearray_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow arg)
 {
     int ret = -1;
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1575,7 +1554,7 @@ bytearray_contains_value(PyObject *self, PyValueBorrow arg)
     return ret;
 }
 
-_Py_VALUE_THUNK_CONTAINS(bytearray_contains, bytearray_contains_value)
+_Py_VALUE_THUNK_CONTAINS(bytearray_contains, PyByteArray_Type, bytearray_contains_value)
 
 /*[clinic input]
 @permit_long_summary
@@ -3085,7 +3064,7 @@ bytearray_mod_lock_held(PyObject *v, PyObject *w)
 }
 
 static PyValue
-bytearray_mod_value(PyValueBorrow v, PyValueBorrow w)
+bytearray_mod_value(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     if (!PyValue_IsObject(v)
         || !PyByteArray_Check(PyValue_AsKnownObjectBorrow(v))) {
@@ -3119,7 +3098,7 @@ bytearray_mod_value(PyValueBorrow v, PyValueBorrow w)
     return _PyValue_FromObjectResult(ret);
 }
 
-_Py_VALUE_THUNK_BINARY(bytearray_mod, bytearray_mod_value)
+_Py_VALUE_THUNK_BINARY(bytearray_mod, PyByteArray_Type, bytearray_mod_value)
 
 static PyNumberMethods bytearray_as_number = {
     0,              /*nb_add*/
@@ -3241,7 +3220,7 @@ bytearrayiter_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-bytearrayiter_next_value(PyObject *self)
+bytearrayiter_next_value(PyTypeObject *owner, PyObject *self)
 {
     bytesiterobject *it = _bytesiterobject_CAST(self);
     int val;
@@ -3274,7 +3253,7 @@ bytearrayiter_next_value(PyObject *self)
     return (_PyStatusValue){PYGEN_NEXT, PyValue_FromInt64((unsigned char)val)};
 }
 
-_Py_VALUE_THUNK_ITERNEXT(bytearrayiter_next, bytearrayiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(bytearrayiter_next, PyByteArrayIter_Type, bytearrayiter_next_value)
 
 static PyObject *
 bytearrayiter_length_hint(PyObject *self, PyObject *Py_UNUSED(ignored))

@@ -18,7 +18,7 @@
 #include "pycore_slots.h"         // _PySlotIterator_Init
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
-#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
+#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue(NULL)
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT(, BOX_SITE_ATTRIBUTE)
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -1628,7 +1628,7 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
 }
 
 PyValue
-_Py_module_getattro_value(PyValueBorrow self, PyObject *name)
+_Py_module_getattro_value(PyTypeObject *owner, PyValueBorrow self, PyObject *name)
 {
     return _Py_module_getattro_impl(
         _PyModule_CAST(PyValue_AsKnownObjectBorrow(self)), name, 0);
@@ -1637,7 +1637,7 @@ _Py_module_getattro_value(PyValueBorrow self, PyObject *name)
 PyObject*
 _Py_module_getattro(PyObject *self, PyObject *name)
 {
-    return _PyValue_THUNK_EXIT(_Py_module_getattro_value(_Py_VALUE_ARG(self),
+    return _PyValue_THUNK_EXIT(_Py_module_getattro_value(NULL, _Py_VALUE_ARG(self),
                                                          name), BOX_SITE_ATTRIBUTE);
 }
 

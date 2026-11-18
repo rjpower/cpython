@@ -1198,7 +1198,7 @@ static PyMethodDef setiter_methods[] = {
 };
 
 static _PyStatusValue
-setiter_iternext_value(PyObject *self)
+setiter_iternext_value(PyTypeObject *owner, PyObject *self)
 {
     setiterobject *si = (setiterobject*)self;
     PyValue key = PyValue_NULL;
@@ -1242,7 +1242,7 @@ setiter_iternext_value(PyObject *self)
 }
 
 /* A failed box consumes the element (see listiter_next()). */
-_Py_VALUE_THUNK_ITERNEXT(setiter_iternext, setiter_iternext_value)
+_Py_VALUE_THUNK_ITERNEXT(setiter_iternext, PySetIter_Type, setiter_iternext_value)
 
 PyTypeObject PySetIter_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -2844,12 +2844,12 @@ _PySet_Contains(PySetObject *so, PyObject *key)
 }
 
 static int
-set_contains_slot(PyObject *self, PyValueBorrow key)
+set_contains_slot(PyTypeObject *owner, PyObject *self, PyValueBorrow key)
 {
     PySetObject *so = _PySet_CAST(self);
     return set_contains_borrowed(so, key);
 }
-_Py_VALUE_THUNK_CONTAINS(set_contains, set_contains_slot)
+_Py_VALUE_THUNK_CONTAINS(set_contains, PySet_Type, set_contains_slot)
 
 /*[clinic input]
 @coexist

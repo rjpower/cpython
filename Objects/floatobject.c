@@ -15,7 +15,7 @@
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_GetOne()
-#include "pycore_long_value.h"    // _PyFloat_ValueAdd()
+#include "pycore_long_value.h"    // _PyFloat_ValueAdd(NULL)
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_Init(), _PyDebugAllocatorStats()
 #include "pycore_pymath.h"        // _PY_SHORT_FLOAT_REPR
@@ -315,7 +315,7 @@ double
 
     PyValue res;
     if (float_slot != NULL) {
-        res = float_slot(v);
+        res = float_slot(tp, v);
     }
     else {
         res = _PyValue_Float(v);
@@ -393,11 +393,11 @@ float_repr_double(double x)
 }
 
 PyObject *
-_PyFloat_ValueRepr(PyValueBorrow v)
+_PyFloat_ValueRepr(PyTypeObject *owner, PyValueBorrow v)
 {
     return float_repr_double(float_known(v));
 }
-_Py_VALUE_THUNK_REPR(float_repr, _PyFloat_ValueRepr)
+_Py_VALUE_THUNK_REPR(float_repr, PyFloat_Type, _PyFloat_ValueRepr)
 
 /* 1: *d is the operand as a double (an inline float or int, a heap float, a
    heap int through its span); 0: not a float or an int (the caller returns
@@ -631,7 +631,7 @@ _PyFloat_ValueRichCompareSlow(PyValueBorrow v, PyValueBorrow w, int op)
     return PyValue_NotImplemented;
 }
 
-_Py_VALUE_THUNK_RICHCMP(float_richcompare, _PyFloat_ValueRichCompare)
+_Py_VALUE_THUNK_RICHCMP(float_richcompare, PyFloat_Type, _PyFloat_ValueRichCompare)
 
 Py_hash_t
 _PyFloat_HashObject(PyObject *op)
@@ -639,37 +639,37 @@ _PyFloat_HashObject(PyObject *op)
     PyFloatObject *v = _PyFloat_CAST(op);
     return _Py_HashDouble(op, v->ob_fval);
 }
-_Py_VALUE_THUNK_HASH(float_hash, _PyFloat_ValueHash)
+_Py_VALUE_THUNK_HASH(float_hash, PyFloat_Type, _PyFloat_ValueHash)
 
 PyValue
-_PyFloat_ValueAdd(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueAdd(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double a, b;
     FLOAT_OPERANDS(v, w, a, b);
     return PyValue_FromDouble(a + b);
 }
-_Py_VALUE_THUNK_BINARY(float_add, _PyFloat_ValueAdd)
+_Py_VALUE_THUNK_BINARY(float_add, PyFloat_Type, _PyFloat_ValueAdd)
 
 PyValue
-_PyFloat_ValueSubtract(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueSubtract(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double a, b;
     FLOAT_OPERANDS(v, w, a, b);
     return PyValue_FromDouble(a - b);
 }
-_Py_VALUE_THUNK_BINARY(float_sub, _PyFloat_ValueSubtract)
+_Py_VALUE_THUNK_BINARY(float_sub, PyFloat_Type, _PyFloat_ValueSubtract)
 
 PyValue
-_PyFloat_ValueMultiply(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueMultiply(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double a, b;
     FLOAT_OPERANDS(v, w, a, b);
     return PyValue_FromDouble(a * b);
 }
-_Py_VALUE_THUNK_BINARY(float_mul, _PyFloat_ValueMultiply)
+_Py_VALUE_THUNK_BINARY(float_mul, PyFloat_Type, _PyFloat_ValueMultiply)
 
 PyValue
-_PyFloat_ValueTrueDivide(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueTrueDivide(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double a, b;
     FLOAT_OPERANDS(v, w, a, b);
@@ -680,7 +680,7 @@ _PyFloat_ValueTrueDivide(PyValueBorrow v, PyValueBorrow w)
     }
     return PyValue_FromDouble(a / b);
 }
-_Py_VALUE_THUNK_BINARY(float_div, _PyFloat_ValueTrueDivide)
+_Py_VALUE_THUNK_BINARY(float_div, PyFloat_Type, _PyFloat_ValueTrueDivide)
 
 /* The double kernels of %, divmod and //: 0, or -1 with ZeroDivisionError. */
 static int
@@ -710,7 +710,7 @@ float_rem_double(double vx, double wx, double *result)
 }
 
 PyValue
-_PyFloat_ValueRemainder(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueRemainder(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double vx, wx, mod;
     FLOAT_OPERANDS(v, w, vx, wx);
@@ -719,7 +719,7 @@ _PyFloat_ValueRemainder(PyValueBorrow v, PyValueBorrow w)
     }
     return PyValue_FromDouble(mod);
 }
-_Py_VALUE_THUNK_BINARY(float_rem, _PyFloat_ValueRemainder)
+_Py_VALUE_THUNK_BINARY(float_rem, PyFloat_Type, _PyFloat_ValueRemainder)
 
 static void
 _float_div_mod(double vx, double wx, double *floordiv, double *mod)
@@ -771,7 +771,7 @@ float_divmod_double(double vx, double wx, double *floordiv, double *mod)
 }
 
 PyValue
-_PyFloat_ValueDivmod(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueDivmod(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double vx, wx;
     double mod, floordiv;
@@ -790,10 +790,10 @@ _PyFloat_ValueDivmod(PyValueBorrow v, PyValueBorrow w)
     return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(
         PyValue_PrepareOwned(q), PyValue_PrepareOwned(r)));
 }
-_Py_VALUE_THUNK_BINARY(float_divmod, _PyFloat_ValueDivmod)
+_Py_VALUE_THUNK_BINARY(float_divmod, PyFloat_Type, _PyFloat_ValueDivmod)
 
 PyValue
-_PyFloat_ValueFloorDivide(PyValueBorrow v, PyValueBorrow w)
+_PyFloat_ValueFloorDivide(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w)
 {
     double vx, wx;
     double mod, floordiv;
@@ -803,7 +803,7 @@ _PyFloat_ValueFloorDivide(PyValueBorrow v, PyValueBorrow w)
     }
     return PyValue_FromDouble(floordiv);
 }
-_Py_VALUE_THUNK_BINARY(float_floor_div, _PyFloat_ValueFloorDivide)
+_Py_VALUE_THUNK_BINARY(float_floor_div, PyFloat_Type, _PyFloat_ValueFloorDivide)
 
 /* determine whether x is an odd integer or not;  assumes that
    x is not an infinity or nan. */
@@ -926,7 +926,7 @@ float_pow_double(double iv, double iw, double *result)
 #undef DOUBLE_IS_ODD_INTEGER
 
 PyValue
-_PyFloat_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+_PyFloat_ValuePower(PyTypeObject *owner, PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
     double iv, iw, ix;
 
@@ -949,34 +949,33 @@ _PyFloat_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 
     /* Preserve complex's base power semantics while dispatching through its
        typed slot when present. */
-    return _PyValue_CallPowerBase(
-        &PyComplex_Type, PyComplex_Type.tp_as_number->nb_power, v, w, z);
+    return _PyType_CALL_VALUE_SLOT(&PyComplex_Type, nb_power, v, w, z);
 }
-_Py_VALUE_THUNK_TERNARY(float_pow, _PyFloat_ValuePower)
+_Py_VALUE_THUNK_TERNARY(float_pow, PyFloat_Type, _PyFloat_ValuePower)
 
 PyValue
-_PyFloat_ValueNegative(PyValueBorrow v)
+_PyFloat_ValueNegative(PyTypeObject *owner, PyValueBorrow v)
 {
     return PyValue_FromDouble(-float_known(v));
 }
-_Py_VALUE_THUNK_UNARY(float_neg, _PyFloat_ValueNegative)
+_Py_VALUE_THUNK_UNARY(float_neg, PyFloat_Type, _PyFloat_ValueNegative)
 
 PyValue
-_PyFloat_ValueAbsolute(PyValueBorrow v)
+_PyFloat_ValueAbsolute(PyTypeObject *owner, PyValueBorrow v)
 {
     return PyValue_FromDouble(fabs(float_known(v)));
 }
-_Py_VALUE_THUNK_UNARY(float_abs, _PyFloat_ValueAbsolute)
+_Py_VALUE_THUNK_UNARY(float_abs, PyFloat_Type, _PyFloat_ValueAbsolute)
 
 int
-_PyFloat_ValueBool(PyValueBorrow v)
+_PyFloat_ValueBool(PyTypeObject *owner, PyValueBorrow v)
 {
     return float_known(v) != 0.0;
 }
-_Py_VALUE_THUNK_INQUIRY(float_bool, _PyFloat_ValueBool)
+_Py_VALUE_THUNK_INQUIRY(float_bool, PyFloat_Type, _PyFloat_ValueBool)
 
 PyValue
-_PyFloat_ValueFloat(PyValueBorrow v)
+_PyFloat_ValueFloat(PyTypeObject *owner, PyValueBorrow v)
 {
     if (PyValue_IsInlineFloat(v)
         || PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
@@ -984,14 +983,14 @@ _PyFloat_ValueFloat(PyValueBorrow v)
     }
     return PyValue_FromDouble(float_known(v));
 }
-_Py_VALUE_THUNK_UNARY(float_float, _PyFloat_ValueFloat)
+_Py_VALUE_THUNK_UNARY(float_float, PyFloat_Type, _PyFloat_ValueFloat)
 
 PyValue
-_PyFloat_ValueInt(PyValueBorrow v)
+_PyFloat_ValueInt(PyTypeObject *owner, PyValueBorrow v)
 {
     return _PyValue_FromDoubleIntegral(float_known(v));
 }
-_Py_VALUE_THUNK_UNARY(float_int, _PyFloat_ValueInt)
+_Py_VALUE_THUNK_UNARY(float_int, PyFloat_Type, _PyFloat_ValueInt)
 
 /*[clinic input]
 float.is_integer
@@ -1239,7 +1238,7 @@ float___round___impl(PyValueBorrow self, PyValueBorrow o_ndigits)
 }
 
 /* self as an exact float; an object helper beside the value slot
-   _PyFloat_ValueFloat() (which would convert an exact float to an inline
+   _PyFloat_ValueFloat(NULL) (which would convert an exact float to an inline
    value and back). */
 static PyObject *
 float_exact(PyObject *v)

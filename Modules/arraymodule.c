@@ -1017,7 +1017,7 @@ array_length(PyObject *op)
 }
 
 static PyValue
-array_item_value(PyObject *op, Py_ssize_t i)
+array_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i)
 {
     if (i < 0 || i >= Py_SIZE(op)) {
         PyErr_SetString(PyExc_IndexError, "array index out of range");
@@ -1026,7 +1026,7 @@ array_item_value(PyObject *op, Py_ssize_t i)
     return getarrayitem(op, i);
 }
 
-_Py_VALUE_THUNK_ITEM(array_item, array_item_value)
+_Py_VALUE_THUNK_ITEM(array_item, *Py_TYPE(self), array_item_value)
 
 static PyObject *
 array_slice(arrayobject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
@@ -1203,7 +1203,7 @@ array_del_slice(arrayobject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
 }
 
 static int
-array_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow v)
+array_ass_item_value(PyTypeObject *owner, PyObject *op, Py_ssize_t i, PyValueBorrow v)
 {
     arrayobject *a = arrayobject_CAST(op);
     if (i < 0 || i >= Py_SIZE(a)) {
@@ -1216,7 +1216,7 @@ array_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow v)
     return (*a->ob_descr->setitem)(a, i, v);
 }
 
-_Py_VALUE_THUNK_ASSITEM(array_ass_item, array_ass_item_value)
+_Py_VALUE_THUNK_ASSITEM(array_ass_item, *Py_TYPE(self), array_ass_item_value)
 
 static int
 setarrayitem(PyObject *a, Py_ssize_t i, PyValueBorrow v)
@@ -1225,7 +1225,7 @@ setarrayitem(PyObject *a, Py_ssize_t i, PyValueBorrow v)
     array_state *state = find_array_state_by_type(Py_TYPE(a));
     assert(array_Check(a, state));
 #endif
-    return array_ass_item_value(a, i, v);
+    return array_ass_item_value(NULL, a, i, v);
 }
 
 static int
@@ -1425,7 +1425,7 @@ array_array_index_impl(arrayobject *self, PyValueBorrow v, Py_ssize_t start,
 }
 
 static int
-array_contains_value(PyObject *self, PyValueBorrow v)
+array_contains_value(PyTypeObject *owner, PyObject *self, PyValueBorrow v)
 {
     Py_ssize_t i;
     int cmp;
@@ -1440,7 +1440,7 @@ array_contains_value(PyObject *self, PyValueBorrow v)
     return cmp;
 }
 
-_Py_VALUE_THUNK_CONTAINS(array_contains, array_contains_value)
+_Py_VALUE_THUNK_CONTAINS(array_contains, *Py_TYPE(self), array_contains_value)
 
 /*[clinic input]
 array.array.remove
@@ -2760,7 +2760,7 @@ array_index_of(PyValueBorrow item, Py_ssize_t *i)
 }
 
 static PyValue
-array_subscr_value(PyObject *op, PyValueBorrow key)
+array_subscr_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key)
 {
     arrayobject *self = arrayobject_CAST(op);
     array_state *state = find_array_state_by_type(Py_TYPE(self));
@@ -2772,7 +2772,7 @@ array_subscr_value(PyObject *op, PyValueBorrow key)
         }
         if (i < 0)
             i += Py_SIZE(self);
-        return array_item_value(op, i);
+        return array_item_value(NULL, op, i);
     }
     PyObject *item = PyValue_IsObject(key) ? PyValue_AsKnownObjectBorrow(key) : NULL;
     if (item != NULL && PySlice_Check(item)) {
@@ -2826,10 +2826,10 @@ array_subscr_value(PyObject *op, PyValueBorrow key)
     }
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(array_subscr, array_subscr_value)
+_Py_VALUE_THUNK_SUBSCRIPT(array_subscr, *Py_TYPE(self), array_subscr_value)
 
 static int
-array_ass_subscr_value(PyObject *op, PyValueBorrow key, PyValueBorrow value_v)
+array_ass_subscr_value(PyTypeObject *owner, PyObject *op, PyValueBorrow key, PyValueBorrow value_v)
 {
     Py_ssize_t start, stop, step, slicelength, needed;
     arrayobject *self = arrayobject_CAST(op);
@@ -2885,7 +2885,7 @@ array_ass_subscr_value(PyObject *op, PyValueBorrow key, PyValueBorrow value_v)
             value = array_slice(other, 0, needed);
             if (value == NULL)
                 return -1;
-            ret = array_ass_subscr_value(op, key,
+            ret = array_ass_subscr_value(NULL, op, key,
                                          PyValue_FromObjectBorrow(value));
             Py_DECREF(value);
             return ret;
@@ -2990,7 +2990,7 @@ array_ass_subscr_value(PyObject *op, PyValueBorrow key, PyValueBorrow value_v)
     }
 }
 
-_Py_VALUE_THUNK_ASSSUBSCRIPT(array_ass_subscr, array_ass_subscr_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(array_ass_subscr, *Py_TYPE(self), array_ass_subscr_value)
 
 static const _Py_ALIGNED_DEF(ALIGNOF_MAX_ALIGN_T, char) emptybuf[] = "";
 
@@ -3355,7 +3355,7 @@ array_iter(PyObject *op)
 }
 
 static _PyStatusValue
-arrayiter_next_value(PyObject *op)
+arrayiter_next_value(PyTypeObject *owner, PyObject *op)
 {
     arrayiterobject *it = arrayiterobject_CAST(op);
     assert(it != NULL);
@@ -3380,7 +3380,7 @@ arrayiter_next_value(PyObject *op)
 }
 
 /* A failed box consumes the element. */
-_Py_VALUE_THUNK_ITERNEXT(arrayiter_next, arrayiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(arrayiter_next, *Py_TYPE(self), arrayiter_next_value)
 
 static void
 arrayiter_dealloc(PyObject *op)

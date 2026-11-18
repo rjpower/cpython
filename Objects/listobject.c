@@ -532,7 +532,7 @@ list_length(PyObject *a)
 }
 
 static int
-list_contains_value(PyObject *aa, PyValueBorrow query)
+list_contains_value(PyTypeObject *owner, PyObject *aa, PyValueBorrow query)
 {
     PyListObject *self = (PyListObject *)aa;
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
@@ -544,10 +544,10 @@ list_contains_value(PyObject *aa, PyValueBorrow query)
     return 0;
 }
 
-_Py_VALUE_THUNK_CONTAINS(list_contains, list_contains_value)
+_Py_VALUE_THUNK_CONTAINS(list_contains, PyList_Type, list_contains_value)
 
 static PyValue
-list_item_value(PyObject *aa, Py_ssize_t i)
+list_item_value(PyTypeObject *owner, PyObject *aa, Py_ssize_t i)
 {
     PyListObject *a = (PyListObject *)aa;
     if (!valid_index(i, Py_SIZE(a))) {
@@ -557,7 +557,7 @@ list_item_value(PyObject *aa, Py_ssize_t i)
     return PyValue_DUP(a->ob_item[i]);
 }
 
-_Py_VALUE_THUNK_ITEM(list_item, list_item_value)
+_Py_VALUE_THUNK_ITEM(list_item, PyList_Type, list_item_value)
 
 static PyObject *
 list_slice_lock_held(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
@@ -668,7 +668,7 @@ _PyList_Concat(PyObject *aa, PyObject *bb)
 }
 
 static PyValue
-list_concat_value(PyObject *aa, PyValueBorrow bb)
+list_concat_value(PyTypeObject *owner, PyObject *aa, PyValueBorrow bb)
 {
     if (!PyValue_IsObject(bb) || !PyList_Check(PyValue_AsKnownObjectBorrow(bb))) {
         PyErr_Format(PyExc_TypeError,
@@ -680,7 +680,7 @@ list_concat_value(PyObject *aa, PyValueBorrow bb)
         _PyList_Concat(aa, PyValue_AsKnownObjectBorrow(bb)));
 }
 
-_Py_VALUE_THUNK_CONCAT(list_concat, list_concat_value)
+_Py_VALUE_THUNK_CONCAT(list_concat, PyList_Type, list_concat_value)
 
 /*[clinic input]
 @critical_section
@@ -968,7 +968,7 @@ list_ass_item_lock_held(PyListObject *a, Py_ssize_t i, PyValueBorrow v)
 }
 
 static int
-list_ass_item_value(PyObject *aa, Py_ssize_t i, PyValueBorrow v)
+list_ass_item_value(PyTypeObject *owner, PyObject *aa, Py_ssize_t i, PyValueBorrow v)
 {
     int res;
     Py_BEGIN_CRITICAL_SECTION(aa);
@@ -977,7 +977,7 @@ list_ass_item_value(PyObject *aa, Py_ssize_t i, PyValueBorrow v)
     return res;
 }
 
-_Py_VALUE_THUNK_ASSITEM(list_ass_item, list_ass_item_value)
+_Py_VALUE_THUNK_ASSITEM(list_ass_item, PyList_Type, list_ass_item_value)
 
 /*[clinic input]
 @critical_section
@@ -1291,7 +1291,7 @@ PyList_Clear(PyObject *self)
 
 
 static PyValue
-list_inplace_concat_value(PyObject *_self, PyValueBorrow other)
+list_inplace_concat_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow other)
 {
     PyListObject *self = (PyListObject *)_self;
     if (list_extend_borrowed(self, other) < 0) {
@@ -1300,7 +1300,7 @@ list_inplace_concat_value(PyObject *_self, PyValueBorrow other)
     return PyValue_FromObjectSteal(Py_NewRef(self));
 }
 
-_Py_VALUE_THUNK_CONCAT(list_inplace_concat, list_inplace_concat_value)
+_Py_VALUE_THUNK_CONCAT(list_inplace_concat, PyList_Type, list_inplace_concat_value)
 
 /*[clinic input]
 @critical_section
@@ -3364,7 +3364,7 @@ _PyList_SliceSubscript(PyObject* _self, PyObject* item)
 }
 
 static PyValue
-list_subscript_value(PyObject *_self, PyValueBorrow item)
+list_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow item)
 {
     PyListObject *self = (PyListObject *)_self;
     if (_PyValue_IndexCheck(item)) {
@@ -3373,7 +3373,7 @@ list_subscript_value(PyObject *_self, PyValueBorrow item)
             return PyValue_NULL;
         if (i < 0)
             i += PyList_GET_SIZE(self);
-        return list_item_value((PyObject *)self, i);
+        return list_item_value(NULL, (PyObject *)self, i);
     }
     else if (PyValue_IsObject(item)
              && PySlice_Check(PyValue_AsKnownObjectBorrow(item)))
@@ -3389,7 +3389,7 @@ list_subscript_value(PyObject *_self, PyValueBorrow item)
     }
 }
 
-_Py_VALUE_THUNK_SUBSCRIPT(list_subscript, list_subscript_value)
+_Py_VALUE_THUNK_SUBSCRIPT(list_subscript, PyList_Type, list_subscript_value)
 
 static Py_ssize_t
 adjust_slice_indexes(PyListObject *lst,
@@ -3626,7 +3626,7 @@ allocate_garbage:;
 
 /* a[key] = value, or del a[key] for a PyValue_NULL value. */
 static int
-list_ass_subscript_value(PyObject *_self, PyValueBorrow key,
+list_ass_subscript_value(PyTypeObject *owner, PyObject *_self, PyValueBorrow key,
                          PyValueBorrow value)
 {
     PyListObject *self = (PyListObject *)_self;
@@ -3667,7 +3667,7 @@ list_ass_subscript_value(PyObject *_self, PyValueBorrow key,
     return res;
 }
 
-_Py_VALUE_THUNK_ASSSUBSCRIPT(list_ass_subscript, list_ass_subscript_value)
+_Py_VALUE_THUNK_ASSSUBSCRIPT(list_ass_subscript, PyList_Type, list_ass_subscript_value)
 
 _PyValueIndexPair
 _PyList_IterValue(PyObject *object, Py_ssize_t index)
@@ -3759,7 +3759,7 @@ PyTypeObject PyList_Type = {
 static void listiter_dealloc(PyObject *);
 static int listiter_traverse(PyObject *, visitproc, void *);
 static PyObject *listiter_next(PyObject *);
-static _PyStatusValue listiter_next_value(PyObject *);
+static _PyStatusValue listiter_next_value(PyTypeObject *owner, PyObject *);
 static PyObject *listiter_len(PyObject *, PyObject *);
 static PyObject *listiter_reduce_general(void *_it, int forward);
 static PyObject *listiter_reduce(PyObject *, PyObject *);
@@ -3851,7 +3851,7 @@ listiter_traverse(PyObject *it, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-listiter_next_value(PyObject *self)
+listiter_next_value(PyTypeObject *owner, PyObject *self)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = it->it_index;
@@ -3874,7 +3874,7 @@ listiter_next_value(PyObject *self)
    iterator does when it cannot allocate its result tuple. The iterators
    over lists, tuples, sets and dicts all follow this rule: the thunk boxes
    after the value slot has advanced. */
-_Py_VALUE_THUNK_ITERNEXT(listiter_next, listiter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(listiter_next, PyListIter_Type, listiter_next_value)
 
 static PyObject *
 listiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -3924,7 +3924,7 @@ typedef struct {
 static void listreviter_dealloc(PyObject *);
 static int listreviter_traverse(PyObject *, visitproc, void *);
 static PyObject *listreviter_next(PyObject *);
-static _PyStatusValue listreviter_next_value(PyObject *);
+static _PyStatusValue listreviter_next_value(PyTypeObject *owner, PyObject *);
 static PyObject *listreviter_len(PyObject *, PyObject *);
 static PyObject *listreviter_reduce(PyObject *, PyObject *);
 static PyObject *listreviter_setstate(PyObject *, PyObject *);
@@ -4011,7 +4011,7 @@ listreviter_traverse(PyObject *it, visitproc visit, void *arg)
 }
 
 static _PyStatusValue
-listreviter_next_value(PyObject *self)
+listreviter_next_value(PyTypeObject *owner, PyObject *self)
 {
     listreviterobject *it = (listreviterobject *)self;
     Py_ssize_t index = it->it_index;
@@ -4031,7 +4031,7 @@ listreviter_next_value(PyObject *self)
 }
 
 /* A failed box consumes the item (see listiter_next()). */
-_Py_VALUE_THUNK_ITERNEXT(listreviter_next, listreviter_next_value)
+_Py_VALUE_THUNK_ITERNEXT(listreviter_next, PyListRevIter_Type, listreviter_next_value)
 
 static PyObject *
 listreviter_len(PyObject *self, PyObject *Py_UNUSED(ignored))

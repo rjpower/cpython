@@ -3260,10 +3260,10 @@
                         STAT_INC(BINARY_OP, hit);
                         IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);
                         {
-                            int retire_needed = _PyValue_MayDealloc(ir_leaf_key);
+                            int retire_needed = _PyValue_CloseMayReenter(ir_leaf_key);
                             if (!retire_needed) {
                                 PyValue_XCLOSE(ir_leaf_key); ir_leaf_key = PyValue_NULL;
-                                retire_needed = _PyValue_MayDealloc(ir_leaf_dict);
+                                retire_needed = _PyValue_CloseMayReenter(ir_leaf_dict);
                             }
                             if (retire_needed) {
                                 int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, ir_leaf_key, ir_leaf_dict, ((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL));
@@ -18549,7 +18549,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -18744,7 +18744,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -18946,7 +18946,7 @@
                 frame->phase_state = 0;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19255,7 +19255,7 @@
                 frame->phase_state = 0;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19338,7 +19338,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19424,7 +19424,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19601,7 +19601,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19689,7 +19689,7 @@
                 IR_SLOT(IR_A(ir_word)) = attr;
                 _PyValue_CheckTemp(IR_SLOT(IR_A(ir_word)));
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19769,7 +19769,7 @@
                 frame->phase_state = 0;
                 IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19854,7 +19854,7 @@
                 IR_SLOT(IR_A(ir_word)) = attr;
                 _PyValue_CheckTemp(IR_SLOT(IR_A(ir_word)));
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -19940,7 +19940,7 @@
                 frame->phase_state = 0;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -20069,7 +20069,7 @@
                 frame->phase_state = 0;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -24225,10 +24225,10 @@
                 PyValue receiver = ir_own_A;
                 frame->phase_state = 0;
                 {
-                    int retire_needed = _PyValue_MayDealloc(old_value);
+                    int retire_needed = _PyValue_CloseMayReenter(old_value);
                     if (!retire_needed) {
                         PyValue_XCLOSE(old_value); old_value = PyValue_NULL;
-                        retire_needed = _PyValue_MayDealloc(receiver);
+                        retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
@@ -24303,10 +24303,10 @@
                 PyValue receiver = ir_own_A;
                 frame->phase_state = 0;
                 {
-                    int retire_needed = _PyValue_MayDealloc(old_value);
+                    int retire_needed = _PyValue_CloseMayReenter(old_value);
                     if (!retire_needed) {
                         PyValue_XCLOSE(old_value); old_value = PyValue_NULL;
-                        retire_needed = _PyValue_MayDealloc(receiver);
+                        retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
@@ -24384,7 +24384,7 @@
                 PyValue receiver = ir_own_A;
                 frame->phase_state = 0;
                 {
-                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    int retire_needed = _PyValue_CloseMayReenter(receiver);
                     if (!retire_needed) {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
@@ -24454,10 +24454,10 @@
                 UNLOCK_OBJECT(owner_o);
                 frame->phase_state = 0;
                 {
-                    int retire_needed = _PyValue_MayDealloc(old_value);
+                    int retire_needed = _PyValue_CloseMayReenter(old_value);
                     if (!retire_needed) {
                         PyValue_XCLOSE(old_value); old_value = PyValue_NULL;
-                        retire_needed = _PyValue_MayDealloc(receiver);
+                        retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
                         int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
@@ -24609,10 +24609,10 @@
                     UNLOCK_OBJECT(dict);
                     frame->phase_state = 0;
                     {
-                        int retire_needed = _PyValue_MayDealloc(old_value);
+                        int retire_needed = _PyValue_CloseMayReenter(old_value);
                         if (!retire_needed) {
                             PyValue_XCLOSE(old_value); old_value = PyValue_NULL;
-                            retire_needed = _PyValue_MayDealloc(receiver);
+                            retire_needed = _PyValue_CloseMayReenter(receiver);
                         }
                         if (retire_needed) {
                             int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);

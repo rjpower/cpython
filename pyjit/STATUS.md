@@ -29,13 +29,16 @@ Both rounds are measured checkpoints; golden73 remains the selected baseline.
 
 In progress: a cost ledger of the call/return path, ours against upstream,
 with IBS precise sampling (`E59/execution76-call-ledger`). It is the causal
-case the next call change requires. In parallel, `pyjit/values76` slims the
-hot value-form operations. Callees there borrow their arguments, as the
-value-slot contract states: interpreter temporaries own their values, and
-`f_locals` writes keep overwritten values alive. The branch also adds
-internal entry points that skip public checks, moves inline receivers to cold
-paths, and fills every value slot at type readiness so that dispatch is a
-single call.
+case the next call change requires. In parallel, `pyjit/values76` applies three
+rules to every value-form operation, not only the hot ones. First, callees
+borrow their arguments, as the value-slot contract states: interpreter temporaries own their values, and
+`f_locals` writes keep overwritten values alive. Second, internal entry points skip public checks.
+Third, inline receivers move to cold paths. Its heuristic scope
+(`E59/values76-scope.txt`): about 60 functions over upstream's count that
+retain their own arguments, most in `typeobject.c` and `dictobject.c`, and 43
+functions with repeated tag tests. A single value-slot table, with every
+slot filled at type readiness so that dispatch is one call, follows as its
+own change (247 slot initializers, 224 thunk uses).
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

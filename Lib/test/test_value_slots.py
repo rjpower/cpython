@@ -3539,5 +3539,112 @@ class IndexExactTests(unittest.TestCase):
         self.assertEqual(result, 7)
 
 
+class SlotPairingTests(unittest.TestCase):
+    """The object slot is the definition; a value field is valid only while
+    it pairs with the object slot beside it, and a dispatcher calls the slots
+    that it read before the first call, as upstream does."""
+
+    def test_reflected_slot_set_during_call_is_not_used(self):
+        from datetime import timedelta
+
+        class TD(timedelta):
+            pass
+
+        class L:
+            def __add__(self, other):
+                TD.__radd__ = lambda s, o: 'new radd'
+                return NotImplemented
+
+        with self.assertRaises(TypeError):
+            L() + TD(1)
+
+    def test_subclass_slot_replaced_during_reflected_call(self):
+        from datetime import timedelta
+
+        class B(timedelta):
+            pass
+
+        class S(B):
+            def __radd__(self, other):
+                B.__add__ = lambda s, o: 'new add'
+                return NotImplemented
+
+        self.assertEqual(B(1) + S(2), timedelta(days=3))
+
+    def test_class_assignment_and_free_during_call(self):
+        code = """if 1:
+            import gc
+            from datetime import timedelta
+
+            class TD2(timedelta):
+                pass
+
+            class L:
+                def __add__(self, other):
+                    other.__class__ = TD2
+                    gc.collect()
+                    for i in range(8):
+                        type('T%d' % i, (), {})
+                    return NotImplemented
+
+            for i in range(3):
+                # The new type is owned by its one instance only.
+                try:
+                    L() + type('TD1', (timedelta,), {})(1)
+                except TypeError:
+                    pass
+                else:
+                    raise SystemExit('no TypeError')
+        """
+        script_helper.assert_python_ok('-c', code)
+
+    def test_static_type_object_slot_stored_after_ready(self):
+        probe = _testinternalcapi.probe_slots()
+        for modified in (False, True):
+            with self.subTest(modified=modified):
+                t = _testinternalcapi.make_static_type(
+                    'ProbeStore%d' % modified)
+                x = t()
+                _testinternalcapi.store_object_slot(
+                    t, 'nb_add', probe['nb_add'], modified)
+                self.assertEqual(x + 1, 'probe nb_add')
+                _testinternalcapi.store_object_slot(
+                    t, 'getattro', probe['getattro'], modified)
+                self.assertEqual(x.anything, 'probe getattro')
+
+    def test_inherited_getattro_replaced_with_modified(self):
+        # object's generic getattro has a native pair; PyType_Modified()
+        # drops it once the object slot is another function.
+        probe = _testinternalcapi.probe_slots()
+
+        class C:
+            pass
+
+        self.assertNotEqual(value_slot(C, 'getattro'), 0)
+        _testinternalcapi.store_object_slot(
+            C, 'getattro', probe['getattro'], True)
+        self.assertEqual(value_slot(C, 'getattro'), 0)
+        self.assertEqual(C().anything, 'probe getattro')
+
+    def test_replaced_object_slot_drops_native_pair(self):
+        probe = _testinternalcapi.probe_slots()
+        t = _testinternalcapi.make_static_type('ProbePaired', True)
+        self.assertNotEqual(value_slot(t, 'nb_add'), 0)
+        _testinternalcapi.store_object_slot(
+            t, 'nb_add', probe['nb_add'], True)
+        self.assertEqual(value_slot(t, 'nb_add'), 0)
+        self.assertEqual(t() + 1, 'probe nb_add')
+
+    def test_branches_iterator(self):
+        def f(x):
+            if x:
+                return 1
+            return 2
+
+        branches = f.__code__.co_branches()
+        self.assertIsNotNone(next(branches))
+        self.assertIsNotNone(next(iter(f.__code__.co_branches())))
+
+
 if __name__ == '__main__':
     unittest.main()

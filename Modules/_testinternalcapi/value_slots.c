@@ -1340,6 +1340,113 @@ value_slot(PyObject *Py_UNUSED(module), PyObject *args)
     return address_to_int(fn);
 }
 
+/* Object slot functions that return a marker, for a test to store into a type
+ * whose instances are plain objects. */
+static PyObject *
+probe_add(PyObject *Py_UNUSED(a), PyObject *Py_UNUSED(b))
+{
+    return PyUnicode_FromString("probe nb_add");
+}
+
+/* The getattro that a probe type starts with: it has no value pair, unlike
+ * PyObject_GenericGetAttr(). */
+static PyObject *
+probe_plain_getattro(PyObject *self, PyObject *name)
+{
+    return PyObject_GenericGetAttr(self, name);
+}
+
+static PyObject *
+probe_getattro(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(name))
+{
+    return PyUnicode_FromString("probe getattro");
+}
+
+/* make_static_type(name, paired=False): a ready, non-heap type with number
+ * methods and no slots of its own, to store object slots into after
+ * PyType_Ready. With paired, nb_add is VInt's object and value pair. The type
+ * is never freed, as a static type's storage is not. */
+typedef struct {
+    PyTypeObject type;
+    PyNumberMethods as_number;
+} static_probe;
+
+static PyObject *
+make_static_type(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *name;
+    int paired = 0;
+    if (!PyArg_ParseTuple(args, "U|p:make_static_type", &name, &paired)) {
+        return NULL;
+    }
+    const char *s = PyUnicode_AsUTF8(name);
+    if (s == NULL) {
+        return NULL;
+    }
+    static_probe *probe = PyMem_RawCalloc(1, sizeof(static_probe));
+    char *tp_name = PyMem_RawMalloc(strlen(s) + 1);
+    if (probe == NULL || tp_name == NULL) {
+        return PyErr_NoMemory();
+    }
+    strcpy(tp_name, s);
+    probe->type = (PyTypeObject){
+        PyVarObject_HEAD_INIT(NULL, 0)
+        .tp_name = tp_name,
+        .tp_basicsize = sizeof(PyObject),
+        .tp_flags = Py_TPFLAGS_DEFAULT,
+        .tp_new = PyType_GenericNew,
+        .tp_getattro = probe_plain_getattro,
+        .tp_as_number = &probe->as_number,
+    };
+    if (paired) {
+        probe->as_number.nb_add = vint_add;
+        probe->type.tp_value.nb_add = _Py_VALUE_SLOT_INIT(nb_add, vint_add_value);
+    }
+    if (PyType_Ready(&probe->type) < 0) {
+        return NULL;
+    }
+    return Py_NewRef((PyObject *)&probe->type);
+}
+
+// probe_slots(): the addresses of the marker functions, by value-slot name.
+static PyObject *
+probe_slots(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
+{
+    return Py_BuildValue("{sKsK}",
+                         "nb_add", (unsigned long long)(uintptr_t)probe_add,
+                         "getattro",
+                         (unsigned long long)(uintptr_t)probe_getattro);
+}
+
+/* store_object_slot(type, name, address, modified): store an object slot
+ * after the type is ready, and call PyType_Modified() if modified is true. */
+static PyObject *
+store_object_slot(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyTypeObject *type;
+    PyObject *name;
+    unsigned long long address;
+    int modified;
+    if (!PyArg_ParseTuple(args, "O!UKp:store_object_slot", &PyType_Type,
+                          &type, &name, &address, &modified)) {
+        return NULL;
+    }
+    const slot_row *row = find_row(name);
+    if (row == NULL) {
+        return NULL;
+    }
+    void **ptr = object_slotptr(type, row->object_offset);
+    if (ptr == NULL) {
+        PyErr_SetString(PyExc_ValueError, "type has no such slot table");
+        return NULL;
+    }
+    *ptr = (void *)(uintptr_t)address;
+    if (modified) {
+        PyType_Modified(type);
+    }
+    Py_RETURN_NONE;
+}
+
 static PyObject *
 object_slot(PyObject *Py_UNUSED(module), PyObject *args)
 {
@@ -2629,6 +2736,9 @@ static PyMethodDef methods[] = {
     {"value_slot_names", value_slot_names, METH_NOARGS},
     {"value_slot", value_slot, METH_VARARGS},
     {"object_slot", object_slot, METH_VARARGS},
+    {"make_static_type", make_static_type, METH_VARARGS},
+    {"probe_slots", probe_slots, METH_NOARGS},
+    {"store_object_slot", store_object_slot, METH_VARARGS},
     {"value_functions", value_functions, METH_NOARGS},
     {"wrapper_pair", wrapper_pair, METH_O},
     {"call_value_slot", _PyCFunction_CAST(call_value_slot), METH_FASTCALL},

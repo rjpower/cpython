@@ -108,17 +108,25 @@ _PyObject_DestroyMayReenter(PyObject *op)
              || type == &PyComplex_Type);
 }
 
+/* Is owner the last owner of its object, so that releasing it destroys the
+ * object?  A scalar, an immortal or a shared owner is not. */
+static inline int
+_PyValue_IsLastOwner(PyValueBorrow owner)
+{
+    if (PyValue_IsObject(owner) && (owner.bits & 1) == 0) {
+        return Py_REFCNT((PyObject *)owner.bits) == 1;
+    }
+    return 0;
+}
+#define _PyValue_IsLastOwner(V0) (_PyValue_IsLastOwner)(PyValue_Borrow(V0))
+
 /* Can releasing owner run Python code?  Only releasing the last owner of an
- * object whose destruction may reenter (_PyObject_DestroyMayReenter) can;
- * releasing a scalar, an immortal or any other owner cannot. */
+ * object whose destruction may reenter (_PyObject_DestroyMayReenter) can. */
 static inline int
 _PyValue_CloseMayReenter(PyValueBorrow owner)
 {
-    if (PyValue_IsObject(owner) && (owner.bits & 1) == 0) {
-        PyObject *op = (PyObject *)owner.bits;
-        return Py_REFCNT(op) == 1 && _PyObject_DestroyMayReenter(op);
-    }
-    return 0;
+    return (_PyValue_IsLastOwner)(owner)
+           && _PyObject_DestroyMayReenter((PyObject *)owner.bits);
 }
 #define _PyValue_CloseMayReenter(V0) (_PyValue_CloseMayReenter)(PyValue_Borrow(V0))
 

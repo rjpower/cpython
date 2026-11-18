@@ -604,15 +604,29 @@ gen_try_set_executing(PyGenObject *gen)
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
-/* OLD, the value that a result displaced from a local.  Releasing it may run
- * Python (_PyValue_CloseMayReenter), so that value waits in ir_displaced until
- * the handler finishes (release_displaced in the generator); any other value
- * is released at once. */
+/* OLD, the last owner of an object that a result displaced from a local:
+ * destroy the object now when that cannot run Python, and return NULL;
+ * otherwise return OLD for the handler to release once it has finished.
+ * Out of line, so that each handler keeps only the last-owner test. */
+static Py_NO_INLINE PyValue
+ir_retire_last_owner(PyValue old)
+{
+    if (_PyObject_DestroyMayReenter(BITS_TO_PTR(old))) {
+        return old;
+    }
+    PyValue_XCLOSE(old);
+    return PyValue_NULL;
+}
+
+/* OLD, the value that a result displaced from a local.  Releasing a last
+ * owner can run Python, so ir_retire_last_owner() leaves such a value in
+ * ir_displaced until the handler finishes (release_displaced in the
+ * generator); any other value is released at once. */
 #define IR_RETIRE_LOCAL(OLD) \
     do { \
-        if (_PyValue_CloseMayReenter(OLD)) { \
+        if (_PyValue_IsLastOwner(OLD)) { \
             assert(PyValue_IsNull(ir_displaced)); \
-            ir_displaced = (OLD); \
+            ir_displaced = ir_retire_last_owner(OLD); \
         } \
         else { \
             PyValue_XCLOSE(OLD); \

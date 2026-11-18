@@ -2,6 +2,24 @@
 
 ## Live state
 
+**Active: [handlers75](issues/register-semantics59/handlers75.md), 2026-11-18.**
+[Execution74](issues/register-semantics59/execution74-diagnosis.md) traced
+golden73's logging regression to op-cache placement and measured golden73 at
+1.1355 of upstream. Handlers75 makes handlers smaller and fewer. Round 1
+(`91c9baa9600`, branch `pyjit/handlers75`) has four parts:
+
+- Slow paths are marked cold.
+- A displaced leaf object is freed at once instead of deferred.
+- Handlers are compiled without frame pointers.
+- `PyList_GET_VALUE` is inline.
+
+Hot handler code shrinks 5.7% and instructions 0.5–1.3%. The all-29 geomean is
+0.9973 against golden73 and 1.1236 against upstream. Its regressions
+(coroutines 1.070, deepcopy_memo 1.052) coincide with collapses in op-cache
+delivery. Round 1 is a measured checkpoint; golden73 remains the selected
+baseline. Round 2, which replaces handler variants with word flags, is in
+progress in `BASE/worktrees/handlers75-r2`.
+
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`
 as golden73, explicitly accepting the logging regression. Sol 6.1 workers

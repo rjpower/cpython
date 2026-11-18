@@ -32,6 +32,11 @@ a complete execution-boundary saving, preserve specialization coverage, and
 keep cold observation/cleanup obligations out of ordinary transfer paths where
 ownership permits.
 
+[Execution74](execution74-diagnosis.md) finds that golden73's logging cost is
+op-cache placement, which moves single workloads by up to 13% with no change in
+work. [Handlers75](handlers75.md) therefore makes handlers smaller and fewer
+before further placement-sensitive screens.
+
 The user requests repeated architecture → ordered implementation → measured
 selection cycles until upstream parity. The hot set is comprehensions,
 DeltaBlue, generators and coroutines, with logging, raytrace, spectral_norm

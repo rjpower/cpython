@@ -23,6 +23,8 @@ to future protection rules. Preserve both original screen verdicts.
 | G | `pyjit/execution73-boundary-integrated` | Frozen golden73 `44f066f5fd55947edf709bbcf9bf17c607307e4b`; both boundary11 builds pass 117/79 |
 | P | `pyjit/execution73-return-isolation` | Clean source `557c225602c`; all source integrated |
 | W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
+| `worktrees/call55-ir` | `pyjit/handlers75` | Handlers75 round 1 `91c9baa9600`; builds `BASE/handlers75-{release,debug}`; keep clean while it is a measurement control |
+| `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags, from round 1; builds `BASE/handlers75r2-{release,debug}` |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

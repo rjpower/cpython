@@ -352,7 +352,7 @@ BaseException_add_note_impl(PyBaseExceptionObject *self, PyObject *note)
         PyErr_SetString(PyExc_TypeError, "Cannot add note: __notes__ is not a list");
         return PyValue_NULL;
     }
-    if (PyList_AppendValue(notes, PyValue_FromObjectBorrow(note)) < 0) {
+    if (_PyList_AppendValue((PyListObject *)notes, PyValue_FromObjectBorrow(note)) < 0) {
         Py_DECREF(notes);
         return PyValue_NULL;
     }
@@ -1452,7 +1452,7 @@ exceptiongroup_split_recursive(PyObject *exc,
         Py_DECREF(e);
         if (rec_result.match) {
             assert(PyList_CheckExact(match_list));
-            if (PyList_AppendValue(match_list, PyValue_FromObjectBorrow(rec_result.match)) < 0) {
+            if (_PyList_AppendValue((PyListObject *)match_list, PyValue_FromObjectBorrow(rec_result.match)) < 0) {
                 Py_DECREF(rec_result.match);
                 Py_XDECREF(rec_result.rest);
                 goto done;
@@ -1462,7 +1462,7 @@ exceptiongroup_split_recursive(PyObject *exc,
         if (rec_result.rest) {
             assert(construct_rest);
             assert(PyList_CheckExact(rest_list));
-            if (PyList_AppendValue(rest_list, PyValue_FromObjectBorrow(rec_result.rest)) < 0) {
+            if (_PyList_AppendValue((PyListObject *)rest_list, PyValue_FromObjectBorrow(rec_result.rest)) < 0) {
                 Py_DECREF(rec_result.rest);
                 goto done;
             }
@@ -1769,7 +1769,7 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
     else if (num_raised > 0) {
         int res = 0;
         if (!Py_IsNone(reraised_eg)) {
-            res = PyList_AppendValue(raised_list, PyValue_FromObjectBorrow(reraised_eg));
+            res = _PyList_AppendValue((PyListObject *)raised_list, PyValue_FromObjectBorrow(reraised_eg));
         }
         Py_DECREF(reraised_eg);
         if (res < 0) {
@@ -1983,15 +1983,15 @@ ImportError_getstate(PyObject *op)
         dict = dict ? PyDict_Copy(dict) : PyDict_New();
         if (dict == NULL)
             return NULL;
-        if (self->name && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(name)), PyValue_FromObjectBorrow(self->name)) < 0) {
+        if (self->name && _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(name)), PyValue_FromObjectBorrow(self->name)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
-        if (self->path && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(path)), PyValue_FromObjectBorrow(self->path)) < 0) {
+        if (self->path && _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(path)), PyValue_FromObjectBorrow(self->path)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
-        if (self->name_from && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(name_from)), PyValue_FromObjectBorrow(self->name_from)) < 0) {
+        if (self->name_from && _PyDict_SetValue((PyDictObject *)dict, _PyValue_FromObjectKnown(&_Py_ID(name_from)), PyValue_FromObjectBorrow(self->name_from)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
@@ -2310,7 +2310,7 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         if (!PyValue_IsNull(values.myerrno) && PyValue_LongCheck(values.myerrno) &&
             state->errnomap && (PyObject *) type == PyExc_OSError) {
             PyValue newtype_v;
-            int rc = PyDict_GetValue(state->errnomap,
+            int rc = _PyDict_GetValue((PyDictObject *)state->errnomap,
                                      PyValue_Borrow(values.myerrno), &newtype_v);
             PyObject *newtype = NULL;
             if (rc > 0) {
@@ -2867,7 +2867,7 @@ AttributeError_str(PyObject *op)
     if (PyModule_Check(obj)) {
         PyModuleObject *mod = _PyModule_CAST(obj);
         PyValue modname_v;
-        int mrc = PyDict_GetValue(mod->md_dict,
+        int mrc = _PyDict_GetValue((PyDictObject *)mod->md_dict,
                                   _PyValue_FromObjectKnown(&_Py_ID(__name__)), &modname_v);
         PyObject *modname = NULL;
         if (mrc > 0) {
@@ -4746,7 +4746,7 @@ _PyExc_InitState(PyInterpreterState *interp)
     do { \
         PyObject *_code = PyLong_FromLong(CODE); \
         assert(_PyObject_RealIsSubclass(PyExc_ ## TYPE, PyExc_OSError)); \
-        if (!_code || PyDict_SetValue(state->errnomap, PyValue_FromObjectBorrow(_code), PyValue_FromObjectBorrow(PyExc_ ## TYPE))) { \
+        if (!_code || _PyDict_SetValue((PyDictObject *)state->errnomap, PyValue_FromObjectBorrow(_code), PyValue_FromObjectBorrow(PyExc_ ## TYPE))) { \
             Py_XDECREF(_code); \
             return _PyStatus_ERR("errmap insertion problem."); \
         } \

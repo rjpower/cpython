@@ -4360,7 +4360,7 @@ dict_vm_storage(PyObject *module, PyObject *arg)
     Py_ssize_t pos = 0, count = 0, inline_keys = 0, inline_values = 0;
     PyValue key, value;
     int status;
-    while ((status = _PyDict_NextValue(arg, &pos, &key, &value, NULL)) > 0) {
+    while ((status = _PyDict_NextValue((PyDictObject *)arg, &pos, &key, &value, NULL)) > 0) {
         assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
         _PyValue_RecheckHome(key);
         _PyValue_RecheckHome(value);

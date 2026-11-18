@@ -2745,7 +2745,7 @@ _PyThread_CurrentFrames(void)
             Py_DECREF(id);
             goto fail;
         }
-        int stat = PyDict_SetValue(result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(frameobj));
+        int stat = _PyDict_SetValue((PyDictObject *)result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(frameobj));
         Py_DECREF(id);
         if (stat < 0) {
             goto fail;
@@ -2806,7 +2806,7 @@ _PyThread_CurrentExceptions(void)
                exc == Py_None ||
                PyExceptionInstance_Check(exc));
 
-        int stat = PyDict_SetValue(result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(exc == NULL ? Py_None : exc));
+        int stat = _PyDict_SetValue((PyDictObject *)result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(exc == NULL ? Py_None : exc));
         Py_DECREF(id);
         if (stat < 0) {
             goto fail;

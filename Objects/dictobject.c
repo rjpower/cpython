@@ -1578,7 +1578,7 @@ _PyDict_InsertSplitValue(PyDictObject *mp, PyValue key, PyValue value,
     /* ix was selected before a possible callback. The checked provider owns
      * fresh inputs and re-probes instead of writing through that old index. */
     (void)ix;
-    return _PyDict_SetValue_KnownHash((PyObject *)mp, key, value,
+    return _PyDict_SetValue_KnownHash(mp, key, value,
                                     hash_unicode_key(PyValue_AsKnownObjectBorrow(key)));
 }
 
@@ -2143,7 +2143,11 @@ PyDict_NextValue(PyObject *op, Py_ssize_t *position,
         PyErr_SetString(PyExc_ValueError, "dictionary outputs must be distinct");
         return -1;
     }
-    return _PyDict_NextValue(op, position, key, value, NULL);
+    if (!PyAnyDict_Check(op)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    return _PyDict_NextValue((PyDictObject *)op, position, key, value, NULL);
 }
 
 Py_ssize_t
@@ -2410,22 +2414,13 @@ int
 }
 
 int
-(_PyDict_SetValue_KnownHash)(PyObject *op, PyValueBorrow key, PyValueBorrow value,
+(_PyDict_SetValue_KnownHash)(PyDictObject *mp, PyValueBorrow key, PyValueBorrow value,
                               Py_hash_t hash)
 {
+    assert(PyDict_Check(mp));
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    if (!PyDict_Check(op)) {
-        if (PyFrozenDict_Check(op)) {
-            frozendict_does_not_support("assignment");
-        }
-        else {
-            PyErr_BadInternalCall();
-        }
-        return -1;
-    }
-    return _PyDict_SetValue_Take2_KnownHash((PyDictObject *)op,
-        PyValue_DUP(key),
-        PyValue_DUP(value), hash);
+    return _PyDict_SetValue_Take2_KnownHash(mp, PyValue_DUP(key),
+                                            PyValue_DUP(value), hash);
 }
 
 int
@@ -2490,8 +2485,18 @@ int
 _PyDict_SetItem_KnownHash(PyObject *op, PyObject *key, PyObject *value,
                           Py_hash_t hash)
 {
-    return _PyDict_SetValue_KnownHash(op, PyValue_FromObjectBorrow(key),
-                                    PyValue_FromObjectBorrow(value), hash);
+    if (!PyDict_Check(op)) {
+        if (PyFrozenDict_Check(op)) {
+            frozendict_does_not_support("assignment");
+        }
+        else {
+            PyErr_BadInternalCall();
+        }
+        return -1;
+    }
+    return _PyDict_SetValue_KnownHash((PyDictObject *)op,
+                                      PyValue_FromObjectBorrow(key),
+                                      PyValue_FromObjectBorrow(value), hash);
 }
 
 static void
@@ -2984,9 +2989,10 @@ dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
 }
 
 int
-_PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
+_PyDict_NextValue(PyDictObject *mp, Py_ssize_t *ppos, PyValue *pkey,
                   PyValue *pvalue, Py_hash_t *phash)
 {
+    assert(PyAnyDict_Check(mp));
     assert(pkey == NULL || pvalue == NULL || pkey != pvalue);
     if (pkey != NULL) {
         *pkey = PyValue_NULL;
@@ -2994,14 +3000,10 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
     if (pvalue != NULL) {
         *pvalue = PyValue_NULL;
     }
-    if (!PyAnyDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
 
     PyValueBorrow key, value;
     Py_hash_t hash;
-    if (!dict_next_stored((PyDictObject *)op, ppos, &key, &value, &hash)) {
+    if (!dict_next_stored(mp, ppos, &key, &value, &hash)) {
         return 0;
     }
     /* Capturing owners is pure: no table pointer crosses a callback. */
@@ -3077,7 +3079,8 @@ dict_next_entry_ref(PyObject *op, Py_ssize_t *position,
     }
     PyValue key = PyValue_NULL, value = PyValue_NULL;
     Py_hash_t hash = -1;
-    int status = _PyDict_NextValue(op, position, out_key != NULL ? &key : NULL,
+    int status = _PyDict_NextValue((PyDictObject *)op, position,
+                                   out_key != NULL ? &key : NULL,
                                    out_value != NULL ? &value : NULL, &hash);
     PyObject *key_object = NULL, *value_object = NULL;
     if (status > 0 && out_key != NULL) {
@@ -3223,25 +3226,16 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
 }
 
 static int
-pop_lock_held(PyObject *op, PyValueBorrow key, PyValue *value_out,
+pop_lock_held(PyDictObject *dict, PyValueBorrow key, PyValue *value_out,
               PyObject **object_out)
 {
+    assert(PyDict_Check(dict));
     if (value_out != NULL) {
         *value_out = PyValue_NULL;
     }
     if (object_out != NULL) {
         *object_out = NULL;
     }
-    if (!PyDict_Check(op)) {
-        if (PyFrozenDict_Check(op)) {
-            frozendict_does_not_support("deletion");
-        }
-        else {
-            PyErr_BadInternalCall();
-        }
-        return -1;
-    }
-    PyDictObject *dict = (PyDictObject *)op;
     assert(can_modify_dict(dict));
 
     if (dict->ma_used == 0) {
@@ -3251,30 +3245,66 @@ pop_lock_held(PyObject *op, PyValueBorrow key, PyValue *value_out,
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         if (PyValue_IsObject(key)) {
-            dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(key));
+            dict_unhashable_type((PyObject *)dict, PyValue_AsKnownObjectBorrow(key));
         }
         return -1;
     }
     return dict_pop_knownhash(dict, key, hash, value_out, object_out);
 }
 
+/* The public pop entries accept any object: a frozendict raises TypeError and
+ * anything else is a bad internal call. Both clear the outputs first. */
+static int
+pop_check_dict(PyObject *op, PyValue *value_out, PyObject **object_out)
+{
+    if (PyDict_Check(op)) {
+        return 0;
+    }
+    if (value_out != NULL) {
+        *value_out = PyValue_NULL;
+    }
+    if (object_out != NULL) {
+        *object_out = NULL;
+    }
+    if (PyFrozenDict_Check(op)) {
+        frozendict_does_not_support("deletion");
+    }
+    else {
+        PyErr_BadInternalCall();
+    }
+    return -1;
+}
+
 int
-(PyDict_PopValue)(PyObject *op, PyValueBorrow key, PyValue *result)
+(_PyDict_PopValue)(PyDictObject *mp, PyValueBorrow key, PyValue *result)
 {
     assert(PyValue_IsLanguageValue(key));
     int err;
-    Py_BEGIN_CRITICAL_SECTION(op);
-    err = pop_lock_held(op, key, result, NULL);
+    Py_BEGIN_CRITICAL_SECTION(mp);
+    err = pop_lock_held(mp, key, result, NULL);
     Py_END_CRITICAL_SECTION();
     return err;
 }
 
 int
+(PyDict_PopValue)(PyObject *op, PyValueBorrow key, PyValue *result)
+{
+    assert(PyValue_IsLanguageValue(key));
+    if (pop_check_dict(op, result, NULL) < 0) {
+        return -1;
+    }
+    return _PyDict_PopValue((PyDictObject *)op, key, result);
+}
+
+int
 PyDict_Pop(PyObject *op, PyObject *key, PyObject **result)
 {
+    if (pop_check_dict(op, NULL, result) < 0) {
+        return -1;
+    }
     int err;
     Py_BEGIN_CRITICAL_SECTION(op);
-    err = pop_lock_held(op, PyValue_FromObjectBorrow(key), NULL, result);
+    err = pop_lock_held((PyDictObject *)op, PyValue_FromObjectBorrow(key), NULL, result);
     Py_END_CRITICAL_SECTION();
 
     return err;
@@ -3309,8 +3339,13 @@ PyDict_PopString(PyObject *op, const char *key, PyObject **result)
     }
 
     int res;
+    if (pop_check_dict(op, NULL, result) < 0) {
+        Py_DECREF(key_obj);
+        return -1;
+    }
     Py_BEGIN_CRITICAL_SECTION(op);
-    res = pop_lock_held(op, _PyValue_FromObjectKnown(key_obj), NULL, result);
+    res = pop_lock_held((PyDictObject *)op, _PyValue_FromObjectKnown(key_obj),
+                        NULL, result);
     Py_END_CRITICAL_SECTION();
     Py_DECREF(key_obj);
     return res;
@@ -3322,8 +3357,12 @@ dict_pop_default(PyObject *dict, PyObject *key, PyObject *default_value)
 {
     PyObject *result;
     int status;
+    if (pop_check_dict(dict, NULL, &result) < 0) {
+        return NULL;
+    }
     Py_BEGIN_CRITICAL_SECTION(dict);
-    status = pop_lock_held(dict, PyValue_FromObjectBorrow(key), NULL, &result);
+    status = pop_lock_held((PyDictObject *)dict, PyValue_FromObjectBorrow(key),
+                           NULL, &result);
     Py_END_CRITICAL_SECTION();
     if (status == 0) {
         if (default_value != NULL) {
@@ -3355,7 +3394,7 @@ dict_dict_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     PyValue key;
     Py_hash_t hash;
     int found;
-    while ((found = _PyDict_NextValue(iterable, &pos, &key, NULL, &hash)) > 0) {
+    while ((found = _PyDict_NextValue((PyDictObject *)iterable, &pos, &key, NULL, &hash)) > 0) {
         if (insertdict(mp, key, hash, PyValue_DUP(default_value)) < 0) {
             goto error;
         }
@@ -3382,7 +3421,7 @@ dict_set_fromkeys(PyDictObject *mp, PyObject *iterable, PyObject *value)
     PyValue key;
     Py_hash_t hash;
     int found;
-    while ((found = _PySet_NextValue(iterable, &pos, &key, &hash)) > 0) {
+    while ((found = _PySet_NextValue((PySetObject *)iterable, &pos, &key, &hash)) > 0) {
         if (insertdict(mp, key, hash, PyValue_DUP(default_value)) < 0) {
             goto error;
         }
@@ -3639,7 +3678,7 @@ anydict_repr_impl(PyObject *self)
     }
     Py_ssize_t pos = 0;
     int first = 1, found;
-    while ((found = _PyDict_NextValue(self, &pos, &key, &value, NULL)) > 0) {
+    while ((found = _PyDict_NextValue((PyDictObject *)self, &pos, &key, &value, NULL)) > 0) {
         key_object = _PyValue_AsObjectAt(key, BOX_SITE_REPR);
         if (key_object == NULL) {
             goto error;
@@ -3814,7 +3853,7 @@ dict_snapshot_values(PyObject *dict, int kind)
         Py_ssize_t pos = 0, index = 0;
         PyValue key, value;
         int found;
-        while ((found = _PyDict_NextValue(dict, &pos,
+        while ((found = _PyDict_NextValue((PyDictObject *)dict, &pos,
                             kind != 1 ? &key : NULL,
                             kind != 0 ? &value : NULL, NULL)) > 0)
         {
@@ -4138,7 +4177,7 @@ dict_dict_merge(PyDictObject *mp, PyDictObject *other, int override, PyObject **
     for (;;) {
         PyValue key = PyValue_NULL, value = PyValue_NULL;
         Py_hash_t hash;
-        int next = _PyDict_NextValue((PyObject *)other, &position, &key, &value, &hash);
+        int next = _PyDict_NextValue((PyDictObject *)other, &position, &key, &value, &hash);
         if (next <= 0) {
             return next < 0 ? -1 : 0;
         }
@@ -4489,7 +4528,7 @@ dict_equal_lock_held(PyDictObject *a, PyDictObject *b)
     PyValue key, left;
     Py_hash_t hash;
     int found;
-    while ((found = _PyDict_NextValue((PyObject *)a, &pos, &key, &left, &hash)) > 0) {
+    while ((found = _PyDict_NextValue((PyDictObject *)a, &pos, &key, &left, &hash)) > 0) {
         PyValue right = PyValue_NULL;
         int present = _PyDict_GetValue_KnownHash(b, key, hash, &right);
         int equal = present > 0 ? _PyValue_RichCompareBool(left, right, Py_EQ) : present;
@@ -6369,7 +6408,7 @@ dictitems_xor_lock_held(PyObject *d1, PyObject *d2)
     Py_ssize_t pos = 0;
     Py_hash_t hash;
     int found;
-    while ((found = _PyDict_NextValue(d2, &pos, &key, &val2, &hash)) > 0) {
+    while ((found = _PyDict_NextValue((PyDictObject *)d2, &pos, &key, &val2, &hash)) > 0) {
         int present = _PyDict_GetValue_KnownHash((PyDictObject *)temp_dict, key, hash, &val1);
         if (present < 0) {
             goto error;
@@ -6977,7 +7016,7 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
             PyTuple_Check(PyValue_AsKnownObjectBorrow(attrs))) {
             PyObject *tuple = PyValue_AsKnownObjectBorrow(attrs);
             for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(tuple); i++) {
-                PyValue key = PyTuple_GetValue(tuple, i);
+                PyValue key = _PyTuple_GetValue(tuple, i);
                 if (!PyValue_IsNull(key) && value_is_exact_unicode(key)) {
                     PyObject *name = PyValue_AsKnownObjectBorrow(key);
                     Py_hash_t key_hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
@@ -7976,7 +8015,7 @@ frozendict_hash(PyObject *op)
     Py_ssize_t pos = 0;
     Py_hash_t key_hash;
     int found;
-    while ((found = _PyDict_NextValue(op, &pos, NULL, &value, &key_hash)) > 0) {
+    while ((found = _PyDict_NextValue((PyDictObject *)op, &pos, NULL, &value, &key_hash)) > 0) {
         Py_hash_t pair_hash = frozendict_pair_hash(key_hash, value);
         PyValue_XCLOSE(value);
         if (pair_hash == -1) {

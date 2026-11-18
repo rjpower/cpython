@@ -1748,7 +1748,7 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
         }
         if (idx < self->memo_size) {
             PyValue value_v;
-            int rc_dict = PyDict_PopValue(self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
+            int rc_dict = _PyDict_PopValue((PyDictObject *)self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
             value = NULL;
             if (rc_dict > 0 && (value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT)) == NULL) {
                 rc_dict = -1;
@@ -1769,7 +1769,7 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
         }
         else {
             PyValue value_v;
-            int rc_dict = PyDict_GetValue(self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
+            int rc_dict = _PyDict_GetValue((PyDictObject *)self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
             value = NULL;
             if (rc_dict > 0 && (value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT)) == NULL) {
                 rc_dict = -1;
@@ -1809,7 +1809,7 @@ _Unpickler_MemoPut(UnpicklerObject *self, size_t idx, PyValueBorrow value)
                 return -1;
             }
 
-            int rc = PyDict_SetValue(self->memo_dict, key, value);
+            int rc = _PyDict_SetValue((PyDictObject *)self->memo_dict, key, value);
             PyValue_CLOSE(key);
             return rc;
         }
@@ -3793,7 +3793,7 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     Py_ssize_t total = 0;
     do {
         if (dict_size - total == 1) {
-            rc = PyDict_NextValue(obj, &ppos, &key, &value);
+            rc = _PyDict_NextValue((PyDictObject *)obj, &ppos, &key, &value, NULL);
             if (rc < 0) {
                 return -1;
             }
@@ -3821,7 +3821,7 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         i = 0;
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
-        while ((rc = PyDict_NextValue(obj, &ppos, &key, &value)) > 0) {
+        while ((rc = _PyDict_NextValue((PyDictObject *)obj, &ppos, &key, &value, NULL)) > 0) {
             if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
                 goto error;
             }
@@ -3986,7 +3986,7 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
         int err = 0, rc;
         Py_BEGIN_CRITICAL_SECTION(obj);
         PyValue item_v;
-        while ((rc = _PySet_NextValue(obj, &ppos, &item_v, &hash)) > 0) {
+        while ((rc = _PySet_NextValue((PySetObject *)obj, &ppos, &item_v, &hash)) > 0) {
             item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_SET);
             if (item == NULL) {
                 rc = -1;
@@ -5943,7 +5943,7 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
 
         int rc;
         PyValue value_v;
-        while ((rc = PyDict_NextValue(obj, &i, NULL, &value_v)) > 0) {
+        while ((rc = _PyDict_NextValue((PyDictObject *)obj, &i, NULL, &value_v, NULL)) > 0) {
             value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
             if (value == NULL) {
                 Py_CLEAR(value);

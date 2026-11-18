@@ -6568,10 +6568,10 @@
                     assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    PyValue owner = PyTuple_GetValue(target, 0);
+                    PyValue owner = _PyTuple_GetValue(target, 0);
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    PyValue attr_name = PyTuple_GetValue(target, 1);
+                    PyValue attr_name = _PyTuple_GetValue(target, 1);
                     assert(PyValue_IsObject(attr_name));
                     frame->phase_state = 0;
                     frame->phase_state = 0;
@@ -10083,7 +10083,7 @@
                 if (PyValue_IsInline(left)) {
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    res = PySet_ContainsValue(right_o, left);
+                    res = _PySet_ContainsValue((PySetObject *)right_o, left);
                 }
                 else {
                     frame->phase_state = 0;
@@ -10183,7 +10183,7 @@
                 if (PyValue_IsInline(left)) {
                     frame->phase_state = 0;
                     frame->phase_state = 0;
-                    res = PySet_ContainsValue(right_o, left);
+                    res = _PySet_ContainsValue((PySetObject *)right_o, left);
                 }
                 else {
                     frame->phase_state = 0;

@@ -439,14 +439,22 @@ _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem)
 }
 
 int
+(_PyList_AppendValue)(PyListObject *self, PyValueBorrow item)
+{
+    assert(PyList_Check(self));
+    assert(!PyValue_IsNull(item));
+    int ret;
+    Py_BEGIN_CRITICAL_SECTION(self);
+    ret = _PyList_AppendTakeValue(self, PyValue_DUP(item));
+    Py_END_CRITICAL_SECTION();
+    return ret;
+}
+
+int
 (PyList_AppendValue)(PyObject *op, PyValueBorrow item)
 {
     if (PyList_Check(op) && !PyValue_IsNull(item)) {
-        int ret;
-        Py_BEGIN_CRITICAL_SECTION(op);
-        ret = _PyList_AppendTakeValue((PyListObject *)op, PyValue_DUP(item));
-        Py_END_CRITICAL_SECTION();
-        return ret;
+        return _PyList_AppendValue((PyListObject *)op, item);
     }
     PyErr_BadInternalCall();
     return -1;

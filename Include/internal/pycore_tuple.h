@@ -66,6 +66,15 @@ PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
 #define PyTuple_GET_VALUE(op, index) \
     PyTuple_GET_VALUE(_PyObject_CAST(op), (index))
 
+/* PyTuple_GetValue() for a caller that holds a tuple and an index it has
+   already bounded: the owner of item index, with no type or range check. */
+static inline PyValue
+_PyTuple_GetValue(PyObject *op, Py_ssize_t index)
+{
+    assert(PyTuple_Check(op));
+    return PyValue_XDUP(PyTuple_GET_VALUE(op, index));
+}
+
 /* Proven object-only metadata, such as a code object's tuple of names. This
    cannot be used for an arbitrary constant, argument or container element. */
 static inline PyObject *

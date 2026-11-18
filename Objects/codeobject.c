@@ -176,7 +176,7 @@ intern_strings(PyObject *tuple)
     Py_ssize_t i;
 
     for (i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
-        PyValue value = PyTuple_GetValue(tuple, i);
+        PyValue value = _PyTuple_GetValue(tuple, i);
         if (!PyValue_IsObject(value) ||
             !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
             PyValue_XCLOSE(value);
@@ -199,7 +199,7 @@ intern_constants(PyObject *tuple, int *modified)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     for (Py_ssize_t i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
-        PyValue held = PyTuple_GetValue(tuple, i);
+        PyValue held = _PyTuple_GetValue(tuple, i);
         if (PyValue_IsNull(held)) {
             PyErr_SetString(PyExc_SystemError, "absent value in code constants");
             return -1;
@@ -242,7 +242,7 @@ intern_constants(PyObject *tuple, int *modified)
             PyValue item;
             Py_hash_t hash;
             int next;
-            while ((next = _PySet_NextValue(v, &pos, &item, &hash)) > 0) {
+            while ((next = _PySet_NextValue((PySetObject *)v, &pos, &item, &hash)) > 0) {
                 PyTuple_SET_VALUE(tmp, index++, item);
             }
             if (next < 0) {
@@ -260,7 +260,7 @@ intern_constants(PyObject *tuple, int *modified)
                 v = PyFrozenSet_New(NULL);
                 if (v != NULL) {
                     for (Py_ssize_t j = 0; j < PyTuple_GET_SIZE(tmp); j++) {
-                        PyValue item = PyTuple_GetValue(tmp, j);
+                        PyValue item = _PyTuple_GetValue(tmp, j);
                         int status = PySet_AddValue(v, item);
                         PyValue_CLOSE(item);
                         if (status < 0) {
@@ -304,7 +304,7 @@ validate_and_copy_tuple(PyObject *tup)
         return NULL;
 
     for (i = 0; i < len; i++) {
-        PyValue value = PyTuple_GetValue(tup, i);
+        PyValue value = _PyTuple_GetValue(tup, i);
         item = PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
         if (item == NULL || !PyUnicode_Check(item)) {
             PyErr_Format(
@@ -6573,7 +6573,7 @@ static PyValue
             goto done;
         }
         for (Py_ssize_t i = 0; i < len; i++) {
-            PyValue item = PyTuple_GetValue(op, i);
+            PyValue item = _PyTuple_GetValue(op, i);
             PyValue item_key = constant_value_key(item);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(item_key)) {
@@ -6594,7 +6594,7 @@ static PyValue
         Py_ssize_t pos = 0;
         PyValue item;
         int status;
-        while ((status = _PySet_NextValue(op, &pos, &item, NULL)) > 0) {
+        while ((status = _PySet_NextValue((PySetObject *)op, &pos, &item, NULL)) > 0) {
             PyValue item_key = constant_value_key(item);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(item_key)) {

@@ -1386,8 +1386,8 @@ dummy_func(
                 // tuple (owner, name)
                 PyObject *target = PyValue_AsKnownObjectBorrow(first);
                 assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
-                PyValue owner = PyTuple_GetValue(target, 0);
-                PyValue attr_name = PyTuple_GetValue(target, 1);
+                PyValue owner = _PyTuple_GetValue(target, 0);
+                PyValue attr_name = _PyTuple_GetValue(target, 1);
                 assert(PyValue_IsObject(attr_name));
                 int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
                                            second);
@@ -3276,7 +3276,7 @@ dummy_func(
             if (PyValue_IsInline(left)) {
                 // An inline int or float is hashable and never a set, so
                 // _PySet_Contains()'s frozenset fallback cannot apply.
-                res = PySet_ContainsValue(right_o, left);
+                res = _PySet_ContainsValue((PySetObject *)right_o, left);
             }
             else {
                 res = _PySet_Contains((PySetObject *)right_o,

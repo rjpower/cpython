@@ -115,7 +115,7 @@ lazy_import_get_loaded_attr(PyThreadState *tstate, PyObject *name,
         goto done;
     }
     PyValue attr_value;
-    int attr_rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(attr_name),
+    int attr_rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(attr_name),
                                   &attr_value);
     if (attr_rc > 0) {
         attr = _PyValue_AsObjectAt(attr_value, BOX_SITE_DICT);
@@ -512,7 +512,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
         FT_ATOMIC_STORE_INT_RELAXED(root->lz_active, 1);
         FT_ATOMIC_STORE_INT_RELAXED(tstate->interp->imports.has_lazy_submodules, 1);
         int package = PyModule_CheckExact(obj) ?
-            PyDict_ContainsValue(_PyModule_GetDict(obj), _PyValue_FromObjectKnown(&_Py_ID(__path__))) : 0;
+            _PyDict_ContainsValue((PyDictObject *)_PyModule_GetDict(obj), _PyValue_FromObjectKnown(&_Py_ID(__path__))) : 0;
         if (package < 0) {
             Py_CLEAR(obj);
         }
@@ -616,7 +616,7 @@ _PyLazyImport_LoadChild(PyThreadState *tstate, PyObject *declaration,
     Py_DECREF(lz);
     if (result != NULL && PyModule_Check(result) &&
         PyUnicode_Compare(source->lz_from, name) != 0 &&
-        !PyDict_ContainsValue(_PyModule_GetDict(result), _PyValue_FromObjectKnown(&_Py_ID(__path__)))) {
+        !_PyDict_ContainsValue((PyDictObject *)_PyModule_GetDict(result), _PyValue_FromObjectKnown(&_Py_ID(__path__)))) {
         // Reaching a non-package must still reject an invalid dotted import.
         Py_DECREF(result);
         return _PyLazyImport_LoadChild(tstate, declaration, source->lz_from);

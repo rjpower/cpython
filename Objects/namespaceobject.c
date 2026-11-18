@@ -145,7 +145,7 @@ namespace_repr(PyObject *ns)
             PyObject *value = NULL, *item;
             PyValue value_v;
 
-            int has_key = PyDict_GetValue(d, PyValue_FromObjectBorrow(key), &value_v);
+            int has_key = _PyDict_GetValue((PyDictObject *)d, PyValue_FromObjectBorrow(key), &value_v);
             if (has_key == 1) {
                 value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
                 PyValue_CLOSE(value_v);
@@ -160,7 +160,7 @@ namespace_repr(PyObject *ns)
                     loop_error = 1;
                 }
                 else {
-                    loop_error = PyList_AppendValue(pairs, PyValue_FromObjectBorrow(item));
+                    loop_error = _PyList_AppendValue((PyListObject *)pairs, PyValue_FromObjectBorrow(item));
                     Py_DECREF(item);
                 }
             }

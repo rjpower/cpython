@@ -1710,7 +1710,7 @@ create_localsdict(localobject *self, thread_module_state *state,
         goto err;
     }
 
-    if (PyDict_SetValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key), PyValue_FromObjectBorrow(ldict)) < 0)
+    if (_PyDict_SetValue((PyDictObject *)self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key), PyValue_FromObjectBorrow(ldict)) < 0)
     {
         goto err;
     }
@@ -1718,7 +1718,7 @@ create_localsdict(localobject *self, thread_module_state *state,
     wr = create_sentinel_wr(self);
     if (wr == NULL) {
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
+        if (_PyDict_DelValue((PyDictObject *)self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
@@ -1729,7 +1729,7 @@ create_localsdict(localobject *self, thread_module_state *state,
 
     if (PySet_AddValue(self->thread_watchdogs, PyValue_FromObjectBorrow(wr)) < 0) {
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
+        if (_PyDict_DelValue((PyDictObject *)self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
@@ -1762,7 +1762,7 @@ _ldict(localobject *self, thread_module_state *state)
     PyObject *ldict;
     PyValue found;
     PyThreadState *tstate = _PyThreadState_GET();
-    if (PyDict_GetValue(self->localdicts,
+    if (_PyDict_GetValue((PyDictObject *)self->localdicts,
                         PyValue_FromObjectBorrow(tstate->threading_local_key),
                         &found) < 0) {
         return NULL;
@@ -1787,7 +1787,7 @@ _ldict(localobject *self, thread_module_state *state)
            we create a new one the next time we do an attr
            access */
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
+        if (_PyDict_DelValue((PyDictObject *)self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
@@ -1940,7 +1940,7 @@ clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
             Py_DECREF(self);
             return NULL;
         }
-        if (PyDict_PopValue(self->localdicts, key, NULL) < 0) {
+        if (_PyDict_PopValue((PyDictObject *)self->localdicts, key, NULL) < 0) {
             PyErr_FormatUnraisable("Exception ignored while clearing "
                                    "thread local %R", (PyObject *)self);
         }

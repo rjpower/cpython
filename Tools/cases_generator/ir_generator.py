@@ -776,7 +776,8 @@ INPLACE_READERS = {
     "_Py_call_instrumentation_exc2",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
-    "_PyDict_ContainsValue", "_PyValue_RichCompareObject",
+    "_PyDict_ContainsValue", "_PySet_ContainsValue",
+    "_PyValue_RichCompareObject",
     # Not a reader: PyDict_SetValue keeps counted copies of its key and
     # value (PyValue_XDUP of a borrow), so it neither keeps nor releases the
     # caller's count and a borrowed local may be passed to it; nor is its
@@ -833,7 +834,7 @@ OBJECT_READERS = {
     "PyErr_GivenExceptionMatches",
     # The value-form container calls (they read the container object and
     # the key as a value)
-    "_PyDict_ContainsValue", "PySet_ContainsValue",
+    "_PyDict_ContainsValue", "PySet_ContainsValue", "_PySet_ContainsValue",
     "PyFunction_New",
     "PyUnicode_Concat",
 

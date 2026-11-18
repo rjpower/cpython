@@ -175,8 +175,9 @@ _PyValue_HashNotImplemented(PyValueBorrow value)
 Py_hash_t
 _PyValue_GenericHash(PyValueBorrow value)
 {
-    if (!PyValue_IsInline(value)) {
-        return PyObject_GenericHash(PyValue_AsKnownObjectBorrow(value));
+    PyObject *obj = PyValue_ObjectOrNull(value);
+    if (obj != NULL) {
+        return PyObject_GenericHash(obj);
     }
     /* object.__hash__() of an exact int or float, whose own types hash by
        value: the identity hash that PyObject_GenericHash() gives any box of

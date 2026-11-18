@@ -283,7 +283,7 @@ maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         return 0;
     }
-    int r = PyDict_ContainsValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__lltrace__)));
+    int r = _PyDict_ContainsValue((PyDictObject *)globals, _PyValue_FromObjectKnown(&_Py_ID(__lltrace__)));
     if (r < 0) {
         PyErr_Clear();
         return 0;

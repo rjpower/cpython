@@ -114,7 +114,7 @@ PyFunctionObject *
 _PyFunction_FromConstructor(PyFrameConstructor *constr)
 {
     PyValue module_value;
-    int module_rc = PyDict_GetValue(constr->fc_globals,
+    int module_rc = _PyDict_GetValue((PyDictObject *)constr->fc_globals,
                                     _PyValue_FromObjectKnown(&_Py_ID(__name__)),
                                     &module_value);
     PyObject *module = NULL;
@@ -616,7 +616,7 @@ func_get_annotation_dict(PyFunctionObject *op)
             // The loop bound and the even-size assert prove both indices.
             PyValue key = PyValue_DUP(PyTuple_GET_VALUE(ann_tuple, i));
             PyValue value = PyValue_DUP(PyTuple_GET_VALUE(ann_tuple, i + 1));
-            int err = PyDict_SetValue(ann_dict, key, value);
+            int err = _PyDict_SetValue((PyDictObject *)ann_dict, key, value);
             PyValue_CLOSE(key);
             PyValue_CLOSE(value);
 
@@ -1449,7 +1449,7 @@ descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *nam
     }
     PyObject *res = NULL;
     PyValue res_value;
-    int res_rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &res_value);
+    int res_rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &res_value);
     if (res_rc > 0) {
         res = _PyValue_AsObjectAt(res_value, BOX_SITE_DICT);
         PyValue_CLOSE(res_value);
@@ -1472,7 +1472,7 @@ descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *nam
         Py_DECREF(dict);
         return NULL;
     }
-    if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(res)) < 0) {
+    if (_PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(res)) < 0) {
         Py_DECREF(dict);
         Py_DECREF(res);
         return NULL;
@@ -1490,7 +1490,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return -1;
     }
     if (value == NULL) {
-        if (PyDict_DelValue(dict, PyValue_FromObjectBorrow(name)) < 0) {
+        if (_PyDict_DelValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name)) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError)) {
                 PyErr_Clear();
                 PyErr_Format(PyExc_AttributeError,
@@ -1508,7 +1508,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return 0;
     }
     else {
-        int result = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
+        int result = _PyDict_SetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
         Py_DECREF(dict);
         return result;
     }

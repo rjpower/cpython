@@ -1699,7 +1699,7 @@ unicode_dealloc(PyObject *unicode)
             PyObject *interned = get_interned_dict(interp);
             assert(interned != NULL);
             PyValue popped;
-            int r = PyDict_PopValue(interned, _PyValue_FromObjectKnown(unicode),
+            int r = _PyDict_PopValue((PyDictObject *)interned, _PyValue_FromObjectKnown(unicode),
                                     &popped);
             if (r == -1) {
                 PyErr_FormatUnraisable("Exception ignored while "
@@ -9123,7 +9123,7 @@ PyUnicode_BuildEncodingMap(PyObject* string)
                 Py_DECREF(result);
                 return NULL;
             }
-            int rc = PyDict_SetValue(result, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
+            int rc = _PyDict_SetValue((PyDictObject *)result, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
             Py_DECREF(key);
             Py_DECREF(value);
             if (rc < 0) {
@@ -13713,7 +13713,7 @@ unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
     PyValue key_v, value_v;
     Py_ssize_t i = 0;
     int res, rc;
-    while ((rc = PyDict_NextValue(x, &i, &key_v, &value_v)) > 0) {
+    while ((rc = _PyDict_NextValue((PyDictObject *)x, &i, &key_v, &value_v, NULL)) > 0) {
         key = _PyValue_AsObjectAt(key_v, BOX_SITE_DICT);
         value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
         PyValue_CLOSE(key_v);
@@ -13737,13 +13737,13 @@ unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
             newkey = PyLong_FromLong(PyUnicode_READ(kind, data, 0));
             if (!newkey)
                 goto fail;
-            res = PyDict_SetValue(newdict, PyValue_FromObjectBorrow(newkey), PyValue_FromObjectBorrow(value));
+            res = _PyDict_SetValue((PyDictObject *)newdict, PyValue_FromObjectBorrow(newkey), PyValue_FromObjectBorrow(value));
             Py_DECREF(newkey);
             if (res < 0)
                 goto fail;
         }
         else if (PyLong_Check(key)) {
-            if (PyDict_SetValue(newdict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value)) < 0)
+            if (_PyDict_SetValue((PyDictObject *)newdict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value)) < 0)
                 goto fail;
         }
         else {
@@ -13831,7 +13831,7 @@ unicode_maketrans_impl(PyValueBorrow x, PyObject *y, PyObject *z)
                 Py_DECREF(key);
                 goto err;
             }
-            res = PyDict_SetValue(new, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
+            res = _PyDict_SetValue((PyDictObject *)new, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
             Py_DECREF(key);
             Py_DECREF(value);
             if (res < 0)
@@ -13845,7 +13845,7 @@ unicode_maketrans_impl(PyValueBorrow x, PyObject *y, PyObject *z)
                 key = PyLong_FromLong(PyUnicode_READ(z_kind, z_data, i));
                 if (!key)
                     goto err;
-                res = PyDict_SetValue(new, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None));
+                res = _PyDict_SetValue((PyDictObject *)new, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None));
                 Py_DECREF(key);
                 if (res < 0)
                     goto err;

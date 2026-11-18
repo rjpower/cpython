@@ -469,7 +469,7 @@ _unpack_args(PyObject *item)
                 return NULL;
             }
         }
-        int rc = PyList_AppendValue(newargs, PyValue_FromObjectBorrow(arg));
+        int rc = _PyList_AppendValue((PyListObject *)newargs, PyValue_FromObjectBorrow(arg));
         Py_XDECREF(arg_owner);
         if (rc < 0) {
             Py_DECREF(newargs);

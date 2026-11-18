@@ -12,6 +12,8 @@ import gc
 import sys
 import unittest
 
+from test.support import import_helper
+
 
 class DropOnHash:
     """A key whose __hash__ runs a callback first."""
@@ -928,6 +930,221 @@ class InlineReceiverTests(unittest.TestCase):
             5[0]
         self.assertEqual({1: "a"}[1], "a")
         self.assertEqual({"k": 2.5}["k"], 2.5)
+
+
+class InternalEntryTests(unittest.TestCase):
+    """Core callers that have proven the container's type call the internal
+    entries, which only assert. The public entries keep their checks, and the
+    proofs must hold for anything Python code can arrange."""
+
+    def test_public_dict_entries_reject_other_objects(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        with self.assertRaises(SystemError):
+            capi.dict_pop_value([], 1)
+        with self.assertRaises(SystemError):
+            capi.dict_pop_value_string([], "a")
+        with self.assertRaises(TypeError):
+            capi.dict_pop_value(frozendict({1: 2}), 1)
+        with self.assertRaises(TypeError):
+            capi.dict_pop_value({1: 2}, [])
+        self.assertEqual(capi.dict_pop_value({1: 2}, 1)[:2], (1, 2))
+
+    def test_public_container_entries_reject_other_objects(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        with self.assertRaises(SystemError):
+            capi.list_append_value((), 1)
+        with self.assertRaises(SystemError):
+            capi.list_set_value((1,), 0, 1)
+        with self.assertRaises(IndexError):
+            capi.list_get_value([1], 5)
+        with self.assertRaises(SystemError):
+            capi.set_discard_value(5, 1)
+        with self.assertRaises(TypeError):
+            capi.cell_value_kind(5)
+
+    def test_json_default_clears_dict_during_encoding(self):
+        import json
+        d = {}
+
+        class Thing:
+            pass
+
+        def default(obj):
+            d.clear()
+            return "thing"
+
+        d.update({"a": Thing(), "b": 1, "c": Thing(), 4: 2.5})
+        out = json.dumps(d, default=default)
+        self.assertTrue(out.startswith('{"a": "thing"'))
+
+    def test_pickle_reduce_clears_dict_during_dump(self):
+        import pickle
+        d = {}
+
+        class Clearer:
+            def __reduce__(self):
+                d.clear()
+                return (int, (3,))
+
+        d.update({1: Clearer(), 2: 5, 3: 2.5})
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+            d.update({1: Clearer(), 2: 5, 3: 2.5})
+            # The pickler reports the change; the point is that it does not
+            # read the cleared dict's storage.
+            try:
+                data = pickle.dumps(d, proto)
+            except RuntimeError as exc:
+                self.assertIn("changed size", str(exc))
+            else:
+                self.assertIsInstance(pickle.loads(data), dict)
+
+    def test_set_hash_mutates_the_set(self):
+        s = {1, 2.5, "x"}
+        s.add(DropOnHash(s.clear, 9))
+        self.assertEqual(len(s), 1)
+        s = {1, 2}
+        s.discard(DropOnHash(lambda: s.add(3), 9))
+        self.assertEqual(s, {1, 2, 3})
+        s = {1, 2}
+        self.assertNotIn(DropOnHash(s.clear, 9), s)
+        self.assertEqual(s, set())
+
+    def test_type_namespace_setters(self):
+        class C:
+            """doc"""
+            x = 1
+
+        C.__doc__ = "new"
+        self.assertEqual(C.__doc__, "new")
+        C.__module__ = "m"
+        self.assertEqual(C.__module__, "m")
+        C.__annotations__ = {"x": int}
+        self.assertEqual(C.__annotations__, {"x": int})
+        del C.__annotations__
+        self.assertEqual(C.__annotations__, {})
+        C.__abstractmethods__ = frozenset()
+        del C.__abstractmethods__
+        with self.assertRaises(AttributeError):
+            del C.__abstractmethods__
+        C.__type_params__ = ()
+        self.assertEqual(C.__type_params__, ())
+        C.__firstlineno__ = 3
+        self.assertEqual(C.__firstlineno__, 3)
+
+    def test_module_annotations_and_annotate(self):
+        import types
+        m = types.ModuleType("m")
+        self.assertEqual(m.__annotations__, {})
+        m.__annotations__ = {"a": int}
+        self.assertEqual(m.__annotations__, {"a": int})
+        del m.__annotations__
+        m.__annotate__ = None
+        self.assertIsNone(m.__annotate__)
+        m.__annotate__ = lambda fmt: {"b": str}
+        self.assertIsInstance(m.__annotations__, dict)
+        m.__annotations__ = {"c": int}
+        del m.__annotations__
+        self.assertEqual(m.__annotations__, {})
+
+    def test_annotation_dict_of_a_function(self):
+        def f(a: int, b: "str") -> float:
+            pass
+
+        self.assertEqual(list(f.__annotations__), ["a", "b", "return"])
+
+        class cm:
+            @classmethod
+            def g(cls): pass
+
+            @staticmethod
+            def h(): pass
+
+        self.assertEqual(cm.__dict__["g"].__wrapped__.__name__, "g")
+        self.assertEqual(cm.__dict__["h"].__wrapped__.__name__, "h")
+        cm.__dict__["g"].__annotations__ = {"q": 1}
+        self.assertEqual(cm.__dict__["g"].__annotations__, {"q": 1})
+        del cm.__dict__["g"].__annotations__
+
+    def test_sequence_reads_and_constants(self):
+        t = (1, 2.5, "x", (3, 4))
+        self.assertEqual(t[1], 2.5)
+        self.assertEqual(t[-1], (3, 4))
+        self.assertEqual([1, 2.5][-2], 1)
+        a, b, *rest = t
+        self.assertEqual((a, b, rest), (1, 2.5, ["x", (3, 4)]))
+        match t:
+            case (1, float(f), *_):
+                self.assertEqual(f, 2.5)
+        code = compile("x = (1, (2, 3), frozenset({4, 5}), 'a')", "<s>", "exec")
+        self.assertIn((2, 3), code.co_consts)
+        self.assertEqual(eval(code, {}) if False else 0, 0)
+        self.assertEqual(len(range(5)), 5)
+        with self.assertRaises(TypeError):
+            len(5)
+        with self.assertRaises(TypeError):
+            del (5)[0]
+
+    def test_integer_extractors(self):
+        import struct
+        self.assertEqual(struct.pack("<q", -2**40), (-2**40).to_bytes(8, "little", signed=True))
+        for fmt, value in (("b", 200), ("i", 2**40), ("L", -1), ("Q", 2**70)):
+            with self.assertRaises(struct.error):
+                struct.pack(fmt, value)
+        with self.assertRaises(OverflowError):
+            "a" * 2**70
+        with self.assertRaises(OverflowError):
+            [].__mul__(2**70)
+        self.assertEqual(range(2**70)[2**69], 2**69)
+        self.assertEqual((7).__index__(), 7)
+        self.assertEqual(int.from_bytes(b"\xff" * 9, "big"), 2**72 - 1)
+
+    def test_attribute_names_are_tested_where_slots_are_reached_directly(self):
+        import types
+        class C:
+            def __getattr__(self, name):
+                return name
+
+        m = types.ModuleType("m")
+        for obj in (object(), C(), m, super(C, C()), 5, 2.5):
+            with self.subTest(type(obj)):
+                with self.assertRaises(TypeError):
+                    getattr(obj, 1)
+                with self.assertRaises(TypeError):
+                    object.__getattribute__(obj, 1) if type(obj) is not int else getattr(obj, 1)
+        with self.assertRaises(TypeError):
+            types.ModuleType.__getattribute__(m, 1)
+        with self.assertRaises(TypeError):
+            super.__getattribute__(super(C, C()), 1)
+        with self.assertRaises(TypeError):
+            object.__setattr__(C(), 1, 2)
+        with self.assertRaises(TypeError):
+            setattr(C(), 1, 2)
+        o = C()
+        object.__setattr__(o, "k", 5)
+        self.assertEqual(o.k, 5)
+        self.assertEqual(o.missing, "missing")
+
+    def test_item_operations_on_each_kind(self):
+        with self.assertRaises(TypeError):
+            (5)[0]
+        with self.assertRaises(TypeError):
+            (2.5)[0] = 1
+        with self.assertRaises(TypeError):
+            len(2.5)
+        self.assertIn(2.5, [1, 2.5])
+        self.assertNotIn(1, {2: 3})
+        l = [1, 2, 3]
+        l[-1] = 7
+        del l[0]
+        self.assertEqual(l, [2, 7])
+        with self.assertRaises(IndexError):
+            l[5] = 1
+        with self.assertRaises(TypeError):
+            l["a"] = 1
+        class Seq:
+            def __getitem__(self, i): return i
+        self.assertEqual(Seq()[4], 4)
+        self.assertEqual(Seq()[1:2], slice(1, 2))
 
 
 if __name__ == "__main__":

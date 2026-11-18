@@ -573,7 +573,7 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         return -1;
     }
     if (scope->callable == NULL) {
-        scope->callable = Py_NewRef(callable);
+        scope->callable = callable;
     }
     else if (scope->callable != callable) {
         PyErr_SetString(PyExc_SystemError, "native scope callable changed");
@@ -606,12 +606,17 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     }
     /* VM self_or_null belongs to the argument window. This receiver is the
      * C function's independently pinned bound self, which may be absent. */
-    if (!PyValue_IsNull(scope->receiver)) {
+    if (scope->receiver_object != NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "scoped C receiver must be captured by the gateway");
         return -1;
     }
-    scope->receiver = PyValue_XDUP(_PyCFunction_GET_SELF_VALUE(callable));
+    PyValueBorrow self = _PyCFunction_GET_SELF_VALUE(callable);
+    if (!PyValue_IsNull(self) &&
+        _PyNativeScope_SetReceiver(scope, self, callable) < 0)
+    {
+        return -1;
+    }
     if (_Py_EnterRecursiveCallTstate(scope->tstate, " while calling a Python object")) {
         return -1;
     }

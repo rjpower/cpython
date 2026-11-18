@@ -453,10 +453,10 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     for (Py_ssize_t i = 0; i < nkeys; i++) {
         // The key stays a value, so an inline key is not boxed
         PyValueBorrow key_v = PyTuple_GET_VALUE(keys, i);
-        if (PySet_ContainsValue(seen, key_v) || PySet_AddValue(seen, key_v)) {
+        if (_PySet_ContainsValue((PySetObject *)seen, key_v) || _PySet_AddValue((PySetObject *)seen, key_v)) {
             if (!_PyErr_Occurred(tstate)) {
                 // Seen it before!
-                PyValue key_owner = PyTuple_GetValue(keys, i);
+                PyValue key_owner = _PyTuple_GetValue(keys, i);
                 key = PyValue_IsNull(key_owner) ? NULL
                     : _PyValue_AsObjectStealAt(key_owner, BOX_SITE_TUPLE);
                 if (key != NULL) {
@@ -529,7 +529,7 @@ match_class_attr(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
     // Only check for duplicates if seen is not NULL.
     if (seen != NULL) {
         assert(PySet_CheckExact(seen));
-        if (PySet_ContainsValue(seen, PyValue_FromObjectBorrow(name)) || PySet_AddValue(seen, PyValue_FromObjectBorrow(name))) {
+        if (_PySet_ContainsValue((PySetObject *)seen, PyValue_FromObjectBorrow(name)) || _PySet_AddValue((PySetObject *)seen, PyValue_FromObjectBorrow(name))) {
             if (!_PyErr_Occurred(tstate)) {
                 // Seen it before!
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -928,7 +928,7 @@ value_subscript(PyValue container, PyValue key)
                 if (0 <= index && index < size) {
                     return is_list
                         ? _PyList_GetValue((PyListObject *)o, index)
-                        : PyTuple_GetValue(o, index);
+                        : _PyTuple_GetValue(o, index);
                 }
             }
         }
@@ -2971,7 +2971,7 @@ positional_only_passed_as_keyword(PyThreadState *tstate, PyCodeObject *co,
             }
             PyObject* kwname = PyValue_AsKnownObjectBorrow(kwvalue);
             if (kwname == posonly_name){
-                if(PyList_AppendValue(posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
+                if(_PyList_AppendValue((PyListObject *)posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
                     goto fail;
                 }
                 posonly_conflicts++;
@@ -2981,7 +2981,7 @@ positional_only_passed_as_keyword(PyThreadState *tstate, PyCodeObject *co,
             int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(posonly_name), PyValue_FromObjectBorrow(kwname), Py_EQ);
 
             if ( cmp > 0) {
-                if(PyList_AppendValue(posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
+                if(_PyList_AppendValue((PyListObject *)posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
                     goto fail;
                 }
                 posonly_conflicts++;
@@ -4788,14 +4788,14 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
             return -1;
         }
 
-        PyValue match_owner = PyTuple_GetValue(pair, 0);
+        PyValue match_owner = _PyTuple_GetValue(pair, 0);
         *match = PyValue_IsNull(match_owner) ? NULL
             : _PyValue_AsObjectStealAt(match_owner, BOX_SITE_TUPLE);
         if (*match == NULL) {
             Py_DECREF(pair);
             return -1;
         }
-        PyValue rest_owner = PyTuple_GetValue(pair, 1);
+        PyValue rest_owner = _PyTuple_GetValue(pair, 1);
         *rest = PyValue_IsNull(rest_owner) ? NULL
             : _PyValue_AsObjectStealAt(rest_owner, BOX_SITE_TUPLE);
         if (*rest == NULL) {
@@ -5306,7 +5306,7 @@ static int
 set_globals_builtins(PyObject *globals, PyObject *builtins)
 {
     if (PyDict_Check(globals)) {
-        if (PyDict_SetValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)), PyValue_FromObjectBorrow(builtins)) < 0) {
+        if (_PyDict_SetValue((PyDictObject *)globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)), PyValue_FromObjectBorrow(builtins)) < 0) {
             return -1;
         }
     }

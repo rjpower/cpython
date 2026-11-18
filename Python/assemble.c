@@ -555,7 +555,7 @@ dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
     }
     Py_ssize_t count = 0;
     int status;
-    while ((status = _PyDict_NextValue(dict, &pos, &key, &value, NULL)) > 0) {
+    while ((status = _PyDict_NextValue((PyDictObject *)dict, &pos, &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
@@ -622,7 +622,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             ? INT_MAX
             : max + argvarkinds[i].count;
         while (pos < max &&
-               (status = _PyDict_NextValue(umd->u_varnames, &pos,
+               (status = _PyDict_NextValue((PyDictObject *)umd->u_varnames, &pos,
                                             &key, &value, NULL)) > 0) {
             assert(PyValue_IsObject(key));
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
@@ -641,7 +641,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             _PyLocals_Kind kind = CO_FAST_LOCAL | argvarkinds[i].kind;
 
             if (umd->u_fasthidden != NULL) {
-                int hidden = PySet_ContainsValue(umd->u_fasthidden, PyValue_FromObjectBorrow(k));
+                int hidden = _PySet_ContainsValue((PySetObject *)umd->u_fasthidden, PyValue_FromObjectBorrow(k));
                 if (hidden < 0) {
                     goto error;
                 }
@@ -650,7 +650,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                 }
             }
 
-            int has_key = PyDict_ContainsValue(umd->u_cellvars, PyValue_FromObjectBorrow(k));
+            int has_key = _PyDict_ContainsValue((PyDictObject *)umd->u_cellvars, PyValue_FromObjectBorrow(k));
             if (has_key < 0) {
                 goto error;
             }
@@ -671,13 +671,13 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     // This counter mirrors the fix done in fix_cell_offsets().
     int numdropped = 0, cellvar_offset = -1;
     pos = 0;
-    while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
+    while ((status = _PyDict_NextValue((PyDictObject *)umd->u_cellvars, &pos,
                                       &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         PyObject *k = PyValue_AsKnownObjectBorrow(key);
-        int has_name = PyDict_ContainsValue(umd->u_varnames, PyValue_FromObjectBorrow(k));
+        int has_name = _PyDict_ContainsValue((PyDictObject *)umd->u_varnames, PyValue_FromObjectBorrow(k));
         if (has_name < 0) {
             goto error;
         }
@@ -709,7 +709,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     }
 
     pos = 0;
-    while ((status = _PyDict_NextValue(umd->u_freevars, &pos,
+    while ((status = _PyDict_NextValue((PyDictObject *)umd->u_freevars, &pos,
                                       &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));

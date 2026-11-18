@@ -1325,7 +1325,7 @@ set_update_dict_lock_held(PySetObject *so, PyObject *other)
     PyValue key;
     Py_hash_t hash;
     int status;
-    while ((status = _PyDict_NextValue(other, &pos, &key, NULL, &hash)) == 1) {
+    while ((status = _PyDict_NextValue((PyDictObject *)other, &pos, &key, NULL, &hash)) == 1) {
         int added = set_add_entry_takeref(so, key, hash);
         if (added < 0) {
             return -1;
@@ -2449,7 +2449,7 @@ set_symmetric_difference_update_dict(PySetObject *so, PyObject *other)
     PyValue key;
     Py_hash_t hash;
     int status;
-    while ((status = _PyDict_NextValue(other, &pos, &key, NULL, &hash)) == 1) {
+    while ((status = _PyDict_NextValue((PyDictObject *)other, &pos, &key, NULL, &hash)) == 1) {
         int rv = set_discard_entry(so, key, hash);
         if (rv < 0) {
             PyValue_XCLOSE(key);
@@ -3410,13 +3410,36 @@ PySet_Contains(PyObject *anyset, PyObject *key)
 }
 
 int
+(_PySet_ContainsValue)(PySetObject *so, PyValueBorrow key)
+{
+    assert(PyAnySet_Check(so));
+    return set_contains_value(so, key);
+}
+
+int
 (PySet_ContainsValue)(PyObject *anyset, PyValueBorrow key)
 {
     if (!PyAnySet_Check(anyset)) {
         PyErr_BadInternalCall();
         return -1;
     }
-    return set_contains_value((PySetObject *)anyset, key);
+    return _PySet_ContainsValue((PySetObject *)anyset, key);
+}
+
+int
+(_PySet_DiscardValue)(PySetObject *so, PyValueBorrow key)
+{
+    assert(PySet_Check(so));
+    return set_discard_value(so, key);
+}
+
+/* For a set (never a frozenset): the frozenset case of PySet_AddValue() is the
+   build-time fill of a unique frozenset, which needs the checked entry. */
+int
+(_PySet_AddValue)(PySetObject *so, PyValueBorrow key)
+{
+    assert(PySet_Check(so));
+    return _PySet_AddValueTakeRef(so, PyValue_DUP(key));
 }
 
 int
@@ -3426,7 +3449,7 @@ int
         PyErr_BadInternalCall();
         return -1;
     }
-    return set_discard_value((PySetObject *)set, key);
+    return _PySet_DiscardValue((PySetObject *)set, key);
 }
 
 int
@@ -3499,15 +3522,12 @@ PySet_Add(PyObject *anyset, PyObject *key)
 }
 
 int
-_PySet_NextValue(PyObject *set, Py_ssize_t *pos, PyValue *key, Py_hash_t *hash)
+_PySet_NextValue(PySetObject *set, Py_ssize_t *pos, PyValue *key, Py_hash_t *hash)
 {
+    assert(PyAnySet_Check(set));
     *key = PyValue_NULL;
-    if (!PyAnySet_Check(set)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
     setentry *entry;
-    if (!set_next((PySetObject *)set, pos, &entry)) {
+    if (!set_next(set, pos, &entry)) {
         return 0;
     }
     *key = PyValue_DUP(entry->key);
@@ -3533,9 +3553,13 @@ int
 _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(set);
+    if (!PyAnySet_Check(set)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
     PyValue value;
     Py_hash_t saved_hash;
-    int status = _PySet_NextValue(set, pos, &value, &saved_hash);
+    int status = _PySet_NextValue((PySetObject *)set, pos, &value, &saved_hash);
     if (status != 1) {
         return status;
     }

@@ -25,21 +25,24 @@ typedef struct {
     _PyNativeResultState state;
 } _PyNativeResult;
 
-/* The caller owns the workspace through End.  The argument of a fixed scope
- * is passed as a borrowed pointer, as upstream passes its evaluation stack;
- * only an inline value is boxed, and argument_box owns that box.  The scope
- * holds no borrowed value (PyValueBorrow lives in C locals only), and no
- * pointer refers to the native body's C stack.  Variable calls do not use a
- * scope: the interpreter's call transaction calls the value vectorcall
- * (pycore_value_call.h) on the window. */
+/* Ownership contract: callers own, the scope borrows.  The caller keeps the
+ * callable, the argument and any self_or_null alive from Begin until End, as
+ * upstream keeps its evaluation stack and callable alive across a call.  The
+ * scope takes no reference to any of them.  Only an inline value has no
+ * object to lend: the scope boxes it, owns that box (argument_box,
+ * receiver_box) and releases it in End.  The scope holds no PyValueBorrow
+ * (those live in C locals only), and no pointer refers to the native body's
+ * C stack.  Variable calls do not use a scope: the interpreter's call
+ * transaction calls the value vectorcall (pycore_value_call.h) on the
+ * window. */
 typedef struct {
     PyThreadState *tstate;
-    PyValue receiver;
-    PyObject *receiver_object;
+    PyObject *receiver_object;      // borrowed, or receiver_box
+    PyObject *receiver_box;         // owned box of an inline receiver
     PyObject *argument_objects[1];
-    PyObject *argument_box;
+    PyObject *argument_box;         // owned box of an inline argument
     PyObject **objects;
-    PyObject *callable;
+    PyObject *callable;             // borrowed
     Py_ssize_t nargs;
     Py_ssize_t positional_count;
     int ended;
@@ -50,17 +53,18 @@ typedef struct {
  * release owners, call Python, or fail. End is a later reentry boundary. */
 typedef void (*_PyNativePublishState)(void *caller_state);
 
-/* The caller keeps the source argument alive until End; publication may move
- * it out of the window.  The scope passes an object argument borrowed, and
- * boxes an inline one at once, which can fail with MemoryError; End
- * releases the box.  This first slice accepts at most one argument and no
- * keyword tail. */
+/* Borrows args and self_or_null (see _PyNativeScope above); boxing an inline
+ * one can fail with MemoryError.  This first slice accepts at most one
+ * argument and no keyword tail. */
 PyAPI_FUNC(int) _PyNativeScope_Begin(
     _PyNativeScope *scope, PyThreadState *tstate,
     const PyValue *args, Py_ssize_t positional_count, Py_ssize_t total_count,
     PyValue self_or_null, PyObject *kwnames);
 PyAPI_FUNC(int) _PyNativeScope_Objects(
     _PyNativeScope *scope, PyObject *const **args);
+/* Borrow an object receiver; box an inline one.  callable may be NULL. */
+PyAPI_FUNC(int) _PyNativeScope_SetReceiver(
+    _PyNativeScope *scope, PyValueBorrow receiver, PyObject *callable);
 /* Consumes owned_result, including when an error is already pending. */
 PyAPI_FUNC(int) _PyNativeScope_StageResult(
     _PyNativeScope *scope, PyObject *owned_result, _PyNativeResult *out);
@@ -76,7 +80,8 @@ PyAPI_FUNC(void) _PyNativeResult_Abort(
  * state after End. */
 PyAPI_FUNC(void) _PyNativeScope_End(_PyNativeScope *scope);
 
-/* out must be &scope->result. 0 = staged success, -1 = failure. */
+/* Borrows callable and its bound self; the caller keeps callable alive until
+ * End.  out must be &scope->result. 0 = staged success, -1 = failure. */
 PyAPI_FUNC(int) _PyCFunction_CallScoped(
     _PyNativeScope *scope, PyObject *callable, _PyNativeResult *out);
 

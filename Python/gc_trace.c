@@ -2011,7 +2011,7 @@ _PyGC_TraceGetHoles(PyInterpreterState *interp)
         PyObject *item = Py_BuildValue("(sKns)", h->type_name,
                                        (unsigned long long)h->addr,
                                        h->refcnt, h->referrer);
-        if (item == NULL || PyList_AppendValue(list, PyValue_FromObjectBorrow(item)) < 0) {
+        if (item == NULL || _PyList_AppendValue((PyListObject *)list, PyValue_FromObjectBorrow(item)) < 0) {
             Py_XDECREF(item);
             Py_DECREF(list);
             return NULL;

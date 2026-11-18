@@ -62,11 +62,16 @@ golden73 although round 3 cut its instructions 4.4%. The cause is op-cache
 placement: round 3 alone runs DeltaBlue in 14% fewer cycles than round 2,
 and reserving `rbp` halves op-cache delivery at the same instruction count.
 
-Checkpoint77 (`feb572b0541`, `pyjit/checkpoint77`) adds `pyjit/values77`
-(the rules' remaining rows; the native call scope borrows) and
-`pyjit/slots77` (every value slot takes its owner type, readiness fills each
-empty value slot with a generated adapter, and dispatch is one call). It is
-in full-suite qualification and review.
+Checkpoint77 (`3c8abb64776`, `pyjit/checkpoint77`) adds `pyjit/values77`:
+the rules' remaining rows, and a native call scope that borrows its
+arguments ([record](issues/register-semantics59/values77.md)). An
+adversarial review of the ownership changes found no use-after-free in about
+5,400 cases. The complete value-slot table (`pyjit/slots77`) was merged and
+then reverted. It must be kept in step with every object-slot write; review
+and the full suite found four ways it falls out of step, two of them
+crashes, and it saved no instructions. `pyjit/slots78` keeps the object slot
+as the definition and moves the boxing adapters out of line instead.
+Checkpoint77 is in full-suite qualification.
 
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`

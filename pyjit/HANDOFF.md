@@ -29,8 +29,9 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/values76` | `pyjit/values76` | Value rules 1–3, first pass, `0d18fff7a07`, from round 2; builds `BASE/values76-{release,debug}`; `pyjit/values76-draft` holds a stopped run's unverified edits |
 | `worktrees/checkpoint76` | `pyjit/checkpoint76` | Round 3 + values76, frame-chain and self-test fixes, `013fb42c922` (pushed); builds `BASE/checkpoint76-{release,debug}`; [record](issues/register-semantics59/checkpoint76.md); measurement control, keep clean. Variant builds `BASE/{calls76fp,calls76fpfull,checkpoint76nofp}-release` are attribution copies only |
 | `worktrees/values77` | `pyjit/values77` | Remaining rule 1–3 rows and the borrowing native scope, `35b4666037f`, from `76fc2b68918`; builds `BASE/values77-{release,debug}`; merged into checkpoint77 |
-| `worktrees/slots77` | `pyjit/slots77` | One value-slot table, `d9054a5b0e4`, from `76fc2b68918` (`E59/slots77-notes.md`); builds `BASE/slots77-{release,debug}`; merged into checkpoint77 |
-| `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77 + slots77, `feb572b0541`; builds `BASE/checkpoint77-{release,debug}`; full suite and two reviews (slot design; ownership use-after-free) running |
+| `worktrees/slots77` | `pyjit/slots77` | Complete value-slot table, `d9054a5b0e4`, from `76fc2b68918` (`E59/slots77-notes.md`); merged and reverted ([record](issues/register-semantics59/values77.md)); builds `BASE/slots77-{release,debug}` |
+| `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77, `3c8abb64776` (`feb572b0541` merged slots77; its full-suite logs are `E59/checkpoint77-*-full.log`); builds `BASE/checkpoint77-{release,debug}`; full suite then timing |
+| `worktrees/slots78` | `pyjit/slots78` | Value fields paired with object slots, cold out-of-line adapters, `PyType_Modified` keeps pairs; from `3c8abb64776`; builds `BASE/slots78-{release,debug}`; worker deadline 09:15 PST |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

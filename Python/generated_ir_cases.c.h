@@ -5025,7 +5025,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -5126,7 +5126,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -5309,7 +5309,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -5432,17 +5432,17 @@
                 PyValue *window_base = args - 2;
                 PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                PyValue *base = args - has_self;
-                if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    base = _PyDataStack_Slots(tstate->datastack_top);
+                _PyInterpreterFrame *pushed_frame;
+                if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                    PyValue *base = args - has_self;
+                    pushed_frame = _PyFrame_ReserveForCall(
+                        tstate, code, base, oparg + has_self, frame);
+                    _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                    code, base, frame);
                 }
-                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
-                    tstate, code, base, oparg + has_self, frame);
-                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
-                                code, base, frame);
-                if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
-                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+                else {
+                    pushed_frame = call_push_moved_exact_args(
+                        tstate, frame, callable, code, window_base, oparg, has_self);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -5509,7 +5509,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -5641,7 +5641,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue *args;
@@ -5762,7 +5762,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue *args;
@@ -5884,7 +5884,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue *args;
@@ -6006,7 +6006,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue *args;
@@ -6128,7 +6128,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue func_st;
             PyValue func;
@@ -6233,7 +6233,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue func_st;
             PyValue func;
@@ -6360,7 +6360,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_C(ir_word);
             PyValue func;
@@ -6657,7 +6657,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue null;
@@ -6774,7 +6774,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -6875,7 +6875,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -6998,7 +6998,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE_KW
@@ -7070,7 +7070,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -7168,7 +7168,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue arg;
@@ -7285,7 +7285,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue nos;
@@ -7439,7 +7439,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue self_or_null;
@@ -7580,7 +7580,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue *args;
@@ -7722,7 +7722,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue self_or_null;
@@ -7893,7 +7893,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue self_or_null;
@@ -8078,7 +8078,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE
@@ -8150,7 +8150,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -8232,17 +8232,17 @@
                 PyValue *window_base = args - 2;
                 PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                PyValue *base = args - has_self;
-                if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    base = _PyDataStack_Slots(tstate->datastack_top);
+                _PyInterpreterFrame *pushed_frame;
+                if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                    PyValue *base = args - has_self;
+                    pushed_frame = _PyFrame_ReserveForCall(
+                        tstate, code, base, oparg + has_self, frame);
+                    _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                    code, base, frame);
                 }
-                _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
-                    tstate, code, base, oparg + has_self, frame);
-                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
-                                code, base, frame);
-                if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                    call_transfer_exact_args(base, window_base, oparg,
-                        has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+                else {
+                    pushed_frame = call_push_moved_exact_args(
+                        tstate, frame, callable, code, window_base, oparg, has_self);
                 }
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -8309,7 +8309,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
@@ -8409,7 +8409,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue arg;
@@ -8518,7 +8518,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue arg;
@@ -8627,7 +8627,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue arg;
@@ -11839,7 +11839,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue self_or_null;
@@ -11920,7 +11920,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue func;
             PyValue callargs;
@@ -11979,7 +11979,7 @@
             (void)window;
             int call_base = IR_B(ir_word);
             int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
             (void)call_state;
             PyValue callable;
             PyValue self_or_null;

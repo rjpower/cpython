@@ -1412,12 +1412,14 @@ value_operation_finish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 /* The checks of a call's window, before the call has any effect; the
- * handler keeps base and destination in registers. */
+ * handler keeps base and destination in registers, and passes the window
+ * from its own slots register. */
 static inline int
-call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
-                       int destination, _PyCallTransactionKind kind,
-                       unsigned int virtual_holes)
+call_transaction_begin(_PyInterpreterFrame *frame, PyValue *homes, int base,
+                       int count, int destination,
+                       _PyCallTransactionKind kind, unsigned int virtual_holes)
 {
+    assert(homes == _PyFrame_Slots(frame) + base);
     assert(base >= _PyFrame_GetCode(frame)->co_nlocalsplus);
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
     assert((destination >= 0 && destination < _PyFrame_NumSlots(frame))
@@ -1426,7 +1428,6 @@ call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
     /* Every call input is an evaluated temporary, including snapshots of
      * locals, and owns its value. Callback-current LOCAL homes are never
      * consumed by this record. */
-    PyValue *homes = _PyFrame_Slots(frame) + base;
     for (int i = 0; i < count; i++) {
         if ((i == 1 && (virtual_holes & _PyIR_CALL_HOLE_SELF)) ||
             (i == 3 && (virtual_holes & _PyIR_CALL_HOLE_KWARGS))) {
@@ -1894,6 +1895,23 @@ call_transfer_exact_args(PyValue *base, PyValue *window, int nargs,
     for (int i = has_self ? 1 : 2; i < 2 + nargs; i++) {
         window[i] = PyValue_NULL;
     }
+}
+
+/* An exact call from a heap-owned frame reserves its child at the arena top
+ * and moves the arguments there, out of the handler's hot path. */
+static Py_NO_INLINE _PyInterpreterFrame *
+call_push_moved_exact_args(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           PyValue callable, PyCodeObject *code,
+                           PyValue *window, int nargs, int has_self)
+{
+    assert(frame->owner != FRAME_OWNED_BY_THREAD);
+    PyValue *base = _PyDataStack_Slots(tstate->datastack_top);
+    _PyInterpreterFrame *pushed = _PyFrame_ReserveForCall(
+        tstate, code, base, nargs + has_self, frame);
+    _PyFrame_Initialize(tstate, pushed, callable, NULL, code, base, frame);
+    call_transfer_exact_args(base, window, nargs,
+                             has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+    return pushed;
 }
 
 /* The handlers' calls (call_transaction_run_*), after

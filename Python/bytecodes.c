@@ -4363,17 +4363,18 @@ dummy_func(
             PyValue *window_base = args - 2;
             PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
             PyCodeObject *code = (PyCodeObject *)func->func_code;
-            PyValue *base = args - has_self;
-            if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                base = _PyDataStack_Slots(tstate->datastack_top);
+            _PyInterpreterFrame *pushed_frame;
+            if (frame->owner == FRAME_OWNED_BY_THREAD) {
+                // The child's bindings overlap the window's arguments
+                PyValue *base = args - has_self;
+                pushed_frame = _PyFrame_ReserveForCall(
+                    tstate, code, base, oparg + has_self, frame);
+                _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
+                                    code, base, frame);
             }
-            _PyInterpreterFrame *pushed_frame = _PyFrame_ReserveForCall(
-                tstate, code, base, oparg + has_self, frame);
-            _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
-                                code, base, frame);
-            if (frame->owner != FRAME_OWNED_BY_THREAD) {
-                call_transfer_exact_args(base, window_base, oparg,
-                                         has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
+            else {
+                pushed_frame = call_push_moved_exact_args(
+                    tstate, frame, callable, code, window_base, oparg, has_self);
             }
             // The callee holds callable as its f_funcobj
             window_base[0] = PyValue_NULL;

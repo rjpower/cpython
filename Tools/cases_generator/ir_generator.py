@@ -7384,7 +7384,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # The virtual inputs are the word's role flags
         holes = ("_PyIR_CallInputHoles(ir_word)" if call_role_flags(name, inst)
                  else "0")
-        out.emit(f"int call_state = call_transaction_begin(frame, call_base, {count}, "
+        out.emit(f"int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, {count}, "
                  f"call_destination, {kind}, {holes});\n")
         out.emit("(void)call_state;\n")
         if emitter.call_has_feedback:

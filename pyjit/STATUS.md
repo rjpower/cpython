@@ -27,6 +27,16 @@ call transactions, physical transfer, value-form operations that are larger
 than upstream's, and frame clearing.
 Both rounds are measured checkpoints; golden73 remains the selected baseline.
 
+In progress: a cost ledger of the call/return path, ours against upstream,
+with IBS precise sampling (`E59/execution76-call-ledger`). It is the causal
+case the next call change requires. In parallel, `pyjit/values76` slims the
+hot value-form operations. Callees there borrow their arguments, as the
+value-slot contract states: interpreter temporaries own their values, and
+`f_locals` writes keep overwritten values alive. The branch also adds
+internal entry points that skip public checks, moves inline receivers to cold
+paths, and fills every value slot at type readiness so that dispatch is a
+single call.
+
 Execution-boundary73 and its bounded RETURN isolation correction are implemented,
 protocol-qualified and measured. On 2026-11-16 the user selected `44f066f5fd5`
 as golden73, explicitly accepting the logging regression. Sol 6.1 workers

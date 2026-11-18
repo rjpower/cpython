@@ -24,7 +24,8 @@ to future protection rules. Preserve both original screen verdicts.
 | P | `pyjit/execution73-return-isolation` | Clean source `557c225602c`; all source integrated |
 | W | `pyjit/execution73-export-contract-fix` | Clean `526157c52ab`; prior compiler source and peers complete |
 | `worktrees/call55-ir` | `pyjit/handlers75` | Handlers75 round 1 `91c9baa9600`; builds `BASE/handlers75-{release,debug}`; keep clean while it is a measurement control |
-| `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags, from round 1; builds `BASE/handlers75r2-{release,debug}` |
+| `worktrees/handlers75-r2` | `pyjit/handlers75-r2` | Round 2 word flags `f78c3902c1b`, from round 1; builds `BASE/handlers75r2-{release,debug}`; keep clean while it is a measurement control |
+| `worktrees/values76` | `pyjit/values76` | Value-form operation fixes from round 2: callers own and callees borrow, internal entry points, cold inline paths, one value-slot table; builds `BASE/values76-{release,debug}` |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

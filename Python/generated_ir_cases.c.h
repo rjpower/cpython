@@ -9952,10 +9952,7 @@
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
             frame->phase_state = 0;
             {
-                _PyIRStepResult ir_step_result = _PyEval_CompleteSendThrow(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), _PyFrame_InstrAt(frame, oparg), completed);
-                next_instr = ir_step_result.next;
-                if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                DISPATCH();
+                IR_COMPLETE_STEP_TAIL(_PyEval_CompleteSendThrowTail, _PyFrame_InstrAt(frame, oparg), completed);
             }
         }
         #undef IR_ERROR_EXIT
@@ -12785,10 +12782,7 @@
                     PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                     }
                 }
                 next = item;
@@ -13004,10 +12998,7 @@
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                     }
                 }
                 #endif
@@ -13123,10 +13114,7 @@
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                     }
                 }
             }
@@ -13245,10 +13233,7 @@
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                     }
                 }
             }
@@ -13363,10 +13348,7 @@
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                     }
                 }
                 null_or_index = PyValue_TagIndex(index);
@@ -14870,10 +14852,7 @@
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 frame->phase_state = 0;
                 {
-                    _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                    next_instr = ir_step_result.next;
-                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                    DISPATCH();
+                    IR_COMPLETE_STEP_TAIL(_PyEval_CompleteForIterTail, next_instr + oparg, completed);
                 }
             }
             next = item;
@@ -15110,6 +15089,30 @@
 #undef _PyValue_CheckTemp
 #pragma pop_macro("_PyValue_CheckHome")
 #pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
@@ -15121,6 +15124,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             // _CHECK_PERIODIC
@@ -15154,6 +15163,28 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
@@ -24143,10 +24174,7 @@
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                         frame->phase_state = 0;
                         {
-                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                            next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                            DISPATCH();
+                            IR_COMPLETE_STEP_TAIL(_PyEval_CompleteSendTail, next_instr + oparg, completed);
                         }
                     }
                     retval = item;
@@ -24163,10 +24191,7 @@
                         PyValue completed = sent.value;
                         frame->phase_state = 0;
                         {
-                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                            next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                            DISPATCH();
+                            IR_COMPLETE_STEP_TAIL(_PyEval_CompleteSendTail, next_instr + oparg, completed);
                         }
                     }
                     frame->phase_state = 0;
@@ -24266,10 +24291,7 @@
                     PyValue completed = sent.value;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteSendTail, next_instr + oparg, completed);
                     }
                 }
                 frame->phase_state = 0;
@@ -24662,10 +24684,7 @@
                     PyValue completed = PyValue_None;
                     frame->phase_state = 0;
                     {
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
+                        IR_COMPLETE_STEP_TAIL(_PyEval_CompleteSendTail, next_instr + oparg, completed);
                     }
                 }
                 next = next_index.value;

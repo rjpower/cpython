@@ -5708,6 +5708,14 @@ class IREmitter(Emitter):
             self.error_terminal_sources.add(id(tkn))
             self.error_finalized = True
             return False
+        if base == "IR_B(ir_word)" and (kind == "_PY_IR_FOR_ITER" or dst == "IR_A(ir_word)"):
+            # The completion is the last step: a continuation makes it
+            self.emit(f"IR_COMPLETE_STEP_TAIL({entries[kind]}Tail, {target}, {value});\n")
+            self.emit("}\n")
+            self.abrupt_operand_sources.add(id(tkn))
+            self.error_terminal_sources.add(id(tkn))
+            self.error_finalized = True
+            return False
         recipient = "" if kind == "_PY_IR_FOR_ITER" else f"{dst}, "
         self.emit(f"_PyIRStepResult ir_step_result = {entries[kind]}(tstate, frame, this_instr, {base}, {recipient}{target}, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
@@ -6681,7 +6689,8 @@ DEFER_RELEASES = {
     "_PyValue_XCLOSE_SPECIALIZED_POINTER": "IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)",
 }
 DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP",
-                       "JUMP_TO_PREDICTED"}
+                       "JUMP_TO_PREDICTED", "IR_COMPLETE_STEP_TAIL",
+                       "IR_PERIODIC_TAIL"}
 DEFER_EXIT_WORDS = re.compile(r"\b(return|goto)\b|Py_MUSTTAIL")
 DEFER_BAD_WORDS = re.compile(r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced")
 CEVAL_HEADERS = ("Python/ceval_macros.h", "Python/ceval_generator.h",

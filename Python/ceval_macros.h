@@ -109,6 +109,9 @@
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_CompleteForIterTail(TAIL_CALL_PARAMS, uintptr_t value);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_CompleteSendTail(TAIL_CALL_PARAMS, uintptr_t value);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_CompleteSendThrowTail(TAIL_CALL_PARAMS, uintptr_t value);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitOneDead(TAIL_CALL_PARAMS, uintptr_t ir_aux);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitOneDisplaced(TAIL_CALL_PARAMS, uintptr_t ir_aux);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_PARAMS);
@@ -672,6 +675,19 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* The handler that starts with the periodic check does nothing before it, so
  * when events are due it tail-calls _PyEval_PeriodicTail, which handles them
  * and runs the instruction again.  The handler then calls nothing itself. */
+/* The completion of a loop or send (_PyEval_CompleteForIter and the like) is
+ * the last step of its handler, which then only checks the status and
+ * dispatches: a continuation calls the helper.  TARGET is where the loop
+ * exits to, ir_word the handler's word (its B names the window, its A the
+ * destination), VALUE the completed value. */
+#define IR_COMPLETE_STEP_TAIL(FN, TARGET, VALUE) \
+    do { \
+        IR_ASSERT_NO_PENDING(); \
+        assert(frame->instr_ptr == this_instr); \
+        PyValue ir_completed = (VALUE); \
+        Py_MUSTTAIL return FN(TAIL_CALL_ARGS_WORD((TARGET), ir_word), \
+                              ir_completed.bits); \
+    } while (0)
 static inline int
 check_periodics_due(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();

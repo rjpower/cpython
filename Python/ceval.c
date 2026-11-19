@@ -2464,6 +2464,49 @@ _PyEval_PeriodicTail(TAIL_CALL_PARAMS)
     DISPATCH_GOTO();
 }
 
+/* The continuations of IR_COMPLETE_STEP_TAIL: the helper, then the status
+ * check and dispatch that the handler would have done.  next_instr is the
+ * target of the exit, value the completed value. */
+#define IR_COMPLETE_STEP_BODY(CALL) \
+    _PyIRStepResult ir_step_result = CALL; \
+    next_instr = ir_step_result.next; \
+    if (ir_step_result.status < 0) { \
+        Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD( \
+            next_instr - 1, \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0))); \
+    } \
+    int opcode; \
+    NEXTOPARG(); \
+    PRE_DISPATCH_GOTO(); \
+    DISPATCH_GOTO();
+
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_CompleteForIterTail(TAIL_CALL_PARAMS, uintptr_t value)
+{
+    frame->phase_state = 0;
+    IR_COMPLETE_STEP_BODY(_PyEval_CompleteForIter(
+        tstate, frame, frame->instr_ptr, IR_B(ir_word), next_instr,
+        (PyValue){value}))
+}
+
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_CompleteSendTail(TAIL_CALL_PARAMS, uintptr_t value)
+{
+    frame->phase_state = 0;
+    IR_COMPLETE_STEP_BODY(_PyEval_CompleteSend(
+        tstate, frame, frame->instr_ptr, IR_B(ir_word), IR_A(ir_word),
+        next_instr, (PyValue){value}))
+}
+
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_CompleteSendThrowTail(TAIL_CALL_PARAMS, uintptr_t value)
+{
+    frame->phase_state = 0;
+    IR_COMPLETE_STEP_BODY(_PyEval_CompleteSendThrow(
+        tstate, frame, frame->instr_ptr, IR_B(ir_word), IR_A(ir_word),
+        next_instr, (PyValue){value}))
+}
+
 /* The exits with one pending release, which need no frame of their own:
  * the object whose last count the handler kept, or the displaced local, in
  * ir_aux (see IR_EXIT_TAIL in ceval_macros.h). */

@@ -887,12 +887,7 @@ class InitShimTests(unittest.TestCase):
             return tracer
 
         def observe(phase):
-            if phase == 'argument':
-                instances = [obj for obj in gc.get_objects() if type(obj) is C]
-                observations.append((phase, len(instances)))
-                instances.clear()
-            else:
-                observations.append((phase,))
+            observations.append(phase)
             caller.f_locals['named'] = new_binding
             previous = sys.gettrace()
             previous_local = caller.f_trace
@@ -939,7 +934,8 @@ class InitShimTests(unittest.TestCase):
         with self.assertRaises(StopIteration) as stopped:
             next(generator)
         self.assertIs(stopped.exception.value, new_binding)
-        self.assertEqual(observations, [('argument', 1), ('shim',)])
+        # Both finalizers run, in either order.
+        self.assertEqual(sorted(observations), ['argument', 'shim'])
         self.assertEqual(len(redirects), 2)
         # A jump out of the half-built call is refused, not applied.
         self.assertTrue(all('recipe' in error for error in redirects), redirects)

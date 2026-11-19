@@ -54,6 +54,23 @@ richards. Clang's
 Compiled with clang-21, `LOAD_FAST_BORROW`'s fast path is 25 instructions
 against GCC's 36, with no shuffles.
 
+A clang-21 build of the same source (`checkpoint78clang-release`, attribution
+only; clang has no `-ffixed-rbp`, so its handlers may use `rbp`) does not
+isolate the convention. Exact calls fall by 34–41 instructions (`f(x, y)` 389,
+`o.m(x)` 360, `o.store(x)` 461), but other codegen differences offset that:
+
+| Kernel | Clang / GCC instructions |
+| --- | ---: |
+| DeltaBlue | 0.990 |
+| raytrace | 0.996 |
+| coroutines | 1.039 |
+| deepcopy_memo | 1.040 |
+| richards | 0.992 |
+
+The two native-call shapes lose (`nat_append` +207 per iteration). Switching
+compilers is therefore not a shortcut; removing the calls from GCC's handler
+bodies keeps the rest of GCC's code generation.
+
 ## Cause 2: the operand and result protocol
 
 Specialized handlers execute the same guards and loads as upstream, but the

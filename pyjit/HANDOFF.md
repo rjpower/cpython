@@ -32,7 +32,8 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/slots77` | `pyjit/slots77` | Complete value-slot table, `d9054a5b0e4`, from `76fc2b68918` (`E59/slots77-notes.md`); merged and reverted ([record](issues/register-semantics59/values77.md)); builds `BASE/slots77-{release,debug}` |
 | `worktrees/checkpoint77` | `pyjit/checkpoint77` | checkpoint76 + values77, `3c8abb64776` (pushed; `feb572b0541` merged and `3c8abb64776` reverts slots77); builds `BASE/checkpoint77-{release,debug}`; [record](issues/register-semantics59/checkpoint77.md); measurement control, keep clean |
 | `worktrees/slots78` | `pyjit/slots78` | Paired value fields and cold out-of-line adapters, `99a04733128` (pushed), from `3c8abb64776`; builds `BASE/slots78-{release,debug}` predate the frame-chain flag (attribution only) |
-| `worktrees/checkpoint78` | `pyjit/checkpoint78` | checkpoint77 + slots78, `99a04733128` (pushed); builds `BASE/checkpoint78-{release,debug}`; [record](issues/register-semantics59/checkpoint78.md); latest measured checkpoint, keep clean |
+| `worktrees/checkpoint78` | `pyjit/checkpoint78` | checkpoint77 + slots78, `99a04733128` (pushed); builds `BASE/checkpoint78-{release,debug}`; [record](issues/register-semantics59/checkpoint78.md); latest measured checkpoint, keep clean. `BASE/checkpoint78clang-release` is a clang-21 attribution build of the same source ([execution79](issues/register-semantics59/execution79-instruction-gap.md)) |
+| `worktrees/handlers80` | `pyjit/handlers80` | Call-free handler bodies, from `99a04733128`; builds `BASE/handlers80-{release,debug}`; evidence `E59/handlers80/`; in progress |
 
 Magic remains 64427. The return correction changes no public layout, metadata or
 ordinary target table. Source commit `557c225602c` integrates as `e668764b766`;

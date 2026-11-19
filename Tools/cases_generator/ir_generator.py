@@ -6712,7 +6712,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                 f"(PyValue) in one handler; give one of them another name",
                 inst.where)
     emitter.declared_roles = roles
+    if record:
+        # The record lives in the handler's frame, so its errors are handled
+        # in place (PROCESS_ERROR_AT in Python/ceval_macros.h)
+        out.emit("#undef IR_ERROR_EXIT\n#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE\n")
     emit_handler(name, inst, fmt, emitter, out, record, {})
+    if record:
+        out.emit("#undef IR_ERROR_EXIT\n#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL\n")
 
 
 @dataclass(frozen=True)
@@ -7604,6 +7610,7 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
         emitter.emit(f"LABEL({name})\n")
         emitter.emit("{\n")
         emitter.emit("_PyValueTemps *const value_temps = NULL;\n")
+        emitter.emit("(void)value_temps;\n")
         storage = Storage(IRStack(), [], [], 0, False)
         if label.spilled:
             storage.spilled = 1

@@ -2423,6 +2423,29 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static_assert(Py_ARRAY_LENGTH(instruction_funcptr_handler_table)
               == IR_HANDLER_MASK + 1,
               "dispatch covers every id that IR_HANDLER yields");
+/* The out-of-line error exit of the handlers without a value record
+ * (PROCESS_ERROR_AT).  next_instr is the origin of the error and ir_word its
+ * encoded entry; the code after the call is the inline form's. */
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_ErrorTail(TAIL_CALL_PARAMS)
+{
+    _PyValueTemps *const value_temps = NULL;
+    uint32_t entry = (uint32_t)ir_word;
+    _PyInstr *origin = next_instr;
+    _PyIRErrorResult ir_error_result =
+        _PyEval_ProcessError(tstate, frame, origin, entry, value_temps);
+    if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
+        frame = tstate->current_frame;
+        slots = _PyFrame_Slots(frame);
+        next_instr = ir_error_result.next;
+        int opcode;
+        NEXTOPARG();
+        PRE_DISPATCH_GOTO();
+        DISPATCH_GOTO();
+    }
+    return PyValue_NULL;
+}
+
 #include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 

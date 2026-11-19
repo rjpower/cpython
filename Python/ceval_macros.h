@@ -67,11 +67,14 @@
 #   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word, lastopcode
 #   define TAIL_CALL_ARGS_AT(INSTR) \
         frame, slots, tstate, (INSTR), ir_word, lastopcode
+#   define TAIL_CALL_ARGS_WORD(INSTR, WORD) \
+        frame, slots, tstate, (INSTR), (WORD), lastopcode
 #else
 #   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, PyValue *slots, \
         PyThreadState *tstate, _PyInstr *next_instr, _PyIRWord ir_word
 #   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word
 #   define TAIL_CALL_ARGS_AT(INSTR) frame, slots, tstate, (INSTR), ir_word
+#   define TAIL_CALL_ARGS_WORD(INSTR, WORD) frame, slots, tstate, (INSTR), (WORD)
 #endif
 
 /* The calling convention of the handlers.  Only the attribute differs
@@ -104,6 +107,7 @@
 /* A handler returns the value of the frame that INTERPRETER_EXIT leaves, or
  * PyValue_NULL with an exception set. */
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARAMS);
 
 #define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
@@ -137,7 +141,7 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
     } while (0)
 /* Error processing must receive the current handler's native bridge owners.
  * Global labels have no value record, so finish the reached scope here. */
-#define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
+#define PROCESS_ERROR_INLINE(ingress, checkpoint, origin) \
     do { \
         _PyIRErrorResult ir_error_result = _PyEval_ProcessError( \
             tstate, frame, (origin), \
@@ -154,6 +158,23 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
         } \
         return PyValue_NULL; \
     } while (0)
+/* A handler without a value record tail-calls the error continuation
+ * (_PyEval_ErrorTail, ceval.c), so that no C call in the handler makes the
+ * compiler move the handler's state out of the argument registers.  The
+ * continuation receives the origin in place of next_instr and the encoded
+ * entry in place of ir_word.  A handler with a record keeps the inline form,
+ * because the record lives in its frame; the generator selects it by
+ * defining IR_ERROR_EXIT around such a handler. */
+#define IR_ERROR_EXIT_TAIL(ingress, checkpoint, origin) \
+    do { \
+        Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD( \
+            (origin), \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint))); \
+    } while (0)
+#define IR_ERROR_EXIT_INLINE PROCESS_ERROR_INLINE
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
+    IR_ERROR_EXIT(ingress, checkpoint, origin)
 #define JUMP_TO_LABEL(name) \
     do { \
         if (value_temps != NULL && value_temps->count != 0) { \

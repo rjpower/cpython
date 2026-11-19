@@ -3557,6 +3557,9 @@ class IREmitter(Emitter):
         self.has_record = True
         # Whether the handler being emitted defers its releases (defers_releases)
         self.defers = False
+        # The retirement sites of the handler, and which of them end it
+        self.retire_sites = 0
+        self.retire_tail_ok: set[int] = set()
         self.ownership_events: list[OwnershipEvent] = []
         self.disjoint_child_publication: Uop | None = None
         self.disjoint_child_drained = False
@@ -3861,6 +3864,11 @@ class IREmitter(Emitter):
 
     def emit_ordered_retirement(self, first, second, failure_result, temps, window):
         """Retire owners in order, checking each after the preceding close."""
+        site = self.retire_sites
+        self.retire_sites += 1
+        tail = (self.defers and site in self.retire_tail_ok
+                and failure_result == "PyValue_NULL" and temps == "NULL"
+                and window is None)
         self.emit("{\n")
         boxes = " || value_temps->count != 0" if temps != "NULL" else ""
         self.emit(f"int retire_needed = _PyValue_CloseMayReenter({first}){boxes};\n")
@@ -3872,6 +3880,16 @@ class IREmitter(Emitter):
         self.emit("if (retire_needed) {\n")
         # The values pass by value and are dead after the call (R-a)
         second_value = "PyValue_NULL" if second is None else second
+        if tail:
+            self.emit(f"IR_RETIRE_TAIL({first}, {second_value});\n")
+            self.emit("}\n")
+            if second is not None:
+                self.emit("else {\n")
+                self.emit(f"PyValue_XCLOSE({second}); {second} = PyValue_NULL;\n")
+                self.emit("}\n")
+            self.emit("}\n")
+            self.emit("/*IR_RETIRE_END*/\n")
+            return
         self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {temps}, {first}, {second_value}, {failure_result});\n")
         self.emit("if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
@@ -3886,6 +3904,7 @@ class IREmitter(Emitter):
             self.emit(f"PyValue_XCLOSE({second}); {second} = PyValue_NULL;\n")
             self.emit("}\n")
         self.emit("}\n")
+        self.emit("/*IR_RETIRE_END*/\n")
 
     def macro_args(self, tkn, tkn_iter, count: int) -> list[str]:
         "The count identifiers of the statement IR_X(a, b, ...);"
@@ -6689,7 +6708,7 @@ DEFER_RELEASES = {
     "_PyValue_XCLOSE_SPECIALIZED_POINTER": "IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)",
 }
 DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP",
-                       "JUMP_TO_PREDICTED", "IR_COMPLETE_STEP_TAIL",
+                       "JUMP_TO_PREDICTED", "IR_COMPLETE_STEP_TAIL", "IR_RETIRE_TAIL",
                        "IR_PERIODIC_TAIL"}
 DEFER_EXIT_WORDS = re.compile(r"\b(return|goto)\b|Py_MUSTTAIL")
 DEFER_BAD_WORDS = re.compile(r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced")
@@ -6806,6 +6825,18 @@ def defers_releases(text: str, name: str = "") -> bool:
     return reason is None
 
 
+def retire_tail_sites(text: str) -> set[int]:
+    """The retirements (emit_ordered_retirement) after which the handler only
+    dispatches: they may leave through a continuation."""
+    sites = set()
+    for index, match in enumerate(re.finditer(r"/\*IR_RETIRE_END\*/", text)):
+        rest = text[match.end():]
+        end = rest.find("DISPATCH();")
+        if end >= 0 and not rest[:end].strip(" \n}"):
+            sites.add(index)
+    return sites
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool,
                      final: bool = False) -> None:
@@ -6870,6 +6901,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         # in place (PROCESS_ERROR_AT in Python/ceval_macros.h)
         out.emit("#undef IR_ERROR_EXIT\n#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE\n")
     emitter.defers = defers
+    emitter.retire_tail_ok = retire_tail_sites(first_pass) if defers else set()
     if defers:
         out.emit(DEFER_ON)
     emit_handler(name, inst, fmt, emitter, out, record, {})
@@ -7446,6 +7478,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
+    emitter.retire_sites = 0
     if (name != inst.name and name not in EXECUTION_VARIANTS
             and emitter.generator_boundary is None):
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
@@ -7499,6 +7532,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  "*ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;\n")
         out.emit("PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, "
                  "*ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;\n")
+        out.emit("PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;\n")
+        out.emit("(void)ir_retire0; (void)ir_retire1;\n")
         out.emit("int ir_has = 0;\n")
         out.emit("enum { IR_DEAD_BASE = __COUNTER__ + 1 };\n")
     use_fb = fmt.fb != LOC_NONE and (
@@ -9179,7 +9214,7 @@ HANDLER_LOCALS = {
     "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
     "window", "oparg", "fb", "opcode", "value_temps", "ir_displaced",
     "ir_dead0", "ir_dead1", "ir_dead2", "ir_dead3", "ir_dead4", "ir_dead5", "ir_pub0", "ir_pub1", "ir_pub2", "ir_pub3",
-    "ir_pub4", "ir_pub5",
+    "ir_pub4", "ir_pub5", "ir_retire0", "ir_retire1",
     "ir_has", "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",

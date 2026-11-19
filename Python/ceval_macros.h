@@ -196,6 +196,7 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
  * (not under Py_STATS, where lastopcode already takes that place). */
 #define IR_EXIT_ERROR_FLAG ((_PyIRWord)1 << 32)
 #define IR_EXIT_DISPLACED_BIT ((uintptr_t)1 << 12)
+#define IR_EXIT_RETIRE_BIT ((uintptr_t)1 << 13)
 #define IR_EXIT_STORE(FIELD, LOCAL, BIT) \
     do { \
         if ((LOCAL) != NULL) { \
@@ -212,14 +213,15 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
             + (ir_pub2 != NULL) + (ir_pub3 != NULL) \
             + (ir_pub4 != NULL) + (ir_pub5 != NULL); \
         int ir_ndisp = !PyValue_IsNull(ir_displaced); \
-        if (ir_ndead == 1 && ir_npub == 0 && ir_ndisp == 0) { \
+        int ir_nret = !PyValue_IsNull(ir_retire0) || !PyValue_IsNull(ir_retire1); \
+        if (ir_ndead == 1 && ir_npub == 0 && ir_ndisp == 0 && ir_nret == 0) { \
             Py_MUSTTAIL return _PyEval_ExitOneDead( \
                 TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
                 (uintptr_t)ir_dead0 | (uintptr_t)ir_dead1 \
                 | (uintptr_t)ir_dead2 | (uintptr_t)ir_dead3 \
                 | (uintptr_t)ir_dead4 | (uintptr_t)ir_dead5); \
         } \
-        if (ir_ndead == 0 && ir_npub == 0 && ir_ndisp == 1) { \
+        if (ir_ndead == 0 && ir_npub == 0 && ir_ndisp == 1 && ir_nret == 0) { \
             Py_MUSTTAIL return _PyEval_ExitOneDisplaced( \
                 TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
                 ir_displaced.bits); \
@@ -242,8 +244,23 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
             ir_ts->ir_exit.displaced = ir_displaced.bits; \
             ir_mask |= IR_EXIT_DISPLACED_BIT; \
         } \
+        if (ir_nret) { \
+            ir_ts->ir_exit.retire[0] = ir_retire0.bits; \
+            ir_ts->ir_exit.retire[1] = ir_retire1.bits; \
+            ir_mask |= IR_EXIT_RETIRE_BIT; \
+        } \
         Py_MUSTTAIL return _PyEval_ExitTail( \
             TAIL_CALL_ARGS_WORD((TARGET), (WORD)), ir_mask); \
+    } while (0)
+/* The retirement of the receiver and another owner (retire_published_values)
+ * that ends a handler runs after its deferred releases, which come before it
+ * in the handler, and before the displaced local. */
+#define IR_RETIRE_TAIL(FIRST, SECOND) \
+    do { \
+        ir_retire0 = (FIRST); \
+        ir_retire1 = (SECOND); \
+        ir_has = 1; \
+        IR_EXIT_TAIL(next_instr, 0); \
     } while (0)
 #define IR_ASSERT_NO_PENDING_DEFER() assert(!ir_has)
 #define IR_EXIT_PENDING_DISPATCH_DEFER() \

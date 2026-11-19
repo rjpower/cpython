@@ -2561,6 +2561,8 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
     static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(((_PyThreadStateImpl *)0)->ir_exit.dead), "see pycore_tstate.h");
     static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(((_PyThreadStateImpl *)0)->ir_exit.pub), "see pycore_tstate.h");
     PyValue displaced = PyValue_NULL;
+    PyValue retire[2] = {PyValue_NULL, PyValue_NULL};
+    bool has_retire = false;
     bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
     uint32_t entry = (uint32_t)ir_word;
     _PyInstr *next = error ? frame->instr_ptr + 1 : next_instr;
@@ -2578,8 +2580,13 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
             else if (bit < 2 * IR_DEAD_MAX) {
                 pub[bit - IR_DEAD_MAX] = ts->ir_exit.pub[bit - IR_DEAD_MAX];
             }
-            else {
+            else if (bit == 12) {
                 displaced = (PyValue){ts->ir_exit.displaced};
+            }
+            else {
+                retire[0] = (PyValue){ts->ir_exit.retire[0]};
+                retire[1] = (PyValue){ts->ir_exit.retire[1]};
+                has_retire = true;
             }
         }
         /* Publish first: the releases below can run Python, which must see
@@ -2594,6 +2601,16 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
             if (dead[i] != NULL) {
                 Py_DECREF_MORTAL(dead[i]);
             }
+        }
+        if (has_retire) {
+            assert(!error);
+            if (retire_published_values(tstate, frame, next, NULL, retire[0],
+                                        retire[1], PyValue_NULL) < 0) {
+                Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD(
+                    next - 1,
+                    _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0)));
+            }
+            slots = _PyFrame_Slots(frame);
         }
     }
     if (!PyValue_IsNull(displaced)) {

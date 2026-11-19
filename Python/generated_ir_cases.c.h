@@ -132,6 +132,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -243,6 +245,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -370,6 +374,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -597,6 +603,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -892,6 +900,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2349,6 +2359,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2661,6 +2673,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -2772,6 +2786,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2987,6 +3003,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3284,6 +3302,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3503,6 +3523,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3747,6 +3769,7 @@
                                 PyValue_XCLOSE(ir_leaf_dict); ir_leaf_dict = PyValue_NULL;
                             }
                         }
+                        /*IR_RETIRE_END*/
                         if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                             IR_STORE_DST(ir_word, A, ir_leaf_result);
                             if (!PyValue_IsNull(ir_displaced)) {
@@ -3938,6 +3961,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4174,6 +4199,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4317,6 +4344,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4449,6 +4478,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4679,6 +4710,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -4790,6 +4823,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4917,6 +4952,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -5208,6 +5245,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -5483,6 +5522,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5566,6 +5607,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5779,6 +5822,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5943,6 +5988,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -10138,6 +10185,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
@@ -10263,6 +10312,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
@@ -10470,6 +10521,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -10603,6 +10656,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -10736,6 +10791,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -10886,6 +10943,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
@@ -11292,6 +11351,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -11432,6 +11493,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -11681,6 +11744,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -11780,6 +11845,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -11877,6 +11944,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -11959,6 +12028,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -12042,6 +12113,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow container;
@@ -12388,6 +12461,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -12461,6 +12536,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow receiver;
@@ -12576,6 +12653,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -12679,6 +12758,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -12838,6 +12919,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -12956,6 +13039,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -13076,6 +13161,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -13200,6 +13287,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -13312,6 +13401,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -13717,6 +13808,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue iterable;
@@ -13805,6 +13898,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue obj;
@@ -14275,6 +14370,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -14436,6 +14533,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -14826,6 +14925,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -14970,6 +15071,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -15128,6 +15231,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15224,6 +15329,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15311,6 +15418,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15447,6 +15556,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15790,6 +15901,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
@@ -15890,6 +16003,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -16031,6 +16146,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
@@ -16155,6 +16272,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
@@ -16279,6 +16398,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -16891,6 +17012,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -17066,6 +17189,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -17162,6 +17287,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -17467,6 +17594,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -17523,6 +17652,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -17597,6 +17727,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -17737,6 +17869,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -17804,6 +17938,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -17981,6 +18116,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -18049,6 +18186,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -18335,6 +18473,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -18401,6 +18541,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -18475,6 +18616,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -18527,6 +18670,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
@@ -18594,6 +18738,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -18656,6 +18802,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
@@ -18821,6 +18968,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -18876,6 +19025,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -18950,6 +19100,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -19007,6 +19159,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -19078,6 +19231,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -19130,6 +19285,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -19204,6 +19360,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -19258,6 +19416,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -19329,6 +19488,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -19387,6 +19548,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -19461,6 +19623,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -19559,6 +19723,7 @@
                         slots = _PyFrame_Slots(frame);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -19633,6 +19798,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue bc;
@@ -19718,6 +19885,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -19789,6 +19958,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -19859,6 +20030,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -19930,6 +20103,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -20001,6 +20176,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -20081,6 +20258,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -20152,6 +20331,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -20223,6 +20404,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -20294,6 +20477,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -20596,6 +20781,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
@@ -20718,6 +20905,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
@@ -20823,6 +21012,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue locals;
@@ -20900,6 +21091,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -20977,6 +21170,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -21048,6 +21243,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -21542,6 +21739,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -21921,6 +22120,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
@@ -21992,6 +22193,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
@@ -22142,6 +22345,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
@@ -22283,6 +22488,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -22443,6 +22650,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -22557,6 +22766,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -22719,6 +22930,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -22833,6 +23046,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
@@ -22929,6 +23144,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
@@ -23087,6 +23304,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -23247,6 +23466,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -23361,6 +23582,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -23523,6 +23746,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -23637,6 +23862,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -24246,6 +24473,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -24441,6 +24670,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -24980,6 +25211,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             if (LOCALS() == NULL) {
@@ -25331,6 +25564,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
@@ -25432,16 +25667,13 @@
                         retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        this_instr = frame->instr_ptr;
-                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        slots = _PyFrame_Slots(frame);
+                        IR_RETIRE_TAIL(old_value, receiver);
                     }
                     else {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             DISPATCH();
         }
@@ -25506,6 +25738,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
@@ -25562,16 +25796,13 @@
                         retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        this_instr = frame->instr_ptr;
-                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        slots = _PyFrame_Slots(frame);
+                        IR_RETIRE_TAIL(old_value, receiver);
                     }
                     else {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             DISPATCH();
         }
@@ -25636,6 +25867,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
@@ -25694,13 +25927,10 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
-                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        this_instr = frame->instr_ptr;
-                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        slots = _PyFrame_Slots(frame);
+                        IR_RETIRE_TAIL(receiver, PyValue_NULL);
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             DISPATCH();
         }
@@ -25765,6 +25995,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
@@ -25817,16 +26049,13 @@
                         retire_needed = _PyValue_CloseMayReenter(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
-                        if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        this_instr = frame->instr_ptr;
-                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        slots = _PyFrame_Slots(frame);
+                        IR_RETIRE_TAIL(old_value, receiver);
                     }
                     else {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                 }
+                /*IR_RETIRE_END*/
             }
             DISPATCH();
         }
@@ -25891,6 +26120,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
@@ -26034,6 +26265,7 @@
                             PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                         }
                     }
+                    /*IR_RETIRE_END*/
                 }
                 STAT_INC(STORE_ATTR, hit);
             }
@@ -26123,6 +26355,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -26208,6 +26442,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -26307,6 +26543,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -26391,6 +26629,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow v;
@@ -26645,6 +26885,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -26803,6 +27045,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -26929,6 +27173,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
@@ -27052,6 +27298,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue value;
@@ -27150,6 +27398,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue tos;
@@ -27277,6 +27527,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue value;
@@ -27375,6 +27627,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -27468,6 +27722,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -27569,6 +27825,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -27921,6 +28179,8 @@
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
             PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            PyValue ir_retire0 = PyValue_NULL, ir_retire1 = PyValue_NULL;
+            (void)ir_retire0; (void)ir_retire1;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);

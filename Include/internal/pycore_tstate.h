@@ -92,6 +92,7 @@ typedef struct _PyThreadStateImpl {
         PyObject *dead[6];  // IR_DEAD_MAX in Python/ceval_macros.h
         PyValue *pub[6];
         uintptr_t displaced;
+        uintptr_t retire[2];
     } ir_exit;
 
     // Nested outlined retirements, including detached result owners.

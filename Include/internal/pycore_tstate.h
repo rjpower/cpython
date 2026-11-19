@@ -84,8 +84,8 @@ typedef struct _PyThreadStateImpl {
      * are not suspended semantic children of this frame. */
     struct _PyInterpreterFrame *observed_frame;
 
-    // Nested outlined retirements, including detached result owners.
-    struct _PyTransitionRoots *transition_roots;
+    // Error processors that are draining a frame's scratch, innermost first.
+    struct _PyErrorScope *error_scopes;
 
     // Distinguishes between yield and return from PyEval_EvalFrame().
     // See gen_send_ex2() in Objects/genobject.c

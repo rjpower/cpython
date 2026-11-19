@@ -7,7 +7,6 @@
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
 #include "pycore_pystate.h"       // HEAD_LOCK(), thread enumeration
-#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
 static int
@@ -15,24 +14,22 @@ find_error_home_view(PyThreadState *owner, _PyInterpreterFrame *frame,
                      _PyIRHomeView *view, _PyIRHomeAuthority *authority)
 {
     int matches = 0;
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)owner)->transition_roots;
-         roots != NULL; roots = roots->previous)
+    for (_PyErrorScope *scope = ((_PyThreadStateImpl *)owner)->error_scopes;
+         scope != NULL; scope = scope->previous)
     {
-        if (roots->kind != _Py_TRANSITION_KIND_ERROR || roots->frame != frame) {
+        if (scope->frame != frame) {
             continue;
         }
-        assert(roots->header_mask == 0 && !roots->result_present);
-        if (roots->homes == NULL ||
-            (roots->home_authority != _PyIR_HOME_MUST_READABLE &&
-             roots->home_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
+        if (scope->homes == NULL ||
+            (scope->home_authority != _PyIR_HOME_MUST_READABLE &&
+             scope->home_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
         {
             return -1;
         }
-        *view = *roots->homes;
+        *view = *scope->homes;
         view->scratch_limit = (uint16_t)Py_MIN(view->scratch_limit,
-            Py_MAX(roots->remaining - view->nbindings, 0));
-        *authority = roots->home_authority;
+            Py_MAX(scope->remaining - view->nbindings, 0));
+        *authority = scope->home_authority;
         matches++;
     }
     return matches;
@@ -296,42 +293,22 @@ _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
     return 0;
 }
 
+/* Move a frame that a frame object outlives into that object. Its first
+ * extent slots are the possible owners; every slot holds a value or NULL. */
 static void
-take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
-               _PyTransitionRoots *roots)
+take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame, int extent)
 {
     Py_BEGIN_CRITICAL_SECTION(f);
     assert(frame->owner < FRAME_OWNED_BY_INTERPRETER);
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     _PyIRHomeView view;
-    _PyIRHomeAuthority authority = (_PyIRHomeAuthority)roots->home_authority;
-    if (authority == _PyIR_HOME_NONE) {
-        assert(roots->remaining == 0 && roots->homes == NULL);
-        assert(_PyFrame_GetCode(frame)->co_nlocalsplus == 0);
-        _PyFrame_GetNullControlHomeView(frame, 0, &view);
-        authority = _PyIR_HOME_NULL_CONTROL_READABLE;
-    }
-    else if (authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
-        assert(roots->homes == NULL);
-        _PyFrame_GetNullControlHomeView(frame, roots->remaining, &view);
-    }
-    else {
-        assert(authority == _PyIR_HOME_MUST_READABLE);
-        assert(roots->homes != NULL);
-        view = *roots->homes;
-        view.scratch_limit = (uint16_t)Py_MIN(view.scratch_limit,
-            Py_MAX(roots->remaining - view.nbindings, 0));
-    }
+    _PyIRHomeAuthority authority = _PyIR_HOME_NULL_CONTROL_READABLE;
+    _PyFrame_GetNullControlHomeView(frame, extent, &view);
     _PyFrame_Copy(frame, new_frame, &view, authority);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
     frame->f_executable = (PyCodeObject *)Py_NewRef(new_frame->f_executable);
-    roots->remaining = 0;
-    roots->home_authority = _PyIR_HOME_NONE;
-    roots->homes = NULL;
-    roots->header_mask = _Py_TRANSITION_CODE |
-        (roots->header_mask & _Py_TRANSITION_EXCEPTION);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     f->f_capture = view;
@@ -431,7 +408,7 @@ clear_slots(_PyInterpreterFrame *frame, int n)
 {
     frame->phase_state = 0;
 #ifdef Py_DEBUG
-    _PyValue_CheckFrame(frame);
+    _PyValue_CheckFrameExtent(frame, n);
 #endif
     PyValue *locals = frame->base;
     PyValue *sp = locals + n;
@@ -451,173 +428,55 @@ _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
     clear_slots(frame, _PyFrame_NumSlots(frame));
 }
 
-/* Stop before the first close that can call Python. The interrupted owner
- * stays in its home until the outlined continuation has published its roots. */
-static inline int
-try_clear_except_code(_PyInterpreterFrame *frame, int remaining)
+void
+_PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
 {
-    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
-    frame->phase_state = 0;
+    assert(extent >= 0 && extent <= _PyFrame_NumSlots(frame));
+    // GH-99729: Clearing this frame can expose the stack (via finalizers). It's
+    // crucial that this frame has been unlinked, and is no longer visible:
     assert(_PyThreadState_GET()->current_frame != frame);
     assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
            FT_ATOMIC_LOAD_INT8_RELAXED(
                _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) == FRAME_CLEARED);
-    return _PyFrame_TryCloseOwnersNoReentry(frame, remaining);
-}
-
-int
-_PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame)
-{
-    int extent = frame->owner == FRAME_OWNED_BY_THREAD
-        ? _PyFrame_GetCode(frame)->co_nlocalsplus : _PyFrame_NumSlots(frame);
-    return try_clear_except_code(frame, extent);
-}
-
-int
-_PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame)
-{
-    assert(frame->owner == FRAME_OWNED_BY_THREAD);
-    return try_clear_except_code(frame, _PyFrame_NumSlots(frame));
-}
-
-int
-_PyFrame_TryClearGenerator(PyGenObject *gen)
-{
-    int stage;
-    Py_BEGIN_CRITICAL_SECTION(gen);
-    stage = try_clear_except_code(&gen->gi_iframe,
-                                  _PyFrame_NumSlots(&gen->gi_iframe));
-    Py_END_CRITICAL_SECTION();
-    return stage;
-}
-
-void
-_PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, int initial_extent,
-                        PyValue result, _PyTransitionRoots *roots)
-{
-    assert(initial_extent >= 0 && initial_extent <= _PyFrame_NumSlots(frame));
-    assert(stage <= initial_extent);
     frame->phase_state = 0;
-    int remaining = stage > 0 ? stage : 0;
-    if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
-        remaining = initial_extent;
-    }
-    *roots = (_PyTransitionRoots){
-        .frame = frame,
-        .remaining = remaining,
-        .home_authority = remaining ? _PyIR_HOME_NULL_CONTROL_READABLE
-                                    : _PyIR_HOME_NONE,
-        .header_mask = _Py_TRANSITION_CODE |
-            (frame->owner == FRAME_OWNED_BY_GENERATOR
-                ? _Py_TRANSITION_EXCEPTION : 0) |
-            (frame->f_funcobj != NULL ? _Py_TRANSITION_FUNCTION : 0) |
-            (frame->f_locals != NULL ? _Py_TRANSITION_LOCALS : 0) |
-            (frame->frame_obj != NULL ? _Py_TRANSITION_FRAME_OBJECT : 0),
-        .result_present = !PyValue_IsNull(result),
-        .kind = _Py_TRANSITION_KIND_RETIRING,
-        .result = result,
-    };
-}
-
-void
-_PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
-                              _PyTransitionRoots *roots)
-{
-    assert(roots->frame == frame);
-    if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
-        PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
-        assert(f != NULL);
+    PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
+    if (f != NULL) {
         f->f_line_next = -1;
-        roots->header_mask &= ~_Py_TRANSITION_FRAME_OBJECT;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
-            take_ownership(f, frame, roots);
+            take_ownership(f, frame, extent);
             Py_DECREF(f);
             return;
         }
         Py_DECREF(f);
     }
-    while (roots->remaining > 0) {
-        int slot = --roots->remaining;
-        PyValue ref = frame->base[slot];
-        frame->base[slot] = PyValue_NULL;
-        PyValue_XCLOSE(ref);
-    }
-    roots->home_authority = _PyIR_HOME_NONE;
-    roots->homes = NULL;
-    roots->header_mask &= ~_Py_TRANSITION_LOCALS;
-    Py_CLEAR(frame->f_locals);
-    roots->header_mask &= ~_Py_TRANSITION_FUNCTION;
+    clear_slots(frame, extent);
     Py_CLEAR(frame->f_funcobj);
 }
 
-static Py_NO_INLINE PyValue
-clear_generator_slow(PyGenObject *gen, int stage, PyValue result, uint8_t reason,
-                      int initial_extent)
+static inline PyValue
+clear_generator_at_extent(PyGenObject *gen, PyValue result, int extent)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyInterpreterFrame *frame = &gen->gi_iframe;
-#ifndef NDEBUG
-    _PyStackChunk *chunk = tstate->datastack_chunk;
-    PyObject **top = tstate->datastack_top;
-    PyObject **limit = tstate->datastack_limit;
-#endif
-    _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
-    roots.retire_reason = reason;
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-    roots.shadow_status = _PyIR_ObserveShadowRetirement(frame, reason);
     Py_BEGIN_CRITICAL_SECTION(gen);
-    if (stage != _Py_FRAME_CLEAR_DONE) {
-        _PyFrame_FinishClearExceptCode(frame, stage, &roots);
-    }
+    _PyFrame_ClearExceptCode(&gen->gi_iframe, extent);
     Py_END_CRITICAL_SECTION();
-    roots.header_mask &= ~_Py_TRANSITION_EXCEPTION;
-    _PyErr_ClearExcState(&gen->gi_exc_state);
-    /* The generator retains code even after its frame/exception clear. */
-    roots.header_mask &= ~_Py_TRANSITION_CODE;
-#ifndef NDEBUG
-    assert(tstate->datastack_chunk == chunk);
-    assert(tstate->datastack_top == top);
-    assert(tstate->datastack_limit == limit);
-#endif
-    result = roots.result;
-    roots.result = PyValue_NULL;
-    roots.result_present = 0;
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
-    return result;
-}
-
-static inline Py_ALWAYS_INLINE PyValue
-clear_generator_at_extent(PyGenObject *gen, PyValue result, uint8_t reason,
-                           int initial_extent)
-{
-    int stage;
-    Py_BEGIN_CRITICAL_SECTION(gen);
-    stage = try_clear_except_code(&gen->gi_iframe, initial_extent);
-    Py_END_CRITICAL_SECTION();
-    if (stage != _Py_FRAME_CLEAR_DONE ||
-        _PyFrame_ObjectMayReenter(gen->gi_exc_state.exc_value))
-    {
-        return clear_generator_slow(gen, stage, result, reason, initial_extent);
-    }
     _PyErr_ClearExcState(&gen->gi_exc_state);
     return result;
 }
 
 PyValue
-_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result, uint8_t reason)
+_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
 {
-    return clear_generator_at_extent(gen, result, reason,
+    return clear_generator_at_extent(gen, result,
                                      _PyFrame_NumSlots(&gen->gi_iframe));
 }
 
-PyValue
-_PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason)
+void
+_PyFrame_ClearGeneratorBindings(PyGenObject *gen)
 {
     /* The error processor has drained selected scratch. Do not reconstruct
      * an N-sized view from the generator's allocation or its public PC. */
-    return clear_generator_at_extent(gen, PyValue_NULL, reason,
+    (void)clear_generator_at_extent(gen, PyValue_NULL,
         _PyFrame_GetCode(&gen->gi_iframe)->co_nlocalsplus);
 }
 

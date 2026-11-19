@@ -356,6 +356,18 @@ _PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
 /* The caller pins code for the entire view/copy commit. */
 PyAPI_FUNC(_PyIRHomeAuthority) _PyFrame_GetHomeView(
     _PyInterpreterFrame *frame, _PyIRHomeView *view);
+/* While the error processor drains the scratch of the current frame
+ * (_PyIR_PHASE_ERROR_SCOPE) this record names the home view that selects the
+ * slots to read. It owns nothing: the frame's own traversal visits them.
+ * Linked from the thread state, innermost first. */
+typedef struct _PyErrorScope {
+    struct _PyErrorScope *previous;
+    _PyInterpreterFrame *frame;
+    int remaining;
+    _PyIRHomeAuthority home_authority;
+    const _PyIRHomeView *homes;
+} _PyErrorScope;
+
 /* Copies metadata only. Foreign native scopes require the GIL or actual STW;
  * owner_hint supplies identity, not quiescence or HEAD_LOCK ownership. */
 _PyIRHomeAuthority _PyFrame_GetErrorHomeView(
@@ -620,62 +632,22 @@ _PyFrame_ObjectMayReenter(PyObject *object)
 #endif
 }
 
-enum {
-    _Py_FRAME_CLEAR_DONE = -1,
-    _Py_FRAME_CLEAR_ASSOCIATION = -2,
-    _Py_FRAME_CLEAR_LOCALS = -3,
-    _Py_FRAME_CLEAR_FUNCTION = -4,
-};
+/* Retire the owners of an unlinked frame as upstream's
+ * _PyFrame_ClearExceptCode() does: detach the frame object, then NULL and
+ * close each of the first extent slots from the top, then close the locals
+ * mapping and the function. The frame must not be current. A finalizer that
+ * runs sees the slots not yet reached intact and the others NULL; whatever
+ * the caller holds in C (a result) is an external reference. The caller
+ * closes the code. */
+void _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent);
 
-/* Close the owners of the first remaining slots, from the top, then the
- * locals mapping and the function. Stop before the first close that can call
- * Python, which stays in its home, and return the stage reached. The caller
- * owns the phase publication of the unlinked frame. */
-static inline int
-_PyFrame_TryCloseOwnersNoReentry(_PyInterpreterFrame *frame, int remaining)
-{
-    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
-    if (FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj) != NULL) {
-        return _Py_FRAME_CLEAR_ASSOCIATION;
-    }
-#ifdef Py_DEBUG
-    _PyValue_CheckFrameExtent(frame, remaining);
-#endif
-    while (remaining > 0) {
-        PyValue ref = frame->base[remaining - 1];
-        if (!_PyValue_TryXCloseNoReentry(ref)) {
-            return remaining;
-        }
-        frame->base[--remaining] = PyValue_NULL;
-    }
-    if (_PyFrame_ObjectMayReenter(frame->f_locals)) {
-        return _Py_FRAME_CLEAR_LOCALS;
-    }
-    Py_CLEAR(frame->f_locals);
-    if (_PyFrame_ObjectMayReenter((PyObject *)frame->f_funcobj)) {
-        return _Py_FRAME_CLEAR_FUNCTION;
-    }
-    Py_CLEAR(frame->f_funcobj);
-    return _Py_FRAME_CLEAR_DONE;
-}
-
-struct _PyTransitionRoots;
-int _PyFrame_TryClearExceptCode(_PyInterpreterFrame *frame);
-int _PyFrame_TryClearExceptCodeGeneral(_PyInterpreterFrame *frame);
-/* Stop before reentry, retaining a generator's executable owner. DONE means
- * only its exception state can remain; the outlined entry owns that close. */
-int _PyFrame_TryClearGenerator(PyGenObject *gen);
-PyValue _PyFrame_ClearGeneratorBindings(PyGenObject *gen, uint8_t reason);
-void _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage,
-                            int initial_extent, PyValue result,
-                            struct _PyTransitionRoots *roots);
-void _PyFrame_FinishClearExceptCode(_PyInterpreterFrame *frame, int stage,
-                                  struct _PyTransitionRoots *roots);
-
-/* Retire frame and exception owners while preserving a detached result.
- * Code remains owned by the generator. Close/deallocation passes NULL. */
-PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result,
-                                          uint8_t reason);
+/* Retire a generator's frame and exception state, keeping the result the
+ * caller detached. The code remains owned by the generator. Close and
+ * deallocation pass NULL. */
+PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
+/* The same, for a frame whose scratch the error processor already drained:
+ * only the bindings remain. */
+void _PyFrame_ClearGeneratorBindings(PyGenObject *gen);
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg);

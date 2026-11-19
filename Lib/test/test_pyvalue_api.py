@@ -16,13 +16,6 @@ from test.support.script_helper import assert_python_failure
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 
-def setUpModule():
-    # Retirement records carry their shadow comparison only while observed.
-    previous = _testinternalcapi.set_retirement_shadow_observed(True)
-    unittest.addModuleCleanup(
-        _testinternalcapi.set_retirement_shadow_observed, previous)
-
-
 class Number(int):
     pass
 
@@ -253,8 +246,13 @@ class FrameCodePinTests(unittest.TestCase):
             context.run(Item, True)
 
 
-class TransitionRootTests(unittest.TestCase):
-    def test_nested_retirement_roots_and_arena_growth(self):
+class RetirementTests(unittest.TestCase):
+    """A frame retires as upstream's does: it is unlinked, the result stays in
+    C and each owner is closed in turn. A finalizer sees a consistent frame, a
+    collection in it must not free what the retirement still holds, and every
+    value is released once."""
+
+    def test_nested_retirement_and_arena_growth(self):
         references = {}
         observations = []
         payload = Item()
@@ -273,11 +271,9 @@ class TransitionRootTests(unittest.TestCase):
 
             def __del__(self):
                 name = self.name
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append((name, id(payload) in ids,
-                                     id(references[name]()) in ids,
+                observations.append((name, references[name]() is not None,
                                      name != 'inner' or
-                                     id(references['outer']()) in ids))
+                                     references['outer']() is not None))
                 namespace['grow'](24)
                 support.gc_collect()
                 if name == 'outer':
@@ -291,10 +287,9 @@ class TransitionRootTests(unittest.TestCase):
 
         result = retire('outer', payload)
         self.assertIs(result, references['outer']())
-        self.assertEqual(observations, [('outer', True, True, True),
-                                        ('inner', True, True, True),
+        self.assertEqual(observations, [('outer', True, True),
+                                        ('inner', True, True),
                                         ('nested-result', True)])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_result_published_after_finalizer_mutates_caller(self):
         caller = sys._getframe()
@@ -308,9 +303,8 @@ class TransitionRootTests(unittest.TestCase):
 
         class Trigger:
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
                 observations.append((caller.f_locals['target'],
-                                     id(references[-1]()) in ids))
+                                     references[-1]() is not None))
                 caller.f_locals['target'] = 'during'
                 support.gc_collect()
 
@@ -321,9 +315,8 @@ class TransitionRootTests(unittest.TestCase):
         target = retire()
         self.assertIs(target, references[-1]())
         self.assertEqual(observations, [('before', True)])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_final_code_close_keeps_result_root(self):
+    def test_final_code_close_keeps_result(self):
         observations = []
         references = []
 
@@ -333,8 +326,7 @@ class TransitionRootTests(unittest.TestCase):
 
         class Constant:
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append(id(references[-1]()) in ids)
+                observations.append(references[-1]() is not None)
                 support.gc_collect()
 
         def body():
@@ -350,9 +342,8 @@ class TransitionRootTests(unittest.TestCase):
         result = functions.pop()()
         self.assertIs(result, references[-1]())
         self.assertEqual(observations, [True])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_frame_association_close_keeps_result_root(self):
+    def test_frame_association_close_keeps_result(self):
         observations = []
         references = []
 
@@ -365,8 +356,7 @@ class TransitionRootTests(unittest.TestCase):
                 return self
 
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append(id(references[-1]()) in ids)
+                observations.append(references[-1]() is not None)
                 support.gc_collect()
 
         def retire():
@@ -376,28 +366,26 @@ class TransitionRootTests(unittest.TestCase):
         result = retire()
         self.assertIs(result, references[-1]())
         self.assertEqual(observations, [True])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_unstarted_generator_deallocation_roots(self):
+    def test_unstarted_generator_deallocation(self):
         observations = []
         payload = Item()
 
         class Trigger:
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append((id(payload) in ids,
-                                     id(retire.__code__) in ids))
+                observations.append((payload_ref() is not None,
+                                     retire.__code__ is not None))
                 support.gc_collect()
 
         def retire(remaining, trigger):
             yield
 
+        payload_ref = weakref.ref(payload)
         generator = retire(payload, Trigger())
         del generator
         self.assertEqual(observations, [(True, True)])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_generator_completion_keeps_result_root(self):
+    def test_generator_completion_keeps_result(self):
         observations = []
         references = []
         payload = Item()
@@ -408,9 +396,8 @@ class TransitionRootTests(unittest.TestCase):
 
         class Trigger:
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append((id(payload) in ids,
-                                     id(references[-1]()) in ids))
+                observations.append((payload_ref() is not None,
+                                     references[-1]() is not None))
                 support.gc_collect()
 
         def retire(remaining):
@@ -419,29 +406,26 @@ class TransitionRootTests(unittest.TestCase):
                 yield
             return Result()
 
+        payload_ref = weakref.ref(payload)
         generator = retire(payload)
         with self.assertRaises(StopIteration) as stopped:
             next(generator)
         self.assertIs(stopped.exception.value, references[-1]())
         self.assertEqual(observations, [(True, True)])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_generator_deallocation_keeps_exception_root(self):
-        exception_ids = []
+    def test_generator_deallocation_keeps_exception(self):
         observations = []
         unraisable = []
 
         class Trigger:
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append(exception_ids[-1] in ids)
+                observations.append('finalized')
                 support.gc_collect()
 
         def retire(trigger):
             try:
                 yield
             except GeneratorExit as error:
-                exception_ids.append(id(error))
                 # Keep this on direct generator retirement: a traceback
                 # would let the escaped frame own Trigger until the exception
                 # itself is already being destroyed.
@@ -459,10 +443,9 @@ class TransitionRootTests(unittest.TestCase):
             del generator
             support.gc_collect()
         self.assertEqual(unraisable, ['generator ignored GeneratorExit'])
-        self.assertEqual(observations, [True])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+        self.assertEqual(observations, ['finalized'])
 
-    def test_exception_retirement_collects_without_leaking_roots(self):
+    def test_exception_retirement_collects(self):
         observations = []
 
         class Trigger:
@@ -478,11 +461,10 @@ class TransitionRootTests(unittest.TestCase):
             retire()
         support.gc_collect()
         self.assertEqual(observations, ['finalized'])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
-class BinderStagingTests(unittest.TestCase):
-    def test_partial_arguments_visible_during_keyword_comparison(self):
+class BinderTests(unittest.TestCase):
+    def test_partial_arguments_survive_keyword_comparison(self):
         for native_provider in (False, True):
             with self.subTest(native_provider=native_provider):
                 observations = []
@@ -498,22 +480,23 @@ class BinderStagingTests(unittest.TestCase):
                     __hash__ = str.__hash__
 
                     def __eq__(self, other):
-                        ids = set(_testinternalcapi.get_transition_root_ids())
-                        observations.append((id(target) in ids,
-                                             id(payload) in ids,
-                                             id(target.__code__) in ids))
+                        observations.append((target_ref() is not None,
+                                             payload_ref() is not None,
+                                             code_ref() is not None))
                         caller.f_locals['changed'] = 'during'
                         support.gc_collect()
                         return str.__eq__(self, other)
 
                 arguments = {Keyword('keyword'): keyword_value}
+                target_ref = weakref.ref(target)
+                payload_ref = weakref.ref(payload)
+                code_ref = weakref.ref(target.__code__)
                 provider = target.__call__ if native_provider else target
                 self.assertEqual(provider(payload, **arguments),
                                  (payload, keyword_value))
                 self.assertTrue(observations)
                 self.assertTrue(all(all(entry) for entry in observations))
                 self.assertEqual(changed, 'during')
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_prior_keyword_and_defaults(self):
         observations = []
@@ -532,13 +515,15 @@ class BinderStagingTests(unittest.TestCase):
 
             def __eq__(self, other):
                 if str.__eq__(self, 'extra'):
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append((id(payload) in ids,
-                                         id(installed) in ids,
-                                         id(target) in ids))
                     support.gc_collect()
+                    observations.append((payload_ref() is not None,
+                                         installed_ref() is not None,
+                                         target_ref() is not None))
                 return str.__eq__(self, other)
 
+        payload_ref = weakref.ref(payload)
+        installed_ref = weakref.ref(installed)
+        target_ref = weakref.ref(target)
         result = target(payload, **{Keyword('keyword'): installed,
                                     Keyword('extra'): extra})
         self.assertEqual(result[:4], (payload, positional_default, installed,
@@ -547,7 +532,6 @@ class BinderStagingTests(unittest.TestCase):
         self.assertIs(next(iter(result[4].values())), extra)
         self.assertTrue(observations)
         self.assertTrue(all(all(entry) for entry in observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_nested_binding_keeps_outer_partial_frame(self):
         observations = []
@@ -564,11 +548,8 @@ class BinderStagingTests(unittest.TestCase):
             __hash__ = str.__hash__
 
             def __eq__(self, other):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append(all(id(value) in ids for value in
-                                        (outer, inner, outer_payload,
-                                         inner_payload)))
                 support.gc_collect()
+                observations.append(all(ref() is not None for ref in refs))
                 return str.__eq__(self, other)
 
         class OuterKeyword(str):
@@ -580,11 +561,12 @@ class BinderStagingTests(unittest.TestCase):
                 observations.append(result is inner_payload)
                 return str.__eq__(self, other)
 
+        refs = [weakref.ref(value) for value in
+                (outer, inner, outer_payload, inner_payload)]
         self.assertIs(outer(outer_payload, **{OuterKeyword('keyword'): None}),
                       outer_payload)
         self.assertTrue(observations)
         self.assertTrue(all(observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_keyword_failure_retires_partial_frame(self):
         observations = []
@@ -599,20 +581,21 @@ class BinderStagingTests(unittest.TestCase):
 
             def __eq__(self, other):
                 if str.__eq__(self, 'second'):
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append((id(payload) in ids,
-                                         id(installed) in ids,
-                                         id(target) in ids))
                     support.gc_collect()
+                    observations.append((payload_ref() is not None,
+                                         installed_ref() is not None,
+                                         target_ref() is not None))
                     raise ValueError('keyword equality')
                 return str.__eq__(self, other)
 
+        payload_ref = weakref.ref(payload)
+        installed_ref = weakref.ref(installed)
+        target_ref = weakref.ref(target)
         with self.assertRaisesRegex(ValueError, 'keyword equality'):
             target(payload, **{Keyword('first'): installed,
                                Keyword('second'): None})
         self.assertTrue(observations)
         self.assertTrue(all(all(entry) for entry in observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_code_mutation_keeps_selected_binding_geometry(self):
         observations = []
@@ -631,22 +614,25 @@ class BinderStagingTests(unittest.TestCase):
 
             def __eq__(self, other):
                 target.__code__ = replacement.__code__
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append((id(selected_code) in ids,
-                                     id(payload) in ids, id(target) in ids))
                 support.gc_collect()
+                observations.append((code_ref() is not None,
+                                     payload_ref() is not None,
+                                     target_ref() is not None))
                 return str.__eq__(self, other)
 
+        code_ref = weakref.ref(selected_code)
+        payload_ref = weakref.ref(payload)
+        target_ref = weakref.ref(target)
         self.assertEqual(target(payload, **{Keyword('keyword'): None}),
                          (payload, None))
         self.assertEqual(target(payload, keyword=None), 'replacement')
         self.assertTrue(observations)
         self.assertTrue(all(all(entry) for entry in observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
-class ProviderHandoffTests(unittest.TestCase):
-    STAGED = 2
+class CustomEvaluatorTests(unittest.TestCase):
+    """A custom evaluator must consume the frame it is given, by running it
+    or by retiring it; the provider keeps no token."""
 
     def test_created_generator_uses_executing_code_after_hook_mutation(self):
         for object_provider in (False, True):
@@ -687,7 +673,6 @@ class ProviderHandoffTests(unittest.TestCase):
                     with self.assertRaises(StopIteration):
                         next(gen)
                     self.assertEqual(observations, ['before', 'after'])
-                    self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_delegated_hook_lifetime_and_reentry(self):
         namespace = {}
@@ -700,15 +685,11 @@ class ProviderHandoffTests(unittest.TestCase):
                 observations = []
 
                 def observe(phase):
-                    states = _testinternalcapi.get_transition_shadow_status()
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append((phase, states, id(target) in ids,
-                                         id(payload) in ids,
-                                         id(selected_code) in ids))
+                    observations.append(phase)
                     namespace['grow'](24)
                     support.gc_collect()
-                    # Before default, an outer live stage protects the child.
-                    # Afterwards a fresh child may reuse its arena address.
+                    # A nested call from the hook gets its own frame, which
+                    # may reuse the arena address of a retired one.
                     if phase in ('before', 'after'):
                         self.assertIs(target(payload), payload)
 
@@ -716,26 +697,11 @@ class ProviderHandoffTests(unittest.TestCase):
                     observe('body')
                     return remaining
 
-                selected_code = target.__code__
                 result = _testinternalcapi.run_staged_provider(
                     target, payload, observe, 'default', object_provider)
                 self.assertIs(result, payload)
-                self.assertEqual([entry[0] for entry in observations],
+                self.assertEqual(observations,
                                  ['before', 'body', 'body', 'after', 'body'])
-                for entry, expected_live in zip(observations,
-                                               (True, True, False, False, False)):
-                    phase, states, function_root, payload_root, code_root = entry
-                    self.assertTrue(all(len(state) == 4 for state in states))
-                    stages = [state for state in states if state[0] == self.STAGED]
-                    self.assertTrue(stages, phase)
-                    self.assertEqual(sum(state[3] for state in stages),
-                                     int(expected_live), phase)
-                    self.assertEqual((function_root, payload_root, code_root),
-                                     (expected_live,) * 3, phase)
-                self.assertFalse(any(kind == self.STAGED and has_frame
-                                     for kind, reason, status, has_frame in
-                                     _testinternalcapi.get_transition_shadow_status()))
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_hook_abandonment_and_explicit_consumption(self):
         for object_provider in (False, True):
@@ -748,11 +714,7 @@ class ProviderHandoffTests(unittest.TestCase):
                         self.fail('this route must not execute the body')
 
                     def observe(phase):
-                        states = _testinternalcapi.get_transition_shadow_status()
-                        ids = set(_testinternalcapi.get_transition_root_ids())
-                        observations.append((phase, states,
-                                             id(target) in ids,
-                                             id(payload) in ids))
+                        observations.append(phase)
                         support.gc_collect()
 
                     arguments = target, payload, observe, mode, object_provider
@@ -768,20 +730,7 @@ class ProviderHandoffTests(unittest.TestCase):
                     expected_phases = ['before', 'after']
                     if mode == 'activate':
                         expected_phases.insert(1, 'active')
-                    self.assertEqual([entry[0] for entry in observations],
-                                     expected_phases)
-                    for phase, states, function_root, payload_root in observations:
-                        expected_live = phase == 'before' or mode in ('return', 'error')
-                        stages = [state for state in states if state[0] == self.STAGED]
-                        self.assertTrue(stages, phase)
-                        self.assertEqual(sum(state[3] for state in stages),
-                                         int(expected_live), phase)
-                        self.assertEqual((function_root, payload_root),
-                                         (expected_live,) * 2, phase)
-                    self.assertFalse(any(kind == self.STAGED and has_frame
-                                         for kind, reason, status, has_frame in
-                                         _testinternalcapi.get_transition_shadow_status()))
-                    self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+                    self.assertEqual(observations, expected_phases)
 
     def test_selected_code_survives_hook_mutation(self):
         for object_provider in (False, True):
@@ -792,9 +741,8 @@ class ProviderHandoffTests(unittest.TestCase):
                 def observe(phase):
                     if phase == 'before':
                         target.__code__ = replacement.__code__
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append((phase, id(selected_code) in ids))
                     support.gc_collect()
+                    observations.append((phase, code_ref() is not None))
 
                 def target(remaining):
                     observe('body')
@@ -804,35 +752,15 @@ class ProviderHandoffTests(unittest.TestCase):
                     observe('replacement')
                     return remaining
 
-                selected_code = target.__code__
+                code_ref = weakref.ref(target.__code__)
                 self.assertIs(_testinternalcapi.run_staged_provider(
                     target, payload, observe, 'default', object_provider), payload)
+                # The frame pins the selected code while it runs; the probe's
+                # own pin keeps it afterwards.
                 self.assertEqual(observations,
-                                 [('before', True), ('body', False), ('after', False)])
+                                 [('before', True), ('body', True), ('after', True)])
                 self.assertIs(target(payload), payload)
-                self.assertEqual(observations[-1], ('replacement', False))
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
-
-    def test_hook_installed_mapping_has_staged_header_authority(self):
-        for object_provider in (False, True):
-            with self.subTest(object_provider=object_provider):
-                payload = {}
-                observations = []
-
-                def observe(phase):
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append((phase, id(payload['mapping']) in ids))
-                    support.gc_collect()
-
-                def target(remaining):
-                    observe('body')
-                    return remaining
-
-                self.assertIs(_testinternalcapi.run_staged_provider(
-                    target, payload, observe, 'headers', object_provider), payload)
-                self.assertEqual(observations,
-                                 [('before', True), ('body', False), ('after', False)])
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+                self.assertEqual(observations[-1][0], 'replacement')
 
     def test_probe_cleanup_rejects_reentry_until_all_state_closes(self):
         for object_provider in (False, True):
@@ -876,7 +804,6 @@ class ProviderHandoffTests(unittest.TestCase):
                 self.assertIs(_testinternalcapi.run_staged_provider(
                     nested_target, payload, lambda phase: None,
                     'return', object_provider), payload)
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_object_hook_result_keeps_scalar_identity(self):
         payload = float('2.5')
@@ -893,9 +820,8 @@ class ProviderHandoffTests(unittest.TestCase):
             target, payload, observe, 'return', True)
         self.assertIs(result, payload)
         self.assertEqual(observations, ['before', 'after'])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
-    def test_constructor_failure_has_no_linked_stage(self):
+    def test_constructor_failure_does_not_enter_hook(self):
         for object_provider in (False, True):
             with self.subTest(object_provider=object_provider):
                 observations = []
@@ -907,10 +833,6 @@ class ProviderHandoffTests(unittest.TestCase):
                     _testinternalcapi.run_staged_provider(
                         target, Item(), observations.append, 'default', object_provider)
                 self.assertEqual(observations, [])
-                self.assertFalse(any(kind == self.STAGED and has_frame
-                                     for kind, reason, status, has_frame in
-                                     _testinternalcapi.get_transition_shadow_status()))
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
 @support.requires_specialization
@@ -920,7 +842,7 @@ class InitShimTests(unittest.TestCase):
                       {inst.opname for inst in dis.get_instructions(
                           function, adaptive=True)})
 
-    def test_exact_init_uses_active_authority(self):
+    def test_exact_init_runs_collection(self):
         armed = False
         observations = []
 
@@ -928,9 +850,8 @@ class InitShimTests(unittest.TestCase):
             def __init__(self, value):
                 self.value = value
                 if armed:
-                    observations.append(id(self) in
-                        _testinternalcapi.get_transition_root_ids())
                     support.gc_collect()
+                    observations.append(self.value is payload)
 
         def instantiate(value):
             return C(value)
@@ -942,10 +863,9 @@ class InitShimTests(unittest.TestCase):
         armed = True
         result = instantiate(payload)
         self.assertIs(result.value, payload)
-        self.assertEqual(observations, [False])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+        self.assertEqual(observations, [True])
 
-    def test_failed_heap_call_stages_self_and_blocks_redirect(self):
+    def test_failed_heap_call_callbacks_see_consistent_caller(self):
         armed = False
         observations = []
         redirects = []
@@ -967,14 +887,7 @@ class InitShimTests(unittest.TestCase):
             return tracer
 
         def observe(phase):
-            ids = set(_testinternalcapi.get_transition_root_ids())
-            if phase == 'argument':
-                instances = [obj for obj in gc.get_objects() if type(obj) is C]
-                observations.append((phase, len(instances),
-                                     all(id(obj) in ids for obj in instances)))
-                instances.clear()
-            else:
-                observations.append((phase,))
+            observations.append(phase)
             caller.f_locals['named'] = new_binding
             previous = sys.gettrace()
             previous_local = caller.f_trace
@@ -1021,11 +934,11 @@ class InitShimTests(unittest.TestCase):
         with self.assertRaises(StopIteration) as stopped:
             next(generator)
         self.assertIs(stopped.exception.value, new_binding)
-        self.assertEqual(observations, [('argument', 1, True), ('shim',)])
+        # Both finalizers run, in either order.
+        self.assertEqual(sorted(observations), ['argument', 'shim'])
         self.assertEqual(len(redirects), 2)
-        self.assertTrue(all('staged constructor owner recipe' in error
-                            for error in redirects), redirects)
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+        # A jump out of the half-built call is refused, not applied.
+        self.assertTrue(all('recipe' in error for error in redirects), redirects)
 
     def test_changed_init_code_uses_checked_child_geometry(self):
         class C:
@@ -1049,17 +962,15 @@ class InitShimTests(unittest.TestCase):
         self.assertGreater(C.__init__.__code__.co_nlocals, old_size)
         result = instantiate(payload)
         self.assertIs(result.value, payload)
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
-class UnpackPrefixTests(unittest.TestCase):
+class UnpackTests(unittest.TestCase):
     def test_prefix_survives_iterator_and_sequence_cleanup(self):
         references = []
         observations = []
 
         def observe(name):
-            ids = set(_testinternalcapi.get_transition_root_ids())
-            observations.append((name, all(id(ref()) in ids for ref in references)))
+            observations.append((name, all(ref() is not None for ref in references)))
             support.gc_collect()
 
         class Iterator:
@@ -1093,7 +1004,6 @@ class UnpackPrefixTests(unittest.TestCase):
         self.assertIs(second, references[1]())
         self.assertEqual(observations, [('next', True), ('next', True),
                                         ('iterator', True), ('sequence', True)])
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_partial_prefix_errors(self):
         cases = ((False, 0, False), (False, 1, False), (False, 3, False),
@@ -1112,8 +1022,7 @@ class UnpackPrefixTests(unittest.TestCase):
 
                     def __next__(self):
                         if self.position:
-                            ids = set(_testinternalcapi.get_transition_root_ids())
-                            observations.append(all(id(ref()) in ids
+                            observations.append(all(ref() is not None
                                                     for ref in references[:2]))
                             support.gc_collect()
                         if self.position == limit:
@@ -1137,7 +1046,6 @@ class UnpackPrefixTests(unittest.TestCase):
                 support.gc_collect()
                 self.assertTrue(all(observations))
                 self.assertTrue(all(ref() is None for ref in references))
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_starred_prefix_cleanup(self):
         references = []
@@ -1151,8 +1059,7 @@ class UnpackPrefixTests(unittest.TestCase):
 
             def __next__(self):
                 if self.position:
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append(id(references[0]()) in ids)
+                    observations.append(references[0]() is not None)
                     support.gc_collect()
                 if self.position == 4:
                     raise StopIteration
@@ -1166,15 +1073,13 @@ class UnpackPrefixTests(unittest.TestCase):
                 return Iterator()
 
             def __del__(self):
-                ids = set(_testinternalcapi.get_transition_root_ids())
-                observations.append(id(references[0]()) in ids and
-                                    id(references[-1]()) in ids)
+                observations.append(references[0]() is not None and
+                                    references[-1]() is not None)
                 support.gc_collect()
 
         first, *middle, last = Sequence()
         self.assertEqual([first, *middle, last], [ref() for ref in references])
         self.assertTrue(all(observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_nested_unpack_prefixes(self):
         references = {'outer': [], 'inner': []}
@@ -1207,9 +1112,8 @@ class UnpackPrefixTests(unittest.TestCase):
 
             def __del__(self):
                 if self.name == 'inner':
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append(id(references['outer'][0]()) in ids and
-                                        all(id(ref()) in ids
+                    observations.append(references['outer'][0]() is not None and
+                                        all(ref() is not None
                                             for ref in references['inner']))
                     support.gc_collect()
 
@@ -1217,7 +1121,6 @@ class UnpackPrefixTests(unittest.TestCase):
         self.assertEqual(observations, [True])
         self.assertIs(first, references['outer'][0]())
         self.assertIs(second, references['outer'][1]())
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def test_unpack_callback_cannot_redirect_ancestor(self):
         rejections = []
@@ -1232,8 +1135,7 @@ class UnpackPrefixTests(unittest.TestCase):
 
             def __next__(self):
                 if self.position:
-                    ids = set(_testinternalcapi.get_transition_root_ids())
-                    observations.append(id(references[0]()) in ids)
+                    observations.append(references[0]() is not None)
                     support.gc_collect()
                 if self.position == 2:
                     raise StopIteration
@@ -1276,7 +1178,6 @@ class UnpackPrefixTests(unittest.TestCase):
         self.assertTrue(rejections)
         self.assertTrue(all(rejections))
         self.assertTrue(all(observations))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
 
 class ValueFormatTests(unittest.TestCase):

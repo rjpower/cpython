@@ -1361,7 +1361,8 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
 }
 
 /* These helpers delimit ownership of a counted C-local workspace. They do
- * not link a GC root; explicit transition roots have a separate interface. */
+ * not link a GC root: a counted C-local reference is an external reference
+ * to the cyclic collector. */
 static inline void
 _PyThreadState_PushCValue(PyThreadState *tstate, _PyCValue *ref)
 {

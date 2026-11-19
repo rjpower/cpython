@@ -242,8 +242,7 @@ do { \
         assert((NEW_FRAME)->previous == frame);                  \
         if (value_temps != NULL && value_temps->count != 0 &&    \
             finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
-            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME),          \
-                                    _PyIR_RETIRE_STAGED_FAILURE); \
+            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));         \
             PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);           \
         }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \

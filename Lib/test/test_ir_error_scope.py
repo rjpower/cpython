@@ -13,17 +13,10 @@ ERROR_SCOPE = 1 << 14
 NULL_CONTROL_READABLE = 3
 
 
-def setUpModule():
-    # Retirement records carry their shadow comparison only while observed.
-    previous = _testinternalcapi.set_retirement_shadow_observed(True)
-    unittest.addModuleCleanup(
-        _testinternalcapi.set_retirement_shadow_observed, previous)
-
-
 class ErrorScopeTests(unittest.TestCase):
     @support.requires_gil_enabled("foreign native scopes require the GIL or STW")
     def test_foreign_error_selection_during_head_locked_gc_walk(self):
-        baseline = _testinternalcapi.get_transition_shadow_status()
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         entered = threading.Event()
         release = threading.Event()
         escaped = []
@@ -69,10 +62,10 @@ class ErrorScopeTests(unittest.TestCase):
             thread.join(support.SHORT_TIMEOUT)
         self.assertFalse(thread.is_alive())
         self.assertEqual(failures, [])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), baseline)
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
 
-    def test_remaining_scratch_is_selected_without_external_ownership(self):
-        baseline = _testinternalcapi.get_transition_shadow_status()
+    def test_remaining_scratch_is_selected(self):
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         observations = []
         addresses = []
         references = []
@@ -103,15 +96,12 @@ class ErrorScopeTests(unittest.TestCase):
                 frame.f_locals["mutable"] = 42
                 bindings.append((self.index, frame.f_locals["mutable"]))
                 selected = set(_testinternalcapi.get_frame_selected_object_ids(frame))
-                external = set(_testinternalcapi.get_transition_root_ids())
                 holes = _testinternalcapi.gc_verify()
                 phases = [state for code, state in
                           _testinternalcapi.get_ir_frame_phases()
                           if code is target.__code__]
-                scopes = [row for row in
-                          _testinternalcapi.get_transition_shadow_status()
-                          if row[0] == 3]
-                observations.append((self.index, selected, external, holes,
+                scopes = _testinternalcapi.get_error_scope_depth()
+                observations.append((self.index, selected, holes,
                                      phases, scopes,
                                      _testinternalcapi.get_frame_home_view(frame)[0]))
 
@@ -129,13 +119,12 @@ class ErrorScopeTests(unittest.TestCase):
             self.fail("the argument must fail")
         self.assertEqual([row[0] for row in observations], [1, 0])
         self.assertEqual(bindings, [(1, 42), (0, 42)])
-        self.assertTrue(all(len(row) == 7 for row in observations), observations)
-        for index, selected, external, holes, phases, scopes, authority in observations:
+        self.assertTrue(all(len(row) == 6 for row in observations), observations)
+        for index, selected, holes, phases, scopes, authority in observations:
             self.assertNotIn(addresses[index], selected)
-            self.assertTrue(set(addresses).isdisjoint(external))
             self.assertEqual(holes, [])
             self.assertEqual(phases, [ERROR_SCOPE])
-            self.assertEqual(scopes, [(3, 0, 0, True)])
+            self.assertEqual(scopes, 1)
             self.assertEqual(authority, NULL_CONTROL_READABLE)
             if index == 1:
                 self.assertIn(addresses[0], selected)
@@ -143,8 +132,7 @@ class ErrorScopeTests(unittest.TestCase):
                 self.assertTrue(set(addresses).isdisjoint(selected))
         self.assertEqual(escaped[0].f_locals["mutable"], 42)
         self.assertTrue(all(reference() is None for reference in references))
-        self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), baseline)
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         # M2 may capture the escaped frame, but only its bindings remain.
         self.assertEqual(_testinternalcapi.get_frame_home_view(escaped[0])[2], 0)
         self.assertTrue(set(addresses).isdisjoint(
@@ -152,7 +140,7 @@ class ErrorScopeTests(unittest.TestCase):
         escaped[0].clear()
 
     def test_nested_error_monitor_restores_outer_scope(self):
-        baseline = _testinternalcapi.get_transition_shadow_status()
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         observations = []
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
@@ -162,9 +150,7 @@ class ErrorScopeTests(unittest.TestCase):
 
         def callback(code, offset, exception):
             if code is inner.__code__:
-                rows = [row for row in
-                        _testinternalcapi.get_transition_shadow_status()
-                        if row[0] == 3]
+                rows = _testinternalcapi.get_error_scope_depth()
                 phases = [state for current, state in
                           _testinternalcapi.get_ir_frame_phases()
                           if current in (target.__code__, inner.__code__)]
@@ -177,9 +163,7 @@ class ErrorScopeTests(unittest.TestCase):
                     inner()
                 except ValueError:
                     pass
-                observations.append([row for row in
-                                     _testinternalcapi.get_transition_shadow_status()
-                                     if row[0] == 3])
+                observations.append(_testinternalcapi.get_error_scope_depth())
 
         def fail():
             raise LookupError("outer error")
@@ -201,13 +185,11 @@ class ErrorScopeTests(unittest.TestCase):
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
         self.assertEqual(observations,
-                         [([(3, 0, 0, True), (3, 0, 0, True)],
-                           [ERROR_SCOPE, ERROR_SCOPE], []),
-                          [(3, 0, 0, True)]])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), baseline)
+                         [(2, [ERROR_SCOPE, ERROR_SCOPE], []), 1])
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
 
     def test_generator_throw_callback_sees_active_selection(self):
-        baseline = _testinternalcapi.get_transition_shadow_status()
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         observations = []
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
@@ -222,8 +204,7 @@ class ErrorScopeTests(unittest.TestCase):
             frame = generator.gi_frame
             observations.append((code is target.__code__,
                                  _testinternalcapi.get_frame_home_view(frame)[0],
-                                 [row for row in _testinternalcapi.get_transition_shadow_status()
-                                  if row[0] == 3],
+                                 _testinternalcapi.get_error_scope_depth(),
                                  _testinternalcapi.gc_verify()))
 
         generator = target()
@@ -241,13 +222,12 @@ class ErrorScopeTests(unittest.TestCase):
             monitor.free_tool_id(tool)
             generator.close()
         self.assertEqual(observations,
-                         [(True, NULL_CONTROL_READABLE,
-                           [(3, 0, 0, True)], [])])
+                         [(True, NULL_CONTROL_READABLE, 1, [])])
         self.assertIsNone(generator.gi_frame)
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), baseline)
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
 
     def test_handled_callback_failure_starts_fresh_error_ingress(self):
-        baseline = _testinternalcapi.get_transition_shadow_status()
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
         observations = []
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
@@ -264,8 +244,7 @@ class ErrorScopeTests(unittest.TestCase):
                 selected = _testinternalcapi.get_frame_selected_object_ids(frame)
                 observations.append((id(exception) in selected,
                                      _testinternalcapi.get_frame_home_view(frame)[0],
-                                     [row for row in _testinternalcapi.get_transition_shadow_status()
-                                      if row[0] == 3],
+                                     _testinternalcapi.get_error_scope_depth(),
                                      _testinternalcapi.gc_verify()))
                 raise RuntimeError("handled monitor failed")
 
@@ -280,9 +259,8 @@ class ErrorScopeTests(unittest.TestCase):
             monitor.register_callback(tool, monitor.events.EXCEPTION_HANDLED, None)
             monitor.free_tool_id(tool)
         self.assertEqual(observations,
-                         [(True, NULL_CONTROL_READABLE,
-                           [(3, 0, 0, True)], [])])
-        self.assertEqual(_testinternalcapi.get_transition_shadow_status(), baseline)
+                         [(True, NULL_CONTROL_READABLE, 1, [])])
+        self.assertEqual(_testinternalcapi.get_error_scope_depth(), 0)
 
 
 if __name__ == "__main__":

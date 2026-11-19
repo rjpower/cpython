@@ -21,7 +21,6 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT64_RELAXED()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tstate.h"
-#include "pycore_transition_roots.h" // _PyTransitionPrefix
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value_ops.h"     // _PyValue_GetItem()
@@ -3346,33 +3345,6 @@ static bool frame_is_suspended(PyFrameObject *frame)
     return false;
 }
 
-/* The redirect already committed its new frame state. These detached owners
- * must survive nested callbacks without reading that frame's old bindings. */
-static Py_NO_INLINE void
-retire_redirect_values_slow(_PyInterpreterFrame *frame, PyValue *values,
-                           int begin, int count)
-{
-    _PyTransitionPrefix prefix = {
-        .base = values,
-        .capacity = count,
-        .begin = begin,
-        .end = count,
-    };
-    _PyTransitionRoots roots = {
-        .frame = frame,
-        .prefix = &prefix,
-    };
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-    while (prefix.begin < prefix.end) {
-        int slot = prefix.begin++;
-        PyValue value = values[slot];
-        values[slot] = PyValue_NULL;
-        PyValue_XCLOSE(value);
-    }
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
-}
-
 /* A debugger transfer is a cold transaction over an observed register phase.
  * Prove the target's incoming owners and semantic protocol roots before
  * changing any home: a line number cannot create an iterator, handled
@@ -3399,21 +3371,6 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
-    /* A constructor binder has taken the evaluated scratch inputs. Its
-     * caller's named bindings remain mutable, but no redirect recipe may
-     * reconstruct those consumed inputs before publication or failure unwind. */
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)PyThreadState_GET())->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        if (roots->caller_staged && roots->frame != NULL &&
-            roots->frame->previous == self->f_frame)
-        {
-            PyErr_SetString(PyExc_ValueError,
-                            "jump requires a staged constructor owner recipe");
-            return -1;
-        }
-    }
     /* Event eligibility permits a request; the phase and owner proofs below
      * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;
@@ -3856,14 +3813,6 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
      * redirect can now install new owners without later closes clearing them. */
     for (int i = 0; i < nretired; i++) {
         PyValue value = retired[i];
-#ifdef Py_GIL_DISABLED
-        if (PyValue_RefcountOnObject(value)) {
-#else
-        if (_PyValue_CloseMayReenter(value)) {
-#endif
-            retire_redirect_values_slow(self->f_frame, retired, i, nretired);
-            break;
-        }
         retired[i] = PyValue_NULL;
         PyValue_XCLOSE(value);
     }
@@ -3955,27 +3904,15 @@ frame_dealloc_owned(PyFrameObject *f, _PyInterpreterFrame *frame,
                     PyObject **observers, size_t nobservers)
 {
     assert(frame->frame_obj == NULL);
-    PyThreadState *tstate = _PyThreadState_GET();
-    int nslots = _PyFrame_NumSlots(frame);
-    _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, nslots, nslots, PyValue_NULL, &roots);
-    roots.retire_reason = _PyIR_RETIRE_HEAP_CLEAR;
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-
     FT_CLEAR_WEAKREFS((PyObject *)f, f->f_weakreflist);
-    roots.header_mask &= ~_Py_TRANSITION_FUNCTION;
     Py_CLEAR(frame->f_funcobj);
-    roots.header_mask &= ~_Py_TRANSITION_LOCALS;
     Py_CLEAR(frame->f_locals);
-    _PyFrame_FinishClearExceptCode(frame, nslots, &roots);
+    _PyFrame_ClearLocals(frame);
     for (size_t i = 0; i < nobservers; i++) {
         Py_CLEAR(observers[i]);
     }
-    /* Code also owns constants with finalizers. Keep its pin through every
-     * home/metadata close, then remove authority before its final close. */
-    roots.header_mask &= ~_Py_TRANSITION_CODE;
+    /* Code also owns constants with finalizers: close it last. */
     Py_CLEAR(frame->f_executable);
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
 }
 
 static void

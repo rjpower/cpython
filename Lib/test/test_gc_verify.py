@@ -84,6 +84,37 @@ class VerifierTests(unittest.TestCase):
         self.verify_held(addr, ref)
         self.assertIs(next(g), ref())
 
+    def test_owners_held_during_release(self):
+        # A frame that retires closes its owners one at a time with the
+        # result in a C local. A finalizer that verifies finds the owners that
+        # the retirement has not reached in an unlinked frame, a thread
+        # frame or a generator's, and the result in C: none is a hole.
+        observations = []
+
+        class Finalized:
+            def __del__(self):
+                observations.append(_testinternalcapi.gc_verify())
+
+        def function():
+            first = Finalized()
+            second = Finalized()
+            return Obj()
+
+        def generator():
+            first = Finalized()
+            second = Finalized()
+            yield
+            return Obj()
+
+        function()
+        gen = generator()
+        next(gen)
+        with self.assertRaises(StopIteration):
+            next(gen)
+        self.assertEqual(len(observations), 4)
+        for holes in observations:
+            self.check_no_holes(holes)
+
     def test_static_type_dict(self):
         # The descriptor is referenced only from the static type's dict.
         addr = id(vars(int)["bit_length"])

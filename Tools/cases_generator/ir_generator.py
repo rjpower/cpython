@@ -80,7 +80,9 @@ from ir_read_effects import (
 from ir_error_effects import (
     HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects, owning_output_source,
 )
+import functools
 import re
+from pathlib import Path
 from dataclasses import dataclass, fields, replace
 
 from analyzer import (
@@ -3551,6 +3553,8 @@ class IREmitter(Emitter):
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
         self.has_record = True
+        # Whether the handler being emitted defers its releases (defers_releases)
+        self.defers = False
         self.ownership_events: list[OwnershipEvent] = []
         self.disjoint_child_publication: Uop | None = None
         self.disjoint_child_drained = False
@@ -4132,6 +4136,9 @@ class IREmitter(Emitter):
         displaced, with the input boxes, then revalidate: the release can
         run __del__ or a weakref callback, which can run any Python."""
         self.error_local_dst = True
+        if self.defers:
+            # The exit continuation releases it (defers_releases)
+            return
         self.emit("if (!PyValue_IsNull(ir_displaced)) {\n")
         self.emit("frame->phase_state = 0;\n")
         self.emit("if (finish_displaced_local(tstate, frame, next_instr, "
@@ -6657,8 +6664,109 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     return None
 
 
+# Deferred releases (Python/ceval_macros.h, "Deferred releases").  A handler
+# defers its releases when it leaves only through DISPATCH(), an error exit or
+# a deopt, which hand the pending releases on, has at most IR_DEAD_MAX release
+# sites and no loop around them, and never reads a reference count.
+DEFER_RELEASES = {
+    "PyValue_XCLOSE": "IR_DEFER_XCLOSE_VALUE(V)",
+    "PyValue_CLOSE": "IR_DEFER_CLOSE_VALUE(V)",
+    "PyValue_CLOSE_SPECIALIZED": "IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)",
+    "PyValue_XCLOSE_SPECIALIZED": "IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)",
+    "_PyValue_XCLOSE_POINTER": "IR_DEFER_XCLOSE_POINTER(V)",
+    "_PyValue_CLOSE_POINTER": "IR_DEFER_CLOSE_POINTER(V)",
+    "_PyValue_CLOSE_SPECIALIZED_POINTER": "IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)",
+    "_PyValue_XCLOSE_SPECIALIZED_POINTER": "IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)",
+}
+DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP"}
+DEFER_EXIT_WORDS = re.compile(r"\b(return|goto)\b|Py_MUSTTAIL")
+DEFER_BAD_WORDS = re.compile(r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced")
+CEVAL_HEADERS = ("Python/ceval_macros.h", "Python/ceval_generator.h",
+                 "Python/ceval.h", "Include/internal/pycore_ir.h")
+DEFER_ON = (
+    "#undef IR_EXIT_PENDING_DISPATCH\n"
+    "#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()\n"
+    "#undef IR_RETIRE_LAST\n"
+    "#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)\n"
+    "#undef IR_ERROR_EXIT\n"
+    "#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER\n"
+    + "".join(
+        f"#define {n}({'V, D' if 'SPECIALIZED' in n else 'V'}) {b}\n"
+        for n, b in DEFER_RELEASES.items())
+)
+DEFER_OFF = (
+    "".join(f"#undef {n}\n" for n in DEFER_RELEASES)
+    + "#undef IR_EXIT_PENDING_DISPATCH\n"
+    "#define IR_EXIT_PENDING_DISPATCH() ((void)0)\n"
+    "#undef IR_RETIRE_LAST\n"
+    "#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))\n"
+    "#undef IR_ERROR_EXIT\n"
+    "#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL\n"
+)
+DEFER_MAX_SITES = 6
+
+
+@functools.cache
+def ceval_macro_bodies() -> dict[str, str]:
+    "The bodies of the macros that the handlers use, by name"
+    root = Path(__file__).resolve().parents[2]
+    bodies: dict[str, str] = {}
+    for header in CEVAL_HEADERS:
+        lines = (root / header).read_text().splitlines()
+        i = 0
+        while i < len(lines):
+            m = re.match(r"\s*#\s*define\s+(\w+)(?:\([^)]*\))?(.*)", lines[i])
+            if m is None:
+                i += 1
+                continue
+            body = m.group(2)
+            while body.rstrip().endswith("\\") and i + 1 < len(lines):
+                i += 1
+                body = body.rstrip()[:-1] + " " + lines[i]
+            bodies.setdefault(m.group(1), body)
+            i += 1
+    return bodies
+
+
+def macro_walk(text: str, seen: frozenset = frozenset()):
+    "Yield every identifier of text, and of the macros it expands to"
+    bodies = ceval_macro_bodies()
+    for word in re.findall(r"\w+", text):
+        yield word
+        if word in bodies and word not in seen:
+            yield from macro_walk(bodies[word], seen | {word})
+
+
+def defers_releases(text: str) -> bool:
+    "Whether the handler whose source is text may defer its releases"
+    if DEFER_BAD_WORDS.search(text):
+        return False
+    bodies = ceval_macro_bodies()
+    sites = 0
+    exits = False
+    for word in macro_walk(text):
+        if word in DEFER_RELEASES:
+            sites += 1
+    # A macro that leaves the handler by any other way than the exits that
+    # take the pending releases with them
+    def leaves(word: str, seen: frozenset) -> bool:
+        body = bodies.get(word)
+        if body is None or word in DEFER_ALLOWED_EXITS or word in seen:
+            return False
+        if DEFER_EXIT_WORDS.search(body):
+            return True
+        return any(leaves(w, seen | {word}) for w in re.findall(r"\w+", body))
+    for word in set(re.findall(r"\w+", text)):
+        if DEFER_EXIT_WORDS.search(word) or leaves(word, frozenset()):
+            return False
+    if re.search(r"\b(return|goto)\b|Py_MUSTTAIL", text):
+        return False
+    return 0 < sites <= DEFER_MAX_SITES
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
-                     emitter: IREmitter, out: CWriter, record: bool) -> None:
+                     emitter: IREmitter, out: CWriter, record: bool,
+                     final: bool = False) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
     BINARY_OP operation, BINARY_OP with that operation.
 
@@ -6700,11 +6808,14 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     roles: dict[str, set[str]] = {}
     emitter.boxes = set()
     emitter.declared_roles = {}
+    emitter.defers = False
     emitter.out = CWriter.null()
     try:
         emit_handler(name, inst, fmt, emitter, emitter.out, record, roles)
+        first_pass = emitter.out.out.getvalue()
     finally:
         emitter.out = saved
+    defers = final and not record and defers_releases(first_pass)
     for var, kinds in sorted(roles.items()):
         if len(kinds) > 1:
             raise analysis_error(
@@ -6716,7 +6827,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         # The record lives in the handler's frame, so its errors are handled
         # in place (PROCESS_ERROR_AT in Python/ceval_macros.h)
         out.emit("#undef IR_ERROR_EXIT\n#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE\n")
+    emitter.defers = defers
+    if defers:
+        out.emit(DEFER_ON)
     emit_handler(name, inst, fmt, emitter, out, record, {})
+    if defers:
+        out.emit(DEFER_OFF)
+    emitter.defers = False
     if record:
         out.emit("#undef IR_ERROR_EXIT\n#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL\n")
 
@@ -7330,11 +7447,16 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("_PyValueTemps value_owners;\n")
         out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
         out.emit("_PyValueTemps *value_temps = &value_owners;\n")
-    if fmt.store_dst:
+    if fmt.store_dst or emitter.defers:
         # The old value of a local that dst names, released after the
         # result is stored (release_displaced)
         out.emit("PyValue ir_displaced = PyValue_NULL;\n")
         out.emit("(void)ir_displaced;\n")
+    if emitter.defers:
+        out.emit("PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, "
+                 "*ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;\n")
+        out.emit("int ir_has = 0;\n")
+        out.emit("enum { IR_DEAD_BASE = __COUNTER__ + 1 };\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = use_fb
@@ -7596,7 +7718,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
         generate_handler(name, inst, formats[name], emitter, out,
-                         name in boxing)
+                         name in boxing, final=True)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
@@ -9012,7 +9134,8 @@ ADDRESS_INLINE_CALLS = {
 HANDLER_LOCALS = {
     "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
     "window", "oparg", "fb", "opcode", "value_temps", "ir_displaced",
-    "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
+    "ir_dead0", "ir_dead1", "ir_dead2", "ir_dead3", "ir_dead4", "ir_dead5",
+    "ir_has", "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",
     "ir_binary_left", "ir_binary_right", "ir_binary_result",

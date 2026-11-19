@@ -93,6 +93,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_ADD_FLOAT) {
             int opcode = BINARY_OP_ADD_FLOAT;
@@ -106,6 +120,9 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -151,15 +168,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_ADD_INT) {
             int opcode = BINARY_OP_ADD_INT;
@@ -173,6 +211,9 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -237,15 +278,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_ADD_UNICODE) {
             int opcode = BINARY_OP_ADD_UNICODE;
@@ -259,6 +321,9 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow nos;
             PyValueBorrow left;
@@ -333,15 +398,22 @@
                 _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_AND) {
             int opcode = BINARY_OP_AND;
@@ -430,6 +502,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_AND_INT) {
             int opcode = BINARY_OP_AND_INT;
@@ -443,6 +529,9 @@
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -499,15 +588,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_EXTEND) {
             int opcode = BINARY_OP_EXTEND;
@@ -682,6 +778,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
             int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
@@ -695,6 +805,9 @@
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -761,15 +874,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_INPLACE_ADD) {
             int opcode = BINARY_OP_INPLACE_ADD;
@@ -2096,6 +2216,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_LSHIFT_INT) {
             int opcode = BINARY_OP_LSHIFT_INT;
@@ -2109,6 +2243,9 @@
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -2180,15 +2317,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_MATRIX_MULTIPLY) {
             int opcode = BINARY_OP_MATRIX_MULTIPLY;
@@ -2365,6 +2509,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_MULTIPLY_FLOAT) {
             int opcode = BINARY_OP_MULTIPLY_FLOAT;
@@ -2378,6 +2536,9 @@
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -2423,15 +2584,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_MULTIPLY_INT) {
             int opcode = BINARY_OP_MULTIPLY_INT;
@@ -2445,6 +2627,9 @@
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -2509,15 +2694,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_OR) {
             int opcode = BINARY_OP_OR;
@@ -2606,6 +2798,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_OR_INT) {
             int opcode = BINARY_OP_OR_INT;
@@ -2619,6 +2825,9 @@
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -2675,15 +2884,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_POWER) {
             int opcode = BINARY_OP_POWER;
@@ -2860,6 +3076,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_REMAINDER_INT) {
             int opcode = BINARY_OP_REMAINDER_INT;
@@ -2873,6 +3103,9 @@
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -2939,15 +3172,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_RSHIFT) {
             int opcode = BINARY_OP_RSHIFT;
@@ -3036,6 +3276,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_RSHIFT_INT) {
             int opcode = BINARY_OP_RSHIFT_INT;
@@ -3049,6 +3303,9 @@
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -3111,15 +3368,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_SUBSCR) {
             int opcode = BINARY_OP_SUBSCR;
@@ -3208,6 +3472,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_DICT) {
             int opcode = BINARY_OP_SUBSCR_DICT;
@@ -3221,6 +3499,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow nos;
             PyValueBorrow dict_st;
             PyValueBorrow sub_st;
@@ -3278,13 +3559,6 @@
                         }
                         if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                             IR_STORE_DST(ir_word, A, ir_leaf_result);
-                            if (!PyValue_IsNull(ir_displaced)) {
-                                frame->phase_state = 0;
-                                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                                    next_instr = frame->instr_ptr + 1;
-                                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                                }
-                            }
                         }
                         DISPATCH();
                     }
@@ -3322,15 +3596,22 @@
                 res = pending;
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_SUBSCR_GETITEM) {
             int opcode = BINARY_OP_SUBSCR_GETITEM;
@@ -3428,6 +3709,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_LIST_INT) {
             int opcode = BINARY_OP_SUBSCR_LIST_INT;
@@ -3441,6 +3736,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow container;
             PyValueBorrow list_st;
@@ -3509,15 +3807,36 @@
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_LIST_SLICE) {
             int opcode = BINARY_OP_SUBSCR_LIST_SLICE;
@@ -3531,6 +3850,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow tos;
             PyValueBorrow nos;
             PyValueBorrow list_st;
@@ -3612,15 +3934,36 @@
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_STR_INT) {
             int opcode = BINARY_OP_SUBSCR_STR_INT;
@@ -3634,6 +3977,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow nos;
             PyValueBorrow str_st;
@@ -3712,15 +4058,36 @@
                 _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_TUPLE_INT) {
             int opcode = BINARY_OP_SUBSCR_TUPLE_INT;
@@ -3734,6 +4101,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow container;
             PyValueBorrow tuple_st;
@@ -3801,15 +4171,36 @@
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_USTR_INT) {
             int opcode = BINARY_OP_SUBSCR_USTR_INT;
@@ -3823,6 +4214,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow nos;
             PyValueBorrow str_st;
@@ -3900,15 +4294,22 @@
                 _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_SUBTRACT) {
             int opcode = BINARY_OP_SUBTRACT;
@@ -3997,6 +4398,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBTRACT_FLOAT) {
             int opcode = BINARY_OP_SUBTRACT_FLOAT;
@@ -4010,6 +4425,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -4055,15 +4473,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBTRACT_INT) {
             int opcode = BINARY_OP_SUBTRACT_INT;
@@ -4077,6 +4516,9 @@
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -4141,15 +4583,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_TRUEDIV_FLOAT) {
             int opcode = BINARY_OP_TRUEDIV_FLOAT;
@@ -4163,6 +4626,9 @@
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -4212,15 +4678,22 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_CANONICAL_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_TRUE_DIVIDE) {
             int opcode = BINARY_OP_TRUE_DIVIDE;
@@ -4397,6 +4870,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_XOR_INT) {
             int opcode = BINARY_OP_XOR_INT;
@@ -4410,6 +4897,9 @@
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -4466,15 +4956,36 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_SLICE) {
             int opcode = BINARY_SLICE;
@@ -4488,6 +4999,9 @@
             INSTRUCTION_STATS(BINARY_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow container;
             PyValueBorrow start;
             PyValueBorrow stop;
@@ -4524,15 +5038,24 @@
                 }
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(BUILD_INTERPOLATION) {
             int opcode = BUILD_INTERPOLATION;
@@ -4625,6 +5148,22 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BUILD_LIST) {
             int opcode = BUILD_LIST;
@@ -4638,6 +5177,9 @@
             INSTRUCTION_STATS(BUILD_LIST);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -4656,15 +5198,36 @@
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], list);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BUILD_MAP) {
             int opcode = BUILD_MAP;
@@ -4678,6 +5241,9 @@
             INSTRUCTION_STATS(BUILD_MAP);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -4708,15 +5274,22 @@
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BUILD_SET) {
             int opcode = BUILD_SET;
@@ -4835,6 +5408,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BUILD_STRING) {
             int opcode = BUILD_STRING;
@@ -4848,6 +5435,9 @@
             INSTRUCTION_STATS(BUILD_STRING);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -4867,15 +5457,24 @@
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], str);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(BUILD_TEMPLATE) {
             int opcode = BUILD_TEMPLATE;
@@ -4952,6 +5551,22 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BUILD_TUPLE) {
             int opcode = BUILD_TUPLE;
@@ -4965,6 +5580,9 @@
             INSTRUCTION_STATS(BUILD_TUPLE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -4981,15 +5599,22 @@
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], tup);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(CACHE) {
             int opcode = CACHE;
@@ -6440,6 +7065,8 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CALL_INTRINSIC_1) {
             int opcode = CALL_INTRINSIC_1;
@@ -6512,6 +7139,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CALL_INTRINSIC_2) {
             int opcode = CALL_INTRINSIC_2;
@@ -6640,6 +7271,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(CALL_ISINSTANCE) {
             int opcode = CALL_ISINSTANCE;
@@ -7701,6 +8334,8 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CALL_METHOD_DESCRIPTOR_NOARGS) {
             int opcode = CALL_METHOD_DESCRIPTOR_NOARGS;
@@ -7872,6 +8507,10 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CALL_METHOD_DESCRIPTOR_O) {
             int opcode = CALL_METHOD_DESCRIPTOR_O;
@@ -8059,6 +8698,8 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(CALL_NON_PY_GENERAL) {
             int opcode = CALL_NON_PY_GENERAL;
@@ -8700,6 +9341,8 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CHECK_EG_MATCH) {
             int opcode = CHECK_EG_MATCH;
@@ -8802,6 +9445,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CHECK_EXC_MATCH) {
             int opcode = CHECK_EXC_MATCH;
@@ -8881,6 +9528,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CLEANUP_THROW) {
             int opcode = CLEANUP_THROW;
@@ -8937,6 +9588,10 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(CLEANUP_THROW_XFER_DISCARD) {
             int opcode = CLEANUP_THROW;
@@ -8994,6 +9649,8 @@
                 IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(COMPARE_OP) {
             int opcode = COMPARE_OP;
@@ -10229,6 +10886,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(CONVERT_VALUE) {
             int opcode = CONVERT_VALUE;
@@ -10242,6 +10913,9 @@
             INSTRUCTION_STATS(CONVERT_VALUE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -10276,15 +10950,22 @@
             }
             result = PyValue_FromObjectSteal(result_o);
             IR_STORE_DST(ir_word, A, result);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(COPY) {
             int opcode = COPY;
@@ -10330,6 +11011,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(DELETE_DEREF) {
             int opcode = DELETE_DEREF;
@@ -10341,6 +11036,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_DEREF);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
@@ -10360,6 +11060,34 @@
             PyValue_CLOSE(old);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(DELETE_FAST) {
             int opcode = DELETE_FAST;
@@ -10371,6 +11099,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_FAST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
@@ -10391,6 +11124,34 @@
             PyValue_XCLOSE(tmp);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(DELETE_SUBSCR) {
             int opcode = DELETE_SUBSCR;
@@ -10402,6 +11163,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_SUBSCR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow container;
             PyValueBorrow sub;
             PyValue ir_own_A = PyValue_NULL;
@@ -10423,6 +11189,22 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(DICT_MERGE) {
             int opcode = DICT_MERGE;
@@ -10515,6 +11297,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(DICT_UPDATE) {
             int opcode = DICT_UPDATE;
@@ -10609,6 +11395,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(END_ASYNC_FOR) {
             int opcode = END_ASYNC_FOR;
@@ -10674,6 +11464,22 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(END_FOR) {
             int opcode = END_FOR;
@@ -10684,6 +11490,11 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
@@ -10694,6 +11505,34 @@
             PyValue_XCLOSE(ir_own_C);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(END_SEND) {
             int opcode = END_SEND;
@@ -10705,6 +11544,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow receiver;
             PyValueBorrow index_or_null;
             PyValueBorrow value;
@@ -10729,6 +11573,20 @@
             PyValue_XCLOSE(ir_own_B);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(EXIT_INIT_CHECK) {
             int opcode = EXIT_INIT_CHECK;
@@ -10757,6 +11615,20 @@
             ir_own_A = IR_CONSUME_INPUT(ir_word, A, should_be_none);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FORMAT_SIMPLE) {
             int opcode = FORMAT_SIMPLE;
@@ -10768,6 +11640,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue res;
             PyValue ir_own_B = PyValue_NULL;
@@ -10808,6 +11685,34 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FORMAT_WITH_SPEC) {
             int opcode = FORMAT_WITH_SPEC;
@@ -10821,6 +11726,9 @@
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow fmt_spec;
             PyValue res;
@@ -10843,15 +11751,22 @@
             }
             res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(FOR_ITER) {
             int opcode = FOR_ITER;
@@ -11299,6 +12214,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(GET_AITER) {
             int opcode = GET_AITER;
@@ -11388,6 +12305,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(GET_ANEXT) {
             int opcode = GET_ANEXT;
@@ -11436,6 +12357,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(GET_AWAITABLE) {
             int opcode = GET_AWAITABLE;
@@ -11498,6 +12423,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(GET_ITER) {
             int opcode = GET_ITER;
@@ -11620,6 +12547,20 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), zero);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(GET_LEN) {
             int opcode = GET_LEN;
@@ -11633,6 +12574,9 @@
             INSTRUCTION_STATS(GET_LEN);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue obj;
             PyValue len;
             obj = IR_SLOT(IR_B(ir_word));
@@ -11649,15 +12593,24 @@
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(ir_word, A, len);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(IMPORT_FROM) {
             int opcode = IMPORT_FROM;
@@ -11723,6 +12676,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(IMPORT_NAME) {
             int opcode = IMPORT_NAME;
@@ -11820,6 +12777,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(INSTRUMENTED_CALL) {
             int opcode = INSTRUMENTED_CALL;
@@ -12039,6 +12998,20 @@
                 }
             }
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_COMPARE_OP_JUMP) {
             int opcode = INSTRUMENTED_COMPARE_OP_JUMP;
@@ -12050,6 +13023,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_COMPARE_OP_JUMP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -12148,6 +13126,34 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_CONTAINS_OP_JUMP) {
             int opcode = INSTRUMENTED_CONTAINS_OP_JUMP;
@@ -12159,6 +13165,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CONTAINS_OP_JUMP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -12260,6 +13271,22 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(INSTRUMENTED_END_ASYNC_FOR) {
             int opcode = INSTRUMENTED_END_ASYNC_FOR;
@@ -12336,6 +13363,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(INSTRUMENTED_END_FOR) {
             int opcode = INSTRUMENTED_END_FOR;
@@ -12381,6 +13412,10 @@
             PyValue_XCLOSE(ir_own_C);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(INSTRUMENTED_END_SEND) {
             int opcode = INSTRUMENTED_END_SEND;
@@ -12474,6 +13509,22 @@
             PyValue_XCLOSE(ir_own_B);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_FOR_ITER) {
             int opcode = INSTRUMENTED_FOR_ITER;
@@ -12487,6 +13538,9 @@
             INSTRUCTION_STATS(INSTRUMENTED_FOR_ITER);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -12543,6 +13597,20 @@
             DISPATCH();
 }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(INSTRUMENTED_INSTRUCTION) {
             int opcode = INSTRUMENTED_INSTRUCTION;
@@ -12571,6 +13639,20 @@
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
             DISPATCH_GOTO();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_IS_OP_JUMP) {
             int opcode = INSTRUMENTED_IS_OP_JUMP;
@@ -12582,6 +13664,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_IS_OP_JUMP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -12677,6 +13764,34 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
@@ -12688,6 +13803,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             // _CHECK_PERIODIC
@@ -12725,6 +13845,34 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_JUMP_FORWARD) {
             int opcode = INSTRUMENTED_JUMP_FORWARD;
@@ -12736,6 +13884,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_FORWARD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             frame->phase_state = 0;
@@ -12760,6 +13913,34 @@
             DISPATCH();
 }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_JUMP_IF_FALSE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_FALSE_OR_POP;
@@ -12771,6 +13952,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow cond;
@@ -12844,6 +14030,34 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_JUMP_IF_TRUE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
@@ -12855,6 +14069,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow cond;
@@ -12928,6 +14147,20 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(INSTRUMENTED_LINE) {
             int opcode = INSTRUMENTED_LINE;
@@ -12970,6 +14203,8 @@
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(INSTRUMENTED_LOAD_SUPER_ATTR) {
             int opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
@@ -13130,6 +14365,22 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_POP_ITER) {
             int opcode = INSTRUMENTED_POP_ITER;
@@ -13142,6 +14393,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
             PyValueBorrow index_or_null;
             PyValue ir_own_A = PyValue_NULL;
@@ -13179,6 +14435,34 @@
             DISPATCH();
 }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_FALSE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_FALSE;
@@ -13190,6 +14474,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_FALSE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -13268,6 +14557,34 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NONE;
@@ -13279,6 +14596,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NONE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -13340,6 +14662,34 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_NOT_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NOT_NONE;
@@ -13351,6 +14701,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NOT_NONE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -13412,6 +14767,34 @@
 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_TRUE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_TRUE;
@@ -13423,6 +14806,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_TRUE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -13501,6 +14889,20 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(INSTRUMENTED_RESUME) {
             int opcode = INSTRUMENTED_RESUME;
@@ -13908,6 +15310,20 @@
             JUMPTO(oparg);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(IS_OP) {
             int opcode = IS_OP;
@@ -13921,6 +15337,9 @@
             INSTRUCTION_STATS(IS_OP);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow left;
@@ -13963,15 +15382,36 @@
                 PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, b);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(IS_OP_JUMP) {
             int opcode = IS_OP_JUMP;
@@ -13983,6 +15423,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IS_OP_JUMP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -14036,6 +15481,20 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(JUMP_BACKWARD) {
             int opcode = JUMP_BACKWARD;
@@ -14099,6 +15558,20 @@
             JUMPTO(oparg);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(JUMP_IF_FALSE_OR_POP) {
             int opcode = JUMP_IF_FALSE_OR_POP;
@@ -14110,6 +15583,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow cond;
@@ -14143,6 +15621,34 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(JUMP_IF_TRUE_OR_POP) {
             int opcode = JUMP_IF_TRUE_OR_POP;
@@ -14154,6 +15660,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow cond;
@@ -14187,6 +15698,20 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(LIST_APPEND) {
             int opcode = LIST_APPEND;
@@ -14219,6 +15744,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(LIST_EXTEND) {
             int opcode = LIST_EXTEND;
@@ -14303,6 +15830,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(LOAD_ATTR) {
             int opcode = LOAD_ATTR;
@@ -15999,6 +17528,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_BUILD_CLASS) {
             int opcode = LOAD_BUILD_CLASS;
@@ -16012,6 +17555,9 @@
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue bc;
             frame->phase_state = 0;
             frame->phase_state = 0;
@@ -16032,15 +17578,36 @@
             }
             bc = found.value;
             IR_STORE_DST(ir_word, A, bc);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_COMMON_CONSTANT) {
             int opcode = LOAD_COMMON_CONSTANT;
@@ -16054,21 +17621,45 @@
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
             IR_STORE_CANONICAL_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_CONST) {
             int opcode = LOAD_CONST;
@@ -16082,20 +17673,44 @@
             (void)this_instr;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
             value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_CONST_INLINE_FLOAT) {
             int opcode = LOAD_CONST_INLINE_FLOAT;
@@ -16109,21 +17724,45 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
             value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_CONST_INLINE_INT) {
             int opcode = LOAD_CONST_INLINE_INT;
@@ -16137,21 +17776,45 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
             value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_DEREF) {
             int opcode = LOAD_DEREF;
@@ -16165,6 +17828,9 @@
             INSTRUCTION_STATS(LOAD_DEREF);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
@@ -16180,15 +17846,36 @@
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_FAST) {
             int opcode = LOAD_FAST;
@@ -16202,21 +17889,45 @@
             INSTRUCTION_STATS(LOAD_FAST);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_CANONICAL_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_FAST_AND_CLEAR) {
             int opcode = LOAD_FAST_AND_CLEAR;
@@ -16230,21 +17941,45 @@
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_NULL;
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_FAST_BORROW) {
             int opcode = LOAD_FAST_BORROW;
@@ -16258,21 +17993,45 @@
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_CANONICAL_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_FAST_CHECK) {
             int opcode = LOAD_FAST_CHECK;
@@ -16286,6 +18045,9 @@
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
@@ -16302,15 +18064,24 @@
             }
             value = PyValue_DUP(value_s);
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(LOAD_FROM_DICT_OR_DEREF) {
             int opcode = LOAD_FROM_DICT_OR_DEREF;
@@ -16396,6 +18167,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(LOAD_FROM_DICT_OR_GLOBALS) {
             int opcode = LOAD_FROM_DICT_OR_GLOBALS;
@@ -16466,6 +18241,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(LOAD_GLOBAL) {
             int opcode = LOAD_GLOBAL;
@@ -16647,6 +18424,20 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_LOCALS) {
             int opcode = LOAD_LOCALS;
@@ -16660,6 +18451,9 @@
             INSTRUCTION_STATS(LOAD_LOCALS);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue locals;
             PyObject *l = LOCALS();
             if (l == NULL) {
@@ -16672,15 +18466,36 @@
             }
             locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
             IR_STORE_DST(ir_word, A, locals);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_NAME) {
             int opcode = LOAD_NAME;
@@ -16694,6 +18509,9 @@
             INSTRUCTION_STATS(LOAD_NAME);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue v;
@@ -16706,15 +18524,36 @@
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(ir_word, A, v);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_SMALL_INT) {
             int opcode = LOAD_SMALL_INT;
@@ -16728,21 +18567,45 @@
             (void)this_instr;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_SMALL_INT_INLINE) {
             int opcode = LOAD_SMALL_INT_INLINE;
@@ -16756,6 +18619,9 @@
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
@@ -16766,15 +18632,24 @@
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(ir_word, A, value);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(LOAD_SPECIAL) {
             int opcode = LOAD_SPECIAL;
@@ -16832,6 +18707,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(LOAD_SUPER_ATTR) {
             int opcode = LOAD_SUPER_ATTR;
@@ -17009,6 +18888,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(LOAD_SUPER_ATTR_ATTR) {
             int opcode = LOAD_SUPER_ATTR_ATTR;
@@ -17186,6 +19067,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(MAKE_CELL) {
             int opcode = MAKE_CELL;
@@ -17197,6 +19092,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             frame->phase_state = 0;
@@ -17213,6 +19113,22 @@
             PyValue_XCLOSE(tmp);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(MAKE_FUNCTION) {
             int opcode = MAKE_FUNCTION;
@@ -17283,6 +19199,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(MAP_ADD) {
             int opcode = MAP_ADD;
@@ -17324,6 +19242,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(MATCH_CLASS) {
             int opcode = MATCH_CLASS;
@@ -17438,6 +19358,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(MATCH_KEYS) {
             int opcode = MATCH_KEYS;
@@ -17501,6 +19425,22 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(MATCH_MAPPING) {
             int opcode = MATCH_MAPPING;
@@ -17514,21 +19454,45 @@
             INSTRUCTION_STATS(MATCH_MAPPING);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
             PyValue res;
             subject = IR_SLOT(IR_B(ir_word));
             int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
             res = match ? PyValue_True : PyValue_False;
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(MATCH_SEQUENCE) {
             int opcode = MATCH_SEQUENCE;
@@ -17542,21 +19506,31 @@
             INSTRUCTION_STATS(MATCH_SEQUENCE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
             PyValue res;
             subject = IR_SLOT(IR_B(ir_word));
             int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
             res = match ? PyValue_True : PyValue_False;
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(MATERIALIZE_KWARGS) {
             int opcode = MATERIALIZE_KWARGS;
@@ -17594,6 +19568,8 @@
             INSTRUCTION_STATS(NOP);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(POP_EXCEPT) {
             int opcode = POP_EXCEPT;
@@ -17632,6 +19608,22 @@
                        ? NULL : (PyValue_IsInline(exc_value) ? Py_NewRef(ir_obj_exc_value) : PyValue_AsKnownObjectSteal(IR_TAKE(exc_value, ir_own_A))));
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_ITER) {
             int opcode = POP_ITER;
@@ -17643,6 +19635,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
             PyValueBorrow index_or_null;
             PyValue ir_own_A = PyValue_NULL;
@@ -17659,6 +19656,20 @@
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(POP_JUMP_IF_FALSE) {
             int opcode = POP_JUMP_IF_FALSE;
@@ -18063,6 +20074,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_NONE) {
             int opcode = POP_JUMP_IF_NONE;
@@ -18074,6 +20099,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -18107,6 +20137,34 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_NOT_NONE) {
             int opcode = POP_JUMP_IF_NOT_NONE;
@@ -18118,6 +20176,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -18151,6 +20214,20 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(POP_JUMP_IF_TRUE) {
             int opcode = POP_JUMP_IF_TRUE;
@@ -18555,6 +20632,20 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_TOP) {
             int opcode = POP_TOP;
@@ -18566,6 +20657,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
@@ -18576,6 +20672,22 @@
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(PUSH_EXC_INFO) {
             int opcode = PUSH_EXC_INFO;
@@ -18631,6 +20743,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(RAISE_VARARGS) {
             int opcode = RAISE_VARARGS;
@@ -18689,6 +20805,10 @@
             frame->phase_state = 0;
             PROCESS_ERROR_AT(RAISE, 0, this_instr);
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(RERAISE) {
             int opcode = RERAISE;
@@ -18738,6 +20858,8 @@
             frame->phase_state = 0;
             PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(RESERVED) {
             int opcode = RESERVED;
@@ -18960,6 +21082,8 @@
                 DISPATCH();
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SEND) {
             int opcode = SEND;
@@ -19102,6 +21226,8 @@
             IR_PUBLISH_TEMP(window[2], retval);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(SEND_ASYNC_GEN) {
             int opcode = SEND_ASYNC_GEN;
@@ -19404,6 +21530,8 @@
                 }
             }
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SEND_VIRTUAL) {
             int opcode = SEND_VIRTUAL;
@@ -19489,6 +21617,10 @@
             IR_PUBLISH_TEMP(window[2], next);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SEND_VIRTUAL_XFER_DISCARD) {
             int opcode = SEND_VIRTUAL;
@@ -19574,6 +21706,10 @@
             window[2] = PyValue_NULL;
             IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, next);
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SEND_XFER_DISCARD) {
             int opcode = SEND;
@@ -19726,6 +21862,22 @@
             window[2] = PyValue_NULL;
             IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(SETUP_ANNOTATIONS) {
             int opcode = SETUP_ANNOTATIONS;
@@ -19737,6 +21889,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SETUP_ANNOTATIONS);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             if (LOCALS() == NULL) {
                 frame->phase_state = 0;
                 frame->phase_state = 0;
@@ -19784,6 +21941,20 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(SET_ADD) {
             int opcode = SET_ADD;
@@ -19816,6 +21987,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SET_FUNCTION_ATTRIBUTE) {
             int opcode = SET_FUNCTION_ATTRIBUTE;
@@ -19878,6 +22051,10 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), func_out);
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(SET_UPDATE) {
             int opcode = SET_UPDATE;
@@ -19947,6 +22124,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(STORE_ATTR) {
             int opcode = STORE_ATTR;
@@ -20549,6 +22728,20 @@
             _PyCell_SetValue(cell, owned);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_FAST) {
             int opcode = STORE_FAST;
@@ -20560,6 +22753,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
@@ -20582,6 +22780,34 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_GLOBAL) {
             int opcode = STORE_GLOBAL;
@@ -20593,6 +22819,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_GLOBAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow v;
@@ -20629,6 +22860,34 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_NAME) {
             int opcode = STORE_NAME;
@@ -20640,6 +22899,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_NAME);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow v;
@@ -20661,6 +22925,34 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_SLICE) {
             int opcode = STORE_SLICE;
@@ -20672,6 +22964,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow v;
             PyValueBorrow container;
             PyValueBorrow start;
@@ -20714,6 +23011,20 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(STORE_SUBSCR) {
             int opcode = STORE_SUBSCR;
@@ -21281,6 +23592,20 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(UNARY_INVERT) {
             int opcode = UNARY_INVERT;
@@ -21294,6 +23619,9 @@
             INSTRUCTION_STATS(UNARY_INVERT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue res;
             PyValueBorrow v;
@@ -21322,15 +23650,36 @@
                 PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(UNARY_NEGATIVE) {
             int opcode = UNARY_NEGATIVE;
@@ -21344,6 +23693,9 @@
             INSTRUCTION_STATS(UNARY_NEGATIVE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue res;
             PyValueBorrow v;
@@ -21380,15 +23732,36 @@
                 PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(UNARY_NOT) {
             int opcode = UNARY_NOT;
@@ -21402,6 +23775,9 @@
             INSTRUCTION_STATS(UNARY_NOT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValue res;
             PyValue ir_own_B = PyValue_NULL;
@@ -21420,15 +23796,24 @@
             }
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(UNPACK_EX) {
             int opcode = UNPACK_EX;
@@ -21482,6 +23867,10 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(UNPACK_SEQUENCE) {
             int opcode = UNPACK_SEQUENCE;
@@ -21555,6 +23944,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(UNPACK_SEQUENCE_LIST) {
             int opcode = UNPACK_SEQUENCE_LIST;
@@ -21755,6 +24146,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
         TARGET(WITH_EXCEPT_START) {
             int opcode = WITH_EXCEPT_START;
@@ -21852,6 +24245,8 @@
             }
             DISPATCH();
         }
+        #undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(YIELD_DELEGATED) {
             int opcode = YIELD_DELEGATED;
@@ -21968,6 +24363,7 @@
         LABEL(error)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -21976,6 +24372,7 @@
         LABEL(exception_unwind)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
@@ -21984,6 +24381,7 @@
         LABEL(exit_unwind)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
@@ -21992,6 +24390,7 @@
         LABEL(exit_unwind_notrace)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
@@ -22000,6 +24399,7 @@
         LABEL(throw_error)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 PROCESS_ERROR_AT(THROW, 0, next_instr - 1);
@@ -22008,6 +24408,7 @@
         LABEL(start_frame)
         {
             _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             {
                 frame->phase_state = 0;
                 frame->phase_state = 0;

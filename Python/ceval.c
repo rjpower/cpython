@@ -2446,6 +2446,60 @@ _PyEval_ErrorTail(TAIL_CALL_PARAMS)
     return PyValue_NULL;
 }
 
+/* The exit of a handler that defers its releases (IR_EXIT_TAIL in
+ * ceval_macros.h).  The pending objects and the displaced local are in
+ * tstate->ir_exit; copy them first, because a release can run Python, which
+ * can run a handler that uses the same fields.  Release the objects in the
+ * order of their sites, then the displaced local as the inline form does,
+ * then dispatch, or process the error whose entry ir_word holds, with
+ * next_instr its origin. */
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_ExitTail(TAIL_CALL_PARAMS)
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+    PyObject *dead[IR_DEAD_MAX];
+    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(ts->ir_exit.dead), "see pycore_tstate.h");
+    for (int i = 0; i < IR_DEAD_MAX; i++) {
+        dead[i] = ts->ir_exit.dead[i];
+    }
+    PyValue displaced = (PyValue){ts->ir_exit.displaced};
+    _PyInstr *next = ts->ir_exit.next;
+    bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
+    uint32_t entry = (uint32_t)ir_word;
+    _PyInstr *origin = next_instr;
+    for (int i = 0; i < IR_DEAD_MAX; i++) {
+        if (dead[i] != NULL) {
+            Py_DECREF_MORTAL(dead[i]);
+        }
+    }
+    if (!PyValue_IsNull(displaced)) {
+        /* Only a displaced value that is the last owner of its object is
+         * kept (IR_RETIRE_LOCAL) */
+        if (!_PyObject_DestroyMayReenter(BITS_TO_PTR(displaced))) {
+            PyValue_XCLOSE(displaced);
+        }
+        else {
+            assert(!error);
+            frame->phase_state = 0;
+            if (finish_displaced_local(tstate, frame, next, NULL, displaced) < 0) {
+                next = frame->instr_ptr + 1;
+                origin = next - 1;
+                error = true;
+                entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0);
+            }
+        }
+    }
+    if (error) {
+        Py_MUSTTAIL return _PyEval_ErrorTail(
+            TAIL_CALL_ARGS_WORD(origin, (_PyIRWord)entry));
+    }
+    next_instr = next;
+    int opcode;
+    NEXTOPARG();
+    PRE_DISPATCH_GOTO();
+    DISPATCH_GOTO();
+}
+
 #include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 

@@ -514,6 +514,21 @@ static inline void Py_DECREF_MORTAL_SPECIALIZED(PyObject *op, destructor destruc
 #define Py_DECREF_MORTAL_SPECIALIZED(op, destruct) Py_DECREF_MORTAL_SPECIALIZED(_PyObject_CAST(op), destruct)
 
 #endif
+
+/* Py_DECREF_MORTAL() unless op's count is 1: then nothing changes and the
+ * caller, which keeps that count, releases it later.  The handlers
+ * (Python/ceval_macros.h, IR_DEFER_CLOSE) hold the last owner of an object
+ * until they have published their results, and call no C function on the
+ * way; the object stays alive and visible to the collector until then. */
+static inline int
+_Py_DecrefMortalUnlessLast(PyObject *op)
+{
+    if (op->ob_refcnt == 1) {
+        return 1;
+    }
+    Py_DECREF_MORTAL(op);
+    return 0;
+}
 #else
 # define Py_DECREF_MORTAL(op) Py_DECREF(op)
 # define Py_DECREF_MORTAL_SPECIALIZED(op, destruct) Py_DECREF(op)

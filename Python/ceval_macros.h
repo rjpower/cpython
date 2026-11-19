@@ -108,6 +108,7 @@
  * PyValue_NULL with an exception set. */
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARAMS);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAMS);
 
 #define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
@@ -173,6 +174,93 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARA
     } while (0)
 #define IR_ERROR_EXIT_INLINE PROCESS_ERROR_INLINE
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+
+/* Hand the pending releases to _PyEval_ExitTail.  WORD is the kind of exit:
+ * 0 to dispatch next_instr, or IR_EXIT_ERROR_FLAG with the encoded error
+ * entry, and TARGET is next_instr or the origin of the error. */
+#define IR_EXIT_ERROR_FLAG ((_PyIRWord)1 << 32)
+#define IR_EXIT_TAIL(TARGET, WORD) \
+    do { \
+        _PyThreadStateImpl *ir_ts = (_PyThreadStateImpl *)tstate; \
+        ir_ts->ir_exit.dead[0] = ir_dead0; \
+        ir_ts->ir_exit.dead[1] = ir_dead1; \
+        ir_ts->ir_exit.dead[2] = ir_dead2; \
+        ir_ts->ir_exit.dead[3] = ir_dead3; \
+        ir_ts->ir_exit.dead[4] = ir_dead4; \
+        ir_ts->ir_exit.dead[5] = ir_dead5; \
+        ir_ts->ir_exit.displaced = ir_displaced.bits; \
+        ir_ts->ir_exit.next = next_instr; \
+        Py_MUSTTAIL return _PyEval_ExitTail( \
+            TAIL_CALL_ARGS_WORD((TARGET), (WORD))); \
+    } while (0)
+#define IR_EXIT_PENDING_DISPATCH_DEFER() \
+    do { \
+        if (Py_UNLIKELY(ir_has)) { \
+            IR_EXIT_TAIL(next_instr, 0); \
+        } \
+    } while (0)
+#define IR_ERROR_EXIT_DEFER(ingress, checkpoint, origin) \
+    do { \
+        if (Py_UNLIKELY(ir_has)) { \
+            IR_EXIT_TAIL((origin), IR_EXIT_ERROR_FLAG | \
+                _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint)); \
+        } \
+        IR_ERROR_EXIT_TAIL(ingress, checkpoint, origin); \
+    } while (0)
+#define IR_RETIRE_LAST_DEFER(OLD) (ir_displaced = (OLD), ir_has = 1)
+/* The release of a count that may be the last: keep the last one.  The index
+ * of the site is its order among the handler's expansions, from
+ * IR_DEAD_BASE, which the generator declares; the slots are scalars, because
+ * a local array would give the handler a stack protector. */
+#define IR_DEFER_CLOSE(OP) \
+    do { \
+        PyObject *ir_c = (OP); \
+        if (Py_UNLIKELY(_Py_DecrefMortalUnlessLast(ir_c))) { \
+            enum { ir_i = __COUNTER__ - IR_DEAD_BASE }; \
+            static_assert(ir_i < IR_DEAD_MAX, "too many deferred releases"); \
+            switch (ir_i) { \
+            case 0: ir_dead0 = ir_c; break; \
+            case 1: ir_dead1 = ir_c; break; \
+            case 2: ir_dead2 = ir_c; break; \
+            case 3: ir_dead3 = ir_c; break; \
+            case 4: ir_dead4 = ir_c; break; \
+            default: ir_dead5 = ir_c; break; \
+            } \
+            ir_has = 1; \
+        } \
+    } while (0)
+#define IR_DEFER_XCLOSE_VALUE(V) \
+    do { \
+        PyValue ir_v = (V); \
+        if (PyValue_RefcountOnObject(ir_v)) { \
+            IR_DEFER_CLOSE(BITS_TO_PTR(ir_v)); \
+        } \
+    } while (0)
+#define IR_DEFER_CLOSE_VALUE(V) \
+    do { \
+        PyValue ir_v = (V); \
+        if (_PyValue_OwnsCountNotNull(ir_v)) { \
+            IR_DEFER_CLOSE(BITS_TO_PTR(ir_v)); \
+        } \
+    } while (0)
+#define IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, DESTRUCT) IR_DEFER_CLOSE_VALUE(V)
+#define IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, DESTRUCT) IR_DEFER_XCLOSE_VALUE(V)
+#define IR_DEFER_XCLOSE_POINTER(V) \
+    do { \
+        PyValue ir_v = (V); \
+        if (!PyValue_IsNull(ir_v) && _PyValue_PointerOwnsCount(ir_v)) { \
+            IR_DEFER_CLOSE(BITS_TO_PTR(ir_v)); \
+        } \
+    } while (0)
+#define IR_DEFER_CLOSE_POINTER(V) \
+    do { \
+        PyValue ir_v = (V); \
+        if (_PyValue_PointerOwnsCount(ir_v)) { \
+            IR_DEFER_CLOSE(BITS_TO_PTR(ir_v)); \
+        } \
+    } while (0)
+#define IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, DESTRUCT) IR_DEFER_CLOSE_POINTER(V)
+#define IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, DESTRUCT) IR_DEFER_XCLOSE_POINTER(V)
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     IR_ERROR_EXIT(ingress, checkpoint, origin)
 #define JUMP_TO_LABEL(name) \
@@ -237,9 +325,27 @@ do { \
 #endif
 
 
+/* Deferred releases.  A handler whose calls would all be releases and error
+ * exits (the generator decides, Tools/cases_generator/ir_generator.py,
+ * defers_releases) calls no C function itself, because any call makes the
+ * compiler move the handler's state out of the argument registers.  Where it
+ * would drop the last count of an object, it keeps that count in a local
+ * (IR_DEFER_CLOSE).  Where it leaves through DISPATCH() or an error exit with
+ * a release pending, it tail-calls _PyEval_ExitTail (ceval.c), which releases
+ * the objects in the order of their sites, then the displaced local, and
+ * goes on to dispatch or to process the error.  The rule: a release that can
+ * free an object happens after the handler has published its results and
+ * before the next instruction; the objects stay alive until then.  The
+ * defaults below are the forms of every other handler, which the generator
+ * replaces around a deferring handler. */
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#define IR_DEAD_MAX 6
+
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
     { \
+        IR_EXIT_PENDING_DISPATCH(); \
         if (value_temps != NULL && value_temps->count != 0 && \
             finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
             next_instr = frame->instr_ptr + 1; PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
@@ -658,7 +764,7 @@ ir_retire_last_owner(PyValue old)
     do { \
         if (_PyValue_IsLastOwner(OLD)) { \
             assert(PyValue_IsNull(ir_displaced)); \
-            ir_displaced = ir_retire_last_owner(OLD); \
+            IR_RETIRE_LAST(OLD); \
         } \
         else { \
             PyValue_XCLOSE(OLD); \

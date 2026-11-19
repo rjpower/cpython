@@ -84,6 +84,16 @@ typedef struct _PyThreadStateImpl {
      * are not suspended semantic children of this frame. */
     struct _PyInterpreterFrame *observed_frame;
 
+    /* What a handler hands to its exit continuation (_PyEval_ExitTail in
+     * Python/ceval.c): the objects whose last count it dropped, the local
+     * that its result displaced, and where to go next.  Written just before
+     * the tail call and read at once, so no Python runs in between. */
+    struct {
+        PyObject *dead[6];  // IR_DEAD_MAX in Python/ceval_macros.h
+        uintptr_t displaced;
+        void *next;
+    } ir_exit;
+
     // Nested outlined retirements, including detached result owners.
     struct _PyTransitionRoots *transition_roots;
 

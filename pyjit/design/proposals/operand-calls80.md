@@ -2,9 +2,10 @@
 
 Status: proposal, 2026-11-19. User decisions (2026-11-19): the child frame
 starts at the arena top (design O, one storage model); the snapshot rule
-stays (no writer-pays scheme); no borrowed arguments. Open: whether opcode
-tracing keeps IR-word read semantics (recommended) or must match upstream
-exactly. The call and return handlers are written in the shape that the
+stays (no writer-pays scheme); no borrowed arguments. Opcode tracing keeps
+IR-word read semantics: behavior that upstream could change between versions,
+such as finalization timing and opcode-event granularity, is free for this
+runtime to change. The call and return handlers are written in the shape that the
 handler design (`E59/handlers81-design/`, in progress) chooses. It
 changes no source. Evidence is in `E59/calls80-design/` (paths below are
 relative to it):

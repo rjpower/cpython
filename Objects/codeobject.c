@@ -2539,9 +2539,7 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
         if (event->kind == _PyIR_OWNER_STORAGE_PUBLISH) {
             assert(event->extent > 0 && event->extent < at);
             const semantic_scalar_state *value = nodes + event->extent;
-            node->valid &= value->valid && value->value_ready &&
-                (!(event->flags & _PyIR_STORAGE_PUBLISH_CANONICAL) ||
-                 !!(value->value & (1u << SEM_INITIALIZED)));
+            node->valid &= value->valid && value->value_ready;
         }
         int h = aliases[event->src];
         if (h == 4) {

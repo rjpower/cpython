@@ -560,7 +560,7 @@ class TestIRCases(unittest.TestCase):
         body = self.handler(generate(source), "BINARY_OP_SUBSCR_DICT")
         provider = body.index("_PyDict_TryGetFirstProbeValue")
         consume = body.index("IR_CONSUME_INPUT", provider)
-        publish = body.index("IR_STORE_CANONICAL_TEMP_DST", consume)
+        publish = body.index("IR_STORE_TEMP_DST", consume)
         key = body.index("_PyValue_CloseMayReenter(ir_leaf_key)", publish)
         dictionary = body.index("_PyValue_CloseMayReenter(ir_leaf_dict)", key)
         dispatch = body.index("DISPATCH();", dictionary)
@@ -839,295 +839,6 @@ class TestIRCases(unittest.TestCase):
                         analysis.instructions['INSTRUMENTED_FOR_ITER'],
                         formats['INSTRUMENTED_FOR_ITER'])
 
-    def test_canonical_numeric_constructor_proof(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        with handle_stderr():
-            analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        names = ('BINARY_OP_MULTIPLY_FLOAT', 'BINARY_OP_ADD_FLOAT',
-                 'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT',
-                 'BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT')
-        for name in names:
-            contract = ir_generator.canonical_result_source(
-                analysis.instructions[name], formats[name])
-            self.assertIsNotNone(contract, name)
-            self.assertEqual(contract.result, 'res')
-        output = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
-        for name in names:
-            handler = self.handler(output.getvalue(), name)
-            self.assertIn('IR_STORE_CANONICAL_DST(ir_word, A, res);', handler)
-            self.assertNotIn('IR_STORE_DST(ir_word, A, res);', handler)
-        for name in ('BINARY_OP_MULTIPLY_INT',):
-            self.assertIsNone(ir_generator.canonical_result_source(
-                analysis.instructions[name], formats[name]))
-            self.assertIn('IR_STORE_DST(ir_word, A, res);',
-                          self.handler(output.getvalue(), name))
-
-        # Eligibility follows the source, not the opcode/producer names.
-        renamed = source.replace('BINARY_OP_MULTIPLY_FLOAT', 'RENAMED_PRODUCT')
-        Path(self.temp_input_filename).write_text(renamed)
-        with handle_stderr():
-            other = analyzer.analyze_files(
-                [self.temp_input_filename], SequentialNumbers())
-        other_formats = ir_generator.compute_formats(other)
-        self.assertIsNotNone(ir_generator.canonical_result_source(
-            other.instructions['RENAMED_PRODUCT'], other_formats['RENAMED_PRODUCT']))
-
-    def test_canonical_numeric_constructor_mutations_fail_closed(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        changes = (
-            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
-             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FromDouble/1, left, right -- res, l, r)'),
-            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
-             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FloatOperandValues/1, left, right -- res, l, r)'),
-            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
-             '_BINARY_OP_MULTIPLY_FLOAT + flush + _POP_TOP_NUMBER + _POP_TOP_NUMBER;'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = unknown_result(a * b);'),
-            ('res = PyValue_FromDouble(a * b);',
-             'if (a) { res = PyValue_FromDouble(a * b); } else { res = unknown_result(); }'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(a * b); res = unknown_result();'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(a * b); mutate(&res);'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(unknown_result());'),
-            ('res = PyValue_FromDouble(a * b);',
-             'PyValue (*PyValue_FromDouble)(double) = replacement; res = PyValue_FromDouble(a * b);'),
-            ('res = PyValue_FromDouble(a * b);',
-             '#define PyValue_FromDouble replacement\nres = PyValue_FromDouble(a * b);\n#undef PyValue_FromDouble'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(a * b);\n#if 1\nspam();\n#endif'),
-            ('res = PyValue_FromDouble(a * b);\n            if (PyValue_IsNull(res)) {\n                ERROR_NO_POP();\n            }',
-             'res = PyValue_FromDouble(a * b);'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(a * b); EXIT_IF(a == 0.0);'),
-            ('res = PyValue_FromDouble(a * b);',
-             'res = PyValue_FromDouble(a * b); PyValue_CLOSE(res);'),
-            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
-             'assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value)); spam();'),
-            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
-             'assert(PyValue_FloatCheck(value));'),
-            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
-             '_BINARY_OP_MULTIPLY_FLOAT, (left, right -- left, l, r)'),
-            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
-             '_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER + _REPLACE_RESULT;\n'
-             '        op(_REPLACE_RESULT, (res -- res)) { mutate(&res); }'),
-        )
-        for old, new in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source)
-                Path(self.temp_input_filename).write_text(source.replace(old, new, 1))
-                with handle_stderr():
-                    analysis = analyzer.analyze_files([self.temp_input_filename])
-                formats = ir_generator.compute_formats(analysis)
-                self.assertIsNone(ir_generator.canonical_result_source(
-                    analysis.instructions['BINARY_OP_MULTIPLY_FLOAT'],
-                    formats['BINARY_OP_MULTIPLY_FLOAT']))
-
-    def test_canonical_inline_int_mutations_fail_closed(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        start = source.index('inline_ok pure op(_BINARY_OP_ADD_INT,')
-        end = source.index('inline_ok pure op(_BINARY_OP_SUBTRACT_INT,', start)
-        producer = source[start:end]
-        box = ('res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + '
-               'PyValue_InlineInt64(right));')
-        changes = (
-            ('__builtin_add_overflow(a, b, &sum)',
-             '__builtin_sub_overflow(a, b, &sum)'),
-            ('__builtin_add_overflow(a, b, &sum)',
-             '!__builtin_add_overflow(a, b, &sum)'),
-            (box, box.replace(' + ', ' - ')),
-            (box, box.replace('PyValue_InlineInt64(right)', '1')),
-            ('_PyValue_FromIntScaled(sum)', '_PyValue_FromIntScaled(a)'),
-            ('if (PyValue_IsNull(res)) {\n                ERROR_NO_POP();\n            }', ''),
-            (box, box + ' res = PyValue_None;'),
-            (box, box + ' opaque(&res);'),
-            (box, 'callback(); ' + box),
-            (box, 'PyValue (*_PyValue_BoxInt64)(int64_t) = replacement; ' + box),
-            (box, '#define _PyValue_BoxInt64 replacement\n' + box +
-             '\n#undef _PyValue_BoxInt64'),
-            ('l = left;', 'l = res;'),
-            ('(left, right -- res, l, r)',
-             '(_PyValue_BoxInt64/1, left, right -- res, l, r)'),
-        )
-        variants = [source[:start] + producer.replace(old, new, 1) + source[end:]
-                    for old, new in changes]
-        for old, _ in changes:
-            self.assertIn(old, producer)
-        variants.extend(source.replace(old, new, 1) for old, new in (
-            ('EXIT_IF(!PyValue_IsInlineInt(left));',
-             'EXIT_IF(!PyValue_LongCheckExact(left));'),
-            ('PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);',
-             'PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc); callback();'),
-            ('_BINARY_OP_ADD_INT + _POP_TOP_INT + _POP_TOP_INT;',
-             '_BINARY_OP_ADD_INT + flush + _POP_TOP_INT + _POP_TOP_INT;'),
-        ))
-        for index, changed in enumerate(variants):
-            with self.subTest(variant=index):
-                Path(self.temp_input_filename).write_text(changed)
-                with handle_stderr():
-                    analysis = analyzer.analyze_files([self.temp_input_filename])
-                formats = ir_generator.compute_formats(analysis)
-                self.assertIsNone(ir_generator.canonical_result_source(
-                    analysis.instructions['BINARY_OP_ADD_INT'],
-                    formats['BINARY_OP_ADD_INT']))
-
-        Path(self.temp_input_filename).write_text(source)
-        with handle_stderr():
-            analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instruction = analysis.instructions['BINARY_OP_ADD_INT']
-        body = analysis.uops['_BINARY_OP_ADD_INT'].body
-        body.body.append(body.body[-1])
-        self.assertIsNone(ir_generator.canonical_result_source(
-            instruction, formats['BINARY_OP_ADD_INT']))
-
-    def test_canonical_inline_int_renamed_source(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        source = source.replace('BINARY_OP_ADD_INT', 'RENAMED_INT_SUM')
-        source = source.replace('BINARY_OP_SUBTRACT_INT', 'RENAMED_INT_DIFFERENCE')
-        Path(self.temp_input_filename).write_text(source)
-        with handle_stderr():
-            analysis = analyzer.analyze_files(
-                [self.temp_input_filename], SequentialNumbers())
-        formats = ir_generator.compute_formats(analysis)
-        for name in ('RENAMED_INT_SUM', 'RENAMED_INT_DIFFERENCE'):
-            self.assertIsNotNone(ir_generator.canonical_result_source(
-                analysis.instructions[name], formats[name]))
-
-    def test_canonical_numeric_direct_int64_boundary(self):
-        source = '''
-        inst(DIRECT, (-- result)) {
-            result = PyValue_FromInt64(42);
-            if (PyValue_IsNull(result)) { ERROR_NO_POP(); }
-        }
-        '''
-        for constructor, valid in (('PyValue_FromInt64', True),
-                                   ('_PyValue_BoxInt64', False),
-                                   ('_PyValue_FromIntScaled', False)):
-            with self.subTest(constructor=constructor):
-                with handle_stderr():
-                    analysis = analyzer.analyze_forest(
-                        parse_src(source.replace('PyValue_FromInt64', constructor)),
-                        SequentialNumbers())
-                formats = ir_generator.compute_formats(analysis)
-                contract = ir_generator.canonical_result_source(
-                    analysis.instructions['DIRECT'], formats['DIRECT'])
-                self.assertEqual(contract is not None, valid)
-
-    def test_canonical_local_duplicate_source(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        with handle_stderr():
-            analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        for name in ("LOAD_FAST", "LOAD_FAST_BORROW"):
-            with self.subTest(name=name):
-                contract = ir_generator.canonical_result_source(
-                    analysis.instructions[name], formats[name])
-                self.assertIsNotNone(contract)
-                self.assertEqual(contract.result, "value")
-                handler = self.handler(out.getvalue(), name)
-                self.assertIn("IR_STORE_CANONICAL_DST(ir_word, A, value);",
-                              handler)
-
-        template = """
-        pure inst(RENAMED_LOCAL_DUP, (-- result)) {
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            result = PyValue_DUP(GETLOCAL(oparg));
-        }
-        """
-        variants = (
-            (template, True),
-            (template.replace("GETLOCAL(oparg)", "GETLOCAL(oparg + 1)"), False),
-            (template.replace("PyValue_DUP(GETLOCAL(oparg))",
-                              "GETLOCAL(oparg)"),
-             False),
-            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
-                              "result = PyValue_DUP(GETLOCAL(oparg)); callback();"),
-             False),
-            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
-                              "result = PyValue_DUP(GETLOCAL(oparg)); result = PyValue_NULL;"),
-             False),
-            (template.replace("(-- result)", "(GETLOCAL -- result)"), False),
-            (template.replace("pure inst(RENAMED_LOCAL_DUP, (-- result))",
-                              "pure inst(RENAMED_LOCAL_DUP, (GETLOCAL/1 -- result))"),
-             False),
-            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
-                              "#define GETLOCAL(x) replacement(x)\n"
-                              "result = PyValue_DUP(GETLOCAL(oparg));\n"
-                              "#undef GETLOCAL"),
-             False),
-        )
-        for text, valid in variants:
-            with self.subTest(source=text), mock.patch.dict(
-                ir_generator.FEEDBACK_LAYOUTS,
-                {"RENAMED_LOCAL_DUP": ir_generator.FB_HEADER}
-            ):
-                with handle_stderr():
-                    variant = analyzer.analyze_forest(
-                        parse_src(text), SequentialNumbers())
-                variant_formats = ir_generator.compute_formats(variant)
-                contract = ir_generator.canonical_result_source(
-                    variant.instructions["RENAMED_LOCAL_DUP"],
-                    variant_formats["RENAMED_LOCAL_DUP"])
-                self.assertEqual(contract is not None, valid)
-
-    def test_canonical_common_constant_source(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        with handle_stderr():
-            analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        contract = ir_generator.canonical_result_source(
-            analysis.instructions["LOAD_COMMON_CONSTANT"],
-            formats["LOAD_COMMON_CONSTANT"])
-        self.assertIsNotNone(contract)
-        handler = self.handler(out.getvalue(), "LOAD_COMMON_CONSTANT")
-        self.assertIn("IR_STORE_CANONICAL_DST(ir_word, A, value);", handler)
-        self.assertNotIn("_PyValue_Publish", handler)
-
-        template = """
-        pure inst(RENAMED_COMMON_CONSTANT, (-- result)) {
-            assert(oparg < NUM_COMMON_CONSTANTS);
-            result = PyValue_DUP(tstate->interp->common_consts[oparg]);
-        }
-        """
-        variants = (
-            (template, True),
-            (template.replace("common_consts[oparg]", "other_consts[oparg]"),
-             False),
-            (template.replace("common_consts[oparg]", "common_consts[oparg + 1]"),
-             False),
-            (template.replace("(-- result)", "(value -- result)"), False),
-        )
-        for text, valid in variants:
-            with self.subTest(source=text), mock.patch.dict(
-                ir_generator.FEEDBACK_LAYOUTS,
-                {"RENAMED_COMMON_CONSTANT": ir_generator.FB_HEADER}
-            ):
-                with handle_stderr():
-                    variant = analyzer.analyze_forest(
-                        parse_src(text), SequentialNumbers())
-                variant_formats = ir_generator.compute_formats(variant)
-                contract = ir_generator.canonical_result_source(
-                    variant.instructions["RENAMED_COMMON_CONSTANT"],
-                    variant_formats["RENAMED_COMMON_CONSTANT"])
-                self.assertEqual(contract is not None, valid)
-
     def test_canonical_frame_transfer_provenance_fails_closed(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -1164,18 +875,6 @@ class TestIRCases(unittest.TestCase):
                 for name in affected:
                     self.assertFalse(ir_generator.canonical_frame_transfer_input(
                         analysis.instructions[name]))
-                # An unsupported mutation may also be rejected by ownership
-                # validation; it must never silently regain canonical stores.
-                output = io.StringIO()
-                try:
-                    ir_generator.generate_ir(
-                        [self.temp_input_filename], analysis, output, False)
-                except SyntaxError:
-                    continue
-                for name in affected:
-                    handler = self.handler(output.getvalue(), name)
-                    self.assertNotIn("assert(_PyValue_IsHome(temp));", handler)
-                    self.assertIn("temp = _PyValue_Publish(&temp);", handler)
 
     def test_canonical_yield_sources(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1187,7 +886,7 @@ class TestIRCases(unittest.TestCase):
             analysis.instructions['YIELD_VALUE']))
         self.assertFalse(ir_generator.canonical_frame_transfer_input(
             analysis.instructions['INSTRUMENTED_YIELD_VALUE']))
-        for name, store in (("YIELD_VALUE", "IR_STORE_CANONICAL_RETURN(value);"),
+        for name, store in (("YIELD_VALUE", "IR_STORE_RETURN(value);"),
                             ("INSTRUMENTED_YIELD_VALUE", "IR_STORE_RETURN(value);")):
             output = io.StringIO()
             writer = CWriter(output, 0, False)
@@ -1663,7 +1362,7 @@ class TestIRCases(unittest.TestCase):
         macro(LOAD_ATTR_SHAPE) = _ATTR + _PUSH_NULL_CONDITIONAL;
         """
         handler = self.handler(self.ir_output(source), "LOAD_ATTR_SHAPE")
-        direct = "IR_STORE_CANONICAL_TEMP_DST(ir_word, A, attr);"
+        direct = "IR_STORE_TEMP_DST(ir_word, A, attr);"
         retire = handler.index("retire_published_values(")
         failure = handler.index("if (retire_failed < 0)", retire)
         local = handler.index("IR_STORE_DST(ir_word, A, attr);", failure)

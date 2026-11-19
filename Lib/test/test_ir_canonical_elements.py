@@ -48,15 +48,14 @@ class CanonicalElementTests(unittest.TestCase):
                 with self.subTest(kind=kind, record=record):
                     body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT", record)
                     self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
-                    self.assertIn("IR_STORE_CANONICAL_TEMP_DST(ir_word, A, res);", body)
-                    self.assertIn("IR_STORE_CANONICAL_DST(ir_word, A, res);", body)
-                    self.assertNotIn("IR_STORE_TEMP_DST(", body)
-                    self.assertNotIn("IR_STORE_DST(", body)
-                    self.assertLess(body.index("IR_STORE_CANONICAL_TEMP_DST("),
+                    self.assertIn("IR_STORE_TEMP_DST(ir_word, A, res);", body)
+                    self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
+                    self.assertNotIn("_PyValue_Publish", body)
+                    self.assertLess(body.index("IR_STORE_TEMP_DST("),
                                     body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
                     self.assertLess(body.index("index >= Py"), body.index("PyValue_XDUP(Py"))
         renamed = source.replace("BINARY_OP_SUBSCR_LIST_INT", "RENAMED_ELEMENT")
-        self.assertIn("IR_STORE_CANONICAL_DST(", self.emit(renamed, "RENAMED_ELEMENT"))
+        self.assertIn("IR_STORE_DST(", self.emit(renamed, "RENAMED_ELEMENT"))
 
     def test_guards_bounds_and_anchor_must_match_current_values(self):
         source = self.source()
@@ -91,23 +90,6 @@ class CanonicalElementTests(unittest.TestCase):
             with self.subTest(prefix=prefix), self.assertRaises(SyntaxError):
                 self.emit(source.replace(guard, prefix + guard + suffix, 1),
                           "BINARY_OP_SUBSCR_LIST_INT")
-
-    def test_result_mutation_cannot_reuse_an_old_canonical_token(self):
-        source = self.source()
-        read = "res = IR_DUP_CANONICAL_ELEMENT(list_st, index);"
-        for suffix in (" res = unknown_value;", " opaque(&res);",
-                       " PyValue alias = opaque(&(res));",
-                       " if ((res = unknown_value)) {}",
-                       " while ((res = unknown_value, 0)) {}",
-                       " for (; (res = unknown_value, 0);) {}",
-                       " PyValue *alias = &(res); opaque(alias);"):
-            with self.subTest(suffix=suffix):
-                try:
-                    body = self.emit(source.replace(read, read + suffix, 1),
-                                     "BINARY_OP_SUBSCR_LIST_INT")
-                except SyntaxError:
-                    continue
-                self.assertNotIn("IR_STORE_CANONICAL_DST(", body)
 
 
 class CanonicalElementRuntimeTests(unittest.TestCase):

@@ -1954,7 +1954,6 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
         return PyValue_NULL;
     }
-    result = _PyValue_Publish(&result);
     if (!local) {
         _PyFrame_Slots(frame)[result_slot] = result;
         _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
@@ -2020,8 +2019,6 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
         return PyValue_NULL;
     }
-    result = _PyValue_Publish(&result);
-    self = _PyValue_Publish(&self);
     _PyFrame_Slots(frame)[slot] = result;
     _PyFrame_Slots(frame)[slot + 1] = self;
     _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
@@ -2072,8 +2069,7 @@ finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static Py_NO_INLINE int
 finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *next, _PyValueTemps *temps,
-                        PyValue *locals, PyValue *window, int n, int first,
-                        int canonical)
+                        PyValue *locals, PyValue *window, int n, int first)
 {
     frame->phase_state = 0;
     int err = 0;
@@ -2086,8 +2082,7 @@ finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
             continue;
         }
         PyValue old = locals[i];
-        assert(!canonical || _PyValue_IsHome(*element));
-        locals[i] = canonical ? *element : _PyValue_Publish(element);
+        locals[i] = *element;
         _PyValue_CheckHome(locals[i]);
         *element = PyValue_NULL;
         err = finish_value_bridges_ex(tstate, frame, next, temps, &old, 1,
@@ -3401,15 +3396,9 @@ clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
 static inline Py_ALWAYS_INLINE _PyIRStepResult
 complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *site, int base, int destination,
-                   _PyInstr *exit, PyValue value, enum _PyIRStepKind kind,
-                   bool canonical_input)
+                   _PyInstr *exit, PyValue value, enum _PyIRStepKind kind)
 {
-    if (canonical_input) {
-        assert(_PyValue_IsHome(value));
-    }
-    else {
-        value = _PyValue_Publish(&value);
-    }
+    assert(_PyValue_IsHome(value));
     PyValue *window = frame->base + base;
     PyValue receiver = window[0];
     PyCodeObject *code = _PyFrame_GetCode(frame);
@@ -3494,10 +3483,8 @@ _PyIRStepResult
 _PyEval_CompleteForIter(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *site, int base, _PyInstr *exit, PyValue value)
 {
-    /* Native completions still need publication; generator returns arrive
-     * from the emitter's checked canonical input or its Publish fallback. */
     return complete_step_impl(tstate, frame, site, base, IR_NO_DST, exit,
-                              value, _PY_IR_FOR_ITER, false);
+                              value, _PY_IR_FOR_ITER);
 }
 
 _PyIRStepResult
@@ -3506,7 +3493,7 @@ _PyEval_CompleteSend(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *exit, PyValue value)
 {
     return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, _PY_IR_SEND, false);
+                              value, _PY_IR_SEND);
 }
 
 _PyIRStepResult
@@ -3515,7 +3502,7 @@ _PyEval_CompleteSendThrow(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *exit, PyValue value)
 {
     return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, _PY_IR_SEND_THROW, false);
+                              value, _PY_IR_SEND_THROW);
 }
 
 _PyIRStepResult
@@ -3538,10 +3525,10 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
     _PyInstr *exit = frame->return_pc + IR_DS(word);
     if (opcode == SEND) {
         return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                                  exit, value, _PY_IR_SEND, true);
+                                  exit, value, _PY_IR_SEND);
     }
     return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                              exit, value, _PY_IR_FOR_ITER, true);
+                              exit, value, _PY_IR_FOR_ITER);
 }
 
 static PyValue
@@ -6384,11 +6371,7 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
         // a move: replaced below
         PyValue old = *writeto;
         *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromObjectSteal(l_v);
-        *writeto = _PyValue_Publish(writeto);
         PyValue_CLOSE(old);
-    }
-    if (!PyValue_IsNull(*writeto)) {
-        *writeto = _PyValue_Publish(writeto);
     }
 }
 

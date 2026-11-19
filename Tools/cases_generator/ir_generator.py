@@ -2477,8 +2477,6 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
-    canonical_result: str | None = None  # checked canonical owner
-    canonical_outputs: frozenset[str] = frozenset()  # declared owning outputs
     owning_result: str | None = None  # first publication of a checked owning alias
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
@@ -2779,20 +2777,6 @@ class IRStack(Stack):
         self.home_node = self.home_graph.action(kind, self.home_node, field, value, flags)
         return self.home_node
 
-    def canonical_native(self, var: Local) -> bool:
-        """Representation of this live token, independently of ownership."""
-        value = var.ir_value
-        while value is not None and value not in self.expired_values:
-            event = self.home_graph.nodes[value - 1]
-            if event.kind == "_PyIR_OWNER_STORAGE_LITERAL":
-                return True
-            if event.kind == "_PyIR_OWNER_STORAGE_RESULT":
-                return bool(event.flags & 1)
-            if event.kind not in {"_PyIR_OWNER_STORAGE_COPY", "_PyIR_OWNER_STORAGE_GUARD"}:
-                return False
-            value = event.extent
-        return False
-
     def take_field(self, field: str) -> None:
         self.home_write_receipts += 1
         index = FIELDS.index(field)
@@ -2810,8 +2794,7 @@ class IRStack(Stack):
         self.home_action("_PyIR_OWNER_STORAGE_VACATE", index)
         self.home_values.pop(index, None)
 
-    def publish_field(self, field: str, var: Local, *, temporary=False,
-                      canonical=False) -> None:
+    def publish_field(self, field: str, var: Local, *, temporary=False) -> None:
         self.home_write_receipts += 1
         index = FIELDS.index(field)
         if var.ir_value is None or var.ir_value in self.expired_values:
@@ -2822,7 +2805,7 @@ class IRStack(Stack):
             # A borrowed C copy does not carry a count into a new home.
             self.home_node = None
             return
-        flags = int(temporary) | (int(same_value) << 1) | (int(canonical) << 2)
+        flags = int(temporary) | (int(same_value) << 1)
         self.home_action("_PyIR_OWNER_STORAGE_PUBLISH", index, var.ir_value, flags)
         self.home_values[index] = var.ir_value
         # Scratch publication owns the count in the frame. Local/discard
@@ -3067,13 +3050,11 @@ class IRStack(Stack):
         out.emit(f"{owner_name(field)} = {consume};\n")
         self.take_field(field)
 
-    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
-              canonical_result: str | None = None) -> bool:
+    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset
+              ) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
         frame then holds it there"""
         self.home_writes += 1
-        if self.canonical_native(var):
-            canonical_result = var.name
         out.start_line()
         p = memory_offset.as_int()
         if self.reloaded:
@@ -3083,9 +3064,7 @@ class IRStack(Stack):
             self.refuse_inplace(var, memory_offset)
             if memory_offset.as_int() != 0:
                 raise StackError(f"'{var.name}' is written after the frame changed")
-            macro = ("IR_STORE_CANONICAL_RETURN" if self.layout.canonical_frame_transfer
-                     else "IR_STORE_RETURN")
-            out.emit(f"{macro}({var.name});\n")
+            out.emit(f"IR_STORE_RETURN({var.name});\n")
             return True
         lay = self.layout
         if lay.window:
@@ -3140,24 +3119,14 @@ class IRStack(Stack):
             if lay.dst in lay.temp_fields:
                 if self.final and self.published_temporary_result:
                     return True
-                if (var.name == canonical_result
-                        or var.name in lay.canonical_outputs):
-                    out.emit(f"assert(PyValue_IsNull({slot}) || "
-                             f"PyValue_Is({slot}, {var.name}));\n")
-                    out.emit(f"{slot} = {var.name};\n")
-                    out.emit(f"_PyValue_CheckTemp({slot});\n")
-                else:
-                    out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
-                self.publish_field(lay.dst, var,
-                    canonical=var.name == canonical_result or var.name in lay.canonical_outputs)
+                out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
+                self.publish_field(lay.dst, var)
                 return False
             if self.final:
                 if self.published_temporary_result:
                     field = FIELD_VARS[lay.dst]
                     out.emit(f"if ({is_local(lay.dst)} || {field} == IR_NO_DST) {{\n")
-                macro = ("IR_STORE_CANONICAL_DST"
-                         if (var.name == canonical_result or var.name == lay.canonical_result
-                             or var.name in lay.canonical_outputs) else "IR_STORE_DST")
+                macro = "IR_STORE_DST"
                 if self.observer_deferred is not None:
                     macro = "IR_COMMIT_OBSERVED_DST"
                     expression = f"{macro}({FIELD_ARGS[lay.dst]}, {var.name}, {self.observer_deferred})"
@@ -3167,26 +3136,17 @@ class IRStack(Stack):
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
-                self.publish_field(lay.dst, var, canonical=macro == "IR_STORE_CANONICAL_DST")
+                self.publish_field(lay.dst, var)
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end, releasing its value.
-            macro = ("IR_STORE_CANONICAL_TEMP_DST" if (var.name == canonical_result
-                     or var.name in lay.canonical_outputs)
-                     else "IR_STORE_TEMP_DST")
-            out.emit(f"{macro}({FIELD_ARGS[lay.dst]}, {var.name});\n")
-            self.publish_field(lay.dst, var, temporary=True,
-                canonical=macro == "IR_STORE_CANONICAL_TEMP_DST")
+            out.emit(f"IR_STORE_TEMP_DST({FIELD_ARGS[lay.dst]}, {var.name});\n")
+            self.publish_field(lay.dst, var, temporary=True)
             return False
-        if previous == "out":
-            macro = ("IR_PUBLISH_CANONICAL_TEMP"
-                     if var.name == canonical_result or var.name in lay.canonical_outputs else "IR_PUBLISH_TEMP")
-        else:
-            macro = ("IR_STORE_CANONICAL_TEMP"
-                     if var.name == canonical_result or var.name in lay.canonical_outputs else "IR_STORE_TEMP")
+        macro = "IR_PUBLISH_TEMP" if previous == "out" else "IR_STORE_TEMP"
         out.emit(f"{macro}({slot}, {var.name});\n")
         if p == lay.dst_offset and lay.dst is not None:
-            self.publish_field(lay.dst, var, canonical="CANONICAL" in macro)
+            self.publish_field(lay.dst, var)
         else:
             self.home_node = None
         if p is not None:
@@ -3219,14 +3179,13 @@ class IRStack(Stack):
         return False
 
     def save_variables(self, out: CWriter,
-                       canonical_result: str | None = None,
                        native_result: PointerOffset | None = None) -> None:
         out.start_line()
         var_offset = self.base_offset
         for var in self.variables:
             if (var_offset != native_result and var.in_local and
                     not var.memory_offset and not var.is_array()):
-                if self.store(out, var, var_offset, canonical_result):
+                if self.store(out, var, var_offset):
                     var.memory_offset = var_offset
             var_offset = var_offset.push(var.item)
 
@@ -3291,7 +3250,6 @@ class IRStack(Stack):
         self.home_node = None
 
     def flush(self, out: CWriter,
-              canonical_result: str | None = None,
               native_result: PointerOffset | None = None) -> None:
         if self.physical_sp is None:
             # After a frame switch there is nothing of this frame to write.
@@ -3301,7 +3259,7 @@ class IRStack(Stack):
         self._print(out)
         if may_be_positive(self.physical_sp - self.logical_sp):
             self.vacate(out, self.logical_sp, self.physical_sp)
-        self.save_variables(out, canonical_result, native_result)
+        self.save_variables(out, native_result)
         self.physical_sp = self.logical_sp
         out.start_line()
 
@@ -3479,7 +3437,6 @@ class IREmitter(Emitter):
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
-        self._replacers["IR_CANONICAL_OUTPUTS"] = self.canonical_outputs
         self._replacers["IR_GUARD_SHAPE_READ"] = self.guard_shape_read
         self._replacers["IR_DUP_SHAPE_READ"] = self.shape_read_value
         self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
@@ -3825,13 +3782,7 @@ class IREmitter(Emitter):
                     f"{tkn.text}({retired.text}) of a view: retire its "
                     f"OWNER()", retired)
         storage.clear_inputs("before published receiver retirement")
-        if (tkn.text == "IR_RETIRE_PUBLISHED_RESULT"
-                and self.result_publication.canonical_source):
-            storage.prepare_flush(self.out)
-            assert isinstance(storage.stack, IRStack)
-            storage.stack.flush(self.out, canonical_result=result_name)
-        else:
-            storage.flush(self.out)
+        storage.flush(self.out)
         self.pending_owner = None
         failure_result = "PyValue_NULL"
         if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
@@ -4073,12 +4024,6 @@ class IREmitter(Emitter):
             self.element_result = HELPERS[tkn.text]
         return True
 
-    def canonical_outputs(self, tkn, tkn_iter, uop, storage, inst):
-        # canonical_output_sources validates the complete declaration before
-        # emission. It describes output provenance, not a runtime operation.
-        self.macro_args(tkn, tkn_iter, len(uop.stack.outputs))
-        return True
-
     def input_slot(self, inst: Instruction, index: int) -> str:
         """The slot of input index, from the handler's word as read before
         the operation ran: no reload happens between an operation and the
@@ -4212,7 +4157,7 @@ class IREmitter(Emitter):
         self.emit("DISPATCH();\n}\n")
         return False
 
-    def unpack_to_locals(self, inst, fmt, count, canonical=False):
+    def unpack_to_locals(self, inst, fmt, count):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
@@ -4225,12 +4170,11 @@ class IREmitter(Emitter):
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
         self.emit(f"int ir_n = {count};\n")
-        macro = "IR_UNPACK_CANONICAL_TO_LOCALS" if canonical else "IR_UNPACK_TO_LOCALS"
-        self.emit(f"int ir_rest = {macro}(&IR_SLOT({dst}), "
+        self.emit(f"int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), "
                   "window, ir_n);\n")
         self.emit("if (ir_rest >= 0 &&\n")
         self.emit("    finish_unpack_to_locals(tstate, frame, next_instr, "
-                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest, {int(canonical)}) < 0) {{\n")
+                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
@@ -4250,7 +4194,7 @@ class IREmitter(Emitter):
         self.emit("PyValue ir_leaf_dict = IR_CONSUME_INPUT(ir_word, B, dict_st);\n")
         self.emit("PyValue ir_leaf_key = IR_CONSUME_INPUT(ir_word, C, sub_st);\n")
         self.emit("STAT_INC(BINARY_OP, hit);\n")
-        self.emit("IR_STORE_CANONICAL_TEMP_DST(ir_word, A, ir_leaf_result);\n")
+        self.emit("IR_STORE_TEMP_DST(ir_word, A, ir_leaf_result);\n")
         self.emit_ordered_retirement(
             "ir_leaf_key", "ir_leaf_dict",
             "((IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
@@ -5740,11 +5684,7 @@ class IREmitter(Emitter):
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
         """Terminal transfer; the retired child has no fictitious output."""
         value, generator_return = self.macro_args(tkn, tkn_iter, 2)
-        assert isinstance(storage.stack, IRStack)
-        if not storage.stack.layout.canonical_frame_transfer:
-            self.emit(f"{value} = _PyValue_Publish(&{value});\n")
-        else:
-            self.emit(f"assert(_PyValue_IsHome({value}));\n")
+        self.emit(f"assert(_PyValue_IsHome({value}));\n")
         self.emit(f"if ({generator_return}) {{\n")
         self.emit("frame->phase_state = 0;\n")
         self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
@@ -6715,155 +6655,6 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_handler(name, inst, fmt, emitter, out, record, {})
 
 
-@dataclass(frozen=True)
-class CanonicalResult:
-    "A checked canonical owner preserved through the complete uop chain."
-    producer: Uop
-    result: str
-
-
-def canonical_output_sources(inst: Instruction, fmt: IRFormat) -> frozenset[str]:
-    """Check declared canonical owners without imposing a retirement effect.
-
-    This is a bounded producer contract: guarded canonical duplicates and
-    transfers of unchanged register inputs. It is not C expression inference.
-    """
-    marker = "IR_CANONICAL_OUTPUTS"
-    declarations = [(part, token) for part in inst.parts if isinstance(part, Uop)
-                    for token in part.body.tokens() if token.text == marker]
-    if not declarations:
-        return frozenset()
-    producer, token = declarations[0]
-
-    def reject(reason: str) -> None:
-        raise analysis_error(f"{inst.name}: canonical outputs {reason}", token)
-
-    if len(declarations) != 1:
-        reject("require one declaration")
-    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
-        reject("cannot cross a flush or other stack transformation")
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    if parts[-1] is not producer or fmt.window:
-        reject("require a terminal scalar producer")
-    inputs, outputs = external_io(inst)
-    names = tuple(item.name for item in producer.stack.outputs)
-    if (not names or len(set(names)) != len(names)
-            or tuple(entry.item.name for entry in outputs) != names
-            or any(entry.external >= 0 for entry in outputs)
-            or any(item.is_array() for part in parts
-                   for item in (*part.stack.inputs, *part.stack.outputs))):
-        reject("must declare new scalar outputs")
-    statements = producer.body.body
-    if not statements or not isinstance(statements[-1], SimpleStmt):
-        reject("require a final top-level declaration")
-    expected = [marker, "("]
-    for i, name in enumerate(names):
-        if i:
-            expected.append(",")
-        expected.append(name)
-    expected += [")", ";"]
-    if _statement_text(statements[-1]) != expected:
-        reject("must name every output in stack order")
-
-    # All prefix operations preserve the same canonical register inputs.
-    input_names = tuple(item.name for item in producer.stack.inputs)
-    if tuple(item.name for item in inputs) != input_names:
-        reject("require unchanged canonical register inputs")
-    readonly_calls = {
-        "assert", "STAT_INC", "EXIT_IF", "Py_TYPE", "PyValue_AsKnownObjectBorrow",
-        "PyValue_IsObject", "_PyValueGuarded_Load", "_PyType_HasFeature",
-        "_PyObject_InlineValues", "FT_ATOMIC_LOAD_UINT_RELAXED",
-        "FT_ATOMIC_LOAD_UINT8", "FT_ATOMIC_LOAD_PTR_ACQUIRE",
-    }
-    roots = {"PyValue_DUP", "TAKE", marker}
-    trusted = readonly_calls | roots
-    for part in parts:
-        body = canonical_body_tokens(part)
-        tokens = [t for t in part.body.tokens() if t.kind != "COMMENT"]
-        if not body or any(text.startswith("#") for text in body):
-            reject("cannot contain preprocessing or a changed source body")
-        if any(item.name in trusted for item in
-               (*part.stack.inputs, *part.stack.outputs, *part.caches)):
-            reject("cannot shadow a producer helper")
-        if part is not producer:
-            if (tuple(item.name for item in part.stack.inputs) != input_names
-                    or tuple(item.name for item in part.stack.outputs) != input_names
-                    or _protected_argument_consumption_tokens(
-                        tokens, set(input_names), set(input_names))):
-                reject("prefix must preserve canonical register inputs")
-        for i, t in enumerate(tokens):
-            if (t.kind == "LPAREN" and i > 0
-                    and tokens[i - 1].kind in {"RPAREN", "RBRACKET"}):
-                reject("cannot contain indirect calls")
-            if (t.kind == "IDENTIFIER" and i + 1 < len(tokens)
-                    and tokens[i + 1].kind == "LPAREN"
-                    and t.text not in trusted):
-                reject("contain an unrecognized call")
-            if t.kind in {"PLUSPLUS", "MINUSMINUS"}:
-                reject("cannot mutate producer values")
-        for stmt in part.body.body:
-            if not isinstance(stmt, SimpleStmt):
-                reject("require flat guard and producer statements")
-            text = _statement_text(stmt)
-            assignment = next((i for i, t in enumerate(text) if t == "="), None)
-            writes = [t for t in stmt.contents if t.kind in ASSIGNMENTS]
-            if part is not producer and (len(writes) > 1 or any(
-                    t.kind != "EQUALS" for t in writes)):
-                reject("prefix may only initialize guard locals")
-            if assignment is not None and any(
-                    name in trusted for name in text[:assignment]):
-                reject("cannot shadow a producer helper")
-            if part is not producer and assignment is not None:
-                # Guard locals may hold borrowed pointers, but cannot overwrite
-                # memory, a stack input, or a previously declared local.
-                lhs = text[:assignment]
-                if (len(lhs) < 2 or lhs[0] not in {
-                        "PyObject", "PyTypeObject", "char"}
-                        or any(t in lhs for t in ("->", ".", "[", ")"))):
-                    reject("prefix may only initialize guard locals")
-
-    caches = {cache.name for cache in producer.caches
-              if cache.name == "class_value" and cache.size == 4
-              and fmt.fb_layout == "_PyFbAttr"}
-    acquired_inputs: set[str] = set()
-    assignments: set[int] = set()
-    for name in names:
-        stmt = _sole_top_level_assignment(producer, name)
-        if stmt is None:
-            reject(f"{name} needs one unconditional assignment")
-        text = _statement_text(stmt)
-        guarded = (len(text) == 10
-                   and text[:6] == [name, "=", "PyValue_DUP", "(",
-                                    "_PyValueGuarded_Load", "("]
-                   and text[6] in caches and text[7:] == [")", ")", ";"])
-        transfer = (len(text) == 7 and text[:4] == [name, "=", "TAKE", "("]
-                    and text[4] in input_names and text[5:] == [")", ";"])
-        if not guarded and not transfer:
-            reject(f"{name} has no canonical owning source")
-        if transfer:
-            if text[4] in acquired_inputs:
-                reject("cannot transfer an input twice")
-            acquired_inputs.add(text[4])
-        elif name in producer.aliased_outputs:
-            reject("cannot alias a guarded duplicate")
-        assignments.add(id(stmt))
-    for stmt in statements[:-1]:
-        if id(stmt) in assignments:
-            continue
-        text = _statement_text(stmt)
-        if (text[:2] not in (["assert", "("], ["STAT_INC", "("])
-                or any(name in text for name in (*names, *input_names))
-                or any(t.kind in ASSIGNMENTS for t in stmt.contents)):
-            # Debug assertions may read the original receiver's layout.
-            if not (text[:2] == ["assert", "("]
-                    and not any(name in text for name in names)
-                    and not _protected_argument_consumption(
-                        stmt, set(input_names), set(input_names))
-                    and not any(t.kind in ASSIGNMENTS for t in stmt.contents)):
-                reject("producer values cannot escape or change after assignment")
-    return frozenset(names)
-
-
 def canonical_body_tokens(part: Uop) -> list[str]:
     "Read the complete source body, including preprocessor arm delimiters."
     context = part.context
@@ -6879,211 +6670,6 @@ def canonical_body_tokens(part: Uop) -> list[str]:
         return []
     return [token.text for token in tokens
             if token.kind != "COMMENT"]
-
-
-def canonical_inline_int_source(parts: list[Uop]) -> CanonicalResult | None:
-    "Prove guarded ADD/SUB's overflow join and unchanged input retirement."
-    shapes = (
-        (("value",), ("value",)),
-        (("left", "unused"), ("left", "unused")),
-        (("left", "right"), ("res", "l", "r")),
-        (("value",), ()),
-        (("value",), ()),
-    )
-    if len(parts) != len(shapes):
-        return None
-    for part, (inputs, outputs) in zip(parts, shapes):
-        if (tuple(item.name for item in part.stack.inputs) != inputs
-                or tuple(item.name for item in part.stack.outputs) != outputs
-                or any(item.is_array() for item in
-                       (*part.stack.inputs, *part.stack.outputs))
-                or any(cache.name != "unused" for cache in part.caches)):
-            return None
-    pop = """{
-        assert(PyValue_LongCheckExact(value));
-        PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
-    }"""
-    fixed = (
-        "{ EXIT_IF(!PyValue_IsInlineInt(value)); }",
-        "{ EXIT_IF(!PyValue_IsInlineInt(left)); }",
-        pop, pop,
-    )
-    for part, body in zip((*parts[:2], *parts[3:]), fixed):
-        if canonical_body_tokens(part) != [t.text for t in tokenize(body)]:
-            return None
-    # Scaled overflow proves the unscaled result is outside the inline range,
-    # exactly the precondition of BoxInt64. The sum/difference of two inline
-    # ints fits int64; the nonoverflow arm is already a canonical inline value.
-    for builtin, operator, result in (
-        ("__builtin_add_overflow", "+", "sum"),
-        ("__builtin_sub_overflow", "-", "difference"),
-    ):
-        body = f"""{{
-            int64_t a = _PyValue_IntScaled(left);
-            int64_t b = _PyValue_IntScaled(right);
-            int64_t {result};
-            STAT_INC(BINARY_OP, hit);
-            if ({builtin}(a, b, &{result})) {{
-                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) {operator} PyValue_InlineInt64(right));
-            }}
-            else {{
-                res = _PyValue_FromIntScaled({result});
-            }}
-            if (PyValue_IsNull(res)) {{
-                ERROR_NO_POP();
-            }}
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }}"""
-        if canonical_body_tokens(parts[2]) == [t.text for t in tokenize(body)]:
-            return CanonicalResult(parts[2], "res")
-    return None
-
-
-def canonical_result_source(inst: Instruction, fmt: IRFormat
-                            ) -> CanonicalResult | None:
-    "Recognize bounded source proofs, independently of instruction names."
-    inputs, outputs = external_io(inst)
-    # Skip entries are unnamed feedback padding and emit no code or C
-    # binding. A Flush or any future part requires a separate proof.
-    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
-        return None
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    if any(cache.name != "unused" for part in parts for cache in part.caches):
-        return None
-    if (not fmt.store_dst or fmt.window or not parts or len(outputs) != 1
-            or outputs[0].item.is_array() or outputs[0].aliased
-            or outputs[0].external >= 0
-            or fmt.field_of(ROLE_DST) is None):
-        return None
-    inline_int = canonical_inline_int_source(parts)
-    if (inline_int is not None and len(inputs) == 2 and fmt.n_inputs == 2
-            and outputs[0].item.name == inline_int.result):
-        return inline_int
-    producer = parts[0]
-    if not producer.stack.outputs:
-        return None
-    result = producer.stack.outputs[0].name
-    if (outputs[0].item.name != result or result in producer.aliased_outputs
-            or any(item.is_array() for part in parts
-                   for item in (*part.stack.inputs, *part.stack.outputs))):
-        return None
-    constructors = {"PyValue_FromDouble", "PyValue_FromInt64"}
-    trusted = constructors | {"PyValue_FloatOperandValues",
-                             "PyValue_CLOSE_SPECIALIZED",
-                             "_PyFloat_OrLongExactDealloc"}
-    # C name resolution is outside this parser. Exclude local bindings and
-    # preprocessing that could replace the audited global helper boundary.
-    if any(item.name in trusted for part in parts
-           for item in (*part.stack.inputs, *part.stack.outputs)):
-        return None
-    tokens = [token for part in parts for token in part.body.tokens()
-              if token.kind != "COMMENT"]
-    if any(token.kind.startswith("CMACRO") for token in tokens):
-        return None
-    # The interpreter publishes its common constants canonically when it
-    # creates them (pylifecycle.c), and they are immortal.
-    if (len(parts) == 1 and not inputs and fmt.n_inputs == 0
-            and producer.properties.pure
-            and len(producer.stack.outputs) == 1):
-        expected = f"""{{
-            assert(oparg < NUM_COMMON_CONSTANTS);
-            {result} = PyValue_DUP(tstate->interp->common_consts[oparg]);
-        }}"""
-        if ([token.text for token in producer.body.tokens()
-             if token.kind != "COMMENT"]
-                == [token.text for token in tokenize(expected)]):
-            return CanonicalResult(producer, result)
-    local_field = fmt.field_of(ROLE_LOCAL_IN)
-    home_helpers = {"GETLOCAL", "PyValue_DUP", "assert", "PyValue_IsNull"}
-    if (len(parts) == 1 and not inputs and fmt.n_inputs == 0
-            and producer.properties.pure
-            and len(producer.stack.outputs) == 1
-            and local_field is not None
-            and fmt.imm == FIELD_LOCS[local_field]
-            and not any(item.name in home_helpers for part in parts
-                        for item in (*part.stack.inputs, *part.stack.outputs))
-            and not any(cache.name in home_helpers for part in parts
-                        for cache in part.caches)):
-        expected = f"""{{
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            {result} = PyValue_DUP(GETLOCAL(oparg));
-        }}"""
-        if ([token.text for token in producer.body.tokens()
-             if token.kind != "COMMENT"]
-                == [token.text for token in tokenize(expected)]):
-            return CanonicalResult(producer, result)
-    assignments = [stmt for stmt in producer.body.body
-                   if isinstance(stmt, SimpleStmt)
-                   and _statement_text(stmt)[:2] == [result, "="]]
-    if len(assignments) != 1:
-        return None
-    assignment = _statement_text(assignments[0])
-    if (len(assignment) < 7 or assignment[2] not in constructors
-            or assignment[3] != "(" or assignment[-2:] != [")", ";"]):
-        return None
-    constructor = assignment[2]
-    if sum(token.text == constructor for token in tokens) != 1:
-        return None
-    argument = assignment[4:-2]
-    null_error = f"if (PyValue_IsNull({result})) {{ ERROR_NO_POP(); }}"
-    if constructor == "PyValue_FromDouble":
-        if (len(producer.stack.inputs) != 2
-                or len(producer.stack.outputs) != 3
-                or len(argument) != 3 or argument[0] != "a"
-                or argument[1] not in {"+", "-", "*", "/"}
-                or argument[2] != "b"):
-            return None
-        left, right = [item.name for item in producer.stack.inputs]
-        _, l, r = [item.name for item in producer.stack.outputs]
-        if len({left, right, result, l, r, "a", "b"}) != 7:
-            return None
-        expected_prefix = f"""double a, b;
-            EXIT_IF(!PyValue_FloatOperandValues({left}, {right}, &a, &b));"""
-        expected_tail = f"""STAT_INC(BINARY_OP, hit);
-            {result} = {constructor}(a {argument[1]} b);
-            {null_error}
-            {l} = {left}; {r} = {right}; INPUTS_DEAD();"""
-        bodies = ["{" + expected_prefix + guard + expected_tail + "}"
-                  for guard in ("", "EXIT_IF(b == 0.0);")]
-        if not any([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
-                   == [t.text for t in tokenize(body)] for body in bodies):
-            return None
-        if len(parts) != 3:
-            return None
-        depth = 3
-        for part in parts[1:]:
-            if (len(part.stack.inputs) != 1 or part.stack.outputs
-                    or part.stack.inputs[0].name == result):
-                return None
-            value = part.stack.inputs[0].name
-            expected = f"""{{
-                assert(PyValue_IsInlineFloat({value}) || PyValue_IsInlineInt({value}));
-                PyValue_CLOSE_SPECIALIZED({value}, _PyFloat_OrLongExactDealloc);
-            }}"""
-            if ([t.text for t in part.body.tokens() if t.kind != "COMMENT"]
-                    != [t.text for t in tokenize(expected)]):
-                return None
-            # Each suffix consumes only the top input owner, never result0.
-            depth -= 1
-            if depth <= 0:
-                return None
-        if depth != 1:
-            return None
-    else:
-        # This constructor's API is unconditional; narrow Box/Scaled helpers
-        # do not qualify. Start with a constant argument and no input owners.
-        if (inputs or len(parts) != 1 or len(producer.stack.outputs) != 1
-                or not re.fullmatch(r"-?(0|[1-9][0-9]*)", "".join(argument))):
-            return None
-        if not -(1 << 63) < int("".join(argument)) < (1 << 63):
-            return None
-        expected = f"{{ {result} = {constructor}({''.join(argument)}); {null_error} }}"
-        if ([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
-                != [t.text for t in tokenize(expected)]):
-            return None
-    return CanonicalResult(producer, result)
 
 
 def native_entry_input_contract(inst: Instruction) -> bool:
@@ -7426,11 +7012,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
-    canonical = canonical_result_source(inst, fmt)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      native_entry=native_entry_input_contract(inst),
-                     canonical_result=canonical.result if canonical else None,
-                     canonical_outputs=canonical_output_sources(inst, fmt),
                      owning_result=owned_alias_result(inst, external_io(inst)[1]),
                      call_kind=emitter.call_kind if call_window else None)
     if emitter.execution_variant is not None:
@@ -7499,10 +7082,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             stack.home_action("_PyIR_OWNER_STORAGE_CALLBACK",
                               FIELDS.index(fmt.field_of(ROLE_DST)), flags=1)
         if fmt.unpacks:
-            emitter.unpack_to_locals(
-                inst, fmt, UNPACKS[fmt.group], canonical=inst.name in (
-                    "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
-                    "UNPACK_SEQUENCE_LIST"))
+            emitter.unpack_to_locals(inst, fmt, UNPACKS[fmt.group])
         source = emitter.error_source
         if (source is not None and source.native_exit_closed and
                 source.homes in {HomeEffect.NO_ARENA_WRITE,

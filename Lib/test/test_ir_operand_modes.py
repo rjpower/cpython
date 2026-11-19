@@ -265,7 +265,7 @@ class OperandModeGeneratorTests(unittest.TestCase):
         self.assertNotIn("IR_CONSUME_INPUT", body)
         self.assertIn("attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);", body)
         self.assertIn("ir_own_B = PyValue_NULL;", body)
-        publication = "IR_SLOT(IR_A(ir_word)) = attr;"
+        publication = "IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);"
         self.assertLess(body.index("attr = shape_read_dup("), body.index(publication))
         self.assertLess(body.index(publication), body.index("retire_published_values("))
         helpers = (Path(test_tools.basepath) / "Python" / "ceval_macros.h").read_text()

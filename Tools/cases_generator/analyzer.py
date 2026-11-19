@@ -537,6 +537,9 @@ IR_MARKER_EFFECTS = {
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_SUSPEND_DELEGATED": frozenset(("escapes", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
+    # Tail-calls the pending-event handler (Python/ceval_macros.h), which can
+    # run Python (signal handlers, finalizers) and raise
+    "IR_PERIODIC_TAIL": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
                      "IR_MONITOR_CALL", "IR_REFRESH_CALL"),
@@ -595,6 +598,9 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
 
 
 NON_ESCAPING_FUNCTIONS = (
+    "__builtin_add_overflow",
+    "__builtin_mul_overflow",
+    "__builtin_sub_overflow",
     "coro_awaitable_can_transfer",
     "native_vector_capture",
     "_PyShape_FindTransition",

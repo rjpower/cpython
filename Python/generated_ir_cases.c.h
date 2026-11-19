@@ -294,8 +294,6 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t sum;
-                frame->phase_state = 0;
-                frame->phase_state = 0;
                 bool overflow = __builtin_add_overflow(a, b, &sum);
                 if (overflow) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -2883,8 +2881,6 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = PyValue_InlineInt64(right);
                 int64_t product;
-                frame->phase_state = 0;
-                frame->phase_state = 0;
                 bool overflow = __builtin_mul_overflow(a, b, &product);
                 if (overflow) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -4992,8 +4988,6 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t difference;
-                frame->phase_state = 0;
-                frame->phase_state = 0;
                 bool overflow = __builtin_sub_overflow(a, b, &difference);
                 if (overflow) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -15592,6 +15586,7 @@
             // _CHECK_PERIODIC
             {
                 if (IR_PERIODIC_DUE(tstate)) {
+                    frame->phase_state = 0;
                     IR_PERIODIC_TAIL();
                 }
             }
@@ -17535,6 +17530,7 @@
             // _CHECK_PERIODIC
             {
                 if (IR_PERIODIC_DUE(tstate)) {
+                    frame->phase_state = 0;
                     IR_PERIODIC_TAIL();
                 }
             }

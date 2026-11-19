@@ -1,5 +1,38 @@
 # Interpreter performance: combined plan
 
+## Current rollout: handlers81, then calls80
+
+Approved 2026-11-19. The user asked to land
+[handlers81](../../design/proposals/handlers81.md) and then
+[operand-encoded calls](../../design/proposals/operand-calls80.md) in its
+shape, and to keep the result even if the first performance gain is modest.
+Gates are correctness; measurements are recorded and attributed, not gated.
+The H4 shape checks (handlers81 §6) are stop-and-diagnose checks on the
+mechanism.
+
+Branch `pyjit/handlers81` from checkpoint78 `99a04733128`; builds
+`BASE/handlers81-{release,debug}`; evidence `E59/handlers81/`.
+
+| Step | Content (handlers81 §6) | State |
+| --- | --- | --- |
+| H0 | Shape tool `Tools/pyjit/handler_shape.py`; checkpoint78 baseline | started |
+| H1a | Canonical by construction; no publication at stores | started |
+| H1b | No `phase_state` in handlers; GC scans all slots | started on sibling `pyjit/handlers81-h1b`; root merges after H1a |
+| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | |
+| H3 | Bridge records and canaries out of handlers | |
+| H4 | One computed-goto evaluator; tail-call backend deleted | |
+| H5 | Calls80 steps 1, 2a–2c, 3 written in the new shape | |
+| Report | Kernel instructions, PMU, timed geomean against checkpoint78, golden73 and upstream | |
+
+Each step is one or more Sonnet workers with a time budget, a small-first test
+ladder and a progress log in `E59/handlers81/`. Root integrates: generation,
+both builds, the step's ladder, kernel instruction counts (`E59/handlers80/instr.sh`)
+and the shape tool. Full suites, release then debug, run after H2, H4 and H5.
+
+Deferred until after H5: the lean normal-return root record, `__init__` shim
+certification, `RETURN_NONE`, list-subclass `append`/`pop` specialization,
+`_PyValue_RichCompare` spills, and hot-code layout (H6).
+
 ## Latest checkpoint: execution-boundary73 and RETURN isolation
 
 The [grouped review](../register-semantics59/review73.md), exact source peers and

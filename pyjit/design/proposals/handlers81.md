@@ -1,7 +1,11 @@
 # Handlers81: upstream-shaped handlers in one computed-goto evaluator
 
-Status: proposal, 2026-11-19; awaiting the user's decisions in section 8. It
-changes no project source. It applies the user's rule that behavior upstream
+Status: **approved for rollout**, 2026-11-19. The user accepted the five
+decisions in section 8 as recommended and asked to land H0–H5 even if the
+first performance gain is modest; there is no performance gate. Work runs on
+`pyjit/handlers81` (worktree `BASE/worktrees/handlers81`, from checkpoint78
+`99a04733128`), builds `BASE/handlers81-{release,debug}`, evidence
+`E59/handlers81/`. It applies the user's rule that behavior upstream
 could change between versions (finalization timing, finalizer-visible order
 within an instruction, opcode-event granularity) is free to change. Source
 references are to checkpoint78 (`99a04733128`) and upstream `3a440b6`.
@@ -778,6 +782,11 @@ retirement remain the largest items.
 ---
 
 ## 8. Decisions for the user
+
+Decided 2026-11-19: all five as recommended. The discard slot replaces
+`IR_NO_DST`; the eight Q4 tests become consistency checks; the transition
+roots, `gc_verify`'s C-held owner walk and `get_transition_root_ids` are
+deleted; H4 switches to computed goto; the method-load gap is accepted.
 
 1. **The discard slot.** A discarded result lives until the next discard or
    frame exit (incidental timing). The alternative keeps an `IR_NO_DST` test

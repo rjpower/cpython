@@ -11,6 +11,13 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
+**Current work (2026-11-19):** the
+[handlers81](design/proposals/handlers81.md) rollout, then
+[operand-encoded calls](design/proposals/operand-calls80.md), on
+`pyjit/handlers81` from checkpoint78. The
+[active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
+lists the steps and [handoff](HANDOFF.md) the worktrees.
+
 The selected runtime is golden73 at `44f066f5fd5`, branch `pyjit/round73-golden`.
 Both independently implemented
 [execution-state72](design/proposals/execution-state72.md) units are closed and

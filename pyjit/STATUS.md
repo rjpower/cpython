@@ -65,8 +65,11 @@ What these rounds established:
   dispatch), deletes those protocols, and compiles the handlers into one
   computed-goto function. A compile probe of 336 labels kept a 40-byte frame,
   no canary and one dispatch jump per site. Estimated −8 to −17% of
-  upstream's instructions per kernel before calls80; awaiting user
-  decisions.
+  upstream's instructions per kernel before calls80. **In progress**
+  (approved 2026-11-19, no performance gate): steps H0–H4 on
+  `pyjit/handlers81`, then calls80 in the new shape as H5. The
+  [active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
+  tracks the steps.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

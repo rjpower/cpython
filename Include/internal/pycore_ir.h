@@ -713,26 +713,6 @@ struct _PyInterpreterFrame;
 PyAPI_FUNC(uint8_t) _PyIR_ShadowRetirement(struct _PyInterpreterFrame *frame,
                                         uint8_t reason);
 
-/* Nonzero while an observer (_testinternalcapi) reads retirement records.
- * Only then do they carry the comparison; assertion builds still run it. */
-PyAPI_DATA(int) _PyIR_ShadowRetirementObserved;
-
-static inline uint8_t
-_PyIR_ObserveShadowRetirement(struct _PyInterpreterFrame *frame,
-                              uint8_t reason)
-{
-#ifndef NDEBUG
-    uint8_t status = _PyIR_ShadowRetirement(frame, reason);
-    assert(status != _PyIR_SHADOW_MISMATCH);
-    return _PyIR_ShadowRetirementObserved ? status : _PyIR_SHADOW_UNCOVERED;
-#else
-    if (!_PyIR_ShadowRetirementObserved) {
-        return _PyIR_SHADOW_UNCOVERED;
-    }
-    return _PyIR_ShadowRetirement(frame, reason);
-#endif
-}
-
 /* Read-only NULL-control comparison, called only in a reached frame walk.
  * The published bit alone does not grant an arbitrary reader home access. */
 PyAPI_FUNC(uint8_t) _PyIR_ShadowFramePhase(struct _PyInterpreterFrame *frame);

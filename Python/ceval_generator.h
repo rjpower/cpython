@@ -69,23 +69,15 @@ generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
 #endif
 }
 
-/* No callback can intervene between detaching this root and its consuming
- * close, or between publication and detachment of the same owner. */
-static inline void
-generator_detach_result(_PyTransitionRoots *roots)
-{
-    roots->result = PyValue_NULL;
-    roots->result_present = 0;
-}
-
+/* The caller holds value in C, which is an external reference to the cyclic
+ * collector. Every frame write precedes the first close. */
 static inline void
 generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                             _PyTransitionRoots *roots)
+                             PyValue value)
 {
     if (frame->pending_redirect) {
         _PyFrame_CompleteRedirect(frame);
     }
-    PyValue value = roots->result;
     PyValue old = PyValue_NULL;
     if (frame->return_slot != IR_NO_DST) {
         if (frame->return_slot < _PyFrame_GetCode(frame)->co_nlocalsplus) {
@@ -93,14 +85,11 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
         }
         frame->base[frame->return_slot] = value;
         _PyValue_CheckHome(value);
-        generator_detach_result(roots);
-        PyValue_XCLOSE(old);
-    }
-    else {
-        generator_detach_result(roots);
-        PyValue_XCLOSE(value);
+        value = PyValue_NULL;
     }
     frame->phase_state = 0;
+    PyValue_XCLOSE(old);
+    PyValue_XCLOSE(value);
 }
 
 /* The remaining-window cursor is an actual home address, not an encoded action.
@@ -121,16 +110,9 @@ TARGET(GEN_COMPLETE_EFFECT)
                              : site + 1 + IR_DS(source_word);
     int remaining_count = (int)(slots - (frame->base + base));
     assert(remaining_count >= 0 && remaining_count <= count);
-    PyValue remaining[5];
-    _PyTransitionPrefix prefix = {remaining, 5, 0, 0};
-    _PyTransitionRoots roots = {
-        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
-        .result = result, .result_present = 1, .prefix = &prefix};
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
     slots = _PyFrame_Slots(frame);
     if (frame->pending_redirect || frame->instr_ptr != site) {
-        generator_publish_redirected(tstate, frame, &roots);
-        _PyThreadState_PopTransitionRoots(tstate, &roots);
+        generator_publish_redirected(tstate, frame, result);
         frame = tstate->current_frame;
         slots = _PyFrame_Slots(frame);
         next_instr = frame->instr_ptr;
@@ -142,9 +124,7 @@ TARGET(GEN_COMPLETE_EFFECT)
             tstate, frame, site, exit, PyValue_Borrow(result), _PY_IR_SEND, 0);
         if (pre.status < 0 || pre.status == _PY_IR_STEP_REDIRECT) {
             PyObject *error = pre.status < 0 ? PyErr_GetRaisedException() : NULL;
-            generator_detach_result(&roots);
             PyValue_XCLOSE(result);
-            _PyThreadState_PopTransitionRoots(tstate, &roots);
             if (error != NULL) {
                 PyErr_SetRaisedException(error);
                 PROCESS_ERROR_AT(RAISE, 0, frame->instr_ptr);
@@ -154,8 +134,10 @@ TARGET(GEN_COMPLETE_EFFECT)
         }
     }
     /* Detach every remaining owner before an overlapping A publication. */
+    PyValue detached[5];
+    int ndetached = 0;
     for (int k = remaining_count; k-- > 0;) {
-        remaining[prefix.end++] = frame->base[base + k];
+        detached[ndetached++] = frame->base[base + k];
         frame->base[base + k] = PyValue_NULL;
     }
     PyValue displaced = PyValue_NULL;
@@ -168,9 +150,9 @@ TARGET(GEN_COMPLETE_EFFECT)
         }
         frame->base[destination] = result;
         _PyValue_CheckHome(result);
-        generator_detach_result(&roots);
+        result = PyValue_NULL;
     }
-    remaining[prefix.end++] = displaced;
+    detached[ndetached++] = displaced;
     frame->return_pc = exit;
     _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
     if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
@@ -179,15 +161,10 @@ TARGET(GEN_COMPLETE_EFFECT)
     }
     if (post.status >= 0) { frame->instr_ptr = post.next; }
     PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
-    while (prefix.begin < prefix.end) {
-        PyValue value = remaining[prefix.begin++];
-        PyValue_XCLOSE(value);
+    for (int k = 0; k < ndetached; k++) {
+        PyValue_XCLOSE(detached[k]);
     }
-    if (roots.result_present) {
-        generator_detach_result(&roots);
-        PyValue_XCLOSE(result);
-    }
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    PyValue_XCLOSE(result);
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
     if (error != NULL) {
@@ -350,19 +327,14 @@ TARGET(GEN_SEND_YIELD)
 TARGET(GEN_YIELD_INPUT_EFFECT)
 {
     _PyValueTemps *const value_temps = NULL;
-    _PyTransitionRoots roots = {
-        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
-        .result = generator_payload(ir_word), .result_present = 1};
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    PyValue result = generator_payload(ir_word);
     int home = IR_B(*next_instr) + 2;
     PyValue sent = frame->base[home];
-    frame->base[home] = roots.result;
-    _PyValue_CheckTemp(roots.result);
-    generator_detach_result(&roots);
+    frame->base[home] = result;
+    _PyValue_CheckTemp(result);
     frame->instr_ptr = next_instr + 1;
     frame->phase_state = 0;
     PyValue_XCLOSE(sent);
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
     next_instr = frame->instr_ptr;
@@ -383,24 +355,15 @@ TARGET(GEN_SEND_INPUT_HOME)
 }
 
 /* The child link is committed, but its recursion debit has not happened.
- * Error construction may allocate; the incoming owner is rooted first. */
+ * The incoming owner stays in C while error construction allocates. */
 TARGET(GEN_ENTRY_EFFECT)
 {
     _PyValueTemps *const value_temps = NULL;
-    _PyTransitionRoots roots = {
-        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
-        .result = generator_payload(ir_word), .result_present = 1};
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
+    PyValue value = generator_payload(ir_word);
     if (_Py_EnterRecursivePy(tstate)) {
-        PyValue value = roots.result;
-        generator_detach_result(&roots);
         PyValue_XCLOSE(value);
-        _PyThreadState_PopTransitionRoots(tstate, &roots);
         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
     }
-    PyValue value = roots.result;
-    generator_detach_result(&roots);
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
     IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots,
                 frame->instr_ptr, value);
 }
@@ -411,12 +374,7 @@ TARGET(GEN_RESUME_EFFECT)
     _PyInstr *source = frame->instr_ptr;
     uint64_t generation = generator_control_generation(frame);
     int pending = frame->pending_redirect;
-    _PyTransitionRoots roots = {
-        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
-        .result = generator_payload(ir_word), .result_present = 1};
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-    generator_publish_redirected(tstate, frame, &roots);
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    generator_publish_redirected(tstate, frame, generator_payload(ir_word));
     if (pending || frame->instr_ptr != source ||
         generator_control_generation(frame) != generation) {
         next_instr = frame->instr_ptr;
@@ -518,12 +476,7 @@ TARGET(GEN_SEND_INPUT)
 TARGET(GEN_REDIRECT_EFFECT)
 {
     _PyValueTemps *const value_temps = NULL;
-    _PyTransitionRoots roots = {
-        .frame = frame, .kind = _Py_TRANSITION_KIND_EXTERNAL,
-        .result = generator_payload(ir_word), .result_present = 1};
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-    generator_publish_redirected(tstate, frame, &roots);
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
+    generator_publish_redirected(tstate, frame, generator_payload(ir_word));
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
     next_instr = frame->instr_ptr;
@@ -582,12 +535,17 @@ TARGET(GEN_RETURN_ROUTE)
 }
 
 /* The incoming frame has been unlinked and debited by the source RETURN.
- * Until its first effect, unfinished owners remain in the actual child. */
+ * Retire it as upstream does, with the result held in C, then route the
+ * result to the parent. Finalizers run during the retirement can redirect
+ * the parent; a changed pc or control generation is taken as a redirect. */
 TARGET(GEN_RETURN_RETIRED)
 {
     PyValue value = generator_payload(ir_word);
     _PyInterpreterFrame *dying = frame;
     _PyInterpreterFrame *parent = tstate->current_frame;
+    _PyInstr *site = next_instr;
+    uint64_t generation = generator_control_generation(parent);
+    bool placed = generator_outcome_target(parent, site, generator_completed_targets) != NULL;
     _PyThreadState_UpdateLastProfiledFrame(tstate, dying, parent);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(dying);
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
@@ -595,102 +553,19 @@ TARGET(GEN_RETURN_RETIRED)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     dying->previous = NULL;
-    int stage = _PyFrame_TryClearGenerator(gen);
-    if (stage > 0) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETIRE_EFFECT_SLOTS, dying,
-                    dying->base + stage, next_instr, value);
-    }
-    if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETIRE_EFFECT_ASSOCIATION, dying,
-                    dying->base, next_instr, value);
-    }
-    if (stage == _Py_FRAME_CLEAR_LOCALS) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETIRE_EFFECT_LOCALS, dying,
-                    dying->base, next_instr, value);
-    }
-    if (stage == _Py_FRAME_CLEAR_FUNCTION) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETIRE_EFFECT_FUNCTION, dying,
-                    dying->base, next_instr, value);
-    }
-    assert(stage == _Py_FRAME_CLEAR_DONE);
-    if (_PyFrame_ObjectMayReenter(gen->gi_exc_state.exc_value)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETIRE_EFFECT_EXCEPTION, dying,
-                    dying->base, next_instr, value);
-    }
-    _PyErr_ClearExcState(&gen->gi_exc_state);
+    value = _PyFrame_ClearGenerator(gen, value);
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
-    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_PARENT, parent, _PyFrame_Slots(parent),
-                next_instr, value);
+    frame = tstate->current_frame;
+    assert(frame == parent);
+    slots = _PyFrame_Slots(frame);
+    if (placed &&
+        (frame->pending_redirect || frame->instr_ptr != site ||
+         generator_control_generation(frame) != generation)) {
+        IR_GEN_TAIL(_TAIL_CALL_GEN_REDIRECT_EFFECT, frame, slots,
+                    frame->instr_ptr, value);
+    }
+    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_PARENT, frame, slots, site, value);
 }
-
-/* Finish the child's remaining suffix, then replace this native frame with
- * the materialized completion suffix. No old outcome target is rearmed. */
-#define GENERATOR_RETIRE_EFFECT(STAGE) \
-    _PyValueTemps *const value_temps = NULL; \
-    _PyInterpreterFrame *dying = frame; \
-    _PyInterpreterFrame *parent = tstate->current_frame; \
-    _PyInstr *site = next_instr; \
-    uint64_t generation = generator_control_generation(parent); \
-    bool placed = generator_outcome_target(parent, site, generator_completed_targets) != NULL; \
-    int stage = (STAGE); \
-    _PyTransitionRoots roots; \
-    _PyFrame_InitClearRoots(dying, stage, _PyFrame_NumSlots(dying), \
-                           generator_payload(ir_word), &roots); \
-    roots.retire_reason = _PyIR_RETIRE_NORMAL_RETURN; \
-    _PyThreadState_PushTransitionRoots(tstate, &roots); \
-    roots.shadow_status = _PyIR_ObserveShadowRetirement( \
-        dying, _PyIR_RETIRE_NORMAL_RETURN); \
-    PyGenObject *gen = _PyGen_GetGeneratorFromFrame(dying); \
-    Py_BEGIN_CRITICAL_SECTION(gen); \
-    if (stage != _Py_FRAME_CLEAR_DONE) { \
-        _PyFrame_FinishClearExceptCode(dying, stage, &roots); \
-    } \
-    Py_END_CRITICAL_SECTION(); \
-    roots.header_mask &= ~_Py_TRANSITION_EXCEPTION; \
-    _PyErr_ClearExcState(&gen->gi_exc_state); \
-    roots.header_mask &= ~_Py_TRANSITION_CODE; \
-    PyValue value = roots.result; \
-    generator_detach_result(&roots); \
-    _PyThreadState_PopTransitionRoots(tstate, &roots); \
-    ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN; \
-    frame = tstate->current_frame; \
-    slots = _PyFrame_Slots(frame); \
-    if (placed) { \
-        if (frame != parent || frame->pending_redirect || \
-            frame->instr_ptr != site || \
-            generator_control_generation(frame) != generation) { \
-            IR_GEN_TAIL(_TAIL_CALL_GEN_REDIRECT_EFFECT, frame, slots, \
-                        frame->instr_ptr, value); \
-        } \
-        IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, frame->base + IR_B(*site) + 3, site, value); \
-    } \
-    _PyIRStepResult completed = _PyEval_CompleteGeneratorReturn(tstate, frame, value); \
-    next_instr = completed.next; \
-    if (completed.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); } \
-    LLTRACE_RESUME_FRAME(); \
-    GENERATOR_DISPATCH()
-
-TARGET(GEN_RETIRE_EFFECT_SLOTS)
-{
-    GENERATOR_RETIRE_EFFECT((int)(slots - frame->base));
-}
-TARGET(GEN_RETIRE_EFFECT_ASSOCIATION)
-{
-    GENERATOR_RETIRE_EFFECT(_Py_FRAME_CLEAR_ASSOCIATION);
-}
-TARGET(GEN_RETIRE_EFFECT_LOCALS)
-{
-    GENERATOR_RETIRE_EFFECT(_Py_FRAME_CLEAR_LOCALS);
-}
-TARGET(GEN_RETIRE_EFFECT_FUNCTION)
-{
-    GENERATOR_RETIRE_EFFECT(_Py_FRAME_CLEAR_FUNCTION);
-}
-TARGET(GEN_RETIRE_EFFECT_EXCEPTION)
-{
-    GENERATOR_RETIRE_EFFECT(_Py_FRAME_CLEAR_DONE);
-}
-#undef GENERATOR_RETIRE_EFFECT
 
 /* The already-validated RETURN consumes the payload without an A home. The
  * generator decision is the same source decision as ordinary RETURN. */

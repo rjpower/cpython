@@ -8,7 +8,6 @@
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
 #include "pycore_setobject.h"     // PySet_AddValue()
-#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
@@ -2223,21 +2222,26 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static void clear_error_frame(PyThreadState *, _PyInterpreterFrame *);
 
 static void
-error_scope_disarm(PyThreadState *tstate, _PyTransitionRoots *scope)
+error_scope_push(PyThreadState *tstate, _PyErrorScope *scope)
 {
-    _PyInterpreterFrame *frame = scope->frame;
-    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
-        frame->phase_state = 0;
-    }
-    scope->remaining = 0;
-    scope->home_authority = _PyIR_HOME_NONE;
-    scope->homes = NULL;
-    scope->frame = NULL;
-    _PyThreadState_PopTransitionRoots(tstate, scope);
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+    scope->previous = impl->error_scopes;
+    impl->error_scopes = scope;
 }
 
 static void
-error_scope_clear(_PyInterpreterFrame *frame, _PyTransitionRoots *scope,
+error_scope_disarm(PyThreadState *tstate, _PyErrorScope *scope)
+{
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+    assert(impl->error_scopes == scope);
+    if (scope->frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
+        scope->frame->phase_state = 0;
+    }
+    impl->error_scopes = scope->previous;
+}
+
+static void
+error_scope_clear(_PyInterpreterFrame *frame, _PyErrorScope *scope,
                   int first)
 {
     const _PyIRHomeView *view = scope->homes;
@@ -2290,14 +2294,13 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), &view);
             authority = _PyIR_HOME_NULL_CONTROL_READABLE;
         }
-        _PyTransitionRoots scope = {
+        _PyErrorScope scope = {
             .frame = frame,
             .remaining = _PyFrame_NumSlots(frame),
-            .kind = _Py_TRANSITION_KIND_ERROR,
             .home_authority = authority,
             .homes = &view,
         };
-        _PyThreadState_PushTransitionRoots(tstate, &scope);
+        error_scope_push(tstate, &scope);
         frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
 
         /* Retain a source callback's immutable recovery triple across bridge
@@ -2512,40 +2515,6 @@ _PyEval_GetObserverContext(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
-/* Only external evaluator entry and explicit custom-evaluator handoffs use
- * this lookup. Empty provider nodes survive until their outer C scope exits. */
-static Py_NO_INLINE bool
-handoff_staged_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)tstate)->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        if (roots->kind == _Py_TRANSITION_KIND_STAGED && !roots->caller_staged &&
-            roots->frame != NULL && roots->frame == frame)
-        {
-            assert(!roots->result_present);
-            roots->remaining = 0;
-            roots->header_mask = 0;
-            roots->home_authority = _PyIR_HOME_NONE;
-            roots->homes = NULL;
-            roots->frame = NULL;
-            return true;
-        }
-    }
-    return false;
-}
-
-int
-_PyEval_ActivateStagedFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    if (tstate->current_frame != frame || !handoff_staged_frame(tstate, frame)) {
-        PyErr_SetString(PyExc_SystemError, "no live staged frame to activate");
-        return -1;
-    }
-    return 0;
-}
-
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
    its borrow floor.  The loop sets up the activation and calls the first
    handler, and the handlers run the frames by tail calls until one of them
@@ -2566,15 +2535,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 #endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
-        uint8_t reason = _PyIR_RETIRE_ERROR_UNWIND;
-        if (((_PyThreadStateImpl *)tstate)->transition_roots != NULL &&
-            handoff_staged_frame(tstate, frame))
-        {
-            reason = _PyIR_RETIRE_STAGED_FAILURE;
-        }
-        /* Handoff to retirement has no callback or poll before its roots. */
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        _PyEval_FrameClearAndPop(tstate, frame, reason);
+        _PyEval_FrameClearAndPop(tstate, frame);
         return PyValue_NULL;
     }
 
@@ -2629,9 +2591,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.previous = tstate->current_frame;
     frame->previous = &entry->frame;
     tstate->current_frame = frame;
-    if (tstate_impl->transition_roots != NULL) {
-        (void)handoff_staged_frame(tstate, frame);
-    }
 
     PyValue result;
     if (throwflag) {
@@ -2666,7 +2625,7 @@ early_exit:
     // GH-99729: We need to unlink the frame *before* clearing it:
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame = dying->previous;
-    _PyEval_FrameClearAndPop(tstate, dying, _PyIR_RETIRE_ERROR_UNWIND);
+    _PyEval_FrameClearAndPop(tstate, dying);
     assert(frame == &entry->frame);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
@@ -3299,71 +3258,46 @@ fail_post_args:
     return -1;
 }
 
-/* This continuation is reached only when a remaining release may reenter.
- * Its record protects the result and retiring reservation through the final
- * code/exception close, whose referents can themselves invoke Python. */
-static _Py_COLD_FUNCTION Py_NO_INLINE PyValue
-clear_thread_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        int stage, PyValue result, uint8_t reason,
-                        int initial_extent)
+/* Retire a thread frame as upstream does: it is unlinked, the caller holds
+ * the result in C, and each owner is NULLed and closed in turn. A finalizer
+ * that runs sees a consistent frame; nested calls may grow the arena but
+ * must restore this reservation, which stays until the code is closed. */
+static inline PyValue
+retire_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue result, int extent)
 {
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
     PyObject **top = tstate->datastack_top;
     PyObject **limit = tstate->datastack_limit;
     PyValue *saved_top = frame->saved_top;
-    assert((PyObject **)frame == limit);
-    assert(frame->base >= _PyDataStack_Slots(&chunk->data[0]));
-    assert(frame->base <= _PyDataStack_Slots(top));
 #endif
-    _PyTransitionRoots roots;
-    _PyFrame_InitClearRoots(frame, stage, initial_extent, result, &roots);
-    roots.retire_reason = reason;
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
-    roots.shadow_status = _PyIR_ObserveShadowRetirement(frame, reason);
-    if (stage != _Py_FRAME_CLEAR_DONE) {
-        _PyFrame_FinishClearExceptCode(frame, stage, &roots);
-    }
-    assert(roots.remaining == 0);
-    roots.header_mask &= ~_Py_TRANSITION_CODE;
+    _PyFrame_ClearExceptCode(frame, extent);
     Py_CLEAR(frame->f_executable);
 #ifndef NDEBUG
-    /* Nested calls may grow the arena, but must restore this reservation. */
     assert(tstate->datastack_chunk == chunk);
     assert(tstate->datastack_top == top);
     assert(tstate->datastack_limit == limit);
     assert(frame->saved_top == saved_top);
 #endif
-    result = roots.result;
-    roots.result = PyValue_NULL;
-    roots.result_present = 0;
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
     _PyThreadState_PopFrame(tstate, frame);
     return result;
 }
 
 static PyValue
 clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   PyValue result, uint8_t reason)
+                   PyValue result)
 {
-    assert(frame->owner == FRAME_OWNED_BY_THREAD);
-    assert((PyObject **)frame == tstate->datastack_limit);
-    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    int stage = _PyFrame_TryClearExceptCode(frame);
-    if (stage != _Py_FRAME_CLEAR_DONE ||
-        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
-    {
-        return clear_thread_frame_slow(tstate, frame, stage, result, reason,
-                                      _PyFrame_GetCode(frame)->co_nlocalsplus);
-    }
-    Py_CLEAR(frame->f_executable);
-    _PyThreadState_PopFrame(tstate, frame);
-    return result;
+    return retire_thread_frame(tstate, frame, result,
+                               _PyFrame_GetCode(frame)->co_nlocalsplus);
 }
 
 static PyValue
 clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                PyValue result, uint8_t reason)
+                PyValue result)
 {
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
     PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -3373,7 +3307,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    result = _PyFrame_ClearGenerator(gen, result, reason);
+    result = _PyFrame_ClearGenerator(gen, result);
     // No escaping call may follow this store before evaluator return.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     return result;
@@ -3384,7 +3318,7 @@ clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        (void)clear_thread_frame(tstate, frame, PyValue_NULL, _PyIR_RETIRE_ERROR_UNWIND);
+        (void)clear_thread_frame(tstate, frame, PyValue_NULL);
         return;
     }
     assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
@@ -3394,7 +3328,7 @@ clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
-    (void)_PyFrame_ClearGeneratorBindings(gen, _PyIR_RETIRE_ERROR_UNWIND);
+    _PyFrame_ClearGeneratorBindings(gen);
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 
@@ -3546,14 +3480,14 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
 
 static PyValue
 frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    PyValue result, uint8_t reason)
+                    PyValue result)
 {
     // By this point, tstate->current_frame is already set to the parent frame.
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
-        return clear_thread_frame(tstate, frame, result, reason);
+        return clear_thread_frame(tstate, frame, result);
     }
-    return clear_gen_frame(tstate, frame, result, reason);
+    return clear_gen_frame(tstate, frame, result);
 }
 
 PyValue
@@ -3561,7 +3495,7 @@ _PyEval_FrameClearAndPopWithResult(PyThreadState *tstate,
                                   _PyInterpreterFrame *frame, PyValue result)
 {
     assert(!PyValue_IsNull(result));
-    return frame_clear_and_pop(tstate, frame, result, _PyIR_RETIRE_NORMAL_RETURN);
+    return frame_clear_and_pop(tstate, frame, result);
 }
 
 Py_NO_INLINE PyValue
@@ -3571,118 +3505,29 @@ _PyEval_FrameClearAndPopGeneralWithResult(PyThreadState *tstate,
 {
     assert(!PyValue_IsNull(result));
     if (frame->owner != FRAME_OWNED_BY_THREAD) {
-        return frame_clear_and_pop(tstate, frame, result,
-                                   _PyIR_RETIRE_NORMAL_RETURN);
+        return frame_clear_and_pop(tstate, frame, result);
     }
-    assert((PyObject **)frame == tstate->datastack_limit);
-    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-    int extent = _PyFrame_NumSlots(frame);
-    int stage = _PyFrame_TryClearExceptCodeGeneral(frame);
-    if (stage != _Py_FRAME_CLEAR_DONE ||
-        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
-    {
-        return clear_thread_frame_slow(tstate, frame, stage, result,
-                                      _PyIR_RETIRE_NORMAL_RETURN, extent);
-    }
-    Py_CLEAR(frame->f_executable);
-    _PyThreadState_PopFrame(tstate, frame);
-    return result;
+    return retire_thread_frame(tstate, frame, result, _PyFrame_NumSlots(frame));
 }
 
 /* Certified RETURN_VALUE_EMPTY retires a thread frame whose scratch is
- * empty, so only the code's locals can own values. The frame is already
- * unlinked and nothing reads its phase publication before it is popped; the
- * slow continuation resets the publication before it publishes roots. */
+ * empty, so only the code's locals can own values. */
 PyValue
 _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
                                     _PyInterpreterFrame *frame, PyValue result)
 {
     assert(!PyValue_IsNull(result));
-    assert(frame->owner == FRAME_OWNED_BY_THREAD);
     assert(tstate->current_frame != frame);
-    assert((PyObject **)frame == tstate->datastack_limit);
-    assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-    int extent = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    int stage = _PyFrame_TryCloseOwnersNoReentry(frame, extent);
-    if (stage != _Py_FRAME_CLEAR_DONE ||
-        _PyFrame_ObjectMayReenter((PyObject *)frame->f_executable))
-    {
-        return clear_thread_frame_slow(tstate, frame, stage, result,
-                                      _PyIR_RETIRE_NORMAL_RETURN, extent);
-    }
-    Py_CLEAR(frame->f_executable);
-    _PyThreadState_PopFrame(tstate, frame);
-    return result;
+    return retire_thread_frame(tstate, frame, result,
+                               _PyFrame_GetCode(frame)->co_nlocalsplus);
 }
 
 void
-_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        uint8_t reason)
+_PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
-    (void)frame_clear_and_pop(tstate, frame, PyValue_NULL, reason);
-}
-
-int
-_PyEval_RetireStagedFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    /* Match the token before reading storage which a prior consumer may have
-     * released. Missing-token errors must not inspect the supplied pointer. */
-    if (tstate->current_frame == frame || !handoff_staged_frame(tstate, frame)) {
-        PyErr_SetString(PyExc_SystemError, "no live staged frame to retire");
-        return -1;
-    }
-    assert(frame->owner == FRAME_OWNED_BY_THREAD);
-    PyObject *error = _PyErr_GetRaisedException(tstate);
-    _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_STAGED_FAILURE);
-    _PyErr_SetRaisedException(tstate, error);
-    return 0;
-}
-
-/* A custom evaluator can return a result or error without consuming its input.
- * The outer provider still owns that reservation; the node decides, not the
- * contents of frame storage which a delegating evaluator may already free. */
-static void
-finish_staged_provider(PyThreadState *tstate, _PyTransitionRoots *staged,
-                       _PyInterpreterFrame *previous)
-{
-    assert(tstate->current_frame == previous);
-    if (staged->frame != NULL) {
-        int status = _PyEval_RetireStagedFrame(tstate, staged->frame);
-        assert(status == 0);
-        (void)status;
-    }
-    _PyThreadState_PopTransitionRoots(tstate, staged);
-}
-
-/* Binding owns initialized arena homes before the child is current. The
- * outlined caller keeps this descriptor through all later provider cleanup. */
-static void
-stage_binding_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    _PyTransitionRoots *staged)
-{
-    *staged = (_PyTransitionRoots){
-        .frame = frame,
-        .remaining = _PyFrame_NumSlots(frame),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
-        .kind = _Py_TRANSITION_KIND_STAGED,
-        /* A custom evaluator may install nullable headers before handoff. */
-        .header_mask = _Py_TRANSITION_CODE | _Py_TRANSITION_FUNCTION |
-            _Py_TRANSITION_LOCALS | _Py_TRANSITION_FRAME_OBJECT,
-    };
-    _PyThreadState_PushTransitionRoots(tstate, staged);
-}
-
-static void
-unstage_binding_frame(PyThreadState *tstate, _PyTransitionRoots *staged)
-{
-    staged->remaining = 0;
-    staged->header_mask = 0;
-    staged->home_authority = _PyIR_HOME_NONE;
-    staged->homes = NULL;
-    staged->frame = NULL;
-    _PyThreadState_PopTransitionRoots(tstate, staged);
+    (void)frame_clear_and_pop(tstate, frame, PyValue_NULL);
 }
 
 /* code is independently pinned through preparation and binding. Consumes
@@ -3691,8 +3536,7 @@ static _PyInterpreterFrame *
 eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
                         PyObject *locals, PyValue *args,
                         size_t argcount, PyObject *kwnames,
-                        _PyInterpreterFrame *previous, PyCodeObject *code,
-                        _PyTransitionRoots *staged)
+                        _PyInterpreterFrame *previous, PyCodeObject *code)
 {
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     CALL_STAT_INC(frames_pushed);
@@ -3705,14 +3549,10 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
-    stage_binding_frame(tstate, frame, staged);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-        /* Transfer to retirement without a callback or poll. */
-        unstage_binding_frame(tstate, staged);
-        (void)clear_thread_frame(tstate, frame, PyValue_NULL,
-                                _PyIR_RETIRE_STAGED_FAILURE);
+        (void)clear_thread_frame(tstate, frame, PyValue_NULL);
         return NULL;
     }
     return frame;
@@ -3741,14 +3581,9 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
 {
     PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
-    _PyTransitionRoots staged;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
-        tstate, func, locals, args, argcount, kwnames, previous, code, &staged);
+        tstate, func, locals, args, argcount, kwnames, previous, code);
     Py_DECREF(code);
-    if (frame != NULL) {
-        /* The caller must activate this child before it can reenter. */
-        unstage_binding_frame(tstate, &staged);
-    }
     return frame;
 }
 
@@ -3758,8 +3593,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
 static _PyInterpreterFrame *
 eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
-    _PyInterpreterFrame *previous, PyCodeObject *code,
-    _PyTransitionRoots *staged)
+    _PyInterpreterFrame *previous, PyCodeObject *code)
 {
     bool has_dict = (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0);
     PyObject *kwnames = NULL;
@@ -3800,7 +3634,7 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     }
     new_frame = eval_frame_push_and_init_code(
         tstate, func, locals,
-        newargs, nargs, kwnames, previous, code, staged
+        newargs, nargs, kwnames, previous, code
     );
     goto done;
 fail_func:
@@ -3826,36 +3660,23 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
 {
     PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
-    _PyTransitionRoots staged;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
-        tstate, func, locals, nargs, callargs, kwargs, previous, code, &staged);
+        tstate, func, locals, nargs, callargs, kwargs, previous, code);
     Py_DECREF(code);
-    if (frame != NULL) {
-        unstage_binding_frame(tstate, &staged);
-    }
     return frame;
 }
 
-/* The shim's stage remains through self retirement and the final M2 closes.
- * After the arena authority transfers, the outer node only blocks redirects
- * of its caller; PopFrame cannot call out before we discard that metadata. */
+/* Retire the shim when binding the __init__ frame failed. Its self owner
+ * closes with the raised exception set aside. */
 static void
-clear_init_shim(PyThreadState *tstate, _PyTransitionRoots *staged)
+clear_init_shim(PyThreadState *tstate, _PyInterpreterFrame *shim)
 {
-    _PyInterpreterFrame *shim = staged->frame;
     PyObject *error = _PyErr_GetRaisedException(tstate);
     _PyFrame_ClearTemporaries(shim, 0);
-    staged->remaining = 0;
-    staged->header_mask = 0;
-    staged->home_authority = _PyIR_HOME_NONE;
-    staged->homes = NULL;
-    _PyEval_FrameClearAndPop(tstate, shim, _PyIR_RETIRE_STAGED_FAILURE);
+    _PyEval_FrameClearAndPop(tstate, shim);
     /* Deallocators preserve the raised-exception state they entered with.
      * Thus restoring the saved error below cannot close a new exception. */
     assert(!_PyErr_Occurred(tstate));
-    staged->caller_staged = 0;
-    staged->frame = NULL;
-    _PyThreadState_PopTransitionRoots(tstate, staged);
     _PyErr_SetRaisedException(tstate, error);
 }
 
@@ -3874,15 +3695,6 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
     }
     _PyFrame_InitializeTrampoline(shim, shim_code, 1, caller);
     shim->base[0] = PyValue_DUP(window[1]);
-    _PyTransitionRoots shim_roots = {
-        .frame = shim,
-        .remaining = _PyFrame_NumSlots(shim),
-        .home_authority = _PyIR_HOME_NULL_CONTROL_READABLE,
-        .header_mask = _Py_TRANSITION_CODE,
-        .kind = _Py_TRANSITION_KIND_STAGED,
-        .caller_staged = 1,
-    };
-    _PyThreadState_PushTransitionRoots(tstate, &shim_roots);
 
     PyValue small[8];
     int argcount = nargs + 1;
@@ -3891,7 +3703,7 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
         arguments = PyMem_Malloc(sizeof(PyValue) * argcount);
         if (arguments == NULL) {
             PyErr_NoMemory();
-            clear_init_shim(tstate, &shim_roots);
+            clear_init_shim(tstate, shim);
             /* No input moved: the caller's error unwind still owns them. */
             return NULL;
         }
@@ -3904,30 +3716,20 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
         arguments[i] = window[i + 1];
         window[i + 1] = PyValue_NULL;
     }
-    _PyTransitionRoots child_roots;
     _PyInterpreterFrame *child = eval_frame_push_and_init_code(
-        tstate, function, NULL, arguments, argcount, NULL, shim, code,
-        &child_roots);
+        tstate, function, NULL, arguments, argcount, NULL, shim, code);
     /* The binder consumed every argument on both outcomes. */
     if (arguments != small) {
         PyMem_Free(arguments);
     }
     Py_DECREF(code);
     if (child == NULL) {
-        clear_init_shim(tstate, &shim_roots);
+        clear_init_shim(tstate, shim);
         return NULL;
     }
     caller->return_slot = (uint16_t)destination;
     caller->return_pc = next;
     tstate->py_recursion_remaining--;
-    unstage_binding_frame(tstate, &child_roots);
-    shim_roots.remaining = 0;
-    shim_roots.header_mask = 0;
-    shim_roots.home_authority = _PyIR_HOME_NONE;
-    shim_roots.homes = NULL;
-    shim_roots.caller_staged = 0;
-    shim_roots.frame = NULL;
-    _PyThreadState_PopTransitionRoots(tstate, &shim_roots);
     return child;
 }
 
@@ -4091,8 +3893,6 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
     PyCodeObject *code = NULL;
     _PyInterpreterFrame *child = NULL;
-    _PyTransitionRoots staged;
-    bool child_staged = false;
     if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
         storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
         if (storage == NULL) {
@@ -4128,7 +3928,7 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
         child = eval_frame_push_and_init_ex_code(
             call->tstate, consumed_function, consumed_locals,
             PyTuple_GET_SIZE(consumed_tuple), consumed_tuple, consumed_kwargs,
-            call->frame, code, &staged);
+            call->frame, code);
     }
     else {
         int offset = call->state & CALL_SELF_PRESENT ? 1 : 2;
@@ -4145,9 +3945,8 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
         copied = 0;
         child = eval_frame_push_and_init_code(
             call->tstate, consumed_function, consumed_locals, storage,
-            positional, names, call->frame, code, &staged);
+            positional, names, call->frame, code);
     }
-    child_staged = child != NULL;
     if (call_record_refresh(call) < 0 || child == NULL) {
         status = -1;
         goto done;
@@ -4171,8 +3970,6 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     call->frame->return_pc = call->frame->instr_ptr + 1;
     assert(child->previous == call->frame);
     call->tstate->current_frame = child;
-    unstage_binding_frame(call->tstate, &staged);
-    child_staged = false;
     status = 0;
 done:
     PyValue_CLEAR(function);
@@ -4206,10 +4003,7 @@ done:
          * the actual parent before clearing it; do not unwind it as executed. */
         call->tstate->current_frame = call->frame;
         call_transaction_publish_pc(call);
-        if (child_staged) {
-            unstage_binding_frame(call->tstate, &staged);
-        }
-        _PyEval_FrameClearAndPop(call->tstate, child, _PyIR_RETIRE_STAGED_FAILURE);
+        _PyEval_FrameClearAndPop(call->tstate, child);
         child = NULL;
     }
     if (child == NULL) {
@@ -4521,7 +4315,6 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
                PyObject* const* args, size_t argcount,
                PyObject *kwnames)
 {
-    _PyInterpreterFrame *previous = tstate->current_frame;
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
     PyObject **top = tstate->datastack_top;
@@ -4554,22 +4347,19 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
         }
     }
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-    _PyTransitionRoots staged;
-    bool linked = false;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
         tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        arguments, argcount, kwnames, NULL, code, &staged);
-    linked = frame != NULL;
+        arguments, argcount, kwnames, NULL, code);
     Py_DECREF(code);
     if (total_args > 8) {
         PyMem_Free(arguments);
     }
-    if (!linked) {
+    if (frame == NULL) {
         return NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
+    /* The evaluator consumes the frame, as upstream's hooks must. */
     PyObject *result = _PyEval_EvalFrame(tstate, frame, 0);
-    finish_staged_provider(tstate, &staged, previous);
 #ifndef NDEBUG
     /* The first root chunk is retained even after its initial frame exits. */
     assert(chunk == NULL || tstate->datastack_chunk == chunk);
@@ -4583,7 +4373,6 @@ Py_NO_INLINE PyValue
 _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
                      const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
-    _PyInterpreterFrame *previous = tstate->current_frame;
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
     PyObject **top = tstate->datastack_top;
@@ -4609,22 +4398,18 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
     PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
         : Py_NewRef(func->func_globals);
-    _PyTransitionRoots staged;
-    bool linked = false;
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
         tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        owners, nargs, kwnames, NULL, code, &staged);
-    linked = frame != NULL;
+        owners, nargs, kwnames, NULL, code);
     Py_DECREF(code);
     if (owners != small) {
         PyMem_Free(owners);
     }
-    if (!linked) {
+    if (frame == NULL) {
         return PyValue_NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
     PyValue result = _PyEval_EvalFrameValue(tstate, frame, 0);
-    finish_staged_provider(tstate, &staged, previous);
 #ifndef NDEBUG
     /* The first root chunk is retained even after its initial frame exits. */
     assert(chunk == NULL || tstate->datastack_chunk == chunk);
@@ -4830,21 +4615,12 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
     assert(argcnt >= 0 && argcntafter >= -1);
+#ifndef NDEBUG
     int capacity = argcnt + (argcntafter < 0 ? 0 : argcntafter + 1);
     _PyInterpreterFrame *frame = tstate->current_frame;
     assert(sp - frame->base >= capacity);
     assert(sp <= frame->base + _PyFrame_NumSlots(frame));
-    _PyTransitionPrefix prefix = {
-        .base = sp - capacity,
-        .capacity = capacity,
-        .begin = capacity,
-        .end = capacity,
-    };
-    _PyTransitionRoots roots = {
-        .frame = frame,
-        .prefix = &prefix,
-    };
-    _PyThreadState_PushTransitionRoots(tstate, &roots);
+#endif
     int result = 0;
 
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
@@ -4880,7 +4656,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             goto Error;
         }
         *--sp = step.value;
-        prefix.begin--;
         _PyValue_CheckTemp(*sp);
     }
 
@@ -4915,7 +4690,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     if (l == NULL)
         goto Error;
     *--sp = PyValue_FromObjectSteal(l);
-    prefix.begin--;
     i++;
 
     ll = PyList_GET_SIZE(l);
@@ -4930,7 +4704,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     for (j = argcntafter; j > 0; j--, i++) {
         *--sp = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
-        prefix.begin--;
     }
     /* Resize the list. */
     Py_SET_SIZE(l, ll - argcntafter);
@@ -4943,17 +4716,12 @@ Error:
     for (; i > 0; i--, sp++) {
         // a move: cleared below
         PyValue ref = *sp;
-        prefix.begin++;
         *sp = PyValue_NULL;
         PyValue_CLOSE(ref);
     }
 Done:
     Py_XDECREF(it);
     Py_DECREF(v);
-    /* Cleanup may reenter while outputs still belong to this prefix. Hand
-     * them back to the initialized/NULL frame without an intervening call. */
-    prefix.begin = prefix.end;
-    _PyThreadState_PopTransitionRoots(tstate, &roots);
     return result;
 }
 

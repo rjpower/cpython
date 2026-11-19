@@ -61,111 +61,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_NextHomeRange()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value_api.h"      // _PyValue_AsObjectAt()
-
-static int
-visit_transition_value(PyValue value, visitproc visit, void *arg)
-{
-    if (!PyValue_IsTaggedIndex(value)) {
-        _PyValue_RecheckHome(value);
-    }
-    if (PyValue_IsObject(value)) {
-        Py_VISIT(PyValue_AsKnownObjectBorrow(value));
-    }
-    return 0;
-}
-
-int
-_PyGC_TraceVisitTransitionRoots(PyThreadState *tstate, visitproc visit, void *arg)
-{
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)tstate)->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        if (roots->kind == _Py_TRANSITION_KIND_ERROR) {
-            /* Active frame/container traversal owns these edges. This node
-             * only selects their view; treating it as an external root would
-             * hide cycles from heap-container subtraction. */
-            assert(roots->header_mask == 0 && !roots->result_present);
-            continue;
-        }
-        _PyInterpreterFrame *frame = roots->frame;
-        if (frame == NULL) {
-            /* A provider scope outlives the frame consumed by its evaluator. */
-            assert(roots->kind == _Py_TRANSITION_KIND_STAGED);
-            assert(!roots->caller_staged);
-            assert(roots->remaining == 0 && roots->header_mask == 0);
-            assert(!roots->result_present && roots->homes == NULL);
-            assert(roots->home_authority == _PyIR_HOME_NONE);
-            continue;
-        }
-        assert(roots->remaining >= 0);
-        if (roots->kind == _Py_TRANSITION_KIND_EXTERNAL) {
-            assert(roots->remaining == 0);
-            assert(roots->home_authority == _PyIR_HOME_NONE);
-        }
-        else if (roots->home_authority == _PyIR_HOME_NULL_CONTROL_READABLE) {
-            assert(roots->homes == NULL);
-            for (int i = 0; i < roots->remaining; i++) {
-                int err = visit_transition_value(frame->base[i], visit, arg);
-                if (err) {
-                    return err;
-                }
-            }
-        }
-        else if (roots->home_authority == _PyIR_HOME_MUST_READABLE) {
-            assert(roots->header_mask & _Py_TRANSITION_CODE);
-            const _PyIRHomeView *view = roots->homes;
-            assert(view != NULL);
-            uint32_t cursor = 0;
-            int begin, end;
-            while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
-                for (int i = begin; i < Py_MIN(end, roots->remaining); i++) {
-                    int err = visit_transition_value(frame->base[i], visit, arg);
-                    if (err) {
-                        return err;
-                    }
-                }
-            }
-        }
-        else {
-            assert(roots->home_authority == _PyIR_HOME_NONE);
-            assert(roots->remaining == 0 && roots->homes == NULL);
-        }
-        if (roots->header_mask & _Py_TRANSITION_CODE) {
-            Py_VISIT(frame->f_executable);
-        }
-        if (roots->header_mask & _Py_TRANSITION_FUNCTION) {
-            Py_VISIT(frame->f_funcobj);
-        }
-        if (roots->header_mask & _Py_TRANSITION_LOCALS) {
-            Py_VISIT(frame->f_locals);
-        }
-        if (roots->header_mask & _Py_TRANSITION_FRAME_OBJECT) {
-            Py_VISIT(frame->frame_obj);
-        }
-        if (roots->header_mask & _Py_TRANSITION_EXCEPTION) {
-            Py_VISIT(_PyGen_GetGeneratorFromFrame(frame)->gi_exc_state.exc_value);
-        }
-        if (roots->result_present && PyValue_IsObject(roots->result)) {
-            Py_VISIT(PyValue_AsKnownObjectBorrow(roots->result));
-        }
-        _PyTransitionPrefix *prefix = roots->kind == _Py_TRANSITION_KIND_EXTERNAL
-            ? roots->prefix : NULL;
-        if (prefix != NULL) {
-            assert(prefix->begin >= 0 && prefix->begin <= prefix->end);
-            assert(prefix->end <= prefix->capacity);
-            for (int i = prefix->begin; i < prefix->end; i++) {
-                int err = visit_transition_value(prefix->base[i], visit, arg);
-                if (err) {
-                    return err;
-                }
-            }
-        }
-    }
-    return 0;
-}
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
@@ -1178,7 +1074,7 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
             return err;
         }
     }
-    return _PyGC_TraceVisitTransitionRoots(p, visit, arg);
+    return 0;
 }
 
 int

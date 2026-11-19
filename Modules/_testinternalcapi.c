@@ -41,7 +41,6 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_regcfg.h"        // _PyRegPass_SetKeepAcrossCode()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
-#include "pycore_transition_roots.h" // _PyGC_TraceVisitTransitionRoots()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // _PyValue_RecheckHome()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
@@ -1169,6 +1168,15 @@ enum {
     STAGED_EVAL_HEADERS,
 };
 
+/* A hook that does not run the frame must retire it, keeping any exception. */
+static void
+retire_unentered_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    PyObject *error = PyErr_GetRaisedException();
+    _PyEval_FrameClearAndPop(tstate, frame);
+    PyErr_SetRaisedException(error);
+}
+
 static int
 observe_staged_eval(module_state *state, const char *phase)
 {
@@ -1222,49 +1230,21 @@ staged_eval(PyThreadState *tstate, _PyInterpreterFrame *frame, int exc)
             result = _PyEval_EvalFrameDefault(tstate, frame, exc);
             break;
         case STAGED_EVAL_RETURN:
+        case STAGED_EVAL_RETIRE:
+            retire_unentered_frame(tstate, frame);
             result = Py_NewRef(state->staged_result);
             break;
         case STAGED_EVAL_ERROR:
+            retire_unentered_frame(tstate, frame);
             PyErr_SetString(PyExc_ValueError, "staged hook error");
-            break;
-        case STAGED_EVAL_RETIRE:
-            if (_PyEval_RetireStagedFrame(tstate, frame) < 0) {
-                goto done;
-            }
-            /* The strict API must reject a consumed token without reading the
-             * old arena storage. This is intentionally the same old address. */
-            if (_PyEval_RetireStagedFrame(tstate, frame) != -1 ||
-                !PyErr_ExceptionMatches(PyExc_SystemError))
-            {
-                PyErr_SetString(PyExc_AssertionError,
-                                "consumed staged token was accepted");
-                goto done;
-            }
-            PyErr_Clear();
-            if (_PyEval_RetireStagedFrame(tstate, NULL) != -1 ||
-                !PyErr_ExceptionMatches(PyExc_SystemError))
-            {
-                PyErr_SetString(PyExc_AssertionError,
-                                "empty staged node matched NULL");
-                goto done;
-            }
-            PyErr_Clear();
-            result = Py_NewRef(state->staged_result);
             break;
         case STAGED_EVAL_ACTIVATE: {
             _PyInterpreterFrame *previous = tstate->current_frame;
             frame->previous = previous;
             tstate->current_frame = frame;
-            int activated = _PyEval_ActivateStagedFrame(tstate, frame);
-            int observed = activated == 0
-                ? observe_staged_eval(state, "active") : -1;
+            int observed = observe_staged_eval(state, "active");
             tstate->current_frame = previous;
-            if (activated < 0) {
-                goto done;
-            }
-            PyObject *error = PyErr_GetRaisedException();
-            _PyEval_FrameClearAndPop(tstate, frame, _PyIR_RETIRE_ERROR_UNWIND);
-            PyErr_SetRaisedException(error);
+            retire_unentered_frame(tstate, frame);
             if (observed < 0) {
                 goto done;
             }
@@ -4786,79 +4766,6 @@ remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
         "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED);
 }
 
-static int
-append_transition_root_id(PyObject *object, void *arg)
-{
-    PyObject *address = PyLong_FromVoidPtr(object);
-    if (address == NULL) {
-        return -1;
-    }
-    int status = PyList_Append((PyObject *)arg, address);
-    Py_DECREF(address);
-    return status;
-}
-
-/* Bypass conservative arena/C-stack roots so tests exercise the precise bridge. */
-static PyObject *
-get_transition_root_ids(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *ids = PyList_New(0);
-    if (ids == NULL) {
-        return NULL;
-    }
-    if (_PyGC_TraceVisitTransitionRoots(_PyThreadState_GET(),
-                                       append_transition_root_id, ids) < 0)
-    {
-        Py_DECREF(ids);
-        return NULL;
-    }
-    return ids;
-}
-
-/* Make retirement records carry their shadow comparison; return the
- * previous setting. */
-static PyObject *
-set_retirement_shadow_observed(PyObject *self, PyObject *arg)
-{
-    int observed = PyObject_IsTrue(arg);
-    if (observed < 0) {
-        return NULL;
-    }
-    int previous = _PyIR_ShadowRetirementObserved;
-    _PyIR_ShadowRetirementObserved = observed;
-    return PyBool_FromLong(previous);
-}
-
-/* Observe every node, including prefix-only and disarmed provider records.
- * Code and frame geometry may already be gone; do not rerun a shadow check. */
-static PyObject *
-get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *states = PyList_New(0);
-    if (states == NULL) {
-        return NULL;
-    }
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        PyObject *state = Py_BuildValue("(iiiO)", roots->kind,
-                                       roots->retire_reason, roots->shadow_status,
-                                       roots->frame != NULL ? Py_True : Py_False);
-        if (state == NULL) {
-            Py_DECREF(states);
-            return NULL;
-        }
-        int status = PyList_Append(states, state);
-        Py_DECREF(state);
-        if (status < 0) {
-            Py_DECREF(states);
-            return NULL;
-        }
-    }
-    return states;
-}
-
 /* Read only the published marker. This probe does not infer a receiver or
  * bypass the generator state/read claim required to acquire its value. */
 static PyObject *
@@ -5371,9 +5278,6 @@ static PyMethodDef module_functions[] = {
     {"get_frame_selected_object_ids", get_frame_selected_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
-    {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
-    {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
-    {"set_retirement_shadow_observed", set_retirement_shadow_observed, METH_O},
     {"check_delegated_frame_copy", check_delegated_frame_copy, METH_VARARGS},
     {"check_clipped_delegated_frame_copy", check_clipped_delegated_frame_copy, METH_VARARGS},
     {"has_delegated_frame_phase", has_delegated_frame_phase, METH_O},

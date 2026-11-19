@@ -5247,7 +5247,7 @@ check_frame_copy(PyObject *args, int mode)
     int selected_home = delegated ? IR_D(protocol) : created ? 0 : nl + 1;
     assert(selected_home >= 0 && selected_home < n);
     assert(!delegated || selected_home >= nl);
-    src->base[selected_home] = _PyValue_Publish(&value);
+    src->base[selected_home] = value;
     int scratch_home = delegated ? selected_home - nl : 1;
     const _PyIRPhaseRange selected = {
         .begin = (uint16_t)scratch_home,

@@ -2197,9 +2197,9 @@ BORROW_TESTS = {
             PyValue ir_displaced = PyValue_NULL;
             IR_STORE_DST(ir_word, A, b);  /* rejected */
             (void)ir_displaced;
-        }}""", r"passing argument 1 of '_PyValue_Publish' from incompatible "
-              r"pointer type|incompatible pointer types passing "
-              r"'PyValueBorrow \*' to parameter of type 'PyValue \*'"),
+        }}""", r"incompatible type for argument 4 of "
+              r"'_PyFrame_ReplaceKnownHome'|passing 'PyValueBorrow' to "
+              r"parameter of incompatible type 'PyValue'"),
     # Section 5.6: a producer's borrow passed to a stealing setter, against
     # the real headers.
     "borrow_element_stored": ("""

@@ -67,12 +67,6 @@ typedef struct _PyBoxAt {
 // The argument of a CORE box under site class SITE.
 #define _PyBox_CORE(SITE) _PyBox_AT((SITE), BOX_KIND_CORE, NULL)
 
-/* The canonical form of source, with the same ownership: an exact int or
- * float whose value can be held inline becomes that inline value, and a box
- * that source owned is released at once (see "Release contract" below).
- * Any other value is returned unchanged. */
-PyAPI_FUNC(PyValue) _PyValue_Canonicalize(PyValue source);
-
 /* The one three-outcome result: a status and the value it carries, returned
  * in two registers (rax:rdx under the x86-64 SysV ABI).  The statuses are
  * PySendResult's: PYGEN_ERROR (-1, value PyValue_NULL, exception set),
@@ -156,24 +150,6 @@ _PyValueTemps_Close(_PyValueTemps *temps)
         _PyValueTemps_CloseNonempty(temps);
     }
 }
-
-/* The canonical form of *source, an owner, for a home.  If *source holds a
- * box whose value is inline, *source becomes that inline value, and the box
- * is released at once if *source owned a count of it. */
-static inline Py_ALWAYS_INLINE PyValue
-_PyValue_Publish(PyValue *source)
-{
-    if (PyValue_IsObject(*source)) {
-        PyObject *obj = (PyObject *)(source->bits & ~(uintptr_t)1);
-        // A static immortal always carries the no-count tag.
-        assert((source->bits & 1) || !_Py_IsStaticImmortal(obj));
-        if (Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type)) {
-            *source = _PyValue_Canonicalize(*source);
-        }
-    }
-    return *source;
-}
-
 
 /*
   This file introduces a new API for handling references on the stack, called
@@ -451,7 +427,7 @@ PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValueBorrow ref _PyBox_AT_PARAM);
    allocator hooks (PyMem_SetAllocator(), for allocation as well as free) and
    reference tracers (PyRefTracer_SetTracer()) never run Python, never raise
    and never change the current exception. So a box that becomes an inline
-   value is freed at once (_PyValue_Canonicalize()), with no exception save
+   value is freed at once (_PyValue_FromNumberSteal()), with no exception save
    and restore around the release. Debug builds check the contract around
    every allocator and tracer call (_PyReleaseCheck in pycore_object.h).
    Releasing any other object can run Python (__del__, weakref callbacks,
@@ -756,9 +732,13 @@ PyValue_AsKnownObjectSteal(PyValue ref)
    immortal. Code that goes on to use the object keeps its PyObject * in a C
    local: the value may hold no object. */
 
-/* The pointer value of obj, owning what obj owned, never inline. Only for
-   boxes, which are pointers by definition, and for the
-   canonical constructors themselves: a home never receives a box. */
+/* The pointer value of obj, owning what obj owned, never inline. A value is
+   canonical where it is made, so a home never receives a box of a value that
+   has an inline form. The callers are the canonical constructors, which
+   pass only an object with no inline form, the producers of an int too
+   large to be inline (_PyValue_BoxInt64(), _PyValue_BoxUInt64(),
+   _PyLong_OutValue()), and _PyValue_BoxInlineValue(), whose box goes to
+   object-form code. */
 static inline PyValue
 _PyValue_PointerSteal(PyObject *obj)
 {

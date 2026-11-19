@@ -402,6 +402,8 @@ _PyLong_OutValue(_PyLongOut *out)
     PyLongObject *z = out->heap;
     out->heap = NULL;
     _PyLong_SetSignAndDigitCount(z, r.neg ? -1 : 1, r.n);
+    // The inline range was handled above, so this int has no inline form.
+    assert(_PyObject_ValueIdentity((PyObject *)z) == (uintptr_t)z);
     return _PyValue_PointerSteal((PyObject *)z);
 }
 

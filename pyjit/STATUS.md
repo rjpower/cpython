@@ -47,6 +47,14 @@ What these rounds established:
   makes a specialized handler cost what upstream's whole stack sequence
   costs. Instruction work comes before hot-code layout; instruction counts
   attribute each step independently of placement.
+- **Operand-encoded calls**
+  ([proposal](design/proposals/operand-calls80.md), 2026-11-19): calls name
+  their inputs in trailing operand words instead of a copied window, and the
+  child frame starts at the arena top. Estimated, after the handler fix:
+  `f(x, y)` from 430 to about 336 instructions (upstream 343); kernels 0.35–0.8%
+  fewer instructions, coroutines 5.4%, deepcopy_memo 5%; constant slots
+  another 0.3–1.8%. Awaiting four user decisions. Call-free handler bodies
+  (handlers80) are in progress.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

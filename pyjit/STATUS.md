@@ -60,8 +60,13 @@ What these rounds established:
   handler text by 15%. Our handlers are fat because the generator inlines
   per-execution protocols (operand-kind decoding, publication, re-entrant
   release, native bridge records) that upstream avoids by plain ordering and
-  helpers. A design for upstream-shaped handlers and their dispatch backend
-  is in progress (`E59/handlers81-design/`).
+  helpers. The [handlers81 proposal](design/proposals/handlers81.md) writes
+  every handler in upstream's order (guards, effect, detach, store, release,
+  dispatch), deletes those protocols, and compiles the handlers into one
+  computed-goto function. A compile probe of 336 labels kept a 40-byte frame,
+  no canary and one dispatch jump per site. Estimated −8 to −17% of
+  upstream's instructions per kernel before calls80; awaiting user
+  decisions.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

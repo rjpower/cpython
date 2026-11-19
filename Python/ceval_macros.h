@@ -108,7 +108,9 @@
  * PyValue_NULL with an exception set. */
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARAMS);
-static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAMS);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitOneDead(TAIL_CALL_PARAMS, uintptr_t ir_aux);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitOneDisplaced(TAIL_CALL_PARAMS, uintptr_t ir_aux);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_PARAMS);
 
 #define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
@@ -178,29 +180,67 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
 
 /* Hand the pending releases to _PyEval_ExitTail.  WORD is the kind of exit:
  * 0 to dispatch next_instr, or IR_EXIT_ERROR_FLAG with the encoded error
- * entry, and TARGET is next_instr or the origin of the error. */
+ * entry, and TARGET is next_instr or the origin of the error.  The sixth
+ * argument, ir_aux, carries the work in a register when one release is
+ * pending, which is the usual case: the one object to _PyEval_ExitOneDead, or the
+ * one displaced local to _PyEval_ExitOneDisplaced.  The split rule: the exit
+ * counts what is pending, a few compares that fold away for the sites the
+ * handler does not have; one object or one displaced local and nothing else
+ * goes in the register; anything else goes to tstate->ir_exit, one entry
+ * per pending item, and ir_aux is the mask of the entries, so that the
+ * continuation reads as many as are pending and no more.  Both are
+ * continuations of one type with an extra argument, passed in r9 on x86-64
+ * (not under Py_STATS, where lastopcode already takes that place). */
 #define IR_EXIT_ERROR_FLAG ((_PyIRWord)1 << 32)
-#define IR_EXIT_STORE(FIELD, LOCAL) \
-    do { if ((LOCAL) != NULL) { ir_ts->ir_exit.FIELD = (LOCAL); } } while (0)
+#define IR_EXIT_DISPLACED_BIT ((uintptr_t)1 << 12)
+#define IR_EXIT_STORE(FIELD, LOCAL, BIT) \
+    do { \
+        if ((LOCAL) != NULL) { \
+            ir_ts->ir_exit.FIELD = (LOCAL); \
+            ir_mask |= (uintptr_t)1 << (BIT); \
+        } \
+    } while (0)
 #define IR_EXIT_TAIL(TARGET, WORD) \
     do { \
+        int ir_ndead = (ir_dead0 != NULL) + (ir_dead1 != NULL) \
+            + (ir_dead2 != NULL) + (ir_dead3 != NULL) \
+            + (ir_dead4 != NULL) + (ir_dead5 != NULL); \
+        int ir_npub = (ir_pub0 != NULL) + (ir_pub1 != NULL) \
+            + (ir_pub2 != NULL) + (ir_pub3 != NULL) \
+            + (ir_pub4 != NULL) + (ir_pub5 != NULL); \
+        int ir_ndisp = !PyValue_IsNull(ir_displaced); \
+        if (ir_ndead == 1 && ir_npub == 0 && ir_ndisp == 0) { \
+            Py_MUSTTAIL return _PyEval_ExitOneDead( \
+                TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
+                (uintptr_t)ir_dead0 | (uintptr_t)ir_dead1 \
+                | (uintptr_t)ir_dead2 | (uintptr_t)ir_dead3 \
+                | (uintptr_t)ir_dead4 | (uintptr_t)ir_dead5); \
+        } \
+        if (ir_ndead == 0 && ir_npub == 0 && ir_ndisp == 1) { \
+            Py_MUSTTAIL return _PyEval_ExitOneDisplaced( \
+                TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
+                ir_displaced.bits); \
+        } \
         _PyThreadStateImpl *ir_ts = (_PyThreadStateImpl *)tstate; \
-        IR_EXIT_STORE(dead[0], ir_dead0); \
-        IR_EXIT_STORE(dead[1], ir_dead1); \
-        IR_EXIT_STORE(dead[2], ir_dead2); \
-        IR_EXIT_STORE(dead[3], ir_dead3); \
-        IR_EXIT_STORE(dead[4], ir_dead4); \
-        IR_EXIT_STORE(dead[5], ir_dead5); \
-        IR_EXIT_STORE(pub[0], ir_pub0); \
-        IR_EXIT_STORE(pub[1], ir_pub1); \
-        IR_EXIT_STORE(pub[2], ir_pub2); \
-        IR_EXIT_STORE(pub[3], ir_pub3); \
-        IR_EXIT_STORE(pub[4], ir_pub4); \
-        IR_EXIT_STORE(pub[5], ir_pub5); \
-        ir_ts->ir_exit.displaced = ir_displaced.bits; \
-        ir_ts->ir_exit.next = next_instr; \
+        uintptr_t ir_mask = 0; \
+        IR_EXIT_STORE(dead[0], ir_dead0, 0); \
+        IR_EXIT_STORE(dead[1], ir_dead1, 1); \
+        IR_EXIT_STORE(dead[2], ir_dead2, 2); \
+        IR_EXIT_STORE(dead[3], ir_dead3, 3); \
+        IR_EXIT_STORE(dead[4], ir_dead4, 4); \
+        IR_EXIT_STORE(dead[5], ir_dead5, 5); \
+        IR_EXIT_STORE(pub[0], ir_pub0, 6); \
+        IR_EXIT_STORE(pub[1], ir_pub1, 7); \
+        IR_EXIT_STORE(pub[2], ir_pub2, 8); \
+        IR_EXIT_STORE(pub[3], ir_pub3, 9); \
+        IR_EXIT_STORE(pub[4], ir_pub4, 10); \
+        IR_EXIT_STORE(pub[5], ir_pub5, 11); \
+        if (ir_ndisp) { \
+            ir_ts->ir_exit.displaced = ir_displaced.bits; \
+            ir_mask |= IR_EXIT_DISPLACED_BIT; \
+        } \
         Py_MUSTTAIL return _PyEval_ExitTail( \
-            TAIL_CALL_ARGS_WORD((TARGET), (WORD))); \
+            TAIL_CALL_ARGS_WORD((TARGET), (WORD)), ir_mask); \
     } while (0)
 #define IR_ASSERT_NO_PENDING_DEFER() assert(!ir_has)
 #define IR_EXIT_PENDING_DISPATCH_DEFER() \

@@ -2464,44 +2464,93 @@ _PyEval_PeriodicTail(TAIL_CALL_PARAMS)
     DISPATCH_GOTO();
 }
 
-/* The exit of a handler that defers its releases (IR_EXIT_TAIL in
- * ceval_macros.h).  The pending objects and the displaced local are in
- * tstate->ir_exit; copy them first, because a release can run Python, which
- * can run a handler that uses the same fields.  Release the objects in the
- * order of their sites, then the displaced local as the inline form does,
- * then dispatch, or process the error whose entry ir_word holds, with
- * next_instr its origin. */
+/* The exits with one pending release, which need no frame of their own:
+ * the object whose last count the handler kept, or the displaced local, in
+ * ir_aux (see IR_EXIT_TAIL in ceval_macros.h). */
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
-_PyEval_ExitTail(TAIL_CALL_PARAMS)
+_PyEval_ExitOneDead(TAIL_CALL_PARAMS, uintptr_t ir_aux)
 {
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    PyObject *dead[IR_DEAD_MAX];
-    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(ts->ir_exit.dead), "see pycore_tstate.h");
-    PyValue *pub[IR_DEAD_MAX];
-    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(ts->ir_exit.pub), "see pycore_tstate.h");
-    for (int i = 0; i < IR_DEAD_MAX; i++) {
-        dead[i] = ts->ir_exit.dead[i];
-        ts->ir_exit.dead[i] = NULL;
-        pub[i] = ts->ir_exit.pub[i];
-        ts->ir_exit.pub[i] = NULL;
+    Py_DECREF_MORTAL((PyObject *)ir_aux);
+    if (ir_word & IR_EXIT_ERROR_FLAG) {
+        Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD(
+            next_instr, (_PyIRWord)(uint32_t)ir_word));
     }
-    PyValue displaced = (PyValue){ts->ir_exit.displaced};
-    ts->ir_exit.displaced = 0;
-    _PyInstr *next = ts->ir_exit.next;
-    bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
-    uint32_t entry = (uint32_t)ir_word;
-    _PyInstr *origin = next_instr;
-    /* Publish first: the releases below can run Python, which must see the
-     * results as canonical values in their homes. */
-    for (int i = 0; i < IR_DEAD_MAX; i++) {
-        if (pub[i] != NULL) {
-            *pub[i] = _PyValue_Publish(pub[i]);
-            _PyValue_CheckTemp(*pub[i]);
+    int opcode;
+    NEXTOPARG();
+    PRE_DISPATCH_GOTO();
+    DISPATCH_GOTO();
+}
+
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_ExitOneDisplaced(TAIL_CALL_PARAMS, uintptr_t ir_aux)
+{
+    PyValue displaced = (PyValue){ir_aux};
+    assert(!(ir_word & IR_EXIT_ERROR_FLAG));
+    /* Only the last owner of an object is kept (IR_RETIRE_LOCAL) */
+    if (!_PyObject_DestroyMayReenter(BITS_TO_PTR(displaced))) {
+        PyValue_XCLOSE(displaced);
+    }
+    else {
+        frame->phase_state = 0;
+        if (finish_displaced_local(tstate, frame, next_instr, NULL, displaced) < 0) {
+            _PyInstr *next = frame->instr_ptr + 1;
+            Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD(
+                next - 1,
+                _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0)));
         }
     }
-    for (int i = 0; i < IR_DEAD_MAX; i++) {
-        if (dead[i] != NULL) {
-            Py_DECREF_MORTAL(dead[i]);
+    int opcode;
+    NEXTOPARG();
+    PRE_DISPATCH_GOTO();
+    DISPATCH_GOTO();
+}
+
+/* The exit of a handler that defers its releases (IR_EXIT_TAIL in
+ * ceval_macros.h).  ir_aux is the one pending object or displaced local, or
+ * the mask of the entries of tstate->ir_exit; copy them first, because a
+ * release can run Python, which can run a handler that uses the same
+ * entries.  Publish the slots, release the objects in the order of their
+ * sites, then the displaced local as the inline form does, then dispatch, or
+ * process the error whose entry ir_word holds, with next_instr its origin. */
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
+{
+    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(((_PyThreadStateImpl *)0)->ir_exit.dead), "see pycore_tstate.h");
+    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(((_PyThreadStateImpl *)0)->ir_exit.pub), "see pycore_tstate.h");
+    PyValue displaced = PyValue_NULL;
+    bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
+    uint32_t entry = (uint32_t)ir_word;
+    _PyInstr *next = error ? frame->instr_ptr + 1 : next_instr;
+    _PyInstr *origin = next_instr;
+    {
+        /* Copy the entries before any release (see above) */
+        PyObject *dead[IR_DEAD_MAX] = {NULL};
+        PyValue *pub[IR_DEAD_MAX] = {NULL};
+        _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
+        for (uintptr_t mask = ir_aux; mask != 0; mask &= mask - 1) {
+            int bit = __builtin_ctzll(mask);
+            if (bit < IR_DEAD_MAX) {
+                dead[bit] = ts->ir_exit.dead[bit];
+            }
+            else if (bit < 2 * IR_DEAD_MAX) {
+                pub[bit - IR_DEAD_MAX] = ts->ir_exit.pub[bit - IR_DEAD_MAX];
+            }
+            else {
+                displaced = (PyValue){ts->ir_exit.displaced};
+            }
+        }
+        /* Publish first: the releases below can run Python, which must see
+         * the results as canonical values in their homes. */
+        for (int i = 0; i < IR_DEAD_MAX; i++) {
+            if (pub[i] != NULL) {
+                *pub[i] = _PyValue_Publish(pub[i]);
+                _PyValue_CheckTemp(*pub[i]);
+            }
+        }
+        for (int i = 0; i < IR_DEAD_MAX; i++) {
+            if (dead[i] != NULL) {
+                Py_DECREF_MORTAL(dead[i]);
+            }
         }
     }
     if (!PyValue_IsNull(displaced)) {

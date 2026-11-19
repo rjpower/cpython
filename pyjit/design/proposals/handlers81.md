@@ -753,7 +753,16 @@ adjustments on fast paths without a hot call. The protocol column assumes the
 hot handlers lose 20–35% of their instructions (the static table above:
 −30% summed over 11 handlers with comparable figures), and that handler
 bodies are about a third of each kernel's instructions. That share is a
-guess (±50%); H0's baseline measures it. Calls80's own estimates (−0.35% to
+guess (±50%); H0's baseline measures it.
+
+**Measured share (H0, 2026-11-19).** `_TAIL_CALL_*` handler bodies execute
+69.3% of DeltaBlue's instructions, 57.1% of raytrace's, 55.1% of coroutines',
+63.3% of deepcopy_memo's and 66.7% of richards' (mean 62%;
+`E59/handlers81/shape/handler-share.txt`). The protocol column above assumed a
+third, so on the same per-handler savings it understates by about 1.9 times.
+Over the 20 hot handlers that upstream also has, checkpoint78's static fast
+paths total 1,022 instructions against upstream's 618
+(`Tools/pyjit/handler_shape.py`, `E59/handlers81/shape/`). Calls80's own estimates (−0.35% to
 −5.4%) come on top. On these estimates richards would reach about upstream's
 count, and the others would keep 5–20% of excess. Calls, generators and
 retirement remain the largest items.

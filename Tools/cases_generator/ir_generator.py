@@ -6711,10 +6711,16 @@ DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP",
                        "JUMP_TO_PREDICTED", "IR_COMPLETE_STEP_TAIL", "IR_RETIRE_TAIL",
                        "IR_PERIODIC_TAIL"}
 DEFER_EXIT_WORDS = re.compile(r"\b(return|goto)\b|Py_MUSTTAIL")
-DEFER_BAD_WORDS = re.compile(r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced")
+DEFER_BAD_WORDS = re.compile(
+    r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced"
+    r"|IR_COMMIT_OBSERVED_DST|IR_MOVE_OBSERVED_DST|IR_UNPACK_TO_LOCALS")
 CEVAL_HEADERS = ("Python/ceval_macros.h", "Python/ceval_generator.h",
                  "Python/ceval.h", "Include/internal/pycore_ir.h")
 DEFER_ON = (
+    "#undef IR_LOCAL_STORE_BARRIER\n"
+    "#define IR_LOCAL_STORE_BARRIER(FIELD, V, KIND) IR_LOCAL_STORE_BARRIER_DEFER(FIELD, V, KIND)\n"
+    "#undef IR_LOCAL_STORE_BARRIER_MOVE\n"
+    "#define IR_LOCAL_STORE_BARRIER_MOVE(FIELD, SLOT) IR_LOCAL_STORE_BARRIER_MOVE_DEFER(FIELD, SLOT)\n"
     "#undef IR_EXIT_PENDING_DISPATCH\n"
     "#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()\n"
     "#undef IR_RETIRE_LAST\n"
@@ -6734,7 +6740,11 @@ DEFER_ON = (
         for n, b in DEFER_RELEASES.items())
 )
 DEFER_OFF = (
-    "".join(f"#undef {n}\n" for n in DEFER_RELEASES)
+    "#undef IR_LOCAL_STORE_BARRIER\n"
+    "#define IR_LOCAL_STORE_BARRIER(FIELD, V, KIND) ((void)0)\n"
+    "#undef IR_LOCAL_STORE_BARRIER_MOVE\n"
+    "#define IR_LOCAL_STORE_BARRIER_MOVE(FIELD, SLOT) ((void)0)\n"
+    + "".join(f"#undef {n}\n" for n in DEFER_RELEASES)
     + "#undef IR_EXIT_PENDING_DISPATCH\n"
     "#define IR_EXIT_PENDING_DISPATCH() ((void)0)\n"
     "#undef IR_RETIRE_LAST\n"
@@ -6810,6 +6820,23 @@ def defer_blocker(text: str) -> str | None:
             return f"exit {word}"
     if m := re.search(r"\b(return|goto)\b|Py_MUSTTAIL", text):
         return f"exit {m.group(0)}"
+    # A store into a local must end the handler, so that the exit
+    # continuation can make it after the releases (IR_LOCAL_STORE_BARRIER)
+    for match in re.finditer(r"\b(IR_STORE_DST|IR_STORE_CANONICAL_DST|IR_MOVE_TO_DST"
+                             r"|IR_MOVE_TO_DST_OR_DISCARD)\(", text):
+        rest = text[match.end():]
+        end = rest.find("DISPATCH();")
+        # The text up to the dispatch is the rest of the macro's arguments
+        # and closing braces
+        tail = rest[rest.find(");") + 2:end] if end >= 0 else None
+        if tail is not None:
+            # The inline release of the displaced local, which a deferring
+            # handler leaves to its exit
+            tail = re.sub(r"if \(!PyValue_IsNull\(ir_displaced\)\) \{.*?"
+                          r"PROCESS_ERROR_AT\(RAISE, 0, next_instr - 1\);\s*\}\s*\}",
+                          "", tail, flags=re.S)
+        if tail is None or tail.strip(" \n}"):
+            return "store into a local that does not end the handler"
     if sites == 0:
         return "no sites"
     if sites > DEFER_MAX_SITES:

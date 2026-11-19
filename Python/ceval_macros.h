@@ -197,6 +197,7 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
 #define IR_EXIT_ERROR_FLAG ((_PyIRWord)1 << 32)
 #define IR_EXIT_DISPLACED_BIT ((uintptr_t)1 << 12)
 #define IR_EXIT_RETIRE_BIT ((uintptr_t)1 << 13)
+#define IR_EXIT_STORE_BIT ((uintptr_t)1 << 14)
 #define IR_EXIT_STORE(FIELD, LOCAL, BIT) \
     do { \
         if ((LOCAL) != NULL) { \
@@ -204,7 +205,8 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
             ir_mask |= (uintptr_t)1 << (BIT); \
         } \
     } while (0)
-#define IR_EXIT_TAIL(TARGET, WORD) \
+#define IR_EXIT_TAIL(TARGET, WORD) IR_EXIT_TAIL_S(TARGET, WORD, PyValue_NULL, 0, 0)
+#define IR_EXIT_TAIL_S(TARGET, WORD, STOREV, KIND, FIELD) \
     do { \
         int ir_ndead = (ir_dead0 != NULL) + (ir_dead1 != NULL) \
             + (ir_dead2 != NULL) + (ir_dead3 != NULL) \
@@ -214,14 +216,14 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
             + (ir_pub4 != NULL) + (ir_pub5 != NULL); \
         int ir_ndisp = !PyValue_IsNull(ir_displaced); \
         int ir_nret = !PyValue_IsNull(ir_retire0) || !PyValue_IsNull(ir_retire1); \
-        if (ir_ndead == 1 && ir_npub == 0 && ir_ndisp == 0 && ir_nret == 0) { \
+        if ((KIND) == 0 && ir_ndead == 1 && ir_npub == 0 && ir_ndisp == 0 && ir_nret == 0) { \
             Py_MUSTTAIL return _PyEval_ExitOneDead( \
                 TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
                 (uintptr_t)ir_dead0 | (uintptr_t)ir_dead1 \
                 | (uintptr_t)ir_dead2 | (uintptr_t)ir_dead3 \
                 | (uintptr_t)ir_dead4 | (uintptr_t)ir_dead5); \
         } \
-        if (ir_ndead == 0 && ir_npub == 0 && ir_ndisp == 1 && ir_nret == 0) { \
+        if ((KIND) == 0 && ir_ndead == 0 && ir_npub == 0 && ir_ndisp == 1 && ir_nret == 0) { \
             Py_MUSTTAIL return _PyEval_ExitOneDisplaced( \
                 TAIL_CALL_ARGS_WORD((TARGET), (WORD)), \
                 ir_displaced.bits); \
@@ -249,6 +251,12 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
             ir_ts->ir_exit.retire[1] = ir_retire1.bits; \
             ir_mask |= IR_EXIT_RETIRE_BIT; \
         } \
+        if ((KIND) != 0) { \
+            ir_ts->ir_exit.store = (STOREV).bits; \
+            ir_ts->ir_exit.store_kind = (KIND); \
+            ir_ts->ir_exit.store_field = (FIELD); \
+            ir_mask |= IR_EXIT_STORE_BIT; \
+        } \
         Py_MUSTTAIL return _PyEval_ExitTail( \
             TAIL_CALL_ARGS_WORD((TARGET), (WORD)), ir_mask); \
     } while (0)
@@ -261,6 +269,29 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_P
         ir_retire1 = (SECOND); \
         ir_has = 1; \
         IR_EXIT_TAIL(next_instr, 0); \
+    } while (0)
+/* A handler stores its result into a local after the releases of its body,
+ * which can run Python that reads the local (a finalizer, through the frame).
+ * With releases pending, the store is handed to the exit continuation, which
+ * makes it after them.  KIND is IR_STORE_PUBLISH for a result that may need
+ * publishing, IR_STORE_CANONICAL for one that does not.  The store ends the
+ * handler (the generator checks); a temporary needs no such order, because
+ * Python cannot read it. */
+#define IR_STORE_PUBLISH 1
+#define IR_STORE_CANONICAL 2
+#define IR_LOCAL_STORE_BARRIER_DEFER(FIELD, V, KIND) \
+    do { \
+        if (Py_UNLIKELY(ir_has)) { \
+            IR_EXIT_TAIL_S(next_instr, 0, (V), (KIND), (FIELD)); \
+        } \
+    } while (0)
+#define IR_LOCAL_STORE_BARRIER_MOVE_DEFER(FIELD, SLOT) \
+    do { \
+        if (Py_UNLIKELY(ir_has)) { \
+            PyValue ir_moved = (SLOT); \
+            (SLOT) = PyValue_NULL; \
+            IR_EXIT_TAIL_S(next_instr, 0, ir_moved, IR_STORE_CANONICAL, (FIELD)); \
+        } \
     } while (0)
 #define IR_ASSERT_NO_PENDING_DEFER() assert(!ir_has)
 #define IR_EXIT_PENDING_DISPATCH_DEFER() \
@@ -423,6 +454,8 @@ do { \
  * defaults below are the forms of every other handler, which the generator
  * replaces around a deferring handler. */
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#define IR_LOCAL_STORE_BARRIER(FIELD, V, KIND) ((void)0)
+#define IR_LOCAL_STORE_BARRIER_MOVE(FIELD, SLOT) ((void)0)
 /* A deopt re-runs the instruction, so no effect can precede it. */
 #define IR_ASSERT_NO_PENDING() ((void)0)
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
@@ -891,9 +924,10 @@ ir_retire_last_owner(PyValue old)
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
  * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
  * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
-#define IR_STORE_DST_IMPL(W, X, V, VALUE) \
+#define IR_STORE_DST_IMPL(W, X, V, VALUE, KIND) \
     do { \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
+            IR_LOCAL_STORE_BARRIER(IR_FIELD(W, X), V, KIND); \
             PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
             _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(ir_old), (VALUE)); \
             _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
@@ -911,11 +945,11 @@ ir_retire_last_owner(PyValue old)
     } while (0)
 
 #define IR_STORE_DST(W, X, V) \
-    IR_STORE_DST_IMPL(W, X, V, IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V))
+    IR_STORE_DST_IMPL(W, X, V, IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V), IR_STORE_PUBLISH)
 
 /* Only a checked canonical-result proof selects this owner transfer. */
 #define IR_STORE_CANONICAL_DST(W, X, V) \
-    IR_STORE_DST_IMPL(W, X, V, (V))
+    IR_STORE_DST_IMPL(W, X, V, (V), IR_STORE_CANONICAL)
 
 /* Observation sees the committed binding; its displaced or ignored owner
  * stays in C until the terminal adapter has published its continuation. */
@@ -985,6 +1019,7 @@ ir_retire_last_owner(PyValue old)
 #define IR_MOVE_TO_DST(W, X, SLOT) \
     do { \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
+            IR_LOCAL_STORE_BARRIER_MOVE(IR_FIELD(W, X), SLOT); \
             PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
             assert(_PyValue_IsHome(SLOT)); \
             IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
@@ -999,6 +1034,7 @@ ir_retire_last_owner(PyValue old)
 #define IR_MOVE_TO_DST_OR_DISCARD(W, X, SLOT) \
     do { \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
+            IR_LOCAL_STORE_BARRIER_MOVE(IR_FIELD(W, X), SLOT); \
             PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
             assert(_PyValue_IsHome(SLOT)); \
             IR_SLOT(IR_FIELD(W, X)) = (SLOT); \

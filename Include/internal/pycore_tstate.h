@@ -93,6 +93,9 @@ typedef struct _PyThreadStateImpl {
         PyValue *pub[6];
         uintptr_t displaced;
         uintptr_t retire[2];
+        uintptr_t store;
+        int store_kind;
+        int store_field;
     } ir_exit;
 
     // Nested outlined retirements, including detached result owners.

@@ -2563,6 +2563,9 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
     PyValue displaced = PyValue_NULL;
     PyValue retire[2] = {PyValue_NULL, PyValue_NULL};
     bool has_retire = false;
+    int store_kind = 0;
+    int store_field = 0;
+    PyValue stored = PyValue_NULL;
     bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
     uint32_t entry = (uint32_t)ir_word;
     _PyInstr *next = error ? frame->instr_ptr + 1 : next_instr;
@@ -2582,6 +2585,11 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
             }
             else if (bit == 12) {
                 displaced = (PyValue){ts->ir_exit.displaced};
+            }
+            else if (bit == 14) {
+                stored = (PyValue){ts->ir_exit.store};
+                store_kind = ts->ir_exit.store_kind;
+                store_field = ts->ir_exit.store_field;
             }
             else {
                 retire[0] = (PyValue){ts->ir_exit.retire[0]};
@@ -2611,6 +2619,25 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS, uintptr_t ir_aux)
                     _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0)));
             }
             slots = _PyFrame_Slots(frame);
+        }
+        if (store_kind != 0) {
+            /* The result of the handler into its local, after the releases
+             * above (IR_LOCAL_STORE_BARRIER), then the old value as
+             * IR_STORE_DST does. */
+            assert(!error);
+            if (store_kind == IR_STORE_PUBLISH) {
+                stored = _PyValue_Publish(&stored);
+            }
+            PyValue old = slots[store_field];
+            _PyFrame_ReplaceKnownHome(frame, &slots[store_field],
+                                      PyValue_Borrow(old), stored);
+            _PyValue_CheckHome(slots[store_field]);
+            if (_PyValue_IsLastOwner(old)) {
+                displaced = old;
+            }
+            else {
+                PyValue_XCLOSE(old);
+            }
         }
     }
     if (!PyValue_IsNull(displaced)) {

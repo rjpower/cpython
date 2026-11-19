@@ -3307,5 +3307,41 @@ class FusedJumpTest(AssemblerTestCase):
                 self.assertEqual(result, expected)
 
 
+class DeferredReleaseOrderTest(unittest.TestCase):
+    """A handler that defers its releases (Python/ceval_macros.h) makes them
+    in the order of the unfused instructions: what a finalizer sees of the
+    frame's locals is what STORE_FAST after the instruction would leave."""
+
+    def test_finalizer_sees_local_before_the_store(self):
+        seen = []
+
+        class D:
+            def __init__(self, n):
+                self.n = n
+                self.x = n
+
+            def __del__(self):
+                seen.append((self.n, sys._getframe(1).f_locals.get("r")))
+
+        def attr():
+            r = None
+            r = D(1).x
+            return r
+
+        def subscript():
+            r = None
+            for i in range(3):
+                r = (D(10 + i), i)[1]
+            return r
+
+        for _ in range(3):
+            seen.clear()
+            self.assertEqual(attr(), 1)
+            self.assertEqual(seen, [(1, None)])
+            seen.clear()
+            self.assertEqual(subscript(), 2)
+            self.assertEqual(seen, [(10, None), (11, 0), (12, 1)])
+
+
 if __name__ == "__main__":
     unittest.main()

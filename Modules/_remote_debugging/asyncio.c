@@ -339,13 +339,6 @@ get_awaited_coro_address(
         return -1;
     }
 
-    uint16_t phase = GET_MEMBER(uint16_t, iframe,
-        unwinder->debug_offsets.interpreter_frame.phase_state);
-    if (phase != _PyIR_PHASE_YIELD_DELEGATED &&
-        phase != (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
-    {
-        return 0;
-    }
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
     uintptr_t code_addr = GET_MEMBER(uintptr_t, iframe,

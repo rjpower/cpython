@@ -663,10 +663,6 @@ enum {
 #define _PyIR_PHASE_PUBLISHED (1u << 8)
 #define _PyIR_PHASE_STATUS_SHIFT 9
 #define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
-#define _PyIR_PHASE_CAPTURED (1u << 11)
-#define _PyIR_PHASE_CREATED (1u << 12)
-#define _PyIR_PHASE_YIELD_DELEGATED (1u << 13)
-#define _PyIR_PHASE_ERROR_SCOPE (1u << 14)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
@@ -733,10 +729,6 @@ _PyIR_ObserveShadowRetirement(struct _PyInterpreterFrame *frame,
 #endif
 }
 
-/* Read-only NULL-control comparison, called only in a reached frame walk.
- * The published bit alone does not grant an arbitrary reader home access. */
-PyAPI_FUNC(uint8_t) _PyIR_ShadowFramePhase(struct _PyInterpreterFrame *frame);
-
 /* NULL-shadow candidate scratch ranges are relative to nbindings. A nullable
  * joined candidate may be canonical NULL on another path; it grants no stale
  * cell readability without join normalization/validity at the authority switch.
@@ -748,13 +740,6 @@ typedef struct {
     const _PyIRPhaseRange *ranges;
 } _PyIRHomeView;
 
-/* Returns NONE before reading homes if the active publication is not covered.
- * Candidate authority permits the NULL-shadow comparison only. MUST_READABLE
- * proves every selected canonical home is initialized on every predecessor;
- * unconverted control/index roles cannot acquire that authority from owner bits.
- * A successful lookup selects a shape; it does not compare runtime values. */
-PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetFrameHomeView(
-    struct _PyInterpreterFrame *frame, _PyIRHomeView *out);
 /* The caller owns the actual reached post-flush origin/checkpoint and pins
  * this frame, code and storage lifetime. A matching lookup alone does not
  * establish that another or suspended frame reached the checkpoint. No

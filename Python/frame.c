@@ -10,139 +10,6 @@
 #include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
-static int
-find_error_home_view(PyThreadState *owner, _PyInterpreterFrame *frame,
-                     _PyIRHomeView *view, _PyIRHomeAuthority *authority)
-{
-    int matches = 0;
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)owner)->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        if (roots->kind != _Py_TRANSITION_KIND_ERROR || roots->frame != frame) {
-            continue;
-        }
-        assert(roots->header_mask == 0 && !roots->result_present);
-        if (roots->homes == NULL ||
-            (roots->home_authority != _PyIR_HOME_MUST_READABLE &&
-             roots->home_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
-        {
-            return -1;
-        }
-        *view = *roots->homes;
-        view->scratch_limit = (uint16_t)Py_MIN(view->scratch_limit,
-            Py_MAX(roots->remaining - view->nbindings, 0));
-        *authority = roots->home_authority;
-        matches++;
-    }
-    return matches;
-}
-
-_PyIRHomeAuthority
-_PyFrame_GetErrorHomeView(PyThreadState *owner_hint, _PyInterpreterFrame *frame,
-                         _PyIRHomeView *view)
-{
-    if (frame->phase_state != _PyIR_PHASE_ERROR_SCOPE) {
-        return _PyIR_HOME_NONE;
-    }
-    PyThreadState *current = _PyThreadState_GET();
-    if (owner_hint != NULL && owner_hint->interp != current->interp) {
-        return _PyIR_HOME_NONE;
-    }
-    _PyIRHomeAuthority authority = _PyIR_HOME_NONE;
-    int matches = 0;
-    if (owner_hint == NULL || owner_hint == current) {
-        matches = find_error_home_view(current, frame, view, &authority);
-        if (matches != 0 || owner_hint == current) {
-            return matches == 1 ? authority : _PyIR_HOME_NONE;
-        }
-    }
-#ifdef Py_GIL_DISABLED
-    /* A suspended-frame read claim does not protect a foreign C stack. */
-    if (!current->interp->stoptheworld.world_stopped) {
-        return _PyIR_HOME_NONE;
-    }
-#endif
-    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)current;
-    int lock_head = impl->head_locked_frame_walk == 0;
-    if (lock_head) {
-        HEAD_LOCK(&_PyRuntime);
-    }
-    if (owner_hint != NULL) {
-        matches = find_error_home_view(owner_hint, frame, view, &authority);
-    }
-    else {
-        _Py_FOR_EACH_TSTATE_UNLOCKED(current->interp, owner) {
-            if (owner != current) {
-                int found = find_error_home_view(owner, frame, view, &authority);
-                if (found < 0) {
-                    matches = -1;
-                    break;
-                }
-                matches += found;
-            }
-        }
-    }
-    if (lock_head) {
-        HEAD_UNLOCK(&_PyRuntime);
-    }
-    return matches == 1 ? authority : _PyIR_HOME_NONE;
-}
-
-_PyIRHomeAuthority
-_PyFrame_GetHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *view)
-{
-    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
-        return _PyFrame_GetErrorHomeView(NULL, frame, view);
-    }
-    if (frame->phase_state & _PyIR_PHASE_CAPTURED) {
-        if (frame->phase_state != _PyIR_PHASE_CAPTURED &&
-            frame->phase_state != (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED))
-        {
-            return _PyIR_HOME_NONE;
-        }
-        PyFrameObject *f;
-        if (frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
-            f = (PyFrameObject *)((char *)frame -
-                offsetof(PyFrameObject, _f_frame_data));
-        }
-        else if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
-            f = frame->frame_obj;
-        }
-        else {
-            return _PyIR_HOME_NONE;
-        }
-        if (f == NULL || f->f_frame != frame ||
-            (f->f_capture_authority != _PyIR_HOME_MUST_READABLE &&
-             f->f_capture_authority != _PyIR_HOME_NULL_CONTROL_READABLE))
-        {
-            return _PyIR_HOME_NONE;
-        }
-        *view = f->f_capture;
-        return (_PyIRHomeAuthority)f->f_capture_authority;
-    }
-    if (frame->phase_state == _PyIR_PHASE_CREATED) {
-        if (frame->owner != FRAME_OWNED_BY_GENERATOR ||
-            FT_ATOMIC_LOAD_INT8_RELAXED(
-                _PyGen_GetGeneratorFromFrame(frame)->gi_frame_state) != FRAME_CREATED ||
-            frame->f_executable == NULL)
-        {
-            return _PyIR_HOME_NONE;
-        }
-        PyCodeObject *code = frame->f_executable;
-        _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
-        if (exec == NULL || frame->ir_words != exec->words ||
-            exec->semantic_plan == NULL ||
-            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
-        {
-            return _PyIR_HOME_NONE;
-        }
-        *view = (_PyIRHomeView){.nbindings = (uint16_t)code->co_nlocalsplus};
-        return _PyIR_HOME_MUST_READABLE;
-    }
-    return _PyIR_GetFrameHomeView(frame, view);
-}
-
 void
 _PyFrame_GetNullControlHomeView(_PyInterpreterFrame *frame, int remaining,
                                _PyIRHomeView *view)
@@ -159,18 +26,11 @@ _PyFrame_GetNullControlHomeView(_PyInterpreterFrame *frame, int remaining,
     };
 }
 
-/* This development adapter is explicit: candidate/unsupported phases still
- * rely on the initialized NULL control, not on a must-readable static proof. */
+/* A frame copy reads every slot: each is a value or NULL. */
 _PyIRHomeAuthority
 _PyFrame_GetCopyViewUnderNullControl(_PyInterpreterFrame *frame,
                                     _PyIRHomeView *view)
 {
-    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(frame, view);
-    if (authority == _PyIR_HOME_MUST_READABLE ||
-        authority == _PyIR_HOME_NULL_CONTROL_READABLE)
-    {
-        return authority;
-    }
     _PyFrame_GetNullControlHomeView(frame, _PyFrame_NumSlots(frame), view);
     return _PyIR_HOME_NULL_CONTROL_READABLE;
 }
@@ -210,7 +70,6 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
     for (int i = nl; i < nslots; i++) {
         dest->base[i] = PyValue_NULL;
     }
-    dest->phase_state = _PyIR_PHASE_CREATED;
 }
 
 void
@@ -218,7 +77,6 @@ _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
     assert(frame->pending_redirect);
     assert(frame->return_slot == IR_NO_DST);
-    assert(frame->phase_state == 0);
     /* The child has retired its overlap. Publish the new state before
      * closing remaining scratch owners, whose finalizers can inspect it. */
     frame->pending_redirect = 0;
@@ -334,13 +192,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame,
         (roots->header_mask & _Py_TRANSITION_EXCEPTION);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
-    f->f_capture = view;
-    f->f_capture_authority = (uint8_t)authority;
-    assert(new_frame->phase_state == 0 ||
-           new_frame->phase_state == _PyIR_PHASE_YIELD_DELEGATED);
-    new_frame->phase_state |= _PyIR_PHASE_CAPTURED;
     if (_PyFrame_IsIncomplete(new_frame)) {
-        new_frame->phase_state = _PyIR_PHASE_CAPTURED;
         // This may be a newly-created generator or coroutine frame. Since it's
         // dead anyways, just pretend that the first RESUME ran:
         new_frame->instr_ptr = new_frame->ir_words

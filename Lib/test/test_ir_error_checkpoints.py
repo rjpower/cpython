@@ -25,8 +25,8 @@ class ErrorCheckpointTests(unittest.TestCase):
         ], slots=5, locals=("payload", "iterator", "mutable")).replace(co_argcount=2)
 
     def authority(self, code, site, checkpoint=1, **kw):
-        return _testinternalcapi.check_ir_frame_phase(
-            code, site, 0, error_checkpoint=checkpoint, **kw)
+        return _testinternalcapi.check_ir_error_authority(
+            code, site, checkpoint, **kw)
 
     def test_explicit_origin_query_and_public_routes(self):
         row = _opcode.get_ir_contract()[opcode.opmap["GET_ANEXT"]]
@@ -40,22 +40,15 @@ class ErrorCheckpointTests(unittest.TestCase):
             self.assertEqual(self.authority(code, len(code.co_code) // 8), 0)
             self.assertEqual(self.authority(code, 3, unaligned=True), 0)
             self.assertEqual(self.authority(code, 3, wrong_image=True), 0)
-            # Publication state is not the error origin or its authority.
-            self.assertEqual(_testinternalcapi.check_ir_frame_phase(
-                code, 3, 65535, error_checkpoint=1), 2)
 
     def test_actual_scope_keeps_survivors_through_monitor_and_retirement(self):
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
         observations = []
         escaped = []
-        addresses = []
         function = None
 
         class Payload:
-            def __init__(self):
-                addresses.append(id(self))
-
             def __del__(self):
                 frame = sys._getframe(1)
                 while frame is not None and frame.f_code is not function.__code__:
@@ -65,10 +58,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                     return
                 frame.f_locals["mutable"] = 42
                 gc.collect()
-                observations.append(("retire",
-                    _testinternalcapi.get_frame_home_view(frame)[0],
-                    id(self) in _testinternalcapi.get_frame_selected_object_ids(frame),
-                    _testinternalcapi.gc_verify()))
+                observations.append(("retire", _testinternalcapi.gc_verify()))
 
         class Iterator:
             def __anext__(self):
@@ -79,10 +69,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                 frame = sys._getframe(1)
                 escaped.append(frame)
                 frame.f_locals["mutable"] = 41
-                observations.append(("raise",
-                    _testinternalcapi.get_frame_home_view(frame)[0],
-                    addresses[-1] in _testinternalcapi.get_frame_selected_object_ids(frame),
-                    _testinternalcapi.gc_verify()))
+                observations.append(("raise", _testinternalcapi.gc_verify()))
 
         monitor.use_tool_id(tool, "selected-error-snapshot")
         try:
@@ -100,7 +87,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                 finally:
                     monitor.set_local_events(tool, code, 0)
                 self.assertEqual(observations[-2:], [
-                    ("raise", 2, True, []), ("retire", 2, False, [])])
+                    ("raise", []), ("retire", [])])
                 self.assertEqual(escaped[-1].f_locals["mutable"], 42)
                 escaped[-1].clear()
         finally:
@@ -112,7 +99,6 @@ class ErrorCheckpointTests(unittest.TestCase):
         tool = monitor.DEBUGGER_ID
         observations = []
         current = None
-        payload_id = value_id = 0
 
         class Value:
             def __bool__(self):
@@ -121,11 +107,7 @@ class ErrorCheckpointTests(unittest.TestCase):
         def raised(code, offset, exception):
             if code is current:
                 frame = sys._getframe(1)
-                selected = _testinternalcapi.get_frame_selected_object_ids(frame)
-                observations.append((
-                    _testinternalcapi.get_frame_home_view(frame)[0],
-                    payload_id in selected, value_id in selected,
-                    _testinternalcapi.gc_verify()))
+                observations.append(_testinternalcapi.gc_verify())
 
         monitor.use_tool_id(tool, "scalar-error-actions")
         try:
@@ -144,7 +126,6 @@ class ErrorCheckpointTests(unittest.TestCase):
                     self.assertEqual(self.authority(current, 4), 2)
                     function = types.FunctionType(current, globals())
                     payload, value = object(), Value()
-                    payload_id, value_id = id(payload), id(value)
                     monitor.set_local_events(tool, current, monitor.events.RAISE)
                     try:
                         try:
@@ -155,7 +136,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                             self.fail("the scalar predicate must fail")
                     finally:
                         monitor.set_local_events(tool, current, 0)
-                    self.assertEqual(observations[-1], (2, True, False, []))
+                    self.assertEqual(observations[-1], [])
         finally:
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
@@ -177,7 +158,6 @@ class ErrorCheckpointTests(unittest.TestCase):
         observations = []
         redirects = []
         retired = []
-        payload_id = 0
 
         class Iterator:
             def __anext__(self):
@@ -206,10 +186,8 @@ class ErrorCheckpointTests(unittest.TestCase):
         def raised(code, offset, exception):
             if code is current:
                 frame = sys._getframe(1)
-                observations.append((
-                    _testinternalcapi.get_frame_home_view(frame)[0],
-                    payload_id in _testinternalcapi.get_frame_selected_object_ids(frame),
-                    _testinternalcapi.gc_verify(), frame.f_locals["mutable"]))
+                observations.append((_testinternalcapi.gc_verify(),
+                                     frame.f_locals["mutable"]))
 
         image = make_code([
             ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
@@ -235,7 +213,6 @@ class ErrorCheckpointTests(unittest.TestCase):
                 self.assertEqual(self.authority(current, 5), 2)
                 function = types.FunctionType(current, globals())
                 payload = object()
-                payload_id = id(payload)
                 monitor.set_local_events(tool, current, monitor.events.RAISE)
                 try:
                     try:
@@ -246,7 +223,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                         self.fail("the published iterator must fail")
                 finally:
                     monitor.set_local_events(tool, current, 0)
-                self.assertEqual(observations[-1], (2, True, [], 42))
+                self.assertEqual(observations[-1], ([], 42))
                 self.assertTrue(retired)
                 self.assertTrue(redirects)
                 self.assertTrue(all("unsupported active call recipe" in error
@@ -322,9 +299,7 @@ class ErrorCheckpointTests(unittest.TestCase):
         def handled(current, offset, exception):
             if current is code:
                 frame = sys._getframe(1)
-                observations.append((_testinternalcapi.get_frame_home_view(frame)[0],
-                    id(exception) in _testinternalcapi.get_frame_selected_object_ids(frame),
-                    _testinternalcapi.gc_verify()))
+                observations.append(_testinternalcapi.gc_verify())
 
         monitor.use_tool_id(tool, "selected-error-handler-entry")
         try:
@@ -335,7 +310,7 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.set_local_events(tool, code, 0)
             monitor.register_callback(tool, monitor.events.EXCEPTION_HANDLED, None)
             monitor.free_tool_id(tool)
-        self.assertEqual(observations, [(3, True, [])])
+        self.assertEqual(observations, [[]])
 
     def test_source_and_actual_flush_receipts_are_both_required(self):
         from pathlib import Path

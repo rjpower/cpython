@@ -4597,10 +4597,6 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                 original = slot.value
                 assert coroutine.cr_await is not None
                 assert 0 <= original < layout['no_dst'], original
-                phase_address = id(coroutine) + layout['generator_frame'] + layout['phase_state']
-                phase = ctypes.c_uint16.from_address(phase_address)
-                original_phase = phase.value
-                assert original_phase & layout['phase_delegated'], original_phase
                 trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
                 targets = [target for info in trace for target in info.awaited_by
                            if target.task_name == 'bounded-target']
@@ -4609,11 +4605,6 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                            for coro in targets[0].coroutine_stack
                            for frame in coro.call_stack), targets
                 try:
-                    phase.value = 0
-                    slot.value = 65535
-                    assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
-                    slot.value = original
-                    phase.value = original_phase
                     # The other two values are non-sentinel uint16 values,
                     # above this target's actual home count. The sentinel
                     # also fails here: this word's actual A is
@@ -4637,7 +4628,6 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                         raise AssertionError('accepted unrelated resume recipient')
                 finally:
                     slot.value = original
-                    phase.value = original_phase
                     task.cancel()
                     try:
                         await task

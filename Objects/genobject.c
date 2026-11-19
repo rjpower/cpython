@@ -1351,12 +1351,6 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     gen->gi_frame_state = FRAME_CREATED;
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
-    f->f_capture = copy_view;
-    f->f_capture_authority = (uint8_t)copy_authority;
-    assert(frame->phase_state == 0 ||
-           frame->phase_state == _PyIR_PHASE_YIELD_DELEGATED);
-    frame->phase_state = _PyIR_PHASE_CAPTURED |
-        (frame->phase_state & _PyIR_PHASE_YIELD_DELEGATED);
     assert(PyObject_GC_IsTracked((PyObject *)f));
     gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;

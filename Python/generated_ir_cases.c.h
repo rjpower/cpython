@@ -13768,7 +13768,6 @@
                 frame = tstate->current_frame = frame->previous;
                 ir_yield_frame->previous = NULL;
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-                _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
                 FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
                 slots = _PyFrame_Slots(frame);
                 IR_TRY_NATIVE_YIELD(outgoing);
@@ -21884,7 +21883,6 @@
             frame = tstate->current_frame = frame->previous;
             ir_yield_frame->previous = NULL;
             ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-            _PyFrame_PublishDelegatedSuspension(ir_yield_frame);
             FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
             slots = _PyFrame_Slots(frame);
             IR_TRY_NATIVE_YIELD(outgoing);

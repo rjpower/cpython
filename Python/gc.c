@@ -479,43 +479,20 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
     return 0;
 }
 
+/* Every slot of a frame is a canonical value or NULL whenever the collector
+ * can run, so the scan needs no knowledge of the frame's state. Values that a
+ * handler holds in C are external references. */
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    if (frame->phase_state & _PyIR_PHASE_PUBLISHED) {
-        uint8_t status = _PyIR_ShadowFramePhase(frame);
-        frame->phase_state = (uint16_t)(
-            (frame->phase_state & ~_PyIR_PHASE_STATUS_MASK) |
-            (status << _PyIR_PHASE_STATUS_SHIFT));
-        assert(status != _PyIR_SHADOW_MISMATCH);
-    }
-    _PyIRHomeView view;
-    int selected = 0;
-    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
-        _PyIRHomeAuthority authority = _PyFrame_GetErrorHomeView(NULL, frame, &view);
-        selected = authority == _PyIR_HOME_MUST_READABLE ||
-                   authority == _PyIR_HOME_NULL_CONTROL_READABLE;
-    }
-    else if (frame->phase_state == _PyIR_PHASE_CREATED) {
-        selected = _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_MUST_READABLE;
-    }
-    uint32_t cursor = 0;
-    int begin = 0, limit = _PyFrame_NumSlots(frame);
-    if (selected && !_PyFrame_NextHomeRange(&view, &cursor, &begin, &limit)) {
-        return 0;
-    }
-    /* Other lifecycle states retain the initialized NULL-control scan. */
-    do {
-        PyValue *ref = _PyFrame_GetLocalsArray(frame) + begin;
-        PyValue *end = _PyFrame_GetLocalsArray(frame) + limit;
-        for (; ref < end; ref++) {
-            if (!PyValue_IsTaggedIndex(*ref)) {
-                _PyValue_RecheckHome(*ref);
-            }
-            _Py_VISIT_VALUE(*ref);
+    PyValue *ref = _PyFrame_GetLocalsArray(frame);
+    PyValue *end = ref + _PyFrame_NumSlots(frame);
+    for (; ref < end; ref++) {
+        if (!PyValue_IsTaggedIndex(*ref)) {
+            _PyValue_RecheckHome(*ref);
         }
-    } while (selected &&
-             _PyFrame_NextHomeRange(&view, &cursor, &begin, &limit));
+        _Py_VISIT_VALUE(*ref);
+    }
     return 0;
 }
 

@@ -4775,15 +4775,13 @@ test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i,s:n,s:n,s:i}",
+    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i,s:n}",
         "descriptor", (unsigned long long)(uintptr_t)&_PyRuntime.debug_offsets,
         "chunk_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, stack_chunk),
         "generator_frame", (Py_ssize_t)offsetof(PyGenObject, gi_iframe),
         "return_slot", (Py_ssize_t)offsetof(_PyInterpreterFrame, return_slot),
         "no_dst", IR_NO_DST,
-        "phase_state", (Py_ssize_t)offsetof(_PyInterpreterFrame, phase_state),
-        "code_exec_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, code_exec),
-        "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED);
+        "code_exec_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, code_exec));
 }
 
 static int
@@ -4859,50 +4857,6 @@ get_transition_shadow_status(PyObject *self, PyObject *Py_UNUSED(ignored))
     return states;
 }
 
-/* Read only the published marker. This probe does not infer a receiver or
- * bypass the generator state/read claim required to acquire its value. */
-static PyObject *
-has_delegated_frame_phase(PyObject *self, PyObject *frame_object)
-{
-    if (!PyFrame_Check(frame_object)) {
-        PyErr_SetString(PyExc_TypeError, "expected a frame");
-        return NULL;
-    }
-    _PyInterpreterFrame *frame = ((PyFrameObject *)frame_object)->f_frame;
-    uint16_t phase = frame->phase_state;
-    return PyBool_FromLong(phase == _PyIR_PHASE_YIELD_DELEGATED ||
-                          phase == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED));
-}
-
-/* Observe all active frames head-to-outer. This never starts a comparison;
- * the stored status must come from an actual reached collector frame walk. */
-static PyObject *
-get_ir_frame_phases(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *states = PyList_New(0);
-    if (states == NULL) {
-        return NULL;
-    }
-    for (_PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
-         frame != NULL; frame = frame->previous)
-    {
-        PyObject *code = frame->f_executable != NULL
-            ? (PyObject *)frame->f_executable : Py_None;
-        PyObject *state = Py_BuildValue("(Oi)", code, frame->phase_state);
-        if (state == NULL) {
-            Py_DECREF(states);
-            return NULL;
-        }
-        int status = PyList_Append(states, state);
-        Py_DECREF(state);
-        if (status < 0) {
-            Py_DECREF(states);
-            return NULL;
-        }
-    }
-    return states;
-}
-
 /* Probe the cold query with initialized control homes, never executable
  * malformed code. The argument pins the borrowed code in this unpublished frame. */
 static PyObject *
@@ -4961,22 +4915,20 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
-/* Initialize a covered control shape without executing the image or
- * publishing the fake frame. Only inline values enter the scratch homes. */
+/* The authority of the error checkpoint of an image site, for a fake frame
+ * that never executes. */
 static PyObject *
-check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
+check_ir_error_authority(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     PyObject *code_object;
-    int site, phase, dirty_home = -1, missing_home = -1;
-    int unaligned = 0, wrong_image = 0, authority_only = 0, error_checkpoint = -1;
+    int site, checkpoint;
+    int unaligned = 0, wrong_image = 0;
     static char *keywords[] = {
-        "code", "site", "phase", "dirty_home", "missing_home",
-        "unaligned", "wrong_image", "authority_only", "error_checkpoint", NULL,
+        "code", "site", "checkpoint", "unaligned", "wrong_image", NULL,
     };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$iipppi:check_ir_frame_phase",
-                                    keywords, &code_object, &site, &phase,
-                                    &dirty_home, &missing_home, &unaligned,
-                                    &wrong_image, &authority_only, &error_checkpoint))
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$pp:check_ir_error_authority",
+                                    keywords, &code_object, &site, &checkpoint,
+                                    &unaligned, &wrong_image))
     {
         return NULL;
     }
@@ -4986,14 +4938,12 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
     }
     PyCodeObject *code = (PyCodeObject *)code_object;
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    int nl = code->co_nlocalsplus;
-    if (site < 0 || site > Py_SIZE(code) || phase < 0 || phase > UINT16_MAX ||
-        error_checkpoint < -1 || error_checkpoint > UINT8_MAX ||
-        nl < 0 || nslots < nl || nslots > IR_MAX_SLOTS ||
-        (dirty_home != -1 && (dirty_home < nl || dirty_home >= nslots)) ||
-        (missing_home != -1 && (missing_home < nl || missing_home >= nslots)))
+    if (site < 0 || site > Py_SIZE(code) ||
+        checkpoint < 0 || checkpoint > UINT8_MAX ||
+        code->co_nlocalsplus < 0 || nslots < code->co_nlocalsplus ||
+        nslots > IR_MAX_SLOTS)
     {
-        PyErr_SetString(PyExc_ValueError, "invalid frame phase control probe");
+        PyErr_SetString(PyExc_ValueError, "invalid error checkpoint probe");
         return NULL;
     }
     _PyCodeExec *exec = _PyCode_GetExec(code);
@@ -5014,159 +4964,25 @@ check_ir_frame_phase(PyObject *self, PyObject *args, PyObject *kwargs)
         .ir_words = exec->words,
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
-        .phase_state = (uint16_t)phase,
     };
-    _PyIRHomeView view;
-    _PyIRHomeAuthority covered = error_checkpoint < 0
-        ? _PyIR_GetFrameHomeView(&frame, &view)
-        : _PyIR_GetErrorHomeView(&frame, (_PyInstr *)pc,
-                                 (uint8_t)error_checkpoint, &view);
-    int dirty_selected = 0, missing_required = 0;
-    if (covered) {
-        for (uint32_t r = 0; r < view.nranges; r++) {
-            const _PyIRPhaseRange *range = view.ranges + r;
-            for (int bit = range->begin; bit < range->end; bit++) {
-                int home = view.nbindings + bit;
-                homes[home] = PyValue_FromInlineInt(17);
-                dirty_selected |= home == dirty_home;
-                missing_required |= home == missing_home &&
-                    !(range->flags & _PyIR_PHASE_RANGE_NULLABLE);
-            }
-        }
-    }
-    if ((dirty_home >= 0 && (!covered || dirty_selected)) ||
-        (missing_home >= 0 && (!covered || !missing_required)))
-    {
-        PyMem_Free(homes);
-        PyErr_SetString(PyExc_ValueError,
-                        "dirty home must be absent and missing home must be required");
-        return NULL;
-    }
-    if (dirty_home >= 0) {
-        homes[dirty_home] = PyValue_FromInlineInt(17);
-    }
-    if (missing_home >= 0) {
-        homes[missing_home] = PyValue_NULL;
-    }
     _PyIRWord other_image = 0;
     if (wrong_image) {
         frame.ir_words = &other_image;
     }
     frame.instr_ptr = (_PyInstr *)(pc + unaligned);
-    int status = error_checkpoint >= 0
-        ? (int)_PyIR_GetErrorHomeView(&frame, frame.instr_ptr,
-                                     (uint8_t)error_checkpoint, &view)
-        : authority_only ? (int)_PyIR_GetFrameHomeView(&frame, &view)
-                         : _PyIR_ShadowFramePhase(&frame);
+    _PyIRHomeView view;
+    int status = (int)_PyIR_GetErrorHomeView(&frame, frame.instr_ptr,
+                                            (uint8_t)checkpoint, &view);
     PyMem_Free(homes);
     return PyLong_FromLong(status);
 }
 
-static PyObject *
-get_frame_home_view(PyObject *self, PyObject *arg)
-{
-    if (!PyFrame_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected a frame");
-        return NULL;
-    }
-    _PyIRHomeView view = {0};
-    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(
-        ((PyFrameObject *)arg)->f_frame, &view);
-    return Py_BuildValue("(iiii)", authority, view.nbindings,
-                         view.scratch_limit, view.nranges);
-}
-
-/* Snapshot selected object addresses before building Python objects. An
- * allocation can run GC and move an associated interpreter frame. */
-static PyObject *
-get_frame_selected_object_ids(PyObject *self, PyObject *arg)
-{
-    if (!PyFrame_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected a frame");
-        return NULL;
-    }
-    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
-    _PyIRHomeView view;
-    _PyIRHomeAuthority authority = _PyFrame_GetHomeView(frame, &view);
-    if (authority != _PyIR_HOME_MUST_READABLE &&
-        authority != _PyIR_HOME_NULL_CONTROL_READABLE)
-    {
-        PyErr_SetString(PyExc_ValueError, "frame has no readable selected view");
-        return NULL;
-    }
-    uintptr_t *addresses = PyMem_Malloc(
-        (size_t)Py_MAX(_PyFrame_NumSlots(frame), 1) * sizeof(*addresses));
-    if (addresses == NULL) {
-        return PyErr_NoMemory();
-    }
-    int count = 0, begin, end;
-    uint32_t cursor = 0;
-    while (_PyFrame_NextHomeRange(&view, &cursor, &begin, &end)) {
-        for (int home = begin; home < end; home++) {
-            PyValue value = frame->base[home];
-            if (PyValue_IsObject(value)) {
-                addresses[count++] = (uintptr_t)PyValue_AsKnownObjectBorrow(value);
-            }
-        }
-    }
-    PyObject *ids = PyList_New(count);
-    if (ids != NULL) {
-        for (int i = 0; i < count; i++) {
-            PyObject *address = PyLong_FromUnsignedLongLong(addresses[i]);
-            if (address == NULL) {
-                Py_CLEAR(ids);
-                break;
-            }
-            PyList_SET_ITEM(ids, i, address);
-        }
-    }
-    PyMem_Free(addresses);
-    return ids;
-}
-
-static PyObject *
-check_created_home_view_invalidation(PyObject *self, PyObject *arg)
-{
-    if (!PyFrame_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected a frame");
-        return NULL;
-    }
-    _PyInterpreterFrame *frame = ((PyFrameObject *)arg)->f_frame;
-    _PyIRHomeView view;
-    if (frame->phase_state != _PyIR_PHASE_CREATED ||
-        _PyFrame_GetHomeView(frame, &view) != _PyIR_HOME_MUST_READABLE)
-    {
-        PyErr_SetString(PyExc_ValueError, "expected certified created frame");
-        return NULL;
-    }
-    /* No callback or home mutation occurs during this invalidation probe. */
-    frame->phase_state = 0;
-    int denied = _PyFrame_GetHomeView(frame, &view) == _PyIR_HOME_NONE;
-    frame->phase_state = _PyIR_PHASE_CREATED;
-    if (!denied) {
-        PyErr_SetString(PyExc_AssertionError, "created authority was reacquired");
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
 /* A cold protocol probe: inactive words are never exposed as Python values,
  * executed, or closed. Only the selected home owns payload. */
-#ifndef Py_GIL_DISABLED
-static int
-count_frame_probe_owners(PyObject *object, void *arg)
-{
-    (*(int *)arg)++;
-    return 0;
-}
-#endif
-
 static PyObject *
 check_frame_copy(PyObject *args, int mode)
 {
     int created = mode == 1;
-    int delegated = mode >= 2;
-    int clipped = mode == 3;
     PyObject *code_object, *payload;
     if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
                           &code_object, &payload))
@@ -5182,59 +4998,40 @@ check_frame_copy(PyObject *args, int mode)
     }
     _PyCodeExec *exec = NULL;
     int site = 0;
-    _PyIRWord protocol = 0;
-    if (created || delegated) {
+    if (created) {
         exec = _PyCode_GetExec(code);
         if (exec == NULL) {
             return NULL;
         }
-        if (created && (exec->semantic_plan == NULL ||
-            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY)))
+        if (exec->semantic_plan == NULL ||
+            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
         {
             PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
             return NULL;
         }
         while (site < exec->nwords) {
-            protocol = code->co_words[site];
-            int handler = IR_HANDLER(protocol);
+            int handler = IR_HANDLER(code->co_words[site]);
             const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
             if (boundary != NULL) {
                 handler = boundary->ordinary;
             }
-            if ((created && _PyIR_BaseOpcode(handler) == RETURN_GENERATOR) ||
-                (delegated && (handler == YIELD_DELEGATED ||
-                               handler == INSTRUMENTED_YIELD_DELEGATED)))
-            {
+            if (_PyIR_BaseOpcode(handler) == RETURN_GENERATOR) {
                 break;
             }
             site++;
         }
         if (site == exec->nwords) {
-            PyErr_SetString(PyExc_ValueError, "probe needs the actual copy/yield site");
-            return NULL;
-        }
-        if (delegated && (site + 1 >= exec->nwords ||
-                IR_B(protocol) < (uint32_t)nl || IR_B(protocol) >= (uint32_t)n ||
-                IR_D(protocol) < (uint32_t)nl || IR_D(protocol) >= (uint32_t)n ||
-                IR_D(protocol) == IR_A(protocol) || IR_D(protocol) == IR_B(protocol)))
-        {
-            PyErr_SetString(PyExc_ValueError, "probe needs admitted delegated operands");
+            PyErr_SetString(PyExc_ValueError, "probe needs the actual copy site");
             return NULL;
         }
     }
     size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
         (size_t)n * sizeof(PyValue);
     _PyInterpreterFrame *src = PyMem_Calloc(1, size);
-    /* The selectors derive their owner container from the embedded frame.
-     * Private untracked storage never executes or invokes an object destructor. */
-    size_t offset = created ? offsetof(PyGenObject, gi_iframe) : delegated
-        ? offsetof(PyFrameObject, _f_frame_data) : 0;
-    void *dst_storage = PyMem_Calloc(1, offset + size);
-    _PyInterpreterFrame *dst = dst_storage == NULL ? NULL
-        : (_PyInterpreterFrame *)((char *)dst_storage + offset);
+    _PyInterpreterFrame *dst = PyMem_Calloc(1, size);
     if (src == NULL || dst == NULL) {
         PyMem_Free(src);
-        PyMem_Free(dst_storage);
+        PyMem_Free(dst);
         return PyErr_NoMemory();
     }
     src->f_executable = (PyCodeObject *)Py_NewRef(code);
@@ -5244,28 +5041,19 @@ check_frame_copy(PyObject *args, int mode)
         src->base[i].bits = poison;
     }
     PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-    int selected_home = delegated ? IR_D(protocol) : created ? 0 : nl + 1;
+    int selected_home = created ? 0 : nl + 1;
     assert(selected_home >= 0 && selected_home < n);
-    assert(!delegated || selected_home >= nl);
     src->base[selected_home] = _PyValue_Publish(&value);
-    int scratch_home = delegated ? selected_home - nl : 1;
+    int scratch_home = 1;
     const _PyIRPhaseRange selected = {
         .begin = (uint16_t)scratch_home,
         .end = (uint16_t)(scratch_home + 1),
     };
     const _PyIRHomeView view = {
         .nbindings = (uint16_t)nl,
-        .scratch_limit = (uint16_t)(clipped ? 0 : selected.end),
-        .nranges = !clipped, .ranges = &selected,
+        .scratch_limit = (uint16_t)selected.end,
+        .nranges = 1, .ranges = &selected,
     };
-    if (delegated) {
-        src->owner = FRAME_OWNED_BY_GENERATOR;
-        src->ir_words = exec->words;
-        src->instr_ptr = exec->words + site + 1;
-        src->return_slot = IR_A(protocol);
-        _PyFrame_PublishDelegatedSuspension(src);
-        assert(_PyIR_DelegatedReceiverHome(src) == selected_home);
-    }
     if (created) {
         src->ir_words = exec->words;
         src->instr_ptr = exec->words + site;
@@ -5274,49 +5062,17 @@ check_frame_copy(PyObject *args, int mode)
     else {
         _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
     }
-    int correct = clipped
-        ? PyValue_IsNull(dst->base[selected_home]) &&
-          src->base[selected_home].bits == value.bits
-        : dst->base[selected_home].bits == value.bits &&
-          PyValue_IsNull(src->base[selected_home]);
-    if (delegated) {
-        correct &= src->phase_state == 0 &&
-            dst->phase_state == (clipped ? 0 : _PyIR_PHASE_YIELD_DELEGATED);
-        PyFrameObject *capture = dst_storage;
-        dst->owner = FRAME_OWNED_BY_FRAME_OBJECT;
-        capture->f_frame = dst;
-        capture->f_capture = view;
-        capture->f_capture_authority = _PyIR_HOME_MUST_READABLE;
-        dst->phase_state |= _PyIR_PHASE_CAPTURED;
-        _PyIRHomeView selected_view;
-        correct &= _PyFrame_GetHomeView(dst, &selected_view) == _PyIR_HOME_MUST_READABLE;
-        correct &= selected_view.scratch_limit == view.scratch_limit;
-        correct &= _PyIR_DelegatedReceiverHome(dst) == (clipped ? -1 : selected_home);
-    }
+    int correct = dst->base[selected_home].bits == value.bits &&
+                  PyValue_IsNull(src->base[selected_home]);
     for (int i = nl; i < n; i++) {
         if (i != selected_home) {
             correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
         }
     }
-#ifndef Py_GIL_DISABLED
-    if (created) {
-        ((PyGenObject *)dst_storage)->gi_frame_state = FRAME_CREATED;
-        dst->owner = FRAME_OWNED_BY_GENERATOR;
-        for (int i = nl; i < n; i++) {
-            dst->base[i].bits = poison;
-        }
-        int visited = 0;
-        int status = _PyGC_VisitFrameStack(dst, count_frame_probe_owners, &visited);
-        correct &= status == 0 && visited == PyValue_IsObject(value);
-    }
-#endif
     PyValue_XCLOSE(dst->base[selected_home]);
-    if (clipped) {
-        PyValue_XCLOSE(src->base[selected_home]);
-    }
     Py_DECREF(dst->f_executable);
     PyMem_Free(src);
-    PyMem_Free(dst_storage);
+    PyMem_Free(dst);
     if (!correct) {
         PyErr_SetString(PyExc_AssertionError, "copy touched an inactive home");
         return NULL;
@@ -5337,18 +5093,6 @@ check_created_frame_copy(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-check_delegated_frame_copy(PyObject *self, PyObject *args)
-{
-    return check_frame_copy(args, 2);
-}
-
-static PyObject *
-check_clipped_delegated_frame_copy(PyObject *self, PyObject *args)
-{
-    return check_frame_copy(args, 3);
-}
-
-static PyObject *
 has_empty_created_copy_plan(PyObject *self, PyObject *arg)
 {
     if (!PyCode_Check(arg)) {
@@ -5364,23 +5108,16 @@ has_empty_created_copy_plan(PyObject *self, PyObject *arg)
 }
 
 static PyMethodDef module_functions[] = {
-    {"check_created_home_view_invalidation", check_created_home_view_invalidation, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
-    {"get_frame_home_view", get_frame_home_view, METH_O},
-    {"get_frame_selected_object_ids", get_frame_selected_object_ids, METH_O},
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"get_transition_root_ids", get_transition_root_ids, METH_NOARGS},
     {"get_transition_shadow_status", get_transition_shadow_status, METH_NOARGS},
     {"set_retirement_shadow_observed", set_retirement_shadow_observed, METH_O},
-    {"check_delegated_frame_copy", check_delegated_frame_copy, METH_VARARGS},
-    {"check_clipped_delegated_frame_copy", check_clipped_delegated_frame_copy, METH_VARARGS},
-    {"has_delegated_frame_phase", has_delegated_frame_phase, METH_O},
-    {"get_ir_frame_phases", get_ir_frame_phases, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},
-    {"check_ir_frame_phase", _PyCFunction_CAST(check_ir_frame_phase),
+    {"check_ir_error_authority", _PyCFunction_CAST(check_ir_error_authority),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},

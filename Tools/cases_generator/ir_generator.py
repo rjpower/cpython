@@ -3689,7 +3689,6 @@ class IREmitter(Emitter):
         self.emit("frame = tstate->current_frame = frame->previous;\n")
         self.emit("ir_yield_frame->previous = NULL;\n")
         self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
-        self.emit("_PyFrame_PublishDelegatedSuspension(ir_yield_frame);\n")
         self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
         self.abrupt_prefix = True
         self.emit("slots = _PyFrame_Slots(frame);\n")

@@ -979,13 +979,7 @@ frame_image_site(_PyInterpreterFrame *frame, const _PyInstr *origin, uint32_t *s
 int
 _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
 {
-    unsigned int phase = frame->phase_state;
-    if (!((phase == _PyIR_PHASE_YIELD_DELEGATED &&
-           frame->owner == FRAME_OWNED_BY_GENERATOR) ||
-          (phase == (_PyIR_PHASE_CAPTURED | _PyIR_PHASE_YIELD_DELEGATED) &&
-           (frame->owner == FRAME_OWNED_BY_GENERATOR ||
-            frame->owner == FRAME_OWNED_BY_FRAME_OBJECT))))
-    {
+    if (frame->owner != FRAME_OWNED_BY_GENERATOR) {
         return -1;
     }
     uint32_t continuation;
@@ -1065,22 +1059,6 @@ plan_home_view(_PyInterpreterFrame *frame, _PyCodeExec *exec, uint32_t site,
 }
 
 _PyIRHomeAuthority
-_PyIR_GetFrameHomeView(_PyInterpreterFrame *frame, _PyIRHomeView *out)
-{
-    unsigned int published = frame->phase_state;
-    if (!(published & _PyIR_PHASE_PUBLISHED) ||
-        (published & ~(255u | _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_STATUS_MASK)) ||
-        (published >> _PyIR_PHASE_STATUS_SHIFT) == 3)
-    {
-        return _PyIR_HOME_NONE;
-    }
-    uint32_t site;
-    _PyCodeExec *exec = frame_image_site(frame, frame->instr_ptr, &site);
-    return exec == NULL ? _PyIR_HOME_NONE : plan_home_view(
-        frame, exec, site, _PyIR_SELECTOR_ACTIVE, (uint8_t)published, out);
-}
-
-_PyIRHomeAuthority
 _PyIR_GetErrorHomeView(_PyInterpreterFrame *frame, const _PyInstr *origin,
                        uint8_t checkpoint, _PyIRHomeView *out)
 {
@@ -1091,36 +1069,4 @@ _PyIR_GetErrorHomeView(_PyInterpreterFrame *frame, const _PyInstr *origin,
     _PyCodeExec *exec = frame_image_site(frame, origin, &site);
     return exec == NULL ? _PyIR_HOME_NONE : plan_home_view(
         frame, exec, site, _PyIR_SELECTOR_ERROR, checkpoint, out);
-}
-
-uint8_t
-_PyIR_ShadowFramePhase(_PyInterpreterFrame *frame)
-{
-    _PyIRHomeView view;
-    _PyIRHomeAuthority authority = _PyIR_GetFrameHomeView(frame, &view);
-    if (authority == _PyIR_HOME_NONE) {
-        return _PyIR_SHADOW_UNCOVERED;
-    }
-    const _PyIRPhaseRange *ranges = view.ranges;
-    uint32_t range = 0;
-    for (int bit = 0; bit < view.scratch_limit; bit++) {
-        while (range < view.nranges && ranges[range].end <= bit) {
-            range++;
-        }
-        PyValue value = frame->base[view.nbindings + bit];
-        if (range == view.nranges || ranges[range].begin > bit) {
-            if (!PyValue_IsNull(value)) {
-                return _PyIR_SHADOW_MISMATCH;
-            }
-        }
-        else if (PyValue_IsNull(value)) {
-            if (!(ranges[range].flags & _PyIR_PHASE_RANGE_NULLABLE)) {
-                return _PyIR_SHADOW_MISMATCH;
-            }
-        }
-        else if (!_PyValue_IsHome(value)) {
-            return _PyIR_SHADOW_MISMATCH;
-        }
-    }
-    return _PyIR_SHADOW_EXACT;
 }

@@ -2226,9 +2226,6 @@ static void
 error_scope_disarm(PyThreadState *tstate, _PyTransitionRoots *scope)
 {
     _PyInterpreterFrame *frame = scope->frame;
-    if (frame->phase_state == _PyIR_PHASE_ERROR_SCOPE) {
-        frame->phase_state = 0;
-    }
     scope->remaining = 0;
     scope->home_authority = _PyIR_HOME_NONE;
     scope->homes = NULL;
@@ -2298,7 +2295,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             .homes = &view,
         };
         _PyThreadState_PushTransitionRoots(tstate, &scope);
-        frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
 
         /* Retain a source callback's immutable recovery triple across bridge
          * cleanup. Its visible source location survives until traceback and
@@ -2371,7 +2367,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             scope.remaining = found.exc_slot + 1;
             _PyFrame_GetNullControlHomeView(frame, scope.remaining, &view);
             scope.home_authority = _PyIR_HOME_NULL_CONTROL_READABLE;
-            frame->phase_state = _PyIR_PHASE_ERROR_SCOPE;
             int err = monitor_handled(tstate, frame, next, exc);
             error_scope_disarm(tstate, &scope);
             if (err < 0) {

@@ -316,9 +316,8 @@ class DeallocTest(unittest.TestCase):
                 self.assertEqual(internal.get_transition_root_ids(), [])
 
 
-class DelegatedPhaseTest(unittest.TestCase):
-    def test_marker_tracks_real_suspension_and_invalidates_before_resume(self):
-        internal = import_helper.import_module('_testinternalcapi')
+class DelegatedYieldTest(unittest.TestCase):
+    def test_yieldfrom_tracks_real_suspension(self):
         observations = []
 
         def delegate():
@@ -328,29 +327,27 @@ class DelegatedPhaseTest(unittest.TestCase):
         def outer(receiver):
             local = 'before'
             result = yield from receiver
-            observations.append(internal.has_delegated_frame_phase(sys._getframe()))
+            observations.append(gen.gi_yieldfrom)
             yield result, local
 
         receiver = delegate()
         gen = outer(receiver)
         frame = gen.gi_frame
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertIsNone(gen.gi_yieldfrom)
         self.assertEqual(next(gen), 'first')
-        self.assertTrue(internal.has_delegated_frame_phase(frame))
         self.assertIs(gen.gi_yieldfrom, receiver)
         frame.f_locals['local'] = 'changed'
         support.gc_collect()
-        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertIs(gen.gi_yieldfrom, receiver)
         self.assertEqual(next(gen), ('done', 'changed'))
-        self.assertEqual(observations, [False])
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertEqual(observations, [None])
+        self.assertIsNone(gen.gi_yieldfrom)
         gen.close()
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertIsNone(gen.gi_yieldfrom)
 
-    def test_close_keeps_marker_through_delegate_callback(self):
-        internal = import_helper.import_module('_testinternalcapi')
+    def test_close_runs_delegate_callback_with_the_receiver_retained(self):
         observations = []
-        gen = frame = None
+        gen = None
 
         class Receiver:
             def __iter__(self):
@@ -360,24 +357,20 @@ class DelegatedPhaseTest(unittest.TestCase):
                 return 1
 
             def close(self):
-                observations.append((internal.has_delegated_frame_phase(frame),
-                                     gen.gi_yieldfrom))
+                observations.append(gen.gi_yieldfrom)
                 support.gc_collect()
 
         def outer(receiver):
             yield from receiver
 
         gen = outer(Receiver())
-        frame = gen.gi_frame
         self.assertEqual(next(gen), 1)
         gen.close()
-        self.assertEqual(observations, [(True, None)])
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
+        self.assertEqual(observations, [None])
 
-    def test_throw_claim_keeps_marker_until_actual_outer_resume(self):
-        internal = import_helper.import_module('_testinternalcapi')
+    def test_throw_callback_leaves_the_delegation_in_place(self):
         observations = []
-        gen = frame = None
+        gen = None
 
         class Receiver:
             def __iter__(self):
@@ -387,8 +380,7 @@ class DelegatedPhaseTest(unittest.TestCase):
                 return 1
 
             def throw(self, *args):
-                observations.append((internal.has_delegated_frame_phase(frame),
-                                     gen.gi_yieldfrom))
+                observations.append(gen.gi_yieldfrom)
                 support.gc_collect()
                 return 2
 
@@ -398,38 +390,30 @@ class DelegatedPhaseTest(unittest.TestCase):
             yield from receiver
 
         gen = outer()
-        frame = gen.gi_frame
         self.assertEqual(next(gen), 1)
         self.assertEqual(gen.throw(ValueError), 2)
-        self.assertEqual(observations, [(True, None)])
-        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertEqual(observations, [None])
         self.assertIs(gen.gi_yieldfrom, receiver)
         gen.close()
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
 
-    def test_clear_cannot_reacquire_marker_from_saved_continuation(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
+    def test_clear_of_a_suspended_delegation(self):
         def outer():
             yield from iter((1, 2))
 
         gen = outer()
         frame = gen.gi_frame
         self.assertEqual(next(gen), 1)
-        self.assertTrue(internal.has_delegated_frame_phase(frame))
         with self.assertRaisesRegex(RuntimeError, 'suspended frame'):
             frame.clear()
-        self.assertTrue(internal.has_delegated_frame_phase(frame))
+        self.assertIsNotNone(gen.gi_yieldfrom)
         gen.close()
         frame.clear()
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
         self.assertIsNone(gen.gi_yieldfrom)
         support.gc_collect()
-        self.assertFalse(internal.has_delegated_frame_phase(frame))
 
-    def test_yield_observer_precedes_marker_and_cannot_redirect(self):
-        internal = import_helper.import_module('_testinternalcapi')
+    def test_yield_observer_cannot_redirect(self):
         observations = []
+        receiver = iter((1,))
 
         def outer(receiver):
             yield from receiver
@@ -437,56 +421,37 @@ class DelegatedPhaseTest(unittest.TestCase):
         def observe(code, offset, value):
             self.assertIs(code, outer.__code__)
             frame = sys._getframe(1)
-            observations.append(internal.has_delegated_frame_phase(frame))
+            observations.append(gen.gi_yieldfrom)
             with self.assertRaisesRegex(ValueError, 'suspended or protected owner recipe'):
                 frame.f_lineno = frame.f_lineno
 
         mon, tool = sys.monitoring, 4
-        gen = outer(iter((1,)))
-        mon.use_tool_id(tool, 'delegated-phase')
+        gen = outer(receiver)
+        mon.use_tool_id(tool, 'delegated-yield')
         try:
             mon.register_callback(tool, mon.events.PY_YIELD, observe)
             mon.set_local_events(tool, outer.__code__, mon.events.PY_YIELD)
             self.assertEqual(next(gen), 1)
-            self.assertEqual(observations, [False])
-            self.assertTrue(internal.has_delegated_frame_phase(gen.gi_frame))
+            self.assertEqual(observations, [None])
+            self.assertIs(gen.gi_yieldfrom, receiver)
         finally:
             mon.set_local_events(tool, outer.__code__, 0)
             mon.register_callback(tool, mon.events.PY_YIELD, None)
             mon.free_tool_id(tool)
             gen.close()
 
-    def test_selected_copy_preserves_only_a_retained_receiver(self):
-        internal = import_helper.import_module('_testinternalcapi')
 
-        def outer(receiver):
-            yield from receiver
-
-        for payload in (object(), 17, 2.5):
-            with self.subTest(payload=type(payload)):
-                internal.check_delegated_frame_copy(outer.__code__, payload)
-                internal.check_clipped_delegated_frame_copy(outer.__code__, payload)
-
-
-class CopyHomeViewTest(unittest.TestCase):
-    def test_created_home_view_requires_marker_and_tracks_current_locals(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
+class FrameCopyTest(unittest.TestCase):
+    def test_created_generator_tracks_current_locals(self):
         def body(value):
             yield value
 
         payload = object()
         gen = body(None)
         frame = gen.gi_frame
-        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
-        self.assertEqual((authority, limit, nranges), (2, 0, 0))
-        self.assertGreaterEqual(bindings, 1)
-        internal.check_created_home_view_invalidation(frame)
         frame.f_locals['value'] = payload
         support.gc_collect()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 2)
         self.assertIs(next(gen), payload)
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
         gen.close()
         frame.clear()
 
@@ -535,16 +500,13 @@ class CopyHomeViewTest(unittest.TestCase):
         with self.assertRaises(StopIteration):
             next(gen)
 
-    def test_zero_binding_escape_keeps_empty_control(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
+    def test_zero_binding_escape(self):
         def body():
             return sys._getframe()
 
         frame = body()
-        self.assertEqual(internal.get_frame_home_view(frame), (3, 0, 0, 0))
+        self.assertEqual(frame.f_locals, {})
         frame.clear()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
 
     def test_selected_copy_skips_inactive_words(self):
         internal = import_helper.import_module('_testinternalcapi')
@@ -556,9 +518,7 @@ class CopyHomeViewTest(unittest.TestCase):
             with self.subTest(payload=type(payload)):
                 internal.check_frame_selected_copy(body.__code__, payload)
 
-    def test_escaped_frame_keeps_explicit_control(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
+    def test_escaped_frame_keeps_its_values(self):
         def body(value):
             scalar = 17
             return sys._getframe()
@@ -569,15 +529,11 @@ class CopyHomeViewTest(unittest.TestCase):
         payload = object()
         code = body.__code__
         frame = body(payload)
-        authority, bindings, limit, nranges = internal.get_frame_home_view(frame)
-        self.assertEqual((authority, limit, nranges), (3, 0, 0))
-        self.assertGreaterEqual(bindings, code.co_nlocals)
         body.__code__ = replacement.__code__
         self.assertIs(frame.f_code, code)
         self.assertIs(frame.f_locals['value'], payload)
         self.assertEqual(frame.f_locals['scalar'], 17)
         frame.clear()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 0)
 
     def test_created_generator_and_suspended_escape_values(self):
         internal = import_helper.import_module('_testinternalcapi')
@@ -600,22 +556,17 @@ class CopyHomeViewTest(unittest.TestCase):
         self.assertIs(frame.f_code, code)
         self.assertIs(frame.f_locals['value'], payload)
         self.assertEqual(frame.f_locals['scalar'], 17)
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
         frame.clear()
 
     @unittest.skipIf(_testcapi is None, '_testcapi required')
-    def test_public_frame_generator_keeps_capture_until_resume(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
+    def test_public_frame_generator(self):
         def body():
             yield 17
 
         gen = _testcapi.frame_new_generator(body.__code__, globals(), {})
         frame = gen.gi_frame
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
         self.assertEqual(next(gen), 17)
         gen.close()
-        self.assertEqual(internal.get_frame_home_view(frame)[0], 3)
         frame.clear()
 
 

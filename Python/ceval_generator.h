@@ -330,7 +330,6 @@ TARGET(GEN_SEND_YIELD)
     frame = tstate->current_frame = frame->previous;
     suspended->previous = NULL;
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-    _PyFrame_PublishDelegatedSuspension(suspended);
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
     slots = _PyFrame_Slots(frame);
     py_tail_call_funcptr target = generator_outcome_target(

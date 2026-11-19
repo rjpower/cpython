@@ -2104,19 +2104,6 @@ typedef struct {
 } semantic_block;
 
 typedef struct {
-    Py_uhash_t hash;
-    uint32_t first, count;
-    const _PyIRPhaseRange *ranges;
-} semantic_shape;
-
-typedef struct {
-    _PyIRPhaseSite *sites;
-    _PyIRPhaseRange *ranges, *scratch;
-    uint32_t nsites, site_capacity, nranges, range_capacity;
-    _Py_hashtable_t *shapes;
-} semantic_phases;
-
-typedef struct {
     unsigned int facts[4];
     uint32_t stamps[4];
     uint32_t published[4];
@@ -2135,7 +2122,8 @@ typedef struct {
     semantic_block *blocks;
     uint64_t *facts;
     uint64_t *branch;
-    semantic_phases *phases;
+    /* Set while building a plan; error branches are then also analysed. */
+    int build_plan;
     semantic_scalar_state *error_nodes;
     uint32_t error_capacity;
     int created_empty;
@@ -2235,20 +2223,6 @@ semantic_home_facts(const semantic_worklist *work, const uint64_t *state,
     return facts;
 }
 
-static Py_uhash_t
-semantic_shape_hash(const void *key)
-{
-    return ((const semantic_shape *)key)->hash;
-}
-
-static int
-semantic_shape_equal(const void *left, const void *right)
-{
-    const semantic_shape *a = left, *b = right;
-    return a->count == b->count &&
-        memcmp(a->ranges, b->ranges, (size_t)a->count * sizeof(*a->ranges)) == 0;
-}
-
 static void *
 semantic_reserve(void *array, uint32_t *capacity, uint32_t count, size_t size)
 {
@@ -2268,121 +2242,6 @@ semantic_reserve(void *array, uint32_t *capacity, uint32_t count, size_t size)
     }
     *capacity = next;
     return result;
-}
-
-static int
-semantic_phase(const semantic_image *image, const semantic_worklist *work,
-               const uint64_t *state, int site, uint8_t checkpoint,
-               int complete)
-{
-    semantic_phases *build = work->phases;
-    if (build == NULL || !complete) {
-        return 0;
-    }
-    if (build->scratch == NULL) {
-        build->scratch = PyMem_Malloc((size_t)Py_MAX(image->scratch, 1) *
-                                      sizeof(*build->scratch));
-        build->shapes = _Py_hashtable_new_full(
-            semantic_shape_hash, semantic_shape_equal, PyMem_Free, NULL, NULL);
-        if (build->scratch == NULL || build->shapes == NULL) {
-            PyErr_NoMemory();
-            return -1;
-        }
-    }
-    uint32_t nranges = 0;
-    for (int bit = 0; bit < image->scratch; bit++) {
-        unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
-        uint8_t flags = facts & (1u << SEM_NONNULL) ? 0 : _PyIR_PHASE_RANGE_NULLABLE;
-        if (!(facts & (1u << SEM_MAY_OWNER))) {
-            if (!(facts & (1u << SEM_INITIALIZED))) {
-                if (!(facts & (1u << SEM_NO_HOME))) {
-                    return 0;
-                }
-                continue;
-            }
-            /* A readable NULL/index control participates in a snapshot
-             * even though it carries no counted-owner obligation. */
-            flags |= _PyIR_PHASE_RANGE_CONTROL;
-        }
-        if (!(facts & (1u << SEM_INITIALIZED))) {
-            return 0;
-        }
-        if (nranges && build->scratch[nranges - 1].end == bit &&
-            build->scratch[nranges - 1].flags == flags)
-        {
-            build->scratch[nranges - 1].end++;
-        }
-        else {
-            build->scratch[nranges++] = (_PyIRPhaseRange){
-                .begin = (uint16_t)bit, .end = (uint16_t)(bit + 1), .flags = flags};
-        }
-    }
-    semantic_shape probe = {
-        .count = nranges, .ranges = build->scratch,
-        .hash = (Py_uhash_t)Py_HashBuffer(
-            build->scratch, (Py_ssize_t)nranges * sizeof(*build->scratch)),
-    };
-#ifdef Py_DEBUG
-    for (uint32_t i = 0; i < nranges; i++) {
-        assert(build->scratch[i].begin < build->scratch[i].end);
-        assert(build->scratch[i].end <= image->scratch);
-        assert(i == 0 || build->scratch[i - 1].end <= build->scratch[i].begin);
-        assert(!(build->scratch[i].flags & ~(_PyIR_PHASE_RANGE_NULLABLE | _PyIR_PHASE_RANGE_CONTROL)));
-    }
-#endif
-    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(build->shapes, &probe);
-    uint32_t first;
-    if (entry != NULL) {
-        first = ((semantic_shape *)entry->key)->first;
-    }
-    else {
-        if (nranges > UINT32_MAX - build->nranges) {
-            PyErr_NoMemory();
-            return -1;
-        }
-        first = build->nranges;
-        if (nranges) {
-            _PyIRPhaseRange *ranges = semantic_reserve(
-                build->ranges, &build->range_capacity, first + nranges, sizeof(*ranges));
-            if (ranges == NULL) {
-                return -1;
-            }
-            build->ranges = ranges;
-            memcpy(ranges + first, build->scratch, (size_t)nranges * sizeof(*ranges));
-        }
-        semantic_shape *key = PyMem_Malloc(sizeof(*key) +
-            (size_t)nranges * sizeof(*build->scratch));
-        if (key == NULL) {
-            PyErr_NoMemory();
-            return -1;
-        }
-        *key = probe;
-        key->first = first;
-        key->ranges = (const _PyIRPhaseRange *)(key + 1);
-        memcpy((void *)key->ranges, build->scratch,
-               (size_t)nranges * sizeof(*build->scratch));
-        if (_Py_hashtable_set(build->shapes, key, NULL) < 0) {
-            PyMem_Free(key);
-            PyErr_NoMemory();
-            return -1;
-        }
-        build->nranges += nranges;
-    }
-    if (build->nsites == UINT32_MAX) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    _PyIRPhaseSite *sites = semantic_reserve(
-        build->sites, &build->site_capacity, build->nsites + 1, sizeof(*sites));
-    if (sites == NULL) {
-        return -1;
-    }
-    build->sites = sites;
-    sites[build->nsites++] = (_PyIRPhaseSite){
-        .site = (uint32_t)site, .checkpoint = checkpoint,
-        .authority = _PyIR_HOME_MUST_READABLE,
-        .first = first, .count = nranges};
-    return 0;
 }
 
 static void semantic_set_facts(const semantic_worklist *, uint64_t *, int, int,
@@ -2575,74 +2434,6 @@ semantic_scalar_actions(const semantic_image *image, semantic_worklist *work,
         }
     }
     return 0;
-}
-
-/* The suffix describes reached, post-flush snapshots emitted by the same
- * Storage instance as the C error transfer. SAVE captures native value facts
- * before later home writes; callbacks widen only frame-home facts. */
-static int
-semantic_error_snapshots(const semantic_image *image, semantic_worklist *work,
-                         const uint64_t *state, int pc, int complete)
-{
-    _PyIRWord word = image->words[pc];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (!complete || work->phases == NULL || !(fmt->flags & _PyIR_ERROR_PROGRAM)) {
-        return 0;
-    }
-    const _PyIROwnershipEvent *header =
-        _PyIR_OwnerPrograms + fmt->owner_program + fmt->owner_events;
-    assert(header->kind == _PyIR_OWNER_ERROR_PROGRAM);
-    const _PyIROwnershipEvent *end = header + 1 + header->extent;
-    assert(header->src <= header->extent);
-    int homes[4], nhomes;
-    if (semantic_scalar_actions(image, work, state, word, header, homes, &nhomes) < 0) {
-        return -1;
-    }
-    for (const _PyIROwnershipEvent *event = header + 1 + header->src; event < end;) {
-        if (event->kind == _PyIR_OWNER_STORAGE_NORMAL) {
-            event++;
-            continue;
-        }
-        assert(event->kind == _PyIR_OWNER_ERROR_CHECKPOINT);
-        assert(event->src > 0 && event->src <= UINT8_MAX);
-        assert(event->extent == 0);
-        assert(event->dst <= header->src);
-        const semantic_scalar_state *node = work->error_nodes + event->dst;
-        int readable = node->valid;
-        if (readable) {
-            size_t bytes = (size_t)SEM_FACTS * work->nwords * sizeof(uint64_t);
-            memcpy(work->branch, state, bytes);
-            if (node->widens_nonnull || (event->flags & _PyIR_ERROR_CANONICAL_OR_NULL)) {
-                memset(work->branch + SEM_NONNULL * work->nwords, 0,
-                       (size_t)work->nwords * sizeof(uint64_t));
-            }
-            for (int h = 0; h < nhomes; h++) {
-                if (homes[h] >= image->nl) {
-                    unsigned int facts = node->facts[h];
-                    if (event->flags & _PyIR_ERROR_CANONICAL_OR_NULL) {
-                        facts &= ~(1u << SEM_NONNULL);
-                    }
-                    semantic_set_facts(work, work->branch, homes[h], image->nl, facts);
-                }
-            }
-            if (semantic_phase(image, work, work->branch, pc,
-                               (uint8_t)event->src, complete) < 0) {
-                return -1;
-            }
-        }
-        event++;
-    }
-    return 0;
-}
-
-static int
-semantic_phase_compare(const void *left, const void *right)
-{
-    const _PyIRPhaseSite *a = left, *b = right;
-    if (a->site != b->site) {
-        return a->site < b->site ? -1 : 1;
-    }
-    return (int)a->checkpoint - (int)b->checkpoint;
 }
 
 static void
@@ -3020,7 +2811,7 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
             case _PyIR_OWNER_ERROR_BRANCH:
                 error = event->dst;
                 error_exact = exact;
-                if (inspect && work->phases != NULL) {
+                if (inspect && work->build_plan) {
                     memcpy(work->branch, state,
                            (size_t)SEM_FACTS * work->nwords * sizeof(uint64_t));
                 }
@@ -3030,7 +2821,7 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                  * but unconverted specializations do not yet close the
                  * whole canonical family. Never grant following exactness. */
                 *complete = 0;
-                if (inspect && work->phases != NULL && error >= 0) {
+                if (inspect && work->build_plan && error >= 0) {
                     state = work->branch;
                     exact = error_exact;
                     at = error - 1;
@@ -3311,7 +3102,7 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
  * Unsupported families/exception entries have explicit unknown state and
  * cannot authorize the later ownership representation switch. */
 /* Zero-row plans are shared: exec teardown/size accounting frees and charges
- * only plans with actual site/phase rows. Cover every nonempty flag subset. */
+ * only plans with actual site rows. Cover every nonempty flag subset. */
 static const _PyIRCodePlan all_normal_returns = {
     .flags = _PyIR_PLAN_ALL_RETURNS};
 static const _PyIRCodePlan all_created_empty = {
@@ -3607,7 +3398,6 @@ normal_transfer_proof(const semantic_image *image,
     _PyIRExceptionEntry *handlers = NULL;
     int *source_links = NULL;
     int result = 0;
-    semantic_phases phases = {0};
     if (nexceptions) {
         if ((size_t)nexceptions > SIZE_MAX / sizeof(*handlers) ||
             (handlers = PyMem_Malloc((size_t)nexceptions * sizeof(*handlers))) == NULL)
@@ -3761,7 +3551,7 @@ normal_transfer_proof(const semantic_image *image,
     }
     /* Allocate persistent storage only for mixed coverage. First count exact
      * sites without retaining a per-word map or another scratch-state array. */
-    work.phases = plan != NULL ? &phases : NULL;
+    work.build_plan = plan != NULL;
     uint32_t nreturns = 0, ncertified = 0, ncreated = 0, ncreated_empty = 0;
     if (plan != NULL) {
         for (int i = 0; i < n; i++) {
@@ -3798,8 +3588,7 @@ normal_transfer_proof(const semantic_image *image,
         int complete = work.blocks[b].complete;
         work.delegated = work.blocks[b].delegated;
         for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
-            if (semantic_error_snapshots(image, &work, state, i, complete) < 0 ||
-                semantic_step(image, &work, state, i, 1, &complete) < 0) {
+            if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
             }
@@ -3843,22 +3632,19 @@ normal_transfer_proof(const semantic_image *image,
     uint32_t flags =
         (ncertified && ncertified == nreturns ? _PyIR_PLAN_ALL_RETURNS : 0) |
         (ncreated && ncreated == ncreated_empty ? _PyIR_PLAN_ALL_CREATED_EMPTY : 0);
-    if (result == 0 && plan != NULL && (ncertified || phases.nsites || flags)) {
+    if (result == 0 && plan != NULL && (ncertified || flags)) {
         uint32_t nsites = flags & _PyIR_PLAN_ALL_RETURNS ? 0 : ncertified;
-        if (nsites == 0 && phases.nsites == 0) {
+        if (nsites == 0) {
             *plan = flag_only_plan(flags);
         }
         else {
             size_t bytes = sizeof(_PyIRCodePlan);
-            uint32_t counts[] = {nsites, phases.nsites, phases.nranges};
-            size_t sizes[] = {sizeof(uint32_t), sizeof(_PyIRPhaseSite), sizeof(_PyIRPhaseRange)};
-            for (size_t i = 0; i < Py_ARRAY_LENGTH(counts); i++) {
-                if (counts[i] > (SIZE_MAX - bytes) / sizes[i]) {
-                    PyErr_NoMemory();
-                    result = -1;
-                    break;
-                }
-                bytes += (size_t)counts[i] * sizes[i];
+            if (nsites > (SIZE_MAX - bytes) / sizeof(uint32_t)) {
+                PyErr_NoMemory();
+                result = -1;
+            }
+            else {
+                bytes += (size_t)nsites * sizeof(uint32_t);
             }
             _PyIRCodePlan *sparse = result == 0 ? PyMem_Malloc(bytes) : NULL;
             if (sparse == NULL) {
@@ -3867,9 +3653,7 @@ normal_transfer_proof(const semantic_image *image,
             }
             else {
                 *sparse = (_PyIRCodePlan){
-                    .nsites = nsites, .nphases = phases.nsites,
-                    .nranges = phases.nranges,
-                    .flags = flags};
+                    .nsites = nsites, .flags = flags};
                 uint32_t next = 0;
                 for (int b = 0; b < nblocks && nsites; b++) {
                     if (!work.blocks[b].reached) {
@@ -3890,16 +3674,6 @@ normal_transfer_proof(const semantic_image *image,
                     }
                 }
                 assert(next == nsites);
-                if (phases.nsites) {
-                    qsort(phases.sites, phases.nsites, sizeof(*phases.sites),
-                          semantic_phase_compare);
-                    memcpy((void *)_PyIR_PlanPhases(sparse), phases.sites,
-                           (size_t)phases.nsites * sizeof(*phases.sites));
-                }
-                if (phases.nranges) {
-                    memcpy((void *)_PyIR_PlanRanges(sparse), phases.ranges,
-                           (size_t)phases.nranges * sizeof(*phases.ranges));
-                }
                 *plan = sparse;
             }
         }
@@ -3910,12 +3684,6 @@ done:
     }
     PyMem_Free(source_links);
     PyMem_Free(handlers);
-    if (phases.shapes != NULL) {
-        _Py_hashtable_destroy(phases.shapes);
-    }
-    PyMem_Free(phases.sites);
-    PyMem_Free(phases.ranges);
-    PyMem_Free(phases.scratch);
     PyMem_Free(work.error_nodes);
     PyMem_Free(work.facts);
     PyMem_Free(work.queue);

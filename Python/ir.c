@@ -852,7 +852,7 @@ _PyCode_ClearExec(PyCodeObject *co)
         _PyFb_Clear(exec->feedback);
     }
     if (exec->semantic_plan != NULL &&
-        (exec->semantic_plan->nsites != 0 || exec->semantic_plan->nphases != 0)) {
+        exec->semantic_plan->nsites != 0) {
         PyMem_Free((void *)exec->semantic_plan);
     }
     _PyMem_NoScanFree(exec);
@@ -867,7 +867,7 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
     if (exec->semantic_plan != NULL &&
-        (exec->semantic_plan->nsites != 0 || exec->semantic_plan->nphases != 0)) {
+        exec->semantic_plan->nsites != 0) {
         res += _PyIR_PlanSize(exec->semantic_plan);
     }
     _PyFbBlock *feedback = exec->feedback;

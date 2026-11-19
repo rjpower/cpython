@@ -572,14 +572,9 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
-/* One immutable semantic plan owns normal-return certificates and error
- * checkpoint shapes. Sparse sites precede sorted (site, checkpoint) rows and
- * interned scratch ranges. Bindings retain dynamic NULL authority in every
- * shape. */
+/* One immutable semantic plan owns normal-return certificates. */
 typedef struct {
     uint32_t nsites;
-    uint32_t nphases;
-    uint32_t nranges;
     uint32_t flags;
     uint32_t sites[];
 } _PyIRCodePlan;
@@ -587,7 +582,6 @@ typedef struct {
 #define _PyIR_PLAN_ALL_RETURNS 1u
 #define _PyIR_PLAN_ALL_CREATED_EMPTY 2u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
-#define _PyIR_PHASE_RANGE_CONTROL 2u
 
 typedef enum _PyIRHomeAuthority {
     _PyIR_HOME_NONE,
@@ -597,35 +591,14 @@ typedef enum _PyIRHomeAuthority {
 } _PyIRHomeAuthority;
 
 typedef struct {
-    uint32_t site, first, count;
-    uint8_t checkpoint, authority;
-    uint16_t reserved;
-} _PyIRPhaseSite;
-static_assert(sizeof(_PyIRPhaseSite) == 16, "phase site encoding must remain fixed");
-
-typedef struct {
     uint16_t begin, end;
     uint8_t flags, reserved;
 } _PyIRPhaseRange;
 
-static inline const _PyIRPhaseSite *
-_PyIR_PlanPhases(const _PyIRCodePlan *plan)
-{
-    return (const _PyIRPhaseSite *)(plan->sites + plan->nsites);
-}
-
-static inline const _PyIRPhaseRange *
-_PyIR_PlanRanges(const _PyIRCodePlan *plan)
-{
-    return (const _PyIRPhaseRange *)(_PyIR_PlanPhases(plan) + plan->nphases);
-}
-
 static inline size_t
 _PyIR_PlanSize(const _PyIRCodePlan *plan)
 {
-    return sizeof(*plan) + (size_t)plan->nsites * sizeof(uint32_t) +
-        (size_t)plan->nphases * sizeof(_PyIRPhaseSite) +
-        (size_t)plan->nranges * sizeof(_PyIRPhaseRange);
+    return sizeof(*plan) + (size_t)plan->nsites * sizeof(uint32_t);
 }
 
 enum {

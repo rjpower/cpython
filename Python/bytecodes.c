@@ -152,9 +152,12 @@ dummy_func(
             ERROR_IF(err < 0);
         }
 
+        // The first step of its instruction: the pending events run out of
+        // line, and the instruction starts again (IR_PERIODIC_TAIL).
         op(_CHECK_PERIODIC, (--)) {
-            int err = check_periodics(tstate);
-            ERROR_IF(err != 0);
+            if (IR_PERIODIC_DUE(tstate)) {
+                IR_PERIODIC_TAIL();
+            }
         }
 
         replaced op(_CHECK_PERIODIC_AT_END, (--)) {
@@ -630,21 +633,17 @@ dummy_func(
 
         // Int arithmetic on inline operands, on scaled values (see
         // _PyValue_IntScaled()): int64 overflow is exactly a result outside
-        // the inline range, which is boxed.
+        // the inline range, which exits to the generic operation, as does a
+        // NaN float result below.  The exit lets the handler call nothing
+        // that allocates.
         inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = PyValue_InlineInt64(right);
             int64_t product;
+            bool overflow = __builtin_mul_overflow(a, b, &product);
+            EXIT_IF(overflow);
             STAT_INC(BINARY_OP, hit);
-            if (__builtin_mul_overflow(a, b, &product)) {
-                res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
-            }
-            else {
-                res = _PyValue_FromIntScaled(product);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = _PyValue_FromIntScaled(product);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -654,16 +653,10 @@ dummy_func(
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t sum;
+            bool overflow = __builtin_add_overflow(a, b, &sum);
+            EXIT_IF(overflow);
             STAT_INC(BINARY_OP, hit);
-            if (__builtin_add_overflow(a, b, &sum)) {
-                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
-            }
-            else {
-                res = _PyValue_FromIntScaled(sum);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = _PyValue_FromIntScaled(sum);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -673,16 +666,10 @@ dummy_func(
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t difference;
+            bool overflow = __builtin_sub_overflow(a, b, &difference);
+            EXIT_IF(overflow);
             STAT_INC(BINARY_OP, hit);
-            if (__builtin_sub_overflow(a, b, &difference)) {
-                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
-            }
-            else {
-                res = _PyValue_FromIntScaled(difference);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = _PyValue_FromIntScaled(difference);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -857,11 +844,10 @@ dummy_func(
         inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
+            double result = a * b;
+            EXIT_IF(result != result);
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a * b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = PyValue_FromDoubleNotNaN(result);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -870,11 +856,10 @@ dummy_func(
         inline_ok pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
+            double result = a + b;
+            EXIT_IF(result != result);
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a + b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = PyValue_FromDoubleNotNaN(result);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -883,11 +868,10 @@ dummy_func(
         inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
+            double result = a - b;
+            EXIT_IF(result != result);
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a - b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = PyValue_FromDoubleNotNaN(result);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -898,11 +882,10 @@ dummy_func(
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             EXIT_IF(b == 0.0);
+            double result = a / b;
+            EXIT_IF(result != result);
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a / b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
+            res = PyValue_FromDoubleNotNaN(result);
             l = left;
             r = right;
             INPUTS_DEAD();

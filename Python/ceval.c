@@ -2446,6 +2446,24 @@ _PyEval_ErrorTail(TAIL_CALL_PARAMS)
     return PyValue_NULL;
 }
 
+/* The pending events of IR_PERIODIC_TAIL.  next_instr is the instruction
+ * that found them due; it starts again once they are handled. */
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC
+_PyEval_PeriodicTail(TAIL_CALL_PARAMS)
+{
+    frame->phase_state = 0;
+    if (_Py_HandlePending(tstate) != 0) {
+        frame->phase_state = 0;
+        Py_MUSTTAIL return _PyEval_ErrorTail(TAIL_CALL_ARGS_WORD(
+            next_instr,
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_RAISE, 0)));
+    }
+    int opcode;
+    NEXTOPARG();
+    PRE_DISPATCH_GOTO();
+    DISPATCH_GOTO();
+}
+
 /* The exit of a handler that defers its releases (IR_EXIT_TAIL in
  * ceval_macros.h).  The pending objects and the displaced local are in
  * tstate->ir_exit; copy them first, because a release can run Python, which
@@ -2459,14 +2477,28 @@ _PyEval_ExitTail(TAIL_CALL_PARAMS)
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     PyObject *dead[IR_DEAD_MAX];
     static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(ts->ir_exit.dead), "see pycore_tstate.h");
+    PyValue *pub[IR_DEAD_MAX];
+    static_assert(IR_DEAD_MAX == Py_ARRAY_LENGTH(ts->ir_exit.pub), "see pycore_tstate.h");
     for (int i = 0; i < IR_DEAD_MAX; i++) {
         dead[i] = ts->ir_exit.dead[i];
+        ts->ir_exit.dead[i] = NULL;
+        pub[i] = ts->ir_exit.pub[i];
+        ts->ir_exit.pub[i] = NULL;
     }
     PyValue displaced = (PyValue){ts->ir_exit.displaced};
+    ts->ir_exit.displaced = 0;
     _PyInstr *next = ts->ir_exit.next;
     bool error = (ir_word & IR_EXIT_ERROR_FLAG) != 0;
     uint32_t entry = (uint32_t)ir_word;
     _PyInstr *origin = next_instr;
+    /* Publish first: the releases below can run Python, which must see the
+     * results as canonical values in their homes. */
+    for (int i = 0; i < IR_DEAD_MAX; i++) {
+        if (pub[i] != NULL) {
+            *pub[i] = _PyValue_Publish(pub[i]);
+            _PyValue_CheckTemp(*pub[i]);
+        }
+    }
     for (int i = 0; i < IR_DEAD_MAX; i++) {
         if (dead[i] != NULL) {
             Py_DECREF_MORTAL(dead[i]);

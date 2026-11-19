@@ -81,7 +81,9 @@ from ir_error_effects import (
     HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects, owning_output_source,
 )
 import functools
+import os
 import re
+import sys
 from pathlib import Path
 from dataclasses import dataclass, fields, replace
 
@@ -6678,7 +6680,8 @@ DEFER_RELEASES = {
     "_PyValue_CLOSE_SPECIALIZED_POINTER": "IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)",
     "_PyValue_XCLOSE_SPECIALIZED_POINTER": "IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)",
 }
-DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP"}
+DEFER_ALLOWED_EXITS = {"DISPATCH", "PROCESS_ERROR_AT", "IR_DEOPT_BINARY_OP",
+                       "JUMP_TO_PREDICTED"}
 DEFER_EXIT_WORDS = re.compile(r"\b(return|goto)\b|Py_MUSTTAIL")
 DEFER_BAD_WORDS = re.compile(r"\b(for|while|do)\b|REFCNT|Py_Is(Un)?[A-Za-z]*Referenced")
 CEVAL_HEADERS = ("Python/ceval_macros.h", "Python/ceval_generator.h",
@@ -6688,8 +6691,16 @@ DEFER_ON = (
     "#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()\n"
     "#undef IR_RETIRE_LAST\n"
     "#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)\n"
+    "#undef IR_ASSERT_NO_PENDING\n"
+    "#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()\n"
     "#undef IR_ERROR_EXIT\n"
     "#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER\n"
+    "#undef IR_PUBLISH\n"
+    "#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)\n"
+    '#pragma push_macro("_PyValue_CheckHome")\n'
+    '#pragma push_macro("_PyValue_CheckTemp")\n'
+    "#undef _PyValue_CheckHome\n#define _PyValue_CheckHome(REF) ((void)0)\n"
+    "#undef _PyValue_CheckTemp\n#define _PyValue_CheckTemp(REF) ((void)0)\n"
     + "".join(
         f"#define {n}({'V, D' if 'SPECIALIZED' in n else 'V'}) {b}\n"
         for n, b in DEFER_RELEASES.items())
@@ -6700,8 +6711,15 @@ DEFER_OFF = (
     "#define IR_EXIT_PENDING_DISPATCH() ((void)0)\n"
     "#undef IR_RETIRE_LAST\n"
     "#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))\n"
+    "#undef IR_ASSERT_NO_PENDING\n"
+    "#define IR_ASSERT_NO_PENDING() ((void)0)\n"
     "#undef IR_ERROR_EXIT\n"
     "#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL\n"
+    "#undef IR_PUBLISH\n"
+    "#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))\n"
+    "#undef _PyValue_CheckHome\n#undef _PyValue_CheckTemp\n"
+    '#pragma pop_macro("_PyValue_CheckHome")\n'
+    '#pragma pop_macro("_PyValue_CheckTemp")\n'
 )
 DEFER_MAX_SITES = 6
 
@@ -6737,16 +6755,19 @@ def macro_walk(text: str, seen: frozenset = frozenset()):
             yield from macro_walk(bodies[word], seen | {word})
 
 
-def defers_releases(text: str) -> bool:
-    "Whether the handler whose source is text may defer its releases"
-    if DEFER_BAD_WORDS.search(text):
-        return False
+def defer_blocker(text: str) -> str | None:
+    "Why the handler whose source is text cannot defer its releases, or None"
+    if m := DEFER_BAD_WORDS.search(text):
+        return f"word {m.group(0)}"
     bodies = ceval_macro_bodies()
     sites = 0
-    exits = False
     for word in macro_walk(text):
-        if word in DEFER_RELEASES:
+        if word in DEFER_RELEASES or word == "IR_PUBLISH":
             sites += 1
+        elif word == "IR_STORE_DST_IMPL":
+            # Publishes in each of two branches
+            sites += 1
+
     # A macro that leaves the handler by any other way than the exits that
     # take the pending releases with them
     def leaves(word: str, seen: frozenset) -> bool:
@@ -6756,12 +6777,24 @@ def defers_releases(text: str) -> bool:
         if DEFER_EXIT_WORDS.search(body):
             return True
         return any(leaves(w, seen | {word}) for w in re.findall(r"\w+", body))
-    for word in set(re.findall(r"\w+", text)):
-        if DEFER_EXIT_WORDS.search(word) or leaves(word, frozenset()):
-            return False
-    if re.search(r"\b(return|goto)\b|Py_MUSTTAIL", text):
-        return False
-    return 0 < sites <= DEFER_MAX_SITES
+    for word in sorted(set(re.findall(r"\w+", text))):
+        if leaves(word, frozenset()):
+            return f"exit {word}"
+    if m := re.search(r"\b(return|goto)\b|Py_MUSTTAIL", text):
+        return f"exit {m.group(0)}"
+    if sites == 0:
+        return "no sites"
+    if sites > DEFER_MAX_SITES:
+        return f"{sites} sites"
+    return None
+
+
+def defers_releases(text: str, name: str = "") -> bool:
+    "Whether the handler whose source is text may defer its releases"
+    reason = defer_blocker(text)
+    if os.environ.get("IR_DEFER_REPORT"):
+        print(f"defer {name}: {reason or 'yes'}", file=sys.stderr)
+    return reason is None
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
@@ -6815,7 +6848,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         first_pass = emitter.out.out.getvalue()
     finally:
         emitter.out = saved
-    defers = final and not record and defers_releases(first_pass)
+    defers = final and not record and defers_releases(first_pass, name)
     for var, kinds in sorted(roles.items()):
         if len(kinds) > 1:
             raise analysis_error(
@@ -7455,6 +7488,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if emitter.defers:
         out.emit("PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, "
                  "*ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;\n")
+        out.emit("PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, "
+                 "*ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;\n")
         out.emit("int ir_has = 0;\n")
         out.emit("enum { IR_DEAD_BASE = __COUNTER__ + 1 };\n")
     use_fb = fmt.fb != LOC_NONE and (
@@ -9134,7 +9169,8 @@ ADDRESS_INLINE_CALLS = {
 HANDLER_LOCALS = {
     "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
     "window", "oparg", "fb", "opcode", "value_temps", "ir_displaced",
-    "ir_dead0", "ir_dead1", "ir_dead2", "ir_dead3", "ir_dead4", "ir_dead5",
+    "ir_dead0", "ir_dead1", "ir_dead2", "ir_dead3", "ir_dead4", "ir_dead5", "ir_pub0", "ir_pub1", "ir_pub2", "ir_pub3",
+    "ir_pub4", "ir_pub5",
     "ir_has", "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",

@@ -109,6 +109,7 @@
 typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ErrorTail(TAIL_CALL_PARAMS);
 static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAMS);
+static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_PeriodicTail(TAIL_CALL_PARAMS);
 
 #define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
@@ -179,20 +180,29 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAM
  * 0 to dispatch next_instr, or IR_EXIT_ERROR_FLAG with the encoded error
  * entry, and TARGET is next_instr or the origin of the error. */
 #define IR_EXIT_ERROR_FLAG ((_PyIRWord)1 << 32)
+#define IR_EXIT_STORE(FIELD, LOCAL) \
+    do { if ((LOCAL) != NULL) { ir_ts->ir_exit.FIELD = (LOCAL); } } while (0)
 #define IR_EXIT_TAIL(TARGET, WORD) \
     do { \
         _PyThreadStateImpl *ir_ts = (_PyThreadStateImpl *)tstate; \
-        ir_ts->ir_exit.dead[0] = ir_dead0; \
-        ir_ts->ir_exit.dead[1] = ir_dead1; \
-        ir_ts->ir_exit.dead[2] = ir_dead2; \
-        ir_ts->ir_exit.dead[3] = ir_dead3; \
-        ir_ts->ir_exit.dead[4] = ir_dead4; \
-        ir_ts->ir_exit.dead[5] = ir_dead5; \
+        IR_EXIT_STORE(dead[0], ir_dead0); \
+        IR_EXIT_STORE(dead[1], ir_dead1); \
+        IR_EXIT_STORE(dead[2], ir_dead2); \
+        IR_EXIT_STORE(dead[3], ir_dead3); \
+        IR_EXIT_STORE(dead[4], ir_dead4); \
+        IR_EXIT_STORE(dead[5], ir_dead5); \
+        IR_EXIT_STORE(pub[0], ir_pub0); \
+        IR_EXIT_STORE(pub[1], ir_pub1); \
+        IR_EXIT_STORE(pub[2], ir_pub2); \
+        IR_EXIT_STORE(pub[3], ir_pub3); \
+        IR_EXIT_STORE(pub[4], ir_pub4); \
+        IR_EXIT_STORE(pub[5], ir_pub5); \
         ir_ts->ir_exit.displaced = ir_displaced.bits; \
         ir_ts->ir_exit.next = next_instr; \
         Py_MUSTTAIL return _PyEval_ExitTail( \
             TAIL_CALL_ARGS_WORD((TARGET), (WORD))); \
     } while (0)
+#define IR_ASSERT_NO_PENDING_DEFER() assert(!ir_has)
 #define IR_EXIT_PENDING_DISPATCH_DEFER() \
     do { \
         if (Py_UNLIKELY(ir_has)) { \
@@ -208,6 +218,19 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAM
         IR_ERROR_EXIT_TAIL(ingress, checkpoint, origin); \
     } while (0)
 #define IR_RETIRE_LAST_DEFER(OLD) (ir_displaced = (OLD), ir_has = 1)
+/* A value that must become canonical goes into its slot as it is, and the
+ * exit continuation publishes the slot (_PyValue_Publish) before it releases
+ * anything.  The debug checks of the store wait for that. */
+#define IR_PUB_SET(PTR, IDX) \
+    (ir_has = 1, \
+     (IDX) == 0 ? (void)(ir_pub0 = (PTR)) : \
+     (IDX) == 1 ? (void)(ir_pub1 = (PTR)) : \
+     (IDX) == 2 ? (void)(ir_pub2 = (PTR)) : \
+     (IDX) == 3 ? (void)(ir_pub3 = (PTR)) : \
+     (IDX) == 4 ? (void)(ir_pub4 = (PTR)) : (void)(ir_pub5 = (PTR)))
+#define IR_PUBLISH_DEFER(SLOTPTR, V) \
+    (_PyValue_NeedsCanonicalize(V) \
+     ? (IR_PUB_SET((SLOTPTR), __COUNTER__ - IR_DEAD_BASE), (V)) : (V))
 /* The release of a count that may be the last: keep the last one.  The index
  * of the site is its order among the handler's expansions, from
  * IR_DEAD_BASE, which the generator declares; the slots are scalars, because
@@ -279,6 +302,7 @@ static Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _PyEval_ExitTail(TAIL_CALL_PARAM
 #define JUMP_TO_PREDICTED(name) \
     do { \
         assert(value_temps == NULL || value_temps->count == 0); \
+        IR_ASSERT_NO_PENDING(); \
         Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS_AT(this_instr)); \
     } while (0)
 
@@ -339,8 +363,11 @@ do { \
  * defaults below are the forms of every other handler, which the generator
  * replaces around a deferring handler. */
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
+/* A deopt re-runs the instruction, so no effect can precede it. */
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
 #define IR_DEAD_MAX 6
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
 
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
@@ -602,6 +629,22 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
+/* The handler that starts with the periodic check does nothing before it, so
+ * when events are due it tail-calls _PyEval_PeriodicTail, which handles them
+ * and runs the instruction again.  The handler then calls nothing itself. */
+static inline int
+check_periodics_due(PyThreadState *tstate) {
+    _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+    QSBR_QUIESCENT_STATE(tstate);
+    return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+            & _PY_EVAL_EVENTS_MASK) != 0;
+}
+#define IR_PERIODIC_DUE(tstate) check_periodics_due(tstate)
+#define IR_PERIODIC_TAIL() \
+    do { \
+        Py_MUSTTAIL return _PyEval_PeriodicTail(TAIL_CALL_ARGS_AT(this_instr)); \
+    } while (0)
+
 static inline int
 check_periodics(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
@@ -716,7 +759,7 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        (SLOT) = IR_PUBLISH(&(SLOT), V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -738,7 +781,7 @@ gen_try_set_executing(PyGenObject *gen)
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \
     do { \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        (SLOT) = IR_PUBLISH(&(SLOT), V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -795,7 +838,7 @@ ir_retire_last_owner(PyValue old)
     } while (0)
 
 #define IR_STORE_DST(W, X, V) \
-    IR_STORE_DST_IMPL(W, X, V, _PyValue_Publish(&(V)))
+    IR_STORE_DST_IMPL(W, X, V, IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V))
 
 /* Only a checked canonical-result proof selects this owner transfer. */
 #define IR_STORE_CANONICAL_DST(W, X, V) \
@@ -808,7 +851,7 @@ ir_retire_last_owner(PyValue old)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
             (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V); \
             _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
         } \
         else if (IR_FIELD(W, X) == IR_NO_DST) { \
@@ -816,7 +859,7 @@ ir_retire_last_owner(PyValue old)
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V); \
             _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
@@ -858,7 +901,7 @@ ir_retire_last_owner(PyValue old)
         if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
                    || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = IR_PUBLISH(&IR_SLOT(IR_FIELD(W, X)), V); \
             _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
@@ -1013,6 +1056,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
         assert(value_temps == NULL || value_temps->count == 0); \
+        IR_ASSERT_NO_PENDING(); \
         opcode = _PyIR_BINARY_OP_FIRST + \
             (int)((_PyFbHeader *)IR_FB(F))->arg; \
         next_instr = this_instr; \

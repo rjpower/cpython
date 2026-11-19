@@ -97,8 +97,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -121,6 +131,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -142,12 +153,13 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a + b);
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                double result = a + b;
+                if (result != result) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
+                STAT_INC(BINARY_OP, hit);
+                res = PyValue_FromDoubleNotNaN(result);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -167,7 +179,7 @@
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -182,14 +194,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -212,6 +242,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -247,17 +278,15 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t sum;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                bool overflow = __builtin_add_overflow(a, b, &sum);
+                if (overflow) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
                 STAT_INC(BINARY_OP, hit);
-                if (__builtin_add_overflow(a, b, &sum)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(sum);
-                }
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
+                res = _PyValue_FromIntScaled(sum);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -277,7 +306,7 @@
                 assert(PyValue_LongCheckExact(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -292,14 +321,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -322,6 +369,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -412,8 +460,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_AND) {
             int opcode = BINARY_OP_AND;
@@ -506,8 +562,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -530,6 +596,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -602,8 +669,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_EXTEND) {
             int opcode = BINARY_OP_EXTEND;
@@ -782,8 +857,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -806,6 +891,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -888,8 +974,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_INPLACE_ADD) {
             int opcode = BINARY_OP_INPLACE_ADD;
@@ -2220,8 +2314,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -2244,6 +2348,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2331,8 +2436,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_MATRIX_MULTIPLY) {
             int opcode = BINARY_OP_MATRIX_MULTIPLY;
@@ -2513,8 +2626,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -2537,6 +2660,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -2558,12 +2682,13 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a * b);
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                double result = a * b;
+                if (result != result) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
+                STAT_INC(BINARY_OP, hit);
+                res = PyValue_FromDoubleNotNaN(result);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -2583,7 +2708,7 @@
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -2598,14 +2723,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -2628,6 +2771,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2663,17 +2807,15 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = PyValue_InlineInt64(right);
                 int64_t product;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                bool overflow = __builtin_mul_overflow(a, b, &product);
+                if (overflow) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
                 STAT_INC(BINARY_OP, hit);
-                if (__builtin_mul_overflow(a, b, &product)) {
-                    res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
-                }
-                else {
-                    res = _PyValue_FromIntScaled(product);
-                }
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
+                res = _PyValue_FromIntScaled(product);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -2708,8 +2850,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_OR) {
             int opcode = BINARY_OP_OR;
@@ -2802,8 +2952,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -2826,6 +2986,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -2898,8 +3059,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_POWER) {
             int opcode = BINARY_OP_POWER;
@@ -3080,8 +3249,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -3104,6 +3283,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3186,8 +3366,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_RSHIFT) {
             int opcode = BINARY_OP_RSHIFT;
@@ -3280,8 +3468,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -3304,6 +3502,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3382,8 +3581,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_SUBSCR) {
             int opcode = BINARY_OP_SUBSCR;
@@ -3472,20 +3679,6 @@
             }
             DISPATCH();
         }
-        #undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
-#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
-#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
-#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
-#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
-#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
-#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(BINARY_OP_SUBSCR_DICT) {
             int opcode = BINARY_OP_SUBSCR_DICT;
@@ -3499,9 +3692,6 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
-            int ir_has = 0;
-            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow nos;
             PyValueBorrow dict_st;
             PyValueBorrow sub_st;
@@ -3559,6 +3749,13 @@
                         }
                         if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                             IR_STORE_DST(ir_word, A, ir_leaf_result);
+                            if (!PyValue_IsNull(ir_displaced)) {
+                                frame->phase_state = 0;
+                                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                                    next_instr = frame->instr_ptr + 1;
+                                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                                }
+                            }
                         }
                         DISPATCH();
                     }
@@ -3596,22 +3793,15 @@
                 res = pending;
             }
             IR_STORE_DST(ir_word, A, res);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
             DISPATCH();
         }
-        #undef PyValue_XCLOSE
-#undef PyValue_CLOSE
-#undef PyValue_CLOSE_SPECIALIZED
-#undef PyValue_XCLOSE_SPECIALIZED
-#undef _PyValue_XCLOSE_POINTER
-#undef _PyValue_CLOSE_POINTER
-#undef _PyValue_CLOSE_SPECIALIZED_POINTER
-#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
-#undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() ((void)0)
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
 
         TARGET(BINARY_OP_SUBSCR_GETITEM) {
             int opcode = BINARY_OP_SUBSCR_GETITEM;
@@ -3713,8 +3903,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -3737,6 +3937,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -3821,22 +4022,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
-        #undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
-#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
-#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
-#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
-#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
-#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
-#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_SUBSCR_LIST_SLICE) {
             int opcode = BINARY_OP_SUBSCR_LIST_SLICE;
@@ -3850,9 +4045,6 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
-            int ir_has = 0;
-            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow tos;
             PyValueBorrow nos;
             PyValueBorrow list_st;
@@ -3934,28 +4126,31 @@
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
             DISPATCH();
         }
-        #undef PyValue_XCLOSE
-#undef PyValue_CLOSE
-#undef PyValue_CLOSE_SPECIALIZED
-#undef PyValue_XCLOSE_SPECIALIZED
-#undef _PyValue_XCLOSE_POINTER
-#undef _PyValue_CLOSE_POINTER
-#undef _PyValue_CLOSE_SPECIALIZED_POINTER
-#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
-#undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() ((void)0)
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -3978,6 +4173,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4072,14 +4268,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4102,6 +4316,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4185,14 +4400,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4215,6 +4448,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4308,8 +4542,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_SUBTRACT) {
             int opcode = BINARY_OP_SUBTRACT;
@@ -4402,8 +4644,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4426,6 +4678,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -4447,12 +4700,13 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a - b);
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                double result = a - b;
+                if (result != result) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
+                STAT_INC(BINARY_OP, hit);
+                res = PyValue_FromDoubleNotNaN(result);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -4472,7 +4726,7 @@
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -4487,14 +4741,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4517,6 +4789,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4552,17 +4825,15 @@
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t difference;
+                frame->phase_state = 0;
+                frame->phase_state = 0;
+                bool overflow = __builtin_sub_overflow(a, b, &difference);
+                if (overflow) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                }
                 STAT_INC(BINARY_OP, hit);
-                if (__builtin_sub_overflow(a, b, &difference)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(difference);
-                }
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
+                res = _PyValue_FromIntScaled(difference);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -4582,7 +4853,7 @@
                 assert(PyValue_LongCheckExact(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -4597,14 +4868,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4627,6 +4916,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow left;
@@ -4652,12 +4942,13 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a / b);
-                if (PyValue_IsNull(res)) {frame->phase_state = 0;
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                double result = a / b;
+                if (result != result) {
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
+                STAT_INC(BINARY_OP, hit);
+                res = PyValue_FromDoubleNotNaN(result);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(ir_word, B, l);
@@ -4677,7 +4968,7 @@
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
-            IR_STORE_CANONICAL_DST(ir_word, A, res);
+            IR_STORE_DST(ir_word, A, res);
             DISPATCH();
         }
         #undef PyValue_XCLOSE
@@ -4692,8 +4983,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_OP_TRUE_DIVIDE) {
             int opcode = BINARY_OP_TRUE_DIVIDE;
@@ -4874,8 +5173,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -4898,6 +5207,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -4970,22 +5280,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
-        #undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
-#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
-#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
-#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
-#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
-#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
-#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BINARY_SLICE) {
             int opcode = BINARY_SLICE;
@@ -4999,9 +5303,6 @@
             INSTRUCTION_STATS(BINARY_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
-            int ir_has = 0;
-            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow container;
             PyValueBorrow start;
             PyValueBorrow stop;
@@ -5038,22 +5339,15 @@
                 }
             }
             IR_STORE_DST(ir_word, A, res);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
             DISPATCH();
         }
-        #undef PyValue_XCLOSE
-#undef PyValue_CLOSE
-#undef PyValue_CLOSE_SPECIALIZED
-#undef PyValue_XCLOSE_SPECIALIZED
-#undef _PyValue_XCLOSE_POINTER
-#undef _PyValue_CLOSE_POINTER
-#undef _PyValue_CLOSE_SPECIALIZED_POINTER
-#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
-#undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() ((void)0)
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -5154,8 +5448,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -5178,6 +5482,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5212,14 +5517,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -5242,6 +5565,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5288,8 +5612,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(BUILD_SET) {
             int opcode = BUILD_SET;
@@ -5412,8 +5744,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -5436,6 +5778,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5471,8 +5814,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -5557,8 +5908,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -5581,6 +5942,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -5613,8 +5975,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(CACHE) {
             int opcode = CACHE;
@@ -9732,6 +10102,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_FLOAT) {
             int opcode = COMPARE_OP_FLOAT;
@@ -9745,6 +10139,10 @@
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
@@ -9805,15 +10203,54 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_INT) {
             int opcode = COMPARE_OP_INT;
@@ -9827,6 +10264,10 @@
             INSTRUCTION_STATS(COMPARE_OP_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
@@ -9887,15 +10328,30 @@
                 PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(COMPARE_OP_JUMP) {
             int opcode = COMPARE_OP_JUMP;
@@ -9978,6 +10434,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_JUMP_FLOAT) {
             int opcode = COMPARE_OP_JUMP_FLOAT;
@@ -9989,6 +10469,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_FLOAT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -10059,6 +10545,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_JUMP_INT) {
             int opcode = COMPARE_OP_JUMP_INT;
@@ -10070,6 +10602,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_INT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -10140,6 +10678,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_JUMP_STR) {
             int opcode = COMPARE_OP_JUMP_STR;
@@ -10151,6 +10735,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_STR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -10238,6 +10828,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COMPARE_OP_STR) {
             int opcode = COMPARE_OP_STR;
@@ -10251,6 +10887,10 @@
             INSTRUCTION_STATS(COMPARE_OP_STR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
@@ -10330,15 +10970,30 @@
                 _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(CONTAINS_OP) {
             int opcode = CONTAINS_OP;
@@ -10601,6 +11256,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(CONTAINS_OP_JUMP_DICT) {
             int opcode = CONTAINS_OP_JUMP_DICT;
@@ -10612,6 +11291,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_DICT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -10689,6 +11374,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(CONTAINS_OP_JUMP_SET) {
             int opcode = CONTAINS_OP_JUMP_SET;
@@ -10700,6 +11431,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_SET);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
@@ -10786,6 +11523,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(CONTAINS_OP_SET) {
             int opcode = CONTAINS_OP_SET;
@@ -10890,8 +11649,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -10914,6 +11683,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_C(ir_word);
@@ -10964,8 +11734,40 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(COPY) {
             int opcode = COPY;
@@ -10977,6 +11779,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -10988,6 +11796,28 @@
             IR_PUBLISH_TEMP(window[1 + (oparg-1)], top);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(COPY_FREE_VARS) {
             int opcode = COPY_FREE_VARS;
@@ -11015,8 +11845,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11039,6 +11879,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -11072,14 +11913,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11102,6 +11961,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -11136,14 +11996,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11166,6 +12044,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow container;
@@ -11201,8 +12080,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -11470,8 +12357,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11493,6 +12390,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -11517,14 +12415,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11547,6 +12463,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow receiver;
@@ -11585,8 +12502,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(EXIT_INIT_CHECK) {
             int opcode = EXIT_INIT_CHECK;
@@ -11619,8 +12544,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11643,6 +12578,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -11697,14 +12633,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -11727,6 +12681,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -11765,8 +12720,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(FOR_ITER) {
             int opcode = FOR_ITER;
@@ -11842,6 +12805,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FOR_ITER_GEN) {
             int opcode = FOR_ITER_GEN;
@@ -11855,6 +12842,10 @@
             INSTRUCTION_STATS(FOR_ITER_GEN);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
@@ -11910,6 +12901,52 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FOR_ITER_LIST) {
             int opcode = FOR_ITER_LIST;
@@ -11923,6 +12960,10 @@
             INSTRUCTION_STATS(FOR_ITER_LIST);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -11981,15 +13022,54 @@
             IR_PUBLISH_TEMP(window[1], null_or_index);
             IR_PUBLISH_TEMP(window[2], next);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[2]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FOR_ITER_RANGE) {
             int opcode = FOR_ITER_RANGE;
@@ -12003,6 +13083,10 @@
             INSTRUCTION_STATS(FOR_ITER_RANGE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -12065,15 +13149,54 @@
             }
             IR_PUBLISH_TEMP(window[2], next);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[2]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FOR_ITER_TUPLE) {
             int opcode = FOR_ITER_TUPLE;
@@ -12087,6 +13210,10 @@
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -12137,15 +13264,54 @@
             IR_PUBLISH_TEMP(window[1], null_or_index);
             IR_PUBLISH_TEMP(window[2], next);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[2]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(FOR_ITER_VIRTUAL) {
             int opcode = FOR_ITER_VIRTUAL;
@@ -12159,6 +13325,10 @@
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -12205,15 +13375,30 @@
             IR_PUBLISH_TEMP(window[1], null_or_index);
             IR_PUBLISH_TEMP(window[2], next);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[2]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -12511,6 +13696,30 @@
             IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word) + 1), res);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(GET_ITER_VIRTUAL) {
             int opcode = GET_ITER_VIRTUAL;
@@ -12522,6 +13731,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_VIRTUAL);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue iterable;
             PyValue zero;
             // _GUARD_ITER_VIRTUAL
@@ -12547,12 +13762,44 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), zero);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -12575,6 +13822,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue obj;
@@ -12607,8 +13855,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -13002,8 +14258,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13026,6 +14292,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -13138,14 +14405,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13168,6 +14453,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -13283,8 +14569,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -13515,8 +14809,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13539,6 +14843,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
@@ -13609,8 +14914,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(INSTRUMENTED_INSTRUCTION) {
             int opcode = INSTRUMENTED_INSTRUCTION;
@@ -13643,8 +14956,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13667,6 +14990,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -13776,22 +15100,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
-        #undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
-#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
-#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
-#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
-#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
-#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
-#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
@@ -13803,21 +15121,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
-            int ir_has = 0;
-            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                frame->phase_state = 0;
-                frame->phase_state = 0;
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                if (IR_PERIODIC_DUE(tstate)) {
+                    IR_PERIODIC_TAIL();
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -13845,26 +15154,22 @@
 }
             }
         }
-        #undef PyValue_XCLOSE
-#undef PyValue_CLOSE
-#undef PyValue_CLOSE_SPECIALIZED
-#undef PyValue_XCLOSE_SPECIALIZED
-#undef _PyValue_XCLOSE_POINTER
-#undef _PyValue_CLOSE_POINTER
-#undef _PyValue_CLOSE_SPECIALIZED_POINTER
-#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
-#undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() ((void)0)
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13887,6 +15192,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -13925,14 +15231,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -13955,6 +15279,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -14042,14 +15367,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14072,6 +15415,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -14159,8 +15503,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(INSTRUMENTED_LINE) {
             int opcode = INSTRUMENTED_LINE;
@@ -14371,8 +15723,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14396,6 +15758,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
@@ -14447,14 +15810,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14477,6 +15858,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
@@ -14569,14 +15951,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14599,6 +15999,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
@@ -14674,14 +16075,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14704,6 +16123,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
@@ -14779,14 +16199,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -14809,6 +16247,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
@@ -14901,8 +16340,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(INSTRUMENTED_RESUME) {
             int opcode = INSTRUMENTED_RESUME;
@@ -15310,20 +16757,6 @@
             JUMPTO(oparg);
             DISPATCH();
         }
-        #undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
-#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
-#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
-#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
-#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
-#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
-#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
-#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(IS_OP) {
             int opcode = IS_OP;
@@ -15337,9 +16770,6 @@
             INSTRUCTION_STATS(IS_OP);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
-            int ir_has = 0;
-            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow left;
@@ -15382,28 +16812,31 @@
                 PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, b);
+            if (!PyValue_IsNull(ir_displaced)) {
+                frame->phase_state = 0;
+                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+            }
             DISPATCH();
         }
-        #undef PyValue_XCLOSE
-#undef PyValue_CLOSE
-#undef PyValue_CLOSE_SPECIALIZED
-#undef PyValue_XCLOSE_SPECIALIZED
-#undef _PyValue_XCLOSE_POINTER
-#undef _PyValue_CLOSE_POINTER
-#undef _PyValue_CLOSE_SPECIALIZED_POINTER
-#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
-#undef IR_EXIT_PENDING_DISPATCH
-#define IR_EXIT_PENDING_DISPATCH() ((void)0)
-#undef IR_RETIRE_LAST
-#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
-#undef IR_ERROR_EXIT
-#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -15426,6 +16859,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
@@ -15493,8 +16927,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(JUMP_BACKWARD) {
             int opcode = JUMP_BACKWARD;
@@ -15510,12 +16952,8 @@
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                frame->phase_state = 0;
-                frame->phase_state = 0;
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    frame->phase_state = 0;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                if (IR_PERIODIC_DUE(tstate)) {
+                    IR_PERIODIC_TAIL();
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT
@@ -15562,8 +17000,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -15586,6 +17034,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15633,14 +17082,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -15663,6 +17130,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -15710,8 +17178,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(LIST_APPEND) {
             int opcode = LIST_APPEND;
@@ -15921,6 +17397,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_CLASS) {
             int opcode = LOAD_ATTR_CLASS;
@@ -15934,6 +17434,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -15999,15 +17503,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_CLASSMETHOD) {
             int opcode = LOAD_ATTR_CLASSMETHOD;
@@ -16021,6 +17564,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_CLASSMETHOD);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16096,15 +17643,54 @@
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) {
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
@@ -16118,6 +17704,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16194,15 +17784,30 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN) {
             int opcode = LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN;
@@ -16306,6 +17911,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_INSTANCE_VALUE) {
             int opcode = LOAD_ATTR_INSTANCE_VALUE;
@@ -16319,6 +17948,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16396,15 +18029,30 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(LOAD_ATTR_METHOD_LAZY_DICT) {
             int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
@@ -16617,6 +18265,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_MODULE) {
             int opcode = LOAD_ATTR_MODULE;
@@ -16630,6 +18302,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16705,15 +18381,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
@@ -16727,6 +18442,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16781,15 +18500,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
@@ -16803,6 +18561,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16867,15 +18629,30 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(LOAD_ATTR_PROPERTY) {
             int opcode = LOAD_ATTR_PROPERTY;
@@ -16974,6 +18751,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_SHAPE) {
             int opcode = LOAD_ATTR_SHAPE;
@@ -16987,6 +18788,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17051,15 +18856,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_SHAPE_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
@@ -17073,6 +18917,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17136,15 +18984,54 @@
                     _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
                 }
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_SHAPE_POLY) {
             int opcode = LOAD_ATTR_SHAPE;
@@ -17158,6 +19045,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17219,15 +19110,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
@@ -17241,6 +19171,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17301,15 +19235,54 @@
                     _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
                 }
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_SLOT) {
             int opcode = LOAD_ATTR_SLOT;
@@ -17323,6 +19296,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17390,15 +19367,54 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_ATTR_WITH_HINT) {
             int opcode = LOAD_ATTR_WITH_HINT;
@@ -17412,6 +19428,10 @@
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -17519,21 +19539,46 @@
             if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {
                 IR_STORE_DST(ir_word, A, attr);
             }
-            if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17556,6 +19601,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue bc;
@@ -17592,14 +19638,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17622,6 +19686,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -17644,14 +19709,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17674,6 +19757,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -17695,14 +19779,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17725,6 +19827,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -17747,14 +19850,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17777,6 +19898,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -17799,14 +19921,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17829,6 +19969,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -17860,14 +20001,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17890,6 +20049,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -17912,14 +20072,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17942,6 +20120,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -17964,14 +20143,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -17994,6 +20191,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -18016,14 +20214,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -18046,6 +20262,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -18078,8 +20295,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -18301,6 +20526,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_GLOBAL_BUILTIN) {
             int opcode = LOAD_GLOBAL_BUILTIN;
@@ -18312,6 +20561,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -18371,6 +20626,52 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(LOAD_GLOBAL_MODULE) {
             int opcode = LOAD_GLOBAL_MODULE;
@@ -18382,6 +20683,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -18424,12 +20731,44 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -18452,6 +20791,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue locals;
@@ -18480,14 +20820,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -18510,6 +20868,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -18538,14 +20897,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -18568,6 +20945,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -18590,14 +20968,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -18620,6 +21016,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -18646,8 +21043,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -19071,8 +21476,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -19095,6 +21510,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_A(ir_word);
@@ -19125,8 +21541,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -19431,8 +21855,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -19455,6 +21889,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
@@ -19477,14 +21912,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -19507,6 +21960,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue subject;
@@ -19529,8 +21983,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(MATERIALIZE_KWARGS) {
             int opcode = MATERIALIZE_KWARGS;
@@ -19614,8 +22076,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -19638,6 +22110,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow iter;
@@ -19668,8 +22141,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_FALSE) {
             int opcode = POP_JUMP_IF_FALSE;
@@ -19732,6 +22213,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_FALSE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_FALSE_ALWAYS_TRUE;
@@ -19743,6 +22248,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_ALWAYS_TRUE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -19798,6 +22309,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_FALSE_BOOL) {
             int opcode = POP_JUMP_IF_FALSE_BOOL;
@@ -19840,6 +22373,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_FALSE_INT) {
             int opcode = POP_JUMP_IF_FALSE_INT;
@@ -19851,6 +22408,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_INT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -19902,6 +22465,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_FALSE_LIST) {
             int opcode = POP_JUMP_IF_FALSE_LIST;
@@ -19913,6 +22522,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_LIST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -19969,6 +22584,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_FALSE_NONE) {
             int opcode = POP_JUMP_IF_FALSE_NONE;
@@ -20012,6 +22649,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_FALSE_STR) {
             int opcode = POP_JUMP_IF_FALSE_STR;
@@ -20023,6 +22684,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_STR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -20074,12 +22741,44 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -20102,6 +22801,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
@@ -20149,14 +22849,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -20179,6 +22897,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
@@ -20226,8 +22945,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_TRUE) {
             int opcode = POP_JUMP_IF_TRUE;
@@ -20290,6 +23017,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_TRUE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_TRUE_ALWAYS_TRUE;
@@ -20301,6 +23052,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_ALWAYS_TRUE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -20356,6 +23113,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_TRUE_BOOL) {
             int opcode = POP_JUMP_IF_TRUE_BOOL;
@@ -20398,6 +23177,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_TRUE_INT) {
             int opcode = POP_JUMP_IF_TRUE_INT;
@@ -20409,6 +23212,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_INT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -20460,6 +23269,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_TRUE_LIST) {
             int opcode = POP_JUMP_IF_TRUE_LIST;
@@ -20471,6 +23326,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_LIST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -20527,6 +23388,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(POP_JUMP_IF_TRUE_NONE) {
             int opcode = POP_JUMP_IF_TRUE_NONE;
@@ -20570,6 +23453,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(POP_JUMP_IF_TRUE_STR) {
             int opcode = POP_JUMP_IF_TRUE_STR;
@@ -20581,6 +23488,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_STR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -20632,12 +23545,44 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -20660,6 +23605,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -20684,8 +23630,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -21228,6 +24182,30 @@
         }
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(SEND_ASYNC_GEN) {
             int opcode = SEND_ASYNC_GEN;
@@ -21239,6 +24217,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -21301,6 +24285,28 @@
             IR_PUBLISH_TEMP(window[2], retval);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(SEND_ASYNC_GEN_XFER_DISCARD) {
             int opcode = SEND_ASYNC_GEN;
@@ -21374,6 +24380,30 @@
             window[2] = PyValue_NULL;
             IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(SEND_GEN) {
             int opcode = SEND_GEN;
@@ -21385,6 +24415,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue receiver;
@@ -21451,6 +24487,28 @@
                 }
             }
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(SEND_GEN_XFER_DISCARD) {
             int opcode = SEND_GEN;
@@ -21868,8 +24926,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -21892,6 +24960,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             if (LOCALS() == NULL) {
@@ -21953,8 +25022,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(SET_ADD) {
             int opcode = SET_ADD;
@@ -22196,6 +25273,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
             int opcode = STORE_ATTR_INSTANCE_VALUE;
@@ -22207,6 +25308,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow value;
             PyValueBorrow owner;
@@ -22319,6 +25426,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_ATTR_SHAPE) {
             int opcode = STORE_ATTR_SHAPE;
@@ -22330,6 +25483,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
@@ -22397,6 +25556,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_ATTR_SHAPE_ADD) {
             int opcode = STORE_ATTR_SHAPE_ADD;
@@ -22408,6 +25613,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
@@ -22474,6 +25685,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_ATTR_SLOT) {
             int opcode = STORE_ATTR_SLOT;
@@ -22485,6 +25742,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
@@ -22548,6 +25811,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_ATTR_WITH_HINT) {
             int opcode = STORE_ATTR_WITH_HINT;
@@ -22559,6 +25868,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -22705,6 +26020,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(STORE_DEREF) {
             int opcode = STORE_DEREF;
@@ -22732,8 +26069,18 @@
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -22756,6 +26103,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
@@ -22792,14 +26140,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -22822,6 +26188,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -22872,14 +26239,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -22902,6 +26287,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_CD(ir_word);
@@ -22937,14 +26323,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -22967,6 +26371,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow v;
@@ -23023,8 +26428,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(STORE_SUBSCR) {
             int opcode = STORE_SUBSCR;
@@ -23174,6 +26587,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(STORE_SUBSCR_LIST_INT) {
             int opcode = STORE_SUBSCR_LIST_INT;
@@ -23185,6 +26622,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
             PyValueBorrow nos;
             PyValueBorrow list_st;
@@ -23280,6 +26723,52 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(SWAP) {
             int opcode = SWAP;
@@ -23291,6 +26780,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SWAP);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -23306,6 +26801,28 @@
             IR_PUBLISH_TEMP(window[1 + (oparg-2)], top);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(TO_BOOL) {
             int opcode = TO_BOOL;
@@ -23354,6 +26871,30 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(TO_BOOL_ALWAYS_TRUE) {
             int opcode = TO_BOOL_ALWAYS_TRUE;
@@ -23365,6 +26906,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
             PyValue owner;
             PyValue value;
@@ -23404,6 +26951,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(TO_BOOL_BOOL) {
             int opcode = TO_BOOL_BOOL;
@@ -23425,6 +26994,30 @@
             STAT_INC(TO_BOOL, hit);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(TO_BOOL_INT) {
             int opcode = TO_BOOL_INT;
@@ -23436,6 +27029,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_INT);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue value;
             PyValue res;
             PyValue v;
@@ -23471,6 +27070,52 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(TO_BOOL_LIST) {
             int opcode = TO_BOOL_LIST;
@@ -23482,6 +27127,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_LIST);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue tos;
             PyValue value;
             PyValue res;
@@ -23521,6 +27172,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
 
         TARGET(TO_BOOL_NONE) {
             int opcode = TO_BOOL_NONE;
@@ -23546,6 +27219,30 @@
             IR_STORE_CANONICAL_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(TO_BOOL_STR) {
             int opcode = TO_BOOL_STR;
@@ -23557,6 +27254,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_STR);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValue value;
             PyValue res;
             PyValue v;
@@ -23592,12 +27295,44 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -23620,6 +27355,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -23664,14 +27400,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -23694,6 +27448,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -23746,14 +27501,32 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_EXIT_PENDING_DISPATCH
 #define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
 #define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
 #define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
 #define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
@@ -23776,6 +27549,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
             int ir_has = 0;
             enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             PyValueBorrow value;
@@ -23810,8 +27584,16 @@
 #define IR_EXIT_PENDING_DISPATCH() ((void)0)
 #undef IR_RETIRE_LAST
 #define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
 #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 
@@ -24081,6 +27863,30 @@
             }
             DISPATCH();
         }
+        #undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() IR_EXIT_PENDING_DISPATCH_DEFER()
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) IR_RETIRE_LAST_DEFER(OLD)
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() IR_ASSERT_NO_PENDING_DEFER()
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_DEFER
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) IR_PUBLISH_DEFER(SLOTPTR, V)
+#pragma push_macro("_PyValue_CheckHome")
+#pragma push_macro("_PyValue_CheckTemp")
+#undef _PyValue_CheckHome
+#define _PyValue_CheckHome(REF) ((void)0)
+#undef _PyValue_CheckTemp
+#define _PyValue_CheckTemp(REF) ((void)0)
+#define PyValue_XCLOSE(V) IR_DEFER_XCLOSE_VALUE(V)
+#define PyValue_CLOSE(V) IR_DEFER_CLOSE_VALUE(V)
+#define PyValue_CLOSE_SPECIALIZED(V, D) IR_DEFER_CLOSE_VALUE_SPECIALIZED(V, D)
+#define PyValue_XCLOSE_SPECIALIZED(V, D) IR_DEFER_XCLOSE_VALUE_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_POINTER(V) IR_DEFER_XCLOSE_POINTER(V)
+#define _PyValue_CLOSE_POINTER(V) IR_DEFER_CLOSE_POINTER(V)
+#define _PyValue_CLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_CLOSE_POINTER_SPECIALIZED(V, D)
+#define _PyValue_XCLOSE_SPECIALIZED_POINTER(V, D) IR_DEFER_XCLOSE_POINTER_SPECIALIZED(V, D)
 
         TARGET(UNPACK_SEQUENCE_TWO_TUPLE) {
             int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
@@ -24092,6 +27898,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            PyObject *ir_dead0 = NULL, *ir_dead1 = NULL, *ir_dead2 = NULL, *ir_dead3 = NULL, *ir_dead4 = NULL, *ir_dead5 = NULL;
+            PyValue *ir_pub0 = NULL, *ir_pub1 = NULL, *ir_pub2 = NULL, *ir_pub3 = NULL, *ir_pub4 = NULL, *ir_pub5 = NULL;
+            int ir_has = 0;
+            enum { IR_DEAD_BASE = __COUNTER__ + 1 };
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -24146,6 +27958,28 @@
             }
             DISPATCH();
         }
+        #undef PyValue_XCLOSE
+#undef PyValue_CLOSE
+#undef PyValue_CLOSE_SPECIALIZED
+#undef PyValue_XCLOSE_SPECIALIZED
+#undef _PyValue_XCLOSE_POINTER
+#undef _PyValue_CLOSE_POINTER
+#undef _PyValue_CLOSE_SPECIALIZED_POINTER
+#undef _PyValue_XCLOSE_SPECIALIZED_POINTER
+#undef IR_EXIT_PENDING_DISPATCH
+#define IR_EXIT_PENDING_DISPATCH() ((void)0)
+#undef IR_RETIRE_LAST
+#define IR_RETIRE_LAST(OLD) (ir_displaced = ir_retire_last_owner(OLD))
+#undef IR_ASSERT_NO_PENDING
+#define IR_ASSERT_NO_PENDING() ((void)0)
+#undef IR_ERROR_EXIT
+#define IR_ERROR_EXIT IR_ERROR_EXIT_TAIL
+#undef IR_PUBLISH
+#define IR_PUBLISH(SLOTPTR, V) _PyValue_Publish(&(V))
+#undef _PyValue_CheckHome
+#undef _PyValue_CheckTemp
+#pragma pop_macro("_PyValue_CheckHome")
+#pragma pop_macro("_PyValue_CheckTemp")
         #undef IR_ERROR_EXIT
 #define IR_ERROR_EXIT IR_ERROR_EXIT_INLINE
 

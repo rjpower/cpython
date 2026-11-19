@@ -160,16 +160,25 @@ _PyValueTemps_Close(_PyValueTemps *temps)
 /* The canonical form of *source, an owner, for a home.  If *source holds a
  * box whose value is inline, *source becomes that inline value, and the box
  * is released at once if *source owned a count of it. */
+/* Whether _PyValue_Publish() may change source: it holds an exact int or
+ * float object, which may have an inline form. */
+static inline Py_ALWAYS_INLINE int
+_PyValue_NeedsCanonicalize(PyValue source)
+{
+    if (PyValue_IsObject(source)) {
+        PyObject *obj = (PyObject *)(source.bits & ~(uintptr_t)1);
+        // A static immortal always carries the no-count tag.
+        assert((source.bits & 1) || !_Py_IsStaticImmortal(obj));
+        return Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type);
+    }
+    return 0;
+}
+
 static inline Py_ALWAYS_INLINE PyValue
 _PyValue_Publish(PyValue *source)
 {
-    if (PyValue_IsObject(*source)) {
-        PyObject *obj = (PyObject *)(source->bits & ~(uintptr_t)1);
-        // A static immortal always carries the no-count tag.
-        assert((source->bits & 1) || !_Py_IsStaticImmortal(obj));
-        if (Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type)) {
-            *source = _PyValue_Canonicalize(*source);
-        }
+    if (_PyValue_NeedsCanonicalize(*source)) {
+        *source = _PyValue_Canonicalize(*source);
     }
     return *source;
 }

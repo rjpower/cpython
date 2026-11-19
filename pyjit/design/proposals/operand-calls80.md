@@ -1,6 +1,11 @@
 # Calls80: operand-encoded calls
 
-Status: proposal, 2026-11-19; awaiting the user's decisions in section 10. It
+Status: proposal, 2026-11-19. User decisions (2026-11-19): the child frame
+starts at the arena top (design O, one storage model); the snapshot rule
+stays (no writer-pays scheme); no borrowed arguments. Open: whether opcode
+tracing keeps IR-word read semantics (recommended) or must match upstream
+exactly. The call and return handlers are written in the shape that the
+handler design (`E59/handlers81-design/`, in progress) chooses. It
 changes no source. Evidence is in `E59/calls80-design/` (paths below are
 relative to it):
 

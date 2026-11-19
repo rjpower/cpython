@@ -53,8 +53,15 @@ What these rounds established:
   child frame starts at the arena top. Estimated, after the handler fix:
   `f(x, y)` from 430 to about 336 instructions (upstream 343); kernels 0.35–0.8%
   fewer instructions, coroutines 5.4%, deepcopy_memo 5%; constant slots
-  another 0.3–1.8%. Awaiting four user decisions. Call-free handler bodies
-  (handlers80) are in progress.
+  another 0.3–1.8%. The user chose the child at the arena top, kept the
+  snapshot rule and declined borrowed arguments.
+- **Handler shape.** Call-free handler bodies under GCC's tail-call convention
+  (handlers80, parked) saved only 0.4–2.4% of kernel instructions and grew hot
+  handler text by 15%. Our handlers are fat because the generator inlines
+  per-execution protocols (operand-kind decoding, publication, re-entrant
+  release, native bridge records) that upstream avoids by plain ordering and
+  helpers. A design for upstream-shaped handlers and their dispatch backend
+  is in progress (`E59/handlers81-design/`).
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

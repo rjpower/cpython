@@ -37,6 +37,16 @@ What these rounds established:
   - a value's pointer space is tested once.
 
   An adversarial review found no use-after-free in about 5,400 cases.
+- **The instruction gap**
+  ([execution79](issues/register-semantics59/execution79-instruction-gap.md)):
+  checkpoint78 retires 1.09–1.30 times upstream's instructions. Calls are
+  the largest category in every kernel. Two causes cut across all handlers:
+  GCC's handler calling convention moves the interpreter state between
+  registers in every handler that contains a call (7–9% of upstream's
+  instructions in each kernel), and the register operand and result protocol
+  makes a specialized handler cost what upstream's whole stack sequence
+  costs. Instruction work comes before hot-code layout; instruction counts
+  attribute each step independently of placement.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

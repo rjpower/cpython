@@ -237,7 +237,6 @@ _PyFrame_CloseHomeRange(_PyInterpreterFrame *frame, PyValue *homes, int count)
 static inline void
 _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
-    f->phase_state = 0;
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
@@ -261,7 +260,6 @@ void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
-    f->phase_state = 0;
     int redirected = f->pending_redirect;
     if (redirected) {
         _PyFrame_CompleteRedirect(f);
@@ -289,7 +287,6 @@ int _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame);
 static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
-    f->phase_state = 0;
     for (int i = _PyFrame_NumSlots(f); i-- > first;) {
         PyValue ref = f->base[i];  // a move: cleared below
         if (!PyValue_IsNull(ref)) {
@@ -385,8 +382,6 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
     dest->pending_redirect = src->pending_redirect;
     /* Copy/takeover has a different lifecycle until a supported producer
      * publishes its exact site/phase. */
-    dest->phase_state = 0;
-    src->phase_state = 0;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;
 #ifdef Py_DEBUG
@@ -461,7 +456,6 @@ _PyFrame_Initialize(
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
-    frame->phase_state = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
@@ -865,7 +859,6 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
-    frame->phase_state = 0;
 }
 
 /* Pushes a trampoline frame without checking for space.

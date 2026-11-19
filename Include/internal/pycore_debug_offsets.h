@@ -151,7 +151,6 @@ typedef struct _Py_DebugOffsets {
         uint64_t owned_slots;
         uint64_t owner;
         uint64_t return_slot;
-        uint64_t phase_state;
         uint64_t tlbc_index;
     } interpreter_frame;
 
@@ -411,7 +410,6 @@ _PyDebugOffsets_Validate(const _Py_DebugOffsets *offsets)
         .owned_slots = offsetof(_PyInterpreterFrame, owned_slots), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
         .return_slot = offsetof(_PyInterpreterFrame, return_slot), \
-        .phase_state = offsetof(_PyInterpreterFrame, phase_state), \
         .tlbc_index = _Py_Debug_interpreter_frame_tlbc_index, \
     }, \
     .code_object = { \

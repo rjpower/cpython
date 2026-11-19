@@ -100,7 +100,6 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
         generator_detach_result(roots);
         PyValue_XCLOSE(value);
     }
-    frame->phase_state = 0;
 }
 
 /* The remaining-window cursor is an actual home address, not an encoded action.
@@ -244,7 +243,6 @@ TARGET(NAME) \
     _PyValue_CheckTemp(result); \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
-    frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_STORE(NAME, THROW, EXPLICIT) \
@@ -267,7 +265,6 @@ TARGET(NAME) \
     (void)closed; \
     frame->instr_ptr = frame->return_pc = consumer; \
     next_instr = consumer + ((EXPLICIT) ? 1 : 0); \
-    frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_DISCARD(NAME, THROW, EXPLICIT) \
@@ -281,7 +278,6 @@ TARGET(NAME) \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
     if (EXPLICIT) { INSTRUCTION_STATS(POP_TOP); ++next_instr; } \
-    frame->phase_state = 0; \
     GENERATOR_DISPATCH(); \
 }
 GENERATOR_COMPLETE_RETURN(GEN_COMPLETE_RETURN, false)
@@ -359,7 +355,6 @@ TARGET(GEN_YIELD_INPUT_EFFECT)
     _PyValue_CheckTemp(roots.result);
     generator_detach_result(&roots);
     frame->instr_ptr = next_instr + 1;
-    frame->phase_state = 0;
     PyValue_XCLOSE(sent);
     _PyThreadState_PopTransitionRoots(tstate, &roots);
     frame = tstate->current_frame;
@@ -470,7 +465,6 @@ TARGET(GEN_RESUME_STORE)
     bool closed = _PyValue_TryXCloseNoReentry(old);
     assert(closed);
     (void)closed;
-    frame->phase_state = 0;
     frame->instr_ptr = next_instr;
     ++next_instr;
     GENERATOR_DISPATCH();

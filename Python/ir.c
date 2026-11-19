@@ -1012,7 +1012,7 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
 
 static _PyIRHomeAuthority
 plan_home_view(_PyInterpreterFrame *frame, _PyCodeExec *exec, uint32_t site,
-               uint8_t selector_class, uint8_t phase, _PyIRHomeView *out)
+               uint8_t checkpoint, _PyIRHomeView *out)
 {
     if (exec == NULL || exec->semantic_plan == NULL) {
         return _PyIR_HOME_NONE;
@@ -1026,9 +1026,7 @@ plan_home_view(_PyInterpreterFrame *frame, _PyCodeExec *exec, uint32_t site,
     while (low < high) {
         uint32_t mid = low + (high - low) / 2;
         if (sites[mid].site < site ||
-            (sites[mid].site == site &&
-             (sites[mid].selector_class < selector_class ||
-              (sites[mid].selector_class == selector_class && sites[mid].phase < phase)))) {
+            (sites[mid].site == site && sites[mid].checkpoint < checkpoint)) {
             low = mid + 1;
         }
         else {
@@ -1036,13 +1034,11 @@ plan_home_view(_PyInterpreterFrame *frame, _PyCodeExec *exec, uint32_t site,
         }
     }
     if (low == plan->nphases || sites[low].site != site ||
-        sites[low].selector_class != selector_class || sites[low].phase != phase) {
+        sites[low].checkpoint != checkpoint) {
         return _PyIR_HOME_NONE;
     }
     const _PyIRPhaseSite *row = sites + low;
-    if (row->authority != _PyIR_HOME_SHADOW_CANDIDATE &&
-        row->authority != _PyIR_HOME_MUST_READABLE)
-    {
+    if (row->authority != _PyIR_HOME_MUST_READABLE) {
         return _PyIR_HOME_NONE;
     }
     /* The immutable builder validates and orders ranges once. Readers borrow
@@ -1068,5 +1064,5 @@ _PyIR_GetErrorHomeView(_PyInterpreterFrame *frame, const _PyInstr *origin,
     uint32_t site;
     _PyCodeExec *exec = frame_image_site(frame, origin, &site);
     return exec == NULL ? _PyIR_HOME_NONE : plan_home_view(
-        frame, exec, site, _PyIR_SELECTOR_ERROR, checkpoint, out);
+        frame, exec, site, checkpoint, out);
 }

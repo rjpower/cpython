@@ -455,7 +455,6 @@ class TestIRCases(unittest.TestCase):
                     branch = body.index("if (generator_return) {")
                     end = body.index("}\n", branch)
                     route = body[branch:end]
-                    self.assertIn("frame->phase_state = 0;", route)
                     self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, "
                                   "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
                     self.assertNotIn("generator_outcome_target(", body)
@@ -1465,7 +1464,7 @@ class TestIRCases(unittest.TestCase):
             (terminal, "if (flag) { " + terminal + " }"),
             (terminal, terminal + terminal),
             (terminal, "opaque(); " + terminal),
-            (terminal, "frame->phase_state = 0; " + terminal),
+            (terminal, "frame->return_slot = 0; " + terminal),
         )
         # Use the real parsed body text so token spacing cannot hide a suffix.
         original = source[source.index("op(_FOR_ITER_GEN_FRAME"):
@@ -1487,7 +1486,7 @@ class TestIRCases(unittest.TestCase):
             self.assertIsNone(ir_generator.generator_entry_recipe(instruction))
         guard = next(part for part in instruction.parts
                      if isinstance(part, analyzer.Uop) and part is not recipe.part)
-        for prefix in ("frame->phase_state = 0;", "opaque();",
+        for prefix in ("frame->return_slot = 0;", "opaque();",
                        "next_instr = this_instr;", "PyValue *alias = slots;"):
             with self.subTest(prefix=prefix):
                 parsed = ir_generator.Parser(
@@ -1980,7 +1979,6 @@ class TestIRCases(unittest.TestCase):
             right = IR_VIEW(IR_C(ir_word));
             left = IR_VIEW(IR_B(ir_word));
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                frame->phase_state = 0;
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
                 if (ir_obj_left == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -1991,7 +1989,6 @@ class TestIRCases(unittest.TestCase):
                 ir_obj_left = PyValue_AsKnownObjectBorrow(left);
             }
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                frame->phase_state = 0;
                 ir_obj_right = _PyValueTemps_Box(value_temps, right);
                 if (ir_obj_right == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -2003,21 +2000,17 @@ class TestIRCases(unittest.TestCase):
             }
             PyObject *l = ir_obj_left;
             PyObject *r = ir_obj_right;
-            frame->phase_state = 0;
-            frame->phase_state = 0;
             PyObject *o = spam_call(l, r);
             ir_own_C = IR_CONSUME_INPUT(ir_word, C, right);
             PyValue_XCLOSE(ir_own_C);
             ir_own_B = IR_CONSUME_INPUT(ir_word, B, left);
             PyValue_XCLOSE(ir_own_B);
             if (o == NULL) {
-                frame->phase_state = 0;
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(ir_word, A, res);
             if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -2118,7 +2111,6 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("PyValue ir_own_A = PyValue_NULL;", close)
         self.assertIn("value = IR_VIEW(IR_A(ir_word));", close)
         self.assertIn("ir_own_A = IR_CONSUME_INPUT(ir_word, A, value);\n"
-                      "            frame->phase_state = 0;\n"
                       "            PyValue_XCLOSE(ir_own_A);", close)
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
@@ -2245,12 +2237,12 @@ class TestIRCases(unittest.TestCase):
     """
         output = self.handler(self.ir_output(input), "OP")
         self.assertIn("_PyValuePair ir_rest = value_operation_restore2(tstate, "
-                      "frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word), 0);\n"
+                      "frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));\n"
                       "                    held_left = ir_rest.first;\n"
                       "                    held_right = ir_rest.second;", output)
         self.assertIn("(void)value_operation_finish(tstate, frame, this_instr, ", output)
         self.assertIn("pending = value_reader_complete(tstate, frame, this_instr, "
-                      "NULL, IR_A(ir_word), pending, held_right, held_left, 0);\n"
+                      "NULL, IR_A(ir_word), pending, held_right, held_left);\n"
                       "            if (PyValue_IsNull(pending)) {", output)
         self.assertNotIn("operation", output.replace("value_operation", ""))
         # The record form is gone
@@ -2943,7 +2935,6 @@ class TestIRCases(unittest.TestCase):
             IR_PUBLISH_TEMP(window[0], res);
             IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
             if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -3211,7 +3202,6 @@ class TestIRCases(unittest.TestCase):
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    frame->phase_state = 0;
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
                     if (ir_obj_owner == NULL) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -3228,7 +3218,6 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(ir_word, A, res);
             if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -3280,7 +3269,6 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(ir_word, A, res);
             if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -3338,7 +3326,6 @@ class TestIRCases(unittest.TestCase):
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
             IR_STORE_DST(ir_word, A, res);
             if (!PyValue_IsNull(ir_displaced)) {
-                frame->phase_state = 0;
                 if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
@@ -3521,25 +3508,18 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual([(e.kind.removeprefix("_PyIR_OWNER_"), e.src)
                           for e in events], [
             ("READ", 0), ("TAKE", 0), ("READ", 1), ("TAKE", 1),
-            ("PHASE", 5), ("ERROR_BRANCH", 0), ("FRESH", 0),
-            ("PHASE", 6), ("NORMAL_EXIT", 0), ("RESTORE", 0),
-            ("RESTORE", 1), ("PHASE", 7), ("ERROR_EXIT", 0)])
-        self.assertEqual(events[5].dst, 9)
+            ("ERROR_BRANCH", 0), ("FRESH", 0),
+            ("NORMAL_EXIT", 0), ("RESTORE", 0),
+            ("RESTORE", 1), ("ERROR_EXIT", 0)])
+        self.assertEqual(events[4].dst, 7)
         self.assertEqual(formats["OP"].borrow_mask, 3)
         output = self.handler(self.ir_output(source), "OP")
         take_left = output.index("PyValue ir_binary_left = IR_TAKE")
         take_right = output.index("PyValue ir_binary_right = IR_TAKE")
-        provider_phase = output.index("frame->phase_state = _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_PROVIDER")
         provider = output.index("_PyValue_BinaryOps[oparg]")
-        revalidate = output.index("int ir_binary_phase_valid")
         self.assertLess(take_left, take_right)
-        self.assertLess(take_right, provider_phase)
-        self.assertLess(provider_phase, provider)
-        self.assertLess(provider, revalidate)
-        self.assertIn("frame->instr_ptr == this_instr", output)
-        self.assertIn("frame->phase_state & ~_PyIR_PHASE_STATUS_MASK", output)
-        self.assertIn("ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_RETIRE : 0", output)
-        self.assertIn("ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_ERROR_RESTORE : 0", output)
+        self.assertLess(take_right, provider)
+        self.assertNotIn("phase_state", output)
         # Opaque body edits cannot retain this positive recipe merely because
         # the marker, name and IO are still present.
         for body, reason in (
@@ -3828,7 +3808,6 @@ class TestIRCases(unittest.TestCase):
             }
         """)
         self.assertIn("_PyFrame_CloseHomeRange(frame, items, oparg)", output)
-        self.assertIn("frame->phase_state = 0;", output)
         self.assertNotIn("IR_CLOSE_INPUTS", output)
         self.assertNotIn("_PyValue_CloseStack", output)
 
@@ -4027,7 +4006,6 @@ class TestIRCases(unittest.TestCase):
         """)
         self.assertIn("_Py_BuildMap_ValueSteal(frame, values, oparg)", output)
         self.assertNotIn("IR_BUILD_MAP", output)
-        self.assertIn("frame->phase_state = 0;", output)
 
     def test_home_loop_operations_lower_through_actual_storage(self):
         output = self.ir_output("""
@@ -4534,7 +4512,7 @@ class TestShapeReadMetadata(unittest.TestCase):
                 ("offset++;", "shape read has no current guarded offset"),
                 ("PyValue_CLOSE(owner);", "view 'owner' is read after a call"),
                 ("unknown_effect();", "view 'owner' is read after a call"),
-                ("frame->phase_state = 0;", "shape read has no current guarded offset"),
+                ("frame->return_slot = 0;", "shape read has no current guarded offset"),
                 ("if (flag) { offset++; }", "shape read has no current guarded offset"),
                 ("for (int i=0; i<0; i++) { offset++; }", "shape read has no current guarded offset")):
             with self.subTest(prefix=prefix):

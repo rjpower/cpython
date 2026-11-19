@@ -830,9 +830,8 @@ value_frame_is_current(PyThreadState *tstate, _PyInterpreterFrame *frame)
 static _PyValuePair
 value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          PyValue first, PyValue second,
-                         int first_slot, int second_slot, uint16_t phase)
+                         int first_slot, int second_slot)
 {
-    frame->phase_state = 0;
     _PyValuePair rest = {first, second};
     if (!value_frame_is_current(tstate, frame)) {
         value_revalidation_error("dictionary store changed the active frame");
@@ -860,7 +859,6 @@ value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyValue_CheckTemp(slots[second_slot]);
         rest.second = PyValue_NULL;
     }
-    frame->phase_state = phase;
     /* Callback-current locals remain intact. Their extra evaluated
      * snapshots are still C-owned; only temporary owners moved back. */
     return rest;
@@ -1932,9 +1930,8 @@ static PyValue
 value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       _PyInstr *current, _PyValueTemps *temps,
                       int result_slot, PyValue result,
-                      PyValue first, PyValue second, uint16_t phase)
+                      PyValue first, PyValue second)
 {
-    frame->phase_state = 0;
     if (!value_frame_is_current(tstate, frame)) {
         PyErr_SetString(PyExc_SystemError, "value reader changed the active frame");
         PyValue_XCLOSE(result);
@@ -1959,10 +1956,8 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyFrame_Slots(frame)[result_slot] = result;
         _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
     }
-    frame->phase_state = phase;
     value_operation_close3(first, second, PyValue_NULL);
     _PyValueTemps_Close(temps);
-    frame->phase_state = 0;
     if (value_operation_refresh(tstate, frame, current,
                                 local ? result : PyValue_NULL) < 0) {
         return PyValue_NULL;
@@ -1993,7 +1988,7 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (!method) {
         return value_reader_complete(tstate, frame, current, temps,
                                      result_slot, result, receiver,
-                                     PyValue_NULL, 0);
+                                     PyValue_NULL);
     }
     int slot = result_slot;
     if (!value_frame_is_current(tstate, frame) ||
@@ -2075,7 +2070,6 @@ finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         PyValue *locals, PyValue *window, int n, int first,
                         int canonical)
 {
-    frame->phase_state = 0;
     int err = 0;
     for (int i = first; i < n; i++) {
         PyValue *element = &window[n - 1 - i];
@@ -2225,7 +2219,6 @@ static void clear_error_frame(PyThreadState *, _PyInterpreterFrame *);
 static void
 error_scope_disarm(PyThreadState *tstate, _PyTransitionRoots *scope)
 {
-    _PyInterpreterFrame *frame = scope->frame;
     scope->remaining = 0;
     scope->home_authority = _PyIR_HOME_NONE;
     scope->homes = NULL;
@@ -2616,7 +2609,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
-    entry->frame.phase_state = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif
@@ -3587,8 +3579,7 @@ _PyEval_FrameClearAndPopGeneralWithResult(PyThreadState *tstate,
 
 /* Certified RETURN_VALUE_EMPTY retires a thread frame whose scratch is
  * empty, so only the code's locals can own values. The frame is already
- * unlinked and nothing reads its phase publication before it is popped; the
- * slow continuation resets the publication before it publishes roots. */
+ * unlinked before it is popped. */
 PyValue
 _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
                                     _PyInterpreterFrame *frame, PyValue result)

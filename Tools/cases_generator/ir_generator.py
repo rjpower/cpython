@@ -3554,28 +3554,13 @@ class IREmitter(Emitter):
         self.ownership_events: list[OwnershipEvent] = []
         self.disjoint_child_publication: Uop | None = None
         self.disjoint_child_drained = False
-        self.dying_frame_save = False
 
     def ownership_event(self, kind, *, flags=0, dst=0, src=0, extent=0):
         self.ownership_events.append(OwnershipEvent(
             "_PyIR_OWNER_" + kind, flags, dst, src, extent))
 
-    def publish_phase(self, phase):
-        self.emit(f"frame->phase_state = _PyIR_PHASE_PUBLISHED | {phase};\n")
-
     def save_stack(self, tkn, tkn_iter, uop, storage, inst):
-        # A canonical return saves the dying frame just before unlinking it.
-        # Nothing observes that frame's publication again: each retirement
-        # path resets it before its first callback (the shared clear and the
-        # slow-path roots), and the thread fast path pops it unobserved.
-        stack = storage.stack
-        self.dying_frame_save = (
-            uop.name in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"} and
-            isinstance(stack, IRStack) and stack.layout.canonical_frame_transfer)
-        try:
-            result = super().save_stack(tkn, tkn_iter, uop, storage, inst)
-        finally:
-            self.dying_frame_save = False
+        result = super().save_stack(tkn, tkn_iter, uop, storage, inst)
         if uop is self.disjoint_child_publication:
             stack = storage.stack
             assert isinstance(stack, IRStack)
@@ -3583,14 +3568,6 @@ class IREmitter(Emitter):
                 raise analysis_error("disjoint child publication retains an input home", tkn)
             self.disjoint_child_drained = True
         return result
-
-    def emit_save(self, storage: Storage) -> None:
-        # A frame switch or unsupported escape cannot inherit a publication
-        # made at an earlier callback boundary, even if its PC still matches.
-        if not self.dying_frame_save:
-            self.out.start_line()
-            self.emit("frame->phase_state = 0;\n")
-        super().emit_save(storage)
 
     def checked_home_array(self, tkn, uop, storage):
         operation = home_operation_contract(uop).get(id(tkn))
@@ -3724,51 +3701,36 @@ class IREmitter(Emitter):
             self.ownership_event("TAKE", dst=index, src=index)
         storage.clear_inputs("before binary provider")
         storage.flush(self.out)
-        self.publish_phase("_PyIR_PHASE_BINARY_PROVIDER")
-        self.ownership_event("PHASE", src=5)
         self.emit("PyValue ir_binary_result = oparg == NB_SUBSCR\n")
         self.emit("    ? value_subscript(ir_binary_left, ir_binary_right)\n")
         self.emit("    : _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
         self.emit("PyValue_Borrow(ir_binary_right));\n")
-        self.emit("int ir_binary_phase_valid = frame->instr_ptr == this_instr &&\n")
-        self.emit("    (frame->phase_state & ~_PyIR_PHASE_STATUS_MASK) ==\n")
-        self.emit("    (_PyIR_PHASE_PUBLISHED | _PyIR_PHASE_BINARY_PROVIDER);\n")
         # The error branch has its own snapshot; it cannot leak into normal
         # successor facts. Restore publishes only after its revalidation.
         error_branch = len(self.ownership_events)
         self.ownership_event("ERROR_BRANCH")
         self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit("_PyValuePair ir_binary_rest = value_operation_restore2(tstate, frame, "
                   f"ir_binary_left, ir_binary_right, {self.input_slot(inst, 0)}, "
-                  f"{self.input_slot(inst, 1)}, "
-                  "ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | "
-                  "_PyIR_PHASE_BINARY_ERROR_RESTORE : 0);\n")
+                  f"{self.input_slot(inst, 1)});\n")
         self.emit("value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);\n")
         self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit(f"ir_binary_result = value_reader_complete(tstate, frame, this_instr, "
                   f"{self.temps}, {FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]}, "
-                  "ir_binary_result, ir_binary_right, ir_binary_left, "
-                  "ir_binary_phase_valid ? _PyIR_PHASE_PUBLISHED | "
-                  "_PyIR_PHASE_BINARY_RETIRE : 0);\n")
+                  "ir_binary_result, ir_binary_right, ir_binary_left);\n")
         self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
         self.reader_reload()
         self.emit(f"{result} = ir_binary_result;\n")
         self.ownership_event("FRESH")
-        self.ownership_event("PHASE", src=6)
         self.ownership_event("NORMAL_EXIT")
         self.ownership_events[error_branch] = replace(
             self.ownership_events[error_branch], dst=len(self.ownership_events))
         self.ownership_event("RESTORE", src=0)
         self.ownership_event("RESTORE", src=1)
-        self.ownership_event("PHASE", src=7)
         self.ownership_event("ERROR_EXIT")
         for output in storage.outputs:
             if output.name == result:
@@ -4115,7 +4077,7 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit(f"_PyValuePair ir_rest = value_operation_restore2(tstate, frame, "
                   f"{first}, {second}, {self.input_slot(inst, 0)}, "
-                  f"{self.input_slot(inst, 1)}, 0);\n")
+                  f"{self.input_slot(inst, 1)});\n")
         self.emit(f"{first} = ir_rest.first;\n")
         self.emit(f"{second} = ir_rest.second;\n")
         self.emit("}\n")
@@ -4132,7 +4094,6 @@ class IREmitter(Emitter):
         run __del__ or a weakref callback, which can run any Python."""
         self.error_local_dst = True
         self.emit("if (!PyValue_IsNull(ir_displaced)) {\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit("if (finish_displaced_local(tstate, frame, next_instr, "
                   f"{self.temps}, ir_displaced) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
@@ -4368,7 +4329,7 @@ class IREmitter(Emitter):
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
         self.emit(f"{result} = value_reader_complete(tstate, frame, this_instr, "
-                  f"{self.temps}, {dst}, {result}, {first}, {second}, 0);\n")
+                  f"{self.temps}, {dst}, {result}, {first}, {second});\n")
         self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
@@ -5129,20 +5090,6 @@ class IREmitter(Emitter):
         uops = [part for part in inst.parts if isinstance(part, Uop)] if inst else []
         self.stores_outputs = bool(uops) and uops[-1] is uop
         escape = uop.properties.escaping_calls.get(stmt)
-        phase_barrier = transaction_marker or any(t.text in {
-            "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
-            "IR_RETIRE_PUBLISHED_PAIR", "IR_COMPLETE_ATTR_READER",
-            "IR_COMPLETE_VALUE_READER", "IR_FINISH_VALUE_OPERATION",
-            "IR_RESTORE_VALUE_INPUTS", "IR_ABORT_VALUE_READER",
-            "INSTRUMENTED_JUMP",
-        } for t in stmt.contents)
-        # The return's caller was reset before retirement, the only code that
-        # can run after the switch; return_to_caller resets it again only
-        # before its own escaping completion.
-        returns_to_caller = bool(stmt.contents) and stmt.contents[0].text == "IR_RETURN_TO_CALLER"
-        if (escape is not None or phase_barrier) and not returns_to_caller:
-            self.out.start_line()
-            self.emit("frame->phase_state = 0;\n")
         if escape is not None and self.pending_owner is not None:
             raise analysis_error(
                 f"code can run between OWNER() and IR_RETIRE_PUBLISHED, so "
@@ -5293,7 +5240,6 @@ class IREmitter(Emitter):
         """Clear the slots that the stack gave up, which the stack machine
         left above its stack pointer, and leave the rest to
         exception_unwind."""
-        self.emit("frame->phase_state = 0;\n")
         # Releases may already have removed dead inputs from Stack while
         # Storage still names them for the uop. Only the live stack is
         # flushed on this edge; cloning Storage would require those inputs.
@@ -5467,7 +5413,6 @@ class IREmitter(Emitter):
         "The inputs stay in their slots"
         self.check_owner_exit(tkn)
         self.check_error_outputs(tkn, storage)
-        self.emit("frame->phase_state = 0;\n")
         self.out.start_line()
         previous = self.abrupt_operand_origin
         self.abrupt_operand_origin = id(tkn)
@@ -5745,7 +5690,6 @@ class IREmitter(Emitter):
         else:
             self.emit(f"assert(_PyValue_IsHome({value}));\n")
         self.emit(f"if ({generator_return}) {{\n")
-        self.emit("frame->phase_state = 0;\n")
         self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
         self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
@@ -5887,7 +5831,6 @@ class IREmitter(Emitter):
             box = f"ir_obj_{var.name}"
             self.boxes.add(box)
             self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
-            self.emit("frame->phase_state = 0;\n")
             self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
             self.emit(f"if ({box} == NULL) {{\n")
             bridge = (id(uop), var.name)
@@ -9008,7 +8951,7 @@ HANDLER_LOCALS = {
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",
     "ir_binary_left", "ir_binary_right", "ir_binary_result",
-    "ir_binary_phase_valid", "ir_binary_rest",
+    "ir_binary_rest",
     "ir_shape_offset",
 }
 HANDLER_POINTERS = {"slots", "window", "fb", "value_temps", "frame", "tstate",

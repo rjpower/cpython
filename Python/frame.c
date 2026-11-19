@@ -281,7 +281,6 @@ _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
-    frame->phase_state = 0;
 #ifdef Py_DEBUG
     _PyValue_CheckFrame(frame);
 #endif
@@ -309,7 +308,6 @@ static inline int
 try_clear_except_code(_PyInterpreterFrame *frame, int remaining)
 {
     assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
-    frame->phase_state = 0;
     assert(_PyThreadState_GET()->current_frame != frame);
     assert(frame->owner != FRAME_OWNED_BY_GENERATOR ||
            FT_ATOMIC_LOAD_INT8_RELAXED(
@@ -349,7 +347,6 @@ _PyFrame_InitClearRoots(_PyInterpreterFrame *frame, int stage, int initial_exten
 {
     assert(initial_extent >= 0 && initial_extent <= _PyFrame_NumSlots(frame));
     assert(stage <= initial_extent);
-    frame->phase_state = 0;
     int remaining = stage > 0 ? stage : 0;
     if (stage == _Py_FRAME_CLEAR_ASSOCIATION) {
         remaining = initial_extent;

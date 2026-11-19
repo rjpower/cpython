@@ -384,7 +384,6 @@ enum {
     _PyIR_OWNER_TAKE,
     _PyIR_OWNER_FRESH,
     _PyIR_OWNER_RESTORE,
-    _PyIR_OWNER_PHASE,
     _PyIR_OWNER_ERROR_BRANCH,
     _PyIR_OWNER_NORMAL_EXIT,
     _PyIR_OWNER_ERROR_EXIT,
@@ -590,11 +589,6 @@ typedef struct {
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
 #define _PyIR_PHASE_RANGE_CONTROL 2u
 
-enum {
-    _PyIR_SELECTOR_ACTIVE,
-    _PyIR_SELECTOR_ERROR,
-};
-
 typedef enum _PyIRHomeAuthority {
     _PyIR_HOME_NONE,
     _PyIR_HOME_SHADOW_CANDIDATE,
@@ -605,8 +599,8 @@ typedef enum _PyIRHomeAuthority {
 
 typedef struct {
     uint32_t site, first, count;
-    uint8_t phase, authority;
-    uint8_t selector_class, reserved;
+    uint8_t checkpoint, authority;
+    uint16_t reserved;
 } _PyIRPhaseSite;
 static_assert(sizeof(_PyIRPhaseSite) == 16, "phase site encoding must remain fixed");
 
@@ -649,20 +643,6 @@ enum {
     _PyIR_SHADOW_MISMATCH,
 };
 
-/* Phase IDs belong to a canonical family; coverage is separate from PRE=0. */
-enum {
-    _PyIR_PHASE_PRE,
-    _PyIR_PHASE_POST,
-    _PyIR_PHASE_ERROR,
-    _PyIR_PHASE_RETIRING,
-    _PyIR_PHASE_SUSPENDED,
-    _PyIR_PHASE_BINARY_PROVIDER,
-    _PyIR_PHASE_BINARY_RETIRE,
-    _PyIR_PHASE_BINARY_ERROR_RESTORE,
-};
-#define _PyIR_PHASE_PUBLISHED (1u << 8)
-#define _PyIR_PHASE_STATUS_SHIFT 9
-#define _PyIR_PHASE_STATUS_MASK (3u << _PyIR_PHASE_STATUS_SHIFT)
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;

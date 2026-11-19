@@ -2272,8 +2272,8 @@ semantic_reserve(void *array, uint32_t *capacity, uint32_t count, size_t size)
 
 static int
 semantic_phase(const semantic_image *image, const semantic_worklist *work,
-               const uint64_t *state, int site, uint8_t selector_class,
-               uint8_t phase, int complete)
+               const uint64_t *state, int site, uint8_t checkpoint,
+               int complete)
 {
     semantic_phases *build = work->phases;
     if (build == NULL || !complete) {
@@ -2290,37 +2290,22 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
         }
     }
     uint32_t nranges = 0;
-    _PyIRHomeAuthority authority = _PyIR_HOME_MUST_READABLE;
     for (int bit = 0; bit < image->scratch; bit++) {
         unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
         uint8_t flags = facts & (1u << SEM_NONNULL) ? 0 : _PyIR_PHASE_RANGE_NULLABLE;
         if (!(facts & (1u << SEM_MAY_OWNER))) {
-            if (selector_class == _PyIR_SELECTOR_ERROR) {
-                if (!(facts & (1u << SEM_INITIALIZED))) {
-                    if (!(facts & (1u << SEM_NO_HOME))) {
-                        return 0;
-                    }
-                    continue;
-                }
-                /* A readable NULL/index control participates in a snapshot
-                 * even though it carries no counted-owner obligation. */
-                flags |= _PyIR_PHASE_RANGE_CONTROL;
-            }
-            else {
-                if (!semantic_absent(facts)) {
+            if (!(facts & (1u << SEM_INITIALIZED))) {
+                if (!(facts & (1u << SEM_NO_HOME))) {
                     return 0;
-                }
-                if (facts & (1u << SEM_INITIALIZED)) {
-                    authority = _PyIR_HOME_SHADOW_CANDIDATE;
                 }
                 continue;
             }
+            /* A readable NULL/index control participates in a snapshot
+             * even though it carries no counted-owner obligation. */
+            flags |= _PyIR_PHASE_RANGE_CONTROL;
         }
         if (!(facts & (1u << SEM_INITIALIZED))) {
-            if (selector_class == _PyIR_SELECTOR_ERROR) {
-                return 0;
-            }
-            authority = _PyIR_HOME_SHADOW_CANDIDATE;
+            return 0;
         }
         if (nranges && build->scratch[nranges - 1].end == bit &&
             build->scratch[nranges - 1].flags == flags)
@@ -2394,8 +2379,8 @@ semantic_phase(const semantic_image *image, const semantic_worklist *work,
     }
     build->sites = sites;
     sites[build->nsites++] = (_PyIRPhaseSite){
-        .site = (uint32_t)site, .phase = phase, .authority = (uint8_t)authority,
-        .selector_class = selector_class,
+        .site = (uint32_t)site, .checkpoint = checkpoint,
+        .authority = _PyIR_HOME_MUST_READABLE,
         .first = first, .count = nranges};
     return 0;
 }
@@ -2642,7 +2627,7 @@ semantic_error_snapshots(const semantic_image *image, semantic_worklist *work,
                     semantic_set_facts(work, work->branch, homes[h], image->nl, facts);
                 }
             }
-            if (semantic_phase(image, work, work->branch, pc, _PyIR_SELECTOR_ERROR,
+            if (semantic_phase(image, work, work->branch, pc,
                                (uint8_t)event->src, complete) < 0) {
                 return -1;
             }
@@ -2659,10 +2644,7 @@ semantic_phase_compare(const void *left, const void *right)
     if (a->site != b->site) {
         return a->site < b->site ? -1 : 1;
     }
-    if (a->selector_class != b->selector_class) {
-        return (int)a->selector_class - (int)b->selector_class;
-    }
-    return (int)a->phase - (int)b->phase;
+    return (int)a->checkpoint - (int)b->checkpoint;
 }
 
 static void
@@ -3036,12 +3018,6 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                 semantic_set_facts(work, state, home, nl,
                     (1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER) |
                     (1u << SEM_NONNULL));
-                break;
-            case _PyIR_OWNER_PHASE:
-                if (inspect && semantic_phase(image, work, state, pc,
-                                              _PyIR_SELECTOR_ACTIVE, (uint8_t)event->src, exact) < 0) {
-                    return -1;
-                }
                 break;
             case _PyIR_OWNER_ERROR_BRANCH:
                 error = event->dst;

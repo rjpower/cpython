@@ -242,8 +242,7 @@ do { \
         assert((NEW_FRAME)->previous == frame);                  \
         if (value_temps != NULL && value_temps->count != 0 &&    \
             finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
-            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME),          \
-                                    _PyIR_RETIRE_STAGED_FAILURE); \
+            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));         \
             PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);           \
         }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \
@@ -585,25 +584,14 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_TAKE(V, OWN) \
     (PyValue_IsNull(OWN) ? PyValue_XDUP(V) : (OWN))
 
+/* Values are canonical where they are made (the PyValue_From*()
+ * constructors), so a store writes V as it is; the debug check proves it. */
+
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = _PyValue_Publish(&(V)); \
-        _PyValue_CheckTemp(SLOT); \
-    } while (0)
-
-/* The generator has proved that V already owns canonical bits. */
-#define IR_STORE_CANONICAL_TEMP(SLOT, V) \
-    do { \
-        assert(PyValue_IsNull(SLOT)); \
         _PyFrame_PublishVacantHome(frame, &(SLOT), (V)); \
-        _PyValue_CheckTemp(SLOT); \
-    } while (0)
-
-#define IR_PUBLISH_CANONICAL_TEMP(SLOT, V) \
-    do { \
-        (SLOT) = (V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -611,7 +599,7 @@ gen_try_set_executing(PyGenObject *gen)
  * wrote before. */
 #define IR_PUBLISH_TEMP(SLOT, V) \
     do { \
-        (SLOT) = _PyValue_Publish(&(V)); \
+        (SLOT) = (V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
@@ -648,11 +636,11 @@ ir_retire_last_owner(PyValue old)
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
  * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
  * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
-#define IR_STORE_DST_IMPL(W, X, V, VALUE) \
+#define IR_STORE_DST(W, X, V) \
     do { \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
             PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
-            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(ir_old), (VALUE)); \
+            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(ir_old), (V)); \
             _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
             IR_RETIRE_LOCAL(ir_old); \
         } \
@@ -662,17 +650,10 @@ ir_retire_last_owner(PyValue old)
         else { \
             assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
                    || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = (VALUE); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
             _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
-
-#define IR_STORE_DST(W, X, V) \
-    IR_STORE_DST_IMPL(W, X, V, _PyValue_Publish(&(V)))
-
-/* Only a checked canonical-result proof selects this owner transfer. */
-#define IR_STORE_CANONICAL_DST(W, X, V) \
-    IR_STORE_DST_IMPL(W, X, V, (V))
 
 /* Observation sees the committed binding; its displaced or ignored owner
  * stays in C until the terminal adapter has published its continuation. */
@@ -681,7 +662,7 @@ ir_retire_last_owner(PyValue old)
         assert(PyValue_IsNull(RETIRED)); \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
             (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
             _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
         } \
         else if (IR_FIELD(W, X) == IR_NO_DST) { \
@@ -689,7 +670,7 @@ ir_retire_last_owner(PyValue old)
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
             _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
@@ -713,17 +694,6 @@ ir_retire_last_owner(PyValue old)
 #define IR_CANONICAL_HOME_DUP(V) \
     (assert(_PyValue_IsHome(V)), PyValue_XDUP(V))
 
-/* The checked producer already owns canonical bits. */
-#define IR_STORE_CANONICAL_TEMP_DST(W, X, V) \
-    do { \
-        if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
-                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-    } while (0)
-
 /* Before code that may run other code, the result V goes to dst field X
  * of W if it names a temporary.  A local gets it at the end, IR_STORE_DST. */
 #define IR_STORE_TEMP_DST(W, X, V) \
@@ -731,7 +701,7 @@ ir_retire_last_owner(PyValue old)
         if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
                    || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = _PyValue_Publish(&(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
             _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
         } \
     } while (0)
@@ -779,7 +749,7 @@ ir_retire_last_owner(PyValue old)
  * finish_unpack_to_locals() does the rest out of line, so that the release
  * sees the locals as the STORE_FAST sequence leaves them. */
 static inline int
-_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
+_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 {
     for (int i = 0; i < n; i++) {
         PyValue old = locals[i];
@@ -787,17 +757,14 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
             return i;
         }
         PyValue *element = &window[n - 1 - i];
-        assert(!canonical || _PyValue_IsHome(*element));
-        locals[i] = canonical ? *element : _PyValue_Publish(element);
+        locals[i] = *element;
         _PyValue_CheckHome(locals[i]);
         window[n - 1 - i] = PyValue_NULL;
         PyValue_XCLOSE(old);
     }
     return -1;
 }
-#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N), 0)
-#define IR_UNPACK_CANONICAL_TO_LOCALS(L, W, N) \
-    _PyIR_UnpackToLocals((L), (W), (N), 1)
+#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
@@ -925,12 +892,6 @@ shape_read_dup(PyObject *owner, uint32_t offset)
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \
-    do { \
-        if (_PyFrame_SetReturnValue(frame, _PyValue_Publish(&(V)))) { \
-            next_instr = frame->return_pc; \
-        } \
-    } while (0)
-#define IR_STORE_CANONICAL_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
         if (_PyFrame_SetReturnValue(frame, (V))) { \

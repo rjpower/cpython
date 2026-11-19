@@ -38,27 +38,6 @@ _PyValue_FromNumberSteal(PyObject *obj)
     return (PyValue){.bits = identity};
 }
 
-PyValue
-_PyValue_Canonicalize(PyValue source)
-{
-    if (!PyValue_IsObject(source)) {
-        return source;
-    }
-    PyObject *obj = PyValue_AsKnownObjectBorrow(source);
-    uintptr_t identity = _PyObject_ValueIdentity(obj);
-    if (identity < Py_DOUBLE_OFFSET) {
-        return source;
-    }
-    if (PyValue_RefcountOnObject(source)) {
-        /* The release contract: freeing an exact int or float box runs no
-           Python and leaves the current exception unchanged. */
-        _PyReleaseCheck_BEGIN(check);
-        Py_DECREF(obj);
-        _PyReleaseCheck_END(check, NULL);
-    }
-    return (PyValue){.bits = identity};
-}
-
 PyObject *
 (_PyValueTemps_Box)(_PyValueTemps *temps, PyValueBorrow value _PyBox_AT_PARAM)
 {

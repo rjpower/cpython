@@ -676,7 +676,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     if (found.status < 0) {
         goto done;
     }
-    method.ref = _PyValue_Publish(&found.value);
+    method.ref = found.value;
     if (found.status == 1) {
         self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     }
@@ -988,7 +988,7 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     if (found.status < 0) {
         goto done;
     }
-    method.ref = _PyValue_Publish(&found.value);
+    method.ref = found.value;
     if (found.status == 1) {
         self.ref = PyValue_DUP(PyValue_FromObjectBorrow(args[0]));
     }
@@ -1040,7 +1040,7 @@ _PyValue_VectorcallMethod(PyObject *name, const PyValue *args, size_t nargsf,
     if (found.status < 0) {
         goto done;
     }
-    method.ref = _PyValue_Publish(&found.value);
+    method.ref = found.value;
     if (PyValue_IsObject(method.ref)) {
         EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD,
                                        PyValue_AsKnownObjectBorrow(method.ref));
@@ -1096,7 +1096,7 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     if (found.status < 0) {
         goto done;
     }
-    method.ref = _PyValue_Publish(&found.value);
+    method.ref = found.value;
     if (found.status == 1) {
         self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     }

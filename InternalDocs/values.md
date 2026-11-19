@@ -31,8 +31,9 @@ views; publishing them into a language home must use canonical preparation.
 They are not an alternative storage format.
 
 The generated interpreter and shared semantic helpers use `_PyValueTemps` for
-private exact-scalar boxes. Preparation is pure; home stores publish first and
-queue displaced scalar boxes for scoped release. Records initialize after all
+private exact-scalar boxes. Preparation is pure; every constructor returns the
+canonical value, so home stores write it as it is (debug builds check each
+store) and queue displaced scalar boxes for scoped release. Records initialize after all
 predicted-entry labels. Handler exits release nonempty records before decoding
 the next word and revalidate live frame, executable and observer state after
 callback-capable cleanup. A previously pending exception remains primary;

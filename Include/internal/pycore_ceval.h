@@ -172,20 +172,13 @@ _PyEval_Vector(PyThreadState *tstate,
             PyObject* const* args, size_t argcount,
             PyObject *kwnames);
 
-/* Borrow the input window; the outlined provider owns construction through
- * evaluation, including a custom evaluator's callbacks and frame handoff. */
+/* Borrow the input window. A custom evaluator must consume the frame it is
+ * given: run it with _PyEval_EvalFrameDefault() or retire it with
+ * _PyEval_FrameClearAndPop(). */
 PyAPI_FUNC(PyValue) _PyEval_VectorValue(PyThreadState *tstate,
                                        PyFunctionObject *func,
                                        const PyValue *args, size_t nargsf,
                                        PyObject *kwnames);
-
-/* Strict custom-evaluator handoffs require a live staged token before reading
- * frame storage. Activation follows current-frame publication; retirement
- * consumes an unentered non-current frame. Both leave an empty outer node. */
-PyAPI_FUNC(int) _PyEval_ActivateStagedFrame(PyThreadState *tstate,
-                                          _PyInterpreterFrame *frame);
-PyAPI_FUNC(int) _PyEval_RetireStagedFrame(PyThreadState *tstate,
-                                        _PyInterpreterFrame *frame);
 
 extern int _PyEval_ThreadsInitialized(void);
 extern void _PyEval_InitGIL(PyThreadState *tstate, int own_gil);
@@ -365,7 +358,7 @@ PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopGeneralWithResult(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue result);
 /* Error/close paths carry no detached result. */
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
-                                        _PyInterpreterFrame *frame, uint8_t reason);
+                                        _PyInterpreterFrame *frame);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
 enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
 enum _PyIRStepStatus {

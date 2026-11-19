@@ -4092,7 +4092,6 @@ dummy_func(
                 Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
-            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_WITH_VALUES) =
@@ -4112,7 +4111,6 @@ dummy_func(
                 Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
-            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_NO_DICT) =
@@ -4171,7 +4169,6 @@ dummy_func(
                 Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
             self = TAKE(owner);
-            IR_CANONICAL_OUTPUTS(attr, self);
         }
 
         macro(LOAD_ATTR_METHOD_LAZY_DICT) =

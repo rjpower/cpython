@@ -10,27 +10,12 @@ from test.test_ir_transfer_admission import encoded, make_code
 
 NORMAL_RETURN, ERROR_UNWIND, HEAP_CLEAR, STAGED_FAILURE = range(1, 5)
 UNCOVERED, EXACT, MISMATCH = range(3)
-RETIRING = 1
 
 
 def return_sites(code):
     return [i for i, row in enumerate(_testinternalcapi.get_ir(code))
             if row[0] in {"RETURN_VALUE", "RETURN_VALUE_EMPTY",
                           "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
-
-
-def retiring_states():
-    # Provider tests assert the complete chain, including disarmed STAGED
-    # nodes. These fixtures select actual retirement records explicitly.
-    return [state for state in _testinternalcapi.get_transition_shadow_status()
-            if state[0] == RETIRING]
-
-
-def setUpModule():
-    # Retirement records carry their shadow comparison only while observed.
-    previous = _testinternalcapi.set_retirement_shadow_observed(True)
-    unittest.addModuleCleanup(
-        _testinternalcapi.set_retirement_shadow_observed, previous)
 
 
 class RetirementPlanTests(unittest.TestCase):
@@ -127,56 +112,6 @@ class RetirementPlanTests(unittest.TestCase):
         for admitted in self.routes(code):
             self.assertEqual(_testinternalcapi.check_ir_retirement(
                 admitted, 6, NORMAL_RETURN), EXACT)
-
-    def test_actual_nested_retirement_records(self):
-        observations = []
-
-        def f(value, trigger):
-            return value
-
-        class Trigger:
-            def __init__(self, nested):
-                self.nested = nested
-
-            def __del__(self):
-                observations.append(retiring_states())
-                if self.nested:
-                    f(None, Trigger(False))
-
-        result = object()
-        self.assertIs(f(result, Trigger(True)), result)
-        self.assertEqual(observations,
-                         [[(RETIRING, NORMAL_RETURN, EXACT, True)],
-                          [(RETIRING, NORMAL_RETURN, EXACT, True),
-                           (RETIRING, NORMAL_RETURN, EXACT, True)]])
-        self.assertEqual(retiring_states(), [])
-
-    def test_actual_unknown_retirement_and_nullable_binding(self):
-        observations = []
-
-        class Trigger:
-            def __del__(self):
-                observations.append(retiring_states())
-
-        def unknown(value, trigger):
-            iter(value)
-            return value
-
-        value = []
-        self.assertIs(unknown(value, Trigger()), value)
-        self.assertEqual(observations,
-                         [[(RETIRING, NORMAL_RETURN, UNCOVERED, True)]])
-        observations.clear()
-
-        def nullable(trigger):
-            if False:
-                unbound = 1
-            return None
-
-        self.assertIn("unbound", nullable.__code__.co_varnames)
-        self.assertIsNone(nullable(Trigger()))
-        self.assertEqual(observations, [[(RETIRING, NORMAL_RETURN, EXACT, True)]])
-        self.assertEqual(retiring_states(), [])
 
 
 if __name__ == "__main__":

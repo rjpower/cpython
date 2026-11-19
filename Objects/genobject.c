@@ -17,7 +17,6 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT8_RELAXED()
 #include "pycore_pyerrors.h"      // _PyErr_ClearExcState()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_transition_roots.h" // _PyTransitionRoots
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
@@ -102,6 +101,15 @@ gen_traverse(PyObject *self, visitproc visit, void *arg)
         // We still need to visit the code object when the frame is cleared to
         // ensure that the independent code owner remains reachable.
         Py_VISIT(gen->gi_iframe.f_executable);
+        // The state is published before the retirement closes the owners, so
+        // a finalizer that collects sees the slots that it has not reached
+        // yet. They are NULL once the retirement is complete.
+        if (gen->gi_iframe.f_executable != NULL) {
+            int err = _PyGC_VisitFrameStack(&gen->gi_iframe, visit, arg);
+            if (err) {
+                return err;
+            }
+        }
     }
     /* cr_origin holds only tuples, strings and ints, which cannot form a
        cycle, but the tracing mark must reach them. */
@@ -178,7 +186,7 @@ gen_clear_frame(PyGenObject *gen)
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     _PyThreadState_UpdateLastProfiledFrame(_PyThreadState_GET(), frame, frame->previous);
     frame->previous = NULL;
-    (void)_PyFrame_ClearGenerator(gen, PyValue_NULL, _PyIR_RETIRE_HEAP_CLEAR);
+    (void)_PyFrame_ClearGenerator(gen, PyValue_NULL);
 }
 
 int
@@ -242,16 +250,8 @@ _PyGen_TryCloseClearedNoReentry(PyObject *self)
     }
     PyGenObject *gen = _PyGen_CAST(self);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    for (_PyTransitionRoots *roots =
-             ((_PyThreadStateImpl *)_PyThreadState_GET())->transition_roots;
-         roots != NULL; roots = roots->previous)
-    {
-        if (roots->frame == frame) {
-            return false;
-        }
-    }
-    /* CLEARED is published before retirement callbacks. No matching root scope
-     * or pending headers may remain when consuming the container. */
+    /* CLEARED is published before retirement callbacks. No pending headers
+     * may remain when consuming the container. */
     if (gen->gi_frame_state != FRAME_CLEARED ||
         gen->gi_weakreflist != NULL || gen->gi_exc_state.exc_value != NULL)
     {
@@ -1344,10 +1344,10 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
      * the ordinary frame initializer's default slot zero. */
     f->f_frame->return_slot = IR_NO_DST;
     _PyIRHomeView copy_view;
-    _PyIRHomeAuthority copy_authority =
-        _PyFrame_GetCopyViewUnderNullControl(f->f_frame, &copy_view);
+    _PyFrame_GetNullControlHomeView(f->f_frame, _PyFrame_NumSlots(f->f_frame),
+                                    &copy_view);
     _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame,
-                  &copy_view, copy_authority);
+                  &copy_view, _PyIR_HOME_NULL_CONTROL_READABLE);
     gen->gi_frame_state = FRAME_CREATED;
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;

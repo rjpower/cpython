@@ -591,7 +591,6 @@ typedef struct {
 
 typedef enum _PyIRHomeAuthority {
     _PyIR_HOME_NONE,
-    _PyIR_HOME_SHADOW_CANDIDATE,
     _PyIR_HOME_MUST_READABLE,
     /* Explicit development adapter, never emitted by a code-plan builder. */
     _PyIR_HOME_NULL_CONTROL_READABLE,
@@ -717,15 +716,6 @@ typedef struct {
     uint32_t nranges;
     const _PyIRPhaseRange *ranges;
 } _PyIRHomeView;
-
-/* The caller owns the actual reached post-flush origin/checkpoint and pins
- * this frame, code and storage lifetime. A matching lookup alone does not
- * establish that another or suspended frame reached the checkpoint. No
- * active-PC publication, allocation or home read is involved; zero and
- * uncovered checkpoints return NONE. */
-PyAPI_FUNC(_PyIRHomeAuthority) _PyIR_GetErrorHomeView(
-    struct _PyInterpreterFrame *frame, const _PyInstr *origin,
-    uint8_t checkpoint, _PyIRHomeView *out);
 
 /* A finite admitted protocol role, independent of whole-home map authority.
  * The caller holds a suspended-frame read claim or its actual successful

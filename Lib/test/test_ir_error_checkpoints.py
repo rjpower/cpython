@@ -24,23 +24,6 @@ class ErrorCheckpointTests(unittest.TestCase):
             ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
         ], slots=5, locals=("payload", "iterator", "mutable")).replace(co_argcount=2)
 
-    def authority(self, code, site, checkpoint=1, **kw):
-        return _testinternalcapi.check_ir_error_authority(
-            code, site, checkpoint, **kw)
-
-    def test_explicit_origin_query_and_public_routes(self):
-        row = _opcode.get_ir_contract()[opcode.opmap["GET_ANEXT"]]
-        self.assertTrue(row.flags & _opcode.IR_ERROR_PROGRAM)
-        for code in routes(self.image()):
-            self.assertEqual(self.authority(code, 3), 2)
-            self.assertEqual(self.authority(code, 3, 2), 2)
-            self.assertEqual(self.authority(code, 3, 0), 0)
-            self.assertEqual(self.authority(code, 3, 255), 0)
-            self.assertEqual(self.authority(code, 2), 0)
-            self.assertEqual(self.authority(code, len(code.co_code) // 8), 0)
-            self.assertEqual(self.authority(code, 3, unaligned=True), 0)
-            self.assertEqual(self.authority(code, 3, wrong_image=True), 0)
-
     def test_actual_scope_keeps_survivors_through_monitor_and_retirement(self):
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
@@ -106,7 +89,6 @@ class ErrorCheckpointTests(unittest.TestCase):
 
         def raised(code, offset, exception):
             if code is current:
-                frame = sys._getframe(1)
                 observations.append(_testinternalcapi.gc_verify())
 
         monitor.use_tool_id(tool, "scalar-error-actions")
@@ -123,7 +105,6 @@ class ErrorCheckpointTests(unittest.TestCase):
                     ("RETURN_VALUE", recipient),
                 ], slots=5, locals=("payload", "value", "mutable")).replace(co_argcount=2)
                 for current in routes(image):
-                    self.assertEqual(self.authority(current, 4), 2)
                     function = types.FunctionType(current, globals())
                     payload, value = object(), Value()
                     monitor.set_local_events(tool, current, monitor.events.RAISE)
@@ -140,16 +121,6 @@ class ErrorCheckpointTests(unittest.TestCase):
         finally:
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
-
-    def test_nullable_binding_does_not_supply_required_nonnull_read(self):
-        # Named bindings are canonical but may be unbound. The scalar
-        # action replay does not invent the missing boundness check.
-        for words in (
-                [("RESUME", 0), ("UNARY_NOT", 2, 0), ("RETURN_VALUE", 2)],
-                [("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 1, 0),
-                 ("UNARY_NOT", 2, 1), ("RETURN_VALUE", 2)]):
-            for code in routes(make_code(words, slots=2, locals=("unbound",))):
-                self.assertEqual(self.authority(code, len(words) - 2), 0)
 
     def test_published_native_result_supplies_the_following_selected_error(self):
         monitor = sys.monitoring
@@ -207,10 +178,6 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.register_callback(tool, monitor.events.LINE, at_line)
             monitor.set_local_events(tool, Value.__del__.__code__, monitor.events.LINE)
             for current in routes(image):
-                self.assertEqual(self.authority(current, 4), 2)
-                # This read needs the previous native result's actual
-                # canonical publication and successful NULL-guard arm.
-                self.assertEqual(self.authority(current, 5), 2)
                 function = types.FunctionType(current, globals())
                 payload = object()
                 monitor.set_local_events(tool, current, monitor.events.RAISE)
@@ -234,49 +201,6 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
 
-    def test_unknown_and_joined_may_shape_cannot_supply_readability(self):
-        # The opaque operation is valid, but its whole incoming shape is not
-        # a positive checkpoint certificate.
-        unknown = make_code([
-            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
-            ("UNARY_NOT", 3, 3), ("LOAD_FAST", 4, 1),
-            ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
-        ], slots=5, locals=("payload", "iterator", "mutable"))
-        # A later valid scalar graph can publish its own result, but cannot
-        # recover the unrelated incoming shape lost at an uncovered read.
-        unknown_then_published = make_code([
-            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
-            ("UNARY_NOT", 3, 3), ("LOAD_FAST", 4, 1),
-            ("UNARY_INVERT", 5, 4), ("GET_ANEXT", 6, 5),
-            ("RETURN_VALUE", 6),
-        ], slots=5, locals=("payload", "iterator", "mutable"))
-        # One predecessor has a scratch owner; the other has never
-        # initialized that home. MAY is insufficient even with a real read.
-        joined = make_code([
-            ("RESUME", 0), ("LOAD_FAST", 6, 0),
-            ("POP_JUMP_IF_NONE", 6, 0, 5),
-            ("LOAD_FAST_AND_CLEAR", 3, 0), ("IR_JUMP", 0, 0, 6),
-            ("IR_JUMP", 0, 0, 6), ("LOAD_FAST", 4, 1),
-            ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
-        ], slots=5, locals=("payload", "iterator", "mutable"))
-        for image, site in ((unknown, 4), (unknown_then_published, 5), (joined, 7)):
-            for code in routes(image):
-                self.assertEqual(self.authority(code, site), 0)
-
-        # Different incoming values can share a shape. Visit both physical
-        # predecessor orders; object identity is not a shape certificate.
-        for first, second in (("LOAD_FAST", "LOAD_CONST"),
-                              ("LOAD_CONST", "LOAD_FAST")):
-            image = make_code([
-                ("RESUME", 0), ("LOAD_FAST", 6, 0),
-                ("POP_JUMP_IF_NONE", 6, 0, 5), (first, 3, 0),
-                ("IR_JUMP", 0, 0, 6), (second, 3, 0),
-                ("LOAD_FAST", 4, 1), ("GET_ANEXT", 5, 4),
-                ("RETURN_VALUE", 5),
-            ], slots=5, locals=("payload", "iterator", "mutable"))
-            for code in routes(image):
-                self.assertEqual(self.authority(code, 7), 2)
-
     def test_new_handler_protocol_uses_explicit_control_until_transformed(self):
         words = [
             ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
@@ -298,7 +222,6 @@ class ErrorCheckpointTests(unittest.TestCase):
 
         def handled(current, offset, exception):
             if current is code:
-                frame = sys._getframe(1)
                 observations.append(_testinternalcapi.gc_verify())
 
         monitor.use_tool_id(tool, "selected-error-handler-entry")

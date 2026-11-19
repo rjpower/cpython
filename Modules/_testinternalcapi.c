@@ -4806,68 +4806,6 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
-/* The authority of the error checkpoint of an image site, for a fake frame
- * that never executes. */
-static PyObject *
-check_ir_error_authority(PyObject *self, PyObject *args, PyObject *kwargs)
-{
-    PyObject *code_object;
-    int site, checkpoint;
-    int unaligned = 0, wrong_image = 0;
-    static char *keywords[] = {
-        "code", "site", "checkpoint", "unaligned", "wrong_image", NULL,
-    };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oii|$pp:check_ir_error_authority",
-                                    keywords, &code_object, &site, &checkpoint,
-                                    &unaligned, &wrong_image))
-    {
-        return NULL;
-    }
-    if (!PyCode_Check(code_object)) {
-        PyErr_SetString(PyExc_TypeError, "expected a code object");
-        return NULL;
-    }
-    PyCodeObject *code = (PyCodeObject *)code_object;
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    if (site < 0 || site > Py_SIZE(code) ||
-        checkpoint < 0 || checkpoint > UINT8_MAX ||
-        code->co_nlocalsplus < 0 || nslots < code->co_nlocalsplus ||
-        nslots > IR_MAX_SLOTS)
-    {
-        PyErr_SetString(PyExc_ValueError, "invalid error checkpoint probe");
-        return NULL;
-    }
-    _PyCodeExec *exec = _PyCode_GetExec(code);
-    if (exec == NULL) {
-        return NULL;
-    }
-    PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
-    if (homes == NULL) {
-        return PyErr_NoMemory();
-    }
-    for (int i = 0; i < nslots; i++) {
-        homes[i] = PyValue_NULL;
-    }
-    uintptr_t pc = (uintptr_t)exec->words + (size_t)site * sizeof(*exec->words);
-    _PyInterpreterFrame frame = {
-        .f_executable = code,
-        .base = homes,
-        .ir_words = exec->words,
-        .instr_ptr = (_PyInstr *)pc,
-        .owner = FRAME_OWNED_BY_THREAD,
-    };
-    _PyIRWord other_image = 0;
-    if (wrong_image) {
-        frame.ir_words = &other_image;
-    }
-    frame.instr_ptr = (_PyInstr *)(pc + unaligned);
-    _PyIRHomeView view;
-    int status = (int)_PyIR_GetErrorHomeView(&frame, frame.instr_ptr,
-                                            (uint8_t)checkpoint, &view);
-    PyMem_Free(homes);
-    return PyLong_FromLong(status);
-}
-
 /* A cold protocol probe: inactive words are never exposed as Python values,
  * executed, or closed. Only the selected home owns payload. */
 static PyObject *
@@ -5004,8 +4942,6 @@ static PyMethodDef module_functions[] = {
     {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
-     METH_VARARGS | METH_KEYWORDS, NULL},
-    {"check_ir_error_authority", _PyCFunction_CAST(check_ir_error_authority),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},

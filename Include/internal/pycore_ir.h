@@ -573,9 +573,10 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
-/* One immutable semantic plan owns normal-return certificates and reached
- * callback shapes. Sparse sites precede sorted (site, class, phase) rows and interned
- * scratch ranges. Bindings retain dynamic NULL authority in every shape. */
+/* One immutable semantic plan owns normal-return certificates and error
+ * checkpoint shapes. Sparse sites precede sorted (site, checkpoint) rows and
+ * interned scratch ranges. Bindings retain dynamic NULL authority in every
+ * shape. */
 typedef struct {
     uint32_t nsites;
     uint32_t nphases;
@@ -709,11 +710,9 @@ _PyIR_ObserveShadowRetirement(struct _PyInterpreterFrame *frame,
 #endif
 }
 
-/* NULL-shadow candidate scratch ranges are relative to nbindings. A nullable
- * joined candidate may be canonical NULL on another path; it grants no stale
- * cell readability without join normalization/validity at the authority switch.
- * Bindings retain dynamic NULL authority. Borrow ranges only while independently
- * pinning code; this active view does not survive callbacks or transitions. */
+/* Scratch ranges are relative to nbindings. Bindings retain dynamic NULL
+ * authority. Borrow ranges only while independently pinning code; a view does
+ * not survive callbacks or transitions. */
 typedef struct {
     uint16_t nbindings, scratch_limit;
     uint32_t nranges;

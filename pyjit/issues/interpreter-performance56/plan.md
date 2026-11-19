@@ -18,7 +18,7 @@ Branch `pyjit/handlers81` from checkpoint78 `99a04733128`; builds
 | H0 | Shape tool `Tools/pyjit/handler_shape.py`; checkpoint78 baseline | started |
 | H1a | Canonical by construction; no publication at stores | started |
 | H1b | No `phase_state` in handlers; GC scans all slots | started on sibling `pyjit/handlers81-h1b`; root merges after H1a |
-| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | |
+| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | frame retirement and root deletion (H2f) started on sibling `pyjit/handlers81-h2f`; the generator core follows the H1 merge |
 | H3 | Bridge records and canaries out of handlers | |
 | H4 | One computed-goto evaluator; tail-call backend deleted | |
 | H5 | Calls80 steps 1, 2a–2c, 3 written in the new shape | |

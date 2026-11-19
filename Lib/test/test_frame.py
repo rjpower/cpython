@@ -309,6 +309,111 @@ class DeallocTest(unittest.TestCase):
                 self.assertIsNone(trace_ref())
 
 
+class RetirementTest(unittest.TestCase):
+    """Every way a frame can retire closes each owner once, while a finalizer
+    that reads the caller's locals and collects sees a consistent frame."""
+
+    def make_owner(self, log):
+        class Owner:
+            def __init__(self, name):
+                self.name = name
+
+            def __del__(self):
+                caller = sys._getframe(1)
+                log.append((self.name, caller.f_locals.get('Owner')))
+                support.gc_collect()
+
+        return Owner
+
+    def check(self, run, names):
+        log = []
+        Owner = self.make_owner(log)
+        with support.disable_gc():
+            run(Owner)
+        support.gc_collect()
+        self.assertEqual(sorted(name for name, _ in log), sorted(names))
+        # The innermost linked frame is the caller, run(), with real locals.
+        self.assertTrue(all(seen is Owner for _, seen in log), log)
+
+    def test_return(self):
+        def run(Owner):
+            def f():
+                a = Owner('a')
+                b = Owner('b')
+                return 1
+            self.assertEqual(f(), 1)
+        self.check(run, 'ab')
+
+    def test_error_unwind(self):
+        def run(Owner):
+            def f():
+                a = Owner('a')
+                b = Owner('b')
+                raise ValueError
+            try:
+                f()
+            except ValueError:
+                pass
+        self.check(run, 'ab')
+
+    def test_escaped_frame(self):
+        def run(Owner):
+            def f():
+                a = Owner('a')
+                b = Owner('b')
+                return sys._getframe()
+            frame = f()
+            self.assertLessEqual({'a', 'b'}, set(frame.f_locals))
+            del frame
+        self.check(run, 'ab')
+
+    def test_frame_clear(self):
+        def run(Owner):
+            def g():
+                a = Owner('a')
+                b = Owner('b')
+                yield sys._getframe()
+            gen = g()
+            frame = next(gen)
+            gen.close()
+            frame.clear()
+        self.check(run, 'ab')
+
+    def test_generator_return(self):
+        def run(Owner):
+            def g():
+                a = Owner('a')
+                yield 1
+                b = Owner('b')
+                return 2
+            gen = g()
+            next(gen)
+            with self.assertRaises(StopIteration):
+                next(gen)
+        self.check(run, 'ab')
+
+    def test_generator_close_and_dealloc(self):
+        def run(Owner):
+            def g():
+                a = Owner('a')
+                yield 1
+            gen = g()
+            next(gen)
+            gen.close()
+            gen = g()
+            next(gen)
+            del gen
+        self.check(run, 'aa')
+
+    def test_recursion(self):
+        def run(Owner):
+            def f(n):
+                x = Owner(n)
+                return f(n - 1) if n else 0
+            self.assertEqual(f(4), 0)
+        self.check(run, [0, 1, 2, 3, 4])
+
+
 class DelegatedPhaseTest(unittest.TestCase):
     def test_marker_tracks_real_suspension_and_invalidates_before_resume(self):
         internal = import_helper.import_module('_testinternalcapi')

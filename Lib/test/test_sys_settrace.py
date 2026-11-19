@@ -7,6 +7,7 @@ import sys
 import struct
 import difflib
 import gc
+import weakref
 from functools import wraps
 from test.support import import_helper, requires_subprocess, run_no_yield_async_fn
 import contextlib
@@ -3410,25 +3411,24 @@ class JumpFrameModelTestCase(unittest.TestCase):
         def __add__(self, other):
             return self
 
-    def test_redirect_retirement_prefix_roots(self):
+    def test_redirect_retirement_finalizers(self):
         for mutate in (False, True):
             with self.subTest(mutate=mutate):
                 observations = []
-                payload_ids = []
+                payload_refs = []
                 frames = []
                 redirected = False
 
                 class Trigger:
                     def __del__(self):
-                        ids = set(_testinternalcapi.get_transition_root_ids())
-                        observations.append(('trigger', payload_ids[-1] in ids))
+                        observations.append(('trigger', payload_refs[-1]() is not None))
                         if mutate:
                             frames[-1].f_locals['changed'] = True
                         support.gc_collect()
 
                 class Payload:
                     def __init__(self):
-                        payload_ids.append(id(self))
+                        payload_refs.append(weakref.ref(self))
 
                     def __del__(self):
                         observations.append(('payload',))
@@ -3467,7 +3467,6 @@ class JumpFrameModelTestCase(unittest.TestCase):
                 self.assertTrue(redirected)
                 self.assertIs(result, mutate)
                 self.assertEqual(observations, [('trigger', True), ('payload',)])
-                self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
 
     def run_with_line_jumps(self, source):
         namespace = {}

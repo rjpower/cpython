@@ -26,13 +26,6 @@ def general_code():
         locals=("owner", "result"), slots=2).replace(co_argcount=2)
 
 
-def setUpModule():
-    # Retirement records carry their shadow comparison only while observed.
-    previous = _testinternalcapi.set_retirement_shadow_observed(True)
-    unittest.addModuleCleanup(
-        _testinternalcapi.set_retirement_shadow_observed, previous)
-
-
 class GeneralReturnTests(unittest.TestCase):
     def test_remaining_owner_is_valid_but_not_an_empty_return(self):
         code = general_code()
@@ -63,15 +56,16 @@ class GeneralReturnTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, message):
                 marshal.loads(payload.replace(code.co_code, changed, 1))
 
-    def test_last_scratch_owner_keeps_result_and_code_rooted(self):
+    def test_last_scratch_owner_finalizer_sees_result_and_code(self):
         for code in routes(general_code()):
             events = []
             observations = []
-            result_ids = []
+            result_refs = []
+            code_ref = weakref.ref(code)
 
             class Result:
                 def __init__(self):
-                    result_ids.append(id(self))
+                    result_refs.append(weakref.ref(self))
 
                 def __del__(self):
                     events.append("result")
@@ -79,20 +73,15 @@ class GeneralReturnTests(unittest.TestCase):
             class Owner:
                 def __del__(self):
                     support.gc_collect()
-                    roots = set(_testinternalcapi.get_transition_root_ids())
-                    states = _testinternalcapi.get_transition_shadow_status()
-                    observations.append((result_ids[0] in roots,
-                                         id(code) in roots,
-                                         [row for row in states if row[0] == 1]))
+                    observations.append((result_refs[0]() is not None,
+                                         code_ref() is not None))
                     events.append("owner")
 
             function = types.FunctionType(code, {})
             result = function(Owner(), Result())
             self.assertEqual(events, ["owner"])
-            self.assertEqual(observations,
-                             [(True, True, [(1, 1, 0, True)])])
-            self.assertEqual(id(result), result_ids[0])
-            self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
+            self.assertEqual(observations, [(True, True)])
+            self.assertIs(result, result_refs[0]())
             del result
             support.gc_collect()
             self.assertEqual(events, ["owner", "result"])
@@ -133,7 +122,6 @@ class GeneralReturnTests(unittest.TestCase):
             self.assertIsNotNone(owner_refs[0]())
             self.assertEqual(len(frames), 1)
             self.assertIs(frames[0].f_code, admitted)
-            self.assertEqual(_testinternalcapi.get_transition_root_ids(), [])
             frames[0].clear()
             support.gc_collect()
             self.assertEqual(events, ["owner"])

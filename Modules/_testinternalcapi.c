@@ -1165,7 +1165,6 @@ enum {
     STAGED_EVAL_RETIRE,
     STAGED_EVAL_ACTIVATE,
     STAGED_EVAL_ENTRY_ERROR,
-    STAGED_EVAL_HEADERS,
 };
 
 /* A hook that does not run the frame must retire it, keeping any exception. */
@@ -1211,22 +1210,11 @@ staged_eval(PyThreadState *tstate, _PyInterpreterFrame *frame, int exc)
         return _PyEval_EvalFrameDefault(tstate, frame, exc);
     }
     PyObject *result = NULL;
-    if (state->staged_mode == STAGED_EVAL_HEADERS) {
-        PyObject *mapping = PyDict_New();
-        if (mapping == NULL) {
-            goto done;
-        }
-        Py_XSETREF(frame->f_locals, mapping);
-        if (PyDict_SetItemString(state->staged_result, "mapping", mapping) < 0) {
-            goto done;
-        }
-    }
     if (observe_staged_eval(state, "before") < 0) {
         goto done;
     }
     switch (state->staged_mode) {
         case STAGED_EVAL_DEFAULT:
-        case STAGED_EVAL_HEADERS:
             result = _PyEval_EvalFrameDefault(tstate, frame, exc);
             break;
         case STAGED_EVAL_RETURN:
@@ -1295,7 +1283,7 @@ run_staged_provider(PyObject *module, PyObject *args)
         return NULL;
     }
     const char *modes[] = {"default", "return", "error", "retire", "activate",
-                           "entry_error", "headers"};
+                           "entry_error"};
     size_t selected;
     for (selected = 0; selected < Py_ARRAY_LENGTH(modes); selected++) {
         if (strcmp(mode, modes[selected]) == 0) {
@@ -1304,10 +1292,6 @@ run_staged_provider(PyObject *module, PyObject *args)
     }
     if (selected == Py_ARRAY_LENGTH(modes)) {
         PyErr_SetString(PyExc_ValueError, "unknown staged hook mode");
-        return NULL;
-    }
-    if (selected == STAGED_EVAL_HEADERS && !PyDict_Check(payload)) {
-        PyErr_SetString(PyExc_TypeError, "headers probe requires a dict payload");
         return NULL;
     }
     state->staged_running = 1;
@@ -4766,6 +4750,20 @@ remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
         "phase_delegated", _PyIR_PHASE_YIELD_DELEGATED);
 }
 
+/* The number of error processors that are draining a frame's scratch. */
+static PyObject *
+get_error_scope_depth(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    Py_ssize_t depth = 0;
+    for (_PyErrorScope *scope =
+             ((_PyThreadStateImpl *)_PyThreadState_GET())->error_scopes;
+         scope != NULL; scope = scope->previous)
+    {
+        depth++;
+    }
+    return PyLong_FromSsize_t(depth);
+}
+
 /* Read only the published marker. This probe does not infer a receiver or
  * bypass the generator state/read claim required to acquire its value. */
 static PyObject *
@@ -5280,6 +5278,7 @@ static PyMethodDef module_functions[] = {
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_delegated_frame_copy", check_delegated_frame_copy, METH_VARARGS},
     {"check_clipped_delegated_frame_copy", check_clipped_delegated_frame_copy, METH_VARARGS},
+    {"get_error_scope_depth", get_error_scope_depth, METH_NOARGS},
     {"has_delegated_frame_phase", has_delegated_frame_phase, METH_O},
     {"get_ir_frame_phases", get_ir_frame_phases, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),

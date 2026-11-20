@@ -2209,7 +2209,11 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     if (throwflag) {
         goto LABEL_throw_error;
     }
-    goto LABEL_start_frame;
+    /* Enter through a computed goto, as dispatch does.  GCC's static profile
+     * then reaches the handler labels from here; a plain goto carries a
+     * "predicted unlikely" estimate and leaves every handler at count 0, so
+     * it is optimised for size and its closes stay out of line. */
+    goto *&&LABEL_start_frame;
 
 #include "ceval_generator.h"
 #include "generated_ir_cases.c.h"

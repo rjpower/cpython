@@ -3930,26 +3930,26 @@ dict_snapshot_values(PyObject *dict, int kind)
             continue;
         }
         Py_ssize_t pos = 0, index = 0;
-        PyValue key, value;
-        int found;
-        while ((found = _PyDict_NextValue((PyDictObject *)dict, &pos,
-                            kind != 1 ? &key : NULL,
-                            kind != 0 ? &value : NULL, NULL)) > 0)
+        PyValueBorrow key, value;
+        /* Borrowed iteration: the body only retains each word into the list
+           or pair made above, which allocates nothing and runs no Python, so
+           the dict cannot change under the borrow. */
+        while (_PyDict_NextBorrowed(dict, &pos,
+                                    kind != 1 ? &key : NULL,
+                                    kind != 0 ? &value : NULL))
         {
             assert(index < count);
             if (kind == 2) {
                 PyValueBorrow pair_value = PyList_GET_VALUE(result, index);
                 PyObject *pair = PyValue_AsKnownObjectBorrow(pair_value);
-                PyTuple_SET_VALUE(pair, 0, key);
-                PyTuple_SET_VALUE(pair, 1, value);
+                PyTuple_SET_VALUE(pair, 0, PyValue_DUP(key));
+                PyTuple_SET_VALUE(pair, 1, PyValue_DUP(value));
             }
             else {
-                PyList_SET_VALUE(result, index, kind == 0 ? key : value);
+                PyList_SET_VALUE(result, index,
+                                 PyValue_DUP(kind == 0 ? key : value));
             }
             index++;
-        }
-        if (found < 0) {
-            goto error;
         }
         assert(index == count);
         return result;

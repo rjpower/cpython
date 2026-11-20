@@ -2377,6 +2377,12 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     return STORE_NEVER
 
 
+def unpacks_elements_directly(inst: Instruction, fmt: "IRFormat") -> bool:
+    """Whether an unpack writes its elements one at a time to the output
+    window (IR_WRITE_OUTPUT), so that each can go straight to its local."""
+    return fmt.unpacks and "IR_WRITE_OUTPUT" in uop_tokens(inst)
+
+
 def uop_tokens(inst: Instruction) -> list[str]:
     return [t.text for part in inst.parts if isinstance(part, Uop)
             for t in part.body.tokens()]
@@ -3606,8 +3612,22 @@ class IREmitter(Emitter):
         local, index = self.checked_home_array(tkn, uop, storage)
         args, end = self.instruction_macro_args(tkn, tkn_iter)
         self.out.start_line()
-        self.out.emit_at(f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
-                         f"{tokens_text(args[2])})", tkn)
+        write = (f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
+                 f"{tokens_text(args[2])})")
+        if inst is not None and unpacks_elements_directly(inst, self.format_of(inst)):
+            # The element goes straight to its local; the local's old value
+            # takes the element's slot of the window, for the close after
+            # the last store (see unpack_to_locals())
+            fmt = self.format_of(inst)
+            dst = fmt.field_of(ROLE_DST)
+            write = (f"if ({is_local(dst)}) {{ "
+                     f"IR_UNPACK_DIRECT(&IR_SLOT({FIELD_VARS[dst]}), "
+                     f"&{local.name}[{index}], {index}, {UNPACKS[fmt.group]}, "
+                     f"{tokens_text(args[2])}); }} else {{ {write}; }}")
+            self.out.emit_at(write, tkn)
+            self.out.last_token = end
+            return True
+        self.out.emit_at(write, tkn)
         self.out.last_token = end
         return True
 
@@ -4124,8 +4144,13 @@ class IREmitter(Emitter):
             raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
-        self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
-        self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
+        if unpacks_elements_directly(inst, fmt):
+            # The elements are in their locals, and the window holds the
+            # old values that own an object, if any
+            self.emit(f"if (ir_unpack_owned) {{ IR_CLOSE_WINDOW(window, {count}); }}\n")
+        else:
+            self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
+            self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
         self.unpack_local_drained = True
         self.emit("}\n")
 
@@ -6674,6 +6699,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # after its last store (IR_STORE_DST)
         out.emit("PyValue ir_old = PyValue_NULL;\n")
         out.emit("(void)ir_old;\n")
+    if unpacks_elements_directly(inst, fmt):
+        out.emit("bool ir_unpack_owned = false;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = use_fb
@@ -8564,6 +8591,11 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
                 out.emit(f"[{ids[name]}] = {target},\n")
+        if column == "Completed":
+            # A generator that ends a FOR loop completes it with one outcome
+            for name in ("FOR_ITER", "FOR_ITER_GEN"):
+                if name in ids:
+                    out.emit(f"[{ids[name]}] = GEN_COMPLETE_FOR_ITER,\n")
         out.emit("};\n")
     out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every

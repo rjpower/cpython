@@ -15016,6 +15016,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -15060,15 +15061,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyList_ITEMS(seq_o);
                 for (int i = 0; i < oparg; i++) {
-                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
+                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
                 }
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }
@@ -15084,6 +15084,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -15120,14 +15121,13 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyTuple_ITEMS(seq_o);
                 for (int i = 0; i < oparg; i++) {
-                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
+                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
                 }
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }

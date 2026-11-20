@@ -60,6 +60,8 @@ static const uint8_t generator_completed_targets[406] = {
     [389] = GEN_COMPLETE_RETURN,
     [404] = GEN_COMPLETE_STORE_FAST,
     [390] = GEN_COMPLETE_STORE,
+    [65] = GEN_COMPLETE_FOR_ITER,
+    [182] = GEN_COMPLETE_FOR_ITER,
 };
 static const uint8_t generator_resume_targets[406] = {
     [371] = GEN_RESUME_SEND,

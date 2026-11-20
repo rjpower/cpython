@@ -695,11 +695,27 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
         } \
     } while (0)
 
-/* The elements of an unpack, in WINDOW in stack order (element i in
- * WINDOW[N - 1 - i]), go to the locals LOCALS[0..N-1].  Each local's old
- * value changes places with the element's slot, so the frame owns every
- * value throughout.  The handler then closes the old values from the window
- * (IR_CLOSE_WINDOW), after all the stores. */
+/* The elements of an unpack go to the locals LOCALS[0..N-1], the first of
+ * a run: element I goes to LOCALS[N - 1 - I] (the elements are in stack
+ * order) and the old value of that local to the window's slot SLOT, if it
+ * owns an object, or the slot stays empty.  The frame owns every value
+ * throughout.  The handler then closes the old values from the window
+ * (IR_CLOSE_WINDOW), after all the stores and only if one owns an object. */
+#define IR_UNPACK_DIRECT(LOCALS, SLOT, I, N, X) \
+    do { \
+        PyValue *ir_local = (LOCALS) + ((N) - 1 - (I)); \
+        PyValue ir_displaced = *ir_local; \
+        *ir_local = (X); \
+        _PyValue_CheckHome(*ir_local); \
+        bool ir_owns = PyValue_RefcountOnObject(ir_displaced); \
+        *(SLOT) = ir_owns ? ir_displaced : PyValue_NULL; \
+        ir_unpack_owned |= ir_owns; \
+    } while (0)
+
+/* The elements of an unpack that a function wrote into WINDOW in stack
+ * order (element i in WINDOW[N - 1 - i]) go to the locals LOCALS[0..N-1].
+ * Each local's old value changes places with the element's slot, so the
+ * frame owns every value throughout. */
 static inline void
 _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 {
@@ -713,11 +729,14 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 }
 #define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
 
-/* Close the N owners in WINDOW, detaching each before it closes it. */
+/* Close the N owners in WINDOW, which are the old values of the locals that
+ * received the elements, detaching each before it closes it.  The first
+ * local's old value goes first, as the STORE_FASTs that the unpack replaces
+ * would close it. */
 static inline void
 _PyIR_CloseWindow(PyValue *window, int n)
 {
-    for (int i = 0; i < n; i++) {
+    for (int i = n; i-- > 0;) {
         PyValue owner = window[i];
         window[i] = PyValue_NULL;
         PyValue_XCLOSE(owner);

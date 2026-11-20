@@ -27,7 +27,8 @@ ir_GEN_COMPLETE_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The kinds of transfer that the tables of Python/ir_targets.h give a word's
  * handler.  A completed outcome is by its consumer, and GEN_THROWING marks a
- * CLEANUP_THROW's, whose window has a fourth input. */
+ * CLEANUP_THROW's, whose window has a fourth input.  A FOR is completed by
+ * its exhausted iterator, which has no consumer. */
 enum {
     GEN_COMPLETE_DISCARD = 1,
     GEN_COMPLETE_HOME,
@@ -35,7 +36,8 @@ enum {
     GEN_COMPLETE_RETURN,
     GEN_COMPLETE_STORE,
     GEN_COMPLETE_STORE_FAST,
-    GEN_THROWING = 8,
+    GEN_COMPLETE_FOR_ITER,
+    GEN_THROWING = 16,
 };
 /* A resume by the word before the resume point: a YIELD whose resumer takes
  * the value in a SEND's window or in a STORE_FAST, or the SEND at the end of

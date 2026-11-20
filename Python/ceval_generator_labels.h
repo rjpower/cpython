@@ -169,9 +169,28 @@ LABEL(gen_return)
                         generator_control_generation(frame) != generation)))) {
         IR_GEN_JUMP(GEN_REDIRECT_EFFECT, frame, frame->instr_ptr, value);
     }
-    if (kind == 0) {
-        /* A FOR, a nonadmitted SEND or an interpreter entry keeps its own
-         * contract. */
+    if (kind == GEN_COMPLETE_FOR_ITER && generator_transfer_is_plain(tstate, frame)) {
+        /* The iterator is exhausted: its window is released after the
+         * frame has moved on, as complete_step_impl() does. */
+        _PyIRWord word = *site;
+        PyValue *window = frame->base + IR_B(word);
+        PyValue receiver = window[0];
+        PyValue cursor = window[1];
+        window[0] = window[1] = PyValue_NULL;
+        _PyInstr *exit = frame->return_pc + IR_DS(word);
+        frame->return_pc = exit;
+        frame->instr_ptr = exit;
+        PyValue_XCLOSE(cursor);
+        PyValue_XCLOSE(receiver);
+        PyValue_XCLOSE(value);
+        next_instr = frame->instr_ptr;
+        LLTRACE_RESUME_FRAME();
+        int opcode;
+        DISPATCH();
+    }
+    if (kind == 0 || kind == GEN_COMPLETE_FOR_ITER) {
+        /* A FOR that must be observed, a nonadmitted SEND or an interpreter
+         * entry keeps its own contract. */
         _PyIRStepResult completed = _PyEval_CompleteGeneratorReturn(tstate, frame, value);
         next_instr = completed.next;
         if (completed.status < 0) {
@@ -271,6 +290,7 @@ LABEL(gen_complete)
         /* The consumer is the RETURN: this frame returns the value in turn.
          * The transfer was plain a moment ago, and nothing has run since. */
         assert((kind & ~GEN_THROWING) == GEN_COMPLETE_RETURN);
+        assert(kind != GEN_COMPLETE_FOR_ITER);
         next_instr = exit;
         frame->instr_ptr = next_instr;
         INSTRUCTION_STATS(IR_HANDLER(*next_instr));

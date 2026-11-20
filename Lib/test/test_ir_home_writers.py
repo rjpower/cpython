@@ -70,7 +70,11 @@ class HomeWriterTests(unittest.TestCase):
                 result, current = run(Payload)
                 self.assertEqual(result.index, 2)
                 self.assertEqual(current, 42)
-                self.assertEqual(sorted(observations), [(0, True, True), (1, True, True)])
+                # The call detaches all its temporary operands from the frame
+                # before it releases the first, so the generator no longer
+                # refers to the first payload when the second one finalizes
+                self.assertEqual(sorted(observations),
+                                 [(0, True, True), (1, True, not suspended)])
                 del result
                 self.assertTrue(all(reference() is None for reference in references))
 

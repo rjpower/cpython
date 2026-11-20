@@ -2722,6 +2722,8 @@ class IRStack(Stack):
         self.final = False
         self.reloaded = False
         self.error_exit = False
+        # An error edge after the call finished: the result is published first
+        self.publish_on_error = False
         # The closes of the inputs that the handler detached, in order: rule
         # 7 runs them after the last store (IREmitter.emit_deferred).  Each
         # path has its own list, and the paths that join agree on it.
@@ -3128,7 +3130,13 @@ class IRStack(Stack):
                 self.dst_stores.append(expression)
                 out.emit(f"{expression};\n")
             elif self.error_exit and var.name in lay.call_results:
-                out.emit(f"PyValue_XCLOSE({var.name});\n")
+                if self.publish_on_error:
+                    # The periodic check follows the store, so the result
+                    # stays in its home when the check raises
+                    out.emit(f"ir_old = call_publish(frame, this_instr, {var.name});\n")
+                    out.emit("PyValue_XCLOSE(ir_old);\n")
+                else:
+                    out.emit(f"PyValue_XCLOSE({var.name});\n")
             elif not self.error_exit:
                 # A spill at a uop boundary: the result stays in its C
                 # variable until the final store
@@ -3461,6 +3469,7 @@ class IREmitter(Emitter):
         # They have no certifying source contract or per-handler receipts.
         self.null_outputs: frozenset[str] | None = None
         self.error_source = None
+        self.error_uop_name = None
         self.owning_output_source = None
         self.callback_current_identity = False
         self.error_unwind_sources = set()
@@ -5088,6 +5097,7 @@ class IREmitter(Emitter):
                 # the original output identity used on normal continuation.
                 stack.refine_value(value.copy(), False)
         stack.error_exit = True
+        stack.publish_on_error = self.error_uop_name == "_CHECK_PERIODIC_AT_END"
         stack.flush(self.out)
         # Rule 9: the owners that C holds close before the unwind
         self.emit_deferred(stack)
@@ -5202,10 +5212,12 @@ class IREmitter(Emitter):
         self.check_error_outputs(tkn, storage)
         previous = self.abrupt_operand_origin
         self.abrupt_operand_origin = id(tkn)
+        self.error_uop_name = uop.name
         try:
             return super().error_if(tkn, tkn_iter, uop, storage, inst)
         finally:
             self.abrupt_operand_origin = previous
+            self.error_uop_name = None
 
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)

@@ -2750,7 +2750,11 @@ class AppendSourcesTest(unittest.TestCase):
     comprehension in place (Python/bytecodes.c)"""
 
     def refcounts(self, objs):
-        return [sys.getrefcount(o) for o in objs]
+        # The specialized call borrows its argument where the cold one holds
+        # a reference, so measure after the call site has specialized
+        for _ in range(10):
+            counts = [sys.getrefcount(o) for o in objs]
+        return counts
 
     def sources(self, func, handler):
         found = [w for w in words(func) if w[0] == handler]

@@ -6404,7 +6404,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -6465,7 +6466,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -6526,7 +6528,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -6607,7 +6610,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7245,7 +7249,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7321,7 +7326,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7410,7 +7416,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7498,7 +7505,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7554,7 +7562,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7807,7 +7816,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -7872,7 +7882,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    PyValue_XCLOSE(res);
+                    ir_old = call_publish(frame, this_instr, res);
+                    PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }

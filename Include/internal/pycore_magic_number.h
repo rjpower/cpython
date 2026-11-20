@@ -356,8 +356,9 @@ Known values:
    64425: preserved experimental carried-owner format
    64426: complete generator transfer boundary shapes
    64427: distinguish explicit generator STORE_FAST and POP_TOP consumers
-   64428: call roles as word flags; 9-bit handler ids */
-#define PYC_MAGIC_NUMBER 64428
+   64428: call roles as word flags; 9-bit handler ids
+   64429: the discard slot, a hidden local after the constant slots */
+#define PYC_MAGIC_NUMBER 64429
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

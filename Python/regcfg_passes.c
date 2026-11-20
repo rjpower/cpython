@@ -1015,6 +1015,14 @@ shift_slots(_PyRegCfg *cfg, int first_free, int k)
     cfg->nvregs += k;
 }
 
+/* The discard slot, a hidden local that results nothing reads go to, after
+ * the constant slots and before the free variables.  Every code has one. */
+void
+_PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree)
+{
+    shift_slots(cfg, cfg->nlocalsplus - nfree, 1);
+}
+
 int
 _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
 {
@@ -1044,7 +1052,8 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
         PyErr_NoMemory();
         goto error;
     }
-    int room = IR_MAX_SLOTS - cfg->nlocalsplus - cfg->ntemps;
+    // less the discard slot
+    int room = IR_MAX_SLOTS - 1 - cfg->nlocalsplus - cfg->ntemps;
     for (int f = 0; f < nfolds; f++) {
         int j;
         for (j = 0; j < nconst && keys[j] != folds[f].bits; j++) {

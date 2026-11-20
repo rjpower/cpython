@@ -478,7 +478,9 @@ check_const_layout(struct _PyCodeConstructor *con, int first, int nconst)
 
 /* The constant-slot table: pairs of (slot, co_consts index), in the
  * order of the constant slots of localsplusnames, which are consecutive
- * and have the kind CO_FAST_CONST | CO_FAST_HIDDEN, one per pair. */
+ * and have the kind CO_FAST_CONST | CO_FAST_HIDDEN, one per pair.  One more
+ * slot of that kind ends them, with no pair: the discard slot, the last slot
+ * before the free variables. */
 static int
 check_constslots(struct _PyCodeConstructor *con)
 {
@@ -501,6 +503,19 @@ check_constslots(struct _PyCodeConstructor *con)
             nconst++;
         }
     }
+    // The last of the slots is the discard slot, and ends the locals
+    Py_ssize_t nfree = 0;
+    while (nfree < n &&
+           (_PyLocals_GetKind(con->localspluskinds, (int)(n - 1 - nfree)) &
+            CO_FAST_FREE))
+    {
+        nfree++;
+    }
+    if (nconst < 1 || first + nconst != n - nfree) {
+        PyErr_SetString(PyExc_ValueError, "code: the discard slot is missing");
+        return -1;
+    }
+    nconst--;
     if (con->constslots != NULL && !PyBytes_Check(con->constslots)) {
         PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
         return -1;
@@ -3880,7 +3895,8 @@ code_new_with_fbinit(
     }
     int nconstslots = constslots == NULL ? 0
         : (int)(PyBytes_GET_SIZE(constslots) / (2 * sizeof(uint32_t)));
-    int nlocalsplus = nvarnames + ncellvars + nconstslots + nfreevars;
+    // The discard slot follows the constant slots
+    int nlocalsplus = nvarnames + ncellvars + nconstslots + 1 + nfreevars;
     localsplusnames = PyTuple_New(nlocalsplus);
     if (localsplusnames == NULL) {
         goto error;
@@ -3926,6 +3942,16 @@ code_new_with_fbinit(
         _Py_set_localsplus_info(offset, name, CO_FAST_CONST | CO_FAST_HIDDEN,
                                localsplusnames, localspluskinds);
         Py_DECREF(name);
+    }
+    {
+        PyObject *name = PyUnicode_FromString(".discard");
+        if (name == NULL) {
+            goto error;
+        }
+        _Py_set_localsplus_info(offset, name, CO_FAST_CONST | CO_FAST_HIDDEN,
+                               localsplusnames, localspluskinds);
+        Py_DECREF(name);
+        offset++;
     }
     for (int i = 0; i < nfreevars; i++, offset++) {
         PyObject *name = _PyTuple_GET_OBJECT(freevars, i);
@@ -5062,7 +5088,7 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     for (int i = 0; i < numlocalplusfree; i++) {
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
         if (kind & CO_FAST_CONST) {
-            // A constant slot is none of these
+            // A constant slot, or the discard slot, is none of these
             numconst += 1;
         }
         else if (kind & CO_FAST_FREE) {
@@ -5137,7 +5163,8 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     assert(locals.cells.total == co->co_ncellvars);
     assert(locals.args.total + locals.numpure == co->co_nlocals);
     assert(locals.total + locals.cells.numargs == co->co_nlocals + co->co_ncellvars);
-    assert(numconst == co->co_nconstslots);
+    // The discard slot is the one constant slot with no table entry
+    assert(numconst == co->co_nconstslots + 1);
     assert(locals.total + numfree + numconst == co->co_nlocalsplus);
     assert(numfree == co->co_nfreevars);
 

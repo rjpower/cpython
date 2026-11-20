@@ -738,6 +738,27 @@ _PyIR_OriginalHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr,
 
 /* The executing copy */
 
+/* word, with the dst of a discarded result (IR_NO_DST) replaced by the
+ * frame's discard slot, which handlers write like a local. */
+static _PyIRWord
+exec_discard_slot(_PyIRWord word, uint32_t discard)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (!(fmt->flags & _PyIR_DISCARDS)) {
+        return word;
+    }
+    for (int r = 0; r < 4; r++) {
+        int shift = 16 + 12 * r;
+        if (fmt->roles[r] == _PyIR_ROLE_DST &&
+            ((word >> shift) & IR_FIELD_MAX) == IR_NO_DST)
+        {
+            return (word & ~((_PyIRWord)IR_FIELD_MAX << shift)) |
+                   ((_PyIRWord)discard << shift);
+        }
+    }
+    return word;
+}
+
 static _PyCodeExec *
 make_exec(PyCodeObject *co)
 {
@@ -766,9 +787,11 @@ make_exec(PyCodeObject *co)
     /* The slot-class flags are a cache of the fields and nlocalsplus,
      * which handlers test in the word instead of loading nlocalsplus. */
     const _PyIRWord *source = _PyCode_WORDS(co);
+    uint32_t discard = (uint32_t)_PyFrame_DiscardSlotForCodeObject(co);
     for (Py_ssize_t i = 0; i < nwords; i++) {
         assert(!(source[i] & IR_F_LOCAL_MASK));
-        words[i] = source[i] | _PyIR_ExecLocalFlags(source[i], exec->nlocalsplus);
+        words[i] = exec_discard_slot(source[i], discard);
+        words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nlocalsplus);
     }
     if (fb_size == 0) {
         return exec;
@@ -958,7 +981,8 @@ frame_image_site(_PyInterpreterFrame *frame, const _PyInstr *origin, uint32_t *s
     if (exec == NULL || frame->base == NULL ||
         frame->ir_words != exec->words || exec->nwords != Py_SIZE(co) ||
         exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
-        scratch > IR_MAX_SLOTS - nl || _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
+        scratch > IR_MAX_SLOTS - nl ||
+        _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
     {
         return NULL;
     }
@@ -997,6 +1021,9 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
         return -1;
     }
     int dst = (int)IR_A(word), outgoing = (int)IR_B(word), receiver = (int)IR_D(word);
+    if (dst == IR_NO_DST) {
+        dst = _PyFrame_DiscardSlotForCodeObject(co);
+    }
     if (dst != frame->return_slot ||
         outgoing < co->co_nlocalsplus || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
         receiver < co->co_nlocalsplus ||

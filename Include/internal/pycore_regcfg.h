@@ -242,6 +242,7 @@ int _PyRegCfg_VerifyCallRoles(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
+void _PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree);
 int _PyRegPass_FuseJump(_PyRegCfg *cfg);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if

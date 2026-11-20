@@ -724,8 +724,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             PyErr_SetString(PyExc_SystemError, "invalid free variable index");
             goto error;
         }
-        // The constant slots come before the free variables
-        offset += nlocals - numdropped + nconst;
+        // The constant slots and the discard slot come before the free
+        // variables
+        offset += nlocals - numdropped + nconst + 1;
         assert(offset < nlocalsplus);
         /* XXX If the assertion below fails it is most likely because a freevar
            was added to u_freevars with the wrong index due to not taking into
@@ -739,7 +740,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         return ERROR;
     }
     // The constant slots, named .k0, .k1, ... as the code constructor does
-    int first = nlocalsplus - nconst - (int)PyDict_GET_SIZE(umd->u_freevars);
+    int first = nlocalsplus - nconst - 1 - (int)PyDict_GET_SIZE(umd->u_freevars);
     for (int j = 0; j < nconst; j++) {
         PyObject *name = PyUnicode_FromFormat(".k%d", j);
         if (name == NULL) {
@@ -749,6 +750,14 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                                 CO_FAST_CONST | CO_FAST_HIDDEN, names, kinds);
         Py_DECREF(name);
     }
+    // The discard slot follows them
+    PyObject *name = PyUnicode_FromString(".discard");
+    if (name == NULL) {
+        return ERROR;
+    }
+    _Py_set_localsplus_info(first + nconst, name,
+                            CO_FAST_CONST | CO_FAST_HIDDEN, names, kinds);
+    Py_DECREF(name);
     return SUCCESS;
 
 error:;

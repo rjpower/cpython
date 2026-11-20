@@ -1702,9 +1702,7 @@ _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
 {
     int n = _PyRegPass_ConstSlots(cfg, consts, nfree);
     RETURN_IF_ERROR(n);
-    if (n == 0) {
-        return SUCCESS;
-    }
+    _PyRegPass_DiscardSlot(cfg, nfree);
     DUMP(cfg, "constant slots");
     if (verify_wanted()) {
         RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "constant slots", 0));

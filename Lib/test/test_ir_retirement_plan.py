@@ -24,7 +24,7 @@ class RetirementPlanTests(unittest.TestCase):
                 marshal.loads(marshal.dumps(code)))
 
     def test_full_extent_and_canonical_null_comparison(self):
-        for home in (0, 63, 64, 128, 4094):
+        for home in (0, 63, 64, 128, 4093):
             code = make_code([("LOAD_CONST", home), ("POP_TOP", home),
                               ("LOAD_CONST", 0), ("RETURN_VALUE", 0)],
                              slots=home + 1)
@@ -35,8 +35,9 @@ class RetirementPlanTests(unittest.TestCase):
                     self.assertEqual(check(admitted, 3, NORMAL_RETURN), EXACT)
                     # An inline scalar owns no mortal count, but cannot occupy
                     # an inactive scratch home in this exact NULL-control shape.
+                    # (the discard slot comes before the temporaries)
                     self.assertEqual(check(admitted, 3, NORMAL_RETURN,
-                                           dirty_home=home), MISMATCH)
+                                           dirty_home=home + 1), MISMATCH)
 
     def test_zero_stack_request_keeps_the_physical_scratch_home(self):
         code = make_code([("LOAD_CONST", 0), ("RETURN_VALUE", 0)], slots=0)
@@ -45,7 +46,7 @@ class RetirementPlanTests(unittest.TestCase):
             self.assertEqual(return_sites(admitted), [1])
             check = _testinternalcapi.check_ir_retirement
             self.assertEqual(check(admitted, 1, NORMAL_RETURN), EXACT)
-            self.assertEqual(check(admitted, 1, NORMAL_RETURN, dirty_home=0),
+            self.assertEqual(check(admitted, 1, NORMAL_RETURN, dirty_home=1),
                              MISMATCH)
         # Home0 is a real language input, not an absent zero-sized domain.
         bad = encoded([("IR_JUMP", 0, 0, 1), ("RETURN_VALUE", 0)])

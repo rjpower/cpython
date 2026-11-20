@@ -232,7 +232,7 @@ class CallRoleTests(unittest.TestCase):
                              ((17,), {"x": 18}))
 
     def test_full_extent_and_resumed_recipient_are_not_implicit_holes(self):
-        for home in (1, 63, 64, 4094):
+        for home in (1, 63, 64, 4093):
             self.assert_admitted([
                 ("LOAD_CONST", home - 1),
                 ("CALL+NO_SELF", home - 1, home - 1, 0, 0),

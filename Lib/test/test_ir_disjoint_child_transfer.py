@@ -7,7 +7,7 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded
+from test.test_ir_transfer_admission import raw_encoded
 
 
 def routes(code):
@@ -79,7 +79,7 @@ class DisjointChildTransferTests(unittest.TestCase):
         # Publishing a real result into the later virtual self home is not
         # a consumed-input or untouched-prefix proof for that same home.
         rows[site] = name, owner + 1, owner, feedback, arg
-        changed = encoded(rows)
+        changed = raw_encoded(rows)
         for route in (construct, lambda co, **kw: co.replace(**kw)):
             with self.assertRaisesRegex(ValueError, 'virtual call input'):
                 route(invoke.__code__, co_code=changed)

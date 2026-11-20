@@ -38,6 +38,34 @@ def encode_words(*words):
         out += value.to_bytes(8, 'little')
     return bytes(out)
 
+def shift_for_discard_slot(words, nlocals):
+    """Return words with the frame slots of the temporaries made room for
+    the discard slot.
+
+    A code object keeps a hidden local, the discard slot, after its
+    constants and before its free variables; the temporaries start after it.
+    Words written for a frame without it name a temporary as nlocals + k
+    where the code object has nlocals + 1 + k.  This adds one to each slot
+    field of a word (a destination, window base or input) that is at least
+    nlocals, other than the discard sentinel 0xFFF.
+    """
+    import _opcode
+    contract = _opcode.get_ir_contract()
+    shifted = []
+    for word in words:
+        handler, *fields = word
+        if isinstance(handler, str):
+            handler = dis._handler_field(handler)
+        fields = list(fields) + [0] * (4 - len(fields))
+        roles = contract[handler & _opcode.IR_HANDLER_MASK].roles
+        for k, role in enumerate(roles):
+            is_slot = (role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE)
+                       or role >= _opcode.IR_ROLE_IN0)
+            if is_slot and nlocals <= fields[k] < 0xFFF:
+                fields[k] += 1
+        shifted.append((handler, *fields))
+    return shifted
+
 class BytecodeTestCase(unittest.TestCase):
     """Custom assertion methods for inspecting bytecode."""
 

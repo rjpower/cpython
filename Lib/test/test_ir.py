@@ -197,7 +197,10 @@ class AssemblerTest(unittest.TestCase):
                     if SPECIALIZES:
                         self.assertIn(expected_handler, handlers(read))
                     self.assertIs(result, references[-1]())
-                    self.assertEqual(events, [("receiver", local, True)] +
+                    # The result is stored before anything is released: the
+                    # receiver's finalizer no longer finds the old value in
+                    # the local, and the old value's finds the result there.
+                    self.assertEqual(events, [("receiver", False, True)] +
                                      ([("old", True)] if local else []))
                     del result
                     self.assertIsNone(references[-1]())
@@ -267,7 +270,7 @@ class AssemblerTest(unittest.TestCase):
             def __del__(self):
                 if observe:
                     frame = sys._getframe(1)
-                    events.append(("receiver", isinstance(frame.f_locals["result"], Old)))
+                    events.append(("receiver", type(frame.f_locals["result"]).__name__))
                     frame.f_locals["result"] = Sentinel()
 
         def factory():
@@ -292,9 +295,12 @@ class AssemblerTest(unittest.TestCase):
             result = read(factory, Old)
         finally:
             observe = False
-        self.assertIs(result, references[-1]())
-        # The frame retains overwritten locals until it is released.
-        self.assertEqual(events, [("receiver", True), "sentinel", "old"])
+        # The store comes first: the receiver's finalizer finds the loaded
+        # attribute in the local, and its own store replaces it.  Each owner
+        # is released once, in no particular order.
+        self.assertIsInstance(result, Sentinel)
+        self.assertIsNone(references[-1]())
+        self.assertCountEqual(events, [("receiver", "Payload"), "old"])
 
     def test_deopt_after_borrowing_a_local(self):
         # A deoptimising LOAD_ATTR must preserve the local's owner.
@@ -647,22 +653,25 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(lines, nnames + nconsts + 1)
 
     def test_slot_limit(self):
-        # Locals, cells, free variables and the stack share IR_MAX_SLOTS
-        # slots; code that needs more does not compile.
+        # Locals, cells, free variables, the discard slot and the stack share
+        # IR_MAX_SLOTS slots; code that needs more does not compile.
         def make(nlocals):
             source = ("def f():\n"
                       + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
                       + "    return [v0]\n")
             return make_function(source)
-        # The list's window is the one temporary
+        # The list's window is the one temporary; the discard slot is a
+        # hidden local
         stacksize = make(1).__code__.co_stacksize
         self.assertEqual(stacksize, 1)
-        f = make(IR_MAX_SLOTS - stacksize)
-        self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
+        f = make(IR_MAX_SLOTS - stacksize - 1)
+        self.assertEqual(f.__code__.co_nlocals + 1 + f.__code__.co_stacksize,
+                         IR_MAX_SLOTS)
+        self.assertEqual(nlocalsplus(f) + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
         self.assertEqual(f(), [0])
         with self.assertRaisesRegex(SyntaxError, "slots"):
-            make(IR_MAX_SLOTS - stacksize + 1)
+            make(IR_MAX_SLOTS - stacksize)
 
     def test_shared_feedback_entry(self):
         # The sites that get no entry (fb 0) share entry 0, a header: they
@@ -1709,7 +1718,7 @@ class DictFirstProbeTest(unittest.TestCase):
         self.assertIs(lookup(d, 7), d)
 
     @support.requires_refcounting
-    def test_temporary_dictionary_retirement_before_local_store(self):
+    def test_temporary_dictionary_retirement_after_local_store(self):
         events = []
         observing = False
 
@@ -1727,7 +1736,7 @@ class DictFirstProbeTest(unittest.TestCase):
             def __del__(self):
                 if observing:
                     frame = sys._getframe(1)
-                    events.append(("dict", isinstance(frame.f_locals["result"], Old)))
+                    events.append(("dict", type(frame.f_locals["result"]).__name__))
                     frame.f_locals["result"] = Sentinel()
 
         class Payload:
@@ -1752,10 +1761,11 @@ class DictFirstProbeTest(unittest.TestCase):
             result = read(factory, Old)
         finally:
             observing = False
-        self.assertIsInstance(result, Payload)
-        # The frame-locals proxy retains the overwritten local until frame
-        # destruction, so Old survives the subsequent Sentinel retirement.
-        self.assertEqual(events, [("dict", True), "sentinel", "old"])
+        # The store comes first: the dictionary's finalizer finds the
+        # subscripted value in the local and replaces it, and the old value
+        # is released once.
+        self.assertIsInstance(result, Sentinel)
+        self.assertCountEqual(events, [("dict", "Payload"), "old"])
 
 
 class GuardedPythonCallTest(unittest.TestCase):
@@ -1992,7 +2002,8 @@ class StoreFoldTest(unittest.TestCase):
             ("BINARY_OP_ADD", 2, (0, 1)),
             ("RETURN_VALUE_EMPTY", None, (2,)),
         ])
-        self.assertEqual(t, 3)
+        # a, b, x and the discard slot
+        self.assertEqual(t, 4)
         self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
         self.run_specialized(lambda: self.assertEqual(f("a", "b"), "ab"))
 

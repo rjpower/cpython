@@ -59,7 +59,9 @@ class CanonicalHomeTests(unittest.TestCase):
         temp_count = len(_testinternalcapi.get_co_localskinds(temporary.__code__))
         self.assertGreaterEqual(routes[temporary][1], temp_count)
         self.assertLess(routes[temporary][1], 4095)
-        self.assertEqual(routes[discard][1], 4095)
+        # The executing copy names the discard slot, the last local
+        discard_count = len(_testinternalcapi.get_co_localskinds(discard.__code__))
+        self.assertEqual(routes[discard][1], discard_count - 1)
         for value in (2, 2.5, 1 << 100, -0.0, float('inf'), float('nan')):
             with self.subTest(value=value):
                 result = local([value], -1)

@@ -6,7 +6,7 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded
+from test.test_ir_transfer_admission import encoded, raw_encoded
 
 
 def binary_code(*, slots=4, move=True):
@@ -32,7 +32,7 @@ def binary_code(*, slots=4, move=True):
     site = len(words)
     words += [(binary[0][0], destination, left, right, binary[0][4]),
               ("POP_TOP", 2), ("RETURN_VALUE", destination)]
-    changed = code.replace(co_code=encoded(words), co_stacksize=slots,
+    changed = code.replace(co_code=encoded(words, code.co_nlocals), co_stacksize=slots,
                            co_consts=(["surviving scratch owner"],),
                            co_linetable=b"", co_exceptiontable=b"")
     return changed, site, destination
@@ -51,7 +51,7 @@ class AdmissionTests(unittest.TestCase):
         handler, dst, left, right, fb = bad[site]
         self.assertNotEqual(left, right)
         bad[site] = (handler, dst, left, left, fb)
-        replacement = encoded(bad)
+        replacement = raw_encoded(bad)
         for route in (construct, lambda co, **kw: co.replace(**kw)):
             with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
                 route(code, co_code=replacement)

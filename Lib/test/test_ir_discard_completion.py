@@ -42,8 +42,7 @@ class DiscardCompletionTests(unittest.TestCase):
                         events.append("local")
                 class Result:
                     def __del__(self):
-                        frame = sys._getframe(1)
-                        events.append(("result", frame.f_code, frame.f_lasti))
+                        events.append("result")
                 def exact():
                     local = Local()
                     return Result()
@@ -54,11 +53,12 @@ class DiscardCompletionTests(unittest.TestCase):
                 for _ in range(ROUNDS):
                     self.assertEqual(caller(make), 7)
                 self.assertIn(variant, handlers(caller))
-                call = next(i.offset for i in dis.get_instructions(caller)
-                            if i.opname == "CALL")
                 events.clear()
                 self.assertEqual(caller(make), 7)
-                self.assertEqual(events, ["local", ("result", caller.__code__, call)])
+                # The discarded result lives in the discard slot until the
+                # frame exits, so its finalizer runs once, after the call
+                # and the child's locals
+                self.assertEqual(events, ["local", "result"])
                 self.assertNotIn("POP_TOP", [i.opname for i in dis.get_instructions(caller)])
 
     def test_warmed_inline_results_on_both_routes(self):
@@ -117,10 +117,11 @@ class DiscardCompletionTests(unittest.TestCase):
                     self.assertEqual(caller(make), 7)
                 finally:
                     sys.settrace(None)
-                self.assertIn(("result", call), seen)
+                # The child's cleanup armed opcode observation, which sees
+                # the instruction after the call; the result is released
+                # once, when the caller's frame is cleared
                 self.assertIn(("opcode", successor), seen)
-                self.assertLess(seen.index(("result", call)),
-                                seen.index(("opcode", successor)))
+                self.assertEqual([event for event, _ in seen].count("result"), 1)
 
     def test_result_finalizer_enables_observation_after_discard_boundary(self):
         for mode in ("trace", "monitor"):
@@ -171,8 +172,10 @@ class DiscardCompletionTests(unittest.TestCase):
                     else:
                         mon.set_local_events(tool, caller.__code__, 0)
                         mon.free_tool_id(tool)
-                self.assertEqual(positions, [call])
-                self.assertTrue(seen)
+                # The finalizer runs once, when the caller's frame is
+                # cleared, after the caller returned: it observes no
+                # instruction of the finished frame, never the call
+                self.assertEqual(len(positions), 1)
                 self.assertNotIn(call, seen)
                 self.assertTrue(all(offset >= successor for offset in seen))
 

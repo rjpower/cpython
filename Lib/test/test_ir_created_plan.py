@@ -22,7 +22,7 @@ class CreatedPlanTests(unittest.TestCase):
                               expected)
 
     def test_empty_creation_covers_the_actual_physical_extent(self):
-        for slots in (0, 1, 64, 65, 4094):
+        for slots in (0, 1, 64, 65, 4093):
             self.assert_plan(make_code([("RETURN_GENERATOR", 4095, 1)],
                                        slots=slots, locals=("value",)), True)
         # A live inline/control-capable language home is not an empty shape.
@@ -52,7 +52,9 @@ class CreatedPlanTests(unittest.TestCase):
     def test_observer_recovery_entry_cannot_inherit_normal_entry_proof(self):
         code = make_code([("RETURN_GENERATOR", 4095, 1)], locals=("value",))
         locations, _ = position_parts(code.co_linetable)
-        event = (0, 0, 0, code.co_firstlineno, code.co_firstlineno, 0, 1, 0, 1, 0)
+        # The exception slot is the first temporary, after the local and the
+        # discard slot
+        event = (0, 0, 0, code.co_firstlineno, code.co_firstlineno, 0, 1, 0, 2, 0)
         self.assert_plan(code.replace(**observation_tables(locations, [event])), False)
 
     def test_free_variable_count_is_admitted_before_local_only_transfer(self):

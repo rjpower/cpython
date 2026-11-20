@@ -7,7 +7,7 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded
+from test.test_ir_transfer_admission import raw_encoded
 
 
 def routes(code):
@@ -45,7 +45,7 @@ class SuperCallTransportTests(unittest.TestCase):
         name, a, b, feedback, arg = words[site]
         self.assertFalse(arg & 1)
         words[site] = name, a, b, feedback, arg | 1
-        changed = encoded(words)
+        changed = raw_encoded(words)
         for route in (construct, lambda co, **kw: co.replace(**kw)):
             with self.subTest(route=route):
                 with self.assertRaisesRegex(ValueError, "virtual call input"):

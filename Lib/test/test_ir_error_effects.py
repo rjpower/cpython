@@ -301,13 +301,13 @@ class ErrorEffectTests(unittest.TestCase):
         with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["GET_ANEXT"].error_routes)
-        original = ir_generator.IREmitter.release_displaced
+        original = ir_generator.IREmitter.finish_stores
 
-        def missing_publication_receipt(emitter):
-            original(emitter)
+        def missing_publication_receipt(emitter, stack):
+            original(emitter, stack)
             emitter.error_local_dst = False
 
-        with mock.patch.object(ir_generator.IREmitter, "release_displaced", missing_publication_receipt):
+        with mock.patch.object(ir_generator.IREmitter, "finish_stores", missing_publication_receipt):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["LOAD_CONST"].error_routes)
 
@@ -450,13 +450,13 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertEqual(contracts["JUMP_BACKWARD_NO_INTERRUPT"].error_routes,
                          ("_PyIR_ERROR_COMPLETE",))
         self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
-        original = ir_generator.IREmitter.release_displaced
+        original = ir_generator.IREmitter.finish_stores
 
-        def missing_binding_receipt(emitter):
-            original(emitter)
+        def missing_binding_receipt(emitter, stack):
+            original(emitter, stack)
             emitter.error_local_dst = False
 
-        with mock.patch.object(ir_generator.IREmitter, "release_displaced", missing_binding_receipt):
+        with mock.patch.object(ir_generator.IREmitter, "finish_stores", missing_binding_receipt):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
         original_boxes = ir_generator.boxes_into_record

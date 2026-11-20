@@ -15,7 +15,7 @@ from test.test_ir_transfer_admission import encoded, make_code
 
 class EmptyReturnTests(unittest.TestCase):
     def test_all_admission_routes_select_the_proven_empty_form(self):
-        for slots in (1, 65, 4095):
+        for slots in (1, 65, 4094):
             with self.subTest(slots=slots):
                 words = [("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
                 supplied = encoded(words)

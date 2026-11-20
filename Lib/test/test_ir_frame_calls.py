@@ -321,7 +321,9 @@ class FrameCallTests(unittest.TestCase):
         for _ in range(ROUNDS):
             read(reader)
         self.assertEqual(events, ["method"] * ROUNDS)
-        self.assertTrue(any(row[0] == "LOAD_ATTR_SLOT" and row[1] == 4095
+        # The executing copy names the discard slot, the last local
+        discard = len(_testinternalcapi.get_co_localskinds(read.__code__)) - 1
+        self.assertTrue(any(row[0] == "LOAD_ATTR_SLOT" and row[1] == discard
                             for row in _testinternalcapi.get_ir(read.__code__, True)))
 
     def test_discarded_custom_reader_results(self):

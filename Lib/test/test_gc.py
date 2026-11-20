@@ -1055,6 +1055,13 @@ class GCTests(unittest.TestCase):
 
         zs = []
 
+        def drop(cls, n=1):
+            # A discarded result stays in its frame until the next discard
+            # or the frame's end, so the instances are made in a frame that
+            # ends
+            for i in range(n):
+                cls()
+
         def getstats():
             d = gc.get_stats()[-1]
             return d['collected'], d['uncollectable']
@@ -1064,8 +1071,7 @@ class GCTests(unittest.TestCase):
 
         # No problems if just collecting A() instances.
         oldc, oldnc = getstats()
-        for i in range(N):
-            A()
+        drop(A, N)
         t = gc.collect()
         c, nc = getstats()
         self.assertEqual(t, N) # instance objects
@@ -1074,7 +1080,7 @@ class GCTests(unittest.TestCase):
 
         # But Z() is not actually collected.
         oldc, oldnc = c, nc
-        Z()
+        drop(Z)
         # Nothing is collected - Z() is merely resurrected.
         t = gc.collect()
         c, nc = getstats()
@@ -1084,9 +1090,8 @@ class GCTests(unittest.TestCase):
 
         # Z() should not prevent anything else from being collected.
         oldc, oldnc = c, nc
-        for i in range(N):
-            A()
-        Z()
+        drop(A, N)
+        drop(Z)
         t = gc.collect()
         c, nc = getstats()
         self.assertEqual(t, N)
@@ -1401,10 +1406,13 @@ class GCCallbackTests(unittest.TestCase):
     @unittest.skipIf(support.Py_GC, "Py_GC collects all garbage, not only cycles")
     def test_collect_garbage(self):
         self.preclean()
-        # Each of these cause two objects to be garbage:
-        Uncollectable()
-        Uncollectable()
-        C1055820(666)
+        # Each of these cause two objects to be garbage.  A discarded result
+        # stays in its frame until the frame ends, so they are made in one:
+        def make_garbage():
+            Uncollectable()
+            Uncollectable()
+            C1055820(666)
+        make_garbage()
         gc.collect()
         for v in self.visit:
             if v[1] != "stop":

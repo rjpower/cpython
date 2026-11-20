@@ -87,12 +87,12 @@ class DelegatedYieldTests(unittest.TestCase):
             ("POP_TOP", 1), ("IR_JUMP", 0, 0, 8), ("IR_JUMP", 0, 0, 8),
             ("LOAD_CONST", 1), ("RETURN_VALUE", 1)], bindings=("recipient",))
         self.assert_admitted([
-            ("LOAD_CONST", 4090), ("LOAD_CONST", 4092),
-            ("SEND", 4090, 4090, 0, 4),
-            ("YIELD_DELEGATED", 4094, 4092, 0, 4090),
-            ("POP_TOP", 4094), ("POP_TOP", 4090), ("IR_JUMP", 0, 0, 8),
-            ("POP_TOP", 4090), ("LOAD_CONST", 4090),
-            ("RETURN_VALUE", 4090)], slots=4095)
+            ("LOAD_CONST", 4089), ("LOAD_CONST", 4091),
+            ("SEND", 4089, 4089, 0, 4),
+            ("YIELD_DELEGATED", 4093, 4091, 0, 4089),
+            ("POP_TOP", 4093), ("POP_TOP", 4089), ("IR_JUMP", 0, 0, 8),
+            ("POP_TOP", 4089), ("LOAD_CONST", 4089),
+            ("RETURN_VALUE", 4089)], slots=4094)
 
     def test_a_missing_unknown_or_unreachable_send_cannot_certify(self):
         words = self.basic_image()

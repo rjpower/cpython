@@ -317,9 +317,10 @@ class TestUnpackToLocals(unittest.TestCase):
         self.assertEqual(f((1, 2)), (1, 2))
         self.assertEqual(f([3, 4]), (3, 4))
 
-    def test_release_order_of_old_values(self):
-        # The old value of each target is released before the next target
-        # is stored, as a sequence of STORE_FASTs does.
+    def test_old_values_are_released_after_all_stores(self):
+        # Every target is stored before any old value is released, so a
+        # finalizer sees the new values of all of them; each old value is
+        # released once.
         log = []
         def frame_locals():
             frame = sys._getframe(2)
@@ -336,9 +337,9 @@ class TestUnpackToLocals(unittest.TestCase):
         for seq in ((1, 2, 3), [1, 2, 3], iter((1, 2, 3))):
             del log[:]
             f(seq)
-            self.assertEqual(log, [
-                ("a", {"a": 1, "b": "b", "c": "c"}),
-                ("b", {"a": 1, "b": 2, "c": "c"}),
+            self.assertCountEqual(log, [
+                ("a", {"a": 1, "b": 2, "c": 3}),
+                ("b", {"a": 1, "b": 2, "c": 3}),
                 ("c", {"a": 1, "b": 2, "c": 3}),
             ])
 

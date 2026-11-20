@@ -7,20 +7,28 @@ import struct
 import types
 import unittest
 
-from test.support.bytecode_helper import encode_words
+from test.support.bytecode_helper import encode_words, shift_for_discard_slot
 from test.test_ir_admission import construct
 
 
 HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
 
 
-def encoded(words):
-    return encode_words(*((dis._handler_field(name), *fields) for name, *fields in words))
+def raw_encoded(words):
+    "co_code for words, which name the slots of the frame as it is"
+    return encode_words(*((dis._handler_field(name), *fields)
+                          for name, *fields in words))
+
+
+def encoded(words, nlocals=0):
+    """co_code for words written by hand, which name temporaries as
+    nlocals + k, as they did before the discard slot"""
+    return encode_words(*shift_for_discard_slot(words, nlocals))
 
 
 def make_code(words, *, slots=4, locals=(), consts=(None,)):
     template = (lambda: None).__code__
-    return template.replace(co_code=encoded(words), co_stacksize=slots,
+    return template.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
                             co_linetable=b"", co_exceptiontable=b"",
                             co_fbinit=struct.pack("<I", 2), co_consts=consts,
                             co_nlocals=len(locals), co_varnames=locals)
@@ -29,7 +37,7 @@ def make_code(words, *, slots=4, locals=(), consts=(None,)):
 class TransferAdmissionTests(unittest.TestCase):
     def assert_rejected(self, words, bad, message, **geometry):
         code = make_code(words, **geometry)
-        changed = encoded(bad)
+        changed = encoded(bad, len(geometry.get("locals", ())))
         self.assertEqual(len(changed), len(code.co_code))
         for route in (construct, lambda co, **kw: co.replace(**kw)):
             with self.subTest(route=route):
@@ -161,14 +169,15 @@ class TransferAdmissionTests(unittest.TestCase):
         self.assert_admitted(touched)
 
     def test_full_scratch_extent_and_many_straight_instructions(self):
-        for home in (0, 63, 64, 128, 4094):
+        # The discard slot takes one of the 4095 slots
+        for home in (0, 63, 64, 128, 4093):
             with self.subTest(home=home):
                 words = [("LOAD_CONST", home), ("POP_TOP", home),
                          ("LOAD_CONST", home), ("RETURN_VALUE", home)]
-                self.assert_admitted(words, slots=4095)
+                self.assert_admitted(words, slots=4094)
                 bad = words.copy()
                 bad[2] = ("IR_JUMP", 0, 0, 3)
-                self.assert_rejected(words, bad, "reads unavailable scratch", slots=4095)
+                self.assert_rejected(words, bad, "reads unavailable scratch", slots=4094)
         words = [("LOAD_CONST", 0), ("POP_TOP", 0)] * 5000
         words += [("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
         self.assert_admitted(words, slots=1)

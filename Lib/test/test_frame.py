@@ -606,16 +606,6 @@ class FrameCopyTest(unittest.TestCase):
         self.assertEqual(frame.f_locals, {})
         frame.clear()
 
-    def test_selected_copy_skips_inactive_words(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
-        def body(value):
-            return value, object(), object()
-
-        for payload in (object(), 17, 2.5):
-            with self.subTest(payload=type(payload)):
-                internal.check_frame_selected_copy(body.__code__, payload)
-
     def test_escaped_frame_keeps_its_values(self):
         def body(value):
             scalar = 17

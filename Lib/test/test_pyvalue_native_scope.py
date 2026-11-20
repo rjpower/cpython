@@ -189,15 +189,35 @@ class NativeScopeDispatchTests(unittest.TestCase):
             self.assertIn("CALL_BUILTIN_O", executing_handlers(fail))
 
     def test_temporary_argument_before_local_replacement(self):
+        # The call stores its result in the local, then releases the
+        # argument, the receiver and the displaced value.  Each finalizer
+        # runs once, in the frame, and finds the local holding the displaced
+        # value or the result; the displaced value's finalizer finds the
+        # result.  The order between them is free.
         events = []
         calls = []
         reenter = False
+
+        def local_is(frame):
+            value = frame.f_locals["old"]
+            return ("displaced" if isinstance(value, Old)
+                    else "result" if type(value) is object else "other")
+
+        def check(events):
+            self.assertEqual(sorted(name for name, _, _ in events),
+                             ["argument", "old", "receiver"])
+            for name, in_frame, local in events:
+                self.assertTrue(in_frame)
+                if name == "old":
+                    self.assertEqual(local, "result")
+                else:
+                    self.assertIn(local, ("displaced", "result"))
 
         class Old:
             def __del__(self):
                 frame = sys._getframe(1)
                 events.append(("old", frame.f_code is replace.__code__,
-                               type(frame.f_locals["old"]) is object))
+                               local_is(frame)))
 
         class Argument:
             def __call__(self):
@@ -207,7 +227,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             def __del__(self):
                 frame = sys._getframe(1)
                 events.append(("argument", frame.f_code is replace.__code__,
-                               isinstance(frame.f_locals["old"], Old)))
+                               local_is(frame)))
                 # Retiring the original argument is a reentry boundary after
                 # scope End, including when no scalar bridge owners exist.
                 if reenter:
@@ -218,7 +238,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             def __del__(self):
                 frame = sys._getframe(1)
                 events.append(("receiver", frame.f_code is replace.__code__,
-                               isinstance(frame.f_locals["old"], Old)))
+                               local_is(frame)))
 
         def replace():
             old = Old()
@@ -236,9 +256,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
                 sys.setprofile(None)
             gc.collect()
             self.assertEqual(calls, ["body"])
-            self.assertEqual(events, [("argument", True, True),
-                                      ("receiver", True, True),
-                                      ("old", True, True)])
+            check(events)
         if not support.Py_GIL_DISABLED:
             call_handlers = [name for name in executing_handlers(replace)
                              if name.startswith("CALL")]
@@ -251,9 +269,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         finally:
             sys.setprofile(None)
         self.assertEqual(calls, ["body"])
-        self.assertEqual(events, [("argument", True, True),
-                                  ("receiver", True, True),
-                                  ("old", True, True)])
+        check(events)
 
     def test_displaced_local_reports_unraisable(self):
         ledger = []
@@ -317,6 +333,9 @@ class NativeGenericVMTests(unittest.TestCase):
             _testinternalcapi.native_scope_flat(1, missing=2)
 
     def test_keyword_argument_retirement_precedes_local_assignment(self):
+        # The call stores its result in the local, then releases the argument
+        # and the displaced value, in either order.  Each runs once, in the
+        # frame, and the displaced value's finalizer finds the result.
         ledger = []
 
         class Old:
@@ -329,7 +348,7 @@ class NativeGenericVMTests(unittest.TestCase):
                 return 2147483647
 
             def __del__(self):
-                ledger.append(('argument', isinstance(sys._getframe(1).f_locals['result'], Old)))
+                ledger.append(('argument', sys._getframe(1).f_locals['result']))
                 sys.setprofile(lambda *args: None)
                 sys.setprofile(None)
 
@@ -347,8 +366,16 @@ class NativeGenericVMTests(unittest.TestCase):
             self.assertEqual(invoke(Value), 2147483647)
         finally:
             sys.setprofile(None)
-        self.assertEqual(ledger, [('body', 2), ('argument', True),
-                                  ('old', 2147483647), 'next'])
+        self.assertEqual(ledger[0], ('body', 2))
+        self.assertEqual(ledger[-1], 'next')
+        released = ledger[1:-1]
+        self.assertEqual(sorted(name for name, _ in released),
+                         ['argument', 'old'])
+        for name, local in released:
+            if name == 'old':
+                self.assertEqual(local, 2147483647)
+            else:
+                self.assertTrue(local == 2147483647 or isinstance(local, Old))
 
     def test_inline_noncallable_consumes_arguments_once(self):
         ledger = []
@@ -434,10 +461,12 @@ def python_callee(first, second=None, num=None):
 
 
 class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
-    # Upstream closes a call's inputs, runs its periodic check
-    # (_CHECK_PERIODIC_AT_END) and only then stores the result with
-    # STORE_FAST. So a pending call run by the check sees the local's old
-    # value, and an exception from the check leaves the old value in place.
+    # A handler stores its result, releases what it held and then runs its
+    # periodic check, so the check runs on a completed instruction.  A
+    # pending call run by the check sees the local's old value or the result,
+    # and an exception from the check leaves one of them in place.  Which
+    # one is not pinned: a check may also run before the store, as
+    # upstream's does after CALL and before STORE_FAST.
 
     @classmethod
     def setUpClass(cls):
@@ -453,32 +482,36 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         raise Pending
 
     def trips(self, site):
-        """Yield (trip, target, first, second, result) for calls that leave
-        work for their own periodic check."""
+        """Yield (trip, target, first, second, value) for calls that leave
+        work for their own periodic check, and return value."""
         if site is single_site:
             simple = _testinternalcapi.simple_pending_call
-            yield 'pending call', simple, self.observe, None, ('returned', None)
-            yield ('pending call raises', simple, self.raise_pending, None,
-                   ('raised', 'old'))
+            yield 'pending call', simple, self.observe, None, None
+            yield 'pending call raises', simple, self.raise_pending, None, None
             return
-        yield 'pending call', self.pending, self.observe, 1, ('returned', 1)
-        yield ('pending call raises', self.pending, self.raise_pending, 1,
-               ('raised', 'old'))
+        yield 'pending call', self.pending, self.observe, 1, 1
+        yield 'pending call raises', self.pending, self.raise_pending, 1, 1
         if site is not keyword_site:
             yield ('async exception', self.set_async_exc,
-                   threading.get_ident(), Pending, ('raised', 'old'))
+                   threading.get_ident(), Pending, 1)
 
     def check_site(self, site, handler, cold=False):
-        for trip, target, first, second, result in self.trips(site):
+        for trip, target, first, second, value in self.trips(site):
             with self.subTest(handler=handler, trip=trip):
                 if cold:
                     support.reset_code(site)
                 self.seen = []
-                self.assertEqual(site(target, first, second), result)
-                expected = []
+                outcome, local = site(target, first, second)
                 if trip == 'pending call':
-                    expected = [(site.__name__, 'old')]
-                self.assertEqual(self.seen, expected)
+                    self.assertEqual((outcome, local), ('returned', value))
+                    self.assertEqual(len(self.seen), 1)
+                    name, seen_local = self.seen[0]
+                    self.assertEqual(name, site.__name__)
+                    self.assertIn(seen_local, ('old', value))
+                else:
+                    self.assertEqual(outcome, 'raised')
+                    self.assertIn(local, ('old', value))
+                    self.assertEqual(self.seen, [])
                 # The site still holds the handler that ran the call.
                 self.assertIn(handler, executing_handlers(site))
 
@@ -505,7 +538,9 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
             self.check_site(site, handler)
 
     def test_failed_check_releases_result_after_raise_event(self):
-        # Upstream's unwinder pops the result after the frame's RAISE event.
+        # The call stores its result and the periodic check then raises, so
+        # the result stays in the local, or is released after the frame's
+        # RAISE event; it is released once.
         ledger = []
         pending = self.pending
         raise_pending = self.raise_pending
@@ -540,8 +575,10 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
                 try:
                     support.reset_code(callee)
                     ledger.clear()
-                    self.assertEqual(positional_site(native, None, None),
-                                     ('raised', 'old'))
+                    outcome, local = positional_site(native, None, None)
+                    self.assertEqual(outcome, 'raised')
+                    self.assertTrue(local == 'old' or isinstance(local, Result))
+                    del local
                     self.assertEqual(ledger,
                                      [('raise', 'positional_site'), 'result'])
                     self.assertIn(handler, executing_handlers(positional_site))

@@ -1,4 +1,5 @@
 import dis
+import re
 import textwrap
 import unittest
 
@@ -55,10 +56,16 @@ class TestLLTrace(unittest.TestCase):
         self.assertIn("GET_ITER", stdout)
         self.assertIn("FOR_ITER", stdout)
         self.assertIn("CALL_INTRINSIC_1", stdout)
-        # Register IR discards the result directly through IR_NO_DST.
+        # Register IR discards the result into the discard slot, the last
+        # local of the frame (before any free variables, which trace_me has
+        # none of).  The first trace shows the frame's locals.
+        match = re.search(r"Resuming frame for 'trace_me'.*\n    locals=\[(.*)\]",
+                          stdout)
+        self.assertIsNotNone(match)
+        discard = match.group(1).count(",")
         self.assertRegex(
             stdout,
-            r"(?m)^    ir CALL_INTRINSIC_1 4095 [0-9]+ [0-9]+ [0-9]+$")
+            rf"(?m)^    ir CALL_INTRINSIC_1 {discard} [0-9]+ [0-9]+ [0-9]+$")
         self.assertNotIn("BINARY_OP", stdout)
         self.assertNotIn("UNARY_NEGATIVE", stdout)
 

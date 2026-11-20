@@ -685,7 +685,6 @@ class AnalyzerTests(unittest.TestCase):
         for code, expected in [
             ("", False),
             ("assert(value_temps->count == 0);", False),
-            ("finish_displaced_local(tstate, value_temps, ir_displaced);", False),
             ("ir_obj_left = _PyValueTemps_Box(value_temps, left);", True),
             ("value_reader_complete(&s, next_instr, value_temps, &r);", False),
             ("_PyValueTemps_Object(value_temps, l);", True),

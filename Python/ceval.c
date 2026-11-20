@@ -824,55 +824,6 @@ value_frame_is_current(PyThreadState *tstate, _PyInterpreterFrame *frame)
     return exec != NULL && frame->ir_words == exec->words;
 }
 
-/* Move each owner whose slot is a temporary back into it, and return the
- * owners it did not move (PyValue_NULL for a moved one). */
-static _PyValuePair
-value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                         PyValue first, PyValue second,
-                         int first_slot, int second_slot)
-{
-    _PyValuePair rest = {first, second};
-    if (!value_frame_is_current(tstate, frame)) {
-        value_revalidation_error("dictionary store changed the active frame");
-        return rest;
-    }
-    int nlocals = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    int nslots = _PyFrame_NumSlots(frame);
-    PyValue *slots = _PyFrame_Slots(frame);
-    int input_slots[2] = {first_slot, second_slot};
-    for (int i = 0; i < 2; i++) {
-        int slot = input_slots[i];
-        if (slot < 0 || slot >= nslots ||
-            (slot >= nlocals && !PyValue_IsNull(slots[slot]))) {
-            value_revalidation_error("dictionary store changed an input home");
-            return rest;
-        }
-    }
-    if (first_slot >= nlocals) {
-        slots[first_slot] = first;
-        _PyValue_CheckTemp(slots[first_slot]);
-        rest.first = PyValue_NULL;
-    }
-    if (second_slot >= nlocals) {
-        slots[second_slot] = second;
-        _PyValue_CheckTemp(slots[second_slot]);
-        rest.second = PyValue_NULL;
-    }
-    /* Callback-current locals remain intact. Their extra evaluated
-     * snapshots are still C-owned; only temporary owners moved back. */
-    return rest;
-}
-
-/* Fixed store operands have already moved out of their frame homes. Keep
- * their original release order, with no decoded slot access between closes. */
-static inline void
-value_operation_close3(PyValue first, PyValue second, PyValue third)
-{
-    PyValue_XCLOSE(first);
-    PyValue_XCLOSE(second);
-    PyValue_XCLOSE(third);
-}
-
 /* IMPORT_NAME's level as a C int, PyLong_AsInt() of it: -1 with an exception
  * set on error.  The compiler's level is an inline int. */
 static inline int
@@ -1404,16 +1355,6 @@ finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return value_operation_refresh(tstate, frame, current, failed_result);
 }
 
-static int
-value_operation_finish(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr *current, _PyValueTemps *temps)
-{
-    /* The operation can run Python even when it created no private boxes:
-     * check the frame even when the owner record is empty. */
-    _PyValueTemps_Close(temps);
-    return value_operation_refresh(tstate, frame, current, PyValue_NULL);
-}
-
 /* The checks of a call's window, before the call has any effect; the
  * handler keeps base and destination in registers, and passes the window
  * from its own slots register. */
@@ -1897,50 +1838,6 @@ static _PyCallResult call_transaction_run_keywords(
 static _PyCallResult call_transaction_run_ex(
     PyThreadState *, _PyInterpreterFrame *, int, int, int);
 
-/* Publish result, the operation's value (to its slot if that is a
- * temporary), then close the operands first and second, then the boxes, and
- * refresh.  Returns the published result, or PyValue_NULL on error, when it
- * has closed result unless the slot already owns it.  All indices come from
- * the handler's word, as read before the provider: a folded destination
- * stays untouched until the original operand owners have retired. */
-static PyValue
-value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      _PyInstr *current, _PyValueTemps *temps,
-                      int result_slot, PyValue result,
-                      PyValue first, PyValue second)
-{
-    if (!value_frame_is_current(tstate, frame)) {
-        PyErr_SetString(PyExc_SystemError, "value reader changed the active frame");
-        PyValue_XCLOSE(result);
-        value_operation_close3(first, second, PyValue_NULL);
-        _PyValueTemps_Close(temps);
-        return PyValue_NULL;
-    }
-    int discard = result_slot == IR_NO_DST;
-    int local = discard || result_slot < _PyFrame_GetCode(frame)->co_nlocalsplus;
-    if (!discard && (result_slot < 0 ||
-        result_slot >= _PyFrame_NumSlots(frame) ||
-        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[result_slot])))) {
-        PyErr_SetString(PyExc_SystemError, "value reader changed its result home");
-        PyValue_XCLOSE(result);
-        value_operation_close3(first, second, PyValue_NULL);
-        _PyValueTemps_Close(temps);
-        (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
-        return PyValue_NULL;
-    }
-    if (!local) {
-        _PyFrame_Slots(frame)[result_slot] = result;
-        _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
-    }
-    value_operation_close3(first, second, PyValue_NULL);
-    _PyValueTemps_Close(temps);
-    if (value_operation_refresh(tstate, frame, current,
-                                local ? result : PyValue_NULL) < 0) {
-        return PyValue_NULL;
-    }
-    return result;
-}
-
 static int
 finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *next, _PyValueTemps *temps)
@@ -1952,115 +1849,6 @@ finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                    PyValue_NULL);
 }
 
-/* value_reader_complete() for LOAD_ATTR, whose method form has two results,
- * the attribute and self, for result_slot and the slot after it.  Returns
- * the published attribute, or PyValue_NULL on error. */
-static PyValue
-value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                         _PyInstr *current, _PyValueTemps *temps,
-                         int result_slot, PyValue result, PyValue self,
-                         PyValue receiver, int method)
-{
-    if (!method) {
-        return value_reader_complete(tstate, frame, current, temps,
-                                     result_slot, result, receiver,
-                                     PyValue_NULL);
-    }
-    int slot = result_slot;
-    if (!value_frame_is_current(tstate, frame) ||
-        slot < _PyFrame_GetCode(frame)->co_nlocalsplus ||
-        slot + 1 >= _PyFrame_NumSlots(frame) ||
-        !PyValue_IsNull(_PyFrame_Slots(frame)[slot]) ||
-        !PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1])) {
-        int nlocals = _PyFrame_GetCode(frame)->co_nlocalsplus;
-        int nslots = _PyFrame_NumSlots(frame);
-        int occupied = slot >= nlocals && slot + 1 < nslots
-            ? ((!PyValue_IsNull(_PyFrame_Slots(frame)[slot])) |
-               (!PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1]) << 1)) : -1;
-        PyErr_Format(PyExc_SystemError,
-                     "method lookup changed its output homes "
-                     "(current=%d, dst=%d, locals=%d, slots=%d, "
-                     "occupied=%d, pc=%zd)",
-                     value_frame_is_current(tstate, frame), slot, nlocals,
-                     nslots, occupied,
-                     current - frame->ir_words);
-        PyValue_XCLOSE(result);
-        PyValue_XCLOSE(self);
-        value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-        _PyValueTemps_Close(temps);
-        (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
-        return PyValue_NULL;
-    }
-    _PyFrame_Slots(frame)[slot] = result;
-    _PyFrame_Slots(frame)[slot + 1] = self;
-    _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
-    _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot + 1]);
-    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-    _PyValueTemps_Close(temps);
-    if (value_operation_refresh(tstate, frame, current, PyValue_NULL) < 0) {
-        return PyValue_NULL;
-    }
-    return result;
-}
-
-/* Release first, then second, the values that a handler's published result
- * displaced or whose receiver it no longer needs, then the input boxes, and
- * refresh.  Both are detached before any callback, and no raw field pointer
- * crosses it.  On failure, also close failed_result, the handler's result
- * that a local was to receive.  Out of line: the owners array is this
- * function's (R-a, R-c). */
-static Py_NO_INLINE int
-retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *next, _PyValueTemps *temps,
-                        PyValue first, PyValue second, PyValue failed_result)
-{
-    PyValue owners[2] = {first, second};
-    return finish_value_bridges_ex(tstate, frame, next, temps, owners, 2,
-                                   failed_result);
-}
-
-/* Release the local that a handler's result displaced (IR_STORE_DST),
- * then its input boxes, and refresh: the release can run Python.  Out of
- * line, so that the address of displaced is taken in this function's frame
- * and not in the handler's, which would then need a frame and a canary on
- * every entry (register-ir-v2-a3.md, 3.4). */
-static _Py_COLD_FUNCTION Py_NO_INLINE int
-finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr *next, _PyValueTemps *temps,
-                       PyValue displaced)
-{
-    return finish_value_bridges_ex(tstate, frame, next, temps, &displaced, 1,
-                                   PyValue_NULL);
-}
-
-/* The rest of IR_UNPACK_TO_LOCALS(): store the elements from index first on,
- * releasing each local's old value before the next is stored, as the
- * STORE_FAST sequence does, and refreshing after each release, which can run
- * Python.  Out of line for the address of the old value (as
- * finish_displaced_local) and for unpacks of many elements. */
-static Py_NO_INLINE int
-finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *next, _PyValueTemps *temps,
-                        PyValue *locals, PyValue *window, int n, int first)
-{
-    int err = 0;
-    for (int i = first; i < n; i++) {
-        PyValue *element = &window[n - 1 - i];
-        if (err < 0) {
-            PyValue rest = *element;
-            *element = PyValue_NULL;
-            PyValue_XCLOSE(rest);
-            continue;
-        }
-        PyValue old = locals[i];
-        locals[i] = *element;
-        _PyValue_CheckHome(locals[i]);
-        *element = PyValue_NULL;
-        err = finish_value_bridges_ex(tstate, frame, next, temps, &old, 1,
-                                      PyValue_NULL);
-    }
-    return err;
-}
 
 typedef struct {
     PyThreadState *tstate;

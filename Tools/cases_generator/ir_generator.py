@@ -7295,7 +7295,7 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 # releases the boxes and adds none, so a handler that boxes nothing passes
 # it NULL.  The macros that box without naming value_temps are listed;
 # test_ir_contract checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"_PyValueTemps_Close", "finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
+NON_BOXING_CALLS = {"_PyValueTemps_Close",
                     "value_attribute_complete", "value_operation_finish",
                     "value_reader_complete"}
 
@@ -8315,7 +8315,7 @@ ADDRESS_INLINE_CALLS = {
 # body, so that a body cannot take their address either
 HANDLER_LOCALS = {
     "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
-    "window", "oparg", "fb", "opcode", "value_temps", "ir_displaced",
+    "window", "oparg", "fb", "opcode", "value_temps", "ir_old",
     "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",

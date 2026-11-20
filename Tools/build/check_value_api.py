@@ -2194,12 +2194,12 @@ BORROW_TESTS = {
         #include "{SRCDIR}/Python/ceval_macros.h"
         void f(PyThreadState *tstate, _PyInterpreterFrame *frame,
                PyValue *slots, uint64_t ir_word, PyValueBorrow b) {{
-            PyValue ir_displaced = PyValue_NULL;
+            PyValue ir_old = PyValue_NULL;
             IR_STORE_DST(ir_word, A, b);  /* rejected */
-            (void)ir_displaced;
-        }}""", r"incompatible type for argument 4 of "
-              r"'_PyFrame_ReplaceKnownHome'|passing 'PyValueBorrow' to "
-              r"parameter of incompatible type 'PyValue'"),
+            (void)ir_old;
+        }}""", r"incompatible types when assigning to type 'PyValue' from "
+              r"type 'PyValueBorrow'|assigning to 'PyValue' from "
+              r"incompatible type 'PyValueBorrow'"),
     # Section 5.6: a producer's borrow passed to a stealing setter, against
     # the real headers.
     "borrow_element_stored": ("""

@@ -1441,15 +1441,16 @@ call_publish_result(_PyInterpreterFrame *frame, const _PyIRWord *head,
  * included), which are all in the first operand word: no loop, no call.  The
  * result is stored, every temporary operand and the callable is detached from
  * its home, and only then are the detached owners closed, in reverse order, so
- * that a finalizer sees the frame as the call left it. */
+ * that a finalizer sees the frame as the call left it.  n is the number of
+ * operands that name slots. */
 static inline Py_ALWAYS_INLINE PyValue
-call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
+call_publish_n(_PyInterpreterFrame *frame, const _PyIRWord *head,
+               PyValue result, unsigned int n)
 {
-    _PyIRWord word = *head;
-    unsigned int n = IR_C(word);
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
         return call_publish_result(frame, head, result, (int)n);
     }
+    _PyIRWord word = *head;
     _PyIRWord ops = head[1];
     PyValue *slots = _PyFrame_Slots(frame);
     uint32_t dst = IR_A(word);
@@ -1484,6 +1485,24 @@ call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
     return displaced;
 }
 
+static inline Py_ALWAYS_INLINE PyValue
+call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
+{
+    return call_publish_n(frame, head, result, IR_C(*head));
+}
+
+/* Copy N operands of the call at HEAD, from operand FIRST on, to ARGS.  They
+ * are all in the first operand word (FIRST + N is at most
+ * IR_OPERANDS_PER_WORD), which is read once. */
+#define CALL_NATIVE_GATHER(HEAD, SLOTS, FIRST, N, ARGS) \
+    do { \
+        uint64_t fields_ = (HEAD)[1] >> (16 + 12 * (FIRST)); \
+        for (int i_ = 0; i_ < (N); i_++) { \
+            (ARGS)[i_] = (SLOTS)[fields_ & IR_FIELD_MAX]; \
+            fields_ >>= 12; \
+        } \
+    } while (0)
+
 /* The native vectorcall of a call, on its operands as they stand in their
  * homes: they are borrowed for the call, as a temporary cannot change and a
  * local's old value survives a write through its frame's proxy.  The caller
@@ -1516,8 +1535,13 @@ call_vector_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (lead) {
         args[0] = receiver;
     }
-    for (int i = 0; i < operands - first; i++) {
-        args[lead + i] = slots[_PyIR_CallOperand(head, first + i)];
+    if (operands <= IR_OPERANDS_PER_WORD) {
+        CALL_NATIVE_GATHER(head, slots, first, operands - first, args + lead);
+    }
+    else {
+        for (int i = 0; i < operands - first; i++) {
+            args[lead + i] = slots[_PyIR_CallOperand(head, first + i)];
+        }
     }
     PyObject *names = NULL;
     size_t positional = (size_t)nargs;
@@ -1559,14 +1583,6 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * path that raises.
  *
  * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
-#define CALL_NATIVE_GATHER(HEAD, SLOTS, FIRST, N, ARGS) \
-    do { \
-        uint64_t fields_ = (HEAD)[1] >> (16 + 12 * (FIRST)); \
-        for (int i_ = 0; i_ < (N); i_++) { \
-            (ARGS)[i_] = (SLOTS)[fields_ & IR_FIELD_MAX]; \
-            fields_ >>= 12; \
-        } \
-    } while (0)
 
 /* The result of a native handler's call: the handler deoptimizes when miss is
  * set, a guard that needs the operands having failed.  The guards of a builtin
@@ -4204,16 +4220,39 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     }
     PyValue result = call_vector_impl(tstate, frame, head, callable, receiver,
                                       keywords);
-    /* The call can run Python: check the frame before monitoring reads it. */
-    int refreshed = call_refresh(tstate, frame, head);
-    int failed = PyValue_IsNull(result);
-    if (instrumented) {
-        failed = call_monitor_result(tstate, frame, head, callable, first,
-                                     failed || refreshed < 0);
-        /* The event can run Python too. */
-        if (!failed && refreshed == 0) {
-            refreshed = call_refresh(tstate, frame, head);
+    if (!instrumented) {
+        /* The callee may have run Python, but nothing that the rest of the
+         * call reads can have changed.  A native callee returns on the C
+         * stack above this activation, so this frame is the current one;
+         * the executing copy of the code, and so the head, is fixed for the
+         * life of the code object (register-ir.md 1.10), as value_operation_
+         * refresh() asserts; and the frame's slots stay where they are.  The
+         * temporaries are owned by their homes and a local that the callee
+         * rebound keeps its old value alive, so publishing reads nothing
+         * stale.  A finalizer that the release runs is in the same position.
+         * Only an event's callback, below, reads the frame after the call. */
+        assert(tstate->current_frame == frame);
+        assert(_PyFrame_GetCode(frame)->_co_exec != NULL &&
+               frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words);
+        if (PyValue_IsNull(result)) {
+            return (_PyCallResult){-1, NULL};
         }
+        PyValue displaced = call_publish_n(
+            frame, head, result, (unsigned int)((int)IR_C(word) - keywords));
+        PyValue_XCLOSE(displaced);
+        if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
+            return (_PyCallResult){-1, NULL};
+        }
+        return (_PyCallResult){0, NULL};
+    }
+    /* An instrumented call: the callee can run Python, so check the frame
+     * before the event's callback reads it, and again after the callback,
+     * which can run Python too. */
+    int refreshed = call_refresh(tstate, frame, head);
+    int failed = call_monitor_result(tstate, frame, head, callable, first,
+                                     PyValue_IsNull(result) || refreshed < 0);
+    if (!failed && refreshed == 0) {
+        refreshed = call_refresh(tstate, frame, head);
     }
     if (failed || refreshed < 0) {
         PyValue_XCLOSE(result);

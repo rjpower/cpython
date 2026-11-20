@@ -2995,8 +2995,10 @@ PyDict_Clear(PyObject *op)
 
 /* Find the entry at or after *ppos without changing ownership: on success
  * store the dict's own key, value and hash, advance *ppos past the entry and
- * return 1; return 0 at the end. */
-static int
+ * return 1; return 0 at the end. The key of a split or unicode table is an
+ * exact str, which has no inline form, so it is borrowed without the number
+ * test of PyValue_FromObjectBorrow(). */
+static inline Py_ALWAYS_INLINE int
 dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
                  PyValueBorrow *pvalue, Py_hash_t *phash)
 {
@@ -3012,7 +3014,7 @@ dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
         value = PyValue_Borrow(mp->ma_values->values[index]);
         PyObject *key_object = LOAD_SHARED_KEY(
             DK_UNICODE_ENTRIES(mp->ma_keys)[index].me_key);
-        key = PyValue_FromObjectBorrow(key_object);
+        key = _PyValue_PointerBorrow(key_object);
         hash = unicode_get_hash(key_object);
     }
     else {
@@ -3028,7 +3030,7 @@ dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
             if (i >= n) {
                 return 0;
             }
-            key = PyValue_FromObjectBorrow(entries[i].me_key);
+            key = _PyValue_PointerBorrow(entries[i].me_key);
             value = PyValue_Borrow(entries[i].me_value);
             hash = unicode_get_hash(entries[i].me_key);
         }

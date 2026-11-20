@@ -1718,9 +1718,9 @@ class TestIRCases(unittest.TestCase):
         inst(OP_POINTER, (value -- res)) {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
-            binaryfunc func = Py_TYPE(o)->tp_as_number->nb_add;
+            binaryfunc action = Py_TYPE(o)->tp_as_number->nb_add;
             Py_ssize_t n = Py_TYPE(o)->tp_basicsize;
-            PyObject *r = (*func)(o, o);
+            PyObject *r = (*action)(o, o);
             SPAM(n, r);
             PyValue_CLOSE(value);
             res = PyValue_None;
@@ -1728,7 +1728,7 @@ class TestIRCases(unittest.TestCase):
         inst(OP_FIELD, (value -- res)) {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
-            PyObject *r = Py_TYPE(o)->tp_as_number->func(o, o);
+            PyObject *r = Py_TYPE(o)->tp_as_number->action(o, o);
             SPAM(r);
             PyValue_CLOSE(value);
             res = PyValue_None;

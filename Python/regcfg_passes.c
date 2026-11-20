@@ -818,9 +818,11 @@ _PyRegPass_TruthFold(_PyRegCfg *cfg)
  * a local does under copy propagation, and the reader names the slot.  The
  * same conditions apply as there, less the rules about writes: nobody writes
  * a constant slot.  So a `return None` or an `n - 1` names a slot wherever
- * it is, in a loop or not.  A code object has at most CONST_SLOTS_MAX
- * constant slots, given in order of static use; window inputs and every
- * other constant keep their loads.
+ * it is, in a loop or not.  The readers include a call's operand words,
+ * which borrow like any register field (a constant slot is a local to
+ * them).  A code object has at most CONST_SLOTS_MAX constant slots, given in
+ * order of static use; window inputs (the BUILD_* ops, SEND) and every other
+ * constant keep their loads.
  *
  * The slots sit between the cells and the free variables, so the free
  * variables and everything above them move up, and so do the opargs that

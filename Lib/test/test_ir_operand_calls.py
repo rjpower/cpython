@@ -4,7 +4,10 @@ Each shape runs cold, through the generic handlers, and warm, through the
 specialized ones; the results are those of the stack interpreter.
 """
 
+import dis
+import struct
 import sys
+import types
 import unittest
 import weakref
 
@@ -227,6 +230,123 @@ class OperandCallShapeTests(unittest.TestCase):
             self.assertEqual(call(receiver, "method"), 2)
         del receiver
         self.assertIsNone(reference())
+
+
+class ConstantSlotOperandTests(unittest.TestCase):
+    """A call's operand words name constant slots, as any register input
+    does: inline-scalar and immortal constants, eight to a code object.  A
+    constant slot is a local to the call, which borrows it and never
+    releases it."""
+
+    @staticmethod
+    def const_slots(code):
+        "{slot: constant} of the code's constant slots"
+        raw = code.co_constslots
+        table = struct.unpack("%dI" % (len(raw) // 4), raw)
+        return {table[i]: code.co_consts[table[i + 1]]
+                for i in range(0, len(table), 2)}
+
+    def call_sources(self, code):
+        "The constants that the last call of the code reads, in order"
+        slots = self.const_slots(code)
+        call = [i for i in dis.get_instructions(code)
+                if i.opname.startswith("CALL")][-1]
+        return [slots[s] for s in call.srcs if s in slots]
+
+    def loads(self, code):
+        return [i.opname for i in dis.get_instructions(code)
+                if i.opname.startswith(("LOAD_SMALL_INT", "LOAD_CONST",
+                                        "LOAD_COMMON_CONSTANT"))]
+
+    def check(self, function, expected, *args):
+        for result in run(function, *args):
+            self.assertEqual(result, expected)
+
+    def test_inline_and_immortal_constants(self):
+        def f(g):
+            return g(1, None)
+        self.check(f, (1, None), lambda a, b: (a, b))
+        self.assertEqual(self.call_sources(f.__code__), [1, None])
+        self.assertEqual(self.loads(f.__code__), [])
+
+    def test_constant_outside_a_loop_and_inside(self):
+        def once(x):
+            return add(x, 1)
+
+        def loop(x):
+            for _ in range(3):
+                x = add(x, 1)
+            return x
+        self.check(once, 6, 5)
+        self.check(loop, 8, 5)
+        self.assertEqual(self.call_sources(once.__code__), [1])
+        self.assertEqual(self.call_sources(loop.__code__), [1])
+        self.assertEqual(self.loads(loop.__code__), [])
+
+    def test_constant_for_a_method_and_a_builtin(self):
+        def f(o):
+            return o.method(1, 3), max(2, 7), divmod(9, 4)
+        self.check(f, (10 + 1 + 3, 7, (2, 1)), Point(10))
+
+    def test_keyword_value(self):
+        def f(a):
+            return add(a, b=1)
+        self.check(f, 6, 5)
+        self.assertEqual(self.call_sources(f.__code__), [1])
+
+    def test_nine_distinct_constants_take_eight_slots(self):
+        def f(g):
+            return g(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        self.check(f, tuple(range(1, 10)), lambda *a: a)
+        # In order of static use; the ninth keeps its load
+        self.assertEqual(self.call_sources(f.__code__), list(range(1, 9)))
+        self.assertEqual(len(self.const_slots(f.__code__)), 8)
+        self.assertEqual(self.loads(f.__code__), ["LOAD_SMALL_INT"])
+
+    def test_repeated_constant_shares_a_slot(self):
+        def f(g):
+            return g(1, 1, 1)
+        self.check(f, (1, 1, 1), lambda *a: a)
+        self.assertEqual(len(self.const_slots(f.__code__)), 1)
+
+    def test_mortal_constant_keeps_its_count(self):
+        # After code.replace the constant need not be immortal: the frame
+        # then counts the constant it holds, and the call borrows it.
+        def f(g):
+            return g(1, 2)
+
+        raw = f.__code__.co_constslots
+        table = struct.unpack("%dI" % (len(raw) // 4), raw)
+        big, bigger = 10 ** 30, 3 * 10 ** 30
+        consts = list(f.__code__.co_consts)
+        for slot, index in zip(table[::2], table[1::2]):
+            consts[index] = {1: big, 2: bigger}[consts[index]]
+        replaced = types.FunctionType(
+            f.__code__.replace(co_consts=tuple(consts)), {})
+        # A Python callee takes the operands into its frame, a builtin
+        # reads them in place
+        for callee, expected in ((lambda a, b: (a, b), (big, bigger)),
+                                 (max, bigger), (min, big),
+                                 (divmod, divmod(big, bigger))):
+            with self.subTest(callee=callee):
+                self.check(replaced, expected, callee)
+                # The frame of the test holds the last result in a dead
+                # temporary, so count after a loop of the same calls
+                for _ in range(WARM):
+                    replaced(callee)
+                before = sys.getrefcount(big), sys.getrefcount(bigger)
+                for _ in range(WARM):
+                    replaced(callee)
+                self.assertEqual(
+                    (sys.getrefcount(big), sys.getrefcount(bigger)), before)
+
+    def test_hidden_slots_stay_out_of_frames(self):
+        def f(g):
+            return g(1, None, sys._getframe().f_locals)
+        names = f.__code__.co_varnames
+        (a, b, local), = [f(lambda *a: a)]
+        self.assertEqual(sorted(local), sorted(names))
+        self.assertEqual(f.__code__.co_varnames, names)
 
 
 class EvaluationOrderTests(unittest.TestCase):

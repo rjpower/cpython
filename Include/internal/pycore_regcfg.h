@@ -208,12 +208,13 @@ int _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
  * assign the slots. */
 int _PyRegCfg_Build(_PyRegCfg *cfg);
 
-/* Give the inline scalar constants that ops inside loops read in place a
- * hidden slot each (G6): the constant loads that copy propagation would fold
- * if the constant were a local go, the readers name the slot, and the slots
- * are inserted before the free variables (nfree of them), which move up
- * with the temporaries.  consts is the list of co_consts, to which the
- * values of LOAD_SMALL_INT are added.  Compacts again. */
+/* Give the inline scalar or immortal constants that ops read in place,
+ * through register fields and call operands alike, a hidden slot each (G6),
+ * eight at most: the constant loads that copy propagation would fold if the
+ * constant were a local go, the readers name the slot, and the slots are
+ * inserted before the free variables (nfree of them), which move up with
+ * the temporaries.  consts is the list of co_consts, to which the values
+ * of LOAD_SMALL_INT and LOAD_COMMON_CONSTANT are added.  Compacts again. */
 int _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
 
 /* The slot of register v: v for a local, its slot for a temporary. */

@@ -430,6 +430,14 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
     return names;
 }
 
+/* Whether constructors re-check the compiler's guarantees; see
+ * validate_semantic_image(). */
+static inline int
+code_validation_enabled(void)
+{
+    return _PyInterpreterState_GET()->opt_config.validate_code;
+}
+
 /* The words against the layout of the frame, which the compiler's verifier
  * (Python/regcfg.c) guarantees for its own output: no word writes a
  * constant slot, through a field whose role is a destination or a local
@@ -547,7 +555,8 @@ check_constslots(struct _PyCodeConstructor *con)
             return -1;
         }
     }
-    return check_const_layout(con, (int)first, (int)nconst);
+    return code_validation_enabled()
+        ? check_const_layout(con, (int)first, (int)nconst) : 0;
 }
 
 /* The units that an entry of each kind takes at least (pycore_feedback.h) */
@@ -2031,14 +2040,46 @@ check_operand_words(struct _PyCodeConstructor *con, const char *bytes,
     return 0;
 }
 
-/* Check the fields of every admitted image that the
- * interpreter uses as indices without checking them: each handler exists,
- * each slot is in the frame, and each feedback index has an entry, which
- * for an operand kept in the entry is not the shared entry 0.  Returns the
- * words to use, a new reference: code itself, or a copy whose inline
+/* The words to use, a new reference: the code itself, or a copy whose inline
  * constant handlers that no longer fit their constant run LOAD_CONST, as
  * after code.replace(co_consts=...). */
 static PyObject *
+fit_inline_constants(struct _PyCodeConstructor *con)
+{
+    PyObject *code = con->code;
+    PyObject *result = Py_NewRef(code);
+    const char *bytes = PyBytes_AS_STRING(code);
+    Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        _PyIRWord word;
+        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        int handler = IR_HANDLER(word);
+        if ((handler != LOAD_CONST_INLINE_INT &&
+             handler != LOAD_CONST_INLINE_FLOAT) ||
+            inline_const_fits(word, con->consts))
+        {
+            continue;
+        }
+        if (result == code) {
+            Py_SETREF(result, PyBytes_FromStringAndSize(
+                PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
+            if (result == NULL) {
+                return NULL;
+            }
+        }
+        _PyIR_SetHandler(&word, LOAD_CONST);
+        memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
+               sizeof(word));
+    }
+    return result;
+}
+
+/* Check the fields of every admitted image that the
+ * interpreter uses as indices without checking them: each handler exists,
+ * each slot is in the frame, and each feedback index has an entry, which
+ * for an operand kept in the entry is not the shared entry 0.  The compiler
+ * produces such images; this guards against hand-built code. */
+static int
 check_words(struct _PyCodeConstructor *con)
 {
     PyObject *code = con->code;
@@ -2049,7 +2090,6 @@ check_words(struct _PyCodeConstructor *con)
     int nfreevars;
     get_localsplus_counts(con->localsplusnames, con->localspluskinds,
                           NULL, NULL, &nfreevars);
-    PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
     Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
     const uint32_t *table = fbinit == NULL ? NULL
@@ -2058,8 +2098,7 @@ check_words(struct _PyCodeConstructor *con)
         : (int)(PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t));
     unsigned char *operand_words;
     if (mark_operand_words(bytes, nwords, &operand_words) < 0) {
-        Py_DECREF(result);
-        return NULL;
+        return -1;
     }
     // Each step is one instruction: a call head takes its operand words
     for (Py_ssize_t i = 0, length; i < nwords; i += length) {
@@ -2244,29 +2283,13 @@ check_words(struct _PyCodeConstructor *con)
                 goto error;
             }
         }
-        if ((handler == LOAD_CONST_INLINE_INT || handler == LOAD_CONST_INLINE_FLOAT)
-            && !inline_const_fits(word, consts))
-        {
-            if (result == code) {
-                Py_SETREF(result, PyBytes_FromStringAndSize(
-                    PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
-                if (result == NULL) {
-                    PyMem_Free(operand_words);
-                    return NULL;
-                }
-            }
-            _PyIR_SetHandler(&word, LOAD_CONST);
-            memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
-                   sizeof(word));
-        }
     }
     PyMem_Free(operand_words);
-    return result;
+    return 0;
 
 error:
     PyMem_Free(operand_words);
-    Py_DECREF(result);
-    return NULL;
+    return -1;
 }
 
 typedef struct {
@@ -3992,28 +4015,35 @@ validate_generator_boundaries(struct _PyCodeConstructor *con)
 }
 
 /* The normalized words and all semantic proofs refer to the same immutable
- * image. A caller's constructor and borrowed input references stay unchanged. */
+ * image. A caller's constructor and borrowed input references stay unchanged.
+ *
+ * Release builds trust the words they are given, as they trust the code of
+ * a C extension: the passes that re-derive the compiler's guarantees cost
+ * several times the rest of construction, and guard only against hand-built
+ * code and corrupt .pyc files. Only the compiler's selection of empty
+ * returns is needed to run. */
 static PyObject *
 validate_semantic_image(struct _PyCodeConstructor *con)
 {
     if (validate_code_structure(con) < 0) {
         return NULL;
     }
-    PyObject *words = check_words(con);
+    int validate = code_validation_enabled();
+    if (validate && check_words(con) < 0) {
+        return NULL;
+    }
+    PyObject *words = fit_inline_constants(con);
     if (words == NULL) {
         return NULL;
     }
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
     PyObject *normalized = NULL;
-    /* These proofs re-derive the compiler's output, for hand-built code and
-     * corrupt .pyc files: they cost several times the rest of construction.
-     * Only the compiler's selection of empty returns is needed to run. */
-    int validate = _PyInterpreterState_GET()->opt_config.validate_code;
-    if (validate_semantic_and_position_maps(&checked) < 0 ||
-        (validate && validate_completion_words(&checked) < 0) ||
-        validate_virtual_kwargs(&checked) < 0 ||
-        validate_generator_boundaries(&checked) < 0 ||
+    if ((validate &&
+         (validate_semantic_and_position_maps(&checked) < 0 ||
+          validate_completion_words(&checked) < 0 ||
+          validate_virtual_kwargs(&checked) < 0 ||
+          validate_generator_boundaries(&checked) < 0)) ||
         ((validate || con->select_returns) &&
          validate_normal_transfers(&checked,
              con->select_returns ? &normalized : NULL) < 0))
@@ -4023,11 +4053,11 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     }
     if (normalized != NULL) {
         Py_SETREF(words, normalized);
-    }
-    checked.code = words;
-    if (validate_generator_boundaries(&checked) < 0) {
-        Py_DECREF(words);
-        return NULL;
+        checked.code = words;
+        if (validate && validate_generator_boundaries(&checked) < 0) {
+            Py_DECREF(words);
+            return NULL;
+        }
     }
     return words;
 }

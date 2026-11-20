@@ -15,6 +15,13 @@ from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class SemanticContainerTests(unittest.TestCase):
     def test_line_redirect_failure_uses_the_target_recovery(self):
         class Marker(Exception):

@@ -48,6 +48,13 @@ def finish(generator, value):
     raise AssertionError("generator did not complete")
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class GeneratorContractExportTests(unittest.TestCase):
     def test_metadata_only_operation_has_an_ordinary_identity(self):
         handler = HANDLERS["BINARY_OP"]

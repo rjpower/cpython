@@ -790,6 +790,10 @@ typedef struct {
  * operand's slot if the word has one that is NULL at run time. */
 #define IR_CALL_ARG(K) \
     IR_OPERAND((K) + ((call_state & CALL_SELF_PRESENT) ? 0 : IR_CALL_HAS_SELF(ir_word)))
+/* The first operand that a native handler passes to the callee: operand 0,
+ * or operand 1 when the word has a self operand that is NULL at run time. */
+#define IR_CALL_FIRST() \
+    ((call_state & CALL_SELF_PRESENT) ? 0 : IR_CALL_HAS_SELF(ir_word))
 /* The tuple of a CALL_KW's keyword names: its last operand is the index in
  * co_consts, which the code keeps alive. */
 #define IR_CALL_KWNAMES() \
@@ -1536,6 +1540,112 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
             const _PyIRWord *head, PyValue callable)
 {
     return call_vector_impl(tstate, frame, head, callable, PyValue_NULL, 0);
+}
+
+/* The native call of a specialized handler: the callee reads operands first
+ * to the end of the call's operand list, copied to a C array that the callee
+ * borrows for the call.  The copy is made before the callee runs, so the
+ * callee sees the operands as they stood at entry (the old value of a local
+ * that the callee rebinds through its frame's proxy stays alive in
+ * f_overwritten_fast_locals, and a temporary cannot change).  The handler
+ * publishes the result and releases the temporaries, as after call_vector().
+ *
+ * A callee written against the value API (METH_VALUE) is called through its
+ * value entry; an object-API callee through the object vectorcall of the
+ * function or descriptor, which boxes the inline words, as the dispatcher of
+ * _PyValue_VectorcallTstate() does.  The handler's guard checked the call
+ * flags, so the bridge is one test of METH_VALUE.  The recursion limit is
+ * checked by the guard (_CHECK_RECURSION_LIMIT), which deopts to the generic
+ * path that raises.
+ *
+ * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
+#define CALL_NATIVE_GATHER(HEAD, SLOTS, FIRST, N, ARGS) \
+    do { \
+        uint64_t fields_ = (HEAD)[1] >> (16 + 12 * (FIRST)); \
+        for (int i_ = 0; i_ < (N); i_++) { \
+            (ARGS)[i_] = (SLOTS)[fields_ & IR_FIELD_MAX]; \
+            fields_ >>= 12; \
+        } \
+    } while (0)
+
+/* The result of a native handler's call: the handler deoptimizes when miss is
+ * set, a guard that needs the operands having failed.  The guards of a builtin
+ * function here are its fixed-arity value forms' (METH_VALUE | METH_O or
+ * METH_NOARGS) number of arguments. */
+typedef struct {
+    PyValue value;
+    int miss;
+} _PyNativeCallResult;
+
+#define CALL_NATIVE_MISS ((_PyNativeCallResult){PyValue_NULL, 1})
+#define CALL_NATIVE_DONE(V) ((_PyNativeCallResult){(V), 0})
+
+static inline Py_ALWAYS_INLINE _PyNativeCallResult
+call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    const _PyIRWord *head, PyValue callable, int first)
+{
+    PyCFunctionObject *func =
+        (PyCFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+    int flags = func->m_ml->ml_flags;
+    int n = (int)IR_C(*head) - first;
+    if (((flags & METH_O) && n != 1) || ((flags & METH_NOARGS) && n != 0)) {
+        return CALL_NATIVE_MISS;
+    }
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
+    if (flags & METH_VALUE) {
+        _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
+                                 func->m_ml->ml_meth;
+        PyValue result = meth(_PyCFunction_GET_SELF_VALUE((PyObject *)func),
+                              args, n, NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return CALL_NATIVE_DONE(result);
+    }
+    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
+        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL));
+}
+
+/* A method descriptor: the receiver is operand first, which must be an exact
+ * instance of the descriptor's type, and the callee takes it with the
+ * arguments. */
+static inline Py_ALWAYS_INLINE _PyNativeCallResult
+call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       const _PyIRWord *head, PyValue callable, int first)
+{
+    PyMethodDescrObject *descr =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(callable);
+    int flags = descr->d_method->ml_flags;
+    int n = (int)IR_C(*head) - first;
+    if (n == 0 || ((flags & METH_O) && n != 2)
+        || ((flags & METH_NOARGS) && n != 1))
+    {
+        return CALL_NATIVE_MISS;
+    }
+    PyValue *slots = _PyFrame_Slots(frame);
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        PyValue receiver = slots[_PyIR_CallOperand(head, first)];
+        if (PyValue_TYPE(receiver) != descr->d_common.d_type) {
+            return CALL_NATIVE_MISS;
+        }
+        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, slots, first, n, args);
+    if (PyValue_TYPE(args[0]) != descr->d_common.d_type) {
+        return CALL_NATIVE_MISS;
+    }
+    if (flags & METH_VALUE) {
+        _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
+                                 descr->d_method->ml_meth;
+        PyValue result = meth(PyValue_Borrow(args[0]), args + 1, n - 1, NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return CALL_NATIVE_DONE(result);
+    }
+    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
+        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL));
 }
 
 /* Move or count the first count (at most four) operands of fields, the twelve

@@ -4661,7 +4661,10 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_FAST, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL functions, without keywords */
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_builtin_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4673,6 +4676,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_FAST +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_FAST +
             _CHECK_PERIODIC_AT_END;
 
@@ -4687,7 +4691,10 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_builtin_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4699,6 +4706,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
@@ -4852,18 +4860,14 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS));
-            int total_args = oparg;
-            if (call_state & CALL_SELF_PRESENT) {
-                total_args++;
-            }
-            EXIT_IF(total_args == 0);
-            EXIT_IF(PyValue_TYPE(IR_CALL_ARG(0)) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
-            
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_descriptor_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4875,6 +4879,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
@@ -4926,19 +4931,14 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
-            int total_args = oparg;
-            if (call_state & CALL_SELF_PRESENT) {
-                total_args++;
-            }
-            EXIT_IF(total_args == 0);
-            PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- res)) {
-            
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_descriptor_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4950,6 +4950,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST +
+            _CHECK_RECURSION_LIMIT +
             _CALL_METHOD_DESCRIPTOR_FAST +
             _CHECK_PERIODIC_AT_END;
 

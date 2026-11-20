@@ -6453,10 +6453,25 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
             // _CALL_BUILTIN_FAST
             {
                 STAT_INC(CALL, hit);
-                PyValue result = call_vector(tstate, frame, this_instr, callable);
+                _PyNativeCallResult call = call_builtin_values(
+                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                if (call.miss) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -6515,10 +6530,25 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
             // _CALL_BUILTIN_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                PyValue result = call_vector(tstate, frame, this_instr, callable);
+                _PyNativeCallResult call = call_builtin_values(
+                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                if (call.miss) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -7220,17 +7250,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int total_args = oparg;
-                if (call_state & CALL_SELF_PRESENT) {
-                    total_args++;
-                }
-                if (total_args == 0) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue self = IR_CALL_ARG(0);
-                if (PyValue_TYPE(self) != method->d_common.d_type) {
+            }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7239,7 +7262,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _CALL_METHOD_DESCRIPTOR_FAST
             {
                 STAT_INC(CALL, hit);
-                PyValue result = call_vector(tstate, frame, this_instr, callable);
+                _PyNativeCallResult call = call_descriptor_values(
+                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                if (call.miss) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -7298,16 +7328,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int total_args = oparg;
-                if (call_state & CALL_SELF_PRESENT) {
-                    total_args++;
-                }
-                if (total_args == 0) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                if (PyValue_TYPE(IR_CALL_ARG(0)) != method->d_common.d_type) {
+            }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7316,7 +7340,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                PyValue result = call_vector(tstate, frame, this_instr, callable);
+                _PyNativeCallResult call = call_descriptor_values(
+                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                if (call.miss) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }

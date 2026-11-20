@@ -1802,7 +1802,8 @@ get_feedback(PyObject *self, PyObject *args)
 /* The words of CODE as the compiler emitted them, or with ADAPTIVE those of
  * its executing copy, which specialisation and instrumentation rewrite:
  * per word a tuple (handler, a, b, c, d) of the name of its handler and its
- * fields.  The executing copy of code that has never run is co_code's. */
+ * fields.  The operand words of a call follow its head as words of their own,
+ * named IR_OPERANDS.  The executing copy of code that has never run is co_code's. */
 static PyObject *
 get_ir(PyObject *self, PyObject *args)
 {
@@ -1829,8 +1830,9 @@ get_ir(PyObject *self, PyObject *args)
          * copy's slot-class flags are derived and not shown. */
         const char *roles = (word & IR_F_NO_KW) ? "+NO_SELF+NO_KW"
                           : (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
+        const char *operands = (word & IR_F_OPERANDS) ? "+OPERANDS" : "";
         PyObject *item = Py_BuildValue(
-            "(NIIII)", PyUnicode_FromFormat("%s%s", name, roles),
+            "(NIIII)", PyUnicode_FromFormat("%s%s%s", name, roles, operands),
             IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
             Py_XDECREF(item);
@@ -4614,6 +4616,23 @@ compile_without_copyprop_kill(PyObject *self, PyObject *args)
     return code;
 }
 
+/* Compile source with the arguments of every CALL as operand words, which
+ * the call handlers do not read yet: the code is for the walkers over the
+ * words, and does not run past a call. */
+static PyObject *
+compile_with_operand_calls(PyObject *self, PyObject *args)
+{
+    const char *source, *filename;
+    if (!PyArg_ParseTuple(args, "ss:compile_with_operand_calls",
+                          &source, &filename)) {
+        return NULL;
+    }
+    int old = _PyAssemble_SetOperandCalls(1);
+    PyObject *code = Py_CompileString(source, filename, Py_file_input);
+    _PyAssemble_SetOperandCalls(old);
+    return code;
+}
+
 static PyObject *
 set_inline_exception_value(PyObject *self, PyObject *exception)
 {
@@ -4924,6 +4943,7 @@ static PyMethodDef module_functions[] = {
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
+    {"compile_with_operand_calls", compile_with_operand_calls, METH_VARARGS, NULL},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,
      METH_VARARGS, NULL},
     {"repr_guard_probe", repr_guard_probe, METH_O},

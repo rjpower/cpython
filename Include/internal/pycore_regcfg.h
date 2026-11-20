@@ -70,6 +70,10 @@ extern "C" {
 #define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
+#define _PyReg_OPERANDS        4096 // a call whose word has operand words
+                                    // (IR_F_OPERANDS): the last noperands of
+                                    // its inputs, one field each, and
+                                    // noperands in the C field of its head
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -93,6 +97,7 @@ typedef struct _PyRegOp {
                             // the pair.  0: none.
     int completion;         // index + 1 of the frontend END_SEND whose
                             // allocated recipient this semantic producer owns
+    int noperands;          // with _PyReg_OPERANDS, the number of operands
     _Py_SourceLocation loc;
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */
@@ -244,6 +249,13 @@ int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
 void _PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree);
 int _PyRegPass_FuseJump(_PyRegCfg *cfg);
+
+/* For tests only (_testinternalcapi.compile_with_operand_calls()): while
+ * set, the assembler gives every CALL its arguments as operand words, which
+ * the window still holds, so that the walkers meet them in code that the
+ * compiler made.  Returns the old setting.  Step 2b of calls80 makes the
+ * compiler do it for every call and removes this. */
+PyAPI_FUNC(int) _PyAssemble_SetOperandCalls(int enable);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

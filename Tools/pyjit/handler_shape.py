@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """Report the shape of an evaluator's handlers from a compiled object.
 
-Two backends:
+Three backends:
 
   tc  one C function per handler (`<prefix>NAME`, default `_TAIL_CALL_`).
   cg  one function (default `_PyEval_EvalFrameDefault`) whose handlers are
       labels.  The labels come from a static table of label addresses (in a
       `.o`, an array with R_X86_64_64 relocations to `.text+offset`).  The
       table symbol and the source of the index -> name mapping are options.
+  alloc  not a shape: the register allocator's size for the evaluator.  It
+      compiles the source with the build's own command plus `-fdump-rtl-ira`
+      into a scratch directory, and reports the evaluator's allocnos, basic
+      blocks and their product, regions and conflicts.  GCC 15 gives up the
+      conflict graph (IRA runs one region and keeps the interpreter state in
+      memory) where pseudos times blocks reaches 2^26, and the product of
+      allocnos and blocks is the measure of that size.  It fails when there
+      are no conflicts, or the product exceeds ALLOC_LIMIT.
 
 Per handler and in total it reports the frame, stack canaries, indirect jumps,
 the shortest path from the handler's entry to its dispatch jump (the "fast
@@ -25,6 +33,7 @@ jumps leaving the function end no path.
 Usage:
   handler_shape.py OBJ [--json OUT.json] [options]            # tc (default)
   handler_shape.py OBJ --mode cg --names opcode-ids:Include/opcode_ids.h
+  handler_shape.py --mode alloc --build-dir BUILD [--source Python/ceval.c]
   handler_shape.py --compare A.json B.json
   handler_shape.py --share KCAT_FILE...                       # handler share
 
@@ -33,10 +42,14 @@ Standard library plus `objdump`/`readelf`.
 import argparse
 import collections
 import heapq
+import glob
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 
 E59 = ('/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/'
        'pyjit-link-wave1/register-semantics59')
@@ -54,6 +67,11 @@ PROBE_STACK_REF_RE = re.compile(r'\((%rsp|%rbp)\)')
 CANARY_TEXT = '%fs:0x28'
 CANARY_SYM = '__stack_chk_fail'
 CALL_COST = 1000
+
+# The largest product of allocnos and basic blocks of the evaluator that the
+# project accepts.  GCC 15's limit is used pseudos times blocks of 2^26
+# (67.1M), which allocnos times blocks tracks within a few percent.
+ALLOC_LIMIT = 50_000_000
 
 
 # ---------------------------------------------------------------------------
@@ -653,14 +671,77 @@ def compare(a_path, b_path):
     return '\n'.join(out)
 
 
+# ---------------------------------------------------------------------------
+# Allocator mode
+
+def compile_command(build_dir, source):
+    """The build's command for the object of SOURCE, as make prints it when
+    the source is newer: (argv, object path relative to the build)."""
+    source = os.path.abspath(source)
+    obj = os.path.splitext(os.path.relpath(source, os.path.dirname(os.path.dirname(source))))[0] + '.o'
+    out = subprocess.run(['make', '-n', '-W', source, obj], cwd=build_dir,
+                         capture_output=True, text=True, check=True).stdout
+    commands = [l for l in out.splitlines() if ' -c ' in l and source in l]
+    if len(commands) != 1:
+        sys.exit(f'expected one compile command for {obj}, make printed:\n{out}')
+    return shlex.split(commands[0]), obj
+
+
+def alloc_report(build_dir, source, function):
+    """Compile SOURCE with the build's command and `-fdump-rtl-ira` in a
+    scratch directory, and read FUNCTION's figures from the dump."""
+    argv, obj = compile_command(build_dir, source)
+    with tempfile.TemporaryDirectory(prefix='alloc-check-') as scratch:
+        i = argv.index('-o')
+        argv[i + 1] = os.path.join(scratch, 'out.o')
+        argv += ['-fdump-rtl-ira', '-dumpdir', scratch + '/']
+        subprocess.run(argv, cwd=build_dir, check=True)
+        dumps = glob.glob(os.path.join(scratch, '*.ira'))
+        if len(dumps) != 1:
+            sys.exit(f'expected one IRA dump, found {dumps}')
+        with open(dumps[0]) as fh:
+            text = fh.read()
+    m = re.search(r'^;; Function %s \(.*?(?=^;; Function |\Z)' % re.escape(function),
+                  text, re.M | re.S)
+    if not m:
+        sys.exit(f'no function {function} in the IRA dump')
+    body = m.group(0)
+    regions = re.search(r'regions=(\d+), blocks=(\d+)', body)
+    counts = re.search(r'allocnos=(\d+).*?conflicts=(\d+)', body)
+    if not regions or not counts:
+        sys.exit(f'IRA printed no figures for {function}')
+    rep = {'function': function,
+           'regions': int(regions.group(1)), 'blocks': int(regions.group(2)),
+           'allocnos': int(counts.group(1)), 'conflicts': int(counts.group(2))}
+    rep['product'] = rep['allocnos'] * rep['blocks']
+    return rep
+
+
+def format_alloc(rep):
+    lines = [f"{rep['function']}: allocnos {rep['allocnos']}, blocks {rep['blocks']}, "
+             f"product {rep['product'] / 1e6:.2f}M (limit {ALLOC_LIMIT / 1e6:.0f}M), "
+             f"regions {rep['regions']}, conflicts {rep['conflicts']}"]
+    if rep['conflicts'] == 0:
+        lines.append('FAIL: no conflicts: IRA gave up the conflict graph '
+                     '(one region), which keeps the interpreter state in memory')
+    if rep['product'] > ALLOC_LIMIT:
+        lines.append(f"FAIL: the product exceeds {ALLOC_LIMIT / 1e6:.0f}M")
+    return '\n'.join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('obj', nargs='?', help='ceval.o or linked executable')
-    ap.add_argument('--mode', choices=['tc', 'cg'], default='tc')
+    ap.add_argument('--mode', choices=['tc', 'cg', 'alloc'], default='tc')
     ap.add_argument('--prefix', default='_TAIL_CALL_',
                     help='tc: handler function prefix')
-    ap.add_argument('--function', default='_PyEval_EvalFrameDefault',
-                    help='cg: the evaluator function')
+    ap.add_argument('--function', default=None,
+                    help='cg: the evaluator function (default '
+                    '_PyEval_EvalFrameDefault); alloc: default ir_evaluate')
+    ap.add_argument('--build-dir', help='alloc: the build to take the compile '
+                    'command from')
+    ap.add_argument('--source', default='Python/ceval.c',
+                    help='alloc: the source of the evaluator')
     ap.add_argument('--table-symbol',
                     default=r'opcode_targets_table(\.\d+)?|opcode_targets(\.\d+)?|targets(\.\d+)?',
                     help='cg: regex for the label-address table symbol')
@@ -687,8 +768,18 @@ def main():
         text, _ = share_report(args.share or DEFAULT_KCAT, args.prefix)
         print(text)
         return
+    if args.mode == 'alloc':
+        if not args.build_dir:
+            ap.error('--build-dir required for --mode alloc')
+        rep = alloc_report(args.build_dir, args.source, args.function or 'ir_evaluate')
+        print(format_alloc(rep))
+        if args.json:
+            with open(args.json, 'w') as fh:
+                json.dump(rep, fh, indent=1, sort_keys=True)
+        sys.exit(int(rep['conflicts'] == 0 or rep['product'] > ALLOC_LIMIT))
     if not args.obj:
         ap.error('OBJ required')
+    args.function = args.function or '_PyEval_EvalFrameDefault'
 
     funcs = disassemble(args.obj, args.probe_compat)
     rep = {'object': args.obj, 'mode': args.mode}

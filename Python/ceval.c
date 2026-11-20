@@ -2294,6 +2294,8 @@ static _PyCallResult call_run_vector(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
+static _PyCallResult call_run_keywords(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_ex(
@@ -5520,6 +5522,13 @@ call_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 _PyInstr *head, int flags)
 {
     return call_run(tstate, frame, head, flags, 0);
+}
+
+static Py_NO_INLINE _PyCallResult
+call_run_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  _PyInstr *head, int flags)
+{
+    return call_run(tstate, frame, head, flags, 1);
 }
 
 Py_NO_INLINE PyObject *

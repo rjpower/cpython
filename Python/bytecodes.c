@@ -3035,7 +3035,7 @@ dummy_func(
             *value_ptr = TAKE(value);
             STAT_INC(STORE_ATTR, hit);
             PyValue_XCLOSE(owner);
-            PyValue_XCLOSE(old_value);
+            PyValue_CLOSE(old_value);
         }
 
         macro(STORE_ATTR_SHAPE) =

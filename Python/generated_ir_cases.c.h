@@ -14196,7 +14196,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
-                PyValue_XCLOSE(old_value);
+                PyValue_CLOSE(old_value);
             }
             _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();

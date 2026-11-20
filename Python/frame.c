@@ -236,7 +236,7 @@ _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
 /* Release the first n slots of frame, from the top, so that a finalizer
  * that looks at the frame finds the slots that it has not reached yet intact
  * and the rest NULL.  The n cover the locals, which include the discard
- * slot. */
+ * slot.  A NULL slot is left as it is: most are NULL at the exit. */
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
@@ -248,10 +248,13 @@ clear_slots(_PyInterpreterFrame *frame, int n)
     PyValue *sp = locals + n;
     while (sp > locals) {
         sp--;
-        // a move: cleared below
         PyValue ref = *sp;
+        if (PyValue_IsNull(ref)) {
+            continue;
+        }
+        // a move: cleared before the close, which can run a finalizer
         *sp = PyValue_NULL;
-        PyValue_XCLOSE(ref);
+        PyValue_CLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
 }

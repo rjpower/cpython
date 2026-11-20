@@ -2634,7 +2634,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (removed_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i += instr_length(code, i)) {
+        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2659,7 +2659,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (new_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i += instr_length(code, i)) {
+        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2712,7 +2712,7 @@ done:;
         /* Restoring a forced wrapper above must not remove unchanged ordinary
          * branch monitoring when LINE itself has just been disabled. */
         if (!line_tools) {
-            for (int i = code->_co_firsttraceable; i < code_len; i += instr_length(code, i)) {
+            for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
                 int base = base_opcode(code, i);
                 if (opcode_has_event(base)) {
                     int event = EVENT_FOR_OPCODE[base];

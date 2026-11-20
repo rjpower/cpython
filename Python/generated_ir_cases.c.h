@@ -469,7 +469,7 @@ ir_run_CALL_FUNCTION_EX(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -482,7 +482,7 @@ ir_run_CALL_FUNCTION_EX(
             call_transaction_fallback_CALL_FUNCTION_EX:;
             assert(frame->instr_ptr == this_instr);
             {
-                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -6665,7 +6665,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -6740,7 +6740,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (0) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (0) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -9490,7 +9490,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }

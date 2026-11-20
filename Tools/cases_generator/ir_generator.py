@@ -6749,7 +6749,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         emitter.call_kind = kind
         emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_run_vector",
                             "CALL_TRANSACTION_KEYWORDS": "call_run_keywords",
-                            "CALL_TRANSACTION_EX": "call_transaction_run_ex"}[kind]
+                            "CALL_TRANSACTION_EX": "call_run_ex"}[kind]
         flags = []
         if name.startswith("INSTRUMENTED_"):
             flags.append("CALL_INSTRUMENTED")

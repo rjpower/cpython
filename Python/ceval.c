@@ -2298,6 +2298,8 @@ static _PyCallResult call_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
+static _PyCallResult call_run_ex(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_ex(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_bind_direct(
@@ -5529,6 +5531,122 @@ call_run_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   _PyInstr *head, int flags)
 {
     return call_run(tstate, frame, head, flags, 1);
+}
+
+/* The positional arguments of a CALL_FUNCTION_EX that are not a tuple, as a
+ * new tuple: the call keeps it, and the operand keeps the iterable until the
+ * call is over.  Preparing it can run Python (__iter__, __getitem__); the
+ * messages of the errors are upstream's. */
+static Py_NO_INLINE PyObject *
+call_args_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                _PyInstr *head, PyValue callable, PyValue args)
+{
+    PyObject *args_object = PyValue_AsObject(args);
+    if (args_object == NULL) {
+        return NULL;
+    }
+    PyObject *tuple = NULL;
+    PyObject *callable_object = PyValue_AsObject(callable);
+    if (callable_object != NULL &&
+        _Py_Check_ArgsIterable(tstate, callable_object, args_object) >= 0) {
+        tuple = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args_object));
+    }
+    Py_XDECREF(callable_object);
+    Py_DECREF(args_object);
+    if (call_refresh(tstate, frame, head) < 0) {
+        Py_CLEAR(tuple);
+    }
+    return tuple;
+}
+
+/* The generic CALL_FUNCTION_EX, instrumented or not.  The operands are the
+ * positional iterable or tuple and, with CALL_KWARGS_PRESENT, the kwargs
+ * dict.  A Python callee takes new references to them and to the function
+ * (and the tuple, if the call prepared one), and the operands are released
+ * once its frame is current; a native callee and every instrumented call go
+ * through _PyValue_Call() as upstream's do. */
+static Py_NO_INLINE _PyCallResult
+call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
+            int flags)
+{
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
+    PyValue *slots = _PyFrame_Slots(frame);
+    PyValue callable = slots[IR_B(word)];
+    PyValue args = slots[_PyIR_CallOperand(head, 0)];
+    PyObject *kwargs = (flags & CALL_KWARGS_PRESENT)
+        ? PyValue_AsKnownObjectBorrow(slots[_PyIR_CallOperand(head, 1)]) : NULL;
+    int operands = 1 + ((flags & CALL_KWARGS_PRESENT) != 0);
+    int instrumented = (flags & CALL_INSTRUMENTED) != 0;
+    PyObject *tuple = NULL;
+    if (!PyValue_IsObject(args) ||
+        !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args))) {
+        tuple = call_args_tuple(tstate, frame, head, callable, args);
+        if (tuple == NULL) {
+            return (_PyCallResult){-1, NULL};
+        }
+    }
+    PyObject *callargs = tuple != NULL ? tuple : PyValue_AsKnownObjectBorrow(args);
+    PyValue first = PyTuple_GET_SIZE(callargs)
+        ? _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0)) : PyValue_NULL;
+    if (instrumented && call_monitor(tstate, frame, head, callable, first) < 0) {
+        Py_XDECREF(tuple);
+        return (_PyCallResult){-1, NULL};
+    }
+    if (!instrumented && call_is_python_function(tstate, callable)) {
+        PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+        PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
+        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
+            : Py_NewRef(func->func_globals);
+        PyValue function = PyValue_DUP(callable);
+        Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
+        /* The binding consumes these on both outcomes */
+        PyObject *owned_args = tuple != NULL ? tuple : Py_NewRef(callargs);
+        PyObject *owned_kwargs = Py_XNewRef(kwargs);
+        _PyInterpreterFrame *child = eval_frame_push_and_init_ex_code(
+            tstate, function, locals, nargs, owned_args, owned_kwargs, frame,
+            code);
+        Py_DECREF(code);
+        if (child == NULL) {
+            (void)call_refresh(tstate, frame, head);
+            return (_PyCallResult){-1, NULL};
+        }
+        call_commit(tstate, frame, head, child);
+        call_release_operands(frame, head, operands, UINT32_MAX);
+        return (_PyCallResult){0, child};
+    }
+    PyValue result = _PyValue_Call(tstate, callable, callargs, kwargs);
+    /* The call can run Python: check the frame before monitoring reads it. */
+    int refreshed = call_refresh(tstate, frame, head);
+    int failed = PyValue_IsNull(result);
+    if (instrumented &&
+        !(PyValue_IsObject(callable) &&
+          (PyFunction_Check(PyValue_AsKnownObjectBorrow(callable)) ||
+           PyMethod_Check(PyValue_AsKnownObjectBorrow(callable))))) {
+        failed = call_monitor_result(tstate, frame, head, callable, first,
+                                     failed || refreshed < 0);
+        /* The event can run Python too. */
+        if (!failed && refreshed == 0) {
+            refreshed = call_refresh(tstate, frame, head);
+        }
+    }
+    if (failed || refreshed < 0) {
+        PyValue_XCLOSE(result);
+        Py_XDECREF(tuple);
+        return (_PyCallResult){-1, NULL};
+    }
+    PyValue displaced = call_publish_result(frame, head, result, operands);
+    PyValue_XCLOSE(displaced);
+    Py_XDECREF(tuple);
+    /* Releasing the operands can run a finalizer. */
+    int status = call_refresh(tstate, frame, head);
+    if (status == 0 && (flags & CALL_PERIODIC)) {
+        /* Signal handlers and the GC can run Python. */
+        if (check_periodics_at_end(tstate, frame) < 0 ||
+            call_refresh(tstate, frame, head) < 0) {
+            status = -1;
+        }
+    }
+    return (_PyCallResult){status, NULL};
 }
 
 Py_NO_INLINE PyObject *

@@ -1906,10 +1906,9 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
         // gh-142831: encoder_encode_key_value() can invoke user code
         // that mutates the items list, so hold a strong reference.
-        PyValue itemv = PyList_GetValue(items, i);
-        if (PyValue_IsNull(itemv)) {
-            return -1;
-        }
+        // The loop condition checked i against the size just now, and nothing
+        // ran since, so the slot is live; the retain makes it ours.
+        PyValue itemv = PyValue_DUP(PyList_GET_VALUE(items, i));
         if (!PyValue_IsObject(itemv)
             || !PyTuple_Check(PyValue_AsKnownObjectBorrow(itemv))
             || PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(itemv)) != 2) {
@@ -1919,21 +1918,13 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
         }
         PyObject *item = PyValue_AsKnownObjectBorrow(itemv);
 
-        PyValue keyv = PyTuple_GetValue(item, 0);
-        PyValue valuev = PyTuple_GetValue(item, 1);
-        if (PyValue_IsNull(keyv) || PyValue_IsNull(valuev)) {
-            PyValue_XCLOSE(keyv);
-            PyValue_XCLOSE(valuev);
-            PyValue_CLOSE(itemv);
-            return -1;
-        }
+        // The key and value are borrowed from the tuple, which itemv keeps
+        // alive and which cannot change, whatever user code does to items.
         int rv = encoder_encode_key_value(s, writer, first, dct,
-                                          PyValue_Borrow(keyv),
-                                          PyValue_Borrow(valuev),
+                                          PyTuple_GET_VALUE(item, 0),
+                                          PyTuple_GET_VALUE(item, 1),
                                           indent_level, indent_cache,
                                           separator);
-        PyValue_CLOSE(keyv);
-        PyValue_CLOSE(valuev);
         PyValue_CLOSE(itemv);
         if (rv < 0) {
             return -1;

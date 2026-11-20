@@ -2680,10 +2680,13 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
     if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
         *complete = 0;
         int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+        _PyIRPhysicalWord physical_word;
+        _PyIR_PhysicalWord(&image->words[pc], arg, 0, nl, nl + image->scratch,
+                           &physical_word);
         for (int bit = 0; bit < image->scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
-            _PyIRPhysicalTransfer physical = _PyIR_NormalPhysicalTransfer(
-                &image->words[pc], arg, 0, nl + bit, nl, nl + image->scratch);
+            _PyIRPhysicalTransfer physical =
+                _PyIR_PhysicalAt(&physical_word, nl + bit);
             if (physical.kind != _PyIR_PHYSICAL_PRESERVE) {
                 state[SEM_NULL * work->nwords + bit / 64] &= ~mask;
             }
@@ -3063,9 +3066,14 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                 if (semantic_leaf_step(image, work, state, pc, inspect, complete) < 0) {
                     return -1;
                 }
-                for (int home = nl; home < nl + image->scratch; home++) {
+                int first_read, end_read;
+                _PyIR_ReadBounds(&image->words[pc], arg, &first_read, &end_read);
+                _PyIRDefines defines = _PyIR_DefinesOf(word, arg);
+                for (int home = Py_MAX(nl, first_read);
+                     home < Py_MIN(nl + image->scratch, end_read); home++)
+                {
                     if (_PyIR_ConsumesNormalInput(&image->words[pc], arg, home) &&
-                        !_PyIR_DefinesHome(word, arg, home))
+                        !_PyIR_DefinesAt(&defines, home))
                     {
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
                         state[SEM_NO_HOME * work->nwords + (home - nl) / 64] |= mask;

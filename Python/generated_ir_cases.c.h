@@ -7024,7 +7024,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 {
                     _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, fb);
                     if (call_result.status > 0) {
-                        call_result = call_run_guarded_miss(tstate, frame, this_instr, CALL_TRANSACTION_KEYWORDS, (0) | call_state);
+                        call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     }
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -7747,7 +7747,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 {
                     _PyCallResult call_result = call_bind_direct(tstate, frame, this_instr, fb);
                     if (call_result.status > 0) {
-                        call_result = call_run_guarded_miss(tstate, frame, this_instr, CALL_TRANSACTION_VECTOR, (0) | call_state);
+                        call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     }
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);

@@ -4195,8 +4195,8 @@ class IREmitter(Emitter):
                     else "call_bind_direct")
             self.emit(f"_PyCallResult call_result = {bind}(tstate, frame, this_instr, fb);\n")
             self.emit("if (call_result.status > 0) {\n")
-            self.emit(f"call_result = call_run_guarded_miss(tstate, frame, this_instr, "
-                      f"{self.call_kind}, {self.call_flags} | call_state);\n")
+            self.emit(f"call_result = {self.call_run}(tstate, frame, this_instr, "
+                      f"{self.call_flags} | call_state);\n")
             self.emit("}\n")
         else:
             self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "

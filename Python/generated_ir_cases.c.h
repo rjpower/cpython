@@ -215,49 +215,6 @@ ir_run_BUILD_SET(
 
         
 static Py_NO_INLINE _PyIRTransfer
-ir_run_BUILD_SLICE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame,
-    _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BUILD_SLICE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_SLICE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue *args;
-            PyValue slice;
-            args = &window[0];
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *slice_o = _PySlice_FromValues(
-                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
-            PyValue tmp;
-            for (int _i = oparg; --_i >= 0;) {
-                tmp = args[_i];
-                args[_i] = PyValue_NULL;
-                PyValue_CLOSE(tmp);
-            }
-            IR_CLEAR_SLOTS(&window[0], oparg);
-            if (slice_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            slice = PyValue_FromObjectSteal(slice_o);
-            IR_SET_TEMP(window[0], slice);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
 ir_run_BUILD_STRING(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
@@ -5936,8 +5893,43 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BUILD_SET) {
             IR_RUN_OUTLINED(ir_run_BUILD_SET);
         }
+
         TARGET(BUILD_SLICE) {
-            IR_RUN_OUTLINED(ir_run_BUILD_SLICE);
+            int opcode = BUILD_SLICE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_SLICE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue *args;
+            PyValue slice;
+            args = &window[0];
+            _PyValue_RecheckWindow(args, oparg);
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
+            PyValue tmp;
+            for (int _i = oparg; --_i >= 0;) {
+                tmp = args[_i];
+                args[_i] = PyValue_NULL;
+                PyValue_CLOSE(tmp);
+            }
+            IR_CLEAR_SLOTS(&window[0], oparg);
+            if (slice_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            slice = PyValue_FromObjectSteal(slice_o);
+            IR_SET_TEMP(window[0], slice);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
         }
         TARGET(BUILD_STRING) {
             IR_RUN_OUTLINED(ir_run_BUILD_STRING);

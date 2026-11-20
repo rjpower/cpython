@@ -4442,6 +4442,10 @@ dummy_func(
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
+        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused)) {
+            EXIT_IF(!(call_state & CALL_SELF_PRESENT));
+        }
+
         op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused)) {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
@@ -4718,11 +4722,11 @@ dummy_func(
             _CALL_LEN;
 
         op(_GUARD_CALLABLE_LEN, (callable, unused, unused -- callable, unused, unused)){
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.len);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.len);
         }
 
         op(_CALL_LEN, (callable, null, arg -- res)) {
@@ -4741,11 +4745,11 @@ dummy_func(
         }
 
         op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused)) {
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.isinstance);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.isinstance);
         }
 
         inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
@@ -4779,16 +4783,16 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_LIST_APPEND +
-            _GUARD_NOS_NOT_NULL +
+            _GUARD_CALL_SELF_PRESENT +
             _GUARD_NOS_LIST +
             _CALL_LIST_APPEND;
 
         op(_GUARD_CALLABLE_LIST_APPEND, (callable, unused, unused -- callable, unused, unused)){
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.list_append);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.list_append);
         }
 
         inline_ok op(_CALL_LIST_APPEND, (callable, self, arg -- none)) {

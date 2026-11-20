@@ -6820,15 +6820,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_ISINSTANCE
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyInterpreterState *interp = tstate->interp;
-                if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                    != interp->callable_cache.isinstance) {
+                if ((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.isinstance) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7094,15 +7088,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_LEN
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyInterpreterState *interp = tstate->interp;
-                if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                    != interp->callable_cache.len) {
+                if ((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.len) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7149,24 +7137,17 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_LIST_APPEND
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyInterpreterState *interp = tstate->interp;
-                if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                    != interp->callable_cache.list_append) {
+                if ((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.list_append) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _GUARD_NOS_NOT_NULL
+            // _GUARD_CALL_SELF_PRESENT
             {
-                nos = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                if (PyValue_IsNull(nos)) {
+                if (!(call_state & CALL_SELF_PRESENT)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7174,6 +7155,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _GUARD_NOS_LIST
             {
+                nos = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_OPERAND(0)))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));

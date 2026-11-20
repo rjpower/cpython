@@ -10866,11 +10866,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);

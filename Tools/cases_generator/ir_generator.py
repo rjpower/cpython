@@ -2535,7 +2535,7 @@ ELEMENT_GUARDS = frozenset(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
 ELEMENT_INTRINSICS = ELEMENT_GUARDS | {"IR_DUP_CANONICAL_ELEMENT"}
 ELEMENT_NATIVE_SYMBOLS = frozenset((
     "PyValue_IsInlineInt", "PyValue_InlineInt64", "PyValue_IsObject",
-    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyList_CheckExact",
+    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyValue_DUP", "PyList_CheckExact",
     "PyTuple_CheckExact", "PyList_GET_SIZE", "PyTuple_GET_SIZE",
     "PyList_GET_VALUE", "PyTuple_GET_VALUE",
 ))
@@ -4004,7 +4004,7 @@ class IREmitter(Emitter):
                     capability[3] != id(self.native_scopes[-1])):
                 raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer({container}), {index}))")
+            self.emit(f"PyValue_DUP({prefix}_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer({container}), {index}))")
             self.element_result = HELPERS[tkn.text]
         return True
 

@@ -5218,7 +5218,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res =PyValue_XDUP(PyList_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(list_st), index));
+                res =PyValue_DUP(PyList_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(list_st), index));
                 assert(!PyValue_IsNull(res));
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
@@ -5483,7 +5483,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res =PyValue_XDUP(PyTuple_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(tuple_st), index));
+                res =PyValue_DUP(PyTuple_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(tuple_st), index));
                 STAT_INC(BINARY_OP, hit);
                 assert(!PyValue_IsNull(res));
                 ts = tuple_st;
@@ -10579,7 +10579,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 PyValueBorrow found = _PyValueGuarded_Load(class_value);
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_XDUP(found);
+                attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -10742,7 +10742,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 PyValueBorrow found = _PyValueGuarded_Load(class_value);
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_XDUP(found);
+                attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -11230,7 +11230,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 PyValueBorrow found = _PyValueGuarded_Load(class_value);
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_XDUP(found);
+                attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             IR_STORE_DST(ir_word, A, attr);
@@ -11292,7 +11292,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 PyValueBorrow found = _PyValueGuarded_Load(class_value);
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_XDUP(found);
+                attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             IR_STORE_DST(ir_word, A, attr);

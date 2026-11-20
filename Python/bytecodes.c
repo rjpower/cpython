@@ -2871,7 +2871,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 
@@ -4152,7 +4152,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 
@@ -4169,7 +4169,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 

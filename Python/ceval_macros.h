@@ -770,7 +770,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
     PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
     /* The current type and shape guards prove that this slot is filled. */
     assert(!PyValue_IsNull(found));
-    return PyValue_XDUP(found);
+    return PyValue_DUP(found);
 }
 
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with

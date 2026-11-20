@@ -15143,14 +15143,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
             (void)window;
             PyValue tos;
             PyValue seq;
-            PyValue val1;
-            PyValue val0;
+            PyValue *values;
             // _GUARD_TOS_TUPLE
             {
                 tos = window[0];
@@ -15169,6 +15169,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _UNPACK_SEQUENCE_TWO_TUPLE
             {
                 seq = tos;
+                values = &window[0];
                 assert(oparg == 2);
                 PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
                 assert(PyTuple_CheckExact(seq_o));
@@ -15178,15 +15179,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                val0 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0));
-                val1 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1));
-                IR_SET_TEMP(window[0], val1);
-                IR_SET_TEMP(window[1], val0);
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[0], 0, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); } else { _PyFrame_WriteHome(frame, &values[0], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); };
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[1], 1, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); } else { _PyFrame_WriteHome(frame, &values[1], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); };
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }

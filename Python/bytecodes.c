@@ -1921,15 +1921,15 @@ dummy_func(
         macro(UNPACK_SEQUENCE_TWO_TUPLE) =
             _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TWO_TUPLE;
 
-        op(_UNPACK_SEQUENCE_TWO_TUPLE, (seq -- val1, val0)) {
+        op(_UNPACK_SEQUENCE_TWO_TUPLE, (seq -- values[2])) {
             assert(oparg == 2);
             PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != 2);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            val0 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0));
-            val1 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1));
-            PyValue_CLOSE(seq);
+            IR_WRITE_OUTPUT(values, 0, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1)));
+            IR_WRITE_OUTPUT(values, 1, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0)));
+            DECREF_INPUTS();
         }
 
         macro(UNPACK_SEQUENCE_TUPLE) =

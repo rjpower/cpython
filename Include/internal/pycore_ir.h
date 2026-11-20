@@ -896,7 +896,7 @@ _PyIR_WordLength(_PyIRWord word)
 
 /* Operand k of the call whose head is at head: the slot that it names, or for
  * the names of a CALL_KW the index in co_consts. */
-static inline int
+static inline Py_ALWAYS_INLINE int
 _PyIR_CallOperand(const _PyIRWord *head, int k)
 {
     return (int)((head[1 + k / IR_OPERANDS_PER_WORD]

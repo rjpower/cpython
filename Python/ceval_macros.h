@@ -735,18 +735,24 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
 
 /* The elements of an unpack that a function wrote into WINDOW in stack
  * order (element i in WINDOW[N - 1 - i]) go to the locals LOCALS[0..N-1].
- * Each local's old value changes places with the element's slot, so the
- * frame owns every value throughout. */
-static inline void
+ * Each local's old value changes places with the element's slot if it owns
+ * an object, and the slot is left empty otherwise.  The frame owns every
+ * value throughout.  The result says whether the window holds an owner to
+ * close. */
+static inline bool
 _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 {
+    bool owned = false;
     for (int i = 0; i < n; i++) {
         PyValue *element = &window[n - 1 - i];
         PyValue old = locals[i];
         locals[i] = *element;
         _PyValue_CheckHome(locals[i]);
-        *element = old;
+        bool owns = PyValue_RefcountOnObject(old);
+        *element = owns ? old : PyValue_NULL;
+        owned |= owns;
     }
+    return owned;
 }
 #define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
 

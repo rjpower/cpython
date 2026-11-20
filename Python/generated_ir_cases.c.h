@@ -3634,8 +3634,7 @@ ir_run_UNPACK_EX(
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, B)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
-                IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
+                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)))) { IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8))); }
             }
             DISPATCH();
         }
@@ -3697,8 +3696,7 @@ ir_run_UNPACK_SEQUENCE(
                 }
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg)) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }

@@ -4167,8 +4167,8 @@ class IREmitter(Emitter):
             # old values that own an object, if any
             self.emit(f"if (ir_unpack_owned) {{ IR_CLOSE_WINDOW(window, {count}); }}\n")
         else:
-            self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
-            self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
+            self.emit(f"if (IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count})) "
+                      f"{{ IR_CLOSE_WINDOW(window, {count}); }}\n")
         self.unpack_local_drained = True
         self.emit("}\n")
 

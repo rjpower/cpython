@@ -380,7 +380,7 @@ ir_run_CALL(
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
+                        if (call_state & CALL_EFFECTS) { goto call_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
                     OPCODE_DEFERRED_INC(CALL);
@@ -405,7 +405,7 @@ ir_run_CALL(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL:;
+            call_fallback_CALL:;
             assert(frame->instr_ptr == this_instr);
             {
                 _PyCallResult call_result = call_run_vector(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
@@ -455,7 +455,7 @@ ir_run_CALL_FUNCTION_EX(
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
+                    if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
@@ -479,7 +479,7 @@ ir_run_CALL_FUNCTION_EX(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL_FUNCTION_EX:;
+            call_fallback_CALL_FUNCTION_EX:;
             assert(frame->instr_ptr == this_instr);
             {
                 _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
@@ -650,7 +650,7 @@ ir_run_CALL_KW(
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
+                    if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
@@ -674,7 +674,7 @@ ir_run_CALL_KW(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL_KW:;
+            call_fallback_CALL_KW:;
             assert(frame->instr_ptr == this_instr);
             {
                 _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);

@@ -4234,10 +4234,10 @@ dummy_func(
             {
                 _PyFbHeader *feedback = FB_COUNTER();
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    /* The specialisation is an effect of the call
-                     * transaction, which then finishes the call generically
-                     * on this word: DISPATCH_SAME_OPARG() goes to its
-                     * fallback, and next_instr stays the next word. */
+                    /* The specialisation is an effect of the call, which
+                     * then finishes generically on this word:
+                     * DISPATCH_SAME_OPARG() goes to its fallback, and
+                     * next_instr stays the next word. */
                     IR_BEGIN_CALL_EFFECTS();
                     _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                     IR_REFRESH_CALL();
@@ -4251,7 +4251,7 @@ dummy_func(
 
         // The call's operands are read through its words (the callable
         // operand and operand k, IR_OPERAND(k): a view that is read, not
-        // closed), and the call transaction prepares the method form itself.
+        // closed), and call_run_vector() prepares the method form itself.
         inline_ok op(_MAYBE_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             IR_PREPARE_CALL_METHOD();
         }

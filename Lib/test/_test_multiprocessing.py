@@ -4654,8 +4654,12 @@ class _TestHeap(BaseTestCase):
 
         # test free'ing all blocks
         random.shuffle(blocks)
-        while blocks:
-            blocks.pop()
+        def free_all():
+            # The last discarded block stays in its frame until the frame
+            # ends, so the blocks are popped in a frame that ends
+            while blocks:
+                blocks.pop()
+        free_all()
 
         self.assertEqual(heap._n_frees, heap._n_mallocs)
         self.assertEqual(len(heap._pending_free_blocks), 0)

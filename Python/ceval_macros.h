@@ -114,13 +114,6 @@
         } \
     } while (0)
 
-/* Every handler advances next_instr at its start.  Left alone, the
- * optimiser (partial redundancy elimination) computes next_instr + 1 in the
- * dispatch, so that the evaluator keeps two values for the word where it
- * needs one, and has no register for the sixth value live across a dispatch.
- * The empty statement makes the handler's advance a change to a value that
- * the optimiser cannot see through, so that the advance stays in the handler. */
-#define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found
@@ -133,10 +126,11 @@
     } while (0)
 #define JUMP_TO_LABEL(name) goto LABEL_##name
 /* A specialisation deoptimises to its family head, which runs the word
- * again from its start. */
+ * again from its start: a handler is entered with next_instr after its
+ * word. */
 #define JUMP_TO_PREDICTED(name) \
     do { \
-        next_instr = this_instr; \
+        next_instr = this_instr + 1; \
         goto TARGET_##name; \
     } while (0)
 
@@ -160,7 +154,7 @@
     assert(frame == tstate->current_frame); \
     assert(IR_EXECUTING_COPY_OK(frame)); \
     if (frame->lltrace >= 5) { \
-        lltrace_instruction(frame, next_instr, opcode); }
+        lltrace_instruction(frame, next_instr - 1, opcode); }
 #else
 #define PRE_DISPATCH_GOTO() ((void)0)
 #endif
@@ -183,6 +177,10 @@ do { \
 
 
 /* Do interpreter dispatch accounting for tracing and instrumentation */
+/* Dispatch takes the word at next_instr and advances next_instr past it, so
+ * that a handler is entered with next_instr after its word and its
+ * this_instr is next_instr - 1.  The optimiser then has no addition to hoist
+ * into the dispatch: the evaluator keeps one value for the word, not two. */
 #define DISPATCH() \
     { \
         NEXTOPARG(); \
@@ -190,12 +188,8 @@ do { \
         DISPATCH_GOTO(); \
     }
 
-#define DISPATCH_SAME_OPARG() \
-    { \
-        opcode = IR_HANDLER(*next_instr); \
-        PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO(); \
-    }
+/* The word at next_instr runs again, as the specialiser wrote it. */
+#define DISPATCH_SAME_OPARG() DISPATCH()
 
 /* The handler of an outlined instruction (Tools/cases_generator/ir_generator.py,
  * rule 4): its body is the function FN, which returns the frame and next word
@@ -236,14 +230,15 @@ do { \
 /* The handler of an instrumented twin whose event precedes the effect (rule
  * 12): the event runs in the cold function FN, then the twin goes to the
  * handler of its base with the same word.  FN returns the word to run, the
- * twin's own word to go on, or no word for an error. */
+ * twin's own word to go on, or no word for an error.  A handler is entered
+ * with next_instr after its word, so the twin's word is next_instr - 1. */
 #define IR_RUN_EVENT(FN, BASE) \
     do { \
         _PyIRTransfer ir_t = FN(tstate, frame, next_instr, ir_word); \
         if (ir_t.next == NULL) { \
             goto LABEL_outlined_exit; \
         } \
-        if (ir_t.next != next_instr) { \
+        if (ir_t.next != next_instr - 1) { \
             next_instr = ir_t.next; \
             int opcode; \
             DISPATCH(); \
@@ -280,6 +275,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define INSTR_OFFSET() ((int)(next_instr - frame->ir_words))
 #define NEXTOPARG()  do { \
         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
+        next_instr += 1; \
         opcode = IR_HANDLER(ir_word); \
     } while (0)
 
@@ -777,7 +773,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
         ir_binary_op = (int)((_PyFbHeader *)IR_FB(F))->arg; \
-        next_instr = this_instr; \
+        next_instr = this_instr + 1; \
         goto LABEL_binary_op; \
     } while (0)
 

@@ -6619,12 +6619,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                                    "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
-        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")
+        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if not inst.properties.no_save_ip:
-        out.emit(f"frame->instr_ptr = next_instr;\n")
-    out.emit("IR_HOLD_NEXT();\n")
-    out.emit(f"next_instr += 1;\n")
+        out.emit(f"frame->instr_ptr = next_instr - 1;\n")
     out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
@@ -6943,7 +6941,7 @@ ir_run_{name}(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {{
-    _PyInstr *this_instr = next_instr;
+    _PyInstr *this_instr = next_instr - 1;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, {base}));
     _PyIRTransfer base = ir_run_{base}(tstate, frame, next_instr, ir_word);
@@ -7077,7 +7075,7 @@ def outlined_exit_label(deopt_heads: set[str]) -> str:
              "            case _PyIR_EXIT_START_FRAME:\n",
              "                goto LABEL_start_frame;\n",
              "            case _PyIR_EXIT_DEOPT:\n",
-             "                next_instr = activation->exit_next;\n",
+             "                next_instr = activation->exit_next + 1;\n",
              "                switch (activation->exit_target) {\n",
              "                case IR_DEOPT_TARGET_BINARY_OP:\n",
              "                    ir_binary_op = (int)activation->exit_entry;\n",

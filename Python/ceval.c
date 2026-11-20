@@ -2240,9 +2240,6 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return (_PyIRTransfer){frame, NULL}; \
     } while (0)
 #pragma push_macro("IR_OBSERVE_EDGE")
-#pragma push_macro("IR_HOLD_NEXT")
-#undef IR_HOLD_NEXT
-#define IR_HOLD_NEXT() ((void)0)
 #pragma push_macro("IR_STEP_DONE")
 #undef IR_STEP_DONE
 #define IR_STEP_DONE(STEP) return (STEP)
@@ -2282,7 +2279,7 @@ static Py_NO_INLINE _PyIRTransfer
 ir_event_return(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr;
+    _PyInstr *this_instr = next_instr - 1;
     frame->instr_ptr = this_instr;
     PyValueBorrow val = IR_VIEW(IR_A(ir_word));
     /* The callbacks can run code, so the event holds the value. */
@@ -2304,7 +2301,7 @@ static Py_NO_INLINE _PyIRTransfer
 ir_event_yield(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr;
+    _PyInstr *this_instr = next_instr - 1;
     frame->instr_ptr = this_instr;
     PyValue val = IR_SLOT(IR_B(ir_word));
     int err = _Py_call_instrumentation_arg(
@@ -2320,7 +2317,7 @@ static Py_NO_INLINE _PyIRTransfer
 ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr;
+    _PyInstr *this_instr = next_instr - 1;
     PyValueBorrow value = IR_VIEW(IR_C(ir_word));
     PyValue receiver = IR_SLOT(IR_A(ir_word));
     if (PyValue_GenCheck(receiver)) {
@@ -2344,7 +2341,6 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
-#pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
 

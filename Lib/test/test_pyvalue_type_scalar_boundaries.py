@@ -281,6 +281,242 @@ class ScalarBoundaryTests(unittest.TestCase):
                     pass
         asyncio.run(missing_async_manager_case())
 
+    def test_with_exit_scalar_attribute_values(self):
+        # The exit function of a `with` is any attribute value; an inline int
+        # or float is not callable, whether the body raises, returns or yields.
+        class Descriptor:
+            def __get__(self, receiver, owner):
+                return 3
+        for name, exit_value, expected in (
+            ('int', 1000, "'int' object is not callable"),
+            ('float', 1.5, "'float' object is not callable"),
+            ('descriptor', Descriptor(), "'int' object is not callable"),
+            ('staticmethod', staticmethod(5), "'int' object is not callable"),
+        ):
+            class Manager:
+                def __enter__(self):
+                    return self
+                __exit__ = exit_value
+            def raises():
+                with Manager():
+                    raise ValueError
+            def returns():
+                with Manager():
+                    return 1
+            def generator():
+                with Manager():
+                    yield 1
+                    raise KeyError
+            gen = generator()
+            next(gen)
+            for label, call in (('raise', raises), ('return', returns),
+                                ('yield', lambda: next(gen))):
+                with self.subTest(exit=name, body=label):
+                    with self.assertRaisesRegex(TypeError, expected):
+                        call()
+
+        class IntSubclass(int):
+            def __enter__(self):
+                return self
+            __exit__ = 2.5
+        with self.assertRaisesRegex(TypeError, "'float' object is not callable"):
+            with IntSubclass(5):
+                raise ValueError
+
+        class AwaitableTypeError:
+            async def __aenter__(self):
+                return self
+            def __aexit__(self, *args):
+                return 5
+        async def non_awaitable_aexit():
+            async with AwaitableTypeError():
+                raise ValueError
+        with self.assertRaisesRegex(TypeError, '__aexit__ that does not implement __await__'):
+            asyncio.run(non_awaitable_aexit())
+
+    def test_scalar_values_at_exception_send_and_function_handlers(self):
+        # Inputs that handlers treat as objects, with scalars where Python can
+        # supply them: errors raise upstream's messages, results pass through.
+        def raise_scalar():
+            raise 5
+        with self.assertRaisesRegex(TypeError, 'exceptions must derive from BaseException'):
+            raise_scalar()
+        def raise_cause():
+            raise ValueError from 5.5
+        with self.assertRaisesRegex(TypeError, 'exception causes must derive from BaseException'):
+            raise_cause()
+
+        def gen():
+            try:
+                yield 1
+            except Exception as exc:
+                yield repr(exc)
+        it = gen()
+        next(it)
+        with self.assertRaisesRegex(TypeError, 'not int'):
+            it.throw(5)
+        it = gen()
+        next(it)
+        self.assertEqual(it.throw(ValueError, 5), 'ValueError(5)')
+
+        def delegating():
+            return (yield from gen())
+        it = delegating()
+        next(it)
+        with self.assertRaisesRegex(TypeError, 'not int'):
+            it.throw(5)
+
+        def echo():
+            return (yield 1)
+        def delegate_echo():
+            return (yield from echo())
+        for sent in (5, 5.5):
+            it = delegate_echo()
+            next(it)
+            with self.assertRaises(StopIteration) as caught:
+                it.send(sent)
+            self.assertEqual(caught.exception.value, sent)
+
+        class SendIterator:
+            def __iter__(self):
+                return self
+            def __next__(self):
+                return 1
+            def send(self, value):
+                raise StopIteration(value)
+        def delegate_custom():
+            return (yield from SendIterator())
+        it = delegate_custom()
+        next(it)
+        with self.assertRaises(StopIteration) as caught:
+            it.send(7)
+        self.assertEqual(caught.exception.value, 7)
+
+        class Throwing:
+            def __await__(self):
+                return self
+            def __iter__(self):
+                return self
+            def __next__(self):
+                return 1
+            def throw(self, *args):
+                raise StopIteration(5.5)
+        async def await_throwing():
+            return await Throwing()
+        coro = await_throwing()
+        coro.send(None)
+        with self.assertRaises(StopIteration) as caught:
+            coro.throw(ValueError)
+        self.assertEqual(caught.exception.value, 5.5)
+
+        for await_attr, expected in (
+            (5, "'int' object is not callable"),
+            (lambda self: 5, '__await__\\(\\) must return an iterator, not int'),
+        ):
+            class Awaitable:
+                __await__ = await_attr
+            async def await_it():
+                await Awaitable()
+            with self.assertRaisesRegex(TypeError, expected):
+                await_it().send(None)
+        async def await_scalar():
+            await 5
+        with self.assertRaisesRegex(TypeError, "'int' object can't be awaited"):
+            await_scalar().send(None)
+
+        for aiter_result, expected in (
+            (5, 'does not implement __anext__: int'),
+            (5.5, 'does not implement __anext__: float'),
+        ):
+            class AsyncIterable:
+                def __aiter__(self):
+                    return aiter_result
+            async def iterate():
+                async for _ in AsyncIterable():
+                    pass
+            with self.assertRaisesRegex(TypeError, expected):
+                asyncio.run(iterate())
+        class ScalarAnext:
+            def __aiter__(self):
+                return self
+            def __anext__(self):
+                return 5
+        async def iterate_scalar_anext():
+            async for _ in ScalarAnext():
+                pass
+        with self.assertRaisesRegex(TypeError, 'invalid object from __anext__: int'):
+            asyncio.run(iterate_scalar_anext())
+        class ScalarAnextAttribute:
+            def __aiter__(self):
+                return self
+            __anext__ = 5
+        async def iterate_scalar_anext_attribute():
+            async for _ in ScalarAnextAttribute():
+                pass
+        with self.assertRaisesRegex(TypeError, "'int' object is not callable"):
+            asyncio.run(iterate_scalar_anext_attribute())
+        class StopWithValue:
+            def __aiter__(self):
+                return self
+            async def __anext__(self):
+                raise StopAsyncIteration(5)
+        async def stop_with_value():
+            async for _ in StopWithValue():
+                pass
+            return 'done'
+        self.assertEqual(asyncio.run(stop_with_value()), 'done')
+
+        def match_keys(subject):
+            match subject:
+                case {'a': 1}:
+                    return 'matched'
+                case _:
+                    return 'no match'
+        self.assertEqual([match_keys(value) for value in (5, 5.5, None, True, {'a': 1}, {'a': 2})],
+                         ['no match', 'no match', 'no match', 'no match', 'matched', 'no match'])
+
+        import builtins
+        saved_import = builtins.__import__
+        builtins.__import__ = lambda *args, **kwargs: 5
+        try:
+            def import_scalar():
+                import os
+                return os
+            self.assertEqual(import_scalar(), 5)
+            def import_from_scalar():
+                from os import path
+            with self.assertRaises(ImportError):
+                import_from_scalar()
+        finally:
+            builtins.__import__ = saved_import
+
+        def template(value):
+            return t"{value}{5!r:>{value}}{5.5}"
+        interpolations = template(5).interpolations
+        self.assertEqual([(i.value, i.conversion, i.format_spec) for i in interpolations],
+                         [(5, None, ''), (5, 'r', '>5'), (5.5, None, '')])
+
+        def make(a=5, *, b=1.5, c: 5 = 7):
+            def inner():
+                return (a, b, c)
+            return inner
+        inner = make()
+        self.assertEqual(inner(), (5, 1.5, 7))
+        self.assertEqual(make.__defaults__, (5,))
+        self.assertEqual(make.__kwdefaults__, {'b': 1.5, 'c': 7})
+        self.assertEqual(make.__annotations__, {'c': 5})
+        self.assertEqual([cell.cell_contents for cell in inner.__closure__], [5, 1.5, 7])
+
+        class Meta(type):
+            @classmethod
+            def __prepare__(mcs, name, bases):
+                return 5
+        with self.assertRaisesRegex(TypeError, 'must return a mapping, not int'):
+            class Bad(metaclass=Meta):
+                pass
+        with self.assertRaisesRegex(TypeError, 'locals must be a mapping or None, not int'):
+            exec('x = 1', {}, 5)
+
     def test_metaclass_lookup_precedence_scalars_and_invalid_names(self):
         class DataDescriptor:
             def __get__(self, receiver, owner):

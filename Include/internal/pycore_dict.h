@@ -112,6 +112,9 @@ PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
  * frozendict for the readers, a dict for SetValue and DelValue, with a
  * language-value key. They assert what the public entries test. */
 PyAPI_FUNC(int) _PyDict_GetValue(PyDictObject *, PyValueBorrow, PyValue *);
+#ifndef Py_GIL_DISABLED
+PyAPI_FUNC(int) _PyDict_GetUnicodeValue(PyDictObject *, PyObject *, PyValue *);
+#endif
 PyAPI_FUNC(int) _PyDict_SetValue(PyDictObject *, PyValueBorrow, PyValueBorrow);
 PyAPI_FUNC(int) _PyDict_DelValue(PyDictObject *, PyValueBorrow);
 PyAPI_FUNC(int) _PyDict_ContainsValue(PyDictObject *, PyValueBorrow);

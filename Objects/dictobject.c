@@ -1382,6 +1382,33 @@ dict_lookup_value(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
     return 1;
 }
 
+#ifndef Py_GIL_DISABLED
+/* The value of the exact str key (with a cached hash) in a dictionary whose
+ * keys are all str, as an owner in *result: 1, or 0 and PyValue_NULL if the
+ * key is absent.  No comparison can run Python, so the caller needs no pins. */
+int
+_PyDict_GetUnicodeValue(PyDictObject *mp, PyObject *key, PyValue *result)
+{
+    PyDictKeysObject *dk = mp->ma_keys;
+    assert(PyDict_CheckExact(mp));
+    assert(dk->dk_kind != DICT_KEYS_GENERAL);
+    assert(PyUnicode_CheckExact(key));
+    Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(key);
+    assert(hash != -1);
+    Py_ssize_t ix = unicodekeys_lookup_unicode(dk, key, hash);
+    if (ix < 0) {
+        *result = PyValue_NULL;
+        return 0;
+    }
+    PyValue value = dk->dk_kind == DICT_KEYS_SPLIT
+        ? mp->ma_values->values[ix]
+        : DK_UNICODE_ENTRIES(dk)[ix].me_value;
+    _PyValue_RecheckHome(value);
+    *result = PyValue_DUP(value);
+    return 1;
+}
+#endif
+
 int
 (_PyDict_GetValue_KnownHash)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
                            PyValue *result)

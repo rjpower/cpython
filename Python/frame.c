@@ -237,43 +237,10 @@ _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
 }
 #endif
 
-/* Release the first n slots of frame, from the top, so that a finalizer
- * that looks at the frame finds the slots that it has not reached yet intact
- * and the rest NULL.  The n cover the locals, which include the discard
- * slot.  An inline or immortal value, which includes every constant slot
- * that has an image, is only NULLed, after one test; a NULL slot is left as
- * it is. */
-static inline void
-clear_slots(_PyInterpreterFrame *frame, int n)
-{
-#ifdef Py_DEBUG
-    _PyValue_CheckFrameExtent(frame, n);
-#endif
-    PyValue *locals = frame->base;
-    assert(n > _PyFrame_DiscardSlot(frame));
-    PyValue *sp = locals + n;
-    while (sp > locals) {
-        sp--;
-        PyValue ref = *sp;
-        if (ref.bits & Py_OWNED_MASK) {
-            // an inline value or an immortal one: nothing to close
-            *sp = PyValue_NULL;
-            continue;
-        }
-        if (PyValue_IsNull(ref)) {
-            continue;
-        }
-        // a move: cleared before the close, which can run a finalizer
-        *sp = PyValue_NULL;
-        PyValue_CLOSE(ref);
-    }
-    Py_CLEAR(frame->f_locals);
-}
-
 void
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 {
-    clear_slots(frame, _PyFrame_NumSlots(frame));
+    _PyFrame_ClearSlots(frame, _PyFrame_NumSlots(frame));
 }
 
 void
@@ -306,7 +273,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
         }
         Py_DECREF(f);
     }
-    clear_slots(frame, extent);
+    _PyFrame_ClearSlots(frame, extent);
     Py_CLEAR(frame->f_funcobj);
 }
 

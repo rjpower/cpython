@@ -587,6 +587,39 @@ _PyFrame_ObjectMayReenter(PyObject *object)
 #endif
 }
 
+/* Release the first n slots of frame, from the top, so that a finalizer
+ * that looks at the frame finds the slots that it has not reached yet intact
+ * and the rest NULL.  The n cover the locals, which include the discard
+ * slot.  An inline or immortal value, which includes every constant slot
+ * that has an image, is only NULLed, after one test; a NULL slot is left as
+ * it is. */
+static inline void
+_PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
+{
+#ifdef Py_DEBUG
+    _PyValue_CheckFrameExtent(frame, n);
+#endif
+    PyValue *locals = frame->base;
+    assert(n > _PyFrame_DiscardSlot(frame));
+    PyValue *sp = locals + n;
+    while (sp > locals) {
+        sp--;
+        PyValue ref = *sp;
+        if (ref.bits & Py_OWNED_MASK) {
+            // an inline value or an immortal one: nothing to close
+            *sp = PyValue_NULL;
+            continue;
+        }
+        if (PyValue_IsNull(ref)) {
+            continue;
+        }
+        // a move: cleared before the close, which can run a finalizer
+        *sp = PyValue_NULL;
+        PyValue_CLOSE(ref);
+    }
+    Py_CLEAR(frame->f_locals);
+}
+
 /* Retire the owners of an unlinked frame as upstream's
  * _PyFrame_ClearExceptCode() does: detach the frame object, then NULL and
  * close each of the first extent slots from the top, then close the locals
@@ -727,7 +760,9 @@ static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
+    /* The callers' guards have shown that func is a function. */
+    PyFunctionObject *func_obj =
+        (PyFunctionObject *)_PyValue_AsKnownObjectBorrowPointer(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));

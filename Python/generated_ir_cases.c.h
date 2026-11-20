@@ -6232,7 +6232,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
-                    tstate, frame, this_instr, callable, self_or_null, call_state);
+                    tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -7044,7 +7044,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, fb);
+                    _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, fb);
                     if (call_result.status > 0) {
                         call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     }
@@ -7670,7 +7670,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
-                    tstate, frame, this_instr, callable, self_or_null, call_state);
+                    tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -7756,7 +7756,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_direct(tstate, frame, this_instr, fb);
+                    _PyCallResult call_result = call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                     if (call_result.status > 0) {
                         call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     }

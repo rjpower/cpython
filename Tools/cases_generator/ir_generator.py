@@ -4243,9 +4243,13 @@ class IREmitter(Emitter):
         if guarded:
             # The cached binding plan fills the child from the operands; a
             # miss had no effect, and the call runs generically
-            bind = ("call_bind_keywords" if self.call_kind == "CALL_KEYWORDS"
-                    else "call_bind_direct")
-            self.emit(f"_PyCallResult call_result = {bind}(tstate, frame, this_instr, fb);\n")
+            if self.call_kind == "CALL_KEYWORDS":
+                bind = ("call_bind_keywords(tstate, frame, this_instr, "
+                        "IR_SLOT(IR_B(ir_word)), PyValue_NULL, fb)")
+            else:
+                bind = ("call_bind_positional(tstate, frame, this_instr, "
+                        "IR_SLOT(IR_B(ir_word)), PyValue_NULL)")
+            self.emit(f"_PyCallResult call_result = {bind};\n")
             self.emit("if (call_result.status > 0) {\n")
             self.emit(f"call_result = {self.call_run}(tstate, frame, this_instr, "
                       f"{self.call_flags} | call_state);\n")

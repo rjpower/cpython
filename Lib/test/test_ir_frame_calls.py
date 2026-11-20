@@ -427,7 +427,7 @@ class FrameCallTests(unittest.TestCase):
             sys.setprofile(previous)
         self.assertEqual(seen, [{}])
 
-    def test_rebind_delete_capture_and_kwonly_decline(self):
+    def test_rebind_delete_and_capture_decline(self):
         def rebind(value, *args, **kwargs):
             before = pending()
             kwargs = None
@@ -443,14 +443,19 @@ class FrameCallTests(unittest.TestCase):
                 return kwargs
             return pending()
 
-        def kwonly(value, *args, optional=None, **kwargs):
-            return pending()
-
-        for target in (rebind, delete, capture, kwonly):
+        for target in (rebind, delete, capture):
             with self.subTest(target=target.__name__):
                 self.assertFalse(warm(positional_caller(target)))
 
-    def test_nonempty_variadics_use_eager_binding(self):
+    def test_kwonly_parameters_bind_virtually(self):
+        def kwonly(value, *args, optional=None, **kwargs):
+            return pending(), optional
+
+        self.assertEqual(warm(positional_caller(kwonly)), (True, None))
+        kwonly.__kwdefaults__ = {"optional": 3}
+        self.assertEqual(warm(positional_caller(kwonly)), (True, 3))
+
+    def test_extra_arguments_leave_kwargs_virtual_and_keywords_make_it(self):
         def target(value, *args, **kwargs):
             return pending(), args, kwargs
 
@@ -460,7 +465,7 @@ class FrameCallTests(unittest.TestCase):
         def call_kwargs():
             return target(1, key=2)
 
-        self.assertEqual(warm(call_args), (False, (2,), {}))
+        self.assertEqual(warm(call_args), (True, (2,), {}))
         self.assertEqual(warm(call_kwargs), (False, (), {"key": 2}))
 
     def test_defaults_mutation_and_overlong_tuple(self):

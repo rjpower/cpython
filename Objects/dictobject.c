@@ -5632,12 +5632,11 @@ static PyMethodDef dictiter_methods[] = {
 
 
 static bool acquire_iter_result(PyObject *result);
-static int dictiter_iternextitem_lock_held(PyDictObject *, PyObject *,
-                                          PyValue *, PyValue *);
 
 /* Advance di over d: return 1 with the next entry, 0 at the end (where di
- * releases d) or -1 with an exception set. */
-static int
+ * releases d) or -1 with an exception set. Each iterator type's slot inlines
+ * it with its direction and the entry parts it takes constant. */
+static inline Py_ALWAYS_INLINE int
 dictiter_capture(PyDictObject *d, dictiterobject *di, int reverse,
                   PyValue *out_key, PyValue *out_value)
 {
@@ -5750,7 +5749,7 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
  * run under the dict's critical section, as their object slot did. */
 enum { DICTITER_KEYS, DICTITER_VALUES, DICTITER_ITEMS };
 
-static _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyStatusValue
 dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
                          int kind, int reverse)
 {
@@ -5758,15 +5757,9 @@ dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
     int values = kind == DICTITER_VALUES;
     int items = kind == DICTITER_ITEMS;
     PyValue key = PyValue_NULL, value = PyValue_NULL;
-    int found;
-    if (items && !reverse) {
-        found = dictiter_iternextitem_lock_held(d, self, &key, &value);
-    }
-    else {
-        found = dictiter_capture(d, di, reverse,
-                                keys || items ? &key : NULL,
-                                values || items ? &value : NULL);
-    }
+    int found = dictiter_capture(d, di, reverse,
+                                 keys || items ? &key : NULL,
+                                 values || items ? &value : NULL);
     if (found < 0) {
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
@@ -5787,7 +5780,7 @@ dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
 
 /* Each iterator type has its own slot, so its kind is a constant, as in
    upstream's one function per kind. */
-static inline _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyStatusValue
 dictiter_next_value(PyObject *self, int kind, int reverse)
 {
     dictiterobject *di = (dictiterobject *)self;
@@ -5894,14 +5887,6 @@ PyTypeObject PyDictIterValue_Type = {
         .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_val_value),
     },
 };
-
-static int
-dictiter_iternextitem_lock_held(PyDictObject *d, PyObject *self,
-                                PyValue *out_key, PyValue *out_value)
-{
-    return dictiter_capture(d, (dictiterobject *)self, 0, out_key, out_value);
-}
-
 
 static bool
 acquire_iter_result(PyObject *result)

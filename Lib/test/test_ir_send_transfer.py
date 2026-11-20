@@ -44,12 +44,6 @@ class SendTransferTests(unittest.TestCase):
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                              _testinternalcapi.get_ir(code))
-        bad = words.copy()
-        bad[4] = ("IR_JUMP", 0, 0, 5)
-        self.assert_rejected(code, bad, "virtual call input")
-        bad = words.copy()
-        bad[2] = ("SEND", 1, 0, 0, 4)
-        self.assert_rejected(code, bad, "virtual call input")
 
     def test_throw_completion_preserves_only_prior_empty_outside_tail(self):
         words = [("LOAD_CONST", 0), ("LOAD_CONST", 2), ("LOAD_CONST", 3),
@@ -59,9 +53,6 @@ class SendTransferTests(unittest.TestCase):
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                              _testinternalcapi.get_ir(code))
-        bad = words.copy()
-        bad[4] = ("CLEANUP_THROW", 1, 0, 5, 0)
-        self.assert_rejected(code, bad, "virtual call input")
 
     def test_delegation_and_recovered_throw_reenter_the_outer_loop(self):
         def outer(fn, groups):

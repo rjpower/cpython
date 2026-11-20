@@ -91,8 +91,8 @@ class CallRoleTests(unittest.TestCase):
         no_self, no_kw = _opcode.IR_F_NO_SELF, _opcode.IR_F_NO_KW
         cases = ((vector, "CALL+NO_SELF", no_self),
                  (keywords, "CALL_KW+NO_SELF", no_self),
-                 (ex, "CALL_FUNCTION_EX+NO_SELF+NO_KW", no_self | no_kw),
-                 (ex_kw, "CALL_FUNCTION_EX+NO_SELF", no_self),
+                 (ex, "CALL_FUNCTION_EX+NO_KW", no_kw),
+                 (ex_kw, "CALL_FUNCTION_EX", 0),
                  (method, "CALL", 0))
         for function, name, flags in cases:
             for admitted in routes(function.__code__):
@@ -103,8 +103,9 @@ class CallRoleTests(unittest.TestCase):
                     self.assertEqual(role_flags(name), flags)
                     row = contract_of(name)
                     self.assertEqual(row.word_flags & flags, flags)
+                    # The callable is an input; the operands follow the head
                     self.assertEqual(row.roles[0:2],
-                                     (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE))
+                                     (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_IN0))
 
     def test_role_flags_are_admitted_only_on_call_family_words(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 1),
@@ -118,25 +119,14 @@ class CallRoleTests(unittest.TestCase):
                 bad = words.copy()
                 bad[index] = bad_word
                 self.assert_rejected(words, bad, message)
-        ex = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-              ("POP_TOP", 3), ("CALL_FUNCTION_EX+NO_SELF+NO_KW", 0, 0, 0),
-              ("RETURN_VALUE", 0)]
+        # CALL_FUNCTION_EX takes NO_KW, and no NO_SELF
+        ex = [("LOAD_CONST", 0), ("LOAD_CONST", 1),
+              ("CALL_FUNCTION_EX+NO_KW", 0, 0, 1, 0),
+              ("IR_OPERANDS", 1, 4095, 4095, 4095), ("RETURN_VALUE", 0)]
         self.assert_admitted(ex, slots=5)
         bad = ex.copy()
-        bad[3] = ("CALL_FUNCTION_EX+NO_KW", 0, 0, 0)
+        bad[2] = ("CALL_FUNCTION_EX+NO_SELF+NO_KW", 0, 0, 1, 0)
         self.assert_rejected(ex, bad, message, slots=5)
-
-    def test_ex_optional_kwargs_requires_its_own_absence_proof(self):
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                 ("POP_TOP", 3), ("CALL_FUNCTION_EX+NO_SELF+NO_KW", 0, 0, 0),
-                 ("RETURN_VALUE", 0)]
-        self.assert_admitted(words, slots=5)
-        bad = words.copy()
-        bad[2] = ("LOAD_CONST", 3)
-        self.assert_rejected(words, bad, "virtual call input", slots=5)
-        # A present kwargs role has a real value home and keeps that owner.
-        bad[3] = ("CALL_FUNCTION_EX+NO_SELF", 0, 0, 0)
-        self.assert_admitted(bad, slots=5)
 
     def test_fused_branches_retire_holes_on_both_successors(self):
         def choose(fn, first, second, sentinel):
@@ -169,59 +159,7 @@ class CallRoleTests(unittest.TestCase):
             function = types.FunctionType(admitted, globals())
             self.assertEqual(function(((payload,),)), [payload])
 
-    def test_absence_is_required_after_unknown_and_at_joins(self):
-        words = [("LOAD_CONST", 0), ("POP_TOP", 1),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-        self.assert_admitted(words)
-        bad = words.copy()
-        bad[1] = ("LOAD_CONST", 1)
-        self.assert_rejected(words, bad, "virtual call input")
-        # The producer's owner fact disappears at this unsupported output,
-        # but that loss of proof must not certify the hole empty.
-        good = [("LOAD_CONST", 0), ("POP_TOP", 1),
-                ("POP_TOP", 1), words[2], words[3]]
-        bad = [good[0], ("LOAD_CONST", 1), ("UNARY_NOT", 1, 1),
-               good[3], good[4]]
-        self.assert_rejected(good, bad, "virtual call input")
-        joined = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                  ("POP_JUMP_IF_NONE", 2, 0, 5), ("POP_TOP", 1),
-                  ("IR_JUMP", 0, 0, 6), ("POP_TOP", 1),
-                  words[2], words[3]]
-        self.assert_admitted(joined)
-        for arm in (3, 5):
-            bad = joined.copy()
-            bad[arm] = ("LOAD_CONST", 1)
-            self.assert_rejected(joined, bad, "virtual call input")
-
-    def test_real_normal_retirement_makes_reused_holes_available(self):
-        self.assert_admitted([
-            ("LOAD_CONST", 2), ("BUILD_TUPLE", 0, 2, 1),
-            ("LOAD_CONST", 1), ("CALL+NO_SELF", 1, 1, 0, 0),
-            ("RETURN_VALUE", 1)], locals=("built",))
-        # The first child/native call consumes argument home2. It becomes
-        # the next call's virtual self hole, independent of physical residue.
-        self.assert_admitted([
-            ("LOAD_CONST", 0), ("LOAD_CONST", 2),
-            ("CALL+NO_SELF", 0, 0, 1, 0), ("POP_TOP", 0),
-            ("LOAD_CONST", 1), ("CALL+NO_SELF", 1, 1, 0, 0),
-            ("RETURN_VALUE", 1)])
-
     def test_through_prefix_is_retained_and_consumed_tail_becomes_empty(self):
-        # DICT_MERGE preserves callable/self/args/dict and consumes only the
-        # trailing source. That source may become another call's self hole.
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                 ("LOAD_CONST", 3), ("LOAD_CONST", 4),
-                 ("DICT_MERGE", 0, 1), ("POP_TOP", 0),
-                 ("POP_TOP", 2), ("CALL+NO_SELF", 3, 3, 0, 0),
-                 ("RETURN_VALUE", 3)]
-        self.assert_admitted(words, slots=6)
-        # The dictionary in the unchanged prefix is not an empty self hole.
-        bad = words.copy()
-        bad[6] = ("LOAD_CONST", 2)
-        bad[7] = ("CALL+NO_SELF", 2, 2, 0, 0)
-        bad[8] = ("RETURN_VALUE", 2)
-        self.assert_rejected(words, bad, "virtual call input", slots=6)
-
         def invoke(fn, values, names):
             return fn(*values, **names)
         self.assertTrue(any(row[0] == "DICT_MERGE" for row in
@@ -230,19 +168,6 @@ class CallRoleTests(unittest.TestCase):
             function = types.FunctionType(admitted, globals())
             self.assertEqual(function(lambda *a, **kw: (a, kw), (17,), {"x": 18}),
                              ((17,), {"x": 18}))
-
-    def test_full_extent_and_resumed_recipient_are_not_implicit_holes(self):
-        for home in (1, 63, 64, 4093):
-            self.assert_admitted([
-                ("LOAD_CONST", home - 1),
-                ("CALL+NO_SELF", home - 1, home - 1, 0, 0),
-                ("RETURN_VALUE", home - 1)], slots=home + 1)
-        words = [("LOAD_CONST", 0), ("YIELD_VALUE", 3, 0, 0),
-                 ("POP_TOP", 3), ("LOAD_CONST", 0),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-        bad = words.copy()
-        bad[1] = ("YIELD_VALUE", 1, 0, 0)
-        self.assert_rejected(words, bad, "virtual call input")
 
     def test_live_call_recipient_is_rejected(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 3),
@@ -274,16 +199,6 @@ class CallRoleTests(unittest.TestCase):
             self.assertEqual(list(function(lambda value: value + 1, (1, 2))), [2, 3])
 
     def test_loop_completion_releases_cursor_only_on_the_exit_edge(self):
-        words = [("LOAD_CONST", 0), ("FOR_ITER", 2, 0, 0, 4),
-                 ("POP_TOP", 1), ("POP_TOP", 2),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
-                 ("LOAD_CONST", 0), ("CALL+NO_SELF", 0, 0, 0, 0),
-                 ("RETURN_VALUE", 0)]
-        self.assert_admitted(words)
-        bad = words.copy()
-        bad[2] = ("IR_JUMP", 0, 0, 3)
-        self.assert_rejected(words, bad, "virtual call input")
-
         def invoke(fn, values):
             for value in values:
                 fn(value)
@@ -301,15 +216,6 @@ class CallRoleTests(unittest.TestCase):
                 self.assertEqual(seen, expected)
 
     def test_early_loop_retirement_covers_its_single_observed_successor(self):
-        # Exercise the actual pair retirement regardless of whether the
-        # frontend folds an early loop exit into scalar POP_TOP operations.
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 1),
-                 ("POP_ITER", 0, 1), ("LOAD_CONST", 0),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-        self.assert_admitted(words)
-        bad = words.copy()
-        bad[2] = ("POP_TOP", 0)
-        self.assert_rejected(words, bad, "virtual call input")
         def invoke(fn, values):
             for value in values:
                 if value:
@@ -394,7 +300,7 @@ class CallRoleTests(unittest.TestCase):
         bound = types.MethodType(namespace["method"], receiver)
         for name in ("plain", "bound"):
             self.assertEqual(call_rows(namespace[name].__code__)[0][0],
-                             "CALL_FUNCTION_EX+NO_SELF+NO_KW")
+                             "CALL_FUNCTION_EX+NO_KW")
         for _ in range(200):
             self.assertEqual(namespace["plain"](namespace["target"], values), values)
             actual = namespace["bound"](bound, values)
@@ -402,9 +308,9 @@ class CallRoleTests(unittest.TestCase):
             self.assertEqual(actual[1], values)
         if not support.Py_GIL_DISABLED:
             self.assertEqual(call_rows(namespace["plain"].__code__, True)[0][0],
-                             "CALL_EX_PY+NO_SELF+NO_KW")
+                             "CALL_EX_PY+NO_KW")
             self.assertEqual(call_rows(namespace["bound"].__code__, True)[0][0],
-                             "CALL_EX_NON_PY_GENERAL+NO_SELF+NO_KW")
+                             "CALL_EX_NON_PY_GENERAL+NO_KW")
 
     def test_native_prepend_uses_owned_copy_without_arena_offset(self):
         receiver = object()

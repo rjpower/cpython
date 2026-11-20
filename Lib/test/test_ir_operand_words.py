@@ -1,9 +1,8 @@
 """Operand words: a call head followed by the words that name its inputs.
 
-Until the compiler emits them for every call, the assembler gives the
-arguments of every CALL operand words only under
-_testinternalcapi.compile_with_operand_calls().  The call handlers do not
-read them yet, so the code under test never runs past a call.
+The compiler gives every call operand words, and the call handlers read
+them.  The code under test never runs past a call that the test does not
+mean to run: g is a function that fails the test.
 """
 
 import dis
@@ -25,7 +24,6 @@ _testinternalcapi = import_helper.import_module('_testinternalcapi')
 CALL_BASES = (opcode.opmap["CALL"], opcode.opmap["CALL_KW"],
               opcode.opmap["CALL_FUNCTION_EX"])
 CONTRACT = _opcode.get_ir_contract()
-OPERANDS = _opcode.IR_F_OPERANDS
 EMPTY = 0xFFF
 
 # Line 3 holds a call with seven operands, two operand words, which the
@@ -55,7 +53,8 @@ def guarded(x):
         pass
     return x
 
-def cell(a):
+def cell():
+    a = 1
     def inner():
         return a
     if a:
@@ -64,12 +63,12 @@ def cell(a):
 """
 
 
-KEYWORDS = _testinternalcapi.compile_with_operand_calls(
-    "def kw(x):\n    return g(x, y=1)\n", "<keywords>").co_consts[0]
+KEYWORDS = compile(
+    "def kw(x):\n    return g(x, y=1)\n", "<keywords>", "exec").co_consts[0]
 
 
 def compile_functions():
-    module = _testinternalcapi.compile_with_operand_calls(SOURCE, "<operands>")
+    module = compile(SOURCE, "<operands>", "exec")
     return {c.co_name: c for c in module.co_consts if hasattr(c, "co_code")}
 
 
@@ -85,10 +84,18 @@ def calls(code):
     result = []
     words = rows(code)
     for i, row in enumerate(words):
-        if row[0].endswith("+OPERANDS"):
+        if is_call_head(row[0]):
             n = row[3]
             result.append((i, row, words[i + 1:i + 1 + (n + 3) // 4]))
     return result
+
+
+def is_call_head(name):
+    handler, _, _ = name.partition("+")
+    row = CONTRACT[dis._all_opname.index(handler)]
+    return (row.base in CALL_BASES or
+            handler in ("INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
+                        "INSTRUMENTED_CALL_FUNCTION_EX"))
 
 
 def replace_word(code, index, name, *fields):
@@ -112,17 +119,17 @@ class WordLengthTests(unittest.TestCase):
         for n, expected in [(0, 1), (1, 2), (4, 2), (5, 3), (8, 3), (9, 4),
                             (4095, 1 + 1024)]:
             with self.subTest(n=n):
-                self.assertEqual(length(self.word("CALL+OPERANDS", 0, 0, n, 0)),
-                                 expected)
+                self.assertEqual(length(self.word("CALL", 0, 0, n, 0)), expected)
+                self.assertEqual(
+                    length(self.word("CALL+NO_SELF", 0, 0, n, 0)), expected)
 
     def test_every_other_word_has_length_one(self):
         length = _opcode.get_ir_word_length
-        self.assertEqual(length(self.word("CALL", 0, 0, 7, 0)), 1)
-        self.assertEqual(length(self.word("CALL+NO_SELF", 0, 0, 7, 0)), 1)
         self.assertEqual(length(self.word("IR_OPERANDS", 1, 2, 3, 4)), 1)
         self.assertEqual(length(self.word("RETURN_VALUE", 0, 0, 7, 0)), 1)
 
-    def test_the_flag_belongs_to_the_call_families(self):
+    def test_only_the_call_families_have_operand_words(self):
+        length = _opcode.get_ir_word_length
         for handler, row in enumerate(CONTRACT):
             if row is None:
                 continue
@@ -131,7 +138,8 @@ class WordLengthTests(unittest.TestCase):
                 is_call = (row.base in CALL_BASES or
                            name in ("INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
                                     "INSTRUMENTED_CALL_FUNCTION_EX"))
-                self.assertEqual(bool(row.word_flags & OPERANDS), is_call)
+                word = self.word(name, 0, 0, 7, 0)
+                self.assertEqual(length(word), 3 if is_call else 1)
 
     def test_operands_handler_is_never_dispatched(self):
         row = CONTRACT[opcode._ir_opmap["IR_OPERANDS"]]
@@ -159,8 +167,8 @@ class EmissionTests(unittest.TestCase):
         slots = [s for row in operands for s in row[1:]]
         used, unused = slots[:5], slots[5:]
         self.assertEqual(unused, [EMPTY] * 3)
-        # The arguments are consecutive temporaries of the window
-        self.assertEqual(used, list(range(used[0], used[0] + 5)))
+        # The arguments are the local x, named in place
+        self.assertEqual(used, [code.co_varnames.index("x")] * 5)
 
     def test_seven_operands_take_two_words(self):
         (i, head, operands), = calls(FUNCTIONS["f"])
@@ -198,11 +206,6 @@ class EmissionTests(unittest.TestCase):
         self.assertTrue(any(start <= i and i + len(operands) < end
                             for start, end, *_ in entries))
 
-    def test_calls_without_the_knob_have_no_operand_words(self):
-        code = compile(SOURCE, "<plain>", "exec").co_consts[0]
-        self.assertEqual(calls(code), [])
-        self.assertFalse(any(row[0] == "IR_OPERANDS" for row in rows(code)))
-
 
 class DisTests(unittest.TestCase):
     def test_one_instruction_per_call_and_its_operands(self):
@@ -224,7 +227,7 @@ class DisTests(unittest.TestCase):
         (i, head, operands), = calls(code)
         call = next(ins for ins in dis.get_instructions(code) if ins.offset == i)
         self.assertEqual(call.opname, "CALL")
-        self.assertEqual(call.handler, "CALL+NO_SELF+OPERANDS")
+        self.assertEqual(call.handler, "CALL+NO_SELF")
         self.assertEqual(call.length, 1 + len(operands))
         slots = [s for row in operands for s in row[1:]][:head[3]]
         self.assertEqual(list(call.srcs[-head[3]:]), slots)
@@ -287,8 +290,7 @@ class AdmissionTests(unittest.TestCase):
     def test_operand_word_without_a_head(self):
         code = FUNCTIONS["one"]
         (i, head, operands), = calls(code)
-        name, *fields = head
-        bad = replace_word(code, i, name.removesuffix("+OPERANDS"), *fields)
+        bad = replace_word(code, i, "POP_TOP", 0)
         self.reject(code, bad, "operand word that no call claims")
 
     def test_head_claiming_words_that_are_not_operands(self):
@@ -330,19 +332,15 @@ class AdmissionTests(unittest.TestCase):
     def test_operand_cannot_name_a_cell(self):
         code = FUNCTIONS["cell"]
         (i, head, operands), = calls(code)
-        slot = code.co_varnames.index("a")
+        # A cell that is not also an argument has a slot of its own after
+        # the locals; an argument that a closure captures is a local too
         self.assertIn("a", code.co_cellvars)
+        self.assertNotIn("a", code.co_varnames)
+        slot = len(code.co_varnames) + code.co_cellvars.index("a")
         row = list(operands[0])
         row[1] = slot
         bad = replace_word(code, i + 1, *row)
         self.reject(code, bad, "cell or free variable")
-
-    def test_operand_flag_only_on_a_call(self):
-        code = FUNCTIONS["one"]
-        last = len(rows(code)) - 1
-        name, *fields = rows(code)[last]
-        bad = replace_word(code, last, name + "+OPERANDS", *fields)
-        self.reject(code, bad, "invalid executable handler")
 
     def test_jump_target_in_the_operands(self):
         code = FUNCTIONS["f"]
@@ -357,22 +355,23 @@ class AdmissionTests(unittest.TestCase):
     def keyword_call(self, n, operands):
         "a hand-assembled call with keywords: g(x, y=1) with operand words"
         words = list(rows(KEYWORDS))
-        name, a, b, c, d = words[5]
-        words[5:6] = [("CALL_KW+NO_SELF+OPERANDS", a, b, n, d),
-                      *[("IR_OPERANDS", *row) for row in operands]]
+        i = next(k for k, row in enumerate(words) if row[0].startswith("CALL_KW"))
+        name, a, b, c, d = words[i]
+        words[i:i + 2] = [("CALL_KW+NO_SELF", a, b, n, d),
+                          *[("IR_OPERANDS", *row) for row in operands]]
         return KEYWORDS.replace(co_code=raw_encoded(words), co_linetable=b"",
                                 co_exceptiontable=b"", co_stacksize=12)
 
     def test_keyword_call_names_are_a_constant_index(self):
         # Operands: x, 1 and the index of ('y',) in co_consts
-        code = self.keyword_call(3, [(4, 5, 1, EMPTY)])
+        code = self.keyword_call(3, [(0, 4, 1, EMPTY)])
         self.assertEqual(construct(code), code)
         self.assertEqual(code.replace(), code)
         self.assertEqual(marshal.loads(marshal.dumps(code)), code)
         for index in (0, 1):
-            self.assertIsNotNone(self.keyword_call(3, [(4, 5, index, EMPTY)]))
+            self.assertIsNotNone(self.keyword_call(3, [(0, 4, index, EMPTY)]))
         with self.assertRaisesRegex(ValueError, "invalid constant index"):
-            self.keyword_call(3, [(4, 5, 99, EMPTY)])
+            self.keyword_call(3, [(0, 4, 99, EMPTY)])
 
     def test_recovery_cannot_split_a_call(self):
         code = FUNCTIONS["f"]
@@ -439,7 +438,8 @@ class WalkerTests(unittest.TestCase):
                  if old[0] != "IR_OPERANDS"]
         self.assertTrue(any("INSTRUMENTED" in row[0] for row in heads))
         (i, head, operands), = calls(code)
-        self.assertIn("+OPERANDS", instrumented[i][0])
+        # A wrapper replaces the handler of the head and keeps its fields
+        self.assertEqual(instrumented[i][1:], before[i][1:])
         monitoring.set_local_events(tool, code, 0)
         self.assertEqual(rows(code), before)
 

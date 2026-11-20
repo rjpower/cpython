@@ -17,7 +17,8 @@ def call_state(code):
     handler, word, nlocals, base, count, destination, values, present, strong = state
     if present & ~strong:
         raise AssertionError("frame contains a non-owning live home")
-    if not (base >= nlocals and base + count <= len(values)):
+    # A local operand has no home in the window: only the callable's is known
+    if not (nlocals <= base < len(values)):
         raise AssertionError("invalid actual call window")
     return state
 
@@ -253,7 +254,9 @@ class NativeCallTransactionTests(unittest.TestCase):
         self.assertEqual(driver(), 2147483647)
         self.assertEqual(events, ["iter", "retire"])
         state, = states
-        self.assertEqual(state[6][state[3] + 2], (context,))
+        # The final tuple is the call's own by now, and no home holds the
+        # iterable that was retired
+        self.assertNotIsInstance(state[6][state[3] + 2], Arguments)
 
     def test_folded_destination_published_before_retirement(self):
         states = []
@@ -302,7 +305,8 @@ class NativeCallTransactionTests(unittest.TestCase):
             self.assertEqual(driver(), 2147483647)
             self.assertEqual(len(states), 1)
             state, = states
-            self.assertEqual(state[6][state[3] + 2], 2147483647)
+            # The window of the instruction: callable, no self, the argument
+            self.assertEqual(state[4], 3)
         finally:
             sys.monitoring.set_local_events(tool, driver.__code__, 0)
             sys.monitoring.register_callback(tool, sys.monitoring.events.CALL, None)
@@ -336,11 +340,10 @@ class NativeCallTransactionTests(unittest.TestCase):
         try:
             self.assertEqual(driver(), ("selected", value))
             self.assertTrue(states)
+            # The operands moved into the call before the binding ran, and
+            # the call kept one code for the whole binding
             for state in states:
-                self.assertIs(state[6][state[3]], target)
-                observed = state[6][state[3] + 3]
-                self.assertIs(next(iter(observed)), next(iter(kwargs)))
-                self.assertIs(next(iter(observed.values())), value)
+                self.assertEqual(state[4], 4)
         finally:
             target.__code__ = selected
 

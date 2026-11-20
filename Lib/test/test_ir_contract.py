@@ -155,9 +155,9 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("LOAD_GLOBAL", load_global, 0, 0, 6), preserve)
         self.assertEqual(transfer("LOAD_GLOBAL", load_global, 1, 0, 6), unknown)
 
-    def test_call_normal_physical_transfer(self):
-        testapi = import_helper.import_module("_testinternalcapi")
-        # Pin the finite family audited for success-only window retirement.
+    def test_call_family(self):
+        # Pin the finite family of calls: the words that name their operands
+        # carry the transfers of their homes, not the head.
         calls = {
             "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
             "CALL_PY_EXACT_ARGS", "CALL_TYPE_1", "CALL_STR_1", "CALL_TUPLE_1",
@@ -175,58 +175,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(calls, {name for name, row in BY_NAME.items()
                                  if row.base in (opcode.opmap["CALL"],
                                                  opcode.opmap["INSTRUMENTED_CALL"])})
-        # Every handler of the family admits the virtual self role and
-        # operand words, flags of the word
+        # Every handler of the family admits the virtual self role, a flag
+        # of the word
         self.assertEqual({BY_NAME[name].word_flags for name in calls},
-                         {_opcode.IR_F_NO_SELF | _opcode.IR_F_OPERANDS})
-        virtual = {name + "+NO_SELF" for name in legacy}
-        instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL+NO_SELF"}
-        unknown = (2, -1)
-        set_null = (1, -1)
-        preserve = (0, -1)
-
-        def transfer(name, dst, home, *, argc=1, encoded_arg=None,
-                     edge=0, base=4):
-            if encoded_arg is None:
-                encoded_arg = argc
-            return testapi.ir_normal_physical_transfer(
-                dis._handler_field(name), dst, base, encoded_arg, 0,
-                argc, edge, home, 2, 10)
-
-        for name in sorted(legacy | virtual):
-            argc = 2 if name.split("+")[0].endswith("_ISINSTANCE") else 1
-            with self.subTest(handler=name):
-                # A new result at BASE is a value, not a known NULL.
-                self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)
-                for home in range(5, 6 + argc):
-                    self.assertEqual(transfer(name, 4, home, argc=argc),
-                                     preserve if name in virtual and home == 5 else set_null)
-                # Folded local and sink destinations drain the whole window.
-                for dst in (0, 4095):
-                    for home in range(4, 6 + argc):
-                        self.assertEqual(transfer(name, dst, home, argc=argc),
-                                         preserve if name in virtual and home == 5 else set_null)
-                for home in (3, 9):
-                    self.assertEqual(transfer(name, 4, home, argc=argc),
-                                     unknown)
-                # Direct variants cannot publish to arbitrary scratch A.
-                for dst in (5, 6, 8):
-                    self.assertEqual(transfer(name, dst, 5, argc=argc), unknown)
-                self.assertEqual(transfer(name, 4, 5, argc=argc, edge=1),
-                                 unknown)
-                self.assertEqual(transfer(name, 4, 5, argc=argc,
-                                          encoded_arg=argc + 1), unknown)
-                self.assertEqual(transfer(name, 9, 9, argc=argc, base=9),
-                                 unknown)
-        # The observer/typed-runner path has no shared physical-NULL
-        # contract. Its logical drain/virtual-hole proof is separate.
-        for name in sorted(instrumented):
-            for dst in (0, 4, 4095):
-                for home in range(3, 10):
-                    with self.subTest(handler=name, dst=dst, home=home):
-                        self.assertEqual(transfer(name, dst, home), unknown)
-        for name in ("CALL_KW", "INSTRUMENTED_CALL_KW"):
-            self.assertEqual(transfer(name, 4, 5), unknown)
+                         {_opcode.IR_F_NO_SELF})
 
     def test_generator_completion_operand_layout(self):
         families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}

@@ -276,15 +276,19 @@ class CodeTest(unittest.TestCase):
 
         def shift_stack_slots(c, by):
             # A new free variable moves the evaluation stack up by one slot,
-            # so every word that names a stack slot must follow it.
+            # so every word that names a stack slot must follow it.  The
+            # operand words of a call name slots in all four fields.
             import _opcode
             contract = _opcode.get_ir_contract()
             words = []
             for i in range(0, len(c.co_code), 8):
                 word = int.from_bytes(c.co_code[i:i+8], 'little')
-                handler = word & _opcode.IR_HANDLER_MASK
-                row = contract[handler]
+                # Keep the flags (NO_SELF, NO_KW) with the handler
+                handler = word & (_opcode.IR_HANDLER_MASK | _opcode.IR_FLAGS_MASK)
+                row = contract[word & _opcode.IR_HANDLER_MASK]
                 roles = row.roles
+                if word & _opcode.IR_HANDLER_MASK == _opcode.IR_OPERANDS:
+                    roles = (_opcode.IR_ROLE_IN0,) * 4
                 self.assertFalse(row.flags & _opcode.IR_JUMPS)
                 fields = [(word >> shift) & 0xFFF for shift in (16, 28, 40, 52)]
                 for k, role in enumerate(roles):

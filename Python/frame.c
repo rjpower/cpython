@@ -9,43 +9,6 @@
 #include "pycore_pystate.h"       // HEAD_LOCK(), thread enumeration
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
-/* Move the first n slots of src to dest, which come to own what src did.
- * src is left NULL.  The constant slots of an image own nothing: they are
- * copied as vector moves, as the push does. */
-static inline void
-_PyFrame_MoveSlots(const _PyCodeExec *exec, PyValue *dest, PyValue *src, int n)
-{
-    int first = 0;
-    int end = 0;
-    if (exec->const_image != NULL) {
-        first = exec->const_first;
-        end = first + exec->nconst;
-        assert(end <= n);
-    }
-    for (int i = 0; i < first; i++) {
-        dest[i] = src[i];
-        src[i] = PyValue_NULL;
-    }
-    if (end != first) {
-        _PyFrame_CopyConstSlots(dest + first, src + first, end - first);
-        _PyFrame_NullConstSlots(src + first, end - first);
-    }
-    for (int i = end; i < n; i++) {
-        dest[i] = src[i];
-        src[i] = PyValue_NULL;
-    }
-}
-
-/* Move the slots of src, the frame that departs, to dest. */
-void
-_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
-{
-    int nslots = _PyFrame_NumSlots(src);
-    _PyFrame_CopyHeader(src, dest);
-    _PyFrame_MoveSlots(_PyFrame_GetCode(src)->_co_exec,
-                       dest->base, src->base, nslots);
-}
-
 static Py_NO_INLINE void
 copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
@@ -70,7 +33,10 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     src->instr_ptr++;
     _PyFrame_CopyHeader(src, dest);
-    _PyFrame_MoveSlots(exec, dest->base, src->base, nl);
+    for (int i = 0; i < nl; i++) {
+        dest->base[i] = src->base[i];
+        src->base[i] = PyValue_NULL;
+    }
     /* The current NULL control still requires initialized destination gaps. */
     for (int i = nl; i < nslots; i++) {
         dest->base[i] = PyValue_NULL;

@@ -199,19 +199,14 @@ class PyValueSlotTests(unittest.TestCase):
 
     def test_load_owner_retires_before_folded_local_replacement(self):
         # The result is stored into the local, then the owner and the
-        # displaced value are released.  Each finalizer finds a valid frame
-        # with real locals and runs once; the order between them is free.
+        # displaced value are released.  Each finalizer runs once and finds
+        # the result in the local; the order between them is free.
         events = []
         reenter = False
 
         def check(events):
-            self.assertEqual(sorted(kind for kind, _ in events),
-                             ['old', 'owner'])
-            for kind, local in events:
-                if kind == 'old':
-                    self.assertEqual(local, 1234567)
-                else:
-                    self.assertTrue(local == 1234567 or isinstance(local, Old))
+            self.assertEqual(sorted(events),
+                             [('old', 1234567), ('owner', 1234567)])
 
         class Old:
             def __del__(self):

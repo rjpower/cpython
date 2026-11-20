@@ -396,8 +396,8 @@ class PyValueDictVMTests(unittest.TestCase):
 
     def test_cached_receiver_retirement_precedes_folded_local(self):
         # The result is stored into the local, then the receiver and the
-        # displaced value are released.  Each finalizer finds a valid frame
-        # with real locals and runs once; the order between them is free.
+        # displaced value are released.  Each finalizer runs once and finds
+        # the result in the local; the order between them is free.
         ledger = []
         observe = False
 
@@ -429,12 +429,8 @@ class PyValueDictVMTests(unittest.TestCase):
             self.assertEqual(read(Owner), 2147483647)
         finally:
             sys.setprofile(None)
-        self.assertEqual(sorted(kind for kind, _ in ledger), ['old', 'receiver'])
-        for kind, local in ledger:
-            if kind == 'old':
-                self.assertEqual(local, 2147483647)
-            else:
-                self.assertTrue(local == 2147483647 or isinstance(local, Old))
+        self.assertEqual(sorted(ledger),
+                         [('old', 2147483647), ('receiver', 2147483647)])
 
     def test_attribute_body_error_retires_receiver_before_deeper(self):
         ledger = []

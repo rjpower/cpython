@@ -273,6 +273,13 @@ class TestAnalysisErrors(unittest.TestCase):
         """, ".*spill.*")
 
 
+def generator_labels_source():
+    "The inline generator paths that the handlers' IR_GEN_* macros enter"
+    return (Path(__file__).resolve().parents[2] /
+            "Python" / "ceval_generator_labels.h").read_text()
+
+
+
 class TestIRCases(unittest.TestCase):
     """The register IR backend: ir_generator.py and ir_metadata_generator.py"""
 
@@ -382,7 +389,11 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("IR_GEN_JUMP(GEN_ENTRY_EFFECT", body)
         self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
         self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
-        self.assertIn("generator_resume_targets[", body)
+        # The handler enters the resume path, which reads the resumed
+        # frame's boundary shape from the resume table
+        self.assertIn("IR_GEN_RESUME(ir_resume_input);", body)
+        self.assertNotIn("generator_resume_targets[", body)
+        self.assertIn("generator_resume_targets[IR_HANDLER(", generator_labels_source())
         self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
                             for event in emitter.ownership_events))
 
@@ -403,7 +414,7 @@ class TestIRCases(unittest.TestCase):
         update = body.index("null_or_index = PyValue_TagIndex(index);")
         publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
         clear = body.index("window[2] = PyValue_NULL;", publish)
-        transfer = body.index("IR_GEN_JUMP(GEN_SEND_YIELD", clear)
+        transfer = body.index("IR_GEN_YIELD(next);", clear)
         self.assertLess(update, publish)
         self.assertLess(publish, clear)
         self.assertLess(clear, transfer)
@@ -451,13 +462,22 @@ class TestIRCases(unittest.TestCase):
                 ir_generator.generate_handler(name, instructions[name], formats[name],
                                               emitter, out)
                 body = output.getvalue()
-                resolve = body.index("generator_outcome_target(frame, this_instr, "
-                                     "generator_completed_targets)")
-                guard = body.index("assert(ir_completed_target != NULL);", resolve)
-                tail = body.index("IR_GEN_JUMP_TO(ir_completed_target,", guard)
-                self.assertLess(resolve, guard)
+                # The handler hands the completion value, a home, to the
+                # completion path with its own word as the source
+                guard = body.index("assert(_PyValue_IsHome(ir_completed));")
+                tail = body.index("IR_GEN_COMPLETE(ir_completed);", guard)
                 self.assertLess(guard, tail)
-                self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
+                self.assertNotIn("generator_completed_targets", body)
+                self.assertNotIn("generator_site_kind(", body)
+        # The path resolves the consumer from the word at the source, which
+        # looks through a monitor's wrapper, and never from the handler
+        labels = generator_labels_source()
+        complete = labels[labels.index("HOT_LABEL(gen_complete)"):]
+        resolve = complete.index("generator_site_kind(frame, next_instr, "
+                                 "generator_completed_targets)")
+        guard = complete.index("assert(kind != 0);", resolve)
+        self.assertLess(resolve, guard)
+        self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", labels)
 
     def test_generator_return_route_leaves_thread_return_unchanged(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -478,13 +498,16 @@ class TestIRCases(unittest.TestCase):
                 branch = body.index("if (generator_return) {")
                 end = body.index("}\n", branch)
                 route = body[branch:end]
-                self.assertIn("IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, "
-                              "frame->instr_ptr, temp);", route)
+                self.assertIn("IR_GEN_RETURN(temp, dying);", route)
+                self.assertNotIn("generator_site_kind(", body)
                 self.assertNotIn("generator_outcome_target(", body)
                 self.assertNotIn("_PyEval_FrameClear", route)
                 self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
                 clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
                          else "_PyEval_FrameClearAndPopGeneralWithResult")
+                # The generator's return leaves before the thread's clear
+                self.assertLess(body.index("IR_GEN_RETURN(temp, dying);"),
+                                body.index(f"temp = {clear}("))
                 self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
                 self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
                 self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
@@ -504,8 +527,12 @@ class TestIRCases(unittest.TestCase):
         for name, row in rows.items():
             if row.completed not in {"STORE_FAST", "POP_TOP"}:
                 continue
-            prefix = "GEN_THROW_COMPLETE_" if row.base == "CLEANUP_THROW" else "GEN_COMPLETE_"
-            self.assertIn(f"[{ids[name]}] = ir_{prefix}{row.completed},", targets)
+            kind = f"GEN_COMPLETE_{row.completed}"
+            if row.base == "CLEANUP_THROW":
+                kind = f"GEN_THROWING | {kind}"
+            self.assertIn(f"[{ids[name]}] = {kind},", targets)
+            self.assertIn(f"case GEN_COMPLETE_{row.completed}:",
+                          generator_labels_source())
             self.assertEqual(ir_generator.generator_word_entry(name, analysis),
                              ir_generator.generator_word_entry(
                                  f"{row.base}_XFER_DISCARD", analysis))

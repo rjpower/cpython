@@ -388,26 +388,6 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 #endif
 }
 
-/* Move the slots of src, the frame that departs, to dest. */
-static inline void
-_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
-{
-    int nslots = _PyFrame_NumSlots(src);
-    _PyFrame_CopyHeader(src, dest);
-    for (int i = 0; i < nslots; i++) {
-        dest->base[i] = src->base[i];
-        src->base[i] = PyValue_NULL;
-    }
-}
-
-
-/* Write the constants of the constant slots of code (CO_FAST_CONST) into the
- * slots of frame, counting those that need a count.  The slow path of
- * _PyFrame_Initialize(), for code with a mortal constant, as after
- * code.replace(co_consts=...). */
-extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
-                                    PyCodeObject *code);
-
 /* The constant slots (CO_FAST_CONST) of a frame of exec, nconst from here.
  * If exec has an image of them (const_image) they hold inline scalars and
  * immortals and own no count: the push copies the image over them and the
@@ -458,6 +438,16 @@ _PyFrame_NullConstSlots(PyValue *dst, int n)
         *dst = PyValue_NULL;
     }
 }
+
+/* Move the slots of src, the frame that departs, to dest. */
+extern void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest);
+
+/* Write the constants of the constant slots of code (CO_FAST_CONST) into the
+ * slots of frame, counting those that need a count.  The slow path of
+ * _PyFrame_Initialize(), for code with a mortal constant, as after
+ * code.replace(co_consts=...). */
+extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
+                                    PyCodeObject *code);
 
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void

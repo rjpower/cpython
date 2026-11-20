@@ -686,10 +686,30 @@ normalize_positions(const _PyIRPositions *map, uint32_t nwords)
 }
 
 static int mark_operand_words(const char *, Py_ssize_t, unsigned char **);
-static int completion_handler_safe(struct _PyCodeConstructor *, int, int, int,
+/* The exception edges of a code object, indexed by word, so that the proof
+ * below finds those of a word without scanning the exception table and the
+ * recovery events of the whole code for each. */
+typedef struct {
+    int start, size, target, slot, lasti;
+} completion_entry;
+
+typedef struct completion_edges {
+    completion_entry *entries;
+    int *cover;    // per word: the first entry whose range holds it, or -1
+    int *first;    // events[first[i]:first[i + 1]] are those from word i
+    int *events;   // recovery records that have a handler, by word, in order
+    _PyIRSemanticMap source;
+} completion_edges;
+
+static int completion_handler_safe(struct _PyCodeConstructor *,
+                                   const completion_edges *, int, int, int,
                                    int, int);
-static int observer_handler_safe(struct _PyCodeConstructor *, _PyIRWord, int,
+static int observer_handler_safe(struct _PyCodeConstructor *,
+                                 const completion_edges *, _PyIRWord, int,
                                  int, int, int, int);
+static int completion_edges_build(completion_edges *, const _PyIRSemanticMap *,
+                                  int);
+static void completion_edges_free(completion_edges *);
 
 static int
 validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
@@ -760,6 +780,11 @@ validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
             return -1;
         }
     }
+    completion_edges edges;
+    if (completion_edges_build(&edges, &map, nwords) < 0) {
+        PyErr_NoMemory();
+        return -1;
+    }
     for (uint32_t i = 0; i < map.nrecords; i++) {
         _PyIRRecoveryEvent event;
         _PyIRSemantic_Event(&map, i, &event);
@@ -774,13 +799,13 @@ validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
               event.exc_slot >= nslots)))
         {
             PyErr_SetString(PyExc_ValueError, "code: semantic recovery does not fit code");
-            return -1;
+            { completion_edges_free(&edges); return -1; }
         }
         const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
         if (_PyIR_HandlerBase[IR_HANDLER(words[event.to])] == RESUME) {
             PyErr_SetString(PyExc_ValueError,
                             "code: semantic recovery cannot precede an entry RESUME");
-            return -1;
+            { completion_edges_free(&edges); return -1; }
         }
         if (event.handler >= 0) {
             _PyIRWord from = words[event.from];
@@ -792,10 +817,10 @@ validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
             int observer = _PyIR_ObserverOutcome(from, event.edge);
             if (observer || completed) {
                 int safe = observer
-                    ? observer_handler_safe(con, from, event.edge,
+                    ? observer_handler_safe(con, &edges, from, event.edge,
                                             event.handler, event.exc_slot,
                                             event.lasti, 1)
-                    : completion_handler_safe(con, event.handler,
+                    : completion_handler_safe(con, &edges, event.handler,
                                               event.exc_slot, event.lasti,
                                               IR_B(from),
                                               _PyIR_CompletionWindow(opcode));
@@ -804,11 +829,12 @@ validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
                         PyErr_SetString(PyExc_ValueError,
                                         "code: source handler reads a retired completion owner");
                     }
-                    return -1;
+                    { completion_edges_free(&edges); return -1; }
                 }
             }
         }
     }
+    completion_edges_free(&edges);
     for (uint32_t i = 0; i < positions.nrecords; i++) {
         _PyIRPosition position;
         _PyIRPositions_Event(&positions, i, &position);
@@ -1082,13 +1108,100 @@ completion_exception_edge(completion_worklist *work, int target, int slot,
     return completion_enqueue(work, target, mask, nonnull);
 }
 
+static int
+completion_edges_build(completion_edges *edges, const _PyIRSemanticMap *source,
+                       int n)
+{
+    *edges = (completion_edges){.source = *source};
+    int nentries = 0;
+    const unsigned char *cursor = source->exceptions;
+    const unsigned char *end = cursor + source->exceptions_size;
+    while (cursor < end) {
+        int field;
+        for (int k = 0; k < 4; k++) {
+            if (_PyIR_ExceptionVarint(&cursor, end, &field) < 0) {
+                return -1;
+            }
+        }
+        nentries++;
+    }
+    size_t nints = (size_t)n + ((size_t)n + 1) + source->nrecords;
+    edges->entries = PyMem_Malloc(Py_MAX(nentries, 1) * sizeof(*edges->entries));
+    edges->cover = PyMem_Malloc(nints * sizeof(int));
+    if (edges->entries == NULL || edges->cover == NULL) {
+        completion_edges_free(edges);
+        return -1;
+    }
+    edges->first = edges->cover + n;
+    edges->events = edges->first + n + 1;
+    cursor = source->exceptions;
+    for (int e = 0; e < nentries; e++) {
+        int slot_lasti = 0;
+        completion_entry *entry = &edges->entries[e];
+        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->start);
+        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->size);
+        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->target);
+        (void)_PyIR_ExceptionVarint(&cursor, end, &slot_lasti);
+        entry->slot = slot_lasti >> 1;
+        entry->lasti = slot_lasti & 1;
+    }
+    for (int i = 0; i < n; i++) {
+        edges->cover[i] = -1;
+    }
+    // Backwards, so that the first entry of the table has the last word
+    for (int e = nentries - 1; e >= 0; e--) {
+        const completion_entry *entry = &edges->entries[e];
+        int low = Py_MAX(entry->start, 0);
+        int high = (int)Py_MIN((int64_t)entry->start + entry->size, (int64_t)n);
+        for (int i = low; i < high; i++) {
+            edges->cover[i] = e;
+        }
+    }
+    for (int i = 0; i <= n; i++) {
+        edges->first[i] = 0;
+    }
+    for (uint32_t j = 0; j < source->nrecords; j++) {
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(source, j, &event);
+        if (event.handler >= 0 && event.from >= 0 && event.from < n) {
+            edges->first[event.from + 1]++;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        edges->first[i + 1] += edges->first[i];
+    }
+    int *next = PyMem_Malloc(((size_t)n + 1) * sizeof(int));
+    if (next == NULL) {
+        completion_edges_free(edges);
+        return -1;
+    }
+    memcpy(next, edges->first, ((size_t)n + 1) * sizeof(int));
+    for (uint32_t j = 0; j < source->nrecords; j++) {
+        _PyIRRecoveryEvent event;
+        _PyIRSemantic_Event(source, j, &event);
+        if (event.handler >= 0 && event.from >= 0 && event.from < n) {
+            edges->events[next[event.from]++] = (int)j;
+        }
+    }
+    PyMem_Free(next);
+    return 0;
+}
+
+static void
+completion_edges_free(completion_edges *edges)
+{
+    PyMem_Free(edges->entries);
+    PyMem_Free(edges->cover);
+}
+
 /* A preserved prefix need not contain live semantic operands. Generator
  * StopIteration wrappers, for example, keep an iterator below their real
  * exception/lasti inputs. Prove that completed homes are not read as those
  * old values on any normal or exceptional handler path. This is the final
  * encoded proof for both compiled programs and public code constructors. */
 static int
-owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
+owner_handler_safe(struct _PyCodeConstructor *con,
+                   const completion_edges *edges, int entry, int exc_slot,
                    int lasti, const int *homes, int count,
                    unsigned int initial, unsigned int initial_nonnull)
 {
@@ -1097,12 +1210,7 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
     }
     const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
     int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
-    _PyIRSemanticMap source;
-    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
-                          PyBytes_GET_SIZE(con->exceptiontable), &source) < 0)
-    {
-        return 0;
-    }
+    const _PyIRSemanticMap source = edges->source;
     completion_worklist work = {.n = n, .nhomes = count};
     memcpy(work.homes, homes, (size_t)count * sizeof(int));
     work.facts = PyMem_Calloc((size_t)n, sizeof(*work.facts));
@@ -1154,23 +1262,10 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
             safe = -1;
             break;
         }
-        const unsigned char *cursor = source.exceptions;
-        const unsigned char *end = cursor + source.exceptions_size;
-        while (cursor < end) {
-            int start, size, target, slot_lasti;
-            if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
-                _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
-                _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
-                _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0)
-            {
-                safe = 0;
-                break;
-            }
-            if (i >= start && i - start < size) {
-                safe = completion_exception_edge(&work, target,
-                    slot_lasti >> 1, slot_lasti & 1, mask, nonnull);
-                break;
-            }
+        if (edges->cover[i] >= 0) {
+            const completion_entry *entry = &edges->entries[edges->cover[i]];
+            safe = completion_exception_edge(&work, entry->target,
+                entry->slot, entry->lasti, mask, nonnull);
         }
         if (!safe) {
             break;
@@ -1215,10 +1310,10 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
             else {
                 edge &= ~defs;
             }
-            for (uint32_t j = 0; j < source.nrecords; j++) {
+            for (int k = edges->first[i]; k < edges->first[i + 1]; k++) {
                 _PyIRRecoveryEvent event;
-                _PyIRSemantic_Event(&source, j, &event);
-                if (event.from == i && event.edge == taken && event.handler >= 0 &&
+                _PyIRSemantic_Event(&source, (uint32_t)edges->events[k], &event);
+                if (event.edge == taken &&
                     !completion_exception_edge(&work, event.handler, event.exc_slot,
                                                event.lasti, edge, edge_nonnull))
                 {
@@ -1241,7 +1336,8 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
 }
 
 static int
-completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
+completion_handler_safe(struct _PyCodeConstructor *con,
+                        const completion_edges *edges, int entry, int exc_slot,
                         int lasti, int base, int count)
 {
     int homes[8];
@@ -1252,12 +1348,13 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         homes[k] = base + k;
     }
     unsigned int initial = (1u << count) - 1;
-    return owner_handler_safe(con, entry, exc_slot, lasti, homes, count,
+    return owner_handler_safe(con, edges, entry, exc_slot, lasti, homes, count,
                               initial, initial);
 }
 
 static int
-observer_handler_safe(struct _PyCodeConstructor *con, _PyIRWord word, int edge,
+observer_handler_safe(struct _PyCodeConstructor *con,
+                      const completion_edges *edges, _PyIRWord word, int edge,
                       int entry, int exc_slot, int lasti, int post)
 {
     int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
@@ -1292,7 +1389,7 @@ observer_handler_safe(struct _PyCodeConstructor *con, _PyIRWord word, int edge,
             unavailable |= bit;
         }
     }
-    return owner_handler_safe(con, entry, exc_slot, lasti, observed.home,
+    return owner_handler_safe(con, edges, entry, exc_slot, lasti, observed.home,
                               observed.count, unavailable, may_nonnull);
 }
 
@@ -1301,6 +1398,7 @@ observer_handler_safe(struct _PyCodeConstructor *con, _PyIRWord word, int edge,
 static int
 validate_completion_words(struct _PyCodeConstructor *con)
 {
+    completion_edges edges = {0};
     const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
     int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
     int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
@@ -1364,6 +1462,10 @@ validate_completion_words(struct _PyCodeConstructor *con)
     if (!_PyIR_ExceptionTableValid(cursor, end, n, nl, limit)) {
         goto invalid;
     }
+    if (completion_edges_build(&edges, &semantic, n) < 0) {
+        PyErr_NoMemory();
+        return -1;
+    }
     cursor = semantic.exceptions;
     while (cursor < end) {
         int start, size, target, slot_lasti;
@@ -1386,13 +1488,14 @@ validate_completion_words(struct _PyCodeConstructor *con)
                 if (!_PyIR_ObserverOutcome(words[i], edge)) {
                     continue;
                 }
-                int pre = observer_handler_safe(con, words[i], edge, target,
-                                                slot, slot_lasti & 1, 0);
+                int pre = observer_handler_safe(con, &edges, words[i], edge,
+                                                target, slot, slot_lasti & 1, 0);
                 int post = pre > 0
-                    ? observer_handler_safe(con, words[i], edge, target,
+                    ? observer_handler_safe(con, &edges, words[i], edge, target,
                                             slot, slot_lasti & 1, 1)
                     : pre;
                 if (pre < 0 || post < 0) {
+                    completion_edges_free(&edges);
                     return -1;
                 }
                 if (!pre || !post) {
@@ -1407,9 +1510,10 @@ validate_completion_words(struct _PyCodeConstructor *con)
                 {
                     goto invalid;
                 }
-                int safe = completion_handler_safe(con, target, slot,
+                int safe = completion_handler_safe(con, &edges, target, slot,
                                                    slot_lasti & 1, base, count);
                 if (safe < 0) {
+                    completion_edges_free(&edges);
                     return -1;
                 }
                 if (!safe) {
@@ -1418,8 +1522,10 @@ validate_completion_words(struct _PyCodeConstructor *con)
             }
         }
     }
+    completion_edges_free(&edges);
     return 0;
 invalid:
+    completion_edges_free(&edges);
     PyErr_Format(PyExc_ValueError,
                  "code: invalid semantic completion window or handler (%U:%d)",
                  con->qualname, con->firstlineno);

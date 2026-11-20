@@ -10843,6 +10843,69 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_GETSET) {
+            int opcode = LOAD_ATTR_GETSET;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_GETSET);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_GETSET
+            {
+                _PyValueGuarded class_value = fb->class_value;
+                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                assert(PyValue_IsObject(descriptor));
+                PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
+                assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));
+                STAT_INC(LOAD_ATTR, hit);
+                PyValue found = _PyGetSet_ValueRead(getset, owner);
+                ir_own_B = IR_DETACH(ir_word, B, owner);
+                if (PyValue_IsNull(found)) {
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                attr = found;
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
+                if (oparg & 1) {
+                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
+                }
+            }
+            IR_STORE_DST(ir_word, A, attr);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_INSTANCE_VALUE) {
             int opcode = LOAD_ATTR_INSTANCE_VALUE;
             (void)(opcode);

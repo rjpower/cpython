@@ -2660,6 +2660,7 @@ dummy_func(
             LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
             LOAD_ATTR_SHAPE,
+            LOAD_ATTR_GETSET,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -4178,6 +4179,34 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
+
+        /* A value getset (_PyValueGetSet, pycore_descrobject.h) found on the
+         * owner's type, read without the attribute protocol. The type version
+         * guard proves that the cached descriptor is still the one the lookup
+         * finds, and so that the owner is an instance of the type that the
+         * descriptor applies to (checked when specializing). A getset is a
+         * data descriptor: it wins over the instance dict. The getter may run
+         * Python and may mutate the type, which can drop the dict's reference
+         * to the descriptor. The record is read before the call and the
+         * descriptor is not used again. */
+        ir_only op(_LOAD_ATTR_GETSET, (class_value/4, owner -- attr)) {
+            PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+            assert(PyValue_IsObject(descriptor));
+            PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
+            assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));
+            STAT_INC(LOAD_ATTR, hit);
+            PyValue found = _PyGetSet_ValueRead(getset, owner);
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(found));
+            attr = found;
+        }
+
+        macro(LOAD_ATTR_GETSET) =
+            unused/1 +
+            _GUARD_TYPE_VERSION +
+            unused/2 +
+            _LOAD_ATTR_GETSET +
+            _PUSH_NULL_CONDITIONAL;
 
         op(_CHECK_ATTR_METHOD_LAZY_DICT, (dictoffset/1, owner -- owner)) {
             char *ptr = ((char *)PyValue_AsKnownObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;

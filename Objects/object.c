@@ -35,6 +35,7 @@
 #include "pycore_symtable.h"      // PySTEntry_Type
 #include "pycore_template.h"      // _PyTemplate_Type _PyTemplateIter_Type
 #include "pycore_tuple.h"         // _PyTuple_DebugMallocStats()
+#include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
 #include "pycore_value.h"         // PyValue_FromObjectSteal
@@ -1787,6 +1788,53 @@ _PyObject_NextNotImplemented(PyObject *self)
 }
 
 
+/* Lifetime of a class attribute found for a lookup.
+
+   A type-cache hit borrows the attribute from the cache entry, which borrows
+   it from a type dict on the MRO. That borrow is valid until Python code can
+   run: Python can mutate a type, and a mutation may drop the dict's reference
+   (the entry's version tag is then 0 and its table is retired, so the borrow
+   is never read again, but the object may be freed). Everything between the
+   lookup and a pin_class_attr() runs no Python: it reads types, flags and the instance
+   dict of an inline-value or managed-dict object.
+
+   Before a step that can run Python, pin_class_attr() takes an owner of the attribute
+   and of the type of the receiver. The receiver keeps its type alive only
+   while Python has not run: it may reassign __class__ and release the type.
+   A type-cache miss pins at once: the MRO walk compares keys of a general
+   dict with arbitrary __eq__. The caller owns the receiver and the name for
+   the whole call, as for any borrowed argument.
+
+   A descriptor type whose descr_get leaves the descriptor unused once it
+   calls out needs no pin even when the callout runs Python (a getset getter,
+   or the audit hook of a member): it copies the getter, the closure and the
+   member offset out of the descriptor before the callout, and the
+   PyGetSetDef or PyMemberDef they point into belongs to the extension and is
+   not freed with the descriptor. Function and method descriptors create a
+   bound object, taking their own references, and run no Python. */
+static inline int
+descr_get_leaves_descr_unused(PyObject *descr)
+{
+    PyTypeObject *dt = Py_TYPE(descr);
+    if (dt == &PyFunction_Type || dt == &PyGetSetDescr_Type ||
+        dt == &PyMethodDescr_Type) {
+        return 1;
+    }
+    return dt == &PyMemberDescr_Type;
+}
+
+/* Make the lookup's result owned, along with the type of the receiver. */
+static inline void
+pin_class_attr(PyValueBorrow descr_value, PyValue *owner, PyTypeObject *tp,
+               int *pinned)
+{
+    if (!*pinned) {
+        *owner = PyValue_XDUP(descr_value);
+        Py_INCREF(tp);
+        *pinned = 1;
+    }
+}
+
 /* The port of _PyObject_GetMethod(): a method descriptor found on the type
    gives status 1 with the descriptor, to call with obj as self, so that no
    bound method is made; anything else is the attribute, status 0. A
@@ -1796,28 +1844,43 @@ _PyStatusValue
 (_PyValue_GetMethod)(PyValueBorrow v, PyObject *name)
 {
     _PyStatusValue r = {-1, PyValue_NULL};
-    PyValue descriptor = PyValue_NULL;
     /* One test of the receiver; an inline receiver has no instance
        attributes. */
     PyObject *obj = PyValue_ObjectOrNull(v);
     PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(v);
-    Py_INCREF(tp);
-    if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
-        goto done;
-    }
+    /* See "Lifetime of a class attribute": descr_value is borrowed from the
+       type cache until pinned, then owned by owner, as is tp. */
+    PyValueBorrow descr_value;
+    PyValue owner = PyValue_NULL;
+    int pinned = 0;
     if (_PyType_VALUE_SLOT(tp, getattro) != _PyObject_GenericGetAttrValue
-        || !PyUnicode_CheckExact(name))
+        || _PyTypeCache_Lookup(tp, name, &descr_value) == 0)
     {
-        r.value = (_PyValue_GetAttr)(v, name);
-        r.status = PyValue_IsNull(r.value) ? -1 : 0;
-        goto done;
+        // Another getattro, an uncacheable name or a miss. A type that is not
+        // ready has no table, so only here is it readied.
+        Py_INCREF(tp);
+        pinned = 1;
+        if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
+            goto done;
+        }
+        if (_PyType_VALUE_SLOT(tp, getattro) != _PyObject_GenericGetAttrValue
+            || !PyUnicode_CheckExact(name))
+        {
+            r.value = (_PyValue_GetAttr)(v, name);
+            r.status = PyValue_IsNull(r.value) ? -1 : 0;
+            goto done;
+        }
+        (void)_PyType_LookupValueAndVersion(tp, name, &owner);
+        descr_value = PyValue_Borrow(owner);
     }
-    (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
-    PyObject *descr = PyValue_ObjectOrNull(descriptor);
+    PyObject *descr = PyValue_ObjectOrNull(descr_value);
     int has_get = descr != NULL && Py_TYPE(descr)->tp_descr_get != NULL;
     bool method_descriptor = descr != NULL &&
         _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR);
     if (has_get && PyDescr_IsData(descr)) {
+        if (!descr_get_leaves_descr_unused(descr)) {
+            pin_class_attr(descr_value, &owner, tp, &pinned);
+        }
         r.value = (_PyValue_DescrGet)(descr, v, tp);
         r.status = PyValue_IsNull(r.value) ? -1 : 0;
         goto done;
@@ -1843,6 +1906,8 @@ _PyStatusValue
         }
     }
     if (dict != NULL) {
+        // A dict with general keys runs their __eq__.
+        pin_class_attr(descr_value, &owner, tp, &pinned);
         Py_INCREF(dict);
         int found = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &attr);
         Py_DECREF(dict);
@@ -1856,8 +1921,9 @@ _PyStatusValue
         }
     }
     if (method_descriptor) {
-        r = (_PyStatusValue){1, descriptor};
-        descriptor = PyValue_NULL;
+        // The result owns the descriptor.
+        r = (_PyStatusValue){1, pinned ? owner : PyValue_XDUP(descr_value)};
+        owner = PyValue_NULL;
     }
     else if (has_get) {
         if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
@@ -1865,13 +1931,16 @@ _PyStatusValue
                 0, PyValue_DUP(PyValue_FromObjectBorrow(_PyStaticMethod_GetFunc(descr)))};
         }
         else {
+            if (!descr_get_leaves_descr_unused(descr)) {
+                pin_class_attr(descr_value, &owner, tp, &pinned);
+            }
             r.value = (_PyValue_DescrGet)(descr, v, tp);
             r.status = PyValue_IsNull(r.value) ? -1 : 0;
         }
     }
-    else if (!PyValue_IsNull(descriptor)) {
-        r = (_PyStatusValue){0, descriptor};
-        descriptor = PyValue_NULL;
+    else if (!PyValue_IsNull(descr_value)) {
+        r = (_PyStatusValue){0, pinned ? owner : PyValue_XDUP(descr_value)};
+        owner = PyValue_NULL;
     }
     else {
         PyErr_Format(PyExc_AttributeError, "'%.100s' object has no attribute '%U'",
@@ -1879,8 +1948,10 @@ _PyStatusValue
         value_attribute_error_context(v, name);
     }
  done:
-    PyValue_XCLOSE(descriptor);
-    Py_DECREF(tp);
+    if (pinned) {
+        PyValue_XCLOSE(owner);
+        Py_DECREF(tp);
+    }
     return r;
 }
 
@@ -1982,22 +2053,23 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
        reached from _PyValue_GetAttr(), which has. */
     assert(PyUnicode_Check(name));
 
-    Py_INCREF(tp);
-    if (!_PyType_IsReady(tp)) {
-        if (PyType_Ready(tp) < 0) {
+    /* See "Lifetime of a class attribute": descr_value is borrowed from the
+       type cache until pinned, then owned by owner, as is tp. */
+    PyValueBorrow descr_value;
+    PyValue owner = PyValue_NULL;
+    int pinned = 0;
+    if (_PyTypeCache_Lookup(tp, name, &descr_value) == 0) {
+        // A type that is not ready has no table, so only a miss is here.
+        Py_INCREF(tp);
+        pinned = 1;
+        if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
             Py_DECREF(tp);
             return PyValue_NULL;
         }
+        (void)_PyType_LookupValueAndVersion(tp, name, &owner);
+        descr_value = PyValue_Borrow(owner);
     }
-
-    Py_INCREF(name);
-
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyCValue cref;
-    _PyThreadState_PushCValue(tstate, &cref);
-
-    (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_ObjectOrNull(cref.ref);
+    descr = PyValue_ObjectOrNull(descr_value);
 
     if (descr != NULL) {
         has_get = Py_TYPE(descr)->tp_descr_get != NULL;
@@ -2018,6 +2090,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
                         goto done;
                     }
                 }
+            }
+            if (!descr_get_leaves_descr_unused(descr)) {
+                pin_class_attr(descr_value, &owner, tp, &pinned);
             }
             res = (_PyValue_DescrGet)(descr, v, tp);
             if (PyValue_IsNull(res) && suppress &&
@@ -2063,6 +2138,8 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         }
     }
     if (dict != NULL) {
+        // A dict with general keys runs their __eq__.
+        pin_class_attr(descr_value, &owner, tp, &pinned);
         Py_INCREF(dict);
         int rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &res);
         /* Suppress the lookup's AttributeError before retirement, so a
@@ -2079,6 +2156,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     }
 
     if (has_get) {
+        if (!descr_get_leaves_descr_unused(descr)) {
+            pin_class_attr(descr_value, &owner, tp, &pinned);
+        }
         res = (_PyValue_DescrGet)(descr, v, tp);
         if (PyValue_IsNull(res) && suppress &&
                 PyErr_ExceptionMatches(PyExc_AttributeError)) {
@@ -2087,10 +2167,15 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         goto done;
     }
 
-    if (!PyValue_IsNull(cref.ref)) {
+    if (!PyValue_IsNull(descr_value)) {
         // A class attribute, perhaps inline: the result owns the lookup's.
-        res = cref.ref;
-        cref.ref = PyValue_NULL;
+        if (pinned) {
+            res = owner;
+            owner = PyValue_NULL;
+        }
+        else {
+            res = PyValue_XDUP(descr_value);
+        }
         goto done;
     }
 
@@ -2102,9 +2187,10 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         value_attribute_error_context(v, name);
     }
   done:
-    _PyThreadState_PopCValue(tstate, &cref);
-    Py_CLEAR(name);
-    Py_DECREF(tp);
+    if (pinned) {
+        PyValue_XCLOSE(owner);
+        Py_DECREF(tp);
+    }
     return res;
 }
 

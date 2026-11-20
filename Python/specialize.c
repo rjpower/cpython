@@ -439,6 +439,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
                     break;
                 case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
                 case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
+                case LOAD_ATTR_GETSET:
                 case LOAD_ATTR_CLASS:
                 case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
                 case LOAD_ATTR_CLASSMETHOD:
@@ -688,7 +689,7 @@ instr_is_fused(_PyInstr *instr)
 }
 
 static inline void
-specialize(_PyInstr *instr, uint8_t specialized_opcode)
+specialize(_PyInstr *instr, int specialized_opcode)
 {
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
@@ -1220,6 +1221,34 @@ instance_has_key(PyObject *obj, PyObject *name, uint32_t *shared_keys_version)
     return result;
 }
 
+/* LOAD_ATTR_GETSET: the descriptor is a getset with a value getter, which
+ * the handler calls directly. The type version guard proves that the lookup
+ * still finds this descriptor, and that the owner is an instance of the type
+ * it applies to, which is checked here. */
+static bool
+specialize_value_getset(PyObject *owner, _PyInstr *instr, PyObject *descr,
+                        unsigned int tp_version)
+{
+    if (descr == NULL || !Py_IS_TYPE(descr, &PyGetSetDescr_Type)) {
+        return false;
+    }
+    PyGetSetDescrObject *getset = (PyGetSetDescrObject *)descr;
+    if (getset->d_value == NULL ||
+        !PyObject_TypeCheck(owner, getset->d_common.d_type)) {
+        return false;
+    }
+    #ifdef Py_GIL_DISABLED
+    if (!_PyObject_HasDeferredRefcount(descr)) {
+        return false;
+    }
+    #endif
+    _PyFbAttr *fb = instr_entry(instr);
+    fb->type_version = tp_version;
+    fb->class_value = _PyValueGuarded_FromBorrow(PyValue_FromObjectBorrow(descr));
+    specialize(instr, LOAD_ATTR_GETSET);
+    return true;
+}
+
 static int
 do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name,
                                  bool shadow, uint32_t shared_keys_version,
@@ -1235,6 +1264,9 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
     uint8_t oparg = instr_oparg(instr);
     switch(kind) {
         case OVERRIDING:
+            if (specialize_value_getset(owner, instr, descr, tp_version)) {
+                return 0;
+            }
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
             return -1;
         case METHOD:

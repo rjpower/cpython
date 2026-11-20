@@ -6391,10 +6391,19 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _CHECK_RECURSION_LIMIT
+            {
+                if (_Py_ReachedRecursionLimit(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
             // _CALL_BUILTIN_CLASS
             {
                 STAT_INC(CALL, hit);
-                PyValue result = call_vector(tstate, frame, this_instr, callable);
+                PyValue result = call_class_values(
+                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -7802,13 +7811,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_STR_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                if (callable_o != (PyObject *)&PyUnicode_Type) {
+                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7868,13 +7871,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                if (callable_o != (PyObject *)&PyTuple_Type) {
+                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7934,13 +7931,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                if (callable_o != (PyObject *)&PyType_Type) {
+                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);

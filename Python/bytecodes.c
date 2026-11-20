@@ -4451,8 +4451,8 @@ dummy_func(
         }
 
         op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyType_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type);
         }
 
         inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res)) {
@@ -4470,8 +4470,8 @@ dummy_func(
             _CALL_TYPE_1;
 
         op(_GUARD_CALLABLE_STR_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyUnicode_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type);
         }
 
         op(_CALL_STR_1, (callable, null, arg -- res)) {
@@ -4494,8 +4494,8 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_GUARD_CALLABLE_TUPLE_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyTuple_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type);
         }
 
         op(_CALL_TUPLE_1, (callable, null, arg -- res)) {
@@ -4594,12 +4594,13 @@ dummy_func(
             EXIT_IF(tp->tp_vectorcall == NULL);
         }
 
-        // The vectorcalls of the builtin and method-descriptor forms read
-        // their operands, borrowed from their homes, in call_vector(); the
-        // handler publishes the result and releases the temporaries.
+        // The builtin and method-descriptor forms read their operands, borrowed
+        // from their homes, and call the callee directly (call_*_values());
+        // the handler publishes the result and releases the temporaries.
         inline_ok op(_CALL_BUILTIN_CLASS, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            PyValue result = call_class_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4611,6 +4612,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_CLASS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_CLASS +
             _CHECK_PERIODIC_AT_END;
 

@@ -1624,6 +1624,31 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL));
 }
 
+/* A builtin class that has a vectorcall (its guard checked): the class's value
+ * vectorcall, else its object vectorcall through the adapter. */
+static inline Py_ALWAYS_INLINE PyValue
+call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  const _PyIRWord *head, PyValue callable, int first)
+{
+    int n = (int)IR_C(*head) - first;
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        return call_vector(tstate, frame, head, callable);
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
+    PyTypeObject *cls = (PyTypeObject *)PyValue_AsKnownObjectBorrow(callable);
+    _Py_vectorcallvaluefunc value_call;
+    memcpy(&value_call, &cls->tp_value_vectorcall, sizeof(value_call));
+    if (value_call != NULL) {
+        PyValue result = value_call(tstate, (PyObject *)cls, args, (size_t)n,
+                                    NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return result;
+    }
+    return _PyValue_CallAdapter(tstate, (PyObject *)cls, cls->tp_vectorcall,
+                                args, (size_t)n, NULL);
+}
+
 /* A method descriptor: the receiver is operand first, which must be an exact
  * instance of the descriptor's type, and the callee takes it with the
  * arguments. */

@@ -346,7 +346,27 @@ typedef struct _PyEvalActivation {
     _PyInterpreterFrame *source_error_frame;
     _PyExceptionHandler source_error_handler;
     const _PyIRObserverSpec *observer_context;
+    /* Why an outlined handler returned no next word (IR_RUN_OUTLINED() in
+     * Python/ceval_macros.h), and what the evaluator needs to go on.  It is
+     * written on the exits that are not a plain dispatch and read at once. */
+    int exit_kind;
+    int exit_target;
+    uint32_t exit_entry;
+    _PyInstr *exit_next;
 } _PyEvalActivation;
+
+/* What an outlined handler returns: the frame to run and its next word, or
+ * a null word for an exit that the activation describes. */
+typedef struct {
+    _PyInterpreterFrame *frame;
+    _PyInstr *next;
+} _PyIRTransfer;
+
+enum {
+    _PyIR_EXIT_ERROR,        /* exit_next is the origin, exit_entry the entry */
+    _PyIR_EXIT_START_FRAME,  /* frame is a new frame to start */
+    _PyIR_EXIT_DEOPT,        /* run exit_next at the head that exit_target names */
+};
 
 typedef enum {
     _PyIR_ERROR_HANDLED,

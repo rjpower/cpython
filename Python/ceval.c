@@ -2185,6 +2185,70 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return error;
 }
 
+/* The outlined handlers (annotation `outlined` in Python/bytecodes.c): each
+ * body of the generated file is a function of its own, run by IR_RUN_OUTLINED()
+ * in the handler.  Its exits are returns: the next word dispatches in the
+ * handler, and the others are described in the activation for the evaluator's
+ * outlined_exit label. */
+#pragma push_macro("DISPATCH")
+#pragma push_macro("DISPATCH_SAME_OPARG")
+#pragma push_macro("DISPATCH_INLINED")
+#pragma push_macro("PROCESS_ERROR_AT")
+#pragma push_macro("JUMP_TO_PREDICTED")
+#pragma push_macro("IR_DEOPT_BINARY_OP")
+#undef DISPATCH
+#undef DISPATCH_SAME_OPARG
+#undef DISPATCH_INLINED
+#undef PROCESS_ERROR_AT
+#undef JUMP_TO_PREDICTED
+#undef IR_DEOPT_BINARY_OP
+#define DISPATCH() return (_PyIRTransfer){frame, next_instr}
+#define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
+#define DISPATCH_INLINED(NEW_FRAME) \
+    do { \
+        assert(!IS_PEP523_HOOKED(tstate)); \
+        assert((NEW_FRAME)->previous == frame); \
+        frame = tstate->current_frame = (NEW_FRAME); \
+        CALL_STAT_INC(inlined_py_calls); \
+        IR_ACTIVATION()->exit_kind = _PyIR_EXIT_START_FRAME; \
+        return (_PyIRTransfer){frame, NULL}; \
+    } while (0)
+#define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
+    do { \
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
+        ir_exit->exit_kind = _PyIR_EXIT_ERROR; \
+        ir_exit->exit_next = (origin); \
+        ir_exit->exit_entry = \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
+        return (_PyIRTransfer){frame, NULL}; \
+    } while (0)
+#define JUMP_TO_PREDICTED(name) \
+    do { \
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
+        ir_exit->exit_kind = _PyIR_EXIT_DEOPT; \
+        ir_exit->exit_target = IR_DEOPT_TARGET_##name; \
+        ir_exit->exit_next = this_instr; \
+        return (_PyIRTransfer){frame, NULL}; \
+    } while (0)
+#define IR_DEOPT_BINARY_OP(F) \
+    do { \
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
+        ir_exit->exit_kind = _PyIR_EXIT_DEOPT; \
+        ir_exit->exit_target = IR_DEOPT_TARGET_BINARY_OP; \
+        ir_exit->exit_entry = (uint32_t)((_PyFbHeader *)IR_FB(F))->arg; \
+        ir_exit->exit_next = this_instr; \
+        return (_PyIRTransfer){frame, NULL}; \
+    } while (0)
+#define IR_OUTLINED_FUNCTIONS
+#include "generated_ir_cases.c.h"
+#undef IR_OUTLINED_FUNCTIONS
+#pragma pop_macro("DISPATCH")
+#pragma pop_macro("DISPATCH_SAME_OPARG")
+#pragma pop_macro("DISPATCH_INLINED")
+#pragma pop_macro("PROCESS_ERROR_AT")
+#pragma pop_macro("JUMP_TO_PREDICTED")
+#pragma pop_macro("IR_DEOPT_BINARY_OP")
+
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
  * locals are the interpreter's state and are never address-taken; the

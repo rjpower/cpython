@@ -3,6 +3,3578 @@
 //   Python/bytecodes.c
 // Do not edit!
 
+#ifdef IR_OUTLINED_FUNCTIONS
+enum {
+    IR_DEOPT_TARGET_BINARY_OP,
+};
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BINARY_SLICE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BINARY_SLICE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BINARY_SLICE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValueBorrow container;
+            PyValueBorrow start;
+            PyValueBorrow stop;
+            PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
+            // _SPECIALIZE_BINARY_SLICE
+            {
+                #if ENABLE_SPECIALIZATION
+                OPCODE_DEFERRED_INC(BINARY_SLICE);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _BINARY_SLICE
+            {
+                stop = IR_VIEW(IR_D(ir_word));
+                start = IR_VIEW(IR_C(ir_word));
+                container = IR_VIEW(IR_B(ir_word));
+                res = _PyEval_BinarySlice(container, start, stop);
+                ir_own_D = IR_DETACH(ir_word, D, stop);
+                ir_own_C = IR_DETACH(ir_word, C, start);
+                ir_own_B = IR_DETACH(ir_word, B, container);
+                if (PyValue_IsNull(res)) {
+                    PyValue_XCLOSE(ir_own_D);
+                    PyValue_XCLOSE(ir_own_C);
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_own_D);
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_INTERPOLATION(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_INTERPOLATION;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_INTERPOLATION);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue value;
+            PyValue str;
+            PyValue *format;
+            PyValue interpolation;
+            format = &window[2];
+            str = window[1];
+            value = window[0];
+            assert(PyValue_IsObject(str));
+            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
+            int conversion = oparg >> 2;
+            PyObject *format_o;
+            if (oparg & 1) {
+                format_o = PyValue_AsKnownObjectBorrow(format[0]);
+            }
+            else {
+                format_o = &_Py_STR(empty);
+            }
+            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
+            PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
+            IR_CLEAR_SLOTS(&window[2], (oparg & 1));
+            PyValue_XCLOSE(format_ref);
+            window[1] = PyValue_NULL;
+            _PyValue_CLOSE_POINTER(str);
+            window[0] = PyValue_NULL;
+            PyValue_CLOSE(value);
+            if (interpolation_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            interpolation = PyValue_FromObjectSteal(interpolation_o);
+            IR_SET_TEMP(window[0], interpolation);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_MAP(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_MAP;
+            (void)(opcode);
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_MAP);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue *values;
+            PyValue map;
+            values = &window[0];
+            PyObject *map_o = _Py_BuildMap_ValueSteal(frame, values, oparg);
+            int failed = map_o == NULL;
+            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
+            IR_SET_TEMP(window[0], map);
+            if (failed) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_SET(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_SET;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_SET);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue *values;
+            PyValue set;
+            values = &window[0];
+            PyObject *set_o = PySet_New(NULL);
+            if (set_o == NULL) {
+                PyValue tmp;
+                for (int _i = oparg; --_i >= 0;) {
+                    tmp = values[_i];
+                    values[_i] = PyValue_NULL;
+                    PyValue_CLOSE(tmp);
+                }
+                IR_CLEAR_SLOTS(&window[0], oparg);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            int err = 0;
+            for (Py_ssize_t i = 0; i < oparg; i++) {
+                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
+                if (err == 0) {
+                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
+                        value);
+                }
+                else {
+                    PyValue_CLOSE(value);
+                }
+            }
+            if (err) {
+                IR_CLEAR_SLOTS(&window[0], oparg);
+                Py_DECREF(set_o);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            set = PyValue_FromObjectSteal(set_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
+            IR_SET_TEMP(window[0], set);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_SLICE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_SLICE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_SLICE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue *args;
+            PyValue slice;
+            args = &window[0];
+            _PyValue_RecheckWindow(args, oparg);
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
+            PyValue tmp;
+            for (int _i = oparg; --_i >= 0;) {
+                tmp = args[_i];
+                args[_i] = PyValue_NULL;
+                PyValue_CLOSE(tmp);
+            }
+            IR_CLEAR_SLOTS(&window[0], oparg);
+            if (slice_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            slice = PyValue_FromObjectSteal(slice_o);
+            IR_SET_TEMP(window[0], slice);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_STRING(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_STRING;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_STRING);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue *pieces;
+            PyValue str;
+            pieces = &window[0];
+            PyObject *str_o = _Py_BuildString_ValueSteal(frame, pieces, oparg);
+            if (str_o == NULL) {
+                IR_CLEAR_SLOTS(&window[0], oparg);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            str = PyValue_FromObjectSteal(str_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
+            IR_SET_TEMP(window[0], str);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_BUILD_TEMPLATE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = BUILD_TEMPLATE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_TEMPLATE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValueBorrow strings;
+            PyValueBorrow interpolations;
+            PyValue template;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            interpolations = IR_VIEW(IR_C(ir_word));
+            strings = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(strings));
+            assert(PyValue_IsObject(interpolations));
+            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
+            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
+            PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
+            ir_own_C = IR_DETACH(ir_word, C, interpolations);
+            (void)(ir_own_C);
+            ir_own_B = IR_DETACH(ir_word, B, strings);
+            (void)(ir_own_B);
+            if (template_o == NULL) {
+                _PyValue_XCLOSE_POINTER(ir_own_C);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            template = PyValue_FromObjectSteal(template_o);
+            IR_STORE_DST(ir_word, A, template);
+            _PyValue_XCLOSE_POINTER(ir_own_C);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CALL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CALL;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            // _SPECIALIZE_CALL
+            {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                #if ENABLE_SPECIALIZATION
+                {
+                    _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                        call_state |= CALL_EFFECTS;
+                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
+                        if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                        }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        window = IR_SLOTS() + call_base;
+                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
+                        DISPATCH_SAME_OPARG();
+                    }
+                    OPCODE_DEFERRED_INC(CALL);
+                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                }
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAYBE_EXPAND_METHOD
+            {
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                window = IR_SLOTS() + call_base;
+                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _DO_CALL
+            {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                DISPATCH();
+            }
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CALL_FUNCTION_EX(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CALL_FUNCTION_EX;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_FUNCTION_EX);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
+            (void)call_state;
+            uint32_t call_feedback = IR_C(ir_word);
+            PyValue func;
+            PyValue callargs;
+            PyValue kwargs;
+            // _SPECIALIZE_CALL_FUNCTION_EX
+            {
+                func = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    call_state |= CALL_EFFECTS;
+                    _Py_Specialize_CallFunctionEx(func, this_instr);
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                    this_instr = frame->instr_ptr;
+                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                    window = IR_SLOTS() + call_base;
+                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAKE_CALLARGS_A_TUPLE
+            {
+                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
+                callargs = window[2];
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                window = IR_SLOTS() + call_base;
+                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                func = window[0];
+                callargs = window[2];
+                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
+            }
+            // _DO_CALL_FUNCTION_EX
+            {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_FUNCTION_EX:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                DISPATCH();
+            }
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CALL_INTRINSIC_1(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CALL_INTRINSIC_1;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_INTRINSIC_1);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValueBorrow value;
+            PyValue res;
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _CALL_INTRINSIC_1
+            {
+                value = IR_VIEW(IR_B(ir_word));
+                assert(oparg <= MAX_INTRINSIC_1);
+                if (oparg == INTRINSIC_UNARY_POSITIVE) {
+                    res = _PyValue_Positive(value);
+                    if (PyValue_IsNull(res)) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+                else {
+                    res = _PyEval_CallIntrinsic1(tstate, oparg, value);
+                    if (PyValue_IsNull(res)) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+                v = value;
+                ir_own_B = IR_DETACH(ir_word, B, v);
+            }
+            // _POP_TOP
+            {
+                value = v;
+                (void)value;
+                (void)(ir_own_B);
+            }
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CALL_INTRINSIC_2(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CALL_INTRINSIC_2;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_INTRINSIC_2);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow value2_st;
+            PyValueBorrow value1_st;
+            PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            value1_st = IR_VIEW(IR_C(ir_word));
+            value2_st = IR_VIEW(IR_B(ir_word));
+            assert(oparg <= MAX_INTRINSIC_2);
+            ir_own_B = IR_DETACH(ir_word, B, value2_st);
+            PyValue held2 = IR_TAKEN(value2_st, ir_own_B);
+            ir_own_C = IR_DETACH(ir_word, C, value1_st);
+            PyValue held1 = IR_TAKEN(value1_st, ir_own_C);
+            if (oparg == INTRINSIC_GETATTR) {
+                PyObject *name = PyValue_ObjectOrNull(held1);
+                assert(name != NULL && PyUnicode_CheckExact(name));
+                res = _PyValue_GetAttr(held2, name);
+            }
+            else if (oparg == INTRINSIC_SETATTR) {
+                PyObject *target = PyValue_ObjectOrNull(held1);
+                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+                PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
+                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
+                assert(PyValue_IsObject(attr_name));
+                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
+                    held2);
+                res = err < 0 ? PyValue_NULL : PyValue_None;
+            }
+            else {
+                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
+            }
+            PyValue_XCLOSE(held1);
+            PyValue_XCLOSE(held2);
+            if (PyValue_IsNull(res)) {
+                PyValue_XCLOSE(res);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CALL_KW(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CALL_KW;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue kwnames;
+            // _SPECIALIZE_CALL_KW
+            {
+                kwnames = window[2 + oparg];
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
+                callable = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    call_state |= CALL_EFFECTS;
+                    _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                    this_instr = frame->instr_ptr;
+                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                    window = IR_SLOTS() + call_base;
+                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CALL_KW);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _MAYBE_EXPAND_METHOD_KW
+            {
+                {
+                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
+                    if (call_state & CALL_FAILED) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                }
+                this_instr = frame->instr_ptr;
+                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                window = IR_SLOTS() + call_base;
+                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                callable = window[0];
+                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
+            }
+            // _DO_CALL_KW
+            {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
+                }
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
+                }
+                DISPATCH();
+            }
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CHECK_EG_MATCH(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CHECK_EG_MATCH;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CHECK_EG_MATCH);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
+            PyValueBorrow exc_value_st;
+            PyValueBorrow match_type_st;
+            PyValue rest;
+            PyValue match;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            match_type_st = IR_VIEW(IR_C(ir_word));
+            exc_value_st = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(exc_value_st));
+            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
+            ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
+            PyValue held_exc = IR_TAKEN(exc_value_st, ir_own_B);
+            ir_own_C = IR_DETACH(ir_word, C, match_type_st);
+            PyValue held_type = IR_TAKEN(match_type_st, ir_own_C);
+            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
+            if (err < 0) {
+                PyValue_CLOSE(held_type);
+                PyValue_CLOSE(held_exc);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
+            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
+            PyObject *match_o = matched.match;
+            PyObject *rest_o = matched.rest;
+            PyValue_CLOSE(held_type);
+            PyValue_CLOSE(held_exc);
+            if (match_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (!Py_IsNone(match_o)) {
+                PyErr_SetHandledException(match_o);
+            }
+            rest = PyValue_FromObjectSteal(rest_o);
+            match = PyValue_FromObjectSteal(match_o);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), rest);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), match);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CHECK_EXC_MATCH(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CHECK_EXC_MATCH;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CHECK_EXC_MATCH);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue left;
+            PyValueBorrow right;
+            PyValue b;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            right = IR_VIEW(IR_C(ir_word));
+            left = IR_SLOT(IR_B(ir_word));
+            assert(PyValue_IsObject(left));
+            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+            ir_own_C = IR_DETACH(ir_word, C, right);
+            PyValue held_right = IR_TAKEN(right, ir_own_C);
+            assert(PyExceptionInstance_Check(left_o));
+            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
+            if (err < 0) {
+                PyValue_CLOSE(held_right);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
+            int res = PyErr_GivenExceptionMatches(left_o, right_o);
+            PyValue_CLOSE(held_right);
+            b = res ? PyValue_True : PyValue_False;
+            IR_STORE_DST(ir_word, A, b);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_COMPARE_OP(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = COMPARE_OP;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(COMPARE_OP);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            (void)oparg;
+            PyValueBorrow left;
+            PyValueBorrow right;
+            PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            // _SPECIALIZE_COMPARE_OP
+            {
+                right = IR_VIEW(IR_C(ir_word));
+                left = IR_VIEW(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_CompareOp(left, right, next_instr, oparg);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(COMPARE_OP);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _COMPARE_OP
+            {
+                assert((oparg >> 5) <= Py_GE);
+                PyValue cmp = _PyValue_RichCompare(left, right, oparg >> 5);
+                ir_own_C = IR_DETACH(ir_word, C, right);
+                ir_own_B = IR_DETACH(ir_word, B, left);
+                if (PyValue_IsNull(cmp)) {
+                    PyValue_XCLOSE(ir_own_C);
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                if (oparg & 16) {
+                    int res_bool = _PyValue_IsTrue(cmp);
+                    PyValue_CLOSE(cmp);
+                    if (res_bool < 0) {
+                        PyValue_XCLOSE(ir_own_C);
+                        PyValue_XCLOSE(ir_own_B);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    res = res_bool ? PyValue_True : PyValue_False;
+                }
+                else {
+                    res = cmp;
+                }
+            }
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CONTAINS_OP(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CONTAINS_OP;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CONTAINS_OP);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            (void)oparg;
+            PyValueBorrow left;
+            PyValueBorrow right;
+            PyValue b;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            // _SPECIALIZE_CONTAINS_OP
+            {
+                right = IR_VIEW(IR_C(ir_word));
+                left = IR_VIEW(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_ContainsOp(left, right, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(CONTAINS_OP);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _CONTAINS_OP
+            {
+                int res = _PyValue_Contains(right, left);
+                if (res < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                b = (res ^ oparg) ? PyValue_True : PyValue_False;
+                l = left;
+                r = right;
+                ir_own_B = IR_DETACH(ir_word, B, l);
+                ir_own_C = IR_DETACH(ir_word, C, r);
+            }
+            // _POP_TOP
+            {
+                value = r;
+                (void)value;
+                (void)(ir_own_C);
+            }
+            // _POP_TOP
+            {
+                value = l;
+                (void)value;
+                (void)(ir_own_B);
+            }
+            IR_STORE_DST(ir_word, A, b);
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_CONVERT_VALUE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = CONVERT_VALUE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CONVERT_VALUE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValueBorrow value;
+            PyValue result;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            value = IR_VIEW(IR_B(ir_word));
+            assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
+            PyObject *result_o;
+            if (oparg == FVC_STR) {
+                result_o = _PyValue_Str(value);
+            }
+            else if (oparg == FVC_REPR) {
+                result_o = _PyValue_Repr(value);
+            }
+            else {
+                result_o = _PyValue_ASCII(value);
+            }
+            ir_own_B = IR_DETACH(ir_word, B, value);
+            (void)(ir_own_B);
+            if (result_o == NULL) {
+                PyValue_XCLOSE(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            result = PyValue_FromObjectSteal(result_o);
+            IR_STORE_DST(ir_word, A, result);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_COPY_FREE_VARS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = COPY_FREE_VARS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(COPY_FREE_VARS);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyCodeObject *co = _PyFrame_GetCode(frame);
+            PyFunctionObject *func = _PyFrame_GetFunction(frame);
+            PyObject *closure = func->func_closure;
+            assert(oparg == co->co_nfreevars);
+            int offset = co->co_nlocalsplus - oparg;
+            for (int i = 0; i < oparg; ++i) {
+                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_DELETE_DEREF(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = DELETE_DEREF;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DELETE_DEREF);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
+            if (PyValue_IsNull(old)) {
+                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue_CLOSE(old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_DELETE_FAST(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = DELETE_FAST;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DELETE_FAST);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
+            if (PyValue_IsNull(v)) {
+                _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
+                    UNBOUNDLOCAL_ERROR_MSG,
+                    _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
+                );
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_NULL;
+            PyValue_XCLOSE(tmp);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_DELETE_SUBSCR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = DELETE_SUBSCR;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DELETE_SUBSCR);
+            PyValueBorrow container;
+            PyValueBorrow sub;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            sub = IR_VIEW(IR_B(ir_word));
+            container = IR_VIEW(IR_A(ir_word));
+            int err = _PyValue_DelItem(container, sub);
+            ir_own_B = IR_DETACH(ir_word, B, sub);
+            ir_own_A = IR_DETACH(ir_word, A, container);
+            if (err) {
+                PyValue_XCLOSE(ir_own_B);
+                PyValue_XCLOSE(ir_own_A);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_DICT_MERGE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = DICT_MERGE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DICT_MERGE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue callable;
+            PyValue dict;
+            PyValue update;
+            PyValue u;
+            PyValue value;
+            // _DICT_MERGE
+            {
+                update = window[4 + (oparg - 1)];
+                dict = window[3];
+                callable = window[0];
+                assert(PyValue_IsObject(dict));
+                if (!PyValue_IsObject(update)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after ** must be a mapping, not %N",
+                              PyValue_TYPE(update));
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(PyValue_IsObject(update));
+                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
+                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
+                if (merged.status < 0) {
+                    _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
+                    Py_XDECREF(merged.object);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                u = update;
+            }
+            // _POP_TOP
+            {
+                value = u;
+                window[4 + (oparg - 1)] = PyValue_NULL;
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_DICT_UPDATE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = DICT_UPDATE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(DICT_UPDATE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue dict;
+            PyValue update;
+            PyValue upd;
+            PyValue value;
+            // _DICT_UPDATE
+            {
+                update = window[1 + (oparg - 1)];
+                dict = window[0];
+                assert(PyValue_IsObject(dict));
+                if (!PyValue_IsObject(update)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%N' object is not a mapping",
+                              PyValue_TYPE(update));
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(PyValue_IsObject(update));
+                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
+                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                int err = PyDict_Update(dict_o, update_o);
+                if (err < 0) {
+                    int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
+                    if (matches) {
+                        PyObject *exc = _PyErr_GetRaisedException(tstate);
+                        int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
+                        if (has_keys == 0) {
+                            _PyErr_Format(tstate, PyExc_TypeError,
+                                      "'%T' object is not a mapping",
+                                      update_o);
+                            Py_DECREF(exc);
+                        }
+                        else {
+                            _PyErr_ChainExceptions1(exc);
+                        }
+                    }
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                upd = update;
+            }
+            // _POP_TOP
+            {
+                value = upd;
+                window[1 + (oparg - 1)] = PyValue_NULL;
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_END_ASYNC_FOR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = END_ASYNC_FOR;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(END_ASYNC_FOR);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue awaitable_st;
+            PyValue exc_st;
+            exc_st = window[1];
+            awaitable_st = window[0];
+            JUMPBY(0);
+            (void)oparg;
+            assert(PyValue_IsObject(exc_st));
+            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+            assert(exc && PyExceptionInstance_Check(exc));
+            int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
+            if (matches) {
+                PyValue tmp = exc_st;
+                exc_st = PyValue_NULL;
+                IR_SET_TEMP(window[1], exc_st);
+                _PyValue_CLOSE_POINTER(tmp);
+                tmp = awaitable_st;
+                awaitable_st = PyValue_NULL;
+                IR_SET_TEMP(window[0], awaitable_st);
+                PyValue_CLOSE(tmp);
+                window[0] = PyValue_NULL;
+                window[1] = PyValue_NULL;
+            }
+            else {
+                Py_INCREF(exc);
+                _PyErr_SetRaisedException(tstate, exc);
+                monitor_reraise(tstate, frame, this_instr);
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_FORMAT_SIMPLE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = FORMAT_SIMPLE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(FORMAT_SIMPLE);
+            PyValueBorrow value;
+            PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            value = IR_VIEW(IR_B(ir_word));
+            if (PyValue_IsInline(value)) {
+                PyObject *res_o = _PyValue_Str(value);
+                ir_own_B = IR_DETACH(ir_word, B, value);
+                (void)(ir_own_B);
+                if (res_o == NULL) {
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
+                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
+                ir_own_B = IR_DETACH(ir_word, B, value);
+                (void)(ir_own_B);
+                if (res_o == NULL) {
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            else {
+                ir_own_B = IR_DETACH(ir_word, B, value);
+                res = IR_TAKEN(value, ir_own_B);
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+            PyValue_XCLOSE(ir_own_B);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_FORMAT_WITH_SPEC(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = FORMAT_WITH_SPEC;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(FORMAT_WITH_SPEC);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValueBorrow value;
+            PyValueBorrow fmt_spec;
+            PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            fmt_spec = IR_VIEW(IR_C(ir_word));
+            value = IR_VIEW(IR_B(ir_word));
+            PyObject *res_o = _PyValue_Format(value, fmt_spec);
+            ir_own_C = IR_DETACH(ir_word, C, fmt_spec);
+            ir_own_B = IR_DETACH(ir_word, B, value);
+            if (res_o == NULL) {
+                PyValue_XCLOSE(ir_own_C);
+                PyValue_XCLOSE(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            res = PyValue_FromObjectSteal(res_o);
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_FOR_ITER(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = FOR_ITER;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(FOR_ITER);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_C(ir_word));
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue iter;
+            PyValue null_or_index;
+            PyValue next;
+            // _SPECIALIZE_FOR_ITER
+            {
+                null_or_index = window[1];
+                iter = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(FOR_ITER);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _FOR_ITER
+            {
+                _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+                null_or_index = window[1];
+                PyValue item = step.value;
+                int found = step.status;
+                if (found <= 0) {
+                    if (found < 0) {
+                        IR_SET_TEMP(window[1], null_or_index);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
+                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
+                        next_instr = ir_step_result.next;
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                        DISPATCH();
+                    }
+                }
+                next = item;
+            }
+            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[2], next);
+            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GET_AITER(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = GET_AITER;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_AITER);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValueBorrow obj;
+            PyValue iter;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            obj = IR_VIEW(IR_B(ir_word));
+            unaryfunc getter = NULL;
+            PyObject *iter_o;
+            if (!PyValue_IsObject(obj)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'async for' requires an object with "
+                              "__aiter__ method, got %.100s",
+                              PyValue_TYPE(obj)->tp_name);
+                ir_own_B = IR_DETACH(ir_word, B, obj);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            assert(PyValue_IsObject(obj));
+            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
+            PyTypeObject *type = Py_TYPE(obj_o);
+            if (type->tp_as_async != NULL) {
+                getter = type->tp_as_async->am_aiter;
+            }
+            if (getter == NULL) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'async for' requires an object with "
+                              "__aiter__ method, got %.100s",
+                              type->tp_name);
+                ir_own_B = IR_DETACH(ir_word, B, obj);
+                (void)(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            iter_o = (*getter)(obj_o);
+            ir_own_B = IR_DETACH(ir_word, B, obj);
+            (void)(ir_own_B);
+            if (iter_o == NULL) {
+                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (Py_TYPE(iter_o)->tp_as_async == NULL ||
+                Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'async for' received an object from __aiter__ "
+                              "that does not implement __anext__: %.100s",
+                              Py_TYPE(iter_o)->tp_name);
+                Py_DECREF(iter_o);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            iter = PyValue_FromObjectSteal(iter_o);
+            IR_STORE_DST(ir_word, A, iter);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GET_ANEXT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = GET_ANEXT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_ANEXT);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue aiter;
+            PyValue awaitable;
+            aiter = IR_SLOT(IR_B(ir_word));
+            assert(PyValue_IsObject(aiter));
+            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
+            if (awaitable_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            }
+            awaitable = PyValue_FromObjectSteal(awaitable_o);
+            IR_STORE_DST(ir_word, A, awaitable);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GET_AWAITABLE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = GET_AWAITABLE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_AWAITABLE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValueBorrow iterable;
+            PyValue iter;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            iterable = IR_VIEW(IR_B(ir_word));
+            if (coro_awaitable_can_transfer(iterable)) {
+                ir_own_B = IR_DETACH(ir_word, B, iterable);
+                iter = IR_TAKEN(iterable, ir_own_B);
+            }
+            else {
+                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
+                ir_own_B = IR_DETACH(ir_word, B, iterable);
+                (void)(ir_own_B);
+                if (iter_o == NULL) {
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                iter = PyValue_FromObjectSteal(iter_o);
+            }
+            IR_STORE_DST(ir_word, A, iter);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GET_ITER(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = GET_ITER;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_ITER);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValue iterable;
+            PyValue iter;
+            PyValue index_or_null;
+            // _SPECIALIZE_GET_ITER
+            {
+                iterable = IR_SLOT(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_GetIter(iterable, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(GET_ITER);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _GET_ITER
+            {
+                _PyValuePair got = _PyEval_GetIter(iterable, oparg);
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+                if (PyValue_IsNull(got.first)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                iter = got.first;
+                index_or_null = got.second;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), index_or_null);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GET_LEN(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = GET_LEN;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_LEN);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue obj;
+            PyValue len;
+            obj = IR_SLOT(IR_B(ir_word));
+            Py_ssize_t len_i = _PyValue_Size(obj);
+            if (len_i < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            len = PyValue_FromInt64(len_i);
+            if (PyValue_IsNull(len)) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            IR_STORE_DST(ir_word, A, len);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_IMPORT_FROM(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = IMPORT_FROM;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(IMPORT_FROM);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue from;
+            PyValue res;
+            from = IR_SLOT(IR_B(ir_word));
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            PyObject *from_o = PyValue_ObjectOrNull(from);
+            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
+            {
+                PyObject *res_o = _PyEval_LazyImportFrom(
+                    tstate, frame, from_o, name);
+                if (res_o == NULL) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            else {
+                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
+                if (PyValue_IsNull(res)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_IMPORT_NAME(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = IMPORT_NAME;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(IMPORT_NAME);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue level;
+            PyValue fromlist;
+            PyValue res;
+            fromlist = window[1];
+            level = window[0];
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
+            PyObject *res_o;
+            assert(PyValue_IsObject(fromlist));
+            int ilevel = value_import_level(level);
+            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
+                PyValue tmp = fromlist;
+                fromlist = PyValue_NULL;
+                IR_SET_TEMP(window[1], fromlist);
+                _PyValue_CLOSE_POINTER(tmp);
+                tmp = level;
+                level = PyValue_NULL;
+                IR_SET_TEMP(window[0], level);
+                PyValue_CLOSE(tmp);
+                window[0] = PyValue_NULL;
+                window[1] = PyValue_NULL;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (!(oparg & 0x02)) {
+                res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
+                    LOCALS(), name,
+                    PyValue_AsKnownObjectBorrow(fromlist),
+                    ilevel, oparg & 0x01);
+            }
+            else {
+                res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
+                    LOCALS(), name,
+                    PyValue_AsKnownObjectBorrow(fromlist),
+                    ilevel);
+            }
+            PyValue tmp = fromlist;
+            fromlist = PyValue_NULL;
+            IR_SET_TEMP(window[1], fromlist);
+            _PyValue_CLOSE_POINTER(tmp);
+            tmp = level;
+            level = PyValue_NULL;
+            IR_SET_TEMP(window[0], level);
+            PyValue_CLOSE(tmp);
+            window[0] = PyValue_NULL;
+            window[1] = PyValue_NULL;
+            if (res_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            res = PyValue_FromObjectSteal(res_o);
+            IR_SET_TEMP(window[0], res);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LIST_EXTEND(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LIST_EXTEND;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LIST_EXTEND);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue list_st;
+            PyValue iterable_st;
+            PyValue i;
+            PyValue value;
+            // _LIST_EXTEND
+            {
+                iterable_st = window[1 + (oparg-1)];
+                list_st = window[0];
+                assert(PyValue_IsObject(list_st));
+                if (!PyValue_IsObject(iterable_st)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after * must be an iterable, not %.200s",
+                              PyValue_TYPE(iterable_st)->tp_name);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(PyValue_IsObject(iterable_st));
+                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+                PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
+                PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
+                if (none_val == NULL) {
+                    int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
+                    if (matches &&
+                        (Py_TYPE(iterable)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
+                    {
+                        _PyErr_Clear(tstate);
+                        _PyErr_Format(tstate, PyExc_TypeError,
+                                  "Value after * must be an iterable, not %.200s",
+                                  Py_TYPE(iterable)->tp_name);
+                    }
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(Py_IsNone(none_val));
+                i = iterable_st;
+            }
+            // _POP_TOP
+            {
+                value = i;
+                window[1 + (oparg-1)] = PyValue_NULL;
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_ATTR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_ATTR;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *self_or_null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _SPECIALIZE_LOAD_ATTR
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+                    next_instr = this_instr;
+                    _Py_Specialize_LoadAttr(owner, next_instr, name);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(LOAD_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _LOAD_ATTR
+            {
+                self_or_null = ((oparg&1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+                PyValue found_attr;
+                PyValue found_self = PyValue_NULL;
+                if (oparg & 1) {
+                    PyValue receiver = PyValue_DUP(owner);
+                    _PyStatusValue found = _PyValue_GetMethod(receiver, name);
+                    found_attr = found.value;
+                    if (found.status > 0) {
+                        found_self = receiver;
+                    }
+                    else {
+                        PyValue_CLOSE(receiver);
+                    }
+                }
+                else {
+                    found_attr = _PyValue_GetAttr(owner, name);
+                }
+                ir_own_B = IR_DETACH(ir_word, B, owner);
+                if (PyValue_IsNull(found_attr)) {
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                attr = found_attr;
+                if (oparg & 1) {
+                    self_or_null[0] = found_self;
+                }
+            }
+            IR_STORE_DST(ir_word, A, attr);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_BUILD_CLASS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_BUILD_CLASS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_BUILD_CLASS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue bc;
+            _PyStatusValue found = _PyValue_GetOptionalItem(
+                PyValue_FromObjectBorrow(BUILTINS()),
+                PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
+            if (found.status < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (found.status == 0) {
+                _PyErr_SetString(tstate, PyExc_NameError,
+                                 "__build_class__ not found");
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            bc = found.value;
+            IR_STORE_DST(ir_word, A, bc);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_FROM_DICT_OR_DEREF(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_FROM_DICT_OR_DEREF;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValueBorrow class_dict_st;
+            PyValue value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            class_dict_st = IR_VIEW(IR_B(ir_word));
+            PyObject *name;
+            assert(PyValue_IsObject(class_dict_st));
+            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
+            ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
+            PyValue held_class_dict = IR_TAKEN(class_dict_st, ir_own_B);
+            assert(class_dict);
+            assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
+            name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
+            _PyStatusValue found = value_load_from_dict(tstate, class_dict, name);
+            if (found.status < 0) {
+                PyValue_CLOSE(held_class_dict);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue selected;
+            if (found.status == 0) {
+                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+                selected = _PyCell_GetValue(cell);
+                if (PyValue_IsNull(selected)) {
+                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                    PyValue_CLOSE(held_class_dict);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            else {
+                selected = found.value;
+            }
+            PyValue_CLOSE(held_class_dict);
+            value = selected;
+            IR_STORE_DST(ir_word, A, value);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_FROM_DICT_OR_GLOBALS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_FROM_DICT_OR_GLOBALS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow mod_or_class_dict;
+            PyValue v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            mod_or_class_dict = IR_VIEW(IR_B(ir_word));
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            assert(PyValue_IsObject(mod_or_class_dict));
+            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
+            ir_own_B = IR_DETACH(ir_word, B, mod_or_class_dict);
+            PyValue held_namespace = IR_TAKEN(mod_or_class_dict, ir_own_B);
+            _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
+            PyValue_CLOSE(held_namespace);
+            if (found.status < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (found.status == 0) {
+                v = value_load_global(GLOBALS(), BUILTINS(), name);
+                if (PyValue_IsNull(v)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            else {
+                v = found.value;
+            }
+            IR_STORE_DST(ir_word, A, v);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_GLOBAL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_GLOBAL;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_GLOBAL);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue *res;
+            // _SPECIALIZE_LOAD_GLOBAL
+            {
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+                    next_instr = this_instr;
+                    _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(LOAD_GLOBAL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _LOAD_GLOBAL
+            {
+                res = &IR_SLOT(IR_A(ir_word));
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+                _PyFrame_WriteHome(frame, &res[0], value_load_global(GLOBALS(), BUILTINS(), name));
+                if (PyValue_IsNull(res[0])) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            // _NULL_SLOT_CONDITIONAL
+            {
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_LOCALS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_LOCALS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_LOCALS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue locals;
+            PyObject *l = LOCALS();
+            if (l == NULL) {
+                _PyErr_SetString(tstate, PyExc_SystemError,
+                                 "no locals found");
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
+            IR_STORE_DST(ir_word, A, locals);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_NAME(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_NAME;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_NAME);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue v;
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            v = _PyEval_LoadName(tstate, frame, name);
+            if (PyValue_IsNull(v)) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            IR_STORE_DST(ir_word, A, v);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_SPECIAL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_SPECIAL;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_SPECIAL);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue self;
+            PyValue *method_and_self;
+            // _INSERT_NULL
+            {
+                self = window[0];
+                method_and_self = &window[0];
+                _PyFrame_WriteHome(frame, &method_and_self[1], self);
+                _PyFrame_WriteHome(frame, &method_and_self[0], PyValue_NULL);
+            }
+            // _LOAD_SPECIAL
+            {
+                method_and_self = &window[0];
+                PyObject *name = _Py_SpecialMethods[oparg].name;
+                int err = _PyObject_LookupSpecialMethod(frame, name, &method_and_self[0], &method_and_self[1]);
+                if (err <= 0) {
+                    if (err == 0) {
+                        PyTypeObject *owner_type = PyValue_TYPE(method_and_self[1]);
+                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, oparg)
+                        ? _Py_SpecialMethods[oparg].error_suggestion
+                    : _Py_SpecialMethods[oparg].error;
+                        assert(!_PyErr_Occurred(tstate));
+                        assert(errfmt != NULL);
+                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
+                    }
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_LOAD_SUPER_ATTR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = LOAD_SUPER_ATTR;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_SUPER_ATTR);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            opcode = LOAD_SUPER_ATTR;
+            PyValue global_super_st;
+            PyValue class_st;
+            PyValue self_st;
+            PyValue attr;
+            PyValue *null;
+            // _SPECIALIZE_LOAD_SUPER_ATTR
+            {
+                class_st = window[1];
+                global_super_st = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                int load_method = oparg & 1;
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _LOAD_SUPER_ATTR
+            {
+                self_st = window[2];
+                PyValueBorrow arg = oparg & 2
+                ? PyValue_Borrow(class_st)
+            : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
+                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
+                    int err = _Py_call_instrumentation_2args(
+                        tstate, PY_MONITORING_EVENT_CALL,
+                        frame, this_instr, global_super_st, arg);
+                    if (err) {
+                        PyValue tmp = self_st;
+                        self_st = PyValue_NULL;
+                        IR_SET_TEMP(window[2], self_st);
+                        PyValue_CLOSE(tmp);
+                        tmp = class_st;
+                        class_st = PyValue_NULL;
+                        IR_SET_TEMP(window[1], class_st);
+                        PyValue_CLOSE(tmp);
+                        tmp = global_super_st;
+                        global_super_st = PyValue_NULL;
+                        IR_SET_TEMP(window[0], global_super_st);
+                        PyValue_CLOSE(tmp);
+                        window[0] = PyValue_NULL;
+                        window[1] = PyValue_NULL;
+                        window[2] = PyValue_NULL;
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+                PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
+                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
+                    if (PyValue_IsNull(super)) {
+                        _Py_call_instrumentation_exc2(
+                            tstate, PY_MONITORING_EVENT_C_RAISE,
+                            frame, this_instr, global_super_st, arg);
+                    }
+                    else {
+                        int err = _Py_call_instrumentation_2args(
+                            tstate, PY_MONITORING_EVENT_C_RETURN,
+                            frame, this_instr, global_super_st, arg);
+                        if (err < 0) {
+                            PyValue_CLEAR(super);
+                        }
+                    }
+                }
+                PyValue tmp = self_st;
+                self_st = PyValue_NULL;
+                IR_SET_TEMP(window[2], self_st);
+                PyValue_CLOSE(tmp);
+                tmp = class_st;
+                class_st = PyValue_NULL;
+                IR_SET_TEMP(window[1], class_st);
+                PyValue_CLOSE(tmp);
+                tmp = global_super_st;
+                global_super_st = PyValue_NULL;
+                IR_SET_TEMP(window[0], global_super_st);
+                PyValue_CLOSE(tmp);
+                window[0] = PyValue_NULL;
+                window[1] = PyValue_NULL;
+                window[2] = PyValue_NULL;
+                if (PyValue_IsNull(super)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
+                attr = _PyValue_GetAttr(super, name);
+                IR_SET_TEMP(window[0], attr);
+                PyValue_CLOSE(super);
+                if (PyValue_IsNull(attr)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = &window[1];
+                if (oparg & 1) {
+                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
+                }
+            }
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MAKE_CELL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MAKE_CELL;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MAKE_CELL);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
+            if (cell == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            PyValue_XCLOSE(tmp);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MAKE_FUNCTION(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MAKE_FUNCTION;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MAKE_FUNCTION);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValueBorrow codeobj_st;
+            PyValue func;
+            PyValueBorrow co;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _MAKE_FUNCTION
+            {
+                codeobj_st = IR_VIEW(IR_B(ir_word));
+                assert(PyValue_IsObject(codeobj_st));
+                PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
+                PyFunctionObject *func_obj = (PyFunctionObject *)
+                PyFunction_New(codeobj, GLOBALS());
+                if (func_obj == NULL) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                co = codeobj_st;
+                ir_own_B = IR_DETACH(ir_word, B, co);
+                _PyFunction_SetVersion(
+                                   func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
+                func = PyValue_FromObjectSteal((PyObject *)func_obj);
+            }
+            // _POP_TOP
+            {
+                value = co;
+                (void)value;
+                (void)(ir_own_B);
+            }
+            IR_STORE_DST(ir_word, A, func);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MATCH_CLASS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MATCH_CLASS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MATCH_CLASS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue subject;
+            PyValue type;
+            PyValue names;
+            PyValue attrs;
+            PyValue s;
+            PyValue tp;
+            PyValue n;
+            PyValue value;
+            // _MATCH_CLASS
+            {
+                names = window[2];
+                type = window[1];
+                subject = window[0];
+                assert(PyValue_IsObject(names));
+                assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+                PyObject *attrs_o = _PyEval_MatchClass(tstate,
+                    subject,
+                    type, oparg,
+                    PyValue_AsKnownObjectBorrow(names));
+                if (attrs_o) {
+                    assert(PyTuple_CheckExact(attrs_o));
+                    attrs = PyValue_FromObjectSteal(attrs_o);
+                }
+                else {
+                    if (_PyErr_Occurred(tstate)) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    attrs = PyValue_None;
+                }
+                s = subject;
+                tp = type;
+                n = names;
+            }
+            // _POP_TOP
+            {
+                value = n;
+                IR_SET_TEMP(window[0], attrs);
+                IR_SET_TEMP(window[1], s);
+                IR_SET_TEMP(window[2], tp);
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            // _POP_TOP
+            {
+                value = tp;
+                window[2] = PyValue_NULL;
+                PyValue_XCLOSE(value);
+            }
+            // _POP_TOP
+            {
+                value = s;
+                window[1] = PyValue_NULL;
+                PyValue_XCLOSE(value);
+            }
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MATCH_KEYS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MATCH_KEYS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MATCH_KEYS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue subject;
+            PyValue keys;
+            PyValue values_or_none;
+            keys = IR_SLOT(IR_C(ir_word));
+            subject = IR_SLOT(IR_B(ir_word));
+            assert(PyValue_IsObject(subject));
+            assert(PyValue_IsObject(keys));
+            PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
+                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+            if (values_or_none_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
+            IR_STORE_DST(ir_word, A, values_or_none);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MATCH_MAPPING(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MATCH_MAPPING;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MATCH_MAPPING);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue subject;
+            PyValue res;
+            subject = IR_SLOT(IR_B(ir_word));
+            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
+            res = match ? PyValue_True : PyValue_False;
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MATCH_SEQUENCE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MATCH_SEQUENCE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MATCH_SEQUENCE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue subject;
+            PyValue res;
+            subject = IR_SLOT(IR_B(ir_word));
+            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
+            res = match ? PyValue_True : PyValue_False;
+            IR_STORE_DST(ir_word, A, res);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_MATERIALIZE_KWARGS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = MATERIALIZE_KWARGS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MATERIALIZE_KWARGS);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            assert(frame->pending_kwargs == IR_NO_DST ||
+                   frame->pending_kwargs == oparg);
+            int err = _PyFrame_MaterializeKwargs(frame);
+            if (err < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_POP_EXCEPT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = POP_EXCEPT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_EXCEPT);
+            PyValueBorrow exc_value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            exc_value = IR_VIEW(IR_A(ir_word));
+            assert(PyValue_IsObject(exc_value));
+            _PyErr_StackItem *exc_info = tstate->exc_info;
+            ir_own_A = IR_DETACH(ir_word, A, exc_value);
+            Py_XSETREF(exc_info->exc_value,
+                       PyValue_IsNone(exc_value)
+                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN(exc_value, ir_own_A)));
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_POP_JUMP_IF_FALSE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = POP_JUMP_IF_FALSE;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow value;
+            PyValue res;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _SPECIALIZE_POP_JUMP_IF
+            {
+                value = IR_VIEW(IR_A(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_PopJumpIf(value, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(TO_BOOL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _TO_BOOL
+            {
+                int err = _PyValue_IsTrue(value);
+                ir_own_A = IR_DETACH(ir_word, A, value);
+                (void)(ir_own_A);
+                if (err < 0) {
+                    PyValue_XCLOSE(ir_own_A);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = err ? PyValue_True : PyValue_False;
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_POP_JUMP_IF_TRUE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = POP_JUMP_IF_TRUE;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow value;
+            PyValue res;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _SPECIALIZE_POP_JUMP_IF
+            {
+                value = IR_VIEW(IR_A(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_PopJumpIf(value, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(TO_BOOL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _TO_BOOL
+            {
+                int err = _PyValue_IsTrue(value);
+                ir_own_A = IR_DETACH(ir_word, A, value);
+                (void)(ir_own_A);
+                if (err < 0) {
+                    PyValue_XCLOSE(ir_own_A);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = err ? PyValue_True : PyValue_False;
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_PUSH_EXC_INFO(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = PUSH_EXC_INFO;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(PUSH_EXC_INFO);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
+            PyValue exc;
+            PyValue prev_exc;
+            PyValue new_exc;
+            exc = window[0];
+            _PyErr_StackItem *exc_info = tstate->exc_info;
+            if (exc_info->exc_value != NULL) {
+                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            }
+            else {
+                prev_exc = PyValue_None;
+            }
+            assert(PyValue_IsObject(exc));
+            assert(PyValue_ExceptionInstanceCheck(exc));
+            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
+            new_exc = exc;
+            IR_SET_TEMP(window[0], prev_exc);
+            IR_SET_TEMP(window[1], new_exc);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_RAISE_VARARGS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = RAISE_VARARGS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(RAISE_VARARGS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue *args;
+            args = &window[0];
+            assert(oparg < 3);
+            _PyValue_RecheckWindow(args, oparg);
+            PyObject *exc = NULL;
+            PyObject *cause = NULL;
+            if (oparg > 0) {
+                if (!PyValue_IsObject(args[0])) {
+                    _PyErr_SetString(tstate, PyExc_TypeError,
+                                     "exceptions must derive from BaseException");
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                exc = PyValue_AsKnownObjectBorrow(args[0]);
+            }
+            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
+            if (oparg == 2 && !cause_is_number) {
+                cause = PyValue_AsKnownObjectBorrow(args[1]);
+            }
+            Py_XINCREF(exc);
+            Py_XINCREF(cause);
+            PyValue tmp;
+            for (int _i = oparg; --_i >= 0;) {
+                tmp = args[_i];
+                args[_i] = PyValue_NULL;
+                PyValue_CLOSE(tmp);
+            }
+            IR_CLEAR_SLOTS(&window[0], oparg);
+            int err = do_raise(tstate, exc, cause, cause_is_number);
+            if (err) {
+                assert(oparg == 0);
+                monitor_reraise(tstate, frame, this_instr);
+                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
+            }
+            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_RERAISE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = RERAISE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(RERAISE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue *values;
+            PyValue exc_st;
+            exc_st = window[oparg];
+            values = &window[0];
+            assert(PyValue_IsObject(exc_st));
+            PyObject *exc = _PyValue_AsPyObjectStealPointer(exc_st);
+            assert(oparg >= 0 && oparg <= 2);
+            if (oparg) {
+                frame->instr_ptr = _PyFrame_InstrAt(frame, PyValue_UntagIndex(values[0]));
+            }
+            assert(exc && PyExceptionInstance_Check(exc));
+            window[oparg] = PyValue_NULL;
+            _PyErr_SetRaisedException(tstate, exc);
+            monitor_reraise(tstate, frame, this_instr);
+            PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SEND(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = SEND;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SEND);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue receiver;
+            PyValue null_or_index;
+            PyValue v;
+            PyValue retval;
+            // _SPECIALIZE_SEND
+            {
+                receiver = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_Send(receiver, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(SEND);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _SEND
+            {
+                v = window[2];
+                null_or_index = window[1];
+                assert(PyValue_IsObject(receiver));
+                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                if (!IS_PEP523_HOOKED(tstate) &&
+                    (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                    !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
+                    gen_try_set_executing((PyGenObject *)receiver_o))
+                {
+                    PyGenObject *gen = (PyGenObject *)receiver_o;{
+                        _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
+                        PyValue ir_resume_input = PyValue_None;
+                        if (_PY_IR_SEND == _PY_IR_SEND) {
+                            ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
+                            IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
+                        }
+                        frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
+                        frame->return_pc = next_instr;
+                        ir_resumed_frame->previous = frame;
+                        gen->gi_exc_state.previous_item = tstate->exc_info;
+                        tstate->exc_info = &gen->gi_exc_state;
+                        frame = tstate->current_frame = ir_resumed_frame;
+                        if (_Py_EnterRecursivePy(tstate)) {
+                            PyValue_XCLOSE(ir_resume_input);
+                            PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
+                        }
+                        _PyFrame_SetReturnValue(frame, ir_resume_input);
+                        LOAD_IP(0);
+                        IR_SKIP_RESUME();
+                        DTRACE_FUNCTION_ENTRY();
+                        LLTRACE_RESUME_FRAME();
+                        DISPATCH();
+                    }
+                }
+                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    null_or_index = window[1];
+                    PyValue item = next.value;
+                    int found = next.status;
+                    if (found <= 0) {
+                        if (found < 0) {
+                            IR_SET_TEMP(window[1], null_or_index);
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                        }
+                        PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
+                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
+                            next_instr = ir_step_result.next;
+                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                            DISPATCH();
+                        }
+                    }
+                    retval = item;
+                }
+                else {
+                    _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                    if (sent.status == PYGEN_ERROR) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    if (sent.status == PYGEN_RETURN) {
+                        PyValue completed = sent.value;{
+                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
+                            next_instr = ir_step_result.next;
+                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                            DISPATCH();
+                        }
+                    }
+                    window[2] = PyValue_NULL;
+                    PyValue_CLOSE(v);
+                    retval = sent.value;
+                }
+            }
+            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[2], retval);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SETUP_ANNOTATIONS(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = SETUP_ANNOTATIONS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SETUP_ANNOTATIONS);
+            if (LOCALS() == NULL) {
+                _PyErr_Format(tstate, PyExc_SystemError,
+                              "no locals found when setting up annotations");
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            _PyStatusValue found = _PyValue_GetOptionalItem(
+                PyValue_FromObjectBorrow(LOCALS()),
+                PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
+            if (found.status < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            int err;
+            if (found.status == 0) {
+                PyObject *ann_dict;
+                ann_dict = PyDict_New();
+                if (ann_dict == NULL) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
+                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
+                                       PyValue_FromObjectBorrow(ann_dict));
+                Py_DECREF(ann_dict);
+                if (err) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            else {
+                PyValue_CLOSE(found.value);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SET_FUNCTION_ATTRIBUTE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = SET_FUNCTION_ATTRIBUTE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow attr_st;
+            PyValueBorrow func_in;
+            PyValue func_out;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            func_in = IR_VIEW(IR_C(ir_word));
+            attr_st = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(func_in));
+            assert(PyValue_IsObject(attr_st));
+            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
+            ir_own_B = IR_DETACH(ir_word, B, attr_st);
+            PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN(attr_st, ir_own_B));
+            ir_own_C = IR_DETACH(ir_word, C, func_in);
+            func_out = IR_TAKEN(func_in, ir_own_C);
+            assert(PyFunction_Check(func));
+            size_t offset = _Py_FunctionAttributeOffsets[oparg];
+            assert(offset != 0);
+            PyObject **ptr = (PyObject **)(((char *)func) + offset);
+            assert(*ptr == NULL);
+            *ptr = attr;
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), func_out);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SET_UPDATE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = SET_UPDATE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(SET_UPDATE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue set;
+            PyValue iterable;
+            PyValue i;
+            PyValue value;
+            // _SET_UPDATE
+            {
+                iterable = window[1 + (oparg-1)];
+                set = window[0];
+                assert(PyValue_IsObject(set));
+                if (!PyValue_IsObject(iterable)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%.200s' object is not iterable",
+                              PyValue_TYPE(iterable)->tp_name);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(PyValue_IsObject(iterable));
+                int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
+                                    PyValue_AsKnownObjectBorrow(iterable));
+                if (err < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                i = iterable;
+            }
+            // _POP_TOP
+            {
+                value = i;
+                window[1 + (oparg-1)] = PyValue_NULL;
+                _PyValue_XCLOSE_POINTER(value);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_STORE_ATTR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = STORE_ATTR;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_ATTR);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow v;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _SPECIALIZE_STORE_ATTR
+            {
+                owner = IR_VIEW(IR_A(ir_word));
+                v = IR_VIEW(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    if (!PyValue_IsNull(v)) {
+                        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                        next_instr = this_instr;
+                        _Py_Specialize_StoreAttr(owner, next_instr, name);
+                        DISPATCH_SAME_OPARG();
+                    }
+                }
+                OPCODE_DEFERRED_INC(STORE_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _STORE_ATTR
+            {
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                int err = _PyValue_SetAttr(owner, name, v);
+                ir_own_A = IR_DETACH(ir_word, A, owner);
+                ir_own_B = IR_DETACH(ir_word, B, v);
+                if (err) {
+                    PyValue_XCLOSE(ir_own_A);
+                    PyValue_XCLOSE(ir_own_B);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            PyValue_XCLOSE(ir_own_A);
+            PyValue_XCLOSE(ir_own_B);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_STORE_GLOBAL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = STORE_GLOBAL;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_GLOBAL);
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow v;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            v = IR_VIEW(IR_A(ir_word));
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            int err;
+            if (PyValue_IsNull(v)) {
+                ir_own_A = IR_DETACH(ir_word, A, v);
+                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
+                if (err == 0) {
+                    err = -1;
+                    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
+                        NAME_ERROR_MSG, name);
+                }
+            }
+            else {
+                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
+                ir_own_A = IR_DETACH(ir_word, A, v);
+                (void)(ir_own_A);
+            }
+            if (err < 0) {
+                PyValue_XCLOSE(ir_own_A);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_STORE_NAME(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = STORE_NAME;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_NAME);
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow v;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            v = IR_VIEW(IR_A(ir_word));
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            PyObject *ns = LOCALS();
+            int error = _PyEval_StoreName(tstate, v, name, ns);
+            ir_own_A = IR_DETACH(ir_word, A, v);
+            (void)(ir_own_A);
+            if (error) {
+                PyValue_XCLOSE(ir_own_A);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_STORE_SLICE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = STORE_SLICE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_SLICE);
+            PyValueBorrow v;
+            PyValueBorrow container;
+            PyValueBorrow start;
+            PyValueBorrow stop;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            // _SPECIALIZE_STORE_SLICE
+            {
+                #if ENABLE_SPECIALIZATION
+                OPCODE_DEFERRED_INC(STORE_SLICE);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _STORE_SLICE
+            {
+                stop = IR_VIEW(IR_C(ir_word));
+                start = IR_VIEW(IR_B(ir_word));
+                container = IR_VIEW(IR_A(ir_word));
+                v = IR_VIEW(IR_D(ir_word));
+                int err = _PyEval_StoreSlice(v, container, start, stop);
+                ir_own_C = IR_DETACH(ir_word, C, stop);
+                ir_own_B = IR_DETACH(ir_word, B, start);
+                ir_own_A = IR_DETACH(ir_word, A, container);
+                ir_own_D = IR_DETACH(ir_word, D, v);
+                if (err) {
+                    PyValue_XCLOSE(ir_own_C);
+                    PyValue_XCLOSE(ir_own_B);
+                    PyValue_XCLOSE(ir_own_A);
+                    PyValue_XCLOSE(ir_own_D);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_own_A);
+            PyValue_XCLOSE(ir_own_D);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_STORE_SUBSCR(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = STORE_SUBSCR;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_SUBSCR);
+            _PyIRWord* this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_D(ir_word));
+            PyValueBorrow container;
+            PyValueBorrow sub;
+            PyValueBorrow v;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _SPECIALIZE_STORE_SUBSCR
+            {
+                sub = IR_VIEW(IR_B(ir_word));
+                container = IR_VIEW(IR_A(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_StoreSubscr(container, sub, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(STORE_SUBSCR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _STORE_SUBSCR
+            {
+                v = IR_VIEW(IR_C(ir_word));
+                int err = _PyValue_SetItem(container, sub, v);
+                ir_own_B = IR_DETACH(ir_word, B, sub);
+                ir_own_A = IR_DETACH(ir_word, A, container);
+                ir_own_C = IR_DETACH(ir_word, C, v);
+                if (err) {
+                    PyValue_XCLOSE(ir_own_B);
+                    PyValue_XCLOSE(ir_own_A);
+                    PyValue_XCLOSE(ir_own_C);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_own_A);
+            PyValue_XCLOSE(ir_own_C);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_TO_BOOL(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = TO_BOOL;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(TO_BOOL);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
+            PyValue value;
+            PyValue res;
+            // _SPECIALIZE_TO_BOOL
+            {
+                value = IR_SLOT(IR_B(ir_word));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_ToBool(value, next_instr);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(TO_BOOL);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+            }
+            // _TO_BOOL
+            {
+                int err = _PyValue_IsTrue(value);
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+                PyValue_CLOSE(value);
+                if (err < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = err ? PyValue_True : PyValue_False;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_UNPACK_EX(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = UNPACK_EX;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(UNPACK_EX);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue seq;
+            PyValue *top;
+            seq = window[0];
+            top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
+            if (!PyValue_IsObject(seq)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                window[0] = PyValue_NULL;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            assert(PyValue_IsObject(seq));
+            PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+            window[0] = PyValue_NULL;
+            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
+            if (res == 0) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            if (IR_IS_LOCAL_FIELD(ir_word, B)) {
+                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
+                IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_UNPACK_SEQUENCE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = UNPACK_SEQUENCE;
+            (void)(opcode);
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(UNPACK_SEQUENCE);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_B(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_A(ir_word));
+            (void)window;
+            PyValue seq;
+            PyValue *top;
+            // _SPECIALIZE_UNPACK_SEQUENCE
+            {
+                seq = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
+                    DISPATCH_SAME_OPARG();
+                }
+                OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                (void)seq;
+            }
+            // _UNPACK_SEQUENCE
+            {
+                top = &window[oparg];
+                if (!PyValue_IsObject(seq)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                    window[0] = PyValue_NULL;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                assert(PyValue_IsObject(seq));
+                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+                window[0] = PyValue_NULL;
+                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
+                if (res == 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+            }
+            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
+                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
+                IR_CLOSE_WINDOW(window, oparg);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_WITH_EXCEPT_START(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = WITH_EXCEPT_START;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(WITH_EXCEPT_START);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            PyValue exit_func;
+            PyValue exit_self;
+            PyValue lasti;
+            PyValue val;
+            PyValue res;
+            val = window[4];
+            lasti = window[2];
+            exit_self = window[1];
+            exit_func = window[0];
+            PyObject *exc, *tb;
+            assert(PyValue_IsObject(val));
+            assert(PyValue_IsObject(exit_func));
+            assert(PyValue_IsObjectOrNull(exit_self));
+            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
+            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
+            assert(val_o && PyExceptionInstance_Check(val_o));
+            exc = PyExceptionInstance_Class(val_o);
+            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
+            if (tb == NULL) {
+                tb = Py_None;
+            }
+            assert(PyValue_IsTaggedIndex(lasti));
+            (void)lasti;
+            PyObject *res_o = with_exit_call(exit_func_o,
+                PyValue_AsKnownObjectBorrow(exit_self),
+                !PyValue_IsNull(exit_self), exc, val_o, tb);
+            Py_XDECREF(original_tb);
+            if (res_o == NULL) {
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            res = PyValue_FromObjectSteal(res_o);
+            IR_SET_TEMP(window[5], res);
+            IR_MOVE_TO_DST(ir_word, A, window[5]);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+#else  // IR_OUTLINED_FUNCTIONS
+
             /* BEGIN INSTRUCTIONS */
 
         TARGET(BINARY_OP_ADD) {
@@ -2022,104 +5594,11 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_SLICE) {
-            int opcode = BINARY_SLICE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_SLICE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow container;
-            PyValueBorrow start;
-            PyValueBorrow stop;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            PyValue ir_own_D = PyValue_NULL;
-            (void)ir_own_D;
-            // _SPECIALIZE_BINARY_SLICE
-            {
-                #if ENABLE_SPECIALIZATION
-                OPCODE_DEFERRED_INC(BINARY_SLICE);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _BINARY_SLICE
-            {
-                stop = IR_VIEW(IR_D(ir_word));
-                start = IR_VIEW(IR_C(ir_word));
-                container = IR_VIEW(IR_B(ir_word));
-                res = _PyEval_BinarySlice(container, start, stop);
-                ir_own_D = IR_DETACH(ir_word, D, stop);
-                ir_own_C = IR_DETACH(ir_word, C, start);
-                ir_own_B = IR_DETACH(ir_word, B, container);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_D);
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_D);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BINARY_SLICE);
         }
-
         TARGET(BUILD_INTERPOLATION) {
-            int opcode = BUILD_INTERPOLATION;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_INTERPOLATION);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue value;
-            PyValue str;
-            PyValue *format;
-            PyValue interpolation;
-            format = &window[2];
-            str = window[1];
-            value = window[0];
-            assert(PyValue_IsObject(str));
-            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
-            int conversion = oparg >> 2;
-            PyObject *format_o;
-            if (oparg & 1) {
-                format_o = PyValue_AsKnownObjectBorrow(format[0]);
-            }
-            else {
-                format_o = &_Py_STR(empty);
-            }
-            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
-            IR_CLEAR_SLOTS(&window[2], (oparg & 1));
-            PyValue_XCLOSE(format_ref);
-            window[1] = PyValue_NULL;
-            _PyValue_CLOSE_POINTER(str);
-            window[0] = PyValue_NULL;
-            PyValue_CLOSE(value);
-            if (interpolation_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            interpolation = PyValue_FromObjectSteal(interpolation_o);
-            IR_SET_TEMP(window[0], interpolation);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_INTERPOLATION);
         }
 
         TARGET(BUILD_LIST) {
@@ -2150,195 +5629,20 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BUILD_MAP) {
-            int opcode = BUILD_MAP;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_MAP);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue *values;
-            PyValue map;
-            values = &window[0];
-            PyObject *map_o = _Py_BuildMap_ValueSteal(frame, values, oparg);
-            int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
-            IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
-            IR_SET_TEMP(window[0], map);
-            if (failed) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_MAP);
         }
-
         TARGET(BUILD_SET) {
-            int opcode = BUILD_SET;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_SET);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue *values;
-            PyValue set;
-            values = &window[0];
-            PyObject *set_o = PySet_New(NULL);
-            if (set_o == NULL) {
-                PyValue tmp;
-                for (int _i = oparg; --_i >= 0;) {
-                    tmp = values[_i];
-                    values[_i] = PyValue_NULL;
-                    PyValue_CLOSE(tmp);
-                }
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                        value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
-            if (err) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                Py_DECREF(set_o);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            set = PyValue_FromObjectSteal(set_o);
-            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            IR_SET_TEMP(window[0], set);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_SET);
         }
-
         TARGET(BUILD_SLICE) {
-            int opcode = BUILD_SLICE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_SLICE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue *args;
-            PyValue slice;
-            args = &window[0];
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *slice_o = _PySlice_FromValues(
-                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
-            PyValue tmp;
-            for (int _i = oparg; --_i >= 0;) {
-                tmp = args[_i];
-                args[_i] = PyValue_NULL;
-                PyValue_CLOSE(tmp);
-            }
-            IR_CLEAR_SLOTS(&window[0], oparg);
-            if (slice_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            slice = PyValue_FromObjectSteal(slice_o);
-            IR_SET_TEMP(window[0], slice);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_SLICE);
         }
-
         TARGET(BUILD_STRING) {
-            int opcode = BUILD_STRING;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_STRING);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue *pieces;
-            PyValue str;
-            pieces = &window[0];
-            PyObject *str_o = _Py_BuildString_ValueSteal(frame, pieces, oparg);
-            if (str_o == NULL) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            str = PyValue_FromObjectSteal(str_o);
-            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            IR_SET_TEMP(window[0], str);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_STRING);
         }
-
         TARGET(BUILD_TEMPLATE) {
-            int opcode = BUILD_TEMPLATE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BUILD_TEMPLATE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow strings;
-            PyValueBorrow interpolations;
-            PyValue template;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            interpolations = IR_VIEW(IR_C(ir_word));
-            strings = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(strings));
-            assert(PyValue_IsObject(interpolations));
-            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
-            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
-            PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
-            ir_own_C = IR_DETACH(ir_word, C, interpolations);
-            (void)(ir_own_C);
-            ir_own_B = IR_DETACH(ir_word, B, strings);
-            (void)(ir_own_B);
-            if (template_o == NULL) {
-                _PyValue_XCLOSE_POINTER(ir_own_C);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            template = PyValue_FromObjectSteal(template_o);
-            IR_STORE_DST(ir_word, A, template);
-            _PyValue_XCLOSE_POINTER(ir_own_C);
-            _PyValue_XCLOSE_POINTER(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_BUILD_TEMPLATE);
         }
 
         TARGET(BUILD_TUPLE) {
@@ -2382,95 +5686,8 @@
             Py_FatalError("Executing a cache.");
             DISPATCH();
         }
-
         TARGET(CALL) {
-            int opcode = CALL;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            int call_base = IR_B(ir_word);
-            int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg), call_destination, CALL_TRANSACTION_VECTOR, _PyIR_CallInputHoles(ir_word));
-            (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
-            PyValue callable;
-            PyValue self_or_null;
-            // _SPECIALIZE_CALL
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
-                callable = window[0];
-                #if ENABLE_SPECIALIZATION
-                {
-                    _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                        call_state |= CALL_EFFECTS;
-                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
-                        if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                        }
-                        this_instr = frame->instr_ptr;
-                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        window = IR_SLOTS() + call_base;
-                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
-                        DISPATCH_SAME_OPARG();
-                    }
-                    OPCODE_DEFERRED_INC(CALL);
-                    ADVANCE_ADAPTIVE_COUNTER(feedback);
-                }
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _MAYBE_EXPAND_METHOD
-            {
-                {
-                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
-                    if (call_state & CALL_FAILED) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                window = IR_SLOTS() + call_base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                callable = window[0];
-                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
-            }
-            // _DO_CALL
-            {
-                assert(frame->instr_ptr == this_instr);
-                {
-                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
-                    if (call_result.status < 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                    if (call_result.child != NULL) {
-                        DISPATCH_INLINED(call_result.child);
-                    }
-                    DISPATCH();
-                }
-            }
-            call_transaction_fallback_CALL:;
-            assert(frame->instr_ptr == this_instr);
-            {
-                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
-                if (call_result.status < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-                if (call_result.child != NULL) {
-                    DISPATCH_INLINED(call_result.child);
-                }
-                DISPATCH();
-            }
+            IR_RUN_OUTLINED(ir_run_CALL);
         }
 
         TARGET(CALL_ALLOC_AND_ENTER_INIT) {
@@ -3571,195 +6788,14 @@
                 DISPATCH();
             }
         }
-
         TARGET(CALL_FUNCTION_EX) {
-            int opcode = CALL_FUNCTION_EX;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL_FUNCTION_EX);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            int call_base = IR_B(ir_word);
-            int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (1) + (1), call_destination, CALL_TRANSACTION_EX, _PyIR_CallInputHoles(ir_word));
-            (void)call_state;
-            uint32_t call_feedback = IR_C(ir_word);
-            PyValue func;
-            PyValue callargs;
-            PyValue kwargs;
-            // _SPECIALIZE_CALL_FUNCTION_EX
-            {
-                func = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    call_state |= CALL_EFFECTS;
-                    _Py_Specialize_CallFunctionEx(func, this_instr);
-                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                    this_instr = frame->instr_ptr;
-                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    window = IR_SLOTS() + call_base;
-                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _MAKE_CALLARGS_A_TUPLE
-            {
-                kwargs = ((call_state & CALL_KWARGS_PRESENT) ? window[3] : PyValue_NULL);
-                callargs = window[2];
-                call_state |= CALL_PREPARED | CALL_EFFECTS;
-                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                window = IR_SLOTS() + call_base;
-                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                func = window[0];
-                callargs = window[2];
-                kwargs = call_state & CALL_KWARGS_PRESENT ? window[3] : PyValue_NULL;
-            }
-            // _DO_CALL_FUNCTION_EX
-            {
-                assert(frame->instr_ptr == this_instr);
-                {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
-                    if (call_result.status < 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                    if (call_result.child != NULL) {
-                        DISPATCH_INLINED(call_result.child);
-                    }
-                    DISPATCH();
-                }
-            }
-            call_transaction_fallback_CALL_FUNCTION_EX:;
-            assert(frame->instr_ptr == this_instr);
-            {
-                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
-                if (call_result.status < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-                if (call_result.child != NULL) {
-                    DISPATCH_INLINED(call_result.child);
-                }
-                DISPATCH();
-            }
+            IR_RUN_OUTLINED(ir_run_CALL_FUNCTION_EX);
         }
-
         TARGET(CALL_INTRINSIC_1) {
-            int opcode = CALL_INTRINSIC_1;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL_INTRINSIC_1);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValueBorrow value;
-            PyValue res;
-            PyValueBorrow v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _CALL_INTRINSIC_1
-            {
-                value = IR_VIEW(IR_B(ir_word));
-                assert(oparg <= MAX_INTRINSIC_1);
-                if (oparg == INTRINSIC_UNARY_POSITIVE) {
-                    res = _PyValue_Positive(value);
-                    if (PyValue_IsNull(res)) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                }
-                else {
-                    res = _PyEval_CallIntrinsic1(tstate, oparg, value);
-                    if (PyValue_IsNull(res)) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                }
-                v = value;
-                ir_own_B = IR_DETACH(ir_word, B, v);
-            }
-            // _POP_TOP
-            {
-                value = v;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CALL_INTRINSIC_1);
         }
-
         TARGET(CALL_INTRINSIC_2) {
-            int opcode = CALL_INTRINSIC_2;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL_INTRINSIC_2);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow value2_st;
-            PyValueBorrow value1_st;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            value1_st = IR_VIEW(IR_C(ir_word));
-            value2_st = IR_VIEW(IR_B(ir_word));
-            assert(oparg <= MAX_INTRINSIC_2);
-            ir_own_B = IR_DETACH(ir_word, B, value2_st);
-            PyValue held2 = IR_TAKEN(value2_st, ir_own_B);
-            ir_own_C = IR_DETACH(ir_word, C, value1_st);
-            PyValue held1 = IR_TAKEN(value1_st, ir_own_C);
-            if (oparg == INTRINSIC_GETATTR) {
-                PyObject *name = PyValue_ObjectOrNull(held1);
-                assert(name != NULL && PyUnicode_CheckExact(name));
-                res = _PyValue_GetAttr(held2, name);
-            }
-            else if (oparg == INTRINSIC_SETATTR) {
-                PyObject *target = PyValue_ObjectOrNull(held1);
-                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
-                PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
-                assert(PyValue_IsObject(attr_name));
-                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                    held2);
-                res = err < 0 ? PyValue_NULL : PyValue_None;
-            }
-            else {
-                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
-            }
-            PyValue_XCLOSE(held1);
-            PyValue_XCLOSE(held2);
-            if (PyValue_IsNull(res)) {
-                PyValue_XCLOSE(res);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CALL_INTRINSIC_2);
         }
 
         TARGET(CALL_ISINSTANCE) {
@@ -3855,95 +6891,8 @@
                 DISPATCH();
             }
         }
-
         TARGET(CALL_KW) {
-            int opcode = CALL_KW;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL_KW);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            int call_base = IR_B(ir_word);
-            int call_destination = IR_A(ir_word);
-            int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, (1) + (1) + (oparg) + (1), call_destination, CALL_TRANSACTION_KEYWORDS, _PyIR_CallInputHoles(ir_word));
-            (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue kwnames;
-            // _SPECIALIZE_CALL_KW
-            {
-                kwnames = window[2 + oparg];
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? window[1] : PyValue_NULL);
-                callable = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    call_state |= CALL_EFFECTS;
-                    _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
-                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                    this_instr = frame->instr_ptr;
-                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    window = IR_SLOTS() + call_base;
-                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(CALL_KW);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _MAYBE_EXPAND_METHOD_KW
-            {
-                {
-                    call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);
-                    if (call_state & CALL_FAILED) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                window = IR_SLOTS() + call_base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                callable = window[0];
-                self_or_null = call_state & CALL_SELF_PRESENT ? window[1] : PyValue_NULL;
-            }
-            // _DO_CALL_KW
-            {
-                assert(frame->instr_ptr == this_instr);
-                {
-                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
-                    if (call_result.status < 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                    }
-                    if (call_result.child != NULL) {
-                        DISPATCH_INLINED(call_result.child);
-                    }
-                    DISPATCH();
-                }
-            }
-            call_transaction_fallback_CALL_KW:;
-            assert(frame->instr_ptr == this_instr);
-            {
-                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
-                if (call_result.status < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-                if (call_result.child != NULL) {
-                    DISPATCH_INLINED(call_result.child);
-                }
-                DISPATCH();
-            }
+            IR_RUN_OUTLINED(ir_run_CALL_KW);
         }
 
         TARGET(CALL_KW_BOUND_METHOD) {
@@ -5556,93 +8505,11 @@
                 DISPATCH();
             }
         }
-
         TARGET(CHECK_EG_MATCH) {
-            int opcode = CHECK_EG_MATCH;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CHECK_EG_MATCH);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
-            PyValueBorrow exc_value_st;
-            PyValueBorrow match_type_st;
-            PyValue rest;
-            PyValue match;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            match_type_st = IR_VIEW(IR_C(ir_word));
-            exc_value_st = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(exc_value_st));
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
-            PyValue held_exc = IR_TAKEN(exc_value_st, ir_own_B);
-            ir_own_C = IR_DETACH(ir_word, C, match_type_st);
-            PyValue held_type = IR_TAKEN(match_type_st, ir_own_C);
-            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
-            if (err < 0) {
-                PyValue_CLOSE(held_type);
-                PyValue_CLOSE(held_exc);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
-            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
-            PyValue_CLOSE(held_type);
-            PyValue_CLOSE(held_exc);
-            if (match_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
-            }
-            rest = PyValue_FromObjectSteal(rest_o);
-            match = PyValue_FromObjectSteal(match_o);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), rest);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), match);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CHECK_EG_MATCH);
         }
-
         TARGET(CHECK_EXC_MATCH) {
-            int opcode = CHECK_EXC_MATCH;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue left;
-            PyValueBorrow right;
-            PyValue b;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            right = IR_VIEW(IR_C(ir_word));
-            left = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(left));
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            ir_own_C = IR_DETACH(ir_word, C, right);
-            PyValue held_right = IR_TAKEN(right, ir_own_C);
-            assert(PyExceptionInstance_Check(left_o));
-            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
-            if (err < 0) {
-                PyValue_CLOSE(held_right);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
-            int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            PyValue_CLOSE(held_right);
-            b = res ? PyValue_True : PyValue_False;
-            IR_STORE_DST(ir_word, A, b);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CHECK_EXC_MATCH);
         }
 
         TARGET(CLEANUP_THROW) {
@@ -5713,72 +8580,8 @@
                 IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
             }
         }
-
         TARGET(COMPARE_OP) {
-            int opcode = COMPARE_OP;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(COMPARE_OP);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
-            (void)oparg;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_COMPARE_OP
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_CompareOp(left, right, next_instr, oparg);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(COMPARE_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _COMPARE_OP
-            {
-                assert((oparg >> 5) <= Py_GE);
-                PyValue cmp = _PyValue_RichCompare(left, right, oparg >> 5);
-                ir_own_C = IR_DETACH(ir_word, C, right);
-                ir_own_B = IR_DETACH(ir_word, B, left);
-                if (PyValue_IsNull(cmp)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                if (oparg & 16) {
-                    int res_bool = _PyValue_IsTrue(cmp);
-                    PyValue_CLOSE(cmp);
-                    if (res_bool < 0) {
-                        PyValue_XCLOSE(ir_own_C);
-                        PyValue_XCLOSE(ir_own_B);
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    res = res_bool ? PyValue_True : PyValue_False;
-                }
-                else {
-                    res = cmp;
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_COMPARE_OP);
         }
 
         TARGET(COMPARE_OP_FLOAT) {
@@ -6361,74 +9164,8 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(CONTAINS_OP) {
-            int opcode = CONTAINS_OP;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CONTAINS_OP);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
-            (void)oparg;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue b;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_CONTAINS_OP
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_ContainsOp(left, right, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(CONTAINS_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _CONTAINS_OP
-            {
-                int res = _PyValue_Contains(right, left);
-                if (res < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                b = (res ^ oparg) ? PyValue_True : PyValue_False;
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP
-            {
-                value = r;
-                (void)value;
-                (void)(ir_own_C);
-            }
-            // _POP_TOP
-            {
-                value = l;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, b);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CONTAINS_OP);
         }
 
         TARGET(CONTAINS_OP_DICT) {
@@ -6834,46 +9571,8 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(CONVERT_VALUE) {
-            int opcode = CONVERT_VALUE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CONVERT_VALUE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValueBorrow value;
-            PyValue result;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            value = IR_VIEW(IR_B(ir_word));
-            assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
-            PyObject *result_o;
-            if (oparg == FVC_STR) {
-                result_o = _PyValue_Str(value);
-            }
-            else if (oparg == FVC_REPR) {
-                result_o = _PyValue_Repr(value);
-            }
-            else {
-                result_o = _PyValue_ASCII(value);
-            }
-            ir_own_B = IR_DETACH(ir_word, B, value);
-            (void)(ir_own_B);
-            if (result_o == NULL) {
-                PyValue_XCLOSE(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            result = PyValue_FromObjectSteal(result_o);
-            IR_STORE_DST(ir_word, A, result);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_CONVERT_VALUE);
         }
 
         TARGET(COPY) {
@@ -6897,256 +9596,26 @@
             IR_SET_TEMP(window[1 + (oparg-1)], top);
             DISPATCH();
         }
-
         TARGET(COPY_FREE_VARS) {
-            int opcode = COPY_FREE_VARS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(COPY_FREE_VARS);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            PyCodeObject *co = _PyFrame_GetCode(frame);
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyObject *closure = func->func_closure;
-            assert(oparg == co->co_nfreevars);
-            int offset = co->co_nlocalsplus - oparg;
-            for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_COPY_FREE_VARS);
         }
-
         TARGET(DELETE_DEREF) {
-            int opcode = DELETE_DEREF;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(DELETE_DEREF);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
-            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
-            if (PyValue_IsNull(old)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue_CLOSE(old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_DELETE_DEREF);
         }
-
         TARGET(DELETE_FAST) {
-            int opcode = DELETE_FAST;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(DELETE_FAST);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
-            if (PyValue_IsNull(v)) {
-                _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
-                    UNBOUNDLOCAL_ERROR_MSG,
-                    _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
-                );
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
-            PyValue_XCLOSE(tmp);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_DELETE_FAST);
         }
-
         TARGET(DELETE_SUBSCR) {
-            int opcode = DELETE_SUBSCR;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(DELETE_SUBSCR);
-            PyValueBorrow container;
-            PyValueBorrow sub;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            sub = IR_VIEW(IR_B(ir_word));
-            container = IR_VIEW(IR_A(ir_word));
-            int err = _PyValue_DelItem(container, sub);
-            ir_own_B = IR_DETACH(ir_word, B, sub);
-            ir_own_A = IR_DETACH(ir_word, A, container);
-            if (err) {
-                PyValue_XCLOSE(ir_own_B);
-                PyValue_XCLOSE(ir_own_A);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_DELETE_SUBSCR);
         }
-
         TARGET(DICT_MERGE) {
-            int opcode = DICT_MERGE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(DICT_MERGE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue callable;
-            PyValue dict;
-            PyValue update;
-            PyValue u;
-            PyValue value;
-            // _DICT_MERGE
-            {
-                update = window[4 + (oparg - 1)];
-                dict = window[3];
-                callable = window[0];
-                assert(PyValue_IsObject(dict));
-                if (!PyValue_IsObject(update)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after ** must be a mapping, not %N",
-                              PyValue_TYPE(update));
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(PyValue_IsObject(update));
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-                _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
-                if (merged.status < 0) {
-                    _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
-                    Py_XDECREF(merged.object);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                u = update;
-            }
-            // _POP_TOP
-            {
-                value = u;
-                window[4 + (oparg - 1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_DICT_MERGE);
         }
-
         TARGET(DICT_UPDATE) {
-            int opcode = DICT_UPDATE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(DICT_UPDATE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue dict;
-            PyValue update;
-            PyValue upd;
-            PyValue value;
-            // _DICT_UPDATE
-            {
-                update = window[1 + (oparg - 1)];
-                dict = window[0];
-                assert(PyValue_IsObject(dict));
-                if (!PyValue_IsObject(update)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%N' object is not a mapping",
-                              PyValue_TYPE(update));
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(PyValue_IsObject(update));
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-                int err = PyDict_Update(dict_o, update_o);
-                if (err < 0) {
-                    int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
-                    if (matches) {
-                        PyObject *exc = _PyErr_GetRaisedException(tstate);
-                        int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
-                        if (has_keys == 0) {
-                            _PyErr_Format(tstate, PyExc_TypeError,
-                                      "'%T' object is not a mapping",
-                                      update_o);
-                            Py_DECREF(exc);
-                        }
-                        else {
-                            _PyErr_ChainExceptions1(exc);
-                        }
-                    }
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                upd = update;
-            }
-            // _POP_TOP
-            {
-                value = upd;
-                window[1 + (oparg - 1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_DICT_UPDATE);
         }
-
         TARGET(END_ASYNC_FOR) {
-            int opcode = END_ASYNC_FOR;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(END_ASYNC_FOR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue awaitable_st;
-            PyValue exc_st;
-            exc_st = window[1];
-            awaitable_st = window[0];
-            JUMPBY(0);
-            (void)oparg;
-            assert(PyValue_IsObject(exc_st));
-            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
-            assert(exc && PyExceptionInstance_Check(exc));
-            int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
-            if (matches) {
-                PyValue tmp = exc_st;
-                exc_st = PyValue_NULL;
-                IR_SET_TEMP(window[1], exc_st);
-                _PyValue_CLOSE_POINTER(tmp);
-                tmp = awaitable_st;
-                awaitable_st = PyValue_NULL;
-                IR_SET_TEMP(window[0], awaitable_st);
-                PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-            }
-            else {
-                Py_INCREF(exc);
-                _PyErr_SetRaisedException(tstate, exc);
-                monitor_reraise(tstate, frame, this_instr);
-                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_END_ASYNC_FOR);
         }
 
         TARGET(END_FOR) {
@@ -7219,142 +9688,14 @@
             ir_own_A = IR_DETACH(ir_word, A, should_be_none);
             DISPATCH();
         }
-
         TARGET(FORMAT_SIMPLE) {
-            int opcode = FORMAT_SIMPLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(FORMAT_SIMPLE);
-            PyValueBorrow value;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            value = IR_VIEW(IR_B(ir_word));
-            if (PyValue_IsInline(value)) {
-                PyObject *res_o = _PyValue_Str(value);
-                ir_own_B = IR_DETACH(ir_word, B, value);
-                (void)(ir_own_B);
-                if (res_o == NULL) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
-                ir_own_B = IR_DETACH(ir_word, B, value);
-                (void)(ir_own_B);
-                if (res_o == NULL) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                ir_own_B = IR_DETACH(ir_word, B, value);
-                res = IR_TAKEN(value, ir_own_B);
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            PyValue_XCLOSE(ir_own_B);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_FORMAT_SIMPLE);
         }
-
         TARGET(FORMAT_WITH_SPEC) {
-            int opcode = FORMAT_WITH_SPEC;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(FORMAT_WITH_SPEC);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow fmt_spec;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            fmt_spec = IR_VIEW(IR_C(ir_word));
-            value = IR_VIEW(IR_B(ir_word));
-            PyObject *res_o = _PyValue_Format(value, fmt_spec);
-            ir_own_C = IR_DETACH(ir_word, C, fmt_spec);
-            ir_own_B = IR_DETACH(ir_word, B, value);
-            if (res_o == NULL) {
-                PyValue_XCLOSE(ir_own_C);
-                PyValue_XCLOSE(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            res = PyValue_FromObjectSteal(res_o);
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_FORMAT_WITH_SPEC);
         }
-
         TARGET(FOR_ITER) {
-            int opcode = FOR_ITER;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(FOR_ITER);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_C(ir_word));
-            int oparg = IR_DS(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue next;
-            // _SPECIALIZE_FOR_ITER
-            {
-                null_or_index = window[1];
-                iter = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(FOR_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _FOR_ITER
-            {
-                _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
-                null_or_index = window[1];
-                PyValue item = step.value;
-                int found = step.status;
-                if (found <= 0) {
-                    if (found < 0) {
-                        IR_SET_TEMP(window[1], null_or_index);
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
-                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
-                        next_instr = ir_step_result.next;
-                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                        DISPATCH();
-                    }
-                }
-                next = item;
-            }
-            IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_FOR_ITER);
         }
 
         TARGET(FOR_ITER_GEN) {
@@ -7679,174 +10020,17 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(GET_AITER) {
-            int opcode = GET_AITER;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(GET_AITER);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow obj;
-            PyValue iter;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            obj = IR_VIEW(IR_B(ir_word));
-            unaryfunc getter = NULL;
-            PyObject *iter_o;
-            if (!PyValue_IsObject(obj)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              PyValue_TYPE(obj)->tp_name);
-                ir_own_B = IR_DETACH(ir_word, B, obj);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            assert(PyValue_IsObject(obj));
-            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
-            PyTypeObject *type = Py_TYPE(obj_o);
-            if (type->tp_as_async != NULL) {
-                getter = type->tp_as_async->am_aiter;
-            }
-            if (getter == NULL) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              type->tp_name);
-                ir_own_B = IR_DETACH(ir_word, B, obj);
-                (void)(ir_own_B);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            iter_o = (*getter)(obj_o);
-            ir_own_B = IR_DETACH(ir_word, B, obj);
-            (void)(ir_own_B);
-            if (iter_o == NULL) {
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (Py_TYPE(iter_o)->tp_as_async == NULL ||
-                Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' received an object from __aiter__ "
-                              "that does not implement __anext__: %.100s",
-                              Py_TYPE(iter_o)->tp_name);
-                Py_DECREF(iter_o);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            iter = PyValue_FromObjectSteal(iter_o);
-            IR_STORE_DST(ir_word, A, iter);
-            _PyValue_XCLOSE_POINTER(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_GET_AITER);
         }
-
         TARGET(GET_ANEXT) {
-            int opcode = GET_ANEXT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(GET_ANEXT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue aiter;
-            PyValue awaitable;
-            aiter = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(aiter));
-            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
-            if (awaitable_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 1, this_instr);
-            }
-            awaitable = PyValue_FromObjectSteal(awaitable_o);
-            IR_STORE_DST(ir_word, A, awaitable);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_GET_ANEXT);
         }
-
         TARGET(GET_AWAITABLE) {
-            int opcode = GET_AWAITABLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(GET_AWAITABLE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValueBorrow iterable;
-            PyValue iter;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            iterable = IR_VIEW(IR_B(ir_word));
-            if (coro_awaitable_can_transfer(iterable)) {
-                ir_own_B = IR_DETACH(ir_word, B, iterable);
-                iter = IR_TAKEN(iterable, ir_own_B);
-            }
-            else {
-                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
-                ir_own_B = IR_DETACH(ir_word, B, iterable);
-                (void)(ir_own_B);
-                if (iter_o == NULL) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                iter = PyValue_FromObjectSteal(iter_o);
-            }
-            IR_STORE_DST(ir_word, A, iter);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_GET_AWAITABLE);
         }
-
         TARGET(GET_ITER) {
-            int opcode = GET_ITER;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(GET_ITER);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValue iterable;
-            PyValue iter;
-            PyValue index_or_null;
-            // _SPECIALIZE_GET_ITER
-            {
-                iterable = IR_SLOT(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_GetIter(iterable, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(GET_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _GET_ITER
-            {
-                _PyValuePair got = _PyEval_GetIter(iterable, oparg);
-                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
-                if (PyValue_IsNull(got.first)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                iter = got.first;
-                index_or_null = got.second;
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), index_or_null);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_GET_ITER);
         }
 
         TARGET(GET_ITER_SELF) {
@@ -7916,136 +10100,14 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), zero);
             DISPATCH();
         }
-
         TARGET(GET_LEN) {
-            int opcode = GET_LEN;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(GET_LEN);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue obj;
-            PyValue len;
-            obj = IR_SLOT(IR_B(ir_word));
-            Py_ssize_t len_i = _PyValue_Size(obj);
-            if (len_i < 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            len = PyValue_FromInt64(len_i);
-            if (PyValue_IsNull(len)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            IR_STORE_DST(ir_word, A, len);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_GET_LEN);
         }
-
         TARGET(IMPORT_FROM) {
-            int opcode = IMPORT_FROM;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(IMPORT_FROM);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue from;
-            PyValue res;
-            from = IR_SLOT(IR_B(ir_word));
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *from_o = PyValue_ObjectOrNull(from);
-            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
-            {
-                PyObject *res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, from_o, name);
-                if (res_o == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_IMPORT_FROM);
         }
-
         TARGET(IMPORT_NAME) {
-            int opcode = IMPORT_NAME;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(IMPORT_NAME);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue level;
-            PyValue fromlist;
-            PyValue res;
-            fromlist = window[1];
-            level = window[0];
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *res_o;
-            assert(PyValue_IsObject(fromlist));
-            int ilevel = value_import_level(level);
-            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-                PyValue tmp = fromlist;
-                fromlist = PyValue_NULL;
-                IR_SET_TEMP(window[1], fromlist);
-                _PyValue_CLOSE_POINTER(tmp);
-                tmp = level;
-                level = PyValue_NULL;
-                IR_SET_TEMP(window[0], level);
-                PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (!(oparg & 0x02)) {
-                res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
-                    LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
-                    ilevel, oparg & 0x01);
-            }
-            else {
-                res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
-                    LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
-                    ilevel);
-            }
-            PyValue tmp = fromlist;
-            fromlist = PyValue_NULL;
-            IR_SET_TEMP(window[1], fromlist);
-            _PyValue_CLOSE_POINTER(tmp);
-            tmp = level;
-            level = PyValue_NULL;
-            IR_SET_TEMP(window[0], level);
-            PyValue_CLOSE(tmp);
-            window[0] = PyValue_NULL;
-            window[1] = PyValue_NULL;
-            if (res_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            res = PyValue_FromObjectSteal(res_o);
-            IR_SET_TEMP(window[0], res);
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_IMPORT_NAME);
         }
 
         TARGET(INSTRUMENTED_CALL) {
@@ -10001,131 +12063,11 @@
             }
             DISPATCH();
         }
-
         TARGET(LIST_EXTEND) {
-            int opcode = LIST_EXTEND;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LIST_EXTEND);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue list_st;
-            PyValue iterable_st;
-            PyValue i;
-            PyValue value;
-            // _LIST_EXTEND
-            {
-                iterable_st = window[1 + (oparg-1)];
-                list_st = window[0];
-                assert(PyValue_IsObject(list_st));
-                if (!PyValue_IsObject(iterable_st)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after * must be an iterable, not %.200s",
-                              PyValue_TYPE(iterable_st)->tp_name);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(PyValue_IsObject(iterable_st));
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-                PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
-                PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
-                if (none_val == NULL) {
-                    int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
-                    if (matches &&
-                        (Py_TYPE(iterable)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
-                    {
-                        _PyErr_Clear(tstate);
-                        _PyErr_Format(tstate, PyExc_TypeError,
-                                  "Value after * must be an iterable, not %.200s",
-                                  Py_TYPE(iterable)->tp_name);
-                    }
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(Py_IsNone(none_val));
-                i = iterable_st;
-            }
-            // _POP_TOP
-            {
-                value = i;
-                window[1 + (oparg-1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LIST_EXTEND);
         }
-
         TARGET(LOAD_ATTR) {
-            int opcode = LOAD_ATTR;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow owner;
-            PyValue attr;
-            PyValue *self_or_null;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _SPECIALIZE_LOAD_ATTR
-            {
-                owner = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadAttr(owner, next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_ATTR
-            {
-                self_or_null = ((oparg&1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-                PyValue found_attr;
-                PyValue found_self = PyValue_NULL;
-                if (oparg & 1) {
-                    PyValue receiver = PyValue_DUP(owner);
-                    _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                    found_attr = found.value;
-                    if (found.status > 0) {
-                        found_self = receiver;
-                    }
-                    else {
-                        PyValue_CLOSE(receiver);
-                    }
-                }
-                else {
-                    found_attr = _PyValue_GetAttr(owner, name);
-                }
-                ir_own_B = IR_DETACH(ir_word, B, owner);
-                if (PyValue_IsNull(found_attr)) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                attr = found_attr;
-                if (oparg & 1) {
-                    self_or_null[0] = found_self;
-                }
-            }
-            IR_STORE_DST(ir_word, A, attr);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_ATTR);
         }
 
         TARGET(LOAD_ATTR_CLASS) {
@@ -11376,33 +13318,8 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(LOAD_BUILD_CLASS) {
-            int opcode = LOAD_BUILD_CLASS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_BUILD_CLASS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue bc;
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(BUILTINS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
-            if (found.status < 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (found.status == 0) {
-                _PyErr_SetString(tstate, PyExc_NameError,
-                                 "__build_class__ not found");
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            bc = found.value;
-            IR_STORE_DST(ir_word, A, bc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_BUILD_CLASS);
         }
 
         TARGET(LOAD_COMMON_CONSTANT) {
@@ -11595,137 +13512,14 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(LOAD_FROM_DICT_OR_DEREF) {
-            int opcode = LOAD_FROM_DICT_OR_DEREF;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValueBorrow class_dict_st;
-            PyValue value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            class_dict_st = IR_VIEW(IR_B(ir_word));
-            PyObject *name;
-            assert(PyValue_IsObject(class_dict_st));
-            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
-            ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
-            PyValue held_class_dict = IR_TAKEN(class_dict_st, ir_own_B);
-            assert(class_dict);
-            assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
-            name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            _PyStatusValue found = value_load_from_dict(tstate, class_dict, name);
-            if (found.status < 0) {
-                PyValue_CLOSE(held_class_dict);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue selected;
-            if (found.status == 0) {
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
-                selected = _PyCell_GetValue(cell);
-                if (PyValue_IsNull(selected)) {
-                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                    PyValue_CLOSE(held_class_dict);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            else {
-                selected = found.value;
-            }
-            PyValue_CLOSE(held_class_dict);
-            value = selected;
-            IR_STORE_DST(ir_word, A, value);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_FROM_DICT_OR_DEREF);
         }
-
         TARGET(LOAD_FROM_DICT_OR_GLOBALS) {
-            int opcode = LOAD_FROM_DICT_OR_GLOBALS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow mod_or_class_dict;
-            PyValue v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            mod_or_class_dict = IR_VIEW(IR_B(ir_word));
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            assert(PyValue_IsObject(mod_or_class_dict));
-            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
-            ir_own_B = IR_DETACH(ir_word, B, mod_or_class_dict);
-            PyValue held_namespace = IR_TAKEN(mod_or_class_dict, ir_own_B);
-            _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
-            PyValue_CLOSE(held_namespace);
-            if (found.status < 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (found.status == 0) {
-                v = value_load_global(GLOBALS(), BUILTINS(), name);
-                if (PyValue_IsNull(v)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            else {
-                v = found.value;
-            }
-            IR_STORE_DST(ir_word, A, v);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_FROM_DICT_OR_GLOBALS);
         }
-
         TARGET(LOAD_GLOBAL) {
-            int opcode = LOAD_GLOBAL;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *res;
-            // _SPECIALIZE_LOAD_GLOBAL
-            {
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_GLOBAL
-            {
-                res = &IR_SLOT(IR_A(ir_word));
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyFrame_WriteHome(frame, &res[0], value_load_global(GLOBALS(), BUILTINS(), name));
-                if (PyValue_IsNull(res[0])) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_GLOBAL);
         }
 
         TARGET(LOAD_GLOBAL_BUILTIN) {
@@ -11846,51 +13640,11 @@
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
         }
-
         TARGET(LOAD_LOCALS) {
-            int opcode = LOAD_LOCALS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_LOCALS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue locals;
-            PyObject *l = LOCALS();
-            if (l == NULL) {
-                _PyErr_SetString(tstate, PyExc_SystemError,
-                                 "no locals found");
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
-            IR_STORE_DST(ir_word, A, locals);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_LOCALS);
         }
-
         TARGET(LOAD_NAME) {
-            int opcode = LOAD_NAME;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_NAME);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue v;
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            v = _PyEval_LoadName(tstate, frame, name);
-            if (PyValue_IsNull(v)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            IR_STORE_DST(ir_word, A, v);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_NAME);
         }
 
         TARGET(LOAD_SMALL_INT) {
@@ -11935,169 +13689,11 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(LOAD_SPECIAL) {
-            int opcode = LOAD_SPECIAL;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_SPECIAL);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue self;
-            PyValue *method_and_self;
-            // _INSERT_NULL
-            {
-                self = window[0];
-                method_and_self = &window[0];
-                _PyFrame_WriteHome(frame, &method_and_self[1], self);
-                _PyFrame_WriteHome(frame, &method_and_self[0], PyValue_NULL);
-            }
-            // _LOAD_SPECIAL
-            {
-                method_and_self = &window[0];
-                PyObject *name = _Py_SpecialMethods[oparg].name;
-                int err = _PyObject_LookupSpecialMethod(frame, name, &method_and_self[0], &method_and_self[1]);
-                if (err <= 0) {
-                    if (err == 0) {
-                        PyTypeObject *owner_type = PyValue_TYPE(method_and_self[1]);
-                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, oparg)
-                        ? _Py_SpecialMethods[oparg].error_suggestion
-                    : _Py_SpecialMethods[oparg].error;
-                        assert(!_PyErr_Occurred(tstate));
-                        assert(errfmt != NULL);
-                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
-                    }
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_SPECIAL);
         }
-
         TARGET(LOAD_SUPER_ATTR) {
-            int opcode = LOAD_SUPER_ATTR;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_SUPER_ATTR);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            opcode = LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
-            // _SPECIALIZE_LOAD_SUPER_ATTR
-            {
-                class_st = window[1];
-                global_super_st = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                int load_method = oparg & 1;
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_SUPER_ATTR
-            {
-                self_st = window[2];
-                PyValueBorrow arg = oparg & 2
-                ? PyValue_Borrow(class_st)
-            : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    int err = _Py_call_instrumentation_2args(
-                        tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, global_super_st, arg);
-                    if (err) {
-                        PyValue tmp = self_st;
-                        self_st = PyValue_NULL;
-                        IR_SET_TEMP(window[2], self_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = class_st;
-                        class_st = PyValue_NULL;
-                        IR_SET_TEMP(window[1], class_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = global_super_st;
-                        global_super_st = PyValue_NULL;
-                        IR_SET_TEMP(window[0], global_super_st);
-                        PyValue_CLOSE(tmp);
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                }
-                PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    if (PyValue_IsNull(super)) {
-                        _Py_call_instrumentation_exc2(
-                            tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, global_super_st, arg);
-                    }
-                    else {
-                        int err = _Py_call_instrumentation_2args(
-                            tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, global_super_st, arg);
-                        if (err < 0) {
-                            PyValue_CLEAR(super);
-                        }
-                    }
-                }
-                PyValue tmp = self_st;
-                self_st = PyValue_NULL;
-                IR_SET_TEMP(window[2], self_st);
-                PyValue_CLOSE(tmp);
-                tmp = class_st;
-                class_st = PyValue_NULL;
-                IR_SET_TEMP(window[1], class_st);
-                PyValue_CLOSE(tmp);
-                tmp = global_super_st;
-                global_super_st = PyValue_NULL;
-                IR_SET_TEMP(window[0], global_super_st);
-                PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
-                if (PyValue_IsNull(super)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                attr = _PyValue_GetAttr(super, name);
-                IR_SET_TEMP(window[0], attr);
-                PyValue_CLOSE(super);
-                if (PyValue_IsNull(attr)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            // _PUSH_NULL_CONDITIONAL
-            {
-                null = &window[1];
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
-            }
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_LOAD_SUPER_ATTR);
         }
 
         TARGET(LOAD_SUPER_ATTR_ATTR) {
@@ -12251,69 +13847,11 @@
             IR_SET_TEMP(window[1], self_or_null);
             DISPATCH();
         }
-
         TARGET(MAKE_CELL) {
-            int opcode = MAKE_CELL;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MAKE_CELL);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
-            if (cell == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
-            PyValue_XCLOSE(tmp);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MAKE_CELL);
         }
-
         TARGET(MAKE_FUNCTION) {
-            int opcode = MAKE_FUNCTION;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MAKE_FUNCTION);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow codeobj_st;
-            PyValue func;
-            PyValueBorrow co;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _MAKE_FUNCTION
-            {
-                codeobj_st = IR_VIEW(IR_B(ir_word));
-                assert(PyValue_IsObject(codeobj_st));
-                PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
-                PyFunctionObject *func_obj = (PyFunctionObject *)
-                PyFunction_New(codeobj, GLOBALS());
-                if (func_obj == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                co = codeobj_st;
-                ir_own_B = IR_DETACH(ir_word, B, co);
-                _PyFunction_SetVersion(
-                                   func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-                func = PyValue_FromObjectSteal((PyObject *)func_obj);
-            }
-            // _POP_TOP
-            {
-                value = co;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, func);
-            _PyValue_XCLOSE_POINTER(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MAKE_FUNCTION);
         }
 
         TARGET(MAP_ADD) {
@@ -12353,164 +13891,20 @@
             }
             DISPATCH();
         }
-
         TARGET(MATCH_CLASS) {
-            int opcode = MATCH_CLASS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MATCH_CLASS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue subject;
-            PyValue type;
-            PyValue names;
-            PyValue attrs;
-            PyValue s;
-            PyValue tp;
-            PyValue n;
-            PyValue value;
-            // _MATCH_CLASS
-            {
-                names = window[2];
-                type = window[1];
-                subject = window[0];
-                assert(PyValue_IsObject(names));
-                assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
-                PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                    subject,
-                    type, oparg,
-                    PyValue_AsKnownObjectBorrow(names));
-                if (attrs_o) {
-                    assert(PyTuple_CheckExact(attrs_o));
-                    attrs = PyValue_FromObjectSteal(attrs_o);
-                }
-                else {
-                    if (_PyErr_Occurred(tstate)) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    attrs = PyValue_None;
-                }
-                s = subject;
-                tp = type;
-                n = names;
-            }
-            // _POP_TOP
-            {
-                value = n;
-                IR_SET_TEMP(window[0], attrs);
-                IR_SET_TEMP(window[1], s);
-                IR_SET_TEMP(window[2], tp);
-                _PyValue_XCLOSE_POINTER(value);
-            }
-            // _POP_TOP
-            {
-                value = tp;
-                window[2] = PyValue_NULL;
-                PyValue_XCLOSE(value);
-            }
-            // _POP_TOP
-            {
-                value = s;
-                window[1] = PyValue_NULL;
-                PyValue_XCLOSE(value);
-            }
-            IR_MOVE_TO_DST(ir_word, A, window[0]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MATCH_CLASS);
         }
-
         TARGET(MATCH_KEYS) {
-            int opcode = MATCH_KEYS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MATCH_KEYS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue subject;
-            PyValue keys;
-            PyValue values_or_none;
-            keys = IR_SLOT(IR_C(ir_word));
-            subject = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(subject));
-            assert(PyValue_IsObject(keys));
-            PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
-            if (values_or_none_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
-            IR_STORE_DST(ir_word, A, values_or_none);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MATCH_KEYS);
         }
-
         TARGET(MATCH_MAPPING) {
-            int opcode = MATCH_MAPPING;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MATCH_MAPPING);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue subject;
-            PyValue res;
-            subject = IR_SLOT(IR_B(ir_word));
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
-            res = match ? PyValue_True : PyValue_False;
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MATCH_MAPPING);
         }
-
         TARGET(MATCH_SEQUENCE) {
-            int opcode = MATCH_SEQUENCE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MATCH_SEQUENCE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue subject;
-            PyValue res;
-            subject = IR_SLOT(IR_B(ir_word));
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
-            res = match ? PyValue_True : PyValue_False;
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MATCH_SEQUENCE);
         }
-
         TARGET(MATERIALIZE_KWARGS) {
-            int opcode = MATERIALIZE_KWARGS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(MATERIALIZE_KWARGS);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            assert(frame->pending_kwargs == IR_NO_DST ||
-                   frame->pending_kwargs == oparg);
-            int err = _PyFrame_MaterializeKwargs(frame);
-            if (err < 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_MATERIALIZE_KWARGS);
         }
 
         TARGET(NOP) {
@@ -12523,26 +13917,8 @@
             INSTRUCTION_STATS(NOP);
             DISPATCH();
         }
-
         TARGET(POP_EXCEPT) {
-            int opcode = POP_EXCEPT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_EXCEPT);
-            PyValueBorrow exc_value;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            exc_value = IR_VIEW(IR_A(ir_word));
-            assert(PyValue_IsObject(exc_value));
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            ir_own_A = IR_DETACH(ir_word, A, exc_value);
-            Py_XSETREF(exc_info->exc_value,
-                       PyValue_IsNone(exc_value)
-                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN(exc_value, ir_own_A)));
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_POP_EXCEPT);
         }
 
         TARGET(POP_ITER) {
@@ -12568,60 +13944,8 @@
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
-
         TARGET(POP_JUMP_IF_FALSE) {
-            int opcode = POP_JUMP_IF_FALSE;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow value;
-            PyValue res;
-            PyValue cond;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            // _SPECIALIZE_POP_JUMP_IF
-            {
-                value = IR_VIEW(IR_A(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_PopJumpIf(value, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _TO_BOOL
-            {
-                int err = _PyValue_IsTrue(value);
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                if (err < 0) {
-                    PyValue_XCLOSE(ir_own_A);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = err ? PyValue_True : PyValue_False;
-            }
-            // _POP_JUMP_IF_FALSE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
-            }
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_POP_JUMP_IF_FALSE);
         }
 
         TARGET(POP_JUMP_IF_FALSE_ALWAYS_TRUE) {
@@ -13037,60 +14361,8 @@
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
-
         TARGET(POP_JUMP_IF_TRUE) {
-            int opcode = POP_JUMP_IF_TRUE;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow value;
-            PyValue res;
-            PyValue cond;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            // _SPECIALIZE_POP_JUMP_IF
-            {
-                value = IR_VIEW(IR_A(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_PopJumpIf(value, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _TO_BOOL
-            {
-                int err = _PyValue_IsTrue(value);
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                if (err < 0) {
-                    PyValue_XCLOSE(ir_own_A);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = err ? PyValue_True : PyValue_False;
-            }
-            // _POP_JUMP_IF_TRUE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
-            }
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_POP_JUMP_IF_TRUE);
         }
 
         TARGET(POP_JUMP_IF_TRUE_ALWAYS_TRUE) {
@@ -13440,119 +14712,14 @@
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
-
         TARGET(PUSH_EXC_INFO) {
-            int opcode = PUSH_EXC_INFO;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(PUSH_EXC_INFO);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
-            PyValue exc;
-            PyValue prev_exc;
-            PyValue new_exc;
-            exc = window[0];
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
-            }
-            else {
-                prev_exc = PyValue_None;
-            }
-            assert(PyValue_IsObject(exc));
-            assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
-            new_exc = exc;
-            IR_SET_TEMP(window[0], prev_exc);
-            IR_SET_TEMP(window[1], new_exc);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_PUSH_EXC_INFO);
         }
-
         TARGET(RAISE_VARARGS) {
-            int opcode = RAISE_VARARGS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(RAISE_VARARGS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue *args;
-            args = &window[0];
-            assert(oparg < 3);
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = NULL;
-            PyObject *cause = NULL;
-            if (oparg > 0) {
-                if (!PyValue_IsObject(args[0])) {
-                    _PyErr_SetString(tstate, PyExc_TypeError,
-                                     "exceptions must derive from BaseException");
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                exc = PyValue_AsKnownObjectBorrow(args[0]);
-            }
-            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
-            if (oparg == 2 && !cause_is_number) {
-                cause = PyValue_AsKnownObjectBorrow(args[1]);
-            }
-            Py_XINCREF(exc);
-            Py_XINCREF(cause);
-            PyValue tmp;
-            for (int _i = oparg; --_i >= 0;) {
-                tmp = args[_i];
-                args[_i] = PyValue_NULL;
-                PyValue_CLOSE(tmp);
-            }
-            IR_CLEAR_SLOTS(&window[0], oparg);
-            int err = do_raise(tstate, exc, cause, cause_is_number);
-            if (err) {
-                assert(oparg == 0);
-                monitor_reraise(tstate, frame, this_instr);
-                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
-            }
-            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            IR_RUN_OUTLINED(ir_run_RAISE_VARARGS);
         }
-
         TARGET(RERAISE) {
-            int opcode = RERAISE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(RERAISE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue *values;
-            PyValue exc_st;
-            exc_st = window[oparg];
-            values = &window[0];
-            assert(PyValue_IsObject(exc_st));
-            PyObject *exc = _PyValue_AsPyObjectStealPointer(exc_st);
-            assert(oparg >= 0 && oparg <= 2);
-            if (oparg) {
-                frame->instr_ptr = _PyFrame_InstrAt(frame, PyValue_UntagIndex(values[0]));
-            }
-            assert(exc && PyExceptionInstance_Check(exc));
-            window[oparg] = PyValue_NULL;
-            _PyErr_SetRaisedException(tstate, exc);
-            monitor_reraise(tstate, frame, this_instr);
-            PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
+            IR_RUN_OUTLINED(ir_run_RERAISE);
         }
 
         TARGET(RESERVED) {
@@ -13741,117 +14908,8 @@
                 DISPATCH();
             }
         }
-
         TARGET(SEND) {
-            int opcode = SEND;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(SEND);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
-            int oparg = IR_DS(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue receiver;
-            PyValue null_or_index;
-            PyValue v;
-            PyValue retval;
-            // _SPECIALIZE_SEND
-            {
-                receiver = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_Send(receiver, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(SEND);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _SEND
-            {
-                v = window[2];
-                null_or_index = window[1];
-                assert(PyValue_IsObject(receiver));
-                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
-                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-                if (!IS_PEP523_HOOKED(tstate) &&
-                    (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
-                    !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
-                    gen_try_set_executing((PyGenObject *)receiver_o))
-                {
-                    PyGenObject *gen = (PyGenObject *)receiver_o;{
-                        _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
-                        PyValue ir_resume_input = PyValue_None;
-                        if (_PY_IR_SEND == _PY_IR_SEND) {
-                            ir_resume_input = IR_SLOT(IR_B(ir_word) + 2);
-                            IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;
-                        }
-                        frame->return_slot = (uint16_t)(_PY_IR_SEND == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word));
-                        frame->return_pc = next_instr;
-                        ir_resumed_frame->previous = frame;
-                        gen->gi_exc_state.previous_item = tstate->exc_info;
-                        tstate->exc_info = &gen->gi_exc_state;
-                        frame = tstate->current_frame = ir_resumed_frame;
-                        if (_Py_EnterRecursivePy(tstate)) {
-                            PyValue_XCLOSE(ir_resume_input);
-                            PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
-                        }
-                        _PyFrame_SetReturnValue(frame, ir_resume_input);
-                        LOAD_IP(0);
-                        IR_SKIP_RESUME();
-                        DTRACE_FUNCTION_ENTRY();
-                        LLTRACE_RESUME_FRAME();
-                        DISPATCH();
-                    }
-                }
-                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
-                    null_or_index = window[1];
-                    PyValue item = next.value;
-                    int found = next.status;
-                    if (found <= 0) {
-                        if (found < 0) {
-                            IR_SET_TEMP(window[1], null_or_index);
-                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                        }
-                        PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
-                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                            next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                            DISPATCH();
-                        }
-                    }
-                    retval = item;
-                }
-                else {
-                    _PyStatusValue sent = _PyValue_Send(receiver_o, v);
-                    if (sent.status == PYGEN_ERROR) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    if (sent.status == PYGEN_RETURN) {
-                        PyValue completed = sent.value;{
-                            _PyIRStepResult ir_step_result = _PyEval_CompleteSend(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), next_instr + oparg, completed);
-                            next_instr = ir_step_result.next;
-                            if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
-                            DISPATCH();
-                        }
-                    }
-                    window[2] = PyValue_NULL;
-                    PyValue_CLOSE(v);
-                    retval = sent.value;
-                }
-            }
-            IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], retval);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_SEND);
         }
 
         TARGET(SEND_ASYNC_GEN) {
@@ -14395,45 +15453,8 @@
             window[2] = PyValue_NULL;
             IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, retval);
         }
-
         TARGET(SETUP_ANNOTATIONS) {
-            int opcode = SETUP_ANNOTATIONS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(SETUP_ANNOTATIONS);
-            if (LOCALS() == NULL) {
-                _PyErr_Format(tstate, PyExc_SystemError,
-                              "no locals found when setting up annotations");
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(LOCALS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
-            if (found.status < 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            int err;
-            if (found.status == 0) {
-                PyObject *ann_dict;
-                ann_dict = PyDict_New();
-                if (ann_dict == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
-                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
-                                       PyValue_FromObjectBorrow(ann_dict));
-                Py_DECREF(ann_dict);
-                if (err) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            else {
-                PyValue_CLOSE(found.value);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_SETUP_ANNOTATIONS);
         }
 
         TARGET(SET_ADD) {
@@ -14464,139 +15485,14 @@
             }
             DISPATCH();
         }
-
         TARGET(SET_FUNCTION_ATTRIBUTE) {
-            int opcode = SET_FUNCTION_ATTRIBUTE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow attr_st;
-            PyValueBorrow func_in;
-            PyValue func_out;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            func_in = IR_VIEW(IR_C(ir_word));
-            attr_st = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(func_in));
-            assert(PyValue_IsObject(attr_st));
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
-            ir_own_B = IR_DETACH(ir_word, B, attr_st);
-            PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN(attr_st, ir_own_B));
-            ir_own_C = IR_DETACH(ir_word, C, func_in);
-            func_out = IR_TAKEN(func_in, ir_own_C);
-            assert(PyFunction_Check(func));
-            size_t offset = _Py_FunctionAttributeOffsets[oparg];
-            assert(offset != 0);
-            PyObject **ptr = (PyObject **)(((char *)func) + offset);
-            assert(*ptr == NULL);
-            *ptr = attr;
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), func_out);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_SET_FUNCTION_ATTRIBUTE);
         }
-
         TARGET(SET_UPDATE) {
-            int opcode = SET_UPDATE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(SET_UPDATE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue set;
-            PyValue iterable;
-            PyValue i;
-            PyValue value;
-            // _SET_UPDATE
-            {
-                iterable = window[1 + (oparg-1)];
-                set = window[0];
-                assert(PyValue_IsObject(set));
-                if (!PyValue_IsObject(iterable)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%.200s' object is not iterable",
-                              PyValue_TYPE(iterable)->tp_name);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(PyValue_IsObject(iterable));
-                int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
-                                    PyValue_AsKnownObjectBorrow(iterable));
-                if (err < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                i = iterable;
-            }
-            // _POP_TOP
-            {
-                value = i;
-                window[1 + (oparg-1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_SET_UPDATE);
         }
-
         TARGET(STORE_ATTR) {
-            int opcode = STORE_ATTR;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow v;
-            PyValueBorrow owner;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            // _SPECIALIZE_STORE_ATTR
-            {
-                owner = IR_VIEW(IR_A(ir_word));
-                v = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyValue_IsNull(v)) {
-                        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                        next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, next_instr, name);
-                        DISPATCH_SAME_OPARG();
-                    }
-                }
-                OPCODE_DEFERRED_INC(STORE_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _STORE_ATTR
-            {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                int err = _PyValue_SetAttr(owner, name, v);
-                ir_own_A = IR_DETACH(ir_word, A, owner);
-                ir_own_B = IR_DETACH(ir_word, B, v);
-                if (err) {
-                    PyValue_XCLOSE(ir_own_A);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            PyValue_XCLOSE(ir_own_A);
-            PyValue_XCLOSE(ir_own_B);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_STORE_ATTR);
         }
 
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
@@ -15039,175 +15935,17 @@
             }
             DISPATCH();
         }
-
         TARGET(STORE_GLOBAL) {
-            int opcode = STORE_GLOBAL;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_GLOBAL);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow v;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            v = IR_VIEW(IR_A(ir_word));
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            int err;
-            if (PyValue_IsNull(v)) {
-                ir_own_A = IR_DETACH(ir_word, A, v);
-                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
-                if (err == 0) {
-                    err = -1;
-                    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
-                        NAME_ERROR_MSG, name);
-                }
-            }
-            else {
-                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
-                ir_own_A = IR_DETACH(ir_word, A, v);
-                (void)(ir_own_A);
-            }
-            if (err < 0) {
-                PyValue_XCLOSE(ir_own_A);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_STORE_GLOBAL);
         }
-
         TARGET(STORE_NAME) {
-            int opcode = STORE_NAME;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_NAME);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow v;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            v = IR_VIEW(IR_A(ir_word));
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *ns = LOCALS();
-            int error = _PyEval_StoreName(tstate, v, name, ns);
-            ir_own_A = IR_DETACH(ir_word, A, v);
-            (void)(ir_own_A);
-            if (error) {
-                PyValue_XCLOSE(ir_own_A);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_STORE_NAME);
         }
-
         TARGET(STORE_SLICE) {
-            int opcode = STORE_SLICE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_SLICE);
-            PyValueBorrow v;
-            PyValueBorrow container;
-            PyValueBorrow start;
-            PyValueBorrow stop;
-            PyValue ir_own_D = PyValue_NULL;
-            (void)ir_own_D;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_STORE_SLICE
-            {
-                #if ENABLE_SPECIALIZATION
-                OPCODE_DEFERRED_INC(STORE_SLICE);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _STORE_SLICE
-            {
-                stop = IR_VIEW(IR_C(ir_word));
-                start = IR_VIEW(IR_B(ir_word));
-                container = IR_VIEW(IR_A(ir_word));
-                v = IR_VIEW(IR_D(ir_word));
-                int err = _PyEval_StoreSlice(v, container, start, stop);
-                ir_own_C = IR_DETACH(ir_word, C, stop);
-                ir_own_B = IR_DETACH(ir_word, B, start);
-                ir_own_A = IR_DETACH(ir_word, A, container);
-                ir_own_D = IR_DETACH(ir_word, D, v);
-                if (err) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PyValue_XCLOSE(ir_own_A);
-                    PyValue_XCLOSE(ir_own_D);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_own_A);
-            PyValue_XCLOSE(ir_own_D);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_STORE_SLICE);
         }
-
         TARGET(STORE_SUBSCR) {
-            int opcode = STORE_SUBSCR;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_SUBSCR);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_D(ir_word));
-            PyValueBorrow container;
-            PyValueBorrow sub;
-            PyValueBorrow v;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _SPECIALIZE_STORE_SUBSCR
-            {
-                sub = IR_VIEW(IR_B(ir_word));
-                container = IR_VIEW(IR_A(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_StoreSubscr(container, sub, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(STORE_SUBSCR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _STORE_SUBSCR
-            {
-                v = IR_VIEW(IR_C(ir_word));
-                int err = _PyValue_SetItem(container, sub, v);
-                ir_own_B = IR_DETACH(ir_word, B, sub);
-                ir_own_A = IR_DETACH(ir_word, A, container);
-                ir_own_C = IR_DETACH(ir_word, C, v);
-                if (err) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PyValue_XCLOSE(ir_own_A);
-                    PyValue_XCLOSE(ir_own_C);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_own_A);
-            PyValue_XCLOSE(ir_own_C);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_STORE_SUBSCR);
         }
 
         TARGET(STORE_SUBSCR_DICT) {
@@ -15399,44 +16137,8 @@
             IR_SET_TEMP(window[1 + (oparg-2)], top);
             DISPATCH();
         }
-
         TARGET(TO_BOOL) {
-            int opcode = TO_BOOL;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(TO_BOOL);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
-            PyValue value;
-            PyValue res;
-            // _SPECIALIZE_TO_BOOL
-            {
-                value = IR_SLOT(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_ToBool(value, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _TO_BOOL
-            {
-                int err = _PyValue_IsTrue(value);
-                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
-                PyValue_CLOSE(value);
-                if (err < 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = err ? PyValue_True : PyValue_False;
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_TO_BOOL);
         }
 
         TARGET(TO_BOOL_ALWAYS_TRUE) {
@@ -15771,101 +16473,11 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(UNPACK_EX) {
-            int opcode = UNPACK_EX;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_EX);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue seq;
-            PyValue *top;
-            seq = window[0];
-            top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                window[0] = PyValue_NULL;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            assert(PyValue_IsObject(seq));
-            PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
-            window[0] = PyValue_NULL;
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            if (res == 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, B)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
-                IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_UNPACK_EX);
         }
-
         TARGET(UNPACK_SEQUENCE) {
-            int opcode = UNPACK_SEQUENCE;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue seq;
-            PyValue *top;
-            // _SPECIALIZE_UNPACK_SEQUENCE
-            {
-                seq = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                (void)seq;
-            }
-            // _UNPACK_SEQUENCE
-            {
-                top = &window[oparg];
-                if (!PyValue_IsObject(seq)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                    window[0] = PyValue_NULL;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(PyValue_IsObject(seq));
-                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
-                window[0] = PyValue_NULL;
-                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-                if (res == 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
-            }
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_UNPACK_SEQUENCE);
         }
 
         TARGET(UNPACK_SEQUENCE_LIST) {
@@ -16050,54 +16662,8 @@
             }
             DISPATCH();
         }
-
         TARGET(WITH_EXCEPT_START) {
-            int opcode = WITH_EXCEPT_START;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(WITH_EXCEPT_START);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            PyValue exit_func;
-            PyValue exit_self;
-            PyValue lasti;
-            PyValue val;
-            PyValue res;
-            val = window[4];
-            lasti = window[2];
-            exit_self = window[1];
-            exit_func = window[0];
-            PyObject *exc, *tb;
-            assert(PyValue_IsObject(val));
-            assert(PyValue_IsObject(exit_func));
-            assert(PyValue_IsObjectOrNull(exit_self));
-            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
-            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
-            assert(val_o && PyExceptionInstance_Check(val_o));
-            exc = PyExceptionInstance_Class(val_o);
-            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
-            if (tb == NULL) {
-                tb = Py_None;
-            }
-            assert(PyValue_IsTaggedIndex(lasti));
-            (void)lasti;
-            PyObject *res_o = with_exit_call(exit_func_o,
-                PyValue_AsKnownObjectBorrow(exit_self),
-                !PyValue_IsNull(exit_self), exc, val_o, tb);
-            Py_XDECREF(original_tb);
-            if (res_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            res = PyValue_FromObjectSteal(res_o);
-            IR_SET_TEMP(window[5], res);
-            IR_MOVE_TO_DST(ir_word, A, window[5]);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            IR_RUN_OUTLINED(ir_run_WITH_EXCEPT_START);
         }
 
         TARGET(YIELD_DELEGATED) {
@@ -16265,4 +16831,26 @@
 PROCESS_ERROR_AT(RAISE, 0, next_instr);
         }
 
+
+        LABEL(outlined_exit)
+        {
+            _PyEvalActivation *activation = IR_ACTIVATION();
+            switch (activation->exit_kind) {
+            case _PyIR_EXIT_ERROR:
+                ir_error_origin = activation->exit_next;
+                ir_error_entry = activation->exit_entry;
+                goto LABEL_process_error;
+            case _PyIR_EXIT_START_FRAME:
+                goto LABEL_start_frame;
+            case _PyIR_EXIT_DEOPT:
+                next_instr = activation->exit_next;
+                switch (activation->exit_target) {
+                case IR_DEOPT_TARGET_BINARY_OP:
+                    ir_binary_op = (int)activation->exit_entry;
+                    goto LABEL_binary_op;
+                }
+            }
+            Py_UNREACHABLE();
+        }
 /* END LABELS */
+#endif  // IR_OUTLINED_FUNCTIONS

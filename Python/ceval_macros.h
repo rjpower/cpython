@@ -196,6 +196,22 @@ do { \
         DISPATCH_GOTO(); \
     }
 
+/* The handler of an outlined instruction (Tools/cases_generator/ir_generator.py,
+ * rule 4): its body is the function FN, which returns the frame and next word
+ * to run, or no word for an exit that the activation describes.  The handler
+ * assigns the state and dispatches, as a helper of rule 13 requires. */
+#define IR_RUN_OUTLINED(FN) \
+    do { \
+        _PyIRTransfer ir_transfer = FN(tstate, frame, next_instr, ir_word); \
+        frame = ir_transfer.frame; \
+        next_instr = ir_transfer.next; \
+        if (next_instr == NULL) { \
+            goto LABEL_outlined_exit; \
+        } \
+        int opcode; \
+        DISPATCH(); \
+    } while (0)
+
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \

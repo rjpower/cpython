@@ -72,6 +72,7 @@ Invariants:
 """
 
 import argparse
+import io
 import ir_numbers
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
@@ -6891,12 +6892,40 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                                               key=lambda event: (event.dst, event.src)))
 
 
+# What an outlined body cannot contain: a jump into the evaluator (other than
+# the call fallback inside the body), a generator transfer, or state that only
+# the evaluator has.
+OUTLINE_BLOCKERS = re.compile(
+    r"\bgoto\s+(?!call_transaction_fallback_)|IR_GEN_|IR_TRY_NATIVE_YIELD|"
+    r"JUMP_TO_LABEL|lastopcode|_targets\b|ir_gen_remaining|ir_binary_op")
+DEOPT_TARGET = re.compile(r"\bJUMP_TO_PREDICTED\((\w+)\)")
+
+
+def outlined_function(name: str, text: str) -> str:
+    """The function that runs the body of handler `name`, emitted as a
+    handler.  It takes the evaluator's state that handlers use, and its
+    exits are returns (DISPATCH, PROCESS_ERROR_AT and the others, which
+    Python/ceval.c defines for it)."""
+    header = (f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{name}(\n"
+              "    PyThreadState *tstate, _PyInterpreterFrame *frame,\n"
+              "    _PyInstr *next_instr, _PyIRWord ir_word)\n{")
+    marker = f"TARGET({name}) {{"
+    assert marker in text
+    return text.replace(marker, header, 1)
+
+
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                       outfile: TextIO, lines: bool,
-                      checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None) -> None:
+                      checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None
+                      ) -> tuple[list[str], set[str]]:
+    """Write the handlers to outfile.  An outlined handler is a call of its
+    function, which is returned with the heads that its deoptimisations go
+    to."""
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
+    functions: list[str] = []
+    deopt_heads: set[str] = set()
     # The generic handlers of BINARY_OP differ only in the operation.  Each
     # sets it and enters the one body, which handles any operation, so that
     # the body is in the evaluator once, not once per operation.
@@ -6919,13 +6948,71 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
-        generate_handler(name, inst, formats[name], emitter, out)
+        # The generic path of an adaptive family runs only until a
+        # specialisation replaces it, or if it cannot
+        generic_head = (name in analysis.families
+                        and any(isinstance(part, Uop) and
+                                "specializing" in part.annotations
+                                for part in inst.parts))
+        outlined = ((inst.outlined or inst.properties.outlined or generic_head)
+                    and not emitter.shared_binary_op)
+        text = None
+        if outlined:
+            buffer = io.StringIO()
+            body = CWriter(buffer, 2, lines)
+            emitter.out = body
+            generate_handler(name, inst, formats[name], emitter, body)
+            emitter.out = out
+            text = buffer.getvalue()
+            blocker = OUTLINE_BLOCKERS.search(text)
+            if blocker is not None and (inst.outlined or inst.properties.outlined):
+                raise analysis_error(
+                    f"{name} is outlined but its body has `{blocker.group(0)}`",
+                    inst.where)
+            if blocker is not None:
+                # A generic head whose body needs the evaluator stays in it
+                text = None
+        if text is not None:
+            deopt_heads.update(DEOPT_TARGET.findall(text))
+            functions.append(outlined_function(name, text))
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
+            out.emit("}\n")
+        else:
+            generate_handler(name, inst, formats[name], emitter, out)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
         emitter.shared_binary_op = False
+    return functions, deopt_heads
+
+
+def outlined_exit_label(deopt_heads: set[str]) -> str:
+    """The label that an outlined handler's stub goes to when the function
+    returned no word: the activation says why"""
+    lines = ["\n        LABEL(outlined_exit)\n        {\n",
+             "            _PyEvalActivation *activation = IR_ACTIVATION();\n",
+             "            switch (activation->exit_kind) {\n",
+             "            case _PyIR_EXIT_ERROR:\n",
+             "                ir_error_origin = activation->exit_next;\n",
+             "                ir_error_entry = activation->exit_entry;\n",
+             "                goto LABEL_process_error;\n",
+             "            case _PyIR_EXIT_START_FRAME:\n",
+             "                goto LABEL_start_frame;\n",
+             "            case _PyIR_EXIT_DEOPT:\n",
+             "                next_instr = activation->exit_next;\n",
+             "                switch (activation->exit_target) {\n",
+             "                case IR_DEOPT_TARGET_BINARY_OP:\n",
+             "                    ir_binary_op = (int)activation->exit_entry;\n",
+             "                    goto LABEL_binary_op;\n"]
+    for head in sorted(deopt_heads):
+        lines.append(f"                case IR_DEOPT_TARGET_{head}:\n")
+        lines.append(f"                    goto TARGET_{head};\n")
+    lines += ["                }\n", "            }\n",
+              "            Py_UNREACHABLE();\n", "        }\n"]
+    return "".join(lines)
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
@@ -8284,10 +8371,22 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     checkpoints = {}
     analyze_handlers(analysis, formats, checkpoints=checkpoints)
     write_header(__file__, filenames, outfile)
+    cases = io.StringIO()
+    functions, deopt_heads = generate_ir_cases(
+        analysis, formats, cases, lines, checkpoints)
+    # The file is included twice by Python/ceval.c: at file scope for the
+    # functions of the outlined handlers, and in ir_evaluate() for the rest
+    outfile.write("\n#ifdef IR_OUTLINED_FUNCTIONS\n")
+    outfile.write("enum {\n    IR_DEOPT_TARGET_BINARY_OP,\n")
+    for head in sorted(deopt_heads):
+        outfile.write(f"    IR_DEOPT_TARGET_{head},\n")
+    outfile.write("};\n")
+    outfile.writelines(functions)
+    outfile.write("#else  // IR_OUTLINED_FUNCTIONS\n")
     outfile.write(f"""
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, formats, outfile, lines, checkpoints)
+    outfile.write(cases.getvalue())
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
         {LABEL_START_MARKER}
@@ -8295,7 +8394,9 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     generate_ir_labels(analysis, emitter)
+    outfile.write(outlined_exit_label(deopt_heads))
     outfile.write(f"{LABEL_END_MARKER}\n")
+    outfile.write("#endif  // IR_OUTLINED_FUNCTIONS\n")
 
 
 def num_handlers(analysis: Analysis) -> int:

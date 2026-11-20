@@ -237,6 +237,7 @@ annotations = {
     "no_fold",
     "returns",
     "ir_only",
+    "outlined",
 }
 
 __all__ = []

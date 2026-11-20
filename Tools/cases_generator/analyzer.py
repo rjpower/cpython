@@ -38,6 +38,9 @@ class Properties:
     needs_prev: bool = False
     no_save_ip: bool = False
     inline_ok: bool = False
+    # Annotated `outlined`: the handler's body runs in a function of its own,
+    # see ir_generator.py.
+    outlined: bool = False
     # The IR binds this instruction in window style (see ir_generator.py).
     window: bool = False
     # Annotated `no_fold`: outputs may alias a borrowed input, so the IR
@@ -87,6 +90,7 @@ class Properties:
             no_save_ip=all(p.no_save_ip for p in properties),
             inline_ok=all(p.inline_ok for p in properties),
             window=any(p.window for p in properties),
+            outlined=any(p.outlined for p in properties),
             no_fold=any(p.no_fold for p in properties),
             switches_frame=any(p.switches_frame for p in properties),
             returns=any(p.returns for p in properties),
@@ -287,6 +291,8 @@ class Instruction:
     is_target: bool = False
     family: Optional["Family"] = None
     opcode: int = -1
+    # Annotated `outlined` as a macro; an `outlined inst` is in the properties
+    outlined: bool = False
 
     @property
     def properties(self) -> Properties:
@@ -1060,6 +1066,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
     returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
+    outlined = False if isinstance(op, parser.LabelDef) else "outlined" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
         escapes=escapes,
@@ -1094,6 +1101,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
         window=window,
+        outlined=outlined,
         no_fold=no_fold,
         switches_frame=switches_frame(op),
         returns=returns,
@@ -1245,6 +1253,7 @@ def add_macro(
                 assert False
     assert parts
     add_instruction(macro.first_token, macro.name, parts, instructions)
+    instructions[macro.name].outlined = "outlined" in macro.annotations
 
 
 def add_family(

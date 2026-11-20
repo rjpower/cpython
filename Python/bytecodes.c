@@ -145,7 +145,7 @@ dummy_func(
         pure inst(NOP, (--)) {
         }
 
-        inst(MATERIALIZE_KWARGS, (--)) {
+        outlined inst(MATERIALIZE_KWARGS, (--)) {
             assert(frame->pending_kwargs == IR_NO_DST ||
                    frame->pending_kwargs == oparg);
             int err = _PyFrame_MaterializeKwargs(frame);
@@ -1031,7 +1031,7 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
+        outlined macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
 
         specializing op(_SPECIALIZE_STORE_SLICE, (v, container, start, stop -- v, container, start, stop)) {
             // Placeholder until we implement STORE_SLICE specialization
@@ -1048,7 +1048,7 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        macro(STORE_SLICE) = _SPECIALIZE_STORE_SLICE + _STORE_SLICE;
+        outlined macro(STORE_SLICE) = _SPECIALIZE_STORE_SLICE + _STORE_SLICE;
 
         inline_ok op(_GUARD_ELEMENT_INT, (value -- value)) {
             IR_GUARD_INLINE_INT(value);
@@ -1312,7 +1312,7 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        inst(DELETE_SUBSCR, (container, sub --)) {
+        outlined inst(DELETE_SUBSCR, (container, sub --)) {
             /* del container[sub] */
             int err = _PyValue_DelItem(container, sub);
             DECREF_INPUTS();
@@ -1338,9 +1338,9 @@ dummy_func(
             DEAD(value);
         }
 
-        macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
+        outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
+        outlined inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken before the calls, which can run code
             PyValue held2 = TAKE(value2_st);
@@ -1373,7 +1373,7 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
+        outlined tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
             _PyValue_RecheckWindow(args, oparg);
             PyObject *exc = NULL;
@@ -1496,7 +1496,7 @@ dummy_func(
             _RETURN_VALUE_EVENT +
             _RETURN_VALUE_EMPTY;
 
-        inst(GET_AITER, (obj -- iter)) {
+        outlined inst(GET_AITER, (obj -- iter)) {
             unaryfunc getter = NULL;
             PyObject *iter_o;
             // A number has no __aiter__
@@ -1542,7 +1542,7 @@ dummy_func(
             iter = PyValue_FromObjectSteal(iter_o);
         }
 
-        inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
+        outlined inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
             // GET_AITER accepted it: it has __anext__
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
@@ -1552,7 +1552,7 @@ dummy_func(
             awaitable = PyValue_FromObjectSteal(awaitable_o);
         }
 
-        inst(GET_AWAITABLE, (iterable -- iter)) {
+        outlined inst(GET_AWAITABLE, (iterable -- iter)) {
             if (coro_awaitable_can_transfer(iterable)) {
                 iter = TAKE(iterable);
             }
@@ -1782,7 +1782,7 @@ dummy_func(
         macro(INSTRUMENTED_YIELD_DELEGATED) =
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
-        inst(POP_EXCEPT, (exc_value -- )) {
+        outlined inst(POP_EXCEPT, (exc_value -- )) {
             assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             Py_XSETREF(exc_info->exc_value,
@@ -1790,7 +1790,7 @@ dummy_func(
                     ? NULL : PyValue_AsKnownObjectSteal(exc_value));
         }
 
-        tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
+        outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
             assert(PyValue_IsObject(exc_st));
             PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
 
@@ -1832,7 +1832,7 @@ dummy_func(
             _MONITOR_END_ASYNC_FOR +
             _END_ASYNC_FOR;
 
-        macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
+        outlined macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
 
         tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
             assert(PyValue_IsObject(exc_value_st));
@@ -1854,7 +1854,7 @@ dummy_func(
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
         }
 
-        inst(LOAD_BUILD_CLASS, ( -- bc)) {
+        outlined inst(LOAD_BUILD_CLASS, ( -- bc)) {
             _PyStatusValue found = _PyValue_GetOptionalItem(
                 PyValue_FromObjectBorrow(BUILTINS()),
                 PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
@@ -1867,7 +1867,7 @@ dummy_func(
             bc = found.value;
         }
 
-        inst(STORE_NAME, (v -- )) {
+        outlined inst(STORE_NAME, (v -- )) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);
@@ -1961,7 +1961,7 @@ dummy_func(
             DECREF_INPUTS();
         }
 
-        window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
+        outlined window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
             // A number is not iterable
             if (!PyValue_IsObject(seq)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2009,7 +2009,7 @@ dummy_func(
 
         macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
-        inst(STORE_GLOBAL, (v --)) {
+        outlined inst(STORE_GLOBAL, (v --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
@@ -2028,7 +2028,7 @@ dummy_func(
             ERROR_IF(err < 0);
         }
 
-        inst(LOAD_LOCALS, ( -- locals)) {
+        outlined inst(LOAD_LOCALS, ( -- locals)) {
             PyObject *l = LOCALS();
             if (l == NULL) {
                 _PyErr_SetString(tstate, PyExc_SystemError,
@@ -2038,7 +2038,7 @@ dummy_func(
             locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
         }
 
-        inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
+        outlined inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
@@ -2056,7 +2056,7 @@ dummy_func(
             }
         }
 
-        inst(LOAD_NAME, (-- v)) {
+        outlined inst(LOAD_NAME, (-- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             v = _PyEval_LoadName(tstate, frame, name);
             ERROR_IF(PyValue_IsNull(v));
@@ -2156,7 +2156,7 @@ dummy_func(
             _LOAD_GLOBAL_BUILTINS +
             _NULL_SLOT_CONDITIONAL;
 
-        inst(DELETE_FAST, (--)) {
+        outlined inst(DELETE_FAST, (--)) {
             PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(v)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
@@ -2170,7 +2170,7 @@ dummy_func(
             PyValue_XCLOSE(tmp);
         }
 
-        inst(MAKE_CELL, (--)) {
+        outlined inst(MAKE_CELL, (--)) {
             // "initial" is probably NULL but not if it's an arg (or set
             // via the f_locals proxy before MAKE_CELL has run).
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
@@ -2182,7 +2182,7 @@ dummy_func(
             PyValue_XCLOSE(tmp);
         }
 
-        inst(DELETE_DEREF, (--)) {
+        outlined inst(DELETE_DEREF, (--)) {
             PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             // Can't use ERROR_IF here.
             // Fortunately we don't need its superpower.
@@ -2194,7 +2194,7 @@ dummy_func(
             PyValue_CLOSE(old);
         }
 
-        inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
+        outlined inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
             PyObject *name;
             assert(PyValue_IsObject(class_dict_st));
             PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
@@ -2242,7 +2242,7 @@ dummy_func(
             _PyCell_SetValue(cell, owned);
         }
 
-        inst(COPY_FREE_VARS, (--)) {
+        outlined inst(COPY_FREE_VARS, (--)) {
             /* Copy closure variables to free variables */
             PyCodeObject *co = _PyFrame_GetCode(frame);
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
@@ -2254,14 +2254,14 @@ dummy_func(
             }
         }
 
-        inst(BUILD_STRING, (pieces[oparg] -- str)) {
+        outlined inst(BUILD_STRING, (pieces[oparg] -- str)) {
             PyObject *str_o = IR_BUILD_STRING(pieces);
             DEAD(pieces);
             ERROR_IF(str_o == NULL);
             str = PyValue_FromObjectSteal(str_o);
         }
 
-        inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
+        outlined inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
             assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
@@ -2285,7 +2285,7 @@ dummy_func(
             interpolation = PyValue_FromObjectSteal(interpolation_o);
         }
 
-        inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
+        outlined inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
             assert(PyValue_IsObject(strings));
             assert(PyValue_IsObject(interpolations));
             PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
@@ -2346,7 +2346,7 @@ dummy_func(
             DEAD(iterable_st);
         }
 
-        macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
+        outlined macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
 
         op(_SET_UPDATE, (set, unused[oparg-1], iterable -- set, unused[oparg-1], i)) {
             assert(PyValue_IsObject(set));
@@ -2367,9 +2367,9 @@ dummy_func(
             DEAD(iterable);
         }
 
-        macro(SET_UPDATE) = _SET_UPDATE + POP_TOP;
+        outlined macro(SET_UPDATE) = _SET_UPDATE + POP_TOP;
 
-        inst(BUILD_SET, (values[oparg] -- set)) {
+        outlined inst(BUILD_SET, (values[oparg] -- set)) {
             PyObject *set_o = PySet_New(NULL);
             if (set_o == NULL) {
                 DECREF_INPUTS();
@@ -2397,7 +2397,7 @@ dummy_func(
             set = PyValue_FromObjectSteal(set_o);
         }
 
-        inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
+        outlined inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
             PyObject *map_o = IR_BUILD_MAP(values);
             DEAD(values);
             int failed = map_o == NULL;
@@ -2406,7 +2406,7 @@ dummy_func(
             ERROR_IF(failed);
         }
 
-        inst(SETUP_ANNOTATIONS, (--)) {
+        outlined inst(SETUP_ANNOTATIONS, (--)) {
             if (LOCALS() == NULL) {
                 _PyErr_Format(tstate, PyExc_SystemError,
                               "no locals found when setting up annotations");
@@ -2472,7 +2472,7 @@ dummy_func(
             DEAD(update);
         }
 
-        macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
+        outlined macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
 
         op(_DICT_MERGE, (callable, unused, unused, dict, unused[oparg - 1], update -- callable, unused, unused, dict, unused[oparg - 1], u)) {
             assert(PyValue_IsObject(dict));
@@ -2497,7 +2497,7 @@ dummy_func(
             DEAD(update);
         }
 
-        macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
+        outlined macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
 
         inline_ok inst(MAP_ADD, (dict_st, unused[oparg - 1], key, value -- dict_st, unused[oparg - 1])) {
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
@@ -3390,7 +3390,7 @@ dummy_func(
         macro(INSTRUMENTED_IS_OP_JUMP) =
             _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
 
-        inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
+        outlined inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             // Taken before the check, which can run code
@@ -3420,7 +3420,7 @@ dummy_func(
             match = PyValue_FromObjectSteal(match_o);
         }
 
-        inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
+        outlined inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
             assert(PyValue_IsObject(left));
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             // Taken before the check, which can run code
@@ -3440,7 +3440,7 @@ dummy_func(
             b = res ? PyValue_True : PyValue_False;
         }
 
-        inst(IMPORT_NAME, (level, fromlist -- res)) {
+        outlined inst(IMPORT_NAME, (level, fromlist -- res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             assert(PyValue_IsObject(fromlist));
@@ -3468,7 +3468,7 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        inst(IMPORT_FROM, (from -- from, res)) {
+        outlined inst(IMPORT_FROM, (from -- from, res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             // The module may be a number, if __import__ returned one
             PyObject *from_o = PyValue_ObjectOrNull(from);
@@ -3665,7 +3665,7 @@ dummy_func(
             JUMPTO(oparg);
         }
 
-        inst(GET_LEN, (obj -- obj, len)) {
+        outlined inst(GET_LEN, (obj -- obj, len)) {
             // PUSH(len(TOS))
             Py_ssize_t len_i = _PyValue_Size(obj);
             ERROR_IF(len_i < 0);
@@ -3699,19 +3699,19 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        macro(MATCH_CLASS) = _MATCH_CLASS + POP_TOP + POP_TOP + POP_TOP;
+        outlined macro(MATCH_CLASS) = _MATCH_CLASS + POP_TOP + POP_TOP + POP_TOP;
 
-        inst(MATCH_MAPPING, (subject -- subject, res)) {
+        outlined inst(MATCH_MAPPING, (subject -- subject, res)) {
             int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
             res = match ? PyValue_True : PyValue_False;
         }
 
-        inst(MATCH_SEQUENCE, (subject -- subject, res)) {
+        outlined inst(MATCH_SEQUENCE, (subject -- subject, res)) {
             int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
             res = match ? PyValue_True : PyValue_False;
         }
 
-        inst(MATCH_KEYS, (subject, keys -- subject, keys, values_or_none)) {
+        outlined inst(MATCH_KEYS, (subject, keys -- subject, keys, values_or_none)) {
             // On successful match, PUSH(values). Otherwise, PUSH(None).
             // MATCH_MAPPING has accepted the subject: a mapping, not a number
             assert(PyValue_IsObject(subject));
@@ -4022,11 +4022,11 @@ dummy_func(
             }
         }
 
-        macro(LOAD_SPECIAL) =
+        outlined macro(LOAD_SPECIAL) =
             _INSERT_NULL +
             _LOAD_SPECIAL;
 
-        inst(WITH_EXCEPT_START, (exit_func, exit_self, lasti, unused, val -- exit_func, exit_self, lasti, unused, val, res)) {
+        outlined inst(WITH_EXCEPT_START, (exit_func, exit_self, lasti, unused, val -- exit_func, exit_self, lasti, unused, val, res)) {
             /* At the top of the stack are 4 values:
                - val: TOP = exc_info()
                - unused: SECOND = previous exception
@@ -4084,7 +4084,7 @@ dummy_func(
             NOP,
         };
 
-        window inst(PUSH_EXC_INFO, (exc -- prev_exc, new_exc)) {
+        outlined window inst(PUSH_EXC_INFO, (exc -- prev_exc, new_exc)) {
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
@@ -5257,9 +5257,9 @@ dummy_func(
             func = PyValue_FromObjectSteal((PyObject *)func_obj);
         }
 
-        macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
+        outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
-        inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+        outlined inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
@@ -5297,7 +5297,7 @@ dummy_func(
             LLTRACE_RESUME_FRAME();
         }
 
-        inst(BUILD_SLICE, (args[oparg] -- slice)) {
+        outlined inst(BUILD_SLICE, (args[oparg] -- slice)) {
             _PyValue_RecheckWindow(args, oparg);
             // The bounds are stored as the values they are: no box of an
             // inline one.
@@ -5308,7 +5308,7 @@ dummy_func(
             slice = PyValue_FromObjectSteal(slice_o);
         }
 
-        inst(CONVERT_VALUE, (value -- result)) {
+        outlined inst(CONVERT_VALUE, (value -- result)) {
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             PyObject *result_o;
             if (oparg == FVC_STR) {
@@ -5325,7 +5325,7 @@ dummy_func(
             result = PyValue_FromObjectSteal(result_o);
         }
 
-        inline_ok inst(FORMAT_SIMPLE, (value -- res)) {
+        outlined inline_ok inst(FORMAT_SIMPLE, (value -- res)) {
             /* If value is a unicode object, then we know the result
              * of format(value) is value itself. An inline int or float
              * formats as it prints: format(x, "") is str(x). */
@@ -5346,7 +5346,7 @@ dummy_func(
             }
         }
 
-        inst(FORMAT_WITH_SPEC, (value, fmt_spec -- res)) {
+        outlined inst(FORMAT_WITH_SPEC, (value, fmt_spec -- res)) {
             PyObject *res_o = _PyValue_Format(value, fmt_spec);
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);

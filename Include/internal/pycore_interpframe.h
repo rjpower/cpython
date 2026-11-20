@@ -421,41 +421,44 @@ _PyFrame_ConstSlots(const _PyCodeExec *exec, PyValue *base)
     return base + exec->const_first;
 }
 
-/* Copy n slots, 1 <= n <= 8, with two overlapping moves of the widest
- * power of two that fits, so that there is no loop and no call. */
+/* Copy the constant slots of an image: n of them, 1 <= n <= 8, two slots at
+ * a time, so that an odd n also writes the slot after the last constant.
+ * That slot is the discard slot, which holds NULL at the push, and the image
+ * has a NULL for it.  Each test takes the next two slots only when there
+ * are constants for them: no loop, no call, and two instructions per slot
+ * after the first pair plus two per test. */
 static inline void
 _PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
 {
     assert(1 <= n && n <= 8);
-    if (n >= 4) {
-        memcpy(dst, src, 4 * sizeof(PyValue));
-        memcpy(dst + n - 4, src + n - 4, 4 * sizeof(PyValue));
-    }
-    else if (n >= 2) {
-        memcpy(dst, src, 2 * sizeof(PyValue));
-        memcpy(dst + n - 2, src + n - 2, 2 * sizeof(PyValue));
-    }
-    else {
-        *dst = *src;
+    memcpy(dst, src, 2 * sizeof(PyValue));
+    if (n > 2) {
+        memcpy(dst + 2, src + 2, 2 * sizeof(PyValue));
+        if (n > 4) {
+            memcpy(dst + 4, src + 4, 2 * sizeof(PyValue));
+            if (n > 6) {
+                memcpy(dst + 6, src + 6, 2 * sizeof(PyValue));
+            }
+        }
     }
 }
 
-/* NULL n slots, 1 <= n <= 8, likewise.  PyValue_NULL is all zero bits. */
+/* NULL the constant slots at the exit, likewise.  The discard slot after the
+ * last has been closed and NULLed by then. */
 static inline void
 _PyFrame_NullConstSlots(PyValue *dst, int n)
 {
     assert(1 <= n && n <= 8);
     assert(PyValue_NULL_BITS == 0);
-    if (n >= 4) {
-        memset(dst, 0, 4 * sizeof(PyValue));
-        memset(dst + n - 4, 0, 4 * sizeof(PyValue));
-    }
-    else if (n >= 2) {
-        memset(dst, 0, 2 * sizeof(PyValue));
-        memset(dst + n - 2, 0, 2 * sizeof(PyValue));
-    }
-    else {
-        *dst = PyValue_NULL;
+    memset(dst, 0, 2 * sizeof(PyValue));
+    if (n > 2) {
+        memset(dst + 2, 0, 2 * sizeof(PyValue));
+        if (n > 4) {
+            memset(dst + 4, 0, 2 * sizeof(PyValue));
+            if (n > 6) {
+                memset(dst + 6, 0, 2 * sizeof(PyValue));
+            }
+        }
     }
 }
 

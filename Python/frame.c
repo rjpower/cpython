@@ -261,17 +261,21 @@ clear_slots(_PyInterpreterFrame *frame, int n)
 #endif
     PyValue *locals = frame->base;
     assert(n > _PyFrame_DiscardSlot(frame));
-    const _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
-    if (exec->const_image == NULL) {
-        close_slots(locals, locals + n);
-    }
-    else {
+    PyValue *top = locals + n;
+    // The test of the code object spares the code without constant slots the
+    // loads of its executing copy
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (code->co_nconstslots != 0 && code->_co_exec->const_image != NULL) {
+        const _PyCodeExec *exec = code->_co_exec;
+        // Loaded before the closes, which run finalizers
+        int nconst = exec->nconst;
         PyValue *consts = _PyFrame_ConstSlots(exec, locals);
-        assert(consts + exec->nconst <= locals + n);
-        close_slots(consts + exec->nconst, locals + n);
-        _PyFrame_NullConstSlots(consts, exec->nconst);
-        close_slots(locals, consts);
+        assert(consts + nconst <= top);
+        close_slots(consts + nconst, top);
+        _PyFrame_NullConstSlots(consts, nconst);
+        top = consts;
     }
+    close_slots(locals, top);
     Py_CLEAR(frame->f_locals);
 }
 

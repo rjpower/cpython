@@ -383,6 +383,27 @@ class ConstantSlotFrameTests(unittest.TestCase):
             with self.assertRaises(UnboundLocalError):
                 reads_unbound(False)
 
+    def test_every_count_of_constant_slots(self):
+        # The fill and the exit move the slots two at a time: an odd count
+        # reaches the discard slot after the last constant
+        for count in range(1, 9):
+            with self.subTest(count=count):
+                args = ", ".join(str(100 + i) for i in range(count))
+                namespace = {}
+                exec(f"def f(g, flag):\n"
+                     f"    if flag:\n"
+                     f"        x = 1\n"
+                     f"    y = g({args})\n"
+                     f"    return y, x\n", namespace)
+                f = namespace["f"]
+                self.assertEqual(len(ConstantSlotOperandTests.const_slots(
+                    f.__code__)), count)
+                expected = tuple(range(100, 100 + count))
+                for _ in range(WARM):
+                    self.assertEqual(f(lambda *a: a, True), (expected, 1))
+                    with self.assertRaises(UnboundLocalError):
+                        f(lambda *a: a, False)
+
     def test_generator_and_coroutine_keep_their_constants(self):
         def gen(g):
             yield g(1, 2, 3)

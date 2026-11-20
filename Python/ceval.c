@@ -1006,18 +1006,25 @@ super_call(PyValueBorrow global_super, PyValueBorrow class, PyValue self, int na
 
 
 /* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
- * exit_func(exc, val, tb) when has_self is 0.  The array keeps a free slot
- * before the arguments for PY_VECTORCALL_ARGUMENTS_OFFSET. */
-static Py_NO_INLINE PyObject *
-with_exit_call(PyObject *exit_func, PyObject *exit_self, int has_self,
+ * exit_func(exc, val, tb) when exit_self is NULL.  exit_func is any attribute
+ * value of the context manager's type, an inline scalar included, which the
+ * call rejects with upstream's TypeError.  The words are borrowed. */
+static Py_NO_INLINE PyValue
+with_exit_call(PyValueBorrow exit_func, PyValueBorrow exit_self,
                PyObject *exc, PyObject *val, PyObject *tb)
 {
-    PyObject *stack[5] = {NULL, exit_self, exc, val, tb};
-    PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
-            (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-    _PyGC_CLEAR_ARRAY(stack);
-    return res;
+    PyValue stack[4];
+    int has_self = !PyValue_IsNull(exit_self);
+    _PyValue_WindowPut(&stack[0], exit_self);
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(exc));
+    _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(val));
+    _PyValue_WindowPut(&stack[3], PyValue_FromObjectBorrow(tb));
+    return _PyValue_Vectorcall(exit_func, stack + 1 - has_self, 3 + has_self,
+                               NULL);
 }
+
+#define with_exit_call(F, S, E, V, T) \
+    (with_exit_call)(PyValue_Borrow(F), PyValue_Borrow(S), E, V, T)
 
 int _Py_CheckRecursiveCallPy(
     PyThreadState *tstate)

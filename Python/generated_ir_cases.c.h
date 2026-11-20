@@ -3784,10 +3784,8 @@ ir_run_WITH_EXCEPT_START(
             exit_func = window[0];
             PyObject *exc, *tb;
             assert(PyValue_IsObject(val));
-            assert(PyValue_IsObject(exit_func));
             assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
-            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
             PyObject *original_tb = tb = PyException_GetTraceback(val_o);
@@ -3796,15 +3794,12 @@ ir_run_WITH_EXCEPT_START(
             }
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti;
-            PyObject *res_o = with_exit_call(exit_func_o,
-                PyValue_AsKnownObjectBorrow(exit_self),
-                !PyValue_IsNull(exit_self), exc, val_o, tb);
+            res = with_exit_call(exit_func, exit_self, exc, val_o, tb);
+            IR_SET_TEMP(window[5], res);
             Py_XDECREF(original_tb);
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res)) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            res = PyValue_FromObjectSteal(res_o);
-            IR_SET_TEMP(window[5], res);
             IR_MOVE_TO_DST(ir_word, A, window[5]);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

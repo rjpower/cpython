@@ -4041,11 +4041,11 @@ dummy_func(
             */
             PyObject *exc, *tb;
 
+            // The exit function is any attribute value, a scalar included;
+            // the call raises upstream's TypeError for one.
             assert(PyValue_IsObject(val));
-            assert(PyValue_IsObject(exit_func));
             assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
-            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
 
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
@@ -4055,12 +4055,9 @@ dummy_func(
             }
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
-            PyObject *res_o = with_exit_call(exit_func_o,
-                PyValue_AsKnownObjectBorrow(exit_self),
-                !PyValue_IsNull(exit_self), exc, val_o, tb);
+            res = with_exit_call(exit_func, exit_self, exc, val_o, tb);
             Py_XDECREF(original_tb);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            ERROR_IF(PyValue_IsNull(res));
         }
 
         pseudo(SETUP_FINALLY, (-- unused), (HAS_ARG)) = {

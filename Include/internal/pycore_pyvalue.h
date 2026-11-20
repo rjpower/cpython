@@ -95,6 +95,15 @@ PyValue_IsObject(PyValueBorrow value)
 }
 #define PyValue_IsObject(V0) (PyValue_IsObject)(PyValue_Borrow(V0))
 
+/* An object, or the NULL value of an empty slot: what a handler asserts of
+ * an input that is optional, which it reads as a PyObject * without a box. */
+static inline int
+PyValue_IsObjectOrNull(PyValueBorrow value)
+{
+    return value.bits == 0 || (PyValue_IsObject)(value);
+}
+#define PyValue_IsObjectOrNull(V0) (PyValue_IsObjectOrNull)(PyValue_Borrow(V0))
+
 static inline int
 PyValue_IsLanguageValue(PyValueBorrow value)
 {

@@ -435,7 +435,6 @@ static py_tail_call_funcptr generator_resume_targets[405] = {
 };
 
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
-    _PyValueTemps *const value_temps = NULL;
     int opcode = IR_HANDLER(*next_instr);
     _PyErr_Format(tstate, PyExc_SystemError,
               "%U:%d: unknown opcode %d",

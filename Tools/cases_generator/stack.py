@@ -156,10 +156,6 @@ class Local:
     # no count, of an input read through a field that may name a local, or
     # a copy of one (see ir_generator.inplace_input_use()).
     ir_inplace: str | None = None
-    # The object local, ir_obj_<name>, that holds the object of the value
-    # for a uop that reads it as one: the value's object, or a box of an
-    # inline value that value_temps owns (ir_generator, emit_object_inputs).
-    ir_box: str | None = None
     # The current C value passed a required-input check or came from checked
     # non-NULL transport. A fresh home load must establish this again.
     nonnull: bool = False
@@ -217,7 +213,6 @@ class Local:
             self.known_object,
             self.ir_input,
             self.ir_inplace,
-            self.ir_box,
             self.nonnull,
             self.ir_value,
             self.owns_value,
@@ -256,9 +251,6 @@ def check_inplace_merge(var: Local, other: Local) -> None:
     if var.ir_inplace != other.ir_inplace:
         raise StackError(
             f"'{var.name}' is a view on some paths, but not all")
-    if var.ir_box != other.ir_box:
-        raise StackError(
-            f"'{var.name}' has an object local on some paths, but not all")
 
 
 class Stack:

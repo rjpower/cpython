@@ -358,7 +358,7 @@ dummy_func(
             /* Need to create a fake StopIteration error here,
              * to conform to PEP 380 */
             if (PyValue_GenCheck(receiver)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, PyValue_AsKnownObjectBorrow(value));
+                int err = monitor_stop_iteration(tstate, frame, this_instr, value);
                 if (err) {
                     ERROR_NO_POP();
                 }
@@ -383,12 +383,12 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_END_SEND, (receiver, index_or_null, value -- val)) {
+            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
             // Taken before the monitoring call, which can run code
             PyValue held = TAKE(value);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, value_o);
+                int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
@@ -1328,16 +1328,11 @@ dummy_func(
                 }
             }
             else {
-                // The other intrinsics take objects
-                PyObject *value_o = _PyValueTemps_Object(value_temps, value);
-                if (value_o == NULL) {
+                // The other intrinsics take objects: the helper boxes a number
+                res = _PyEval_CallIntrinsic1(tstate, oparg, value);
+                if (PyValue_IsNull(res)) {
                     ERROR_NO_POP();
                 }
-                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
-                if (res_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                res = PyValue_FromObjectSteal(res_o);
             }
             v = value;
             DEAD(value);
@@ -1347,54 +1342,63 @@ dummy_func(
 
         inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
             assert(oparg <= MAX_INTRINSIC_2);
+            // Taken before the calls, which can run code
+            PyValue held2 = TAKE(value2_st);
+            PyValue held1 = TAKE(value1_st);
             if (oparg == INTRINSIC_GETATTR) {
                 // The owner is a value; the name is a str
-                PyObject *name = _PyValueTemps_Object(value_temps, value1_st);
-                assert(PyUnicode_CheckExact(name));
-                res = _PyValue_GetAttr(value2_st, name);
+                PyObject *name = PyValue_ObjectOrNull(held1);
+                assert(name != NULL && PyUnicode_CheckExact(name));
+                res = _PyValue_GetAttr(held2, name);
             }
             else if (oparg == INTRINSIC_SETATTR) {
                 // value2_st is the value, NULL for a deletion; value1_st is
                 // the tuple (owner, name), which stays in its slot
-                PyObject *target = _PyValueTemps_Object(value_temps, value1_st);
-                assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+                PyObject *target = PyValue_ObjectOrNull(held1);
+                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                 PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
                 PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
                 assert(PyValue_IsObject(attr_name));
                 int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                                           value2_st);
+                                           held2);
                 res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {
-                PyObject *value1 = _PyValueTemps_Object(value_temps, value1_st);
-                PyObject *value2 = _PyValueTemps_Object(value_temps, value2_st);
-                PyObject *res_o = NULL;
-                if (value1 != NULL && value2 != NULL) {
-                    res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-                }
-                res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+                // The other intrinsics take objects: the helper boxes a
+                // number (the subject or class of MATCH_CLASS_ISINSTANCE)
+                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
             }
-            DECREF_INPUTS();
+            PyValue_XCLOSE(held1);
+            PyValue_XCLOSE(held2);
             ERROR_IF(PyValue_IsNull(res));
         }
 
         tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
             _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
-            if (oparg > 0 && exc == NULL) {
-                ERROR_NO_POP();
+            PyObject *exc = NULL;
+            PyObject *cause = NULL;
+            if (oparg > 0) {
+                // A number is not an exception
+                if (!PyValue_IsObject(args[0])) {
+                    _PyErr_SetString(tstate, PyExc_TypeError,
+                                     "exceptions must derive from BaseException");
+                    ERROR_NO_POP();
+                }
+                exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
-            PyObject *cause = oparg == 2 ? _PyValueTemps_Object(value_temps, args[1]) : NULL;
-            if (oparg == 2 && cause == NULL) {
-                ERROR_NO_POP();
+            // A number is not a cause: do_raise reports it after the
+            // exception is made
+            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
+            if (oparg == 2 && !cause_is_number) {
+                cause = PyValue_AsKnownObjectBorrow(args[1]);
             }
             /* do_raise consumes independent object owners; homes remain
              * canonical until their semantic input ownership is detached. */
             Py_XINCREF(exc);
             Py_XINCREF(cause);
             DECREF_INPUTS();
-            int err = do_raise(tstate, exc, cause);
+            int err = do_raise(tstate, exc, cause, cause_is_number);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -1494,8 +1498,18 @@ dummy_func(
 
         inst(GET_AITER, (obj -- iter)) {
             unaryfunc getter = NULL;
-            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
             PyObject *iter_o;
+            // A number has no __aiter__
+            if (!PyValue_IsObject(obj)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'async for' requires an object with "
+                              "__aiter__ method, got %.100s",
+                              PyValue_TYPE(obj)->tp_name);
+                DEAD(obj);
+                ERROR_IF(true);
+            }
+            assert(PyValue_IsObject(obj));
+            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
             PyTypeObject *type = Py_TYPE(obj_o);
 
             if (type->tp_as_async != NULL) {
@@ -1529,6 +1543,8 @@ dummy_func(
         }
 
         inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
+            // GET_AITER accepted it: it has __anext__
+            assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
                 ERROR_NO_POP();
@@ -1541,7 +1557,7 @@ dummy_func(
                 iter = TAKE(iterable);
             }
             else {
-                PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
+                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
                 PyValue_CLOSE(iterable);
                 ERROR_IF(iter_o == NULL);
                 iter = PyValue_FromObjectSteal(iter_o);
@@ -1568,6 +1584,7 @@ dummy_func(
         }
 
         tier1 window op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
@@ -1636,6 +1653,7 @@ dummy_func(
         }
 
         replaced op(_SEND_VIRTUAL, (iter, null_or_index, none -- iter, null_or_index, next)) {
+            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
             _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
@@ -1765,6 +1783,7 @@ dummy_func(
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
         inst(POP_EXCEPT, (exc_value -- )) {
+            assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             Py_XSETREF(exc_info->exc_value,
                    PyValue_IsNone(exc_value)
@@ -1772,6 +1791,7 @@ dummy_func(
         }
 
         tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
+            assert(PyValue_IsObject(exc_st));
             PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
 
             assert(oparg >= 0 && oparg <= 2);
@@ -1787,6 +1807,7 @@ dummy_func(
         tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
             JUMPBY(0); // Pretend jump as we need source offset for monitoring
             (void)oparg;
+            assert(PyValue_IsObject(exc_st));
             PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
 
             assert(exc && PyExceptionInstance_Check(exc));
@@ -1814,6 +1835,7 @@ dummy_func(
         macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
 
         tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
+            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -1874,6 +1896,15 @@ dummy_func(
         }
 
         window op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
+            // A number is not iterable
+            if (!PyValue_IsObject(seq)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                DEAD(seq);
+                ERROR_IF(true);
+            }
+            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
             ERROR_IF(res == 0);
@@ -1931,6 +1962,15 @@ dummy_func(
         }
 
         window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
+            // A number is not iterable
+            if (!PyValue_IsObject(seq)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                DEAD(seq);
+                ERROR_IF(true);
+            }
+            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             ERROR_IF(res == 0);
@@ -2000,6 +2040,7 @@ dummy_func(
 
         inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             // Taken before the lookup, which can run code
             PyValue held_namespace = TAKE(mod_or_class_dict);
@@ -2155,6 +2196,7 @@ dummy_func(
 
         inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
             PyObject *name;
+            assert(PyValue_IsObject(class_dict_st));
             PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
             // Taken before the lookup, which can run code
             PyValue held_class_dict = TAKE(class_dict_st);
@@ -2220,7 +2262,7 @@ dummy_func(
         }
 
         inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+            assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
@@ -2230,7 +2272,8 @@ dummy_func(
             else {
                 format_o = &_Py_STR(empty);
             }
-            PyObject *interpolation_o = _PyInterpolation_Build(value_o, str_o, conversion, format_o);
+            // The value may be a number: the interpolation holds its box
+            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
             // The handler clears the slots of the array before it closes
             // the element, so the element moves to a C variable first
             PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
@@ -2243,6 +2286,8 @@ dummy_func(
         }
 
         inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
+            assert(PyValue_IsObject(strings));
+            assert(PyValue_IsObject(interpolations));
             PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
             PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
@@ -2271,6 +2316,15 @@ dummy_func(
         }
 
         op(_LIST_EXTEND, (list_st, unused[oparg-1], iterable_st -- list_st, unused[oparg-1], i)) {
+            assert(PyValue_IsObject(list_st));
+            // A number is not iterable
+            if (!PyValue_IsObject(iterable_st)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after * must be an iterable, not %.200s",
+                              PyValue_TYPE(iterable_st)->tp_name);
+                ERROR_NO_POP();
+            }
+            assert(PyValue_IsObject(iterable_st));
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
 
@@ -2295,6 +2349,15 @@ dummy_func(
         macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
 
         op(_SET_UPDATE, (set, unused[oparg-1], iterable -- set, unused[oparg-1], i)) {
+            assert(PyValue_IsObject(set));
+            // A number is not iterable
+            if (!PyValue_IsObject(iterable)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%.200s' object is not iterable",
+                              PyValue_TYPE(iterable)->tp_name);
+                ERROR_NO_POP();
+            }
+            assert(PyValue_IsObject(iterable));
             int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
                                     PyValue_AsKnownObjectBorrow(iterable));
             if (err < 0) {
@@ -2375,6 +2438,15 @@ dummy_func(
         };
 
         op(_DICT_UPDATE, (dict, unused[oparg - 1], update -- dict, unused[oparg - 1], upd)) {
+            assert(PyValue_IsObject(dict));
+            // A number is not a mapping
+            if (!PyValue_IsObject(update)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%N' object is not a mapping",
+                              PyValue_TYPE(update));
+                ERROR_NO_POP();
+            }
+            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
@@ -2403,13 +2475,21 @@ dummy_func(
         macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
 
         op(_DICT_MERGE, (callable, unused, unused, dict, unused[oparg - 1], update -- callable, unused, unused, dict, unused[oparg - 1], u)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            assert(PyValue_IsObject(dict));
+            // A number is not a mapping
+            if (!PyValue_IsObject(update)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after ** must be a mapping, not %N",
+                              PyValue_TYPE(update));
+                ERROR_NO_POP();
+            }
+            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
             _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
             if (merged.status < 0) {
-                _PyEval_FormatKwargsError(tstate, callable_o, update_o, merged.object);
+                _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
                 Py_XDECREF(merged.object);
                 ERROR_NO_POP();
             }
@@ -2456,36 +2536,33 @@ dummy_func(
         }
 
         tier1 op(_LOAD_SUPER_ATTR, (global_super_st, class_st, self_st -- attr)) {
-            PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-            PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-
+            // `super` and `__class__` can name numbers, which the call
+            // reports; both stay values
+            // we make no attempt to optimize here; specializations should
+            // handle any case whose performance we care about
+            PyValueBorrow arg = oparg & 2
+                ? PyValue_Borrow(class_st)
+                : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                 int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                        PyValue_FromObjectBorrow(arg));
+                        frame, this_instr, global_super_st, arg);
                 if (err) {
                     DECREF_INPUTS();
                     ERROR_IF(true);
                 }
             }
-            // we make no attempt to optimize here; specializations should
-            // handle any case whose performance we care about
-            PyValue super = super_call(global_super, class, self_st, oparg & 2);
+            PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                 if (PyValue_IsNull(super)) {
                     _Py_call_instrumentation_exc2(
                         tstate, PY_MONITORING_EVENT_C_RAISE,
-                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                        PyValue_FromObjectBorrow(arg));
+                        frame, this_instr, global_super_st, arg);
                 }
                 else {
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_C_RETURN,
-                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                        PyValue_FromObjectBorrow(arg));
+                        frame, this_instr, global_super_st, arg);
                     if (err < 0) {
                         PyValue_CLEAR(super);
                     }
@@ -3314,17 +3391,19 @@ dummy_func(
             _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
 
         inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
+            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(match_type_st);
             // Taken before the check, which can run code
             PyValue held_exc = TAKE(exc_value_st);
             PyValue held_type = TAKE(match_type_st);
-            int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
+            // A number is not an exception class: the check rejects it
+            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
             if (err < 0) {
                 PyValue_CLOSE(held_type);
                 PyValue_CLOSE(held_exc);
                 ERROR_IF(true);
             }
+            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
 
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
             PyObject *match_o = matched.match;
@@ -3342,17 +3421,19 @@ dummy_func(
         }
 
         inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
+            assert(PyValue_IsObject(left));
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             // Taken before the check, which can run code
             PyValue held_right = TAKE(right);
 
             assert(PyExceptionInstance_Check(left_o));
-            int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
+            // A number is not an exception class: the check rejects it
+            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
             if (err < 0) {
                 PyValue_CLOSE(held_right);
                 ERROR_NO_POP();
             }
+            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
 
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
             PyValue_CLOSE(held_right);
@@ -3362,6 +3443,7 @@ dummy_func(
         inst(IMPORT_NAME, (level, fromlist -- res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
+            assert(PyValue_IsObject(fromlist));
             // The level is an inline int: read it without a box
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
@@ -3388,11 +3470,12 @@ dummy_func(
 
         inst(IMPORT_FROM, (from -- from, res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            if (PyValue_IsObject(from) &&
-                PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from)))
+            // The module may be a number, if __import__ returned one
+            PyObject *from_o = PyValue_ObjectOrNull(from);
+            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
             {
                 PyObject *res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, PyValue_AsKnownObjectBorrow(from), name);
+                    tstate, frame, from_o, name);
                 ERROR_IF(res_o == NULL);
                 res = PyValue_FromObjectSteal(res_o);
             }
@@ -3593,10 +3676,12 @@ dummy_func(
         op(_MATCH_CLASS, (subject, type, names -- attrs, s, tp, n)) {
             // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
             // None on failure.
+            assert(PyValue_IsObject(names));
             assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+            // The class pattern may name a number: MatchClass rejects it
             PyObject *attrs_o = _PyEval_MatchClass(tstate,
                 subject,
-                PyValue_AsKnownObjectBorrow(type), oparg,
+                type, oparg,
                 PyValue_AsKnownObjectBorrow(names));
             if (attrs_o) {
                 assert(PyTuple_CheckExact(attrs_o));  // Success!
@@ -3628,6 +3713,9 @@ dummy_func(
 
         inst(MATCH_KEYS, (subject, keys -- subject, keys, values_or_none)) {
             // On successful match, PUSH(values). Otherwise, PUSH(None).
+            // MATCH_MAPPING has accepted the subject: a mapping, not a number
+            assert(PyValue_IsObject(subject));
+            assert(PyValue_IsObject(keys));
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
                 PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
             ERROR_IF(values_or_none_o == NULL);
@@ -3921,16 +4009,14 @@ dummy_func(
             int err = IR_LOOKUP_SPECIAL(name, method_and_self);
             if (err <= 0) {
                 if (err == 0) {
-                    PyObject *owner = _PyValueTemps_Object(value_temps, method_and_self[1]);
-                    if (owner == NULL) {
-                        ERROR_NO_POP();
-                    }
-                    const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner, oparg)
+                    // The messages name the owner's type, as %N
+                    PyTypeObject *owner_type = PyValue_TYPE(method_and_self[1]);
+                    const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, oparg)
                         ? _Py_SpecialMethods[oparg].error_suggestion
                         : _Py_SpecialMethods[oparg].error;
                     assert(!_PyErr_Occurred(tstate));
                     assert(errfmt != NULL);
-                    _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
+                    _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
                 }
                 ERROR_NO_POP();
             }
@@ -3952,6 +4038,9 @@ dummy_func(
             */
             PyObject *exc, *tb;
 
+            assert(PyValue_IsObject(val));
+            assert(PyValue_IsObject(exit_func));
+            assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
             PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
 
@@ -4004,6 +4093,7 @@ dummy_func(
             else {
                 prev_exc = PyValue_None;
             }
+            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
             exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
@@ -4785,27 +4875,17 @@ dummy_func(
             }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = method->d_method->ml_meth;
-            PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
-            if (self == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *arg = _PyValueTemps_Object(value_temps, arguments[1]);
-            if (arg == NULL) {
-                ERROR_NO_POP();
-            }
-            _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
-            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
-            _PyBorrowScope_Exit(tstate, borrow_mark);
+            // ml_meth takes objects: the helper boxes numbers
+            PyValue res_value = _PyEval_CallMethodDescriptorO(tstate, cfunc, arguments[0], arguments[1]);
             _Py_LeaveRecursiveCallTstate(tstate);
-            assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_value)) {
                 ERROR_NO_POP();
             }
             c = callable;
             s = arguments[0];
             a = arguments[1];
             INPUTS_DEAD();
-            res = PyValue_FromObjectSteal(res_o);
+            res = res_value;
         }
 
         op(_CHECK_RECURSION_LIMIT, ( -- )) {
@@ -4890,24 +4970,18 @@ dummy_func(
             if (call_state & CALL_SELF_PRESENT) {
                 args--;
             }
-            PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
-            if (self == NULL) {
-                ERROR_NO_POP();
-            }
             STAT_INC(CALL, hit);
             PyCFunction cfunc = method->d_method->ml_meth;
-            _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
-            PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
-            _PyBorrowScope_Exit(tstate, borrow_mark);
+            // ml_meth takes objects: the helper boxes a number
+            PyValue res_value = _PyEval_CallMethodDescriptorNoArgs(tstate, cfunc, args[0]);
             _Py_LeaveRecursiveCallTstate(tstate);
-            assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-            if (res_o == NULL) {
+            if (PyValue_IsNull(res_value)) {
                 ERROR_NO_POP();
             }
             c = callable;
             s = args[0];
             INPUTS_DEAD();
-            res = PyValue_FromObjectSteal(res_o);
+            res = res_value;
         }
 
         macro(CALL_METHOD_DESCRIPTOR_NOARGS) =
@@ -5166,6 +5240,7 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_MAKE_FUNCTION, (codeobj_st -- func, co)) {
+            assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
 
             PyFunctionObject *func_obj = (PyFunctionObject *)
@@ -5186,6 +5261,8 @@ dummy_func(
         macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
         inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+            assert(PyValue_IsObject(func_in));
+            assert(PyValue_IsObject(attr_st));
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
             func_out = TAKE(func_in);

@@ -718,7 +718,6 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_box = None
                                     stored.append(var)
                                     break
                             for var in storage.outputs:
@@ -726,7 +725,6 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_box = None
                                     stored.append(var)
                                     break
                         if tkn.text.startswith("DISPATCH"):

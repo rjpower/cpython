@@ -319,11 +319,31 @@ PyAPI_DATA(const size_t) _Py_FunctionAttributeOffsets[];
 
 PyAPI_FUNC(int) _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right);
 PyAPI_FUNC(int) _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right);
+// The value forms: a number is not an exception class
+PyAPI_FUNC(int) _PyEval_CheckExceptTypeValidValue(PyThreadState *tstate, PyValueBorrow right);
+PyAPI_FUNC(int) _PyEval_CheckExceptStarTypeValidValue(PyThreadState *tstate, PyValueBorrow right);
+#define _PyEval_CheckExceptTypeValidValue(T, R) \
+    (_PyEval_CheckExceptTypeValidValue)(T, PyValue_Borrow(R))
+#define _PyEval_CheckExceptStarTypeValidValue(T, R) \
+    (_PyEval_CheckExceptStarTypeValidValue)(T, PyValue_Borrow(R))
 PyAPI_FUNC(int) _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *, PyObject* exc_value, PyObject *match_type, PyObject **match, PyObject **rest);
 PyAPI_FUNC(void) _PyEval_FormatAwaitableError(PyThreadState *tstate, PyTypeObject *type, int oparg);
+PyAPI_FUNC(PyValue) _PyEval_CallMethodDescriptorO(PyThreadState *tstate, PyCFunction cfunc, PyValueBorrow self, PyValueBorrow arg);
+PyAPI_FUNC(PyValue) _PyEval_CallMethodDescriptorNoArgs(PyThreadState *tstate, PyCFunction cfunc, PyValueBorrow self);
+#define _PyEval_CallMethodDescriptorO(T, C, S, A) \
+    (_PyEval_CallMethodDescriptorO)(T, C, PyValue_Borrow(S), PyValue_Borrow(A))
+#define _PyEval_CallMethodDescriptorNoArgs(T, C, S) \
+    (_PyEval_CallMethodDescriptorNoArgs)(T, C, PyValue_Borrow(S))
+PyAPI_FUNC(PyValue) _PyEval_CallIntrinsic2(PyThreadState *tstate, int oparg, PyValueBorrow value2, PyValueBorrow value1);
+#define _PyEval_CallIntrinsic2(T, O, V2, V1) \
+    (_PyEval_CallIntrinsic2)(T, O, PyValue_Borrow(V2), PyValue_Borrow(V1))
+PyAPI_FUNC(PyValue) _PyEval_CallIntrinsic1(PyThreadState *tstate, int oparg, PyValueBorrow value);
+#define _PyEval_CallIntrinsic1(T, O, V) (_PyEval_CallIntrinsic1)(T, O, PyValue_Borrow(V))
 PyAPI_FUNC(void) _Py_COLD_FUNCTION _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc, const char *format_str, PyObject *obj);
 PyAPI_FUNC(void) _PyEval_FormatExcUnbound(PyThreadState *tstate, PyCodeObject *co, int oparg);
-PyAPI_FUNC(void) _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwargs, PyObject *dupkey);
+PyAPI_FUNC(void) _PyEval_FormatKwargsError(PyThreadState *tstate, PyValueBorrow func, PyObject *kwargs, PyObject *dupkey);
+#define _PyEval_FormatKwargsError(T, F, K, D) \
+    (_PyEval_FormatKwargsError)(T, PyValue_Borrow(F), K, D)
 PyAPI_FUNC(PyObject *) _PyEval_ImportFrom(PyThreadState *, PyObject *, PyObject *);
 PyAPI_FUNC(PyValue) _PyEval_ImportFromValue(PyThreadState *, PyValueBorrow, PyObject *);
 
@@ -339,9 +359,9 @@ PyAPI_FUNC(PyObject *) _PyEval_ImportName(
 PyObject * _PyEval_ImportNameWithImport(
     PyThreadState *tstate, PyObject *import_func, PyObject *globals,
     PyObject *locals, PyObject *name, PyObject *fromlist, int level);
-PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyValueBorrow subject, PyObject *type, Py_ssize_t nargs, PyObject *kwargs);
+PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyValueBorrow subject, PyValueBorrow type, Py_ssize_t nargs, PyObject *kwargs);
 #define _PyEval_MatchClass(T, S, TY, N, K) \
-    (_PyEval_MatchClass)(T, PyValue_Borrow(S), TY, N, K)
+    (_PyEval_MatchClass)(T, PyValue_Borrow(S), PyValue_Borrow(TY), N, K)
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
@@ -391,7 +411,8 @@ PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteGeneratorReturn(
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,
     PyObject *name, PyValue *writeto);
-PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
+PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyValueBorrow iterable, int oparg);
+#define _PyEval_GetAwaitable(I, O) (_PyEval_GetAwaitable)(PyValue_Borrow(I), O)
 PyAPI_FUNC(PyValue) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
@@ -416,7 +437,7 @@ PyAPI_FUNC(int) _PyEval_IsInstanceValue(PyValueBorrow inst, PyValueBorrow cls);
  * Symbol is exported for the JIT (see discussion on GH-132218).
  */
 PyAPI_FUNC(int)
-_PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg);
+_PyEval_SpecialMethodCanSuggest(PyTypeObject *type, int oparg);
 
 /* Bits that can be set in PyThreadState.eval_breaker */
 #define _PY_GIL_DROP_REQUEST_BIT (1U << 0)

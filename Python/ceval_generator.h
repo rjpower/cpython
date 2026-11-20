@@ -81,12 +81,52 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyFrame_PublishReturnSlot(frame, value);
 }
 
+/* The publication of GEN_COMPLETE_EFFECT, out of line: the detached owners
+ * are an array, which would be the handler's. Detaches the remaining
+ * owners, writes result to the destination, observes the completed step,
+ * and closes everything detached. Returns the exception that observation
+ * raised, or NULL. */
+static Py_NO_INLINE PyObject *
+generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           _PyInstr *site, _PyInstr *exit, int base,
+                           int remaining_count, int destination,
+                           bool throwing, PyValue result)
+{
+    /* Detach every remaining owner before an overlapping A publication. */
+    PyValue detached[5];
+    int ndetached = 0;
+    for (int k = remaining_count; k-- > 0;) {
+        detached[ndetached++] = frame->base[base + k];
+        frame->base[base + k] = PyValue_NULL;
+    }
+    // The releasing write: a local's or the discard slot's old value closes
+    // with the detached owners
+    PyValue displaced = frame->base[destination];
+    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+           destination == _PyFrame_DiscardSlot(frame) ||
+           PyValue_IsNull(displaced));
+    frame->base[destination] = result;
+    _PyValue_CheckHome(result);
+    detached[ndetached++] = displaced;
+    frame->return_pc = exit;
+    _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
+    if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
+        post = _PyIR_ObserveStep(tstate, frame, site, exit,
+            PyValue_Borrow(PyValue_None), throwing ? _PY_IR_SEND_THROW : _PY_IR_SEND, 1);
+    }
+    if (post.status >= 0) { frame->instr_ptr = post.next; }
+    PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
+    for (int k = 0; k < ndetached; k++) {
+        PyValue_XCLOSE(detached[k]);
+    }
+    return error;
+}
+
 /* The remaining-window cursor is an actual home address, not an encoded action.
  * Only this effect entry decodes the source outcome. Earlier successful closes
  * have consumed their owners and NULLed their homes. */
 TARGET(GEN_COMPLETE_EFFECT)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue result = generator_payload(ir_word);
     _PyInstr *site = next_instr;
     _PyIRWord source_word = *site;
@@ -122,35 +162,8 @@ TARGET(GEN_COMPLETE_EFFECT)
             GENERATOR_DISPATCH();
         }
     }
-    /* Detach every remaining owner before an overlapping A publication. */
-    PyValue detached[5];
-    int ndetached = 0;
-    for (int k = remaining_count; k-- > 0;) {
-        detached[ndetached++] = frame->base[base + k];
-        frame->base[base + k] = PyValue_NULL;
-    }
-    // The releasing write: a local's or the discard slot's old value closes
-    // with the detached owners
-    PyValue displaced = frame->base[destination];
-    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
-           destination == _PyFrame_DiscardSlot(frame) ||
-           PyValue_IsNull(displaced));
-    frame->base[destination] = result;
-    _PyValue_CheckHome(result);
-    result = PyValue_NULL;
-    detached[ndetached++] = displaced;
-    frame->return_pc = exit;
-    _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
-    if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
-        post = _PyIR_ObserveStep(tstate, frame, site, exit,
-            PyValue_Borrow(PyValue_None), throwing ? _PY_IR_SEND_THROW : _PY_IR_SEND, 1);
-    }
-    if (post.status >= 0) { frame->instr_ptr = post.next; }
-    PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
-    for (int k = 0; k < ndetached; k++) {
-        PyValue_XCLOSE(detached[k]);
-    }
-    PyValue_XCLOSE(result);
+    PyObject *error = generator_complete_publish(tstate, frame, site, exit,
+        base, remaining_count, destination, throwing, result);
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
     if (error != NULL) {
@@ -199,7 +212,6 @@ TARGET(NAME) \
 #define GENERATOR_COMPLETE_HOME(NAME, THROW) \
 TARGET(NAME) \
 { \
-    _PyValueTemps *const value_temps = NULL; \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     int destination = IR_A(source_word); \
     assert(PyValue_IsNull(frame->base[destination])); \
@@ -212,7 +224,6 @@ TARGET(NAME) \
 #define GENERATOR_COMPLETE_STORE(NAME, THROW, EXPLICIT) \
 TARGET(NAME) \
 { \
-    _PyValueTemps *const value_temps = NULL; \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     _PyInstr *consumer = GENERATOR_COMPLETED_EXIT(THROW); \
     int destination = (EXPLICIT) ? IR_B(*consumer) : IR_A(source_word); \
@@ -234,7 +245,6 @@ TARGET(NAME) \
 #define GENERATOR_COMPLETE_DISCARD(NAME, THROW, EXPLICIT) \
 TARGET(NAME) \
 { \
-    _PyValueTemps *const value_temps = NULL; \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     if (!_PyValue_TryXCloseNoReentry(result)) { \
         IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
@@ -266,7 +276,6 @@ GENERATOR_COMPLETE_DISCARD(GEN_THROW_COMPLETE_POP_TOP, true, true)
 
 TARGET(GEN_SEND_YIELD)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue result = generator_payload(ir_word);
     _PyInstr *yield = next_instr + 1;
     _PyIRWord word = *yield;
@@ -308,7 +317,6 @@ TARGET(GEN_SEND_YIELD)
  * redirect that continuation without any old-home retake afterward. */
 TARGET(GEN_YIELD_INPUT_EFFECT)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue result = generator_payload(ir_word);
     int home = IR_B(*next_instr) + 2;
     PyValue sent = frame->base[home];
@@ -326,7 +334,6 @@ TARGET(GEN_YIELD_INPUT_EFFECT)
  * and effects receive it once in their authoritative input home. */
 TARGET(GEN_SEND_INPUT_HOME)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue result = generator_payload(ir_word);
     int home = IR_B(*next_instr) + 2;
     assert(PyValue_IsNull(frame->base[home]));
@@ -339,7 +346,6 @@ TARGET(GEN_SEND_INPUT_HOME)
  * The incoming owner stays in C while error construction allocates. */
 TARGET(GEN_ENTRY_EFFECT)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue value = generator_payload(ir_word);
     if (_Py_EnterRecursivePy(tstate)) {
         PyValue_XCLOSE(value);
@@ -351,7 +357,6 @@ TARGET(GEN_ENTRY_EFFECT)
 
 TARGET(GEN_RESUME_EFFECT)
 {
-    _PyValueTemps *const value_temps = NULL;
     _PyInstr *source = frame->instr_ptr;
     uint64_t generation = generator_control_generation(frame);
     int pending = frame->pending_redirect;
@@ -387,7 +392,6 @@ TARGET(GEN_RESUME_SEND)
 
 TARGET(GEN_RESUME_STORE)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue value = generator_payload(ir_word);
     _PyInstr *resume = next_instr;
     if (!generator_transfer_is_plain(tstate, frame)) {
@@ -455,7 +459,6 @@ TARGET(GEN_SEND_INPUT)
 
 TARGET(GEN_REDIRECT_EFFECT)
 {
-    _PyValueTemps *const value_temps = NULL;
     generator_publish_redirected(tstate, frame, generator_payload(ir_word));
     frame = tstate->current_frame;
     slots = _PyFrame_Slots(frame);
@@ -466,7 +469,6 @@ TARGET(GEN_REDIRECT_EFFECT)
 
 TARGET(GEN_RETURN_PARENT)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue value = generator_payload(ir_word);
     if (frame->owner != FRAME_OWNED_BY_INTERPRETER) {
         if (frame->pending_redirect) {
@@ -493,7 +495,6 @@ TARGET(GEN_RETURN_PARENT)
  * generator routing and its legacy fallback out of the shared RETURN body. */
 TARGET(GEN_RETURN_ROUTE)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue value = generator_payload(ir_word);
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame;
@@ -551,7 +552,6 @@ TARGET(GEN_RETURN_RETIRED)
  * generator decision is the same source decision as ordinary RETURN. */
 TARGET(GEN_RETURN)
 {
-    _PyValueTemps *const value_temps = NULL;
     PyValue value = generator_payload(ir_word);
     frame->instr_ptr = next_instr;
     if (!generator_transfer_is_plain(tstate, frame)) {

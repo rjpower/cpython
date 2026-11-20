@@ -9,8 +9,6 @@
         TARGET(BINARY_OP_ADD) {
             int opcode = BINARY_OP_ADD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -66,8 +64,6 @@
         TARGET(BINARY_OP_ADD_FLOAT) {
             int opcode = BINARY_OP_ADD_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -128,8 +124,6 @@
         TARGET(BINARY_OP_ADD_INT) {
             int opcode = BINARY_OP_ADD_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -209,8 +203,6 @@
         TARGET(BINARY_OP_ADD_UNICODE) {
             int opcode = BINARY_OP_ADD_UNICODE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -300,8 +292,6 @@
         TARGET(BINARY_OP_AND) {
             int opcode = BINARY_OP_AND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -357,8 +347,6 @@
         TARGET(BINARY_OP_AND_INT) {
             int opcode = BINARY_OP_AND_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -430,8 +418,6 @@
         TARGET(BINARY_OP_EXTEND) {
             int opcode = BINARY_OP_EXTEND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -503,8 +489,6 @@
         TARGET(BINARY_OP_FLOOR_DIVIDE) {
             int opcode = BINARY_OP_FLOOR_DIVIDE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -560,8 +544,6 @@
         TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
             int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -643,8 +625,6 @@
         TARGET(BINARY_OP_INPLACE_ADD) {
             int opcode = BINARY_OP_INPLACE_ADD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -700,8 +680,6 @@
         TARGET(BINARY_OP_INPLACE_ADD_UNICODE) {
             int opcode = BINARY_OP_INPLACE_ADD_UNICODE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -785,8 +763,6 @@
         TARGET(BINARY_OP_INPLACE_AND) {
             int opcode = BINARY_OP_INPLACE_AND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -842,8 +818,6 @@
         TARGET(BINARY_OP_INPLACE_FLOOR_DIVIDE) {
             int opcode = BINARY_OP_INPLACE_FLOOR_DIVIDE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -899,8 +873,6 @@
         TARGET(BINARY_OP_INPLACE_LSHIFT) {
             int opcode = BINARY_OP_INPLACE_LSHIFT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -956,8 +928,6 @@
         TARGET(BINARY_OP_INPLACE_MATRIX_MULTIPLY) {
             int opcode = BINARY_OP_INPLACE_MATRIX_MULTIPLY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1013,8 +983,6 @@
         TARGET(BINARY_OP_INPLACE_MULTIPLY) {
             int opcode = BINARY_OP_INPLACE_MULTIPLY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1070,8 +1038,6 @@
         TARGET(BINARY_OP_INPLACE_OR) {
             int opcode = BINARY_OP_INPLACE_OR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1127,8 +1093,6 @@
         TARGET(BINARY_OP_INPLACE_POWER) {
             int opcode = BINARY_OP_INPLACE_POWER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1184,8 +1148,6 @@
         TARGET(BINARY_OP_INPLACE_REMAINDER) {
             int opcode = BINARY_OP_INPLACE_REMAINDER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1241,8 +1203,6 @@
         TARGET(BINARY_OP_INPLACE_RSHIFT) {
             int opcode = BINARY_OP_INPLACE_RSHIFT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1298,8 +1258,6 @@
         TARGET(BINARY_OP_INPLACE_SUBTRACT) {
             int opcode = BINARY_OP_INPLACE_SUBTRACT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1355,8 +1313,6 @@
         TARGET(BINARY_OP_INPLACE_TRUE_DIVIDE) {
             int opcode = BINARY_OP_INPLACE_TRUE_DIVIDE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1412,8 +1368,6 @@
         TARGET(BINARY_OP_INPLACE_XOR) {
             int opcode = BINARY_OP_INPLACE_XOR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1469,8 +1423,6 @@
         TARGET(BINARY_OP_LSHIFT) {
             int opcode = BINARY_OP_LSHIFT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1526,8 +1478,6 @@
         TARGET(BINARY_OP_LSHIFT_INT) {
             int opcode = BINARY_OP_LSHIFT_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1614,8 +1564,6 @@
         TARGET(BINARY_OP_MATRIX_MULTIPLY) {
             int opcode = BINARY_OP_MATRIX_MULTIPLY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1671,8 +1619,6 @@
         TARGET(BINARY_OP_MULTIPLY) {
             int opcode = BINARY_OP_MULTIPLY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1728,8 +1674,6 @@
         TARGET(BINARY_OP_MULTIPLY_FLOAT) {
             int opcode = BINARY_OP_MULTIPLY_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1790,8 +1734,6 @@
         TARGET(BINARY_OP_MULTIPLY_INT) {
             int opcode = BINARY_OP_MULTIPLY_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1871,8 +1813,6 @@
         TARGET(BINARY_OP_OR) {
             int opcode = BINARY_OP_OR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1928,8 +1868,6 @@
         TARGET(BINARY_OP_OR_INT) {
             int opcode = BINARY_OP_OR_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2001,8 +1939,6 @@
         TARGET(BINARY_OP_POWER) {
             int opcode = BINARY_OP_POWER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2058,8 +1994,6 @@
         TARGET(BINARY_OP_REMAINDER) {
             int opcode = BINARY_OP_REMAINDER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2115,8 +2049,6 @@
         TARGET(BINARY_OP_REMAINDER_INT) {
             int opcode = BINARY_OP_REMAINDER_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2198,8 +2130,6 @@
         TARGET(BINARY_OP_RSHIFT) {
             int opcode = BINARY_OP_RSHIFT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2255,8 +2185,6 @@
         TARGET(BINARY_OP_RSHIFT_INT) {
             int opcode = BINARY_OP_RSHIFT_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2334,8 +2262,6 @@
         TARGET(BINARY_OP_SUBSCR) {
             int opcode = BINARY_OP_SUBSCR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2391,8 +2317,6 @@
         TARGET(BINARY_OP_SUBSCR_DICT) {
             int opcode = BINARY_OP_SUBSCR_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2463,8 +2387,6 @@
         TARGET(BINARY_OP_SUBSCR_GETITEM) {
             int opcode = BINARY_OP_SUBSCR_GETITEM;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2552,8 +2474,6 @@
         TARGET(BINARY_OP_SUBSCR_LIST_INT) {
             int opcode = BINARY_OP_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2635,8 +2555,6 @@
         TARGET(BINARY_OP_SUBSCR_LIST_SLICE) {
             int opcode = BINARY_OP_SUBSCR_LIST_SLICE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2725,8 +2643,6 @@
         TARGET(BINARY_OP_SUBSCR_STR_INT) {
             int opcode = BINARY_OP_SUBSCR_STR_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2821,8 +2737,6 @@
         TARGET(BINARY_OP_SUBSCR_TUPLE_INT) {
             int opcode = BINARY_OP_SUBSCR_TUPLE_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2903,8 +2817,6 @@
         TARGET(BINARY_OP_SUBSCR_USTR_INT) {
             int opcode = BINARY_OP_SUBSCR_USTR_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2998,8 +2910,6 @@
         TARGET(BINARY_OP_SUBTRACT) {
             int opcode = BINARY_OP_SUBTRACT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3055,8 +2965,6 @@
         TARGET(BINARY_OP_SUBTRACT_FLOAT) {
             int opcode = BINARY_OP_SUBTRACT_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3117,8 +3025,6 @@
         TARGET(BINARY_OP_SUBTRACT_INT) {
             int opcode = BINARY_OP_SUBTRACT_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3198,8 +3104,6 @@
         TARGET(BINARY_OP_TRUEDIV_FLOAT) {
             int opcode = BINARY_OP_TRUEDIV_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3264,8 +3168,6 @@
         TARGET(BINARY_OP_TRUE_DIVIDE) {
             int opcode = BINARY_OP_TRUE_DIVIDE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3321,8 +3223,6 @@
         TARGET(BINARY_OP_XOR) {
             int opcode = BINARY_OP_XOR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3378,8 +3278,6 @@
         TARGET(BINARY_OP_XOR_INT) {
             int opcode = BINARY_OP_XOR_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3451,8 +3349,6 @@
         TARGET(BINARY_SLICE) {
             int opcode = BINARY_SLICE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3508,10 +3404,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -3522,33 +3414,11 @@
             PyValue str;
             PyValue *format;
             PyValue interpolation;
-            PyObject *ir_obj_str = NULL;
-            PyObject *ir_obj_value = NULL;
             format = &window[2];
             str = window[1];
             value = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                ir_obj_value = _PyValueTemps_Box(value_temps, value);
-                if (ir_obj_value == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(BUILD_INTERPOLATION);
-            }
-            else {
-                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                ir_obj_str = _PyValueTemps_Box(value_temps, str);
-                if (ir_obj_str == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(BUILD_INTERPOLATION);
-            }
-            else {
-                ir_obj_str = PyValue_AsKnownObjectBorrow(str);
-            }
-            PyObject *value_o = ir_obj_value;
-            PyObject *str_o = ir_obj_str;
+            assert(PyValue_IsObject(str));
+            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
             if (oparg & 1) {
@@ -3557,12 +3427,12 @@
             else {
                 format_o = &_Py_STR(empty);
             }
-            PyObject *interpolation_o = _PyInterpolation_Build(value_o, str_o, conversion, format_o);
+            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
             PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
             IR_CLEAR_SLOTS(&window[2], (oparg & 1));
             PyValue_XCLOSE(format_ref);
             window[1] = PyValue_NULL;
-            PyValue_CLOSE(str);
+            _PyValue_CLOSE_POINTER(str);
             window[0] = PyValue_NULL;
             PyValue_CLOSE(value);
             if (interpolation_o == NULL) {
@@ -3578,8 +3448,6 @@
         TARGET(BUILD_LIST) {
             int opcode = BUILD_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3609,8 +3477,6 @@
         TARGET(BUILD_MAP) {
             int opcode = BUILD_MAP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3641,8 +3507,6 @@
         TARGET(BUILD_SET) {
             int opcode = BUILD_SET;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3695,8 +3559,6 @@
         TARGET(BUILD_SLICE) {
             int opcode = BUILD_SLICE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3734,8 +3596,6 @@
         TARGET(BUILD_STRING) {
             int opcode = BUILD_STRING;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3771,10 +3631,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TEMPLATE);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow strings;
@@ -3784,46 +3640,26 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_interpolations = NULL;
-            PyObject *ir_obj_strings = NULL;
             interpolations = IR_VIEW(IR_C(ir_word));
             strings = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                ir_obj_strings = _PyValueTemps_Box(value_temps, strings);
-                if (ir_obj_strings == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(BUILD_TEMPLATE);
-            }
-            else {
-                ir_obj_strings = PyValue_AsKnownObjectBorrow(strings);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(interpolations))) {
-                ir_obj_interpolations = _PyValueTemps_Box(value_temps, interpolations);
-                if (ir_obj_interpolations == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(BUILD_TEMPLATE);
-            }
-            else {
-                ir_obj_interpolations = PyValue_AsKnownObjectBorrow(interpolations);
-            }
-            PyObject *strings_o = ir_obj_strings;
-            PyObject *interpolations_o = ir_obj_interpolations;
+            assert(PyValue_IsObject(strings));
+            assert(PyValue_IsObject(interpolations));
+            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
+            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
             ir_own_C = IR_DETACH(ir_word, C, interpolations);
             (void)(ir_own_C);
             ir_own_B = IR_DETACH(ir_word, B, strings);
             (void)(ir_own_B);
             if (template_o == NULL) {
-                PyValue_XCLOSE(ir_own_C);
-                PyValue_XCLOSE(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_C);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             template = PyValue_FromObjectSteal(template_o);
             IR_STORE_DST(ir_word, A, template);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_C);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -3831,8 +3667,6 @@
         TARGET(BUILD_TUPLE) {
             int opcode = BUILD_TUPLE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3862,8 +3696,6 @@
         TARGET(CACHE) {
             int opcode = CACHE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3877,8 +3709,6 @@
         TARGET(CALL) {
             int opcode = CALL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL);
@@ -3973,8 +3803,6 @@
         TARGET(CALL_ALLOC_AND_ENTER_INIT) {
             int opcode = CALL_ALLOC_AND_ENTER_INIT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4137,8 +3965,6 @@
         TARGET(CALL_BOUND_METHOD_EXACT_ARGS) {
             int opcode = CALL_BOUND_METHOD_EXACT_ARGS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4327,8 +4153,6 @@
         TARGET(CALL_BOUND_METHOD_GENERAL) {
             int opcode = CALL_BOUND_METHOD_GENERAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4458,8 +4282,6 @@
         TARGET(CALL_BUILTIN_CLASS) {
             int opcode = CALL_BUILTIN_CLASS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4561,8 +4383,6 @@
         TARGET(CALL_BUILTIN_FAST) {
             int opcode = CALL_BUILTIN_FAST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4665,8 +4485,6 @@
         TARGET(CALL_BUILTIN_FAST_WITH_KEYWORDS) {
             int opcode = CALL_BUILTIN_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4769,8 +4587,6 @@
         TARGET(CALL_BUILTIN_O) {
             int opcode = CALL_BUILTIN_O;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4881,8 +4697,6 @@
         TARGET(CALL_EX_NON_PY_GENERAL) {
             int opcode = CALL_EX_NON_PY_GENERAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -4984,8 +4798,6 @@
         TARGET(CALL_EX_PY) {
             int opcode = CALL_EX_PY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5108,8 +4920,6 @@
         TARGET(CALL_FUNCTION_EX) {
             int opcode = CALL_FUNCTION_EX;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_FUNCTION_EX);
@@ -5206,10 +5016,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -5230,15 +5036,10 @@
                     }
                 }
                 else {
-                    PyObject *value_o = _PyValueTemps_Object(value_temps, value);
-                    if (value_o == NULL) {
+                    res = _PyEval_CallIntrinsic1(tstate, oparg, value);
+                    if (PyValue_IsNull(res)) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
-                    PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
-                    if (res_o == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    res = PyValue_FromObjectSteal(res_o);
                 }
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
@@ -5263,10 +5064,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_D(ir_word);
@@ -5281,40 +5078,35 @@
             value1_st = IR_VIEW(IR_C(ir_word));
             value2_st = IR_VIEW(IR_B(ir_word));
             assert(oparg <= MAX_INTRINSIC_2);
+            ir_own_B = IR_DETACH(ir_word, B, value2_st);
+            PyValue held2 = IR_TAKEN(value2_st, ir_own_B);
+            ir_own_C = IR_DETACH(ir_word, C, value1_st);
+            PyValue held1 = IR_TAKEN(value1_st, ir_own_C);
             if (oparg == INTRINSIC_GETATTR) {
-                PyObject *name = _PyValueTemps_Object(value_temps, value1_st);
-                assert(PyUnicode_CheckExact(name));
-                res = _PyValue_GetAttr(value2_st, name);
+                PyObject *name = PyValue_ObjectOrNull(held1);
+                assert(name != NULL && PyUnicode_CheckExact(name));
+                res = _PyValue_GetAttr(held2, name);
             }
             else if (oparg == INTRINSIC_SETATTR) {
-                PyObject *target = _PyValueTemps_Object(value_temps, value1_st);
-                assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+                PyObject *target = PyValue_ObjectOrNull(held1);
+                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                 PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
                 PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
                 assert(PyValue_IsObject(attr_name));
                 int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                    value2_st);
+                    held2);
                 res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {
-                PyObject *value1 = _PyValueTemps_Object(value_temps, value1_st);
-                PyObject *value2 = _PyValueTemps_Object(value_temps, value2_st);
-                PyObject *res_o = NULL;
-                if (value1 != NULL && value2 != NULL) {
-                    res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-                }
-                res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
             }
-            ir_own_C = IR_DETACH(ir_word, C, value1_st);
-            ir_own_B = IR_DETACH(ir_word, B, value2_st);
+            PyValue_XCLOSE(held1);
+            PyValue_XCLOSE(held2);
             if (PyValue_IsNull(res)) {
-                PyValue_XCLOSE(ir_own_C);
-                PyValue_XCLOSE(ir_own_B);
+                PyValue_XCLOSE(res);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -5322,8 +5114,6 @@
         TARGET(CALL_ISINSTANCE) {
             int opcode = CALL_ISINSTANCE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5419,8 +5209,6 @@
         TARGET(CALL_KW) {
             int opcode = CALL_KW;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW);
@@ -5515,8 +5303,6 @@
         TARGET(CALL_KW_BOUND_METHOD) {
             int opcode = CALL_KW_BOUND_METHOD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5637,8 +5423,6 @@
         TARGET(CALL_KW_NON_PY) {
             int opcode = CALL_KW_NON_PY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5707,8 +5491,6 @@
         TARGET(CALL_KW_PY) {
             int opcode = CALL_KW_PY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5807,8 +5589,6 @@
         TARGET(CALL_LEN) {
             int opcode = CALL_LEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -5908,8 +5688,6 @@
         TARGET(CALL_LIST_APPEND) {
             int opcode = CALL_LIST_APPEND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6049,8 +5827,6 @@
         TARGET(CALL_METHOD_DESCRIPTOR_FAST) {
             int opcode = CALL_METHOD_DESCRIPTOR_FAST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6172,8 +5948,6 @@
         TARGET(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) {
             int opcode = CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6299,10 +6073,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
-            PyObject *value_boxes[16];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 16};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -6381,23 +6151,16 @@
                 if (call_state & CALL_SELF_PRESENT) {
                     args--;
                 }
-                PyObject *self = _PyValueTemps_Object(value_temps, args[0]);
-                if (self == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
-                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
-                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
-                _PyBorrowScope_Exit(tstate, borrow_mark);
+                PyValue res_value = _PyEval_CallMethodDescriptorNoArgs(tstate, cfunc, args[0]);
                 _Py_LeaveRecursiveCallTstate(tstate);
-                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_value)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = args[0];
-                res = PyValue_FromObjectSteal(res_o);
+                res = res_value;
             }
             // _POP_TOP
             {
@@ -6426,7 +6189,6 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
             call_transaction_fallback_CALL_METHOD_DESCRIPTOR_NOARGS:;
-            assert(value_temps->count == 0);
             assert(frame->instr_ptr == this_instr);
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
@@ -6449,10 +6211,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
-            PyObject *value_boxes[18];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 18};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -6534,26 +6292,15 @@
                 }
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
-                PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
-                if (self == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                PyObject *arg = _PyValueTemps_Object(value_temps, arguments[1]);
-                if (arg == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
-                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
-                _PyBorrowScope_Exit(tstate, borrow_mark);
+                PyValue res_value = _PyEval_CallMethodDescriptorO(tstate, cfunc, arguments[0], arguments[1]);
                 _Py_LeaveRecursiveCallTstate(tstate);
-                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res_value)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 c = callable;
                 s = arguments[0];
                 a = arguments[1];
-                res = PyValue_FromObjectSteal(res_o);
+                res = res_value;
             }
             // _POP_TOP
             {
@@ -6589,7 +6336,6 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
             call_transaction_fallback_CALL_METHOD_DESCRIPTOR_O:;
-            assert(value_temps->count == 0);
             assert(frame->instr_ptr == this_instr);
             {
                 _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
@@ -6607,8 +6353,6 @@
         TARGET(CALL_NON_PY_GENERAL) {
             int opcode = CALL_NON_PY_GENERAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6677,8 +6421,6 @@
         TARGET(CALL_PY_EXACT_ARGS) {
             int opcode = CALL_PY_EXACT_ARGS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6828,8 +6570,6 @@
         TARGET(CALL_PY_GENERAL) {
             int opcode = CALL_PY_GENERAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -6928,8 +6668,6 @@
         TARGET(CALL_STR_1) {
             int opcode = CALL_STR_1;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7023,8 +6761,6 @@
         TARGET(CALL_TUPLE_1) {
             int opcode = CALL_TUPLE_1;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7118,8 +6854,6 @@
         TARGET(CALL_TYPE_1) {
             int opcode = CALL_TYPE_1;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7207,10 +6941,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EG_MATCH);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
@@ -7222,42 +6952,21 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_exc_value_st = NULL;
-            PyObject *ir_obj_match_type_st = NULL;
             match_type_st = IR_VIEW(IR_C(ir_word));
             exc_value_st = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
-                if (ir_obj_exc_value_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CHECK_EG_MATCH);
-            }
-            else {
-                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                ir_obj_match_type_st = _PyValueTemps_Box(value_temps, match_type_st);
-                if (ir_obj_match_type_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CHECK_EG_MATCH);
-            }
-            else {
-                ir_obj_match_type_st = PyValue_AsKnownObjectBorrow(match_type_st);
-            }
-            PyObject *exc_value = ir_obj_exc_value_st;
-            PyObject *match_type = ir_obj_match_type_st;
+            assert(PyValue_IsObject(exc_value_st));
+            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
             PyValue held_exc = IR_TAKEN(exc_value_st, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, match_type_st);
             PyValue held_type = IR_TAKEN(match_type_st, ir_own_C);
-            int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
+            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
             if (err < 0) {
                 PyValue_CLOSE(held_type);
                 PyValue_CLOSE(held_exc);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
+            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
             PyObject *match_o = matched.match;
             PyObject *rest_o = matched.rest;
@@ -7284,10 +6993,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue left;
@@ -7295,40 +7000,19 @@
             PyValue b;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_left = NULL;
-            PyObject *ir_obj_right = NULL;
             right = IR_VIEW(IR_C(ir_word));
             left = IR_SLOT(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_B(ir_word))))) {
-                ir_obj_left = _PyValueTemps_Box(value_temps, left);
-                if (ir_obj_left == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CHECK_EXC_MATCH);
-            }
-            else {
-                ir_obj_left = PyValue_AsKnownObjectBorrow(left);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                ir_obj_right = _PyValueTemps_Box(value_temps, right);
-                if (ir_obj_right == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CHECK_EXC_MATCH);
-            }
-            else {
-                ir_obj_right = PyValue_AsKnownObjectBorrow(right);
-            }
-            PyObject *left_o = ir_obj_left;
-            PyObject *right_o = ir_obj_right;
+            assert(PyValue_IsObject(left));
+            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             ir_own_C = IR_DETACH(ir_word, C, right);
             PyValue held_right = IR_TAKEN(right, ir_own_C);
             assert(PyExceptionInstance_Check(left_o));
-            int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
+            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
             if (err < 0) {
                 PyValue_CLOSE(held_right);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
+            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
             PyValue_CLOSE(held_right);
             b = res ? PyValue_True : PyValue_False;
@@ -7345,10 +7029,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
-            PyObject *value_boxes[9];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 9};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -7357,19 +7037,9 @@
             (void)window;
             PyValue exc_value_st;
             PyValue value;
-            PyObject *ir_obj_exc_value_st = NULL;
             exc_value_st = window[3];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
-                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
-                if (ir_obj_exc_value_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CLEANUP_THROW);
-            }
-            else {
-                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
-            }
-            PyObject *exc_value = ir_obj_exc_value_st;
+            assert(PyValue_IsObject(exc_value_st));
+            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (!matches) {
@@ -7393,10 +7063,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
-            PyObject *value_boxes[9];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 9};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -7405,19 +7071,9 @@
             (void)window;
             PyValue exc_value_st;
             PyValue value;
-            PyObject *ir_obj_exc_value_st = NULL;
             exc_value_st = window[3];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
-                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
-                if (ir_obj_exc_value_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(CLEANUP_THROW);
-            }
-            else {
-                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
-            }
-            PyObject *exc_value = ir_obj_exc_value_st;
+            assert(PyValue_IsObject(exc_value_st));
+            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (!matches) {
@@ -7437,8 +7093,6 @@
         TARGET(COMPARE_OP) {
             int opcode = COMPARE_OP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP);
@@ -7506,8 +7160,6 @@
         TARGET(COMPARE_OP_FLOAT) {
             int opcode = COMPARE_OP_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7584,8 +7236,6 @@
         TARGET(COMPARE_OP_INT) {
             int opcode = COMPARE_OP_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7662,8 +7312,6 @@
         TARGET(COMPARE_OP_JUMP) {
             int opcode = COMPARE_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP);
@@ -7738,8 +7386,6 @@
         TARGET(COMPARE_OP_JUMP_FLOAT) {
             int opcode = COMPARE_OP_JUMP_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7821,8 +7467,6 @@
         TARGET(COMPARE_OP_JUMP_INT) {
             int opcode = COMPARE_OP_JUMP_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -7904,8 +7548,6 @@
         TARGET(COMPARE_OP_JUMP_STR) {
             int opcode = COMPARE_OP_JUMP_STR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8004,8 +7646,6 @@
         TARGET(COMPARE_OP_STR) {
             int opcode = COMPARE_OP_STR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8101,8 +7741,6 @@
         TARGET(CONTAINS_OP) {
             int opcode = CONTAINS_OP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP);
@@ -8172,8 +7810,6 @@
         TARGET(CONTAINS_OP_DICT) {
             int opcode = CONTAINS_OP_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8250,8 +7886,6 @@
         TARGET(CONTAINS_OP_JUMP) {
             int opcode = CONTAINS_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP);
@@ -8328,8 +7962,6 @@
         TARGET(CONTAINS_OP_JUMP_DICT) {
             int opcode = CONTAINS_OP_JUMP_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8411,8 +8043,6 @@
         TARGET(CONTAINS_OP_JUMP_SET) {
             int opcode = CONTAINS_OP_JUMP_SET;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8501,8 +8131,6 @@
         TARGET(CONTAINS_OP_SET) {
             int opcode = CONTAINS_OP_SET;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8586,8 +8214,6 @@
         TARGET(CONVERT_VALUE) {
             int opcode = CONVERT_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8629,8 +8255,6 @@
         TARGET(COPY) {
             int opcode = COPY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8653,8 +8277,6 @@
         TARGET(COPY_FREE_VARS) {
             int opcode = COPY_FREE_VARS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8676,8 +8298,6 @@
         TARGET(DELETE_DEREF) {
             int opcode = DELETE_DEREF;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8698,8 +8318,6 @@
         TARGET(DELETE_FAST) {
             int opcode = DELETE_FAST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8724,8 +8342,6 @@
         TARGET(DELETE_SUBSCR) {
             int opcode = DELETE_SUBSCR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -8760,10 +8376,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_MERGE);
-            PyObject *value_boxes[15];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 15};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -8775,50 +8387,24 @@
             PyValue update;
             PyValue u;
             PyValue value;
-            PyObject *ir_obj_callable = NULL;
-            PyObject *ir_obj_dict = NULL;
-            PyObject *ir_obj_update = NULL;
             // _DICT_MERGE
             {
                 update = window[4 + (oparg - 1)];
                 dict = window[3];
                 callable = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_callable = _PyValueTemps_Box(value_temps, callable);
-                    if (ir_obj_callable == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(DICT_MERGE);
+                assert(PyValue_IsObject(dict));
+                if (!PyValue_IsObject(update)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after ** must be a mapping, not %N",
+                              PyValue_TYPE(update));
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                else {
-                    ir_obj_callable = PyValue_AsKnownObjectBorrow(callable);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
-                    ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
-                    if (ir_obj_dict == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(DICT_MERGE);
-                }
-                else {
-                    ir_obj_dict = PyValue_AsKnownObjectBorrow(dict);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[4 + (oparg - 1)]))) {
-                    ir_obj_update = _PyValueTemps_Box(value_temps, update);
-                    if (ir_obj_update == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(DICT_MERGE);
-                }
-                else {
-                    ir_obj_update = PyValue_AsKnownObjectBorrow(update);
-                }
-                PyObject *callable_o = ir_obj_callable;
-                PyObject *dict_o = ir_obj_dict;
-                PyObject *update_o = ir_obj_update;
+                assert(PyValue_IsObject(update));
+                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
+                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
                 _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
                 if (merged.status < 0) {
-                    _PyEval_FormatKwargsError(tstate, callable_o, update_o, merged.object);
+                    _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
                     Py_XDECREF(merged.object);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -8828,7 +8414,7 @@
             {
                 value = u;
                 window[4 + (oparg - 1)] = PyValue_NULL;
-                PyValue_XCLOSE(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             DISPATCH();
         }
@@ -8841,10 +8427,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_UPDATE);
-            PyObject *value_boxes[9];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 9};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -8855,34 +8437,20 @@
             PyValue update;
             PyValue upd;
             PyValue value;
-            PyObject *ir_obj_dict = NULL;
-            PyObject *ir_obj_update = NULL;
             // _DICT_UPDATE
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
-                    if (ir_obj_dict == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(DICT_UPDATE);
+                assert(PyValue_IsObject(dict));
+                if (!PyValue_IsObject(update)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%N' object is not a mapping",
+                              PyValue_TYPE(update));
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                else {
-                    ir_obj_dict = PyValue_AsKnownObjectBorrow(dict);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg - 1)]))) {
-                    ir_obj_update = _PyValueTemps_Box(value_temps, update);
-                    if (ir_obj_update == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(DICT_UPDATE);
-                }
-                else {
-                    ir_obj_update = PyValue_AsKnownObjectBorrow(update);
-                }
-                PyObject *dict_o = ir_obj_dict;
-                PyObject *update_o = ir_obj_update;
+                assert(PyValue_IsObject(update));
+                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
+                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
                 int err = PyDict_Update(dict_o, update_o);
                 if (err < 0) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
@@ -8907,7 +8475,7 @@
             {
                 value = upd;
                 window[1 + (oparg - 1)] = PyValue_NULL;
-                PyValue_XCLOSE(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             DISPATCH();
         }
@@ -8920,10 +8488,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_ASYNC_FOR);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -8932,29 +8496,19 @@
             (void)window;
             PyValue awaitable_st;
             PyValue exc_st;
-            PyObject *ir_obj_exc_st = NULL;
             exc_st = window[1];
             awaitable_st = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
-                if (ir_obj_exc_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(END_ASYNC_FOR);
-            }
-            else {
-                ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
-            }
             JUMPBY(0);
             (void)oparg;
-            PyObject *exc = ir_obj_exc_st;
+            assert(PyValue_IsObject(exc_st));
+            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
             assert(exc && PyExceptionInstance_Check(exc));
             int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
             if (matches) {
                 PyValue tmp = exc_st;
                 exc_st = PyValue_NULL;
                 IR_SET_TEMP(window[1], exc_st);
-                PyValue_CLOSE(tmp);
+                _PyValue_CLOSE_POINTER(tmp);
                 tmp = awaitable_st;
                 awaitable_st = PyValue_NULL;
                 IR_SET_TEMP(window[0], awaitable_st);
@@ -8974,8 +8528,6 @@
         TARGET(END_FOR) {
             int opcode = END_FOR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             next_instr += 1;
@@ -8993,8 +8545,6 @@
         TARGET(END_SEND) {
             int opcode = END_SEND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9027,8 +8577,6 @@
         TARGET(EXIT_INIT_CHECK) {
             int opcode = EXIT_INIT_CHECK;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9051,8 +8599,6 @@
         TARGET(FORMAT_SIMPLE) {
             int opcode = FORMAT_SIMPLE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9095,8 +8641,6 @@
         TARGET(FORMAT_WITH_SPEC) {
             int opcode = FORMAT_WITH_SPEC;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9132,8 +8676,6 @@
         TARGET(FOR_ITER) {
             int opcode = FOR_ITER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER);
@@ -9194,8 +8736,6 @@
         TARGET(FOR_ITER_GEN) {
             int opcode = FOR_ITER_GEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9260,8 +8800,6 @@
         TARGET(FOR_ITER_LIST) {
             int opcode = FOR_ITER_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9332,8 +8870,6 @@
         TARGET(FOR_ITER_RANGE) {
             int opcode = FOR_ITER_RANGE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9407,8 +8943,6 @@
         TARGET(FOR_ITER_TUPLE) {
             int opcode = FOR_ITER_TUPLE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9471,8 +9005,6 @@
         TARGET(FOR_ITER_VIRTUAL) {
             int opcode = FOR_ITER_VIRTUAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9533,31 +9065,25 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AITER);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow obj;
             PyValue iter;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_obj = NULL;
             obj = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                ir_obj_obj = _PyValueTemps_Box(value_temps, obj);
-                if (ir_obj_obj == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(GET_AITER);
-            }
-            else {
-                ir_obj_obj = PyValue_AsKnownObjectBorrow(obj);
-            }
             unaryfunc getter = NULL;
-            PyObject *obj_o = ir_obj_obj;
             PyObject *iter_o;
+            if (!PyValue_IsObject(obj)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'async for' requires an object with "
+                              "__aiter__ method, got %.100s",
+                              PyValue_TYPE(obj)->tp_name);
+                ir_own_B = IR_DETACH(ir_word, B, obj);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            assert(PyValue_IsObject(obj));
+            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
             PyTypeObject *type = Py_TYPE(obj_o);
             if (type->tp_as_async != NULL) {
                 getter = type->tp_as_async->am_aiter;
@@ -9569,14 +9095,14 @@
                               type->tp_name);
                 ir_own_B = IR_DETACH(ir_word, B, obj);
                 (void)(ir_own_B);
-                PyValue_XCLOSE(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             iter_o = (*getter)(obj_o);
             ir_own_B = IR_DETACH(ir_word, B, obj);
             (void)(ir_own_B);
             if (iter_o == NULL) {
-                PyValue_XCLOSE(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (Py_TYPE(iter_o)->tp_as_async == NULL ||
@@ -9586,12 +9112,12 @@
                               "that does not implement __anext__: %.100s",
                               Py_TYPE(iter_o)->tp_name);
                 Py_DECREF(iter_o);
-                PyValue_XCLOSE(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             iter = PyValue_FromObjectSteal(iter_o);
             IR_STORE_DST(ir_word, A, iter);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9604,29 +9130,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue aiter;
             PyValue awaitable;
-            PyObject *ir_obj_aiter = NULL;
             aiter = IR_SLOT(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_B(ir_word))))) {
-                ir_obj_aiter = _PyValueTemps_Box(value_temps, aiter);
-                if (ir_obj_aiter == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 1, this_instr);
-                }
-                BOX_STAT_INC(GET_ANEXT);
-            }
-            else {
-                ir_obj_aiter = PyValue_AsKnownObjectBorrow(aiter);
-            }
-            PyObject *awaitable_o = _PyEval_GetANext(ir_obj_aiter);
+            assert(PyValue_IsObject(aiter));
+            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 2, this_instr);
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(ir_word, A, awaitable);
@@ -9642,36 +9154,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValueBorrow iterable;
             PyValue iter;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_iterable = NULL;
             iterable = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
-                if (ir_obj_iterable == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(GET_AWAITABLE);
-            }
-            else {
-                ir_obj_iterable = PyValue_AsKnownObjectBorrow(iterable);
-            }
             if (coro_awaitable_can_transfer(iterable)) {
                 ir_own_B = IR_DETACH(ir_word, B, iterable);
                 iter = IR_TAKEN(iterable, ir_own_B);
             }
             else {
-                PyObject *iter_o = _PyEval_GetAwaitable(ir_obj_iterable, oparg);
+                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
                 ir_own_B = IR_DETACH(ir_word, B, iterable);
                 (void)(ir_own_B);
                 if (iter_o == NULL) {
@@ -9680,17 +9175,14 @@
                 }
                 iter = PyValue_FromObjectSteal(iter_o);
             }
-            IR_STORE_DST(ir_word, A, iter);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
             PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
         TARGET(GET_ITER) {
             int opcode = GET_ITER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER);
@@ -9734,8 +9226,6 @@
         TARGET(GET_ITER_SELF) {
             int opcode = GET_ITER_SELF;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9770,8 +9260,6 @@
         TARGET(GET_ITER_VIRTUAL) {
             int opcode = GET_ITER_VIRTUAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9806,8 +9294,6 @@
         TARGET(GET_LEN) {
             int opcode = GET_LEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -9839,34 +9325,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_FROM);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue from;
             PyValue res;
-            PyObject *ir_obj_from = NULL;
             from = IR_SLOT(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_B(ir_word))))) {
-                ir_obj_from = _PyValueTemps_Box(value_temps, from);
-                if (ir_obj_from == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(IMPORT_FROM);
-            }
-            else {
-                ir_obj_from = PyValue_AsKnownObjectBorrow(from);
-            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            if (PyValue_IsObject(from) &&
-                PyLazyImport_CheckExact(ir_obj_from))
+            PyObject *from_o = PyValue_ObjectOrNull(from);
+            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
             {
                 PyObject *res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, ir_obj_from, name);
+                    tstate, frame, from_o, name);
                 if (res_o == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -9891,10 +9362,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_NAME);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -9904,27 +9371,17 @@
             PyValue level;
             PyValue fromlist;
             PyValue res;
-            PyObject *ir_obj_fromlist = NULL;
             fromlist = window[1];
             level = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                ir_obj_fromlist = _PyValueTemps_Box(value_temps, fromlist);
-                if (ir_obj_fromlist == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(IMPORT_NAME);
-            }
-            else {
-                ir_obj_fromlist = PyValue_AsKnownObjectBorrow(fromlist);
-            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
+            assert(PyValue_IsObject(fromlist));
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
                 PyValue tmp = fromlist;
                 fromlist = PyValue_NULL;
                 IR_SET_TEMP(window[1], fromlist);
-                PyValue_CLOSE(tmp);
+                _PyValue_CLOSE_POINTER(tmp);
                 tmp = level;
                 level = PyValue_NULL;
                 IR_SET_TEMP(window[0], level);
@@ -9936,19 +9393,19 @@
             if (!(oparg & 0x02)) {
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    ir_obj_fromlist,
+                    PyValue_AsKnownObjectBorrow(fromlist),
                     ilevel, oparg & 0x01);
             }
             else {
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    ir_obj_fromlist,
+                    PyValue_AsKnownObjectBorrow(fromlist),
                     ilevel);
             }
             PyValue tmp = fromlist;
             fromlist = PyValue_NULL;
             IR_SET_TEMP(window[1], fromlist);
-            PyValue_CLOSE(tmp);
+            _PyValue_CLOSE_POINTER(tmp);
             tmp = level;
             level = PyValue_NULL;
             IR_SET_TEMP(window[0], level);
@@ -9968,8 +9425,6 @@
         TARGET(INSTRUMENTED_CALL) {
             int opcode = INSTRUMENTED_CALL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10048,8 +9503,6 @@
         TARGET(INSTRUMENTED_CALL_FUNCTION_EX) {
             int opcode = INSTRUMENTED_CALL_FUNCTION_EX;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10103,8 +9556,6 @@
         TARGET(INSTRUMENTED_CALL_KW) {
             int opcode = INSTRUMENTED_CALL_KW;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10179,8 +9630,6 @@
         TARGET(INSTRUMENTED_COMPARE_OP_JUMP) {
             int opcode = INSTRUMENTED_COMPARE_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10241,7 +9690,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10262,7 +9710,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10278,8 +9725,6 @@
         TARGET(INSTRUMENTED_CONTAINS_OP_JUMP) {
             int opcode = INSTRUMENTED_CONTAINS_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10342,7 +9787,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10363,7 +9807,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10384,10 +9827,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -10396,7 +9835,6 @@
             (void)window;
             PyValue awaitable_st;
             PyValue exc_st;
-            PyObject *ir_obj_exc_st = NULL;
             // _MONITOR_END_ASYNC_FOR
             {
                 assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
@@ -10406,26 +9844,17 @@
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
-                    if (ir_obj_exc_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_END_ASYNC_FOR);
-                }
-                else {
-                    ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
-                }
                 JUMPBY(0);
                 (void)oparg;
-                PyObject *exc = ir_obj_exc_st;
+                assert(PyValue_IsObject(exc_st));
+                PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
                 assert(exc && PyExceptionInstance_Check(exc));
                 int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
                 if (matches) {
                     PyValue tmp = exc_st;
                     exc_st = PyValue_NULL;
                     IR_SET_TEMP(window[1], exc_st);
-                    PyValue_CLOSE(tmp);
+                    _PyValue_CLOSE_POINTER(tmp);
                     tmp = awaitable_st;
                     awaitable_st = PyValue_NULL;
                     IR_SET_TEMP(window[0], awaitable_st);
@@ -10450,29 +9879,14 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_FOR);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue receiver;
             PyValueBorrow value;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_value = NULL;
             value = IR_VIEW(IR_C(ir_word));
             receiver = IR_SLOT(IR_A(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                ir_obj_value = _PyValueTemps_Box(value_temps, value);
-                if (ir_obj_value == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(INSTRUMENTED_END_FOR);
-            }
-            else {
-                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
-            }
             if (PyValue_GenCheck(receiver)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, ir_obj_value);
+                int err = monitor_stop_iteration(tstate, frame, this_instr, value);
                 if (err) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -10491,10 +9905,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_SEND);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValueBorrow receiver;
             PyValueBorrow index_or_null;
             PyValueBorrow value;
@@ -10505,37 +9915,15 @@
             (void)ir_own_C;
             PyValue ir_own_D = PyValue_NULL;
             (void)ir_own_D;
-            PyObject *ir_obj_receiver = NULL;
-            PyObject *ir_obj_value = NULL;
             value = IR_VIEW(IR_D(ir_word));
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
-                if (ir_obj_receiver == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(INSTRUMENTED_END_SEND);
-            }
-            else {
-                ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                ir_obj_value = _PyValueTemps_Box(value_temps, value);
-                if (ir_obj_value == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(INSTRUMENTED_END_SEND);
-            }
-            else {
-                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
-            }
-            PyObject *receiver_o = ir_obj_receiver;
-            PyObject *value_o = ir_obj_value;
+            assert(PyValue_IsObject(receiver));
+            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
             PyValue held = IR_TAKEN(value, ir_own_D);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, value_o);
+                int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
                     PyValue_CLOSE(held);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -10557,15 +9945,13 @@
             ir_own_B = IR_DETACH(ir_word, B, receiver);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
             (void)(ir_own_B);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             DISPATCH();
         }
 
         TARGET(INSTRUMENTED_FOR_ITER) {
             int opcode = INSTRUMENTED_FOR_ITER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10611,7 +9997,6 @@
                 ? PyErr_GetRaisedException() : NULL;
                 assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                 frame->instr_ptr = ir_observer_result.next;
-                _PyValueTemps_Close(NULL);
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
@@ -10625,8 +10010,6 @@
         TARGET(INSTRUMENTED_INSTRUCTION) {
             int opcode = INSTRUMENTED_INSTRUCTION;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10650,8 +10033,6 @@
         TARGET(INSTRUMENTED_IS_OP_JUMP) {
             int opcode = INSTRUMENTED_IS_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10711,7 +10092,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10732,7 +10112,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -10748,8 +10127,6 @@
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10775,7 +10152,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -10790,8 +10166,6 @@
         TARGET(INSTRUMENTED_JUMP_FORWARD) {
             int opcode = INSTRUMENTED_JUMP_FORWARD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10808,7 +10182,6 @@
                 ? PyErr_GetRaisedException() : NULL;
                 assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                 frame->instr_ptr = ir_observer_result.next;
-                _PyValueTemps_Close(NULL);
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
@@ -10822,8 +10195,6 @@
         TARGET(INSTRUMENTED_JUMP_IF_FALSE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10855,7 +10226,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -10879,7 +10249,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -10894,8 +10263,6 @@
         TARGET(INSTRUMENTED_JUMP_IF_TRUE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -10927,7 +10294,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -10951,7 +10317,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -10966,8 +10331,6 @@
         TARGET(INSTRUMENTED_LINE) {
             int opcode = INSTRUMENTED_LINE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const prev_instr = frame->instr_ptr;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11011,10 +10374,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_D(ir_word);
@@ -11027,41 +10386,18 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
-            PyObject *ir_obj_class_st = NULL;
-            PyObject *ir_obj_global_super_st = NULL;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
                 class_st = window[1];
                 global_super_st = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
-                    if (ir_obj_global_super_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
-                    if (ir_obj_class_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
-                }
-                PyObject *global_super = ir_obj_global_super_st;
-                PyObject *class = ir_obj_class_st;
+                PyValueBorrow arg = oparg & 2
+                ? PyValue_Borrow(class_st)
+            : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                        PyValue_FromObjectBorrow(arg));
+                        frame, this_instr, global_super_st, arg);
                     if (err) {
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
@@ -11081,20 +10417,17 @@
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
-                PyValue super = super_call(global_super, class, self_st, oparg & 2);
+                PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (PyValue_IsNull(super)) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                            PyValue_FromObjectBorrow(arg));
+                            frame, this_instr, global_super_st, arg);
                     }
                     else {
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                            PyValue_FromObjectBorrow(arg));
+                            frame, this_instr, global_super_st, arg);
                         if (err < 0) {
                             PyValue_CLEAR(super);
                         }
@@ -11141,8 +10474,6 @@
         TARGET(INSTRUMENTED_POP_ITER) {
             int opcode = INSTRUMENTED_POP_ITER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const prev_instr = frame->instr_ptr;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11174,7 +10505,6 @@
                 ? PyErr_GetRaisedException() : NULL;
                 assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                 frame->instr_ptr = ir_observer_result.next;
-                _PyValueTemps_Close(NULL);
                 if (ir_observer_result.status < 0) {
                     PyErr_SetRaisedException(ir_observer_exception);
                     next_instr = frame->instr_ptr + 1;
@@ -11188,8 +10518,6 @@
         TARGET(INSTRUMENTED_POP_JUMP_IF_FALSE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_FALSE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11231,7 +10559,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -11251,7 +10578,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -11267,8 +10593,6 @@
         TARGET(INSTRUMENTED_POP_JUMP_IF_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11294,7 +10618,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -11317,7 +10640,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -11332,8 +10654,6 @@
         TARGET(INSTRUMENTED_POP_JUMP_IF_NOT_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11361,7 +10681,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -11382,7 +10701,6 @@
                     ? PyErr_GetRaisedException() : NULL;
                     assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                     frame->instr_ptr = ir_observer_result.next;
-                    _PyValueTemps_Close(NULL);
                     if (ir_observer_result.status < 0) {
                         PyErr_SetRaisedException(ir_observer_exception);
                         next_instr = frame->instr_ptr + 1;
@@ -11397,8 +10715,6 @@
         TARGET(INSTRUMENTED_POP_JUMP_IF_TRUE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_TRUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11440,7 +10756,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -11460,7 +10775,6 @@
                         ? PyErr_GetRaisedException() : NULL;
                         assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
                         frame->instr_ptr = ir_observer_result.next;
-                        _PyValueTemps_Close(NULL);
                         if (ir_observer_result.status < 0) {
                             PyErr_SetRaisedException(ir_observer_exception);
                             next_instr = frame->instr_ptr + 1;
@@ -11476,8 +10790,6 @@
         TARGET(INSTRUMENTED_RESUME) {
             int opcode = INSTRUMENTED_RESUME;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11534,8 +10846,6 @@
         TARGET(INSTRUMENTED_RETURN_VALUE) {
             int opcode = INSTRUMENTED_RETURN_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11592,8 +10902,6 @@
         TARGET(INSTRUMENTED_RETURN_VALUE_EMPTY) {
             int opcode = INSTRUMENTED_RETURN_VALUE_EMPTY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11650,8 +10958,6 @@
         TARGET(INSTRUMENTED_YIELD_DELEGATED) {
             int opcode = INSTRUMENTED_YIELD_DELEGATED;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11711,8 +11017,6 @@
         TARGET(INSTRUMENTED_YIELD_VALUE) {
             int opcode = INSTRUMENTED_YIELD_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11794,8 +11098,6 @@
         TARGET(INTERPRETER_EXIT) {
             int opcode = INTERPRETER_EXIT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11819,8 +11121,6 @@
         TARGET(IR_JUMP) {
             int opcode = IR_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             next_instr += 1;
@@ -11834,8 +11134,6 @@
         TARGET(IS_OP) {
             int opcode = IS_OP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11888,8 +11186,6 @@
         TARGET(IS_OP_JUMP) {
             int opcode = IS_OP_JUMP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11950,8 +11246,6 @@
         TARGET(JUMP_BACKWARD) {
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11977,8 +11271,6 @@
         TARGET(JUMP_BACKWARD_NO_INTERRUPT) {
             int opcode = JUMP_BACKWARD_NO_INTERRUPT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -11994,8 +11286,6 @@
         TARGET(JUMP_FORWARD) {
             int opcode = JUMP_FORWARD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12010,8 +11300,6 @@
         TARGET(JUMP_IF_FALSE_OR_POP) {
             int opcode = JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12046,8 +11334,6 @@
         TARGET(JUMP_IF_TRUE_OR_POP) {
             int opcode = JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12082,8 +11368,6 @@
         TARGET(LIST_APPEND) {
             int opcode = LIST_APPEND;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12118,10 +11402,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_EXTEND);
-            PyObject *value_boxes[9];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 9};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -12132,34 +11412,20 @@
             PyValue iterable_st;
             PyValue i;
             PyValue value;
-            PyObject *ir_obj_iterable_st = NULL;
-            PyObject *ir_obj_list_st = NULL;
             // _LIST_EXTEND
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_list_st = _PyValueTemps_Box(value_temps, list_st);
-                    if (ir_obj_list_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(LIST_EXTEND);
+                assert(PyValue_IsObject(list_st));
+                if (!PyValue_IsObject(iterable_st)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "Value after * must be an iterable, not %.200s",
+                              PyValue_TYPE(iterable_st)->tp_name);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                else {
-                    ir_obj_list_st = PyValue_AsKnownObjectBorrow(list_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg-1)]))) {
-                    ir_obj_iterable_st = _PyValueTemps_Box(value_temps, iterable_st);
-                    if (ir_obj_iterable_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(LIST_EXTEND);
-                }
-                else {
-                    ir_obj_iterable_st = PyValue_AsKnownObjectBorrow(iterable_st);
-                }
-                PyObject *list = ir_obj_list_st;
-                PyObject *iterable = ir_obj_iterable_st;
+                assert(PyValue_IsObject(iterable_st));
+                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+                PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
@@ -12180,7 +11446,7 @@
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
-                PyValue_XCLOSE(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             DISPATCH();
         }
@@ -12188,8 +11454,6 @@
         TARGET(LOAD_ATTR) {
             int opcode = LOAD_ATTR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
@@ -12259,8 +11523,6 @@
         TARGET(LOAD_ATTR_CLASS) {
             int opcode = LOAD_ATTR_CLASS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12323,8 +11585,6 @@
         TARGET(LOAD_ATTR_CLASSMETHOD) {
             int opcode = LOAD_ATTR_CLASSMETHOD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12413,8 +11673,6 @@
         TARGET(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) {
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12488,8 +11746,6 @@
         TARGET(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN) {
             int opcode = LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12583,8 +11839,6 @@
         TARGET(LOAD_ATTR_INSTANCE_VALUE) {
             int opcode = LOAD_ATTR_INSTANCE_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12659,8 +11913,6 @@
         TARGET(LOAD_ATTR_METHOD_LAZY_DICT) {
             int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12726,8 +11978,6 @@
         TARGET(LOAD_ATTR_METHOD_NO_DICT) {
             int opcode = LOAD_ATTR_METHOD_NO_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12783,8 +12033,6 @@
         TARGET(LOAD_ATTR_METHOD_WITH_VALUES) {
             int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12850,8 +12098,6 @@
         TARGET(LOAD_ATTR_MODULE) {
             int opcode = LOAD_ATTR_MODULE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12924,8 +12170,6 @@
         TARGET(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -12977,8 +12221,6 @@
         TARGET(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13040,8 +12282,6 @@
         TARGET(LOAD_ATTR_PROPERTY) {
             int opcode = LOAD_ATTR_PROPERTY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13130,8 +12370,6 @@
         TARGET(LOAD_ATTR_SHAPE) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13193,8 +12431,6 @@
         TARGET(LOAD_ATTR_SHAPE_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13255,8 +12491,6 @@
         TARGET(LOAD_ATTR_SHAPE_POLY) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13315,8 +12549,6 @@
         TARGET(LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13374,8 +12606,6 @@
         TARGET(LOAD_ATTR_SLOT) {
             int opcode = LOAD_ATTR_SLOT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13440,8 +12670,6 @@
         TARGET(LOAD_ATTR_WITH_HINT) {
             int opcode = LOAD_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13546,8 +12774,6 @@
         TARGET(LOAD_BUILD_CLASS) {
             int opcode = LOAD_BUILD_CLASS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13576,8 +12802,6 @@
         TARGET(LOAD_COMMON_CONSTANT) {
             int opcode = LOAD_COMMON_CONSTANT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13598,8 +12822,6 @@
         TARGET(LOAD_CONST) {
             int opcode = LOAD_CONST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST);
@@ -13619,8 +12841,6 @@
         TARGET(LOAD_CONST_INLINE_FLOAT) {
             int opcode = LOAD_CONST_INLINE_FLOAT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13641,8 +12861,6 @@
         TARGET(LOAD_CONST_INLINE_INT) {
             int opcode = LOAD_CONST_INLINE_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13663,8 +12881,6 @@
         TARGET(LOAD_DEREF) {
             int opcode = LOAD_DEREF;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13690,8 +12906,6 @@
         TARGET(LOAD_FAST) {
             int opcode = LOAD_FAST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13712,8 +12926,6 @@
         TARGET(LOAD_FAST_AND_CLEAR) {
             int opcode = LOAD_FAST_AND_CLEAR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13734,8 +12946,6 @@
         TARGET(LOAD_FAST_BORROW) {
             int opcode = LOAD_FAST_BORROW;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13756,8 +12966,6 @@
         TARGET(LOAD_FAST_CHECK) {
             int opcode = LOAD_FAST_CHECK;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -13790,10 +12998,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -13802,20 +13006,10 @@
             PyValue value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_class_dict_st = NULL;
             class_dict_st = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                ir_obj_class_dict_st = _PyValueTemps_Box(value_temps, class_dict_st);
-                if (ir_obj_class_dict_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
-            }
-            else {
-                ir_obj_class_dict_st = PyValue_AsKnownObjectBorrow(class_dict_st);
-            }
             PyObject *name;
-            PyObject *class_dict = ir_obj_class_dict_st;
+            assert(PyValue_IsObject(class_dict_st));
+            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
             ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
             PyValue held_class_dict = IR_TAKEN(class_dict_st, ir_own_B);
             assert(class_dict);
@@ -13854,10 +13048,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -13866,20 +13056,10 @@
             PyValue v;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_mod_or_class_dict = NULL;
             mod_or_class_dict = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                ir_obj_mod_or_class_dict = _PyValueTemps_Box(value_temps, mod_or_class_dict);
-                if (ir_obj_mod_or_class_dict == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
-            }
-            else {
-                ir_obj_mod_or_class_dict = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
-            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *namespace = ir_obj_mod_or_class_dict;
+            assert(PyValue_IsObject(mod_or_class_dict));
+            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             ir_own_B = IR_DETACH(ir_word, B, mod_or_class_dict);
             PyValue held_namespace = IR_TAKEN(mod_or_class_dict, ir_own_B);
             _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
@@ -13904,8 +13084,6 @@
         TARGET(LOAD_GLOBAL) {
             int opcode = LOAD_GLOBAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
@@ -13947,8 +13125,6 @@
         TARGET(LOAD_GLOBAL_BUILTIN) {
             int opcode = LOAD_GLOBAL_BUILTIN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14017,8 +13193,6 @@
         TARGET(LOAD_GLOBAL_MODULE) {
             int opcode = LOAD_GLOBAL_MODULE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14070,8 +13244,6 @@
         TARGET(LOAD_LOCALS) {
             int opcode = LOAD_LOCALS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14095,8 +13267,6 @@
         TARGET(LOAD_NAME) {
             int opcode = LOAD_NAME;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14120,8 +13290,6 @@
         TARGET(LOAD_SMALL_INT) {
             int opcode = LOAD_SMALL_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT);
@@ -14142,8 +13310,6 @@
         TARGET(LOAD_SMALL_INT_INLINE) {
             int opcode = LOAD_SMALL_INT_INLINE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14172,10 +13338,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SPECIAL);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -14198,16 +13360,13 @@
                 int err = _PyObject_LookupSpecialMethod(frame, name, &method_and_self[0], &method_and_self[1]);
                 if (err <= 0) {
                     if (err == 0) {
-                        PyObject *owner = _PyValueTemps_Object(value_temps, method_and_self[1]);
-                        if (owner == NULL) {
-                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                        }
-                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner, oparg)
+                        PyTypeObject *owner_type = PyValue_TYPE(method_and_self[1]);
+                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, oparg)
                         ? _Py_SpecialMethods[oparg].error_suggestion
                     : _Py_SpecialMethods[oparg].error;
                         assert(!_PyErr_Occurred(tstate));
                         assert(errfmt != NULL);
-                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
+                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
                     }
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -14223,10 +13382,6 @@
             INSTRUCTION_STATS(LOAD_SUPER_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[13];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 13};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
@@ -14240,8 +13395,6 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
-            PyObject *ir_obj_class_st = NULL;
-            PyObject *ir_obj_global_super_st = NULL;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14261,34 +13414,13 @@
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
-                    if (ir_obj_global_super_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
-                    if (ir_obj_class_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
-                }
-                PyObject *global_super = ir_obj_global_super_st;
-                PyObject *class = ir_obj_class_st;
+                PyValueBorrow arg = oparg & 2
+                ? PyValue_Borrow(class_st)
+            : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                        PyValue_FromObjectBorrow(arg));
+                        frame, this_instr, global_super_st, arg);
                     if (err) {
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
@@ -14308,20 +13440,17 @@
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
-                PyValue super = super_call(global_super, class, self_st, oparg & 2);
+                PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (PyValue_IsNull(super)) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                            PyValue_FromObjectBorrow(arg));
+                            frame, this_instr, global_super_st, arg);
                     }
                     else {
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, PyValue_FromObjectBorrow(global_super),
-                            PyValue_FromObjectBorrow(arg));
+                            frame, this_instr, global_super_st, arg);
                         if (err < 0) {
                             PyValue_CLEAR(super);
                         }
@@ -14368,8 +13497,6 @@
         TARGET(LOAD_SUPER_ATTR_ATTR) {
             int opcode = LOAD_SUPER_ATTR_ATTR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14437,8 +13564,6 @@
         TARGET(LOAD_SUPER_ATTR_METHOD) {
             int opcode = LOAD_SUPER_ATTR_METHOD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14524,8 +13649,6 @@
         TARGET(MAKE_CELL) {
             int opcode = MAKE_CELL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14551,10 +13674,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_FUNCTION);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow codeobj_st;
@@ -14563,21 +13682,11 @@
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_codeobj_st = NULL;
             // _MAKE_FUNCTION
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(PyValue_IsInline(codeobj_st))) {
-                    ir_obj_codeobj_st = _PyValueTemps_Box(value_temps, codeobj_st);
-                    if (ir_obj_codeobj_st == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(MAKE_FUNCTION);
-                }
-                else {
-                    ir_obj_codeobj_st = PyValue_AsKnownObjectBorrow(codeobj_st);
-                }
-                PyObject *codeobj = ir_obj_codeobj_st;
+                assert(PyValue_IsObject(codeobj_st));
+                PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
                 if (func_obj == NULL) {
@@ -14596,7 +13705,7 @@
                 (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, func);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -14604,8 +13713,6 @@
         TARGET(MAP_ADD) {
             int opcode = MAP_ADD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14649,10 +13756,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_CLASS);
-            PyObject *value_boxes[12];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 12};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -14667,38 +13770,17 @@
             PyValue tp;
             PyValue n;
             PyValue value;
-            PyObject *ir_obj_names = NULL;
-            PyObject *ir_obj_type = NULL;
             // _MATCH_CLASS
             {
                 names = window[2];
                 type = window[1];
                 subject = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_type = _PyValueTemps_Box(value_temps, type);
-                    if (ir_obj_type == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(MATCH_CLASS);
-                }
-                else {
-                    ir_obj_type = PyValue_AsKnownObjectBorrow(type);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_names = _PyValueTemps_Box(value_temps, names);
-                    if (ir_obj_names == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(MATCH_CLASS);
-                }
-                else {
-                    ir_obj_names = PyValue_AsKnownObjectBorrow(names);
-                }
-                assert(PyTuple_CheckExact(ir_obj_names));
+                assert(PyValue_IsObject(names));
+                assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
                     subject,
-                    ir_obj_type, oparg,
-                    ir_obj_names);
+                    type, oparg,
+                    PyValue_AsKnownObjectBorrow(names));
                 if (attrs_o) {
                     assert(PyTuple_CheckExact(attrs_o));
                     attrs = PyValue_FromObjectSteal(attrs_o);
@@ -14719,7 +13801,7 @@
                 IR_SET_TEMP(window[0], attrs);
                 IR_SET_TEMP(window[1], s);
                 IR_SET_TEMP(window[2], tp);
-                PyValue_XCLOSE(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
@@ -14746,41 +13828,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue subject;
             PyValue keys;
             PyValue values_or_none;
-            PyObject *ir_obj_keys = NULL;
-            PyObject *ir_obj_subject = NULL;
             keys = IR_SLOT(IR_C(ir_word));
             subject = IR_SLOT(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_B(ir_word))))) {
-                ir_obj_subject = _PyValueTemps_Box(value_temps, subject);
-                if (ir_obj_subject == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(MATCH_KEYS);
-            }
-            else {
-                ir_obj_subject = PyValue_AsKnownObjectBorrow(subject);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_C(ir_word))))) {
-                ir_obj_keys = _PyValueTemps_Box(value_temps, keys);
-                if (ir_obj_keys == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(MATCH_KEYS);
-            }
-            else {
-                ir_obj_keys = PyValue_AsKnownObjectBorrow(keys);
-            }
+            assert(PyValue_IsObject(subject));
+            assert(PyValue_IsObject(keys));
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                ir_obj_subject, ir_obj_keys);
+                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
             if (values_or_none_o == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
@@ -14793,8 +13851,6 @@
         TARGET(MATCH_MAPPING) {
             int opcode = MATCH_MAPPING;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14815,8 +13871,6 @@
         TARGET(MATCH_SEQUENCE) {
             int opcode = MATCH_SEQUENCE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14837,8 +13891,6 @@
         TARGET(MATERIALIZE_KWARGS) {
             int opcode = MATERIALIZE_KWARGS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14858,8 +13910,6 @@
         TARGET(NOP) {
             int opcode = NOP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14876,38 +13926,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_EXCEPT);
-            PyObject *value_boxes[3];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 3};
-            _PyValueTemps *value_temps = &value_owners;
             PyValueBorrow exc_value;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            PyObject *ir_obj_exc_value = NULL;
             exc_value = IR_VIEW(IR_A(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value))) {
-                ir_obj_exc_value = _PyValueTemps_Box(value_temps, exc_value);
-                if (ir_obj_exc_value == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(POP_EXCEPT);
-            }
-            else {
-                ir_obj_exc_value = PyValue_AsKnownObjectBorrow(exc_value);
-            }
+            assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             ir_own_A = IR_DETACH(ir_word, A, exc_value);
             Py_XSETREF(exc_info->exc_value,
                        PyValue_IsNone(exc_value)
-                       ? NULL : (PyValue_IsInline(exc_value) ? Py_NewRef(ir_obj_exc_value) : PyValue_AsKnownObjectSteal(IR_TAKEN(exc_value, ir_own_A))));
+                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN(exc_value, ir_own_A)));
             DISPATCH();
         }
 
         TARGET(POP_ITER) {
             int opcode = POP_ITER;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -14932,8 +13966,6 @@
         TARGET(POP_JUMP_IF_FALSE) {
             int opcode = POP_JUMP_IF_FALSE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
@@ -14989,8 +14021,6 @@
         TARGET(POP_JUMP_IF_FALSE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_FALSE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15054,8 +14084,6 @@
         TARGET(POP_JUMP_IF_FALSE_BOOL) {
             int opcode = POP_JUMP_IF_FALSE_BOOL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15096,8 +14124,6 @@
         TARGET(POP_JUMP_IF_FALSE_INT) {
             int opcode = POP_JUMP_IF_FALSE_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15159,8 +14185,6 @@
         TARGET(POP_JUMP_IF_FALSE_LIST) {
             int opcode = POP_JUMP_IF_FALSE_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15225,8 +14249,6 @@
         TARGET(POP_JUMP_IF_FALSE_NONE) {
             int opcode = POP_JUMP_IF_FALSE_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15268,8 +14290,6 @@
         TARGET(POP_JUMP_IF_FALSE_STR) {
             int opcode = POP_JUMP_IF_FALSE_STR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15331,8 +14351,6 @@
         TARGET(POP_JUMP_IF_NONE) {
             int opcode = POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15375,8 +14393,6 @@
         TARGET(POP_JUMP_IF_NOT_NONE) {
             int opcode = POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15419,8 +14435,6 @@
         TARGET(POP_JUMP_IF_TRUE) {
             int opcode = POP_JUMP_IF_TRUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
@@ -15476,8 +14490,6 @@
         TARGET(POP_JUMP_IF_TRUE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_TRUE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15541,8 +14553,6 @@
         TARGET(POP_JUMP_IF_TRUE_BOOL) {
             int opcode = POP_JUMP_IF_TRUE_BOOL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15583,8 +14593,6 @@
         TARGET(POP_JUMP_IF_TRUE_INT) {
             int opcode = POP_JUMP_IF_TRUE_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15646,8 +14654,6 @@
         TARGET(POP_JUMP_IF_TRUE_LIST) {
             int opcode = POP_JUMP_IF_TRUE_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15712,8 +14718,6 @@
         TARGET(POP_JUMP_IF_TRUE_NONE) {
             int opcode = POP_JUMP_IF_TRUE_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15755,8 +14759,6 @@
         TARGET(POP_JUMP_IF_TRUE_STR) {
             int opcode = POP_JUMP_IF_TRUE_STR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15818,8 +14820,6 @@
         TARGET(POP_TOP) {
             int opcode = POP_TOP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15843,10 +14843,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -15855,18 +14851,7 @@
             PyValue exc;
             PyValue prev_exc;
             PyValue new_exc;
-            PyObject *ir_obj_exc = NULL;
             exc = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                ir_obj_exc = _PyValueTemps_Box(value_temps, exc);
-                if (ir_obj_exc == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(PUSH_EXC_INFO);
-            }
-            else {
-                ir_obj_exc = PyValue_AsKnownObjectBorrow(exc);
-            }
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
                 prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
@@ -15874,8 +14859,9 @@
             else {
                 prev_exc = PyValue_None;
             }
+            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = Py_NewRef(ir_obj_exc);
+            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
             IR_SET_TEMP(window[0], prev_exc);
             IR_SET_TEMP(window[1], new_exc);
@@ -15890,10 +14876,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
-            PyObject *value_boxes[3];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 3};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -15904,13 +14886,19 @@
             args = &window[0];
             assert(oparg < 3);
             _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
-            if (oparg > 0 && exc == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            PyObject *exc = NULL;
+            PyObject *cause = NULL;
+            if (oparg > 0) {
+                if (!PyValue_IsObject(args[0])) {
+                    _PyErr_SetString(tstate, PyExc_TypeError,
+                                     "exceptions must derive from BaseException");
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
-            PyObject *cause = oparg == 2 ? _PyValueTemps_Object(value_temps, args[1]) : NULL;
-            if (oparg == 2 && cause == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
+            if (oparg == 2 && !cause_is_number) {
+                cause = PyValue_AsKnownObjectBorrow(args[1]);
             }
             Py_XINCREF(exc);
             Py_XINCREF(cause);
@@ -15921,7 +14909,7 @@
                 PyValue_CLOSE(tmp);
             }
             IR_CLEAR_SLOTS(&window[0], oparg);
-            int err = do_raise(tstate, exc, cause);
+            int err = do_raise(tstate, exc, cause, cause_is_number);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -15938,10 +14926,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RERAISE);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -15950,20 +14934,10 @@
             (void)window;
             PyValue *values;
             PyValue exc_st;
-            PyObject *ir_obj_exc_st = NULL;
             exc_st = window[oparg];
             values = &window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[oparg]))) {
-                ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
-                if (ir_obj_exc_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(RERAISE);
-            }
-            else {
-                ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
-            }
-            PyObject *exc = (PyValue_IsInline(exc_st) ? Py_NewRef(ir_obj_exc_st) : PyValue_AsKnownObjectSteal(exc_st));
+            assert(PyValue_IsObject(exc_st));
+            PyObject *exc = _PyValue_AsPyObjectStealPointer(exc_st);
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
                 frame->instr_ptr = _PyFrame_InstrAt(frame, PyValue_UntagIndex(values[0]));
@@ -15978,8 +14952,6 @@
         TARGET(RESERVED) {
             int opcode = RESERVED;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -15993,8 +14965,6 @@
         TARGET(RESUME) {
             int opcode = RESUME;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16038,8 +15008,6 @@
         TARGET(RETURN_GENERATOR) {
             int opcode = RETURN_GENERATOR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16078,8 +15046,6 @@
         TARGET(RETURN_VALUE) {
             int opcode = RETURN_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16128,8 +15094,6 @@
         TARGET(RETURN_VALUE_EMPTY) {
             int opcode = RETURN_VALUE_EMPTY;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16183,10 +15147,6 @@
             INSTRUCTION_STATS(SEND);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[14];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 14};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
@@ -16198,7 +15158,6 @@
             PyValue null_or_index;
             PyValue v;
             PyValue retval;
-            PyObject *ir_obj_receiver = NULL;
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
@@ -16217,17 +15176,8 @@
             {
                 v = window[2];
                 null_or_index = window[1];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
-                    if (ir_obj_receiver == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SEND);
-                }
-                else {
-                    ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
-                }
-                PyObject *receiver_o = ir_obj_receiver;
+                assert(PyValue_IsObject(receiver));
+                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -16305,8 +15255,6 @@
         TARGET(SEND_ASYNC_GEN) {
             int opcode = SEND_ASYNC_GEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16373,8 +15321,6 @@
         TARGET(SEND_ASYNC_GEN_XFER_DISCARD) {
             int opcode = SEND_ASYNC_GEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16443,8 +15389,6 @@
         TARGET(SEND_GEN) {
             int opcode = SEND_GEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16520,8 +15464,6 @@
         TARGET(SEND_GEN_XFER_DISCARD) {
             int opcode = SEND_GEN;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16604,10 +15546,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
-            PyObject *value_boxes[14];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 14};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = IR_DS(ir_word);
@@ -16620,7 +15558,6 @@
             PyValue null_or_index;
             PyValue none;
             PyValue next;
-            PyObject *ir_obj_iter = NULL;
             // _GUARD_TOS_IS_NONE
             {
                 val = window[2];
@@ -16644,17 +15581,8 @@
                 none = val;
                 null_or_index = nos;
                 iter = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_iter = _PyValueTemps_Box(value_temps, iter);
-                    if (ir_obj_iter == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SEND_VIRTUAL);
-                }
-                else {
-                    ir_obj_iter = PyValue_AsKnownObjectBorrow(iter);
-                }
-                PyObject *iter_o = ir_obj_iter;
+                assert(PyValue_IsObject(iter));
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -16685,10 +15613,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
-            PyObject *value_boxes[14];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 14};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = IR_DS(ir_word);
@@ -16701,7 +15625,6 @@
             PyValue null_or_index;
             PyValue none;
             PyValue next;
-            PyObject *ir_obj_iter = NULL;
             // _GUARD_TOS_IS_NONE
             {
                 val = window[2];
@@ -16723,17 +15646,8 @@
                 none = val;
                 null_or_index = nos;
                 iter = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_iter = _PyValueTemps_Box(value_temps, iter);
-                    if (ir_obj_iter == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SEND_VIRTUAL);
-                }
-                else {
-                    ir_obj_iter = PyValue_AsKnownObjectBorrow(iter);
-                }
-                PyObject *iter_o = ir_obj_iter;
+                assert(PyValue_IsObject(iter));
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -16766,10 +15680,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND);
-            PyObject *value_boxes[14];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 14};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
@@ -16781,7 +15691,6 @@
             PyValue null_or_index;
             PyValue v;
             PyValue retval;
-            PyObject *ir_obj_receiver = NULL;
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
@@ -16800,17 +15709,8 @@
             {
                 v = window[2];
                 null_or_index = window[1];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
-                    if (ir_obj_receiver == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SEND);
-                }
-                else {
-                    ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
-                }
-                PyObject *receiver_o = ir_obj_receiver;
+                assert(PyValue_IsObject(receiver));
+                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -16900,8 +15800,6 @@
         TARGET(SETUP_ANNOTATIONS) {
             int opcode = SETUP_ANNOTATIONS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16942,8 +15840,6 @@
         TARGET(SET_ADD) {
             int opcode = SET_ADD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -16978,10 +15874,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow attr_st;
@@ -16991,33 +15883,13 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_attr_st = NULL;
-            PyObject *ir_obj_func_in = NULL;
             func_in = IR_VIEW(IR_C(ir_word));
             attr_st = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(attr_st))) {
-                ir_obj_attr_st = _PyValueTemps_Box(value_temps, attr_st);
-                if (ir_obj_attr_st == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-            }
-            else {
-                ir_obj_attr_st = PyValue_AsKnownObjectBorrow(attr_st);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(func_in))) {
-                ir_obj_func_in = _PyValueTemps_Box(value_temps, func_in);
-                if (ir_obj_func_in == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-            }
-            else {
-                ir_obj_func_in = PyValue_AsKnownObjectBorrow(func_in);
-            }
-            PyObject *func = ir_obj_func_in;
+            assert(PyValue_IsObject(func_in));
+            assert(PyValue_IsObject(attr_st));
+            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
-            PyObject *attr = (PyValue_IsInline(attr_st) ? Py_NewRef(ir_obj_attr_st) : PyValue_AsKnownObjectSteal(IR_TAKEN(attr_st, ir_own_B)));
+            PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN(attr_st, ir_own_B));
             ir_own_C = IR_DETACH(ir_word, C, func_in);
             func_out = IR_TAKEN(func_in, ir_own_C);
             assert(PyFunction_Check(func));
@@ -17038,10 +15910,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_UPDATE);
-            PyObject *value_boxes[9];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 9};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -17052,34 +15920,20 @@
             PyValue iterable;
             PyValue i;
             PyValue value;
-            PyObject *ir_obj_iterable = NULL;
-            PyObject *ir_obj_set = NULL;
             // _SET_UPDATE
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_set = _PyValueTemps_Box(value_temps, set);
-                    if (ir_obj_set == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SET_UPDATE);
+                assert(PyValue_IsObject(set));
+                if (!PyValue_IsObject(iterable)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%.200s' object is not iterable",
+                              PyValue_TYPE(iterable)->tp_name);
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                else {
-                    ir_obj_set = PyValue_AsKnownObjectBorrow(set);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg-1)]))) {
-                    ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
-                    if (ir_obj_iterable == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(SET_UPDATE);
-                }
-                else {
-                    ir_obj_iterable = PyValue_AsKnownObjectBorrow(iterable);
-                }
-                int err = _PySet_Update(ir_obj_set,
-                                    ir_obj_iterable);
+                assert(PyValue_IsObject(iterable));
+                int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
+                                    PyValue_AsKnownObjectBorrow(iterable));
                 if (err < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -17089,7 +15943,7 @@
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
-                PyValue_XCLOSE(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             DISPATCH();
         }
@@ -17097,8 +15951,6 @@
         TARGET(STORE_ATTR) {
             int opcode = STORE_ATTR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
@@ -17151,8 +16003,6 @@
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
             int opcode = STORE_ATTR_INSTANCE_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17258,8 +16108,6 @@
         TARGET(STORE_ATTR_SHAPE) {
             int opcode = STORE_ATTR_SHAPE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17320,8 +16168,6 @@
         TARGET(STORE_ATTR_SHAPE_ADD) {
             int opcode = STORE_ATTR_SHAPE_ADD;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17384,8 +16230,6 @@
         TARGET(STORE_ATTR_SLOT) {
             int opcode = STORE_ATTR_SLOT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17442,8 +16286,6 @@
         TARGET(STORE_ATTR_WITH_HINT) {
             int opcode = STORE_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17554,8 +16396,6 @@
         TARGET(STORE_DEREF) {
             int opcode = STORE_DEREF;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17575,8 +16415,6 @@
         TARGET(STORE_FAST) {
             int opcode = STORE_FAST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17606,8 +16444,6 @@
         TARGET(STORE_GLOBAL) {
             int opcode = STORE_GLOBAL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17646,8 +16482,6 @@
         TARGET(STORE_NAME) {
             int opcode = STORE_NAME;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17675,8 +16509,6 @@
         TARGET(STORE_SLICE) {
             int opcode = STORE_SLICE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17729,8 +16561,6 @@
         TARGET(STORE_SUBSCR) {
             int opcode = STORE_SUBSCR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR);
@@ -17784,8 +16614,6 @@
         TARGET(STORE_SUBSCR_DICT) {
             int opcode = STORE_SUBSCR_DICT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17850,8 +16678,6 @@
         TARGET(STORE_SUBSCR_LIST_INT) {
             int opcode = STORE_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17952,8 +16778,6 @@
         TARGET(SWAP) {
             int opcode = SWAP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -17980,8 +16804,6 @@
         TARGET(TO_BOOL) {
             int opcode = TO_BOOL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL);
@@ -18021,8 +16843,6 @@
         TARGET(TO_BOOL_ALWAYS_TRUE) {
             int opcode = TO_BOOL_ALWAYS_TRUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18069,8 +16889,6 @@
         TARGET(TO_BOOL_BOOL) {
             int opcode = TO_BOOL_BOOL;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18090,8 +16908,6 @@
         TARGET(TO_BOOL_INT) {
             int opcode = TO_BOOL_INT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18136,8 +16952,6 @@
         TARGET(TO_BOOL_LIST) {
             int opcode = TO_BOOL_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18184,8 +16998,6 @@
         TARGET(TO_BOOL_NONE) {
             int opcode = TO_BOOL_NONE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18209,8 +17021,6 @@
         TARGET(TO_BOOL_STR) {
             int opcode = TO_BOOL_STR;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18255,8 +17065,6 @@
         TARGET(UNARY_INVERT) {
             int opcode = UNARY_INVERT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18294,8 +17102,6 @@
         TARGET(UNARY_NEGATIVE) {
             int opcode = UNARY_NEGATIVE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18341,8 +17147,6 @@
         TARGET(UNARY_NOT) {
             int opcode = UNARY_NOT;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18377,10 +17181,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_EX);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -18389,20 +17189,17 @@
             (void)window;
             PyValue seq;
             PyValue *top;
-            PyObject *ir_obj_seq = NULL;
             seq = window[0];
             top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
-                if (ir_obj_seq == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(UNPACK_EX);
+            if (!PyValue_IsObject(seq)) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                window[0] = PyValue_NULL;
+                PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            else {
-                ir_obj_seq = PyValue_AsKnownObjectBorrow(seq);
-            }
-            PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
+            assert(PyValue_IsObject(seq));
+            PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             if (res == 0) {
@@ -18423,10 +17220,6 @@
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
@@ -18436,7 +17229,6 @@
             (void)window;
             PyValue seq;
             PyValue *top;
-            PyObject *ir_obj_seq = NULL;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = window[0];
@@ -18455,17 +17247,15 @@
             // _UNPACK_SEQUENCE
             {
                 top = &window[oparg];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
-                    if (ir_obj_seq == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(UNPACK_SEQUENCE);
+                if (!PyValue_IsObject(seq)) {
+                    _PyErr_Format(tstate, PyExc_TypeError,
+                              "cannot unpack non-iterable %.200s object",
+                              PyValue_TYPE(seq)->tp_name);
+                    window[0] = PyValue_NULL;
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                else {
-                    ir_obj_seq = PyValue_AsKnownObjectBorrow(seq);
-                }
-                PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
+                assert(PyValue_IsObject(seq));
+                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 if (res == 0) {
@@ -18482,8 +17272,6 @@
         TARGET(UNPACK_SEQUENCE_LIST) {
             int opcode = UNPACK_SEQUENCE_LIST;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18551,8 +17339,6 @@
         TARGET(UNPACK_SEQUENCE_TUPLE) {
             int opcode = UNPACK_SEQUENCE_TUPLE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18611,8 +17397,6 @@
         TARGET(UNPACK_SEQUENCE_TWO_TUPLE) {
             int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18676,10 +17460,6 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
-            PyObject *value_boxes[13];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 13};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -18689,46 +17469,16 @@
             PyValue lasti;
             PyValue val;
             PyValue res;
-            PyObject *ir_obj_exit_func = NULL;
-            PyObject *ir_obj_exit_self = NULL;
-            PyObject *ir_obj_val = NULL;
             val = window[4];
             lasti = window[2];
             exit_self = window[1];
             exit_func = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                ir_obj_exit_func = _PyValueTemps_Box(value_temps, exit_func);
-                if (ir_obj_exit_func == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(WITH_EXCEPT_START);
-            }
-            else {
-                ir_obj_exit_func = PyValue_AsKnownObjectBorrow(exit_func);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                ir_obj_exit_self = _PyValueTemps_Box(value_temps, exit_self);
-                if (ir_obj_exit_self == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(WITH_EXCEPT_START);
-            }
-            else {
-                ir_obj_exit_self = PyValue_AsKnownObjectBorrow(exit_self);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[4]))) {
-                ir_obj_val = _PyValueTemps_Box(value_temps, val);
-                if (ir_obj_val == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(WITH_EXCEPT_START);
-            }
-            else {
-                ir_obj_val = PyValue_AsKnownObjectBorrow(val);
-            }
             PyObject *exc, *tb;
-            PyObject *val_o = ir_obj_val;
-            PyObject *exit_func_o = ir_obj_exit_func;
+            assert(PyValue_IsObject(val));
+            assert(PyValue_IsObject(exit_func));
+            assert(PyValue_IsObjectOrNull(exit_self));
+            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
+            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
             PyObject *original_tb = tb = PyException_GetTraceback(val_o);
@@ -18738,7 +17488,7 @@
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti;
             PyObject *res_o = with_exit_call(exit_func_o,
-                ir_obj_exit_self,
+                PyValue_AsKnownObjectBorrow(exit_self),
                 !PyValue_IsNull(exit_self), exc, val_o, tb);
             Py_XDECREF(original_tb);
             if (res_o == NULL) {
@@ -18754,8 +17504,6 @@
         TARGET(YIELD_DELEGATED) {
             int opcode = YIELD_DELEGATED;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18793,8 +17541,6 @@
         TARGET(YIELD_VALUE) {
             int opcode = YIELD_VALUE;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -18860,42 +17606,36 @@
 
         LABEL(error)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
             }}
 
         LABEL(exception_unwind)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }}
 
         LABEL(exit_unwind)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
             }}
 
         LABEL(exit_unwind_notrace)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
             }}
 
         LABEL(throw_error)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 PROCESS_ERROR_AT(THROW, 0, next_instr - 1);
             }}
 
         LABEL(start_frame)
         {
-            _PyValueTemps *const value_temps = NULL;
             {
                 int too_deep = _Py_EnterRecursivePy(tstate);
                 if (too_deep) {

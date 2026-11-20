@@ -80,7 +80,7 @@ HELPERS = {
     "coro_awaitable_can_transfer": native_helper((Kind.VALUE,), Kind.SCALAR),
     # The returned native count is known, but this contract grants no arena
     # effect or callback-shape authority for arbitrary __await__ execution.
-    "_PyEval_GetAwaitable": HelperEffect((Kind.OBJECT, Kind.SCALAR), Kind.OBJECT,
+    "_PyEval_GetAwaitable": HelperEffect((Kind.VALUE, Kind.SCALAR), Kind.OBJECT,
         HomeEffect.UNKNOWN, may_fail=True, callback=True, result_owned=True),
     "IS_PEP523_HOOKED": native_helper((Kind.TSTATE,), Kind.SCALAR),
     "PyValue_DUP": native_helper((Kind.VALUE,), Kind.VALUE),

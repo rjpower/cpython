@@ -293,8 +293,6 @@ enum {
 #define _PyIR_PURE          0x100   // annotated pure (HAS_PURE_FLAG)
 #define _PyIR_SPECIALIZES   0x200   // a generic handler whose entry's
                                     // counter drives specialisation
-#define _PyIR_BOXES         0x400   // may box a value into the value record
-                                    // (_PyValueTemps), which it then needs
 #define _PyIR_NATIVE_ONLY   0x800   // checked synthetic activation homes;
                                     // never admitted in a code image
 #define _PyIR_LEARNED_ONLY  0x1000  // requires a reached feedback nomination;
@@ -304,7 +302,6 @@ enum {
  * unknown, not infallible. These bits establish no readable-home facts. */
 #define _PyIR_ERROR_COMPLETE  1u
 #define _PyIR_ERROR_DIRECT    2u
-#define _PyIR_ERROR_BRIDGE    4u
 #define _PyIR_ERROR_LOCAL_DST 8u
 
 #define _PyIR_NO_DST        INT8_MIN

@@ -350,11 +350,11 @@ const _Py_SpecialMethod _Py_SpecialMethods[] = {
     [SPECIAL___ENTER__] = {
         .name = &_Py_ID(__enter__),
         .error = (
-            "'%T' object does not support the context manager protocol "
+            "'%N' object does not support the context manager protocol "
             "(missed __enter__ method)"
         ),
         .error_suggestion = (
-            "'%T' object does not support the context manager protocol "
+            "'%N' object does not support the context manager protocol "
             "(missed __enter__ method) but it supports the asynchronous "
             "context manager protocol. Did you mean to use 'async with'?"
         )
@@ -362,11 +362,11 @@ const _Py_SpecialMethod _Py_SpecialMethods[] = {
     [SPECIAL___EXIT__] = {
         .name = &_Py_ID(__exit__),
         .error = (
-            "'%T' object does not support the context manager protocol "
+            "'%N' object does not support the context manager protocol "
             "(missed __exit__ method)"
         ),
         .error_suggestion = (
-            "'%T' object does not support the context manager protocol "
+            "'%N' object does not support the context manager protocol "
             "(missed __exit__ method) but it supports the asynchronous "
             "context manager protocol. Did you mean to use 'async with'?"
         )
@@ -374,11 +374,11 @@ const _Py_SpecialMethod _Py_SpecialMethods[] = {
     [SPECIAL___AENTER__] = {
         .name = &_Py_ID(__aenter__),
         .error = (
-            "'%T' object does not support the asynchronous "
+            "'%N' object does not support the asynchronous "
             "context manager protocol (missed __aenter__ method)"
         ),
         .error_suggestion = (
-            "'%T' object does not support the asynchronous context manager "
+            "'%N' object does not support the asynchronous context manager "
             "protocol (missed __aenter__ method) but it supports the context "
             "manager protocol. Did you mean to use 'with'?"
         )
@@ -386,11 +386,11 @@ const _Py_SpecialMethod _Py_SpecialMethods[] = {
     [SPECIAL___AEXIT__] = {
         .name = &_Py_ID(__aexit__),
         .error = (
-            "'%T' object does not support the asynchronous "
+            "'%N' object does not support the asynchronous "
             "context manager protocol (missed __aexit__ method)"
         ),
         .error_suggestion = (
-            "'%T' object does not support the asynchronous context manager "
+            "'%N' object does not support the asynchronous context manager "
             "protocol (missed __aexit__ method) but it supports the context "
             "manager protocol. Did you mean to use 'with'?"
         )
@@ -545,14 +545,16 @@ match_class_attr(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
 // On success (match), return a tuple of extracted attributes. On failure (no
 // match), return NULL. Use _PyErr_Occurred(tstate) to disambiguate.
 PyObject*
-(_PyEval_MatchClass)(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
+(_PyEval_MatchClass)(PyThreadState *tstate, PyValueBorrow subject, PyValueBorrow type_value,
                      Py_ssize_t nargs, PyObject *kwargs)
 {
-    if (!PyType_Check(type)) {
+    if (!PyValue_IsObject(type_value) ||
+        !PyType_Check(PyValue_AsKnownObjectBorrow(type_value))) {
         const char *e = "class pattern must refer to a class";
         _PyErr_Format(tstate, PyExc_TypeError, e);
         return NULL;
     }
+    PyObject *type = PyValue_AsKnownObjectBorrow(type_value);
     assert(PyTuple_CheckExact(kwargs));
     // First, an isinstance check:
     int isinstance = _PyEval_IsInstanceValue(subject, PyValue_FromObjectBorrow(type));
@@ -666,7 +668,8 @@ fail:
 }
 
 
-static int do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause);
+static int do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause,
+                    bool cause_is_number);
 
 PyObject *
 PyEval_EvalCode(PyObject *co, PyObject *globals, PyObject *locals)
@@ -990,14 +993,17 @@ _Py_BuildMap_ValueSteal(
  * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
  * is 0. */
 static Py_NO_INLINE PyValue
-super_call(PyObject *global_super, PyObject *class, PyValue self, int nargs)
+super_call(PyValueBorrow global_super, PyValueBorrow class, PyValue self, int nargs)
 {
-    PyValue stack[] = {PyValue_DUP(PyValue_FromObjectBorrow(class)), self};
-    PyValue super = _PyValue_Vectorcall(PyValue_FromObjectBorrow(global_super),
-                                        stack, nargs, NULL);
+    PyValue stack[] = {PyValue_DUP(class), self};
+    PyValue super = _PyValue_Vectorcall(global_super, stack, nargs, NULL);
     PyValue_CLOSE(stack[0]);
     return super;
 }
+
+#define super_call(G, C, S, N) \
+    (super_call)(PyValue_Borrow(G), PyValue_Borrow(C), S, N)
+
 
 /* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
  * exit_func(exc, val, tb) when has_self is 0.  The array keeps a free slot
@@ -1324,35 +1330,6 @@ value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(frame->ir_feedback == exec->entries);
     frame->instr_ptr = current;
     return 0;
-}
-
-/* Release owners[0] to owners[count - 1] in order, then the handler's input
- * boxes, then refresh: releasing an owner can run Python. */
-static int
-finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr *next, _PyValueTemps *temps,
-                       PyValue *owners, int count, PyValue failed_result)
-{
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        for (int i = 0; i < count; i++) {
-            PyValue_XCLOSE(owners[i]);
-        }
-        _PyValueTemps_Close(temps);
-        return 0;
-    }
-    _PyInstr *current = frame->instr_ptr;
-#ifndef NDEBUG
-    _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
-    assert(exec != NULL && frame->ir_words == exec->words);
-    assert(current >= exec->words && current < exec->words + exec->nwords);
-    assert(next >= exec->words && next <= exec->words + exec->nwords);
-#endif
-    (void)next;
-    for (int i = 0; i < count; i++) {
-        PyValue_XCLOSE(owners[i]);
-    }
-    _PyValueTemps_Close(temps);
-    return value_operation_refresh(tstate, frame, current, failed_result);
 }
 
 /* The checks of a call's window, before the call has any effect; the
@@ -1830,25 +1807,13 @@ call_push_moved_exact_args(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
-static inline _PyCallResult call_bind_known_python(
+static Py_NO_INLINE _PyCallResult call_bind_known_python(
     PyThreadState *, _PyInterpreterFrame *, int, int, int,
     _PyCallTransactionKind, const _PyFbCall *, int);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
     PyThreadState *, _PyInterpreterFrame *, int, int, int);
-
-static int
-finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *next, _PyValueTemps *temps)
-{
-    if (temps == NULL || temps->count == 0) {
-        return 0;
-    }
-    return finish_value_bridges_ex(tstate, frame, next, temps, NULL, 0,
-                                   PyValue_NULL);
-}
-
 
 typedef struct {
     PyThreadState *tstate;
@@ -1989,12 +1954,11 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
     }
 }
 
-/* Entered before the generic label bridge finisher. All descriptors are local
- * to this reached cold scope; no successful handler gains an owner record. */
+/* All descriptors are local to this reached cold scope; no successful handler
+ * gains an owner record. */
 static _Py_COLD_FUNCTION Py_NO_INLINE _PyIRErrorResult
 _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *origin, uint32_t entry,
-                     _PyValueTemps *value_temps)
+                     _PyInstr *origin, uint32_t entry)
 {
     unsigned int ingress = (entry >> 8) & 15;
     unsigned int checkpoint = entry & 255;
@@ -2017,15 +1981,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyExceptionHandler source = {0};
         if (has_source) {
             source = activation->source_error_handler;
-        }
-        if (value_temps != NULL && value_temps->count != 0) {
-            int had_error = _PyErr_Occurred(tstate) != NULL;
-            if (finish_value_bridges(tstate, frame, origin + 1, value_temps) < 0 && !had_error) {
-                origin = frame->instr_ptr;
-                ingress = _PyIR_ERROR_INGRESS_RAISE;
-                checkpoint = 0;
-                has_source = 0;
-            }
         }
         if (ingress == _PyIR_ERROR_INGRESS_THROW) {
             monitor_throw(tstate, frame, origin + 1);
@@ -2079,7 +2034,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 origin = next - 1;
                 ingress = _PyIR_ERROR_INGRESS_HANDLED_FAILURE;
                 checkpoint = 0;
-                value_temps = NULL;
                 continue;
             }
 #ifdef Py_DEBUG
@@ -2112,7 +2066,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         origin = frame->instr_ptr;
         ingress = _PyIR_ERROR_INGRESS_CALLER;
         checkpoint = 0;
-        value_temps = NULL;
     }
 }
 
@@ -3801,7 +3754,9 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The checked prefix proves the function version and standard provider.
  * Return 1 before effects on a miss; no transaction record exists on a hit. */
-static inline _PyCallResult
+/* Out of line: the keyword staging array is a local that its callees
+ * address, which would be the handler's */
+static Py_NO_INLINE _PyCallResult
 call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        int base, int destination, int argument_count,
                        _PyCallTransactionKind kind, const _PyFbCall *binding,
@@ -5559,6 +5514,28 @@ _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
     return 0;
 }
 
+/* The value forms: a number cannot be an exception class, which
+   _PyEval_CheckExceptTypeValid reports for any other non-class */
+int
+(_PyEval_CheckExceptTypeValidValue)(PyThreadState *tstate, PyValueBorrow right)
+{
+    if (!PyValue_IsObject(right)) {
+        _PyErr_SetString(tstate, PyExc_TypeError, CANNOT_CATCH_MSG);
+        return -1;
+    }
+    return _PyEval_CheckExceptTypeValid(tstate, PyValue_AsKnownObjectBorrow(right));
+}
+
+int
+(_PyEval_CheckExceptStarTypeValidValue)(PyThreadState *tstate, PyValueBorrow right)
+{
+    if (!PyValue_IsObject(right)) {
+        _PyErr_SetString(tstate, PyExc_TypeError, CANNOT_CATCH_MSG);
+        return -1;
+    }
+    return _PyEval_CheckExceptStarTypeValid(tstate, PyValue_AsKnownObjectBorrow(right));
+}
+
 int
 _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
 {
@@ -5609,11 +5586,106 @@ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
     return 0;
 }
 
+/* The binary intrinsics other than GETATTR and SETATTR take objects:
+   a type parameter, a function, an exception group. Boxes them, as above. */
+Py_NO_INLINE PyValue
+(_PyEval_CallIntrinsic2)(PyThreadState *tstate, int oparg,
+                         PyValueBorrow value2, PyValueBorrow value1)
+{
+    PyObject *boxes[2];
+    _PyValueTemps temps = {boxes, 0, 2};
+    PyValue res = PyValue_NULL;
+    PyObject *value1_o = _PyValueTemps_Object(&temps, value1);
+    PyObject *value2_o = value1_o != NULL ? _PyValueTemps_Object(&temps, value2) : NULL;
+    if (value2_o != NULL) {
+        PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2_o, value1_o);
+        if (res_o != NULL) {
+            res = PyValue_FromObjectSteal(res_o);
+        }
+    }
+    _PyValueTemps_Close(&temps);
+    return res;
+}
+
+/* The method descriptors of METH_O and METH_NOARGS take objects
+   (ml_meth(PyObject *, PyObject *)): these box a number in a record that
+   the handler does not carry, and return the result, or PyValue_NULL with an
+   exception set. */
+Py_NO_INLINE PyValue
+(_PyEval_CallMethodDescriptorO)(PyThreadState *tstate, PyCFunction cfunc,
+                              PyValueBorrow self, PyValueBorrow arg)
+{
+    PyObject *boxes[2];
+    _PyValueTemps temps = {boxes, 0, 2};
+    PyValue res = PyValue_NULL;
+    PyObject *self_o = _PyValueTemps_Object(&temps, self);
+    PyObject *arg_o = self_o != NULL ? _PyValueTemps_Object(&temps, arg) : NULL;
+    if (arg_o != NULL) {
+        _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
+        PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self_o, arg_o);
+        _PyBorrowScope_Exit(tstate, borrow_mark);
+        assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+        if (res_o != NULL) {
+            res = PyValue_FromObjectSteal(res_o);
+        }
+    }
+    _PyValueTemps_Close(&temps);
+    return res;
+}
+
+Py_NO_INLINE PyValue
+(_PyEval_CallMethodDescriptorNoArgs)(PyThreadState *tstate, PyCFunction cfunc,
+                                   PyValueBorrow self)
+{
+    PyObject *boxes[1];
+    _PyValueTemps temps = {boxes, 0, 1};
+    PyValue res = PyValue_NULL;
+    PyObject *self_o = _PyValueTemps_Object(&temps, self);
+    if (self_o != NULL) {
+        _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
+        PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self_o, NULL);
+        _PyBorrowScope_Exit(tstate, borrow_mark);
+        assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+        if (res_o != NULL) {
+            res = PyValue_FromObjectSteal(res_o);
+        }
+    }
+    _PyValueTemps_Close(&temps);
+    return res;
+}
+
+/* The intrinsics of CALL_INTRINSIC_1 other than unary plus take objects.
+   Only PRINT and ASYNC_GEN_WRAP can get a number: this boxes it here, in a
+   record that the handler does not carry. Returns the result, or
+   PyValue_NULL with an exception set. */
+Py_NO_INLINE PyValue
+(_PyEval_CallIntrinsic1)(PyThreadState *tstate, int oparg, PyValueBorrow value)
+{
+    PyObject *boxes[1];
+    _PyValueTemps temps = {boxes, 0, 1};
+    PyValue res = PyValue_NULL;
+    PyObject *value_o = _PyValueTemps_Object(&temps, value);
+    if (value_o != NULL) {
+        PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
+        if (res_o != NULL) {
+            res = PyValue_FromObjectSteal(res_o);
+        }
+    }
+    _PyValueTemps_Close(&temps);
+    return res;
+}
+
 void
-_PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwargs, PyObject *dupkey)
+(_PyEval_FormatKwargsError)(PyThreadState *tstate, PyValueBorrow func, PyObject *kwargs, PyObject *dupkey)
 {
     if (dupkey != NULL) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
+        // The callable may be a number: boxed here, out of the handler
+        PyObject *func_o = PyValue_AsObject(func);
+        if (func_o == NULL) {
+            return;
+        }
+        PyObject *funcstr = _PyObject_FunctionStr(func_o);
+        Py_DECREF(func_o);
         _PyErr_Format(
             tstate, PyExc_TypeError,
             "%V got multiple values for keyword argument '%S'",
@@ -5845,8 +5917,18 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
 }
 
 PyObject *
-_PyEval_GetAwaitable(PyObject *iterable, int oparg)
+(_PyEval_GetAwaitable)(PyValueBorrow iterable_value, int oparg)
 {
+    if (!PyValue_IsObject(iterable_value)) {
+        // A number is not awaitable: _PyCoro_GetAwaitableIter's error,
+        // which _PyEval_FormatAwaitableError replaces for `async with`
+        PyTypeObject *type = PyValue_TYPE(iterable_value);
+        PyErr_Format(PyExc_TypeError,
+                     "'%.100s' object can't be awaited", type->tp_name);
+        _PyEval_FormatAwaitableError(PyThreadState_GET(), type, oparg);
+        return NULL;
+    }
+    PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_value);
     PyObject *iter = _PyCoro_GetAwaitableIter(iterable);
 
     if (iter == NULL) {
@@ -5868,7 +5950,9 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
     return iter;
 }
 
-PyValue
+/* Out of line: the lookups pass the address of a local (_PyDict_GetValue's
+ * out-parameter), which would be the handler's */
+Py_NO_INLINE PyValue
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
     PyObject *namespace = frame->f_locals;
@@ -5962,9 +6046,8 @@ type_has_special_method(PyTypeObject *cls, PyObject *name)
 }
 
 int
-_PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg)
+_PyEval_SpecialMethodCanSuggest(PyTypeObject *type, int oparg)
 {
-    PyTypeObject *type = Py_TYPE(self);
     switch (oparg) {
         case SPECIAL___ENTER__:
         case SPECIAL___EXIT__: {

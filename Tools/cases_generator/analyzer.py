@@ -777,10 +777,6 @@ NON_ESCAPING_FUNCTIONS = (
     # Allocate an int or float; see the boxing entries below.
     "PyValue_FromDouble",
     "_PyValue_LshiftInt64",
-    # Box an inline value the same way, into a temporary that the handler's
-    # value_temps owns.
-    "_PyValueTemps_Box",
-    "_PyValueTemps_Object",
     "PyValue_IsValid",
     "PyValue_Wrap",
     "PyValue_Unwrap",
@@ -1144,7 +1140,8 @@ def find_object_inputs(
                         break
                 i += 1
             texts = [t.text for t in tokens[start:i + 1]]
-            if (len(texts) == 7 and texts[2] == "PyValue_IsObject"
+            if (len(texts) == 7
+                    and texts[2] in ("PyValue_IsObject", "PyValue_IsObjectOrNull")
                     and texts[4] in scalars):
                 asserted.append(texts[4])
         elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):

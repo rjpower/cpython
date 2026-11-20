@@ -135,14 +135,11 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
     do { \
         Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
     } while (0)
-/* Error processing must receive the current handler's native bridge owners.
- * Global labels have no value record, so finish the reached scope here. */
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
         _PyIRErrorResult ir_error_result = _PyEval_ProcessError( \
             tstate, frame, (origin), \
-            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint), \
-            value_temps); \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint)); \
         if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) { \
             frame = tstate->current_frame; \
             slots = _PyFrame_Slots(frame); \
@@ -156,20 +153,12 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
     } while (0)
 #define JUMP_TO_LABEL(name) \
     do { \
-        if (value_temps != NULL && value_temps->count != 0) { \
-            int value_had_error = PyErr_Occurred() != NULL; \
-            if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
-                next_instr = frame->instr_ptr + 1; \
-                PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
-            } \
-        } \
         Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
     } while (0)
 /* A specialisation deoptimises to its family head, which runs the word
  * again from its start. */
 #define JUMP_TO_PREDICTED(name) \
     do { \
-        assert(value_temps == NULL || value_temps->count == 0); \
         Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS_AT(this_instr)); \
     } while (0)
 
@@ -219,10 +208,6 @@ do { \
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
     { \
-        if (value_temps != NULL && value_temps->count != 0 && \
-            finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
-            next_instr = frame->instr_ptr + 1; PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
-        } \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
@@ -230,7 +215,6 @@ do { \
 
 #define DISPATCH_SAME_OPARG() \
     { \
-        assert(value_temps == NULL || value_temps->count == 0); \
         opcode = IR_HANDLER(*next_instr); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
@@ -240,11 +224,6 @@ do { \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
         assert((NEW_FRAME)->previous == frame);                  \
-        if (value_temps != NULL && value_temps->count != 0 &&    \
-            finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
-            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));         \
-            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);           \
-        }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
         JUMP_TO_LABEL(start_frame);                              \
@@ -763,7 +742,6 @@ shape_read_dup(PyObject *owner, uint32_t offset)
  * that its entry, at index F, records. */
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
-        assert(value_temps == NULL || value_temps->count == 0); \
         opcode = _PyIR_BINARY_OP_FIRST + \
             (int)((_PyFbHeader *)IR_FB(F))->arg; \
         next_instr = this_instr; \

@@ -307,10 +307,10 @@ maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
 static void monitor_reraise(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _PyInstr *instr);
-static int monitor_stop_iteration(PyThreadState *tstate,
+static Py_NO_INLINE int monitor_stop_iteration(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _PyInstr *instr,
-                 PyObject *value);
+                 PyValueBorrow value);
 static void monitor_unwind(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _PyInstr *instr);
@@ -450,15 +450,21 @@ monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_RERAISE);
 }
 
-static int
+static Py_NO_INLINE int
 monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr *instr, PyObject *value)
+                       _PyInstr *instr, PyValueBorrow value)
 {
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_STOP_ITERATION)) {
         return 0;
     }
     assert(!PyErr_Occurred());
-    PyErr_SetObject(PyExc_StopIteration, value);
+    // The value may be a number: the exception holds its box
+    PyObject *value_o = PyValue_AsObject(value);
+    if (value_o == NULL) {
+        return -1;
+    }
+    PyErr_SetObject(PyExc_StopIteration, value_o);
+    Py_DECREF(value_o);
     int res = do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_STOP_ITERATION);
     if (res < 0) {
         return res;
@@ -466,6 +472,8 @@ monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyErr_SetRaisedException(NULL);
     return 0;
 }
+#define monitor_stop_iteration(T, F, I, V) \
+    (monitor_stop_iteration)(T, F, I, PyValue_Borrow(V))
 
 static void
 monitor_unwind(PyThreadState *tstate,
@@ -571,9 +579,11 @@ get_frame_exception_handler(_PyInterpreterFrame *frame, int offset)
 }
 
 /* Logic for the raise statement (too complicated for inlining).
-   This *consumes* a reference count to each of its arguments. */
+   This *consumes* a reference count to each of its arguments. A cause that
+   is a number has no object: cause_is_number stands for it, with cause NULL. */
 static int
-do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
+do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause,
+         bool cause_is_number)
 {
     PyObject *type = NULL, *value = NULL;
 
@@ -627,6 +637,12 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
     assert(type != NULL);
     assert(value != NULL);
 
+    if (cause_is_number) {
+        _PyErr_SetString(tstate, PyExc_TypeError,
+                         "exception causes must derive from "
+                         "BaseException");
+        goto raise_error;
+    }
     if (cause) {
         PyObject *fixed_cause;
         if (PyExceptionClass_Check(cause)) {

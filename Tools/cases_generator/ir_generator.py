@@ -755,7 +755,7 @@ INPLACE_READERS = {
     "coro_awaitable_can_transfer",
     "value_subscript", "value_binary_op",
     "PyValue_DUP", "PyValue_XDUP", "PyValue_AsObject",
-    "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
+    "PyValue_AsKnownObjectBorrow", "PyValue_TYPE", "PyValue_ObjectOrNull",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
     # The value dispatchers (pycore_value_ops.h): they read their operands
@@ -782,13 +782,19 @@ INPLACE_READERS = {
     # caller's count and a borrowed local may be passed to it; nor is its
     # internal entry _PyDict_SetValue, for the same reason
     "PyDict_SetValue", "_PyDict_SetValue",
-    # Boxes an inline input into value_temps, which owns the box; the result
-    # is followed as an uncounted object (inplace_input_use)
-    "_PyValueTemps_Object",
     # Python/ceval.c: they read their value arguments, and the handler
     # releases them after
     "_PyEval_BinarySlice", "_PyEval_StoreName", "_PyEval_StoreSlice",
     "_PyEval_MatchClass",
+    # Value-form entries of the object-form callees (H3): they box what
+    # they need in their own frame
+    "_PyEval_CallIntrinsic1", "_PyEval_CallIntrinsic2", "_PyEval_GetAwaitable",
+    "_PyEval_CallMethodDescriptorO",
+    "_PyEval_CallMethodDescriptorNoArgs",
+    "_PyEval_CheckExceptTypeValidValue",
+    "_PyEval_CheckExceptStarTypeValidValue", "_PyInterpolation_BuildValue",
+    "monitor_stop_iteration", "PyValue_Borrow",
+    "_PyEval_FormatKwargsError",
     # Python/specialize.c: they read types and values
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp", "_Py_Specialize_LoadAttr",
@@ -837,17 +843,14 @@ OBJECT_READERS = {
     "PyFunction_New",
     "PyUnicode_Concat",
 
-    "_PyValue_GetAttr",
-    "_PyDict_SetValue_Take2", "_PyDict_SetValue", "_PyEval_CheckExceptStarTypeValid",
-    "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
-    "_PyEval_GetAwaitable", "_PyList_SliceSubscript",
+    "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
+    "_PyList_SliceSubscript",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
-    "monitor_stop_iteration",
-    # The indirect calls of BINARY_OP_EXTEND and
-    # CALL_INTRINSIC_*, through tables of functions that read their
-    # operands, and of GET_AITER, through the type's am_aiter slot
-    "action", "func", "getter",
+    # The indirect calls of BINARY_OP_EXTEND, through a table of functions
+    # that read their operands, and of GET_AITER, through the type's
+    # am_aiter slot
+    "action", "getter",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1158,18 +1161,6 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                     objects.add(holder)
                 elif not object_use_allowed(tokens, i - 2, i + 1):
                     return tkn
-            elif callee == "_PyValueTemps_Object" and prev == "," and nxt == ")":
-                # `_PyValueTemps_Object(temps, name)`: the object of name,
-                # uncounted (or a box that temps owns). Follow it like
-                # PyValue_AsKnownObjectBorrow's, so that a release drops
-                # the borrow.
-                if consumed_argument(tokens, i - 4):
-                    return tkn
-                holder = object_holder(tokens, i - 4, i + 1)
-                if holder is not None:
-                    objects.add(holder)
-                elif not object_use_allowed(tokens, i - 4, i + 1):
-                    return tkn
         elif nxt == "." and i + 3 < len(tokens) and tokens[i + 2].text == "bits" \
                 and tokens[i + 3].text not in ASSIGNMENT_OPS:
             pass
@@ -1461,6 +1452,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
     candidates = [
         (("receiver", "null_or_index", "v"),
          ("receiver", "null_or_index", "retval"), """{
+            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
@@ -1504,6 +1496,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }"""),
         (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"), """{
+            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
             _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
@@ -2611,10 +2604,6 @@ def object_source(tokens: list[Token], views: dict[str, int],
                 and texts[i + 1] == "(" and texts[i + 2] in views
                 and texts[i + 3] == ")"):
             return views[texts[i + 2]]
-        if (tkn.text == "_PyValueTemps_Object" and i + 5 < len(texts)
-                and texts[i + 1] == "(" and texts[i + 3] == ","
-                and texts[i + 4] in views and texts[i + 5] == ")"):
-            return views[texts[i + 4]]
     return None
 
 
@@ -3459,8 +3448,6 @@ class IREmitter(Emitter):
         self._replacers["IR_REFRESH_CALL"] = self.refresh_call
         self._replacers["TAKE"] = self.take_view
         self._replacers["OWNER"] = self.take_view
-        self._replacers["PyValue_AsKnownObjectBorrow"] = self.object_of
-        self._replacers["PyValue_AsPyObjectNew"] = self.object_of
         # Set while a statement is emitted
         self.native_scopes: list[dict[str, Local | None]] = []
         self.native_condition_depth = 0
@@ -3480,12 +3467,6 @@ class IREmitter(Emitter):
         # The outputs that a statement `out = TAKE(in);` assigned in the
         # handler (check_error_outputs())
         self.taken_outputs: set[str] = set()
-        # The object locals of the handler (emit_object_inputs), which the
-        # first pass of generate_handler finds and the second declares
-        self.boxes: set[str] = set()
-        # The variables assigned from one that has an object local, in the
-        # uop, with the source; their object is read through the source
-        self.box_copies: dict[str, str] = {}
         # The C type of each variable of the handler, from the first pass
         self.declared_roles: dict[str, set[str]] = {}
         self.stores_outputs = False  # the statement's uop is the last
@@ -3502,9 +3483,6 @@ class IREmitter(Emitter):
         self.handler_format: IRFormat | None = None
         self.execution_variant: ExecutionVariant | None = None
         self.result_publication: "ResultPublicationContract | None" = None
-        # Whether the handler being emitted has a value record, value_temps:
-        # only a handler whose contract has BOXES does (boxing_handlers)
-        self.has_record = True
         self.ownership_events: list[OwnershipEvent] = []
         self.disjoint_child_publication: Uop | None = None
         self.disjoint_child_drained = False
@@ -3668,11 +3646,11 @@ class IREmitter(Emitter):
                   f"ir_binary_left, ir_binary_right, {self.input_slot(inst, 0)}, "
                   f"{self.input_slot(inst, 1)});\n")
         self.emit("value_operation_close3(ir_binary_rest.second, ir_binary_rest.first, PyValue_NULL);\n")
-        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
+        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, NULL);\n")
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
         self.emit(f"ir_binary_result = value_reader_complete(tstate, frame, this_instr, "
-                  f"{self.temps}, {FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]}, "
+                  f"NULL, {FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]}, "
                   "ir_binary_result, ir_binary_right, ir_binary_left);\n")
         self.emit("if (PyValue_IsNull(ir_binary_result)) {\n")
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
@@ -3696,11 +3674,6 @@ class IREmitter(Emitter):
         stack.bind(result, None)
         stack.code_ran()
         return True
-
-    @property
-    def temps(self) -> str:
-        "The record argument of a function that finishes the handler's boxes"
-        return "value_temps" if self.has_record else "NULL"
 
     def format_of(self, inst: Instruction) -> IRFormat:
         if self.handler_format is not None:
@@ -3959,7 +3932,7 @@ class IREmitter(Emitter):
         dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
         self.out.start_line()
         self.emit(f"{result} = value_attribute_complete(tstate, frame, this_instr, "
-                  f"{self.temps}, {dst}, {result}, {self_value}, {receiver}, {method});\n")
+                  f"NULL, {dst}, {result}, {self_value}, {receiver}, {method});\n")
         self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
@@ -4052,7 +4025,6 @@ class IREmitter(Emitter):
         self.emit("? PyErr_GetRaisedException() : NULL;\n")
         self.emit("assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);\n")
         self.emit("frame->instr_ptr = ir_observer_result.next;\n")
-        self.emit(f"_PyValueTemps_Close({self.temps});\n")
         self.emit("if (ir_observer_result.status < 0) {\n")
         self.emit("PyErr_SetRaisedException(ir_observer_exception);\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
@@ -4155,8 +4127,6 @@ class IREmitter(Emitter):
 
     def call_completion(self, run_override=None):
         self.call_normal_drained = True
-        if self.has_record:
-            self.emit("assert(value_temps->count == 0);\n")
         # One out-of-line call, which keeps the transaction record in its own
         # frame and returns {status, child} in two registers (R-c).  The run
         # takes its current instruction from frame->instr_ptr: every
@@ -4206,7 +4176,7 @@ class IREmitter(Emitter):
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
         self.emit(f"{result} = value_reader_complete(tstate, frame, this_instr, "
-                  f"{self.temps}, {dst}, {result}, {first}, {second});\n")
+                  f"NULL, {dst}, {result}, {first}, {second});\n")
         self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
@@ -4217,7 +4187,7 @@ class IREmitter(Emitter):
         self.macro_args(tkn, tkn_iter, 0)
         # Never flush the undefined result on this edge: its destination
         # may be one of the just-restored input temporary homes.
-        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
+        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, NULL);\n")
         self.reader_error()
         return False
 
@@ -4226,7 +4196,7 @@ class IREmitter(Emitter):
         self.macro_args(tkn, tkn_iter, 0)
         storage.flush(self.out)
         self.emit("{\n")
-        self.emit(f"int operation_failed = value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
+        self.emit(f"int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);\n")
         self.emit("if (operation_failed < 0) {\n")
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
         self.emit("}\n")
@@ -4391,13 +4361,7 @@ class IREmitter(Emitter):
         arg = tkn_iter.peek()
         var = find_local(arg.text, storage) if arg is not None and arg.kind == "IDENTIFIER" else None
         field = self.view_field(arg, storage)
-        box = var.ir_box if var is not None else None
-        if var is not None and box is None and var.name in self.box_copies:
-            raise analysis_error(
-                f"{tkn.text}({var.name}): '{var.name}' is a copy of "
-                f"'{self.box_copies[var.name]}', which has an object local",
-                tkn)
-        if field is None and box is None:
+        if field is None:
             return super().value_steal(
                 tkn, iter_with_first(lparen, tkn_iter), uop, storage, inst)
         name = next(tkn_iter)
@@ -4410,19 +4374,9 @@ class IREmitter(Emitter):
             storage.stack.taken(storage.stack.field_position(field))
         steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
                  else tkn.text)
-        if box is None:
-            self.out.emit_at(steal, tkn)
-            self.out.emit(lparen)
-            self.out.emit(owned)
-            return self.value_kill(name, storage, False)
-        # An inline value owns nothing: the box, which value_temps owns,
-        # gives the count
-        rparen = next(tkn_iter)
-        if rparen.kind != "RPAREN":
-            raise analysis_error("Expected ')'", rparen)
-        self.out.emit_at(f"(PyValue_IsInline({name.text}) ? Py_NewRef({box}) "
-                         f": {steal}({owned}))", tkn)
-        self.out.last_token = rparen
+        self.out.emit_at(steal, tkn)
+        self.out.emit(lparen)
+        self.out.emit(owned)
         return self.value_kill(name, storage, False)
 
     def take_view(self, tkn, tkn_iter, uop, storage, inst):
@@ -4466,33 +4420,6 @@ class IREmitter(Emitter):
             self.owning_take_output = storage.stack.layout.owning_result
         return self.value_kill(name, storage, False)
 
-    def object_of(self, tkn, tkn_iter, uop, storage, inst):
-        """The object of a value that has an object local reads it: the
-        input's object, or a box that value_temps owns"""
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
-        arg = tkn_iter.peek()
-        var = find_local(arg.text, storage) if arg is not None and arg.kind == "IDENTIFIER" else None
-        if var is not None and var.ir_box is None and var.name in self.box_copies:
-            raise analysis_error(
-                f"{tkn.text}({var.name}): '{var.name}' is a copy of "
-                f"'{self.box_copies[var.name]}', whose object local holds "
-                "its object; read that", tkn)
-        if var is None or var.ir_box is None or tkn_iter.peek() is None:
-            self.out.emit(tkn)
-            self.out.emit(lparen)
-            return True
-        name = next(tkn_iter)
-        rparen = next(tkn_iter)
-        if rparen.kind != "RPAREN":
-            raise analysis_error(f"{tkn.text}() of '{name.text}' must be its "
-                                 "whole argument", rparen)
-        text = (var.ir_box if tkn.text == "PyValue_AsKnownObjectBorrow"
-                else f"Py_NewRef({var.ir_box})")
-        self.out.emit_at(text, tkn)
-        self.out.last_token = rparen
-        return True
-
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
         """After `a = b;` with b a view, a is a view of the same input"""
         super().note_pointer_assignment(stmt, storage)
@@ -4502,10 +4429,6 @@ class IREmitter(Emitter):
         source = find_local(tkns[2].text, storage)
         if source is None:
             return
-        if source.ir_box is not None:
-            # The copy holds the value, which may be inline; its object
-            # is the source's object local, which object_of() reads
-            self.box_copies[tkns[0].text] = tkns[2].text
         if source.ir_inplace is None:
             return
         if self.stores_outputs and any(
@@ -4547,8 +4470,7 @@ class IREmitter(Emitter):
     def note_view_object(self, stmt: SimpleStmt, storage: Storage,
                          escapes: bool) -> None:
         """After `[T *]h = [(T *)]PyValue_AsKnownObjectBorrow(x);` or
-        `[T *]h = [(T *)]_PyValueTemps_Object(temps, x);` with x a view, or
-        `[T *]h = [(T *)]g;` with g such a variable, h holds the object of a
+        `[T *]h = [(T *)]g;` with x a view and g such a variable, h holds the object of a
         view, uncounted, and dangles with it (S7).  So does a pointer that
         `T *h = <expression>;` or `h = <expression>;`, with h not a stack
         variable, derives from the object in a statement that runs no code
@@ -4573,10 +4495,6 @@ class IREmitter(Emitter):
         if (len(rhs) == 4 and rhs[0] == "PyValue_AsKnownObjectBorrow"
                 and rhs[1] == "(" and rhs[2] in views and rhs[3] == ")"):
             source = views[rhs[2]]
-        elif (len(rhs) == 6 and rhs[0] == "_PyValueTemps_Object"
-                and rhs[1] == "(" and rhs[3] == "," and rhs[4] in views
-                and rhs[5] == ")"):
-            source = views[rhs[4]]
         elif len(rhs) == 1 and rhs[0] in stack.view_objects:
             source = stack.view_objects[rhs[0]]
         elif not escapes and (
@@ -4679,35 +4597,6 @@ class IREmitter(Emitter):
                 "which can run code, outside its arguments: C may read it "
                 "after the call (S7); read it in a statement before", tkn)
 
-    def object_condition(self, condition: list[Token],
-                         storage: Storage) -> list[Token]:
-        """A condition, which the emitter writes as it is, with the object
-        of each value that has an object local read through it, as
-        object_of() reads it in a statement"""
-        tokens = list(condition)
-        out: list[Token] = []
-        i = 0
-        while i < len(tokens):
-            tkn = tokens[i]
-            var = None
-            if (tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens)
-                    and tokens[i + 1].text == "(" and tokens[i + 3].text == ")"):
-                var = find_local(tokens[i + 2].text, storage)
-            if var is not None and (var.ir_box is not None
-                                    or var.name in self.box_copies):
-                if (tkn.text != "PyValue_AsKnownObjectBorrow"
-                        or var.ir_box is None):
-                    raise analysis_error(
-                        f"{tkn.text}({var.name}) in a condition: read the "
-                        "object in a statement", tkn)
-                out.append(replace(tkn, kind="IDENTIFIER", text=var.ir_box,
-                                   end=tokens[i + 3].end))
-                i += 4
-                continue
-            out.append(tkn)
-            i += 1
-        return out
-
     def emit_IfStmt(self, stmt, uop, storage, inst):
         storage.stack.shape_read_binding = None
         storage.stack.element_guards.clear()
@@ -4727,7 +4616,6 @@ class IREmitter(Emitter):
                (self.null_outputs is not None and t.text in self.null_outputs)
                for t in stmt.condition):
             storage.stack.null_uncovered = True
-        stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
         return super().emit_IfStmt(stmt, uop, storage, inst)
 
     def refine_current_value(self, storage, name, nonnull):
@@ -4757,7 +4645,6 @@ class IREmitter(Emitter):
             var.owns_value = False
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
-        stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
         storage.stack.home_node = None
         return super().emit_WhileStmt(stmt, uop, storage, inst)
 
@@ -5165,7 +5052,7 @@ class IREmitter(Emitter):
         checkpoint = self.record_error_checkpoint(stack)
         return f"PROCESS_ERROR_AT(RAISE, {checkpoint}, this_instr);"
 
-    def record_error_checkpoint(self, stack: IRStack, bridge=None) -> int:
+    def record_error_checkpoint(self, stack: IRStack) -> int:
         """Capture the actual flushed stack, independently of normal IO.
 
         Every supported scalar action is replayed from its actual incoming
@@ -5182,22 +5069,15 @@ class IREmitter(Emitter):
                 stack.possible_native_owners or stack.unknown_read or
                 any(stack.read_fields.values())):
             return 0
-        route = bridge if bridge is not None else self.abrupt_operand_origin
-        if route is None:
-            return 0
-        if bridge is not None:
-            # Boxing precedes the uop body. It may own only its explicit
-            # value_temps workspace, never a result left by an earlier uop.
-            if bridge[0] not in source.native_closed_entries:
-                return 0
-        elif route not in source.native_closed_errors:
+        route = self.abrupt_operand_origin
+        if route is None or route not in source.native_closed_errors:
             return 0
         self.error_checkpoint_count += 1
         if self.error_checkpoint_count > 255:
             raise StackError("more than 255 emitted error checkpoints")
         checkpoint = self.error_checkpoint_count
         self.error_checkpoint_sites[checkpoint] = ErrorCheckpoint(
-            checkpoint, int(source.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL or bridge is not None),
+            checkpoint, int(source.homes == HomeEffect.PRESERVES_CANONICAL_OR_NULL),
             stack.home_node,
             tuple(stack.home_graph.nodes[:stack.home_node]))
         if (self.allowed_error_checkpoints is not None and
@@ -5205,15 +5085,13 @@ class IREmitter(Emitter):
             return 0
         return checkpoint
 
-    def operand_error_flush(self, stack, bridge=None):
+    def operand_error_flush(self, stack):
         # These are actual error stores from the same IRStack used to emit C.
         # Scalar layouts address only encoded inputs and the recipient; the
         # source gate has excluded independent aliases and manual protocols.
         if not isinstance(stack, IRStack):
             self.abrupt_operand_uncovered = True
-        if bridge is not None:
-            self.abrupt_operand_bridges.add(bridge)
-        elif self.abrupt_operand_origin is not None:
+        if self.abrupt_operand_origin is not None:
             self.abrupt_operand_sources.add(self.abrupt_operand_origin)
             self.observer_errors.add(self.abrupt_operand_origin)
         else:
@@ -5691,10 +5569,8 @@ class IREmitter(Emitter):
     ) -> None:
         """The inputs that uop reads as objects (PyObject *).  A guard exits
         if one holds an inline value; it is then known to be an object for
-        the rest of the instruction.  Any other uop reads it through an
-        object local, ir_obj_<name>: the input's object, or a box of an
-        inline value that value_temps owns, made out of line.  The input
-        keeps its canonical value (register-ir-v2-a5b.md, 4.5)."""
+        the rest of the instruction.  A uop that reads it as an object
+        without a guard or an assert is refused: no handler boxes."""
         for var in storage.inputs:
             if var.name in uop.asserted_objects:
                 var.known_object = True
@@ -5704,8 +5580,7 @@ class IREmitter(Emitter):
             return
         guard = uop.is_guard()
         for var in storage.inputs:
-            if (var.name not in uop.object_inputs or var.known_object
-                    or var.ir_box is not None):
+            if var.name not in uop.object_inputs or var.known_object:
                 continue
             self.out.start_line()
             # Test the slot rather than the local where the slot holds the
@@ -5730,27 +5605,14 @@ class IREmitter(Emitter):
                 self.emit("}\n")
                 var.known_object = True
                 continue
-            box = f"ir_obj_{var.name}"
-            self.boxes.add(box)
-            self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
-            self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
-            self.emit(f"if ({box} == NULL) {{\n")
-            bridge = (id(uop), var.name)
-            self.abrupt_operand_bridge_expected.add(bridge)
-            # Every input is still in its slot: exception_unwind has them
-            error_stack = storage.stack.copy()
-            error_stack.flush(self.out)
-            self.operand_error_flush(error_stack, bridge)
-            checkpoint = self.record_error_checkpoint(error_stack, bridge)
-            self.emit(f"PROCESS_ERROR_AT(RAISE, {checkpoint}, this_instr);\n")
-            self.emit("}\n")
-            if inst is not None:
-                self.emit(f"BOX_STAT_INC({inst.name});\n")
-            self.emit("}\n")
-            self.emit("else {\n")
-            self.emit(f"{box} = PyValue_AsKnownObjectBorrow({var.name});\n")
-            self.emit("}\n")
-            var.ir_box = box
+            # No handler boxes an inline input (handlers81, H3): an input
+            # that a uop reads as an object is asserted to be one
+            # (assert(PyValue_IsObject(x))) or tested by a guard, and a
+            # callee that may get a number takes a value
+            raise analysis_error(
+                f"{uop.name} reads '{var.name}' as an object, which may be an "
+                "inline value: assert(PyValue_IsObject()) it, or pass the "
+                "value to a callee that takes one", next(iter(uop.body.tokens())))
 
 
 def write_uop(
@@ -5766,7 +5628,6 @@ def write_uop(
         emitter.emit(f"// flush\n")
         stack.flush(emitter.out)
         return True, stack
-    emitter.box_copies = {}
     emitter.out.start_line()
     if braces:
         emitter.out.emit(f"// {uop.name}\n")
@@ -5850,22 +5711,6 @@ def uses_call_transaction(inst: Instruction) -> bool:
     return any(isinstance(part, Uop) and
                any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens())
                for part in inst.parts)
-
-
-def value_bridge_bound(name: str, inst: Instruction) -> int:
-    """The most input boxes that handler name can hold in value_temps.
-
-    Publication frees a result's box at once (the release contract), so
-    only inputs that a handler boxes for an object API stay until the
-    handler finishes.  An array input can box several values (BUILD_SLICE
-    boxes three, RAISE_VARARGS two), so the bound keeps a slot per output
-    as well as per input, and two more.  Window loops use their own object
-    arrays."""
-    return 2 + sum(
-        len(part.stack.inputs) + len(part.stack.outputs)
-        for part in inst.parts if isinstance(part, Uop)
-    )
-
 
 
 def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
@@ -6181,7 +6026,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
     # elsewhere or used as a raw write target after acquiring a capability.
     # Raw reads are complete by-value arguments of these existing typed
     # readers, never a member lvalue or an address hidden in parentheses.
-    readers = {"PyValue_IsNull": (0, 1), "_PyValueTemps_Object": (1, 2)}
+    readers = {"PyValue_IsNull": (0, 1), "PyValue_TYPE": (0, 1)}
     reads: set[int] = set()
     if "oparg" in declared_locals(list(part.body.tokens())):
         raise analysis_error("home extent cannot be shadowed", markers[0])
@@ -6194,8 +6039,6 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
             args, _ = instruction_macro_args(token, TokenIterator(tokens[at + 1:]))
             position, count = readers[token.text]
             if len(args) != count:
-                continue
-            if position == 1 and [t.text for t in args[0]] != ["value_temps"]:
                 continue
             arg = args[position]
             if (len(arg) == 4 and arg[0].text in used and arg[1].text == "[" and
@@ -6497,14 +6340,9 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
-                     emitter: IREmitter, out: CWriter, record: bool) -> None:
+                     emitter: IREmitter, out: CWriter) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
     BINARY_OP operation, BINARY_OP with that operation.
-
-    With record, the handler sets up a value record, value_temps, for the
-    boxes it makes of inline inputs.  Without it, value_temps is NULL, so
-    the dispatch macros finish no bridges: only a handler that boxes
-    (boxing_handlers, the contract's BOXES) needs one.
 
     The handler is generated twice.  The first pass, to no output, finds
     the role of each C variable, a view or an owner, and the object
@@ -6537,13 +6375,12 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
-    emitter.boxes = set()
     emitter.declared_roles = {}
     emitter.close_names = set()
     emitter.declared_closes = set()
     emitter.out = CWriter.null()
     try:
-        emit_handler(name, inst, fmt, emitter, emitter.out, record, roles)
+        emit_handler(name, inst, fmt, emitter, emitter.out, roles)
     finally:
         emitter.out = saved
     for var, kinds in sorted(roles.items()):
@@ -6554,7 +6391,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                 inst.where)
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
-    emit_handler(name, inst, fmt, emitter, out, record, {})
+    emit_handler(name, inst, fmt, emitter, out, {})
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -6714,7 +6551,7 @@ def current_operation_preserves_scratch(inst: Instruction, fmt: IRFormat, source
 
 
 def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
-                 emitter: IREmitter, out: CWriter, record: bool,
+                 emitter: IREmitter, out: CWriter,
                  roles: dict[str, set[str]]) -> None:
     "One pass of generate_handler, which records the roles it finds"
     emitter.generator_boundary = generator_boundaries(emitter.analysis).get(name)
@@ -6739,8 +6576,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
     emitter.abrupt_operand_sources = set()
     emitter.abrupt_operand_origin = None
-    emitter.abrupt_operand_bridge_expected = set()
-    emitter.abrupt_operand_bridges = set()
     emitter.abrupt_operand_uncovered = False
     emitter.error_unwind_sources = set()
     emitter.error_terminal_sources = set()
@@ -6769,7 +6604,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.call_kind = ""
     emitter.taken_outputs = set()
     operation = None
-    emitter.has_record = record
     if (name != inst.name and name not in EXECUTION_VARIANTS
             and emitter.generator_boundary is None):
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
@@ -6780,13 +6614,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
-    bridge_bound = value_bridge_bound(name, inst)
     out.emit(f"int opcode = {canonical_handler(name)};\n")
     out.emit(f"(void)(opcode);\n")
-    if not record:
-        # No value record: the dispatch macros finish no bridges
-        out.emit("_PyValueTemps *const value_temps = NULL;\n")
-        out.emit("(void)value_temps;\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
@@ -6807,12 +6636,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
-    if record:
-        # The handler's value record, the box area (R27 deletes it)
-        out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
-        out.emit("_PyValueTemps value_owners;\n")
-        out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
-        out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     if fmt.store_dst or fmt.window:
         # The old value of the slot that dst names, a local or the discard
         # slot, which the releasing store hands to the handler: it closes it
@@ -6915,8 +6738,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             own = owner_name(fmt.input_field(k))
             out.emit(f"PyValue {own} = PyValue_NULL;\n")
             out.emit(f"(void){own};\n")
-    for box in sorted(emitter.boxes):
-        out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      native_entry=native_entry_input_contract(inst),
@@ -7068,7 +6889,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
-                      boxing: set[str], outfile: TextIO, lines: bool,
+                      outfile: TextIO, lines: bool,
                       checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None) -> None:
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
@@ -7080,8 +6901,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
-        generate_handler(name, inst, formats[name], emitter, out,
-                         name in boxing)
+        generate_handler(name, inst, formats[name], emitter, out)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
@@ -7094,7 +6914,6 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
     for name, label in analysis.labels.items():
         emitter.emit(f"LABEL({name})\n")
         emitter.emit("{\n")
-        emitter.emit("_PyValueTemps *const value_temps = NULL;\n")
         storage = Storage(IRStack(), [], [], 0, False)
         if label.spilled:
             storage.spilled = 1
@@ -7287,53 +7106,7 @@ def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
 # Calls that construct an object: conservatively, ALLOCATES
 CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
 
-# What a handler's generated code may do with its value record, value_temps
-# (the classifier of the register IR v2 packet,
-# pyjit/design/proposals/register-ir-v2-packet.md, A1).  A handler boxes
-# unless every use is known not to: the declaration, a read of the count,
-# or an argument to a function that only finishes what is there: it
-# releases the boxes and adds none, so a handler that boxes nothing passes
-# it NULL.  The macros that box without naming value_temps are listed;
-# test_ir_contract checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"_PyValueTemps_Close",
-                    "value_attribute_complete", "value_operation_finish",
-                    "value_reader_complete"}
-
-
-def enclosing_call_name(code: str, end: int) -> str | None:
-    "The function whose argument list holds code[end], or None"
-    depth = 0
-    for j in range(end - 1, -1, -1):
-        c = code[j]
-        if c == ")":
-            depth += 1
-        elif c == "(":
-            if depth == 0:
-                m = re.search(r"(\w+)\s*$", code[:j])
-                return m.group(1) if m else None
-            depth -= 1
-        elif c in ";{}" and depth == 0:
-            return None
-    return None
-
-
-def boxes_into_record(code: str) -> bool:
-    "Whether the generated code of a handler may box into value_temps"
-    for m in re.finditer(r"\bvalue_temps\b", code):
-        before, after = code[:m.start()], code[m.end():]
-        if (re.match(r"\s*=\s*&value_owners\s*;", after)
-                and before.rstrip().endswith("_PyValueTemps *")):
-            continue    # the declaration
-        if (re.match(r"->count\b(?!\s*(?:\+\+|--|[-+*/|&^]?=(?!=)))", after)
-                and not re.search(r"(?:\+\+|--)\s*$", before)):
-            continue    # reads the count
-        if enclosing_call_name(code, m.start()) in NON_BOXING_CALLS:
-            continue
-        return True
-    return False
-
-
-def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
+def analyze_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,
                     abrupt: dict[str, bool] | None = None,
                     operand_abrupt: dict[str, bool] | None = None,
@@ -7341,10 +7114,9 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     observer_entries: dict[str, bool] | None = None,
                     checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None,
                     normal_storage: dict[str, ErrorCheckpoint | None] | None = None
-                    ) -> set[str]:
-    "The handlers whose generated code may box into the value record"
+                    ) -> None:
+    "Emit every handler once, to no output, and collect what the contract needs"
     import io
-    result = set()
     for name, inst in sorted(handler_instructions(analysis).items()):
         if formats[name].transparent:
             kind = normal_transfer_kind(inst, formats[name])
@@ -7354,7 +7126,7 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                 out = CWriter.null()
                 emitter = IREmitter(out, analysis, formats)
                 emitter.handler_format = formats[name]
-                generate_handler(name, inst, formats[name], emitter, out, False)
+                generate_handler(name, inst, formats[name], emitter, out)
                 observer_entries[name] = emitted_observer_entry(emitter, inst)
             continue
         buffer = io.StringIO()
@@ -7362,40 +7134,30 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
         emitter = IREmitter(out, analysis, formats)
         emitter.handler_format = formats[name]
         emitter.allowed_error_checkpoints = None
-        # Classify the handler as emitted with a record
-        generate_handler(name, inst, formats[name], emitter, out, True)
-        boxes = boxes_into_record(buffer.getvalue())
+        generate_handler(name, inst, formats[name], emitter, out)
         if abrupt is not None:
             abrupt[name] = emitter.abrupt_prefix
         if operand_abrupt is not None:
             operand_abrupt[name] = (
                 emitter.abrupt_operand_expected is not None and
                 emitter.abrupt_operand_sources == emitter.abrupt_operand_expected and
-                emitter.abrupt_operand_bridges == emitter.abrupt_operand_bridge_expected and
                 not emitter.abrupt_operand_uncovered and
                 not emitter.error_uncovered and
                 emitter.error_source is not None and
                 emitter.error_source.unwind_sources == emitter.error_unwind_sources and
                 emitter.error_source.terminal_sources == emitter.error_terminal_sources and
-                not ((boxes or formats[name].store_dst) and emitter.error_source is not None
+                not (formats[name].store_dst and emitter.error_source is not None
                      and emitter.error_source.changes_origin))
         if programs is not None:
             programs[name] = tuple(emitter.ownership_events)
         if error_routes is not None:
-            error_routes[name] = emitted_error_routes(emitter, formats[name], boxes)
+            error_routes[name] = emitted_error_routes(emitter, formats[name])
         if checkpoints is not None:
             checkpoints[name] = (tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
-                if emitted_error_routes(emitter, formats[name], boxes) else ())
+                if emitted_error_routes(emitter, formats[name]) else ())
         if normal_storage is not None:
             normal_storage[name] = (emitter.error_checkpoint_sites.get(0)
-                if emitted_error_routes(emitter, formats[name], boxes) else None)
-        if boxes:
-            if any(isinstance(p, Uop) and any(
-                    t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
-                   for p in inst.parts):
-                raise analysis_error("IR_TRY_DICT_FIRST_PROBE cannot use "
-                                     "a value record", inst.where)
-            result.add(name)
+                if emitted_error_routes(emitter, formats[name]) else None)
     if programs is not None:
         # A pristine word can redispatch to any member. A successful final
         # vacate in one member does not certify an uncovered sibling.
@@ -7456,11 +7218,10 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat],
             if not all(checkpoints.get(name, ()) == common for name in members):
                 for name in members:
                     checkpoints[name] = ()
-    return result
 
 
 ERROR_ROUTE_FLAGS = ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_DIRECT",
-                     "_PyIR_ERROR_BRIDGE", "_PyIR_ERROR_LOCAL_DST")
+                     "_PyIR_ERROR_LOCAL_DST")
 
 OBSERVER_ENTRY_HELPERS = {
     "_Py_call_instrumentation_line", "_Py_call_instrumentation_instruction",
@@ -7484,22 +7245,21 @@ def emitted_observer_entry(emitter: IREmitter, inst: Instruction) -> bool:
     source = emitter.observer_source
     calls = {id(token) for part in inst.parts if isinstance(part, Uop)
              for token in part.body.tokens() if token.text in OBSERVER_ENTRY_HELPERS}
-    return bool(source is not None and calls and not emitter.boxes and
+    return bool(source is not None and calls and
                 source.error_sources == emitter.observer_errors and
                 source.terminal_sources == emitter.observer_terminals and
                 calls == emitter.observer_calls)
 
 
-def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tuple[str, ...]:
+def emitted_error_routes(emitter: IREmitter, fmt: IRFormat) -> tuple[str, ...]:
     """Match complete typed source to actual flush and terminal receipts."""
     source = emitter.error_source
     if (source is None or source.homes == HomeEffect.UNKNOWN
-            or source.changes_origin and (boxes or fmt.store_dst)
+            or source.changes_origin and fmt.store_dst
             or emitter.error_uncovered or emitter.abrupt_operand_uncovered
             or source.error_sources != emitter.abrupt_operand_sources
             or source.unwind_sources != emitter.error_unwind_sources
             or source.terminal_sources != emitter.error_terminal_sources
-            or emitter.abrupt_operand_bridge_expected != emitter.abrupt_operand_bridges
             or fmt.store_dst and not emitter.error_local_dst
             or not (emitter.error_finalized or source.error_sources
                     or source.unwind_sources or source.terminal_sources)):
@@ -7507,10 +7267,8 @@ def emitted_error_routes(emitter: IREmitter, fmt: IRFormat, boxes: bool) -> tupl
     routes = [ERROR_ROUTE_FLAGS[0]]
     if source.error_sources or source.unwind_sources or source.may_fail:
         routes.append(ERROR_ROUTE_FLAGS[1])
-    if boxes:
-        routes.append(ERROR_ROUTE_FLAGS[2])
     if emitter.error_local_dst:
-        routes.append(ERROR_ROUTE_FLAGS[3])
+        routes.append(ERROR_ROUTE_FLAGS[2])
     return tuple(routes)
 
 
@@ -8193,8 +7951,7 @@ def writes_suspended_frame_state(inst: Instruction) -> bool:
             r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
 
 
-def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
-                    boxes: bool) -> list[str]:
+def handler_effects(name: str, inst: Instruction, fmt: IRFormat) -> list[str]:
     "The _PyIR_* effect bits of handler name, which runs inst"
     p = inst.properties
     tokens = {t.text for t in uop_token_list(inst)}
@@ -8203,7 +7960,7 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
     specializes = fmt.fb != LOC_NONE and any(
         isinstance(part, Uop) and "specializing" in part.annotations
         for part in inst.parts)
-    allocates = (not p.infallible or p.escapes or boxes or pushes_frame
+    allocates = (not p.infallible or p.escapes or pushes_frame
                  or any(CONSTRUCTOR.search(t) for t in tokens))
     effects = []
     for bit, present in (
@@ -8220,7 +7977,6 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
             ("_PyIR_ALLOCATES", allocates),
             ("_PyIR_PURE", p.pure),
             ("_PyIR_SPECIALIZES", specializes),
-            ("_PyIR_BOXES", boxes),
             ("_PyIR_NATIVE_ONLY", native_entry_input_contract(inst)),
             ("_PyIR_LEARNED_ONLY", bool(EXECUTION_VARIANTS.get(name) and
                                       EXECUTION_VARIANTS[name].shape_cases))):
@@ -8240,8 +7996,8 @@ def handler_contracts(analysis: Analysis,
     observer_entries = {}
     checkpoints = {}
     normal_storage = {}
-    boxing = boxing_handlers(analysis, formats, programs, abrupt, operand_abrupt,
-                             error_routes, observer_entries, checkpoints, normal_storage)
+    analyze_handlers(analysis, formats, programs, abrupt, operand_abrupt,
+                     error_routes, observer_entries, checkpoints, normal_storage)
     for members in redispatch_cohorts(analysis, formats):
         # Stack-only formats have no independently emitted family members.
         # They cannot acquire a storage certificate from an empty intersection.
@@ -8277,7 +8033,7 @@ def handler_contracts(analysis: Analysis,
         inputs, outputs = external_io(inst)
         publication = result_publication_contract(inst, fmt)
         result[name] = HandlerContract(
-            effects=handler_effects(name, inst, fmt, name in boxing),
+            effects=handler_effects(name, inst, fmt),
             reads=extent(inputs, inst),
             writes=extent([e.item for e in outputs], inst),
             through=extent(through_items(inst, inputs, outputs), inst),
@@ -8315,15 +8071,15 @@ ADDRESS_INLINE_CALLS = {
 # body, so that a body cannot take their address either
 HANDLER_LOCALS = {
     "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
-    "window", "oparg", "fb", "opcode", "value_temps", "ir_old",
-    "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
+    "window", "oparg", "fb", "opcode", "ir_old",
+    "ir_rest", "ir_expanded", "call_base",
     "call_destination", "call_state", "call_result", "call_feedback",
     "retire_needed", "retire_failed", "operation_failed",
     "ir_binary_left", "ir_binary_right", "ir_binary_result",
     "ir_binary_rest",
     "ir_shape_offset",
 }
-HANDLER_POINTERS = {"slots", "window", "fb", "value_temps", "frame", "tstate",
+HANDLER_POINTERS = {"slots", "window", "fb", "frame", "tstate",
                     "next_instr", "this_instr"}
 DECL_KINDS = {"INT", "CHAR", "SHORT", "LONG", "SIGNED", "UNSIGNED", "DOUBLE",
               "FLOAT", "VOID", "CONST", "VOLATILE", "STATIC", "STRUCT",
@@ -8501,12 +8257,12 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
     checkpoints = {}
-    boxing = boxing_handlers(analysis, formats, checkpoints=checkpoints)
+    analyze_handlers(analysis, formats, checkpoints=checkpoints)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, formats, boxing, outfile, lines, checkpoints)
+    generate_ir_cases(analysis, formats, outfile, lines, checkpoints)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
         {LABEL_START_MARKER}
@@ -8589,7 +8345,6 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("\n")
     out.emit(function_proto("UNKNOWN_OPCODE"))
     out.emit(" {\n")
-    out.emit("_PyValueTemps *const value_temps = NULL;\n")
     out.emit("int opcode = IR_HANDLER(*next_instr);\n")
     out.emit(UNKNOWN_OPCODE_HANDLER)
     out.emit("}\n")

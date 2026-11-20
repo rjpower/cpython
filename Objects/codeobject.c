@@ -3275,9 +3275,9 @@ semantic_has_exceptional_predecessor(const semantic_image *image, int pc)
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     unsigned int routes = fmt->error_routes;
     unsigned int known = _PyIR_ERROR_COMPLETE | _PyIR_ERROR_DIRECT |
-                         _PyIR_ERROR_BRIDGE | _PyIR_ERROR_LOCAL_DST;
+                         _PyIR_ERROR_LOCAL_DST;
     if (!(routes & _PyIR_ERROR_COMPLETE) || (routes & ~known) ||
-        (routes & (_PyIR_ERROR_DIRECT | _PyIR_ERROR_BRIDGE)))
+        (routes & _PyIR_ERROR_DIRECT))
     {
         return 1;
     }

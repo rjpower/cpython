@@ -244,6 +244,18 @@ _PyInterpolation_Build(PyObject *value, PyObject *str, int conversion, PyObject 
 }
 
 PyObject *
+(_PyInterpolation_BuildValue)(PyValueBorrow value, PyObject *str, int conversion, PyObject *format_spec)
+{
+    PyObject *value_obj = PyValue_AsObject(value);
+    if (value_obj == NULL) {
+        return NULL;
+    }
+    PyObject *interpolation = _PyInterpolation_Build(value_obj, str, conversion, format_spec);
+    Py_DECREF(value_obj);
+    return interpolation;
+}
+
+PyObject *
 _PyInterpolation_GetValueRef(PyObject *interpolation)
 {
     return Py_NewRef(interpolationobject_CAST(interpolation)->value);

@@ -5,19 +5,23 @@
 
             /* BEGIN INSTRUCTIONS */
 
-
         TARGET(BINARY_OP_ADD) {
-            int opcode = BINARY_OP_ADD;
+            ir_binary_op = NB_ADD;
+            goto LABEL_binary_op;
+        }
+
+        LABEL(binary_op) {
+            int opcode = _PyIR_BINARY_OP_FIRST + ir_binary_op;
             (void)(opcode);
             _PyIRWord* this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD);
+            INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + ir_binary_op);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_ADD;
+            int oparg = ir_binary_op;
             (void)oparg;
             PyValueBorrow lhs;
             PyValueBorrow rhs;
@@ -288,60 +292,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_AND) {
-            int opcode = BINARY_OP_AND;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_AND);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_AND;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_AND;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_AND_INT) {
@@ -485,60 +438,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_FLOOR_DIVIDE) {
-            int opcode = BINARY_OP_FLOOR_DIVIDE;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_FLOOR_DIVIDE;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_FLOOR_DIVIDE;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
@@ -621,60 +523,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_INPLACE_ADD) {
-            int opcode = BINARY_OP_INPLACE_ADD;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_ADD;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_ADD;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_INPLACE_ADD_UNICODE) {
@@ -759,720 +610,57 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_INPLACE_AND) {
-            int opcode = BINARY_OP_INPLACE_AND;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_AND);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_AND;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_AND;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_FLOOR_DIVIDE) {
-            int opcode = BINARY_OP_INPLACE_FLOOR_DIVIDE;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_FLOOR_DIVIDE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_FLOOR_DIVIDE;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_FLOOR_DIVIDE;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_LSHIFT) {
-            int opcode = BINARY_OP_INPLACE_LSHIFT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_LSHIFT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_LSHIFT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_LSHIFT;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_MATRIX_MULTIPLY) {
-            int opcode = BINARY_OP_INPLACE_MATRIX_MULTIPLY;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_MATRIX_MULTIPLY);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_MATRIX_MULTIPLY;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_MATRIX_MULTIPLY;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_MULTIPLY) {
-            int opcode = BINARY_OP_INPLACE_MULTIPLY;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_MULTIPLY);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_MULTIPLY;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_MULTIPLY;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_OR) {
-            int opcode = BINARY_OP_INPLACE_OR;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_OR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_OR;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_OR;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_POWER) {
-            int opcode = BINARY_OP_INPLACE_POWER;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_POWER);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_POWER;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_POWER;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_REMAINDER) {
-            int opcode = BINARY_OP_INPLACE_REMAINDER;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_REMAINDER);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_REMAINDER;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_REMAINDER;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_RSHIFT) {
-            int opcode = BINARY_OP_INPLACE_RSHIFT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_RSHIFT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_RSHIFT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_RSHIFT;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_SUBTRACT) {
-            int opcode = BINARY_OP_INPLACE_SUBTRACT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_SUBTRACT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_SUBTRACT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_SUBTRACT;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_TRUE_DIVIDE) {
-            int opcode = BINARY_OP_INPLACE_TRUE_DIVIDE;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_TRUE_DIVIDE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_TRUE_DIVIDE;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_TRUE_DIVIDE;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_INPLACE_XOR) {
-            int opcode = BINARY_OP_INPLACE_XOR;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_XOR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_INPLACE_XOR;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_INPLACE_XOR;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_LSHIFT) {
-            int opcode = BINARY_OP_LSHIFT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_LSHIFT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_LSHIFT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_LSHIFT;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_LSHIFT_INT) {
@@ -1560,115 +748,13 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_MATRIX_MULTIPLY) {
-            int opcode = BINARY_OP_MATRIX_MULTIPLY;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MATRIX_MULTIPLY);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_MATRIX_MULTIPLY;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_MATRIX_MULTIPLY;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_MULTIPLY) {
-            int opcode = BINARY_OP_MULTIPLY;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_MULTIPLY;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_MULTIPLY;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_MULTIPLY_FLOAT) {
@@ -1809,60 +895,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_OR) {
-            int opcode = BINARY_OP_OR;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_OR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_OR;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_OR;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_OR_INT) {
@@ -1935,115 +970,13 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_POWER) {
-            int opcode = BINARY_OP_POWER;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_POWER);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_POWER;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_POWER;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_REMAINDER) {
-            int opcode = BINARY_OP_REMAINDER;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_REMAINDER);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_REMAINDER;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_REMAINDER;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_REMAINDER_INT) {
@@ -2126,60 +1059,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_RSHIFT) {
-            int opcode = BINARY_OP_RSHIFT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_RSHIFT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_RSHIFT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_RSHIFT;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_RSHIFT_INT) {
@@ -2258,60 +1140,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_SUBSCR) {
-            int opcode = BINARY_OP_SUBSCR;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBSCR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_SUBSCR;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_SUBSCR;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_SUBSCR_DICT) {
@@ -2906,60 +1737,9 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_SUBTRACT) {
-            int opcode = BINARY_OP_SUBTRACT;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_SUBTRACT;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_SUBTRACT;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_SUBTRACT_FLOAT) {
@@ -3164,115 +1944,13 @@
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
-
         TARGET(BINARY_OP_TRUE_DIVIDE) {
-            int opcode = BINARY_OP_TRUE_DIVIDE;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_TRUE_DIVIDE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_TRUE_DIVIDE;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_TRUE_DIVIDE;
+            goto LABEL_binary_op;
         }
-
         TARGET(BINARY_OP_XOR) {
-            int opcode = BINARY_OP_XOR;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_XOR);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = NB_XOR;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
+            ir_binary_op = NB_XOR;
+            goto LABEL_binary_op;
         }
 
         TARGET(BINARY_OP_XOR_INT) {

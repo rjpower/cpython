@@ -2199,6 +2199,9 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     PyValue *slots = _PyFrame_Slots(frame);
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
+    /* The operation that the generic BINARY_OP handlers pass to their shared
+     * body, which is not live across a dispatch. */
+    int ir_binary_op;
     /* What PROCESS_ERROR_AT passes to process_error */
     _PyInstr *ir_error_origin;
     uint32_t ir_error_entry;

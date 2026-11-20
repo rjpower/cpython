@@ -710,14 +710,13 @@ shape_read_dup(PyObject *owner, uint32_t offset)
 #define IR_FB_ARG(FB, F) \
     (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
 
-/* A specialisation of BINARY_OP deoptimises to the handler of the operation
- * that its entry, at index F, records. */
+/* A specialisation of BINARY_OP deoptimises to the generic body, run with
+ * the operation that its entry, at index F, records. */
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
-        opcode = _PyIR_BINARY_OP_FIRST + \
-            (int)((_PyFbHeader *)IR_FB(F))->arg; \
+        ir_binary_op = (int)((_PyFbHeader *)IR_FB(F))->arg; \
         next_instr = this_instr; \
-        DISPATCH_GOTO(); \
+        goto LABEL_binary_op; \
     } while (0)
 
 /* On entry to a frame at next_instr, its instr_ptr: if the word there is a

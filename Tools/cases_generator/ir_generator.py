@@ -3401,6 +3401,8 @@ class IREmitter(Emitter):
         self.observer_errors = set()
         self.observer_terminals = set()
         self.observer_calls = set()
+        # Emitting the one body that every generic BINARY_OP operation shares
+        self.shared_binary_op = False
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -6614,8 +6616,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
-    out.emit(f"TARGET({name}) {{\n")
-    out.emit(f"int opcode = {canonical_handler(name)};\n")
+    if emitter.shared_binary_op:
+        out.emit("LABEL(binary_op) {\n")
+        handler_id = "_PyIR_BINARY_OP_FIRST + ir_binary_op"
+    else:
+        out.emit(f"TARGET({name}) {{\n")
+        handler_id = canonical_handler(name)
+    out.emit(f"int opcode = {handler_id};\n")
     out.emit(f"(void)(opcode);\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -6632,7 +6639,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({canonical_handler(name)});\n")
+    out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
@@ -6651,7 +6658,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  f"IR_FB({field_expr(fmt.fb)});\n")
     if inst.properties.oparg:
         if operation is not None:
-            out.emit(f"int oparg = {operation};\n")
+            out.emit("int oparg = ir_binary_op;\n" if emitter.shared_binary_op
+                     else f"int oparg = {operation};\n")
         elif fmt.fused:
             # D is the distance; the arg of the entry holds the operation
             out.emit("int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);\n")
@@ -6895,9 +6903,24 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
+    # The generic handlers of BINARY_OP differ only in the operation.  Each
+    # sets it and enters the one body, which handles any operation, so that
+    # the body is in the evaluator once, not once per operation.
+    binary_ops = frozenset(binary_op_handlers(analysis))
+    shared_binary_op_done = False
     for name, inst in sorted(handler_instructions(analysis).items()):
         if generator_word_entry(name, analysis) != name:
             continue
+        if name in binary_ops:
+            operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"ir_binary_op = {operation};\n")
+            out.emit("goto LABEL_binary_op;\n")
+            out.emit("}\n")
+            if shared_binary_op_done:
+                continue
+            shared_binary_op_done = True
+            emitter.shared_binary_op = True
         emitter.handler_format = formats[name]
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
@@ -6908,6 +6931,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
+        emitter.shared_binary_op = False
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:

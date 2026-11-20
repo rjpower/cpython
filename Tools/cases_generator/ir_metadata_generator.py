@@ -36,6 +36,7 @@ from ir_generator import (
     binary_op_handlers,
     binary_ops,
     compute_formats,
+    operand_metadata,
     generator_boundaries,
     generator_boundary_source_closed,
     handler_contracts,
@@ -141,6 +142,8 @@ def extent_initializer(e: Extent) -> str:
 def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str],
                        owner_program: tuple[int, int] = (0, 0)) -> str:
+    if fmt.operands != "_PyIR_OPERANDS_NONE":
+        fmt = operand_metadata(fmt)
     # A STACK_ONLY opcode has a format for the CFG but no handler to run
     flags = [] if fmt.group in STACK_ONLY else ["_PyIR_VALID"]
     for present, flag in (
@@ -179,6 +182,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".owner_program = {owner_program[0]}, .owner_events = {owner_program[1]}, "
         f".word_flags = {bits(list(contract.word_flags))}, "
         f".error_routes = {bits(list(contract.error_routes))}, "
+        f".operands = {fmt.operands}, "
         f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "

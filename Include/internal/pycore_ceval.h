@@ -113,10 +113,13 @@ extern void _PyEval_Fini(void);
 
 extern PyObject* _PyEval_GetBuiltins(PyThreadState *tstate);
 
-/* Success consumes the window and returns an unpublished child. On failure,
- * preparation may leave it intact; ERROR_NO_POP unwinds its actual NULL homes. */
+/* The frame of the __init__ function init (an owner) for the call at
+ * current, with self (an owner) and the call's operands as its arguments.
+ * Success consumes them, releases the call's class operand and returns an
+ * unpublished child.  On failure it has closed what it took. */
 extern _PyInterpreterFrame *_PyEval_CreateInitFrame(
-    PyThreadState *, _PyInterpreterFrame *, PyValue *, int, int, _PyInstr *);
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
+    _PyInstr *);
 
 // Trampoline API
 

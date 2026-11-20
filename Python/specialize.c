@@ -3668,7 +3668,7 @@ _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr)
     assert(ENABLE_SPECIALIZATION);
     PyTypeObject *tp = PyValue_TYPE(iterable);
     fb_begin_unary(instr, tp);
-    if (tp->_tp_iteritem != NULL) {
+    if (_PyType_IteratesByIndex(tp)) {
         specialize(instr, GET_ITER_VIRTUAL);
         return;
     }

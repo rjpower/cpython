@@ -2378,6 +2378,12 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     return STORE_NEVER
 
 
+def unpacks_elements_directly(inst: Instruction, fmt: "IRFormat") -> bool:
+    """Whether an unpack writes its elements one at a time to the output
+    window (IR_WRITE_OUTPUT), so that each can go straight to its local."""
+    return fmt.unpacks and "IR_WRITE_OUTPUT" in uop_tokens(inst)
+
+
 def uop_tokens(inst: Instruction) -> list[str]:
     return [t.text for part in inst.parts if isinstance(part, Uop)
             for t in part.body.tokens()]
@@ -2508,6 +2514,10 @@ class SlotLayout:
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
+    # Window: the slot, above the inputs', whose result goes to a dst that
+    # may name a local, and the dst's macro arguments
+    move_dst: int | None = None
+    move_dst_args: str = ""
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2732,6 +2742,8 @@ class IRStack(Stack):
         # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler,
         # which close ir_old after them.  Copies share the list.
         self.dst_stores: list[str] = []
+        # The result already went to dst (IR_MOVE_RESULT_TO_DST)
+        self.moved_dst = False
         # Must-NULL output facts follow the actual structured storage paths.
         # Distinct normal successors keep distinct facts until the final store.
         self.null_paths: dict[int, set[str]] = {0: set()}
@@ -3150,7 +3162,19 @@ class IRStack(Stack):
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
-            out.emit(f"IR_SET_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            slot = self.window_slot(memory_offset)
+            if (self.final and role is None and lay.move_dst is not None
+                    and slot == f"window[{lay.move_dst}]"):
+                # The result goes to the local that dst names, or to its
+                # slot, without the slot's store and reload; the slot is
+                # above the inputs, so it holds nothing to replace
+                expression = (f"IR_MOVE_RESULT_TO_DST({lay.move_dst_args}, "
+                              f"{slot}, {var.name})")
+                self.dst_stores.append(expression)
+                self.moved_dst = True
+                out.emit(f"{expression};\n")
+                return True
+            out.emit(f"IR_SET_TEMP({slot}, {var.name});\n")
             if role is not None:
                 out.emit("}\n")
             return True
@@ -3607,8 +3631,22 @@ class IREmitter(Emitter):
         local, index = self.checked_home_array(tkn, uop, storage)
         args, end = self.instruction_macro_args(tkn, tkn_iter)
         self.out.start_line()
-        self.out.emit_at(f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
-                         f"{tokens_text(args[2])})", tkn)
+        write = (f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
+                 f"{tokens_text(args[2])})")
+        if inst is not None and unpacks_elements_directly(inst, self.format_of(inst)):
+            # The element goes straight to its local; the local's old value
+            # takes the element's slot of the window, for the close after
+            # the last store (see unpack_to_locals())
+            fmt = self.format_of(inst)
+            dst = fmt.field_of(ROLE_DST)
+            write = (f"if ({is_local(dst)}) {{ "
+                     f"IR_UNPACK_DIRECT(&IR_SLOT({FIELD_VARS[dst]}), "
+                     f"&{local.name}[{index}], {index}, {UNPACKS[fmt.group]}, "
+                     f"{tokens_text(args[2])}); }} else {{ {write}; }}")
+            self.out.emit_at(write, tkn)
+            self.out.last_token = end
+            return True
+        self.out.emit_at(write, tkn)
         self.out.last_token = end
         return True
 
@@ -4133,8 +4171,13 @@ class IREmitter(Emitter):
             raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
-        self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
-        self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
+        if unpacks_elements_directly(inst, fmt):
+            # The elements are in their locals, and the window holds the
+            # old values that own an object, if any
+            self.emit(f"if (ir_unpack_owned) {{ IR_CLOSE_WINDOW(window, {count}); }}\n")
+        else:
+            self.emit(f"if (IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count})) "
+                      f"{{ IR_CLOSE_WINDOW(window, {count}); }}\n")
         self.unpack_local_drained = True
         self.emit("}\n")
 
@@ -5475,11 +5518,7 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("_PyIRGenStep *ir_completed_target = generator_outcome_target("
-                      "frame, this_instr, generator_completed_targets);\n")
-            self.emit("assert(ir_completed_target != NULL);\n")
-            self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
-                      "frame, this_instr, ir_completed);\n")
+            self.emit("IR_GEN_COMPLETE(ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
@@ -5519,8 +5558,7 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_JUMP(GEN_RETURN_ROUTE, {dying}, "
-                  f"frame->instr_ptr, {value});\n")
+        self.emit(f"IR_GEN_RETURN({value}, {dying});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -5583,26 +5621,18 @@ class IREmitter(Emitter):
                       "frame->instr_ptr, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
-            self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
-            self.emit("if (ir_resume_site > frame->ir_words) {\n")
-            self.emit("_PyIRGenStep *ir_resume_target = "
-                      "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
-            self.emit("if (ir_resume_target != NULL) {\n")
-            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, "
-                      "ir_resume_site, ir_resume_input);\n")
-            self.emit("}\n")
-            self.emit("}\n")
+            self.emit("IR_GEN_RESUME(ir_resume_input);\n")
         else:
             self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
             self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
             self.emit("}\n")
-        self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
-        self.emit("LOAD_IP(0);\n")
-        self.emit("IR_SKIP_RESUME();\n")
-        self.emit("DTRACE_FUNCTION_ENTRY();\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
+            self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+            self.emit("LOAD_IP(0);\n")
+            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("DTRACE_FUNCTION_ENTRY();\n")
+            self.emit("LLTRACE_RESUME_FRAME();\n")
+            self.emit("DISPATCH();\n")
         self.emit("}\n")
         # The entered heap frame cannot overlap the parent's values. Its
         # failed entry/return retires the child before error re-enters parent.
@@ -5750,8 +5780,14 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
                      for k in range(fmt.n_inputs)}
         borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
                                if fmt.borrow_mask & (1 << k))
-        return SlotLayout(True, get_stack_effect(inst).base_offset, in_fields,
-                          borrowable)
+        base = get_stack_effect(inst).base_offset
+        # The inputs are window[0:n] when their number is constant
+        move = (mode == STORE_RESULT and fmt.operands == "_PyIR_OPERANDS_NONE"
+                and not base.positive and not base.negative
+                and fmt.dst_offset >= -base.numeric)
+        return SlotLayout(True, base, in_fields, borrowable,
+                          move_dst=fmt.dst_offset if move else None,
+                          move_dst_args=FIELD_ARGS[fmt.field_of(ROLE_DST)] if move else "")
     in_fields = {k - fmt.n_inputs: fmt.input_field(k)
                  for k in range(fmt.n_inputs) if k not in fmt.metadata_inputs}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
@@ -6393,6 +6429,8 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     stack.final = True
     stack.flush(out)
     if mode == STORE_RESULT and fmt.window and fmt.operands == "_PyIR_OPERANDS_NONE":
+        if stack.moved_dst:
+            return fmt.dst_offset
         dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
         expression = f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
@@ -6717,6 +6755,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # after its last store (IR_STORE_DST)
         out.emit("PyValue ir_old = PyValue_NULL;\n")
         out.emit("(void)ir_old;\n")
+    if unpacks_elements_directly(inst, fmt):
+        out.emit("bool ir_unpack_owned = false;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = use_fb
@@ -6862,7 +6902,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, {result});\n")
+        out.emit(f"IR_GEN_YIELD({result});\n")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(
@@ -8573,7 +8613,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
-    tables, which name the step that a word's handler transfers to.
+    tables, which give the kind of transfer that a word's handler makes (the
+    enums of that file).
     ir_evaluate() includes it at its start without, for the dispatch table,
     which is local to it and has the addresses of its labels."""
     ids = handler_ids(analysis)
@@ -8584,16 +8625,16 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     boundaries = generator_boundaries(analysis)
     out.emit("#ifdef IR_GEN_TABLES\n")
     for column in ("Yielded", "Completed", "Resume"):
-        out.emit(f"static _PyIRGenStep *const generator_{column.lower()}_targets[{n}] = {{\n")
+        out.emit(f"static const uint8_t generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
                 continue
             target = None
             if column == "Yielded" and boundary.yielded == "DELEGATED":
-                target = "GEN_SEND_YIELD"
+                target = "1"
             elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROW_COMPLETE_" if boundary.base == "CLEANUP_THROW"
-                          else "GEN_COMPLETE_") + {
+                target = ("GEN_THROWING | GEN_COMPLETE_"
+                          if boundary.base == "CLEANUP_THROW" else "GEN_COMPLETE_") + {
                     "STORE_LOCAL": "STORE", "RETURN": "RETURN",
                     "DISCARD": "DISCARD", "HOME": "HOME",
                     "STORE_FAST": "STORE_FAST", "POP_TOP": "POP_TOP"}[boundary.completed]
@@ -8605,7 +8646,12 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
-                out.emit(f"[{ids[name]}] = ir_{target},\n")
+                out.emit(f"[{ids[name]}] = {target},\n")
+        if column == "Completed":
+            # A generator that ends a FOR loop completes it with one outcome
+            for name in ("FOR_ITER", "FOR_ITER_GEN"):
+                if name in ids:
+                    out.emit(f"[{ids[name]}] = GEN_COMPLETE_FOR_ITER,\n")
         out.emit("};\n")
     out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every

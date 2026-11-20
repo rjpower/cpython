@@ -1527,7 +1527,7 @@ ir_run_FOR_ITER(
             }
             // _FOR_ITER
             {
-                _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+                _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, &window[1]);
                 null_or_index = window[1];
                 PyValue item = step.value;
                 int found = step.status;
@@ -1546,8 +1546,7 @@ ir_run_FOR_ITER(
                 next = item;
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -3592,8 +3591,7 @@ ir_run_UNPACK_EX(
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, B)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
-                IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8)));
+                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)))) { IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8))); }
             }
             DISPATCH();
         }
@@ -3655,8 +3653,7 @@ ir_run_UNPACK_SEQUENCE(
                 }
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg)) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }
@@ -8008,9 +8005,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
-                _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                assert(ir_completed_target != NULL);
-                IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                IR_GEN_COMPLETE(ir_completed);
             }
         }
         TARGET(COMPARE_OP) {
@@ -9135,8 +9130,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9209,8 +9203,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9272,8 +9265,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9328,8 +9320,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 next = next_index.value;
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9401,7 +9392,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
                 PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(iterable));
-                if (tp->_tp_iteritem == NULL) {
+                if (!_PyType_IteratesByIndex(tp)) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);
@@ -13430,7 +13421,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_RETURN(temp, dying);
                 }
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));
@@ -13478,7 +13469,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_RETURN(temp, dying);
                 }
                 temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));
@@ -13615,9 +13606,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = sent.value;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                        assert(ir_completed_target != NULL);
-                        IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                        IR_GEN_COMPLETE(ir_completed);
                     }
                 }if (!_PyValue_TryXCloseNoReentry(v)) {
                     assert(_PyValue_IsHome(sent.value));
@@ -13632,7 +13621,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_out);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, retval);
+            IR_GEN_YIELD(retval);
         }
 
         TARGET(SEND_GEN) {
@@ -13770,19 +13759,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, frame->instr_ptr, ir_resume_input);
                     }
                     --tstate->py_recursion_remaining;
-                    _PyInstr *ir_resume_site = frame->instr_ptr;
-                    if (ir_resume_site > frame->ir_words) {
-                        _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
-                        if (ir_resume_target != NULL) {
-                            IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
-                        }
-                    }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
-                    LOAD_IP(0);
-                    IR_SKIP_RESUME();
-                    DTRACE_FUNCTION_ENTRY();
-                    LLTRACE_RESUME_FRAME();
-                    DISPATCH();
+                    IR_GEN_RESUME(ir_resume_input);
                 }
             }
         }
@@ -13909,9 +13886,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = PyValue_None;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                        assert(ir_completed_target != NULL);
-                        IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                        IR_GEN_COMPLETE(ir_completed);
                     }
                 }
                 next = next_index.value;
@@ -13920,7 +13895,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(next));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, next);
+            IR_GEN_YIELD(next);
         }
 
         TARGET(SEND_XFER_DISCARD) {
@@ -13986,19 +13961,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                             IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, frame->instr_ptr, ir_resume_input);
                         }
                         --tstate->py_recursion_remaining;
-                        _PyInstr *ir_resume_site = frame->instr_ptr;
-                        if (ir_resume_site > frame->ir_words) {
-                            _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
-                            if (ir_resume_target != NULL) {
-                                IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
-                            }
-                        }
-                        _PyFrame_SetReturnValue(frame, ir_resume_input);
-                        LOAD_IP(0);
-                        IR_SKIP_RESUME();
-                        DTRACE_FUNCTION_ENTRY();
-                        LLTRACE_RESUME_FRAME();
-                        DISPATCH();
+                        IR_GEN_RESUME(ir_resume_input);
                     }
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
@@ -14014,9 +13977,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                            assert(ir_completed_target != NULL);
-                            IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                            IR_GEN_COMPLETE(ir_completed);
                         }
                     }
                     retval = item;
@@ -14030,9 +13991,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = sent.value;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                            assert(ir_completed_target != NULL);
-                            IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                            IR_GEN_COMPLETE(ir_completed);
                         }
                     }if (!_PyValue_TryXCloseNoReentry(v)) {
                         assert(_PyValue_IsHome(sent.value));
@@ -14045,7 +14004,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, retval);
+            IR_GEN_YIELD(retval);
         }
         TARGET(SETUP_ANNOTATIONS) {
             IR_RUN_OUTLINED(ir_run_SETUP_ANNOTATIONS);
@@ -15105,6 +15064,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -15149,15 +15109,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyList_ITEMS(seq_o);
                 for (int i = 0; i < oparg; i++) {
-                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
+                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
                 }
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }
@@ -15173,6 +15132,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -15209,14 +15169,13 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyTuple_ITEMS(seq_o);
                 for (int i = 0; i < oparg; i++) {
-                    _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i]));
+                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
                 }
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }
@@ -15232,14 +15191,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
+            bool ir_unpack_owned = false;
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
             (void)window;
             PyValue tos;
             PyValue seq;
-            PyValue val1;
-            PyValue val0;
+            PyValue *values;
             // _GUARD_TOS_TUPLE
             {
                 tos = window[0];
@@ -15258,6 +15217,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _UNPACK_SEQUENCE_TWO_TUPLE
             {
                 seq = tos;
+                values = &window[0];
                 assert(oparg == 2);
                 PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
                 assert(PyTuple_CheckExact(seq_o));
@@ -15267,15 +15227,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                val0 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0));
-                val1 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1));
-                IR_SET_TEMP(window[0], val1);
-                IR_SET_TEMP(window[1], val0);
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[0], 0, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); } else { _PyFrame_WriteHome(frame, &values[0], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); };
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[1], 1, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); } else { _PyFrame_WriteHome(frame, &values[1], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); };
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg);
-                IR_CLOSE_WINDOW(window, oparg);
+                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
             }
             DISPATCH();
         }

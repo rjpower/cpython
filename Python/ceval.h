@@ -365,11 +365,6 @@ typedef struct {
     _PyInstr *next;
 } _PyIRTransfer;
 
-/* A generator transfer step (Python/ceval_generator.h): the frame and word
- * that it runs next, for the value that it takes as its word. */
-typedef _PyIRTransfer _PyIRGenStep(PyThreadState *, _PyInterpreterFrame *,
-                                   _PyInstr *, _PyIRWord);
-
 enum {
     _PyIR_EXIT_ERROR,        /* exit_next is the origin, exit_entry the entry */
     _PyIR_EXIT_START_FRAME,  /* frame is a new frame to start */

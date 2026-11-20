@@ -3188,14 +3188,13 @@ treebuilder_handle_end(TreeBuilderObject* self, PyObject* tag)
         return NULL;
     }
 
-    PyValue new_this_value = PyList_GetValue(self->stack, self->index - 1);
-    if (PyValue_IsNull(new_this_value)) {
-        return NULL;
-    }
-    PyObject *new_this = _PyValue_AsObjectStealAt(new_this_value, BOX_SITE_LIST);
-    if (new_this == NULL) {
-        return NULL;
-    }
+    /* The stack list is private to the builder: only this file's code
+       changes it, and it holds at least self->index entries. An entry is
+       None or a former self->this that took a child through append(), so it
+       is never an inline int or float. The borrow is retained on the same
+       line, before any call can run, so it cannot outlive the list's count. */
+    PyObject *new_this = Py_NewRef(PyValue_AsKnownObjectBorrow(
+        PyList_GET_VALUE(self->stack, self->index - 1)));
     PyObject *last = self->last;
     PyObject *last_for_tail = self->last_for_tail;
     PyObject *this = self->this;

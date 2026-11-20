@@ -465,19 +465,18 @@ raise_stop_iteration(Py_ssize_t idx)
 static PyObject *
 _build_rval_index_tuple(PyObject *rval, Py_ssize_t idx) {
     /* return (rval, idx) tuple, stealing reference to rval */
-    PyObject *pyidx;
     /*
     steal a reference to rval, returns (rval, idx)
     */
     if (rval == NULL) {
         return NULL;
     }
-    pyidx = PyLong_FromSsize_t(idx);
-    if (pyidx == NULL) {
+    PyValue pyidx = PyValue_FromInt64(idx);
+    if (PyValue_IsNull(pyidx)) {
         Py_DECREF(rval);
         return NULL;
     }
-    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(rval), PyValue_PrepareOwned(pyidx));
+    return _PyTuple_FromPairTakeValue(PyValue_FromObjectSteal(rval), pyidx);
 }
 
 static PyObject *
@@ -826,7 +825,7 @@ _parse_object_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ss
                (releasing them on failure).  Only key is reset for the bail
                path; val is never live there, so it needs no cleanup. */
             if (has_pairs_hook) {
-                PyObject *item = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(val));
+                PyObject *item = _PyTuple_FromPairTakeValue(_PyValue_PointerSteal(key), PyValue_FromObjectSteal(val));
                 key = NULL;
                 if (item == NULL)
                     goto bail;
@@ -837,7 +836,7 @@ _parse_object_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ss
                 Py_DECREF(item);
             }
             else {
-                int err = _PyDict_SetValue_Take2((PyDictObject *)rval, PyValue_PrepareOwned(key), PyValue_PrepareOwned(val));
+                int err = _PyDict_SetValue_Take2((PyDictObject *)rval, _PyValue_PointerSteal(key), PyValue_FromObjectSteal(val));
                 key = NULL;
                 if (err < 0)
                     goto bail;
@@ -924,7 +923,7 @@ _parse_array_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssi
             if (val == NULL)
                 goto bail;
 
-            if (_PyList_AppendTakeValue((PyListObject *)rval, PyValue_PrepareOwned(val)) < 0)
+            if (_PyList_AppendTakeValue((PyListObject *)rval, PyValue_FromObjectSteal(val)) < 0)
                 goto bail;
             idx = next_idx;
 
@@ -1668,6 +1667,16 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
     return rval;
 }
 
+/* The key of an object in the markers dict: its address as an int, which
+   is what id() gives. The runtime keeps every object below Py_PTR_LIMIT
+   (2**48), which fits an inline int (int51), so no int object is made. */
+static PyValue
+encoder_marker_key(const void *obj)
+{
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
+    return PyValue_FromInlineInt((int64_t)(uintptr_t)obj);
+}
+
 /* Write an inline int in decimal, as its repr. */
 static int
 write_inline_int(PyUnicodeWriter *writer, PyValueBorrow obj)
@@ -1743,21 +1752,17 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
         return rv;
     }
     else {
-        PyObject *ident = NULL;
+        PyValue ident = PyValue_NULL;
         if (s->markers != Py_None) {
             int has_key;
-            ident = PyLong_FromVoidPtr(obj);
-            if (ident == NULL)
-                return -1;
-            has_key = PyDict_ContainsValue(s->markers, PyValue_FromObjectBorrow(ident));
+            ident = encoder_marker_key(obj);
+            has_key = PyDict_ContainsValue(s->markers, ident);
             if (has_key) {
                 if (has_key != -1)
                     PyErr_SetString(PyExc_ValueError, "Circular reference detected");
-                Py_DECREF(ident);
                 return -1;
             }
-            if (PyDict_SetValue(s->markers, PyValue_FromObjectBorrow(ident), PyValue_FromObjectBorrow(obj))) {
-                Py_DECREF(ident);
+            if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(obj))) {
                 return -1;
             }
         }
@@ -1765,13 +1770,11 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
                                      PyValue_FromObjectBorrow(s->defaultfn),
                                      obj_value);
         if (PyValue_IsNull(newobj)) {
-            Py_XDECREF(ident);
             return -1;
         }
 
         if (_Py_EnterRecursiveCall(" while encoding a JSON object")) {
             PyValue_CLOSE(newobj);
-            Py_XDECREF(ident);
             return -1;
         }
         rv = encoder_listencode_obj(s, writer, PyValue_Borrow(newobj),
@@ -1781,15 +1784,12 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
         PyValue_CLOSE(newobj);
         if (rv) {
             _PyErr_FormatNote("when serializing %T object", obj);
-            Py_XDECREF(ident);
             return -1;
         }
-        if (ident != NULL) {
-            if (PyDict_DelValue(s->markers, PyValue_FromObjectBorrow(ident))) {
-                Py_XDECREF(ident);
+        if (!PyValue_IsNull(ident)) {
+            if (PyDict_DelValue(s->markers, ident)) {
                 return -1;
             }
-            Py_XDECREF(ident);
         }
         return rv;
     }
@@ -1906,10 +1906,9 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
         // gh-142831: encoder_encode_key_value() can invoke user code
         // that mutates the items list, so hold a strong reference.
-        PyValue itemv = PyList_GetValue(items, i);
-        if (PyValue_IsNull(itemv)) {
-            return -1;
-        }
+        // The loop condition checked i against the size just now, and nothing
+        // ran since, so the slot is live; the retain makes it ours.
+        PyValue itemv = PyValue_DUP(PyList_GET_VALUE(items, i));
         if (!PyValue_IsObject(itemv)
             || !PyTuple_Check(PyValue_AsKnownObjectBorrow(itemv))
             || PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(itemv)) != 2) {
@@ -1919,21 +1918,13 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
         }
         PyObject *item = PyValue_AsKnownObjectBorrow(itemv);
 
-        PyValue keyv = PyTuple_GetValue(item, 0);
-        PyValue valuev = PyTuple_GetValue(item, 1);
-        if (PyValue_IsNull(keyv) || PyValue_IsNull(valuev)) {
-            PyValue_XCLOSE(keyv);
-            PyValue_XCLOSE(valuev);
-            PyValue_CLOSE(itemv);
-            return -1;
-        }
+        // The key and value are borrowed from the tuple, which itemv keeps
+        // alive and which cannot change, whatever user code does to items.
         int rv = encoder_encode_key_value(s, writer, first, dct,
-                                          PyValue_Borrow(keyv),
-                                          PyValue_Borrow(valuev),
+                                          PyTuple_GET_VALUE(item, 0),
+                                          PyTuple_GET_VALUE(item, 1),
                                           indent_level, indent_cache,
                                           separator);
-        PyValue_CLOSE(keyv);
-        PyValue_CLOSE(valuev);
         PyValue_CLOSE(itemv);
         if (rv < 0) {
             return -1;
@@ -1952,8 +1943,9 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     PyValue keyv, valuev;
     Py_ssize_t pos = 0;
     int rc;
-    // gh-145244: encoder_encode_key_value() can invoke user code
-    // that mutates the dict; the owning iterator snapshots each entry.
+    // gh-145244: encoder_encode_key_value() can invoke user code (the
+    // default hook, a Python-level string encoder) that mutates the dict; the owning iterator snapshots each entry, so a
+    // borrow would dangle.
     while ((rc = _PyDict_NextValue((PyDictObject *)dct, &pos, &keyv, &valuev, NULL)) > 0) {
         int rv = encoder_encode_key_value(s, writer, first, dct,
                                           PyValue_Borrow(keyv),
@@ -1975,7 +1967,7 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
                        Py_ssize_t indent_level, PyObject *indent_cache)
 {
     /* Encode Python dict dct a JSON term */
-    PyObject *ident = NULL;
+    PyValue ident = PyValue_NULL;
     bool first = true;
 
     if (PyDict_GET_SIZE(dct) == 0) {
@@ -1985,16 +1977,14 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
 
     if (s->markers != Py_None) {
         int has_key;
-        ident = PyLong_FromVoidPtr(dct);
-        if (ident == NULL)
-            goto bail;
-        has_key = PyDict_ContainsValue(s->markers, PyValue_FromObjectBorrow(ident));
+        ident = encoder_marker_key(dct);
+        has_key = PyDict_ContainsValue(s->markers, ident);
         if (has_key) {
             if (has_key != -1)
                 PyErr_SetString(PyExc_ValueError, "Circular reference detected");
             goto bail;
         }
-        if (PyDict_SetValue(s->markers, PyValue_FromObjectBorrow(ident), PyValue_FromObjectBorrow(dct))) {
+        if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(dct))) {
             goto bail;
         }
     }
@@ -2039,10 +2029,9 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
         }
     }
 
-    if (ident != NULL) {
-        if (PyDict_DelValue(s->markers, PyValue_FromObjectBorrow(ident)))
+    if (!PyValue_IsNull(ident)) {
+        if (PyDict_DelValue(s->markers, ident))
             goto bail;
-        Py_CLEAR(ident);
     }
     if (s->indent != Py_None && !first) {
         indent_level--;
@@ -2057,7 +2046,6 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
     return 0;
 
 bail:
-    Py_XDECREF(ident);
     return -1;
 }
 
@@ -2069,12 +2057,11 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(s_fast); i++) {
         // gh-142831: encoder_listencode_obj() can invoke user code
         // that mutates the sequence, so hold a strong reference.
-        PyValue objv = PyList_Check(s_fast)
-            ? PyList_GetValue(s_fast, i)
-            : PyTuple_GetValue(s_fast, i);
-        if (PyValue_IsNull(objv)) {
-            return -1;
-        }
+        // The loop condition checked i against the size just now, and nothing
+        // ran since, so the slot is live; the retain below makes it ours.
+        PyValue objv = PyValue_DUP(PyList_Check(s_fast)
+            ? PyList_GET_VALUE(s_fast, i)
+            : PyTuple_GET_VALUE(s_fast, i));
         if (i) {
             if (PyUnicodeWriter_WriteStr(writer, separator) < 0) {
                 PyValue_CLOSE(objv);
@@ -2097,7 +2084,7 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
                         PyObject *seq,
                         Py_ssize_t indent_level, PyObject *indent_cache)
 {
-    PyObject *ident = NULL;
+    PyValue ident = PyValue_NULL;
     PyObject *s_fast = NULL;
 
     s_fast = _PyValue_SequenceFast(PyValue_FromObjectBorrow(seq), "encoder_listencode_list needs a sequence");
@@ -2110,16 +2097,14 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
 
     if (s->markers != Py_None) {
         int has_key;
-        ident = PyLong_FromVoidPtr(seq);
-        if (ident == NULL)
-            goto bail;
-        has_key = PyDict_ContainsValue(s->markers, PyValue_FromObjectBorrow(ident));
+        ident = encoder_marker_key(seq);
+        has_key = PyDict_ContainsValue(s->markers, ident);
         if (has_key) {
             if (has_key != -1)
                 PyErr_SetString(PyExc_ValueError, "Circular reference detected");
             goto bail;
         }
-        if (PyDict_SetValue(s->markers, PyValue_FromObjectBorrow(ident), PyValue_FromObjectBorrow(seq))) {
+        if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(seq))) {
             goto bail;
         }
     }
@@ -2146,10 +2131,9 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
     if (result < 0) {
         goto bail;
     }
-    if (ident != NULL) {
-        if (PyDict_DelValue(s->markers, PyValue_FromObjectBorrow(ident)))
+    if (!PyValue_IsNull(ident)) {
+        if (PyDict_DelValue(s->markers, ident))
             goto bail;
-        Py_CLEAR(ident);
     }
 
     if (s->indent != Py_None) {
@@ -2166,7 +2150,6 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
     return 0;
 
 bail:
-    Py_XDECREF(ident);
     Py_DECREF(s_fast);
     return -1;
 }

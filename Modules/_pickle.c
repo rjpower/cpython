@@ -3517,11 +3517,10 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
         while (total < PyList_GET_SIZE(obj)) {
-            PyValue item = PyList_GetValue(obj, total);
-            if (PyValue_IsNull(item)) {
-                _PyErr_FormatNote("when serializing %T item %zd", obj, total);
-                return -1;
-            }
+            /* The loop condition checked total against the size just now and
+               nothing ran since, so the slot is live. save_value() can run
+               Python that drops the list's count of the item, so retain it. */
+            PyValue item = PyValue_DUP(PyList_GET_VALUE(obj, total));
             int err = save_value(state, self, PyValue_Borrow(item), 0);
             PyValue_CLOSE(item);
             if (err < 0) {
@@ -3788,6 +3787,11 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
 
     dict_size = PyDict_GET_SIZE(obj);
     assert(dict_size);
+
+    /* Both loops below iterate with owners, not borrows. save_value() can run
+       Python (persistent_id, reducer_override, __reduce__, a file's write at a
+       frame boundary), which can drop the dict's count of the key or value
+       being saved. */
 
     /* Write in batches of BATCHSIZE. */
     Py_ssize_t total = 0;
@@ -5941,29 +5945,27 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
         if (new_memo == NULL)
             return -1;
 
-        int rc;
-        PyValue value_v;
-        while ((rc = _PyDict_NextValue((PyDictObject *)obj, &i, NULL, &value_v, NULL)) > 0) {
-            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
-            if (value == NULL) {
-                Py_CLEAR(value);
-                rc = -1;
-                break;
-            }
+        PyValueBorrow value_v;
+        /* Borrowed iteration. Nothing here changes obj, and `value` is used
+           only to read its two items, which are retained before anything
+           can run Python (the int conversion below can). Each step re-reads
+           obj at position i, so later steps stay valid whatever that code
+           does to the dict. */
+        while (_PyDict_NextBorrowed(obj, &i, NULL, &value_v)) {
+            value = PyValue_ObjectOrNull(value_v);
             Py_ssize_t memo_id;
             PyObject *memo_id_obj = NULL, *memo_obj = NULL;
 
-            if (!PyTuple_Check(value) || PyTuple_GET_SIZE(value) != 2) {
+            if (value == NULL || !PyTuple_Check(value)
+                || PyTuple_GET_SIZE(value) != 2) {
                 PyErr_SetString(PyExc_TypeError,
                                 "'memo' values must be 2-item tuples");
-                Py_DECREF(value);
                 goto error;
             }
             PyValue memo_id_obj_v = PyTuple_GetValue(value, 0);
             memo_id_obj = PyValue_IsNull(memo_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(memo_id_obj_v, BOX_SITE_TUPLE);
             PyValue memo_obj_v = PyTuple_GetValue(value, 1);
             memo_obj = PyValue_IsNull(memo_obj_v) ? NULL : _PyValue_AsObjectStealAt(memo_obj_v, BOX_SITE_TUPLE);
-            Py_DECREF(value);
             if (memo_id_obj == NULL || memo_obj == NULL) {
                 Py_XDECREF(memo_id_obj);
                 Py_XDECREF(memo_obj);
@@ -5980,8 +5982,6 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
             if (err < 0)
                 goto error;
         }
-        if (rc < 0)
-            goto error;
     }
     else {
         PyErr_Format(PyExc_TypeError,
@@ -7813,8 +7813,6 @@ load_build(PickleState *st, UnpicklerObject *self)
             if (err < 0)
                 goto error;
         }
-        if (rc < 0)
-            goto error;
     }
 
     if (0) {

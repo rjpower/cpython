@@ -1870,7 +1870,8 @@ class SizeofTest(unittest.TestCase):
             INTERPRETER_FRAME = '13Pi2HccP'
         else:
             INTERPRETER_FRAME = '13P2HccP'
-        check(x, size('3P5i2Q2c4P' + INTERPRETER_FRAME + 'P'))
+        # The last 'P' is the hidden discard slot that every code object has.
+        check(x, size('3P5i2Q2c4P' + INTERPRETER_FRAME + 'PP'))
         # function
         def func(): pass
         check(func, size('17Pi'))
@@ -1887,7 +1888,7 @@ class SizeofTest(unittest.TestCase):
             check(bar, size('PP'))
         # generator
         def get_gen(): yield 1
-        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'P'))
+        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'PP'))
         # iterator
         check(iter('abc'), size('lP'))
         # callable-iterator

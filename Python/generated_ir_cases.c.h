@@ -8016,9 +8016,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
-                _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                assert(ir_completed_target != NULL);
-                IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                IR_GEN_COMPLETE(ir_completed);
             }
         }
         TARGET(COMPARE_OP) {
@@ -13375,7 +13373,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_RETURN(temp, dying);
                 }
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));
@@ -13423,7 +13421,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_RETURN(temp, dying);
                 }
                 temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));
@@ -13560,9 +13558,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = sent.value;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                        assert(ir_completed_target != NULL);
-                        IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                        IR_GEN_COMPLETE(ir_completed);
                     }
                 }if (!_PyValue_TryXCloseNoReentry(v)) {
                     assert(_PyValue_IsHome(sent.value));
@@ -13577,7 +13573,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_out);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, retval);
+            IR_GEN_YIELD(retval);
         }
 
         TARGET(SEND_GEN) {
@@ -13715,19 +13711,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, frame->instr_ptr, ir_resume_input);
                     }
                     --tstate->py_recursion_remaining;
-                    _PyInstr *ir_resume_site = frame->instr_ptr;
-                    if (ir_resume_site > frame->ir_words) {
-                        _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
-                        if (ir_resume_target != NULL) {
-                            IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
-                        }
-                    }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
-                    LOAD_IP(0);
-                    IR_SKIP_RESUME();
-                    DTRACE_FUNCTION_ENTRY();
-                    LLTRACE_RESUME_FRAME();
-                    DISPATCH();
+                    IR_GEN_RESUME(ir_resume_input);
                 }
             }
         }
@@ -13854,9 +13838,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = PyValue_None;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                        assert(ir_completed_target != NULL);
-                        IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                        IR_GEN_COMPLETE(ir_completed);
                     }
                 }
                 next = next_index.value;
@@ -13865,7 +13847,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(next));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, next);
+            IR_GEN_YIELD(next);
         }
 
         TARGET(SEND_XFER_DISCARD) {
@@ -13931,19 +13913,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                             IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, frame->instr_ptr, ir_resume_input);
                         }
                         --tstate->py_recursion_remaining;
-                        _PyInstr *ir_resume_site = frame->instr_ptr;
-                        if (ir_resume_site > frame->ir_words) {
-                            _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
-                            if (ir_resume_target != NULL) {
-                                IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
-                            }
-                        }
-                        _PyFrame_SetReturnValue(frame, ir_resume_input);
-                        LOAD_IP(0);
-                        IR_SKIP_RESUME();
-                        DTRACE_FUNCTION_ENTRY();
-                        LLTRACE_RESUME_FRAME();
-                        DISPATCH();
+                        IR_GEN_RESUME(ir_resume_input);
                     }
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
@@ -13959,9 +13929,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                            assert(ir_completed_target != NULL);
-                            IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                            IR_GEN_COMPLETE(ir_completed);
                         }
                     }
                     retval = item;
@@ -13975,9 +13943,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = sent.value;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
-                            assert(ir_completed_target != NULL);
-                            IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
+                            IR_GEN_COMPLETE(ir_completed);
                         }
                     }if (!_PyValue_TryXCloseNoReentry(v)) {
                         assert(_PyValue_IsHome(sent.value));
@@ -13990,7 +13956,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, retval);
+            IR_GEN_YIELD(retval);
         }
         TARGET(SETUP_ANNOTATIONS) {
             IR_RUN_OUTLINED(ir_run_SETUP_ANNOTATIONS);

@@ -73,14 +73,15 @@
 #define TARGET(op) TARGET_##op:
 #define LABEL(name) LABEL_##name:
 
-/* The generator transfer steps (Python/ceval_generator.h, rule 13) are
- * functions that take the value that they transfer as their word.  A handler
- * calls one with IR_GEN_JUMP() by name, or with IR_GEN_JUMP_TO() by the
- * function that generator_outcome_target() or a generator_*_targets table
- * gave, and runs the frame and word that it returns.  The arguments are
- * evaluated before the call, as they were when they set the state.  The
- * steps use the same macros to continue a transfer, which then return what
- * the next step returns. */
+/* The generator transfers.  The plain send, yield and return of a delegation
+ * chain run in the evaluator, in the labels gen_resume, gen_yield, gen_return
+ * and gen_complete (Python/ceval_generator_labels.h): a handler sets the
+ * state that they read and jumps to one.  A transfer that is not plain,
+ * because a callback, a hook or a pending redirect must observe it, runs
+ * the steps of Python/ceval_generator.h (rule 13): functions that take the
+ * value that they transfer as the word of their call, and return the frame
+ * and next word to run.  A handler calls one with IR_GEN_JUMP() by name and
+ * runs what it returns. */
 #define IR_STEP_DONE(STEP) \
     do { \
         _PyIRTransfer ir_t = (STEP); \
@@ -98,20 +99,50 @@
  * their homes. */
 #define IR_GEN_EFFECT(REMAINING, IP, V) \
     IR_STEP_DONE(ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, (REMAINING)))
-#define IR_GEN_JUMP_TO(STEP, F, IP, V) \
-    IR_STEP_DONE((STEP)(tstate, (F), (IP), (V).bits))
 
+/* The yielded value V passes up from the SEND at this_instr, whose YIELD
+ * follows it, through every delegating frame above. */
+#define IR_GEN_YIELD(V) \
+    do { \
+        ir_gen_value = (V); \
+        next_instr = this_instr; \
+        goto LABEL_gen_yield; \
+    } while (0)
+/* Likewise V from the frame that a leaf YIELD has just suspended, if its
+ * resumer is a SEND with a native yielded outcome. */
 #define IR_TRY_NATIVE_YIELD(V) \
     do { \
-        if (frame->owner != FRAME_OWNED_BY_INTERPRETER) { \
-            _PyIRGenStep *ir_yield_target = generator_outcome_target( \
-                frame, frame->instr_ptr, generator_yielded_targets); \
-            if (ir_yield_target != NULL && !frame->pending_redirect) { \
-                assert(_PyValue_IsHome(V)); \
-                IR_GEN_JUMP_TO(ir_yield_target, frame, \
-                               frame->instr_ptr, (V)); \
-            } \
+        if (generator_site_kind(frame, frame->instr_ptr, \
+                                generator_yielded_targets) && \
+            !frame->pending_redirect) { \
+            assert(_PyValue_IsHome(V)); \
+            ir_gen_value = (V); \
+            next_instr = frame->instr_ptr; \
+            goto LABEL_gen_yield; \
         } \
+    } while (0)
+/* The SEND or CLEANUP_THROW at this_instr completes with V, whose word has
+ * a native completed outcome. */
+#define IR_GEN_COMPLETE(V) \
+    do { \
+        ir_gen_value = (V); \
+        next_instr = this_instr; \
+        goto LABEL_gen_complete; \
+    } while (0)
+/* The generator frame DYING has returned V and been unlinked and debited;
+ * frame is its resumer. */
+#define IR_GEN_RETURN(V, DYING) \
+    do { \
+        ir_gen_value = (V); \
+        ir_gen_dying = (DYING); \
+        goto LABEL_gen_return; \
+    } while (0)
+/* The generator that frame has just entered resumes with V, and follows the
+ * chain of delegating frames that the words of the frame describe. */
+#define IR_GEN_RESUME(V) \
+    do { \
+        ir_gen_value = (V); \
+        goto LABEL_gen_resume; \
     } while (0)
 
 /* Every IR word is one word, so every handler's entry computes the same

@@ -5449,11 +5449,7 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("_PyIRGenStep *ir_completed_target = generator_outcome_target("
-                      "frame, this_instr, generator_completed_targets);\n")
-            self.emit("assert(ir_completed_target != NULL);\n")
-            self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
-                      "frame, this_instr, ir_completed);\n")
+            self.emit("IR_GEN_COMPLETE(ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
@@ -5493,8 +5489,7 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_JUMP(GEN_RETURN_ROUTE, {dying}, "
-                  f"frame->instr_ptr, {value});\n")
+        self.emit(f"IR_GEN_RETURN({value}, {dying});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -5557,26 +5552,18 @@ class IREmitter(Emitter):
                       "frame->instr_ptr, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
-            self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
-            self.emit("if (ir_resume_site > frame->ir_words) {\n")
-            self.emit("_PyIRGenStep *ir_resume_target = "
-                      "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
-            self.emit("if (ir_resume_target != NULL) {\n")
-            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, "
-                      "ir_resume_site, ir_resume_input);\n")
-            self.emit("}\n")
-            self.emit("}\n")
+            self.emit("IR_GEN_RESUME(ir_resume_input);\n")
         else:
             self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
             self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
             self.emit("}\n")
-        self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
-        self.emit("LOAD_IP(0);\n")
-        self.emit("IR_SKIP_RESUME();\n")
-        self.emit("DTRACE_FUNCTION_ENTRY();\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
+            self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+            self.emit("LOAD_IP(0);\n")
+            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("DTRACE_FUNCTION_ENTRY();\n")
+            self.emit("LLTRACE_RESUME_FRAME();\n")
+            self.emit("DISPATCH();\n")
         self.emit("}\n")
         # The entered heap frame cannot overlap the parent's values. Its
         # failed entry/return retires the child before error re-enters parent.
@@ -6832,7 +6819,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, {result});\n")
+        out.emit(f"IR_GEN_YIELD({result});\n")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(
@@ -8543,7 +8530,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
-    tables, which name the step that a word's handler transfers to.
+    tables, which give the kind of transfer that a word's handler makes (the
+    enums of that file).
     ir_evaluate() includes it at its start without, for the dispatch table,
     which is local to it and has the addresses of its labels."""
     ids = handler_ids(analysis)
@@ -8554,16 +8542,16 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     boundaries = generator_boundaries(analysis)
     out.emit("#ifdef IR_GEN_TABLES\n")
     for column in ("Yielded", "Completed", "Resume"):
-        out.emit(f"static _PyIRGenStep *const generator_{column.lower()}_targets[{n}] = {{\n")
+        out.emit(f"static const uint8_t generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
                 continue
             target = None
             if column == "Yielded" and boundary.yielded == "DELEGATED":
-                target = "GEN_SEND_YIELD"
+                target = "1"
             elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROW_COMPLETE_" if boundary.base == "CLEANUP_THROW"
-                          else "GEN_COMPLETE_") + {
+                target = ("GEN_THROWING | GEN_COMPLETE_"
+                          if boundary.base == "CLEANUP_THROW" else "GEN_COMPLETE_") + {
                     "STORE_LOCAL": "STORE", "RETURN": "RETURN",
                     "DISCARD": "DISCARD", "HOME": "HOME",
                     "STORE_FAST": "STORE_FAST", "POP_TOP": "POP_TOP"}[boundary.completed]
@@ -8575,7 +8563,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
-                out.emit(f"[{ids[name]}] = ir_{target},\n")
+                out.emit(f"[{ids[name]}] = {target},\n")
         out.emit("};\n")
     out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every

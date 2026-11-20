@@ -1476,7 +1476,7 @@ is_unusable_slot(Py_ssize_t ix)
 /* Internal function to find slot for an item from its hash
    when it is known that the key is not present in the dict.
  */
-static Py_ssize_t
+static inline Py_ALWAYS_INLINE Py_ssize_t
 find_empty_slot(PyDictKeysObject *keys, Py_hash_t hash)
 {
     assert(keys != NULL);
@@ -1498,19 +1498,20 @@ insertion_resize(PyDictObject *mp, int unicode)
     return dictresize(mp, calculate_log2_keysize(GROWTH_RATE(mp)), unicode);
 }
 
-static inline int
-insert_combined_dict(PyDictObject *mp, Py_hash_t hash,
+static inline Py_ALWAYS_INLINE int
+insert_combined_dict(PyDictObject *mp, Py_hash_t hash, Py_ssize_t hashpos,
                      PyValue key, PyValue value)
 {
-    /* Caller has revalidated absence and capacity without a subsequent call.
-     * This pure commit consumes key and value only on success. */
+    /* Caller has revalidated absence and capacity without a subsequent call,
+     * and hashpos is the first free index slot of the key's probe sequence
+     * (find_empty_slot()). This pure commit consumes key and value only on
+     * success. */
     assert(mp->ma_values == NULL);
     assert(mp->ma_keys->dk_usable > 0);
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
     _PyValue_CheckHome(key);
     _PyValue_CheckHome(value);
     FT_ATOMIC_STORE_UINT32_RELAXED(mp->ma_keys->dk_version, 0);
-    Py_ssize_t hashpos = find_empty_slot(mp->ma_keys, hash);
     Py_ssize_t ix = mp->ma_keys->dk_nentries;
     if (DK_IS_UNICODE(mp->ma_keys)) {
         assert(value_is_exact_unicode(key));
@@ -1611,6 +1612,66 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
     PyValue_XCLOSE(owner);
 }
 
+/* One-pass insert of an exact str key into an unwatched combined table of
+   str keys: one probe finds either the entry to replace or the slot to fill.
+   Returns 1 if it stored the pair (consuming key and value), and 0 with
+   nothing consumed when the general insertdict() must run: a split table, a
+   watched dict, a generic table, or a table that must grow first.
+
+   Nothing in here runs Python code. Comparing two exact str keys is a pointer
+   test, a hash test and unicode_eq(), a watcher would be the only callback
+   (none is set), and the old value is released after its replacement is
+   published. So the probe cannot be invalidated mid-way, which is what the
+   retry loop of insertdict() guards against. The slot to fill is the first
+   one in the probe sequence that is not in use, as find_empty_slot() gives. */
+static inline Py_ALWAYS_INLINE int
+insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
+                       PyValue value)
+{
+    PyDictKeysObject *keys = mp->ma_keys;
+    if (!value_is_exact_unicode(key) || mp->ma_values != NULL
+        || !DK_IS_UNICODE(keys)
+        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK))
+    {
+        return 0;
+    }
+    PyObject *key_object = PyValue_AsKnownObjectBorrow(key);
+    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
+    const size_t mask = DK_MASK(keys);
+    size_t i = (size_t)hash & mask;
+    Py_ssize_t free_slot = -1;
+    for (size_t perturb = hash;;) {
+        Py_ssize_t ix = dictkeys_get_index(keys, i);
+        if (ix >= 0) {
+            PyObject *ep_key = entries[ix].me_key;
+            if (ep_key == key_object
+                || (unicode_get_hash(ep_key) == hash
+                    && unicode_eq(ep_key, key_object)))
+            {
+                replace_value(mp, PyValue_Borrow(key), ix,
+                              PyValue_Borrow(entries[ix].me_value), value);
+                PyValue_CLOSE(key);
+                return 1;
+            }
+        }
+        else {
+            if (free_slot < 0) {
+                free_slot = (Py_ssize_t)i;
+            }
+            if (ix == DKIX_EMPTY) {
+                break;
+            }
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = mask & (i*5 + perturb + 1);
+    }
+    if (keys->dk_usable <= 0) {
+        return 0;
+    }
+    insert_combined_dict(mp, hash, free_slot, key, value);
+    return 1;
+}
+
 /*
 Internal routine to insert a new item into the table.
 Used both by the internal resize routine and by the public insert routine.
@@ -1622,6 +1683,9 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
     assert(can_modify_dict(mp));
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+    if (insertdict_unicode_key(mp, key, hash, value)) {
+        return 0;
+    }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;
@@ -1697,7 +1761,8 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             STORE_USED(mp, mp->ma_used + 1);
         }
         else {
-            insert_combined_dict(mp, hash, key, value);
+            insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash),
+                                 key, value);
             key = value = PyValue_NULL;
         }
         status = 0;
@@ -2356,7 +2421,10 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
     assert(PyAnyDict_Check(mp));
-    Py_hash_t hash = _PyValue_Hash(key);
+    /* An exact str has its hash cached or computed by its own type. */
+    Py_hash_t hash = value_is_exact_unicode(key)
+        ? hash_unicode_key(PyValue_AsKnownObjectBorrow(key))
+        : _PyValue_Hash(key);
     if (hash == -1) {
         if (PyValue_IsObject(key)) {
             dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
@@ -4691,7 +4759,8 @@ static int
             STORE_USED(mp, mp->ma_used + 1);
         }
         else {
-            insert_combined_dict(mp, hash, PyValue_DUP(key), PyValue_DUP(value));
+            insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash),
+                                 PyValue_DUP(key), PyValue_DUP(value));
         }
         status = 0;
         break;

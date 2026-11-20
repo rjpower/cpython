@@ -15,10 +15,12 @@ class PyValueConstantTests(unittest.TestCase):
 
     def test_actual_minus_one_common_load(self):
         def constant():
-            return -1
+            # A list item is a window input, which keeps its load: a
+            # return of -1 would read a constant slot instead
+            return [-1]
 
         for _ in range(20):
-            self.assertEqual(constant(), -1)
+            self.assertEqual(constant(), [-1])
         handlers = [word[0] for word in
                     _testinternalcapi.get_ir(constant.__code__, True)]
         self.assertIn('LOAD_COMMON_CONSTANT', handlers)

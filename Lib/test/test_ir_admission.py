@@ -63,7 +63,9 @@ class AdmissionTests(unittest.TestCase):
 
     def call_code(self):
         def f(a):
-            return a.target(1000)
+            # A list item is a window input, which keeps its load: a call
+            # operand would name a constant slot instead
+            return a.target([1000])
         return f.__code__.replace(co_linetable=b"", co_exceptiontable=b"")
 
     def test_encoded_domains(self):

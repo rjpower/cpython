@@ -95,6 +95,8 @@ class PyValueCodeObjectTests(unittest.TestCase):
                 self.assertEqual(math.copysign(1, item[-1]), -1)
 
     def inline_constant_function(self, original, handler):
+        # The constant is a list item, a window input that keeps its load;
+        # a return or a call operand would read a constant slot
         code = original.__code__
         words = _testinternalcapi.get_ir(code)
         index = next(i for i, word in enumerate(words)
@@ -109,9 +111,9 @@ class PyValueCodeObjectTests(unittest.TestCase):
 
     def test_warmed_integer_replacement_falls_back(self):
         original, word_index = self.inline_constant_function(
-            eval('lambda: 1073741824'), 'LOAD_CONST_INLINE_INT')
+            eval('lambda: [1073741824]'), 'LOAD_CONST_INLINE_INT')
         for _ in range(64):
-            self.assertEqual(original(), 1073741824)
+            self.assertEqual(original(), [1073741824])
         index = next(i for i, value in enumerate(original.__code__.co_consts)
                      if type(value) is int and value == 1073741824)
         for replacement in (1 << 50, True, 'different type', object()):
@@ -122,13 +124,13 @@ class PyValueCodeObjectTests(unittest.TestCase):
                 self.assertEqual(_testinternalcapi.get_ir(code)[word_index][0],
                                  'LOAD_CONST')
                 result = types.FunctionType(code, {})()
-                self.assertIs(result, replacement)
+                self.assertIs(result[0], replacement)
 
     def test_warmed_float_replacement_falls_back(self):
         original, word_index = self.inline_constant_function(
-            eval('lambda: 1.5'), 'LOAD_CONST_INLINE_FLOAT')
+            eval('lambda: [1.5]'), 'LOAD_CONST_INLINE_FLOAT')
         for _ in range(64):
-            self.assertEqual(original(), 1.5)
+            self.assertEqual(original(), [1.5])
         index = next(i for i, value in enumerate(original.__code__.co_consts)
                      if type(value) is float and value == 1.5)
         for replacement in (float('nan'), 1 << 40, object()):
@@ -138,7 +140,7 @@ class PyValueCodeObjectTests(unittest.TestCase):
                 code = original.__code__.replace(co_consts=tuple(consts))
                 self.assertEqual(_testinternalcapi.get_ir(code)[word_index][0],
                                  'LOAD_CONST')
-                self.assertIs(types.FunctionType(code, {})(), replacement)
+                self.assertIs(types.FunctionType(code, {})()[0], replacement)
 
 
 if __name__ == '__main__':

@@ -932,7 +932,8 @@ class TestSpecifics(unittest.TestCase):
         exec(code, g)
         f = g['f']
         expected = tuple([''] + [f't{i}' for i in range(N)])
-        self.assertEqual(f.__code__.co_consts, expected)
+        # range(1) reads the 1 from a constant slot, which consts holds
+        self.assertEqual(f.__code__.co_consts, expected + (1,))
         expected = "".join(expected[1:])
         self.assertEqual(expected, f())
 
@@ -3238,20 +3239,23 @@ class TestSourcePositions(unittest.TestCase):
             start_line, end_line, _, _ = instr.positions
             self.assertEqual(start_line, end_line)
 
-        # Expect three `None`-loading instructions for the no-exception
-        # __exit__ call (the None that the return reads is a constant slot,
-        # with no load).  They should all have the locations of the context
-        # manager ('xyz').
+        # The no-exception __exit__ call reads None three times, and the
+        # return reads it too: all four read the None constant slot, so
+        # nothing loads None.  The call and the returns have the locations
+        # of the context manager ('xyz').
 
         load_none = [instr for instr in dis.get_instructions(f) if
                      instr.opname in ('LOAD_CONST', 'LOAD_COMMON_CONSTANT')
                      and instr.argval is None]
+        exit_calls = [instr for instr in dis.get_instructions(f) if
+                      instr.opname == 'CALL' and instr.arg == 3]
         return_value = [instr for instr in dis.get_instructions(f) if
                         instr.opname == 'RETURN_VALUE']
 
-        self.assertEqual(len(load_none), 3)
+        self.assertEqual(len(load_none), 0)
+        self.assertEqual(len(exit_calls), 1)
         self.assertEqual(len(return_value), 2)
-        for instr in load_none + return_value:
+        for instr in exit_calls + return_value:
             start_line, end_line, start_col, end_col = instr.positions
             self.assertEqual(start_line, f.__code__.co_firstlineno + 1)
             self.assertEqual(end_line, f.__code__.co_firstlineno + 1)

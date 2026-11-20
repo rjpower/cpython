@@ -79,6 +79,12 @@ def rows(code, adaptive=False):
     return _testinternalcapi.get_ir(code, adaptive)
 
 
+def top_slot(code):
+    """The last slot of the frame: the temporaries follow the locals, which
+    include the hidden constant slots"""
+    return len(_testinternalcapi.get_co_localskinds(code)) + code.co_stacksize - 1
+
+
 def calls(code):
     "(index, row, operand rows) of each call head that has operand words"
     result = []
@@ -376,7 +382,7 @@ class AdmissionTests(unittest.TestCase):
     def test_recovery_cannot_split_a_call(self):
         code = FUNCTIONS["f"]
         (i, head, operands), = calls(code)
-        slot = code.co_stacksize - 1
+        slot = top_slot(code)
         for start, size in [(i + 1, 1), (i, 1)]:
             with self.subTest(start=start, size=size):
                 table = exception_entry(start, size, i + 1 + len(operands),
@@ -388,7 +394,7 @@ class AdmissionTests(unittest.TestCase):
     def test_handler_cannot_be_an_operand_word(self):
         code = FUNCTIONS["f"]
         (i, head, operands), = calls(code)
-        slot = code.co_stacksize - 1
+        slot = top_slot(code)
         table = exception_entry(0, 1, i + 1, slot << 1)
         with self.assertRaisesRegex(ValueError, "split by recovery"):
             construct(code, co_exceptiontable=table)

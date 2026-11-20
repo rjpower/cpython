@@ -16,7 +16,10 @@ def code_arguments(code):
 
 
 def sample():
-    return 42
+    # A return of a constant would read a constant slot, which the
+    # constructor takes only as its last optional argument: store it first
+    value = 42
+    return value
 
 
 def candidate_state(code):
@@ -187,7 +190,11 @@ class PositionalCandidateTests(unittest.TestCase):
         value = Value()
         pending.append(value)
         index = Index()
-        args = (value,) if default else (value, index, 2147483647)
+        # The observer reads the call's operands as consecutive slots, as a
+        # temporary holds each: a constant argument would name a constant
+        # slot, so the call reads this one through a cell instead.
+        tail = 2147483647
+        args = (value,) if default else (value, index, tail)
         if expanded:
             def driver():
                 return target(*args)
@@ -196,7 +203,7 @@ class PositionalCandidateTests(unittest.TestCase):
                 return target(value)
         else:
             def driver():
-                return target(value, index, 2147483647)
+                return target(value, index, tail)
 
         count = 200 if warm else 1
         for _ in range(count):

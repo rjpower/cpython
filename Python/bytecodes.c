@@ -5204,7 +5204,7 @@ dummy_func(
             LLTRACE_RESUME_FRAME();
         }
 
-        outlined inst(BUILD_SLICE, (args[oparg] -- slice)) {
+        inst(BUILD_SLICE, (args[oparg] -- slice)) {
             _PyValue_RecheckWindow(args, oparg);
             // The bounds are stored as the values they are: no box of an
             // inline one.

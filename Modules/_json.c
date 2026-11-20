@@ -1668,12 +1668,12 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
 }
 
 /* The key of an object in the markers dict: its address as an int, which
-   is what id() gives. A user-space address is below 2**47, so it is always an
-   inline int and no int object is made. */
+   is what id() gives. The runtime keeps every object below Py_PTR_LIMIT
+   (2**48), which fits an inline int (int51), so no int object is made. */
 static PyValue
 encoder_marker_key(const void *obj)
 {
-    assert((uintptr_t)obj < ((uintptr_t)1 << 47));
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
     return PyValue_FromInlineInt((int64_t)(uintptr_t)obj);
 }
 

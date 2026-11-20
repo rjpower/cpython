@@ -1621,12 +1621,14 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
    dict, grows first. Growth moves the entries and runs no Python code, so the
    probe's miss stays valid and only the free slot is found again.
 
-   Nothing in here runs Python code. Comparing two exact str keys is a pointer
-   test, a hash test and unicode_eq(), a watcher would be the only callback
-   (none is set), and the old value is released after its replacement is
-   published. So the probe cannot be invalidated mid-way, which is what the
-   retry loop of insertdict() guards against. The slot to fill is the first
-   one in the probe sequence that is not in use, as find_empty_slot() gives. */
+   Nothing runs Python code between the probe and the store. Comparing two
+   exact str keys is a pointer test, a hash test and unicode_eq(), and a
+   watcher would be the only callback (none is set). So the probe cannot be
+   invalidated mid-way, which is what the retry loop of insertdict() guards
+   against. Only the release of a replaced value can run Python, and it comes
+   after the replacement is published, as in replace_value(). The slot to fill
+   is the first one in the probe sequence that is not in use, as
+   find_empty_slot() gives. */
 static inline Py_ALWAYS_INLINE int
 insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
                        PyValue value)

@@ -92,7 +92,7 @@ ir_run_BUILD_INTERPOLATION(
             str = window[1];
             value = window[0];
             assert(PyValue_IsObject(str));
-            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
+            PyObject *str_o = _PyValue_AsKnownObjectBorrowPointer(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
             if (oparg & 1) {
@@ -319,8 +319,8 @@ ir_run_BUILD_TEMPLATE(
             strings = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(strings));
             assert(PyValue_IsObject(interpolations));
-            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
-            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
+            PyObject *strings_o = _PyValue_AsKnownObjectBorrowPointer(strings);
+            PyObject *interpolations_o = _PyValue_AsKnownObjectBorrowPointer(interpolations);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
             ir_own_C = IR_DETACH(ir_word, C, interpolations);
             (void)(ir_own_C);
@@ -716,7 +716,7 @@ ir_run_CHECK_EG_MATCH(
             match_type_st = IR_VIEW(IR_C(ir_word));
             exc_value_st = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(exc_value_st));
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
+            PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
             PyValue held_exc = IR_TAKEN(exc_value_st, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, match_type_st);
@@ -770,7 +770,7 @@ ir_run_CHECK_EXC_MATCH(
             right = IR_VIEW(IR_C(ir_word));
             left = IR_SLOT(IR_B(ir_word));
             assert(PyValue_IsObject(left));
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+            PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
             ir_own_C = IR_DETACH(ir_word, C, right);
             PyValue held_right = IR_TAKEN(right, ir_own_C);
             assert(PyExceptionInstance_Check(left_o));
@@ -1303,8 +1303,8 @@ ir_run_DICT_MERGE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(PyValue_IsObject(update));
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
+                PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
                 if (merged.status < 0) {
                     _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
@@ -1358,8 +1358,8 @@ ir_run_DICT_UPDATE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(PyValue_IsObject(update));
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
+                PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 int err = PyDict_Update(dict_o, update_o);
                 if (err < 0) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
@@ -1416,7 +1416,7 @@ ir_run_END_ASYNC_FOR(
             JUMPBY(0);
             (void)oparg;
             assert(PyValue_IsObject(exc_st));
-            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+            PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
             assert(exc && PyExceptionInstance_Check(exc));
             int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
             if (matches) {
@@ -1627,7 +1627,7 @@ ir_run_GET_AITER(
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             assert(PyValue_IsObject(obj));
-            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
+            PyObject *obj_o = _PyValue_AsKnownObjectBorrowPointer(obj);
             PyTypeObject *type = Py_TYPE(obj_o);
             if (type->tp_as_async != NULL) {
                 getter = type->tp_as_async->am_aiter;
@@ -1686,7 +1686,7 @@ ir_run_GET_ANEXT(
             PyValue awaitable;
             aiter = IR_SLOT(IR_B(ir_word));
             assert(PyValue_IsObject(aiter));
-            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
+            PyObject *awaitable_o = _PyEval_GetANext(_PyValue_AsKnownObjectBorrowPointer(aiter));
             if (awaitable_o == NULL) {
                 PROCESS_ERROR_AT(RAISE, 1, this_instr);
             }
@@ -1908,13 +1908,13 @@ ir_run_IMPORT_NAME(
             if (!(oparg & 0x02)) {
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
+                    _PyValue_AsKnownObjectBorrowPointer(fromlist),
                     ilevel, oparg & 0x01);
             }
             else {
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
+                    _PyValue_AsKnownObjectBorrowPointer(fromlist),
                     ilevel);
             }
             PyValue tmp = fromlist;
@@ -1973,8 +1973,8 @@ ir_run_LIST_EXTEND(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(PyValue_IsObject(iterable_st));
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-                PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
+                PyObject *list = _PyValue_AsKnownObjectBorrowPointer(list_st);
+                PyObject *iterable = _PyValue_AsKnownObjectBorrowPointer(iterable_st);
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
@@ -2134,7 +2134,7 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             class_dict_st = IR_VIEW(IR_B(ir_word));
             PyObject *name;
             assert(PyValue_IsObject(class_dict_st));
-            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
+            PyObject *class_dict = _PyValue_AsKnownObjectBorrowPointer(class_dict_st);
             ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
             PyValue held_class_dict = IR_TAKEN(class_dict_st, ir_own_B);
             assert(class_dict);
@@ -2190,7 +2190,7 @@ ir_run_LOAD_FROM_DICT_OR_GLOBALS(
             mod_or_class_dict = IR_VIEW(IR_B(ir_word));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             assert(PyValue_IsObject(mod_or_class_dict));
-            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
+            PyObject *namespace = _PyValue_AsKnownObjectBorrowPointer(mod_or_class_dict);
             ir_own_B = IR_DETACH(ir_word, B, mod_or_class_dict);
             PyValue held_namespace = IR_TAKEN(mod_or_class_dict, ir_own_B);
             _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
@@ -2545,7 +2545,7 @@ ir_run_MAKE_FUNCTION(
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(codeobj_st));
-                PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
+                PyObject *codeobj = _PyValue_AsKnownObjectBorrowPointer(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
                 if (func_obj == NULL) {
@@ -2603,11 +2603,11 @@ ir_run_MATCH_CLASS(
                 type = window[1];
                 subject = window[0];
                 assert(PyValue_IsObject(names));
-                assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+                assert(PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
                     subject,
                     type, oparg,
-                    PyValue_AsKnownObjectBorrow(names));
+                    _PyValue_AsKnownObjectBorrowPointer(names));
                 if (attrs_o) {
                     assert(PyTuple_CheckExact(attrs_o));
                     attrs = PyValue_FromObjectSteal(attrs_o);
@@ -2671,7 +2671,7 @@ ir_run_MATCH_KEYS(
             assert(PyValue_IsObject(subject));
             assert(PyValue_IsObject(keys));
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+                _PyValue_AsKnownObjectBorrowPointer(subject), _PyValue_AsKnownObjectBorrowPointer(keys));
             if (values_or_none_o == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
@@ -3085,7 +3085,7 @@ ir_run_SEND(
                 v = window[2];
                 null_or_index = window[1];
                 assert(PyValue_IsObject(receiver));
-                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+                PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -3232,7 +3232,7 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
             attr_st = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
+            PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
             PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN(attr_st, ir_own_B));
             ir_own_C = IR_DETACH(ir_word, C, func_in);
@@ -3283,8 +3283,8 @@ ir_run_SET_UPDATE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 assert(PyValue_IsObject(iterable));
-                int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
-                                    PyValue_AsKnownObjectBorrow(iterable));
+                int err = _PySet_Update(_PyValue_AsKnownObjectBorrowPointer(set),
+                                    _PyValue_AsKnownObjectBorrowPointer(iterable));
                 if (err < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -3734,7 +3734,7 @@ ir_run_WITH_EXCEPT_START(
             PyObject *exc, *tb;
             assert(PyValue_IsObject(val));
             assert(PyValue_IsObjectOrNull(exit_self));
-            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
+            PyObject *val_o = _PyValue_AsKnownObjectBorrowPointer(val);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
             PyObject *original_tb = tb = PyException_GetTraceback(val_o);
@@ -4079,11 +4079,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -4092,11 +4092,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -4108,8 +4108,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)right;
                 left = nos;
                 (void)left;
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(right_o));
                 STAT_INC(BINARY_OP, hit);
@@ -4127,14 +4127,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = r;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_C);
             }
             // _POP_TOP_UNICODE
             {
                 value = l;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
@@ -4405,11 +4405,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -4418,11 +4418,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -4434,9 +4434,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)right;
                 left = nos;
                 (void)left;
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
                 assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(right)));
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
                 PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
@@ -5028,11 +5028,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_DICT_SUBSCRIPT
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -5201,7 +5201,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 UPDATE_MISS_STATS(BINARY_OP);
                 IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 #endif
-                if (!PyValue_IsObject(container) || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(container))) {
+                if (!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))) || !PyList_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -5213,12 +5213,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 list_st = container;
                 (void)list_st;
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
-                if (index < 0) { index += PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(list_st)); }
-                if (index < 0 || index >= PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(list_st))) {
+                if (index < 0) { index += PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st)); }
+                if (index < 0 || index >= PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res =PyValue_XDUP(PyList_GET_VALUE(PyValue_AsKnownObjectBorrow(list_st), index));
+                res =PyValue_XDUP(PyList_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(list_st), index));
                 assert(!PyValue_IsNull(res));
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
@@ -5272,11 +5272,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_SLICE
             {
                 tos = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PySlice_Check(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -5285,11 +5285,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_LIST
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -5301,8 +5301,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)sub_st;
                 list_st = nos;
                 (void)list_st;
-                PyObject *sub = PyValue_AsKnownObjectBorrow(sub_st);
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+                PyObject *sub = _PyValue_AsKnownObjectBorrowPointer(sub_st);
+                PyObject *list = _PyValue_AsKnownObjectBorrowPointer(list_st);
                 assert(PySlice_Check(sub));
                 assert(PyList_CheckExact(list));
                 PyObject *res_o = _PyList_SliceSubscript(list, sub);
@@ -5368,11 +5368,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_COMPACT_ASCII
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -5388,7 +5388,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)sub_st;
                 str_st = nos;
                 (void)str_st;
-                PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
+                PyObject *str = _PyValue_AsKnownObjectBorrowPointer(str_st);
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
@@ -5420,7 +5420,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = s;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
@@ -5463,7 +5463,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_ELEMENT_TUPLE
             {
                 container = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsObject(container) || !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(container))) {
+                if (!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))) || !PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -5479,11 +5479,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                if (index >= PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(tuple_st))) {
+                if (index >= PyTuple_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(tuple_st))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res =PyValue_XDUP(PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(tuple_st), index));
+                res =PyValue_XDUP(PyTuple_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(tuple_st), index));
                 STAT_INC(BINARY_OP, hit);
                 assert(!PyValue_IsNull(res));
                 ts = tuple_st;
@@ -5544,11 +5544,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -5560,7 +5560,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)sub_st;
                 str_st = nos;
                 (void)str_st;
-                PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
+                PyObject *str = _PyValue_AsKnownObjectBorrowPointer(str_st);
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
@@ -5595,7 +5595,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = s;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
@@ -6035,7 +6035,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6064,7 +6064,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _ALLOCATE_OBJECT
             {
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 assert(!(call_state & CALL_SELF_PRESENT));
                 assert(PyType_Check(callable_o));
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
@@ -6165,7 +6165,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6181,7 +6181,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 assert(!(call_state & CALL_SELF_PRESENT));
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 STAT_INC(CALL, hit);
                 self_or_null = ((PyMethodObject *)callable_o)->im_self;
                 call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
@@ -6195,7 +6195,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6210,7 +6210,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_FUNCTION_EXACT_ARGS
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -6222,7 +6222,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_STACK_SPACE
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
@@ -6303,7 +6303,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6378,7 +6378,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyType_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6439,7 +6439,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6501,7 +6501,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6563,7 +6563,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6642,7 +6642,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
-                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
                 if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -6654,7 +6654,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_IS_NOT_PY_CALLABLE_EX
             {
-                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
                 if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -6707,7 +6707,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
-                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
                 if (Py_TYPE(func) != &PyFunction_Type) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -6724,7 +6724,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_IS_PY_CALLABLE_EX
             {
-                PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
+                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
                 if (Py_TYPE(func) != &PyFunction_Type) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -6797,7 +6797,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 PyInterpreterState *interp = tstate->interp;
                 if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
+                    || _PyValue_AsKnownObjectBorrowPointer(callable)
                     != interp->callable_cache.isinstance) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6869,7 +6869,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -6996,7 +6996,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -7071,7 +7071,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 PyInterpreterState *interp = tstate->interp;
                 if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
+                    || _PyValue_AsKnownObjectBorrowPointer(callable)
                     != interp->callable_cache.len) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7126,7 +7126,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 PyInterpreterState *interp = tstate->interp;
                 if (!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
+                    || _PyValue_AsKnownObjectBorrowPointer(callable)
                     != interp->callable_cache.list_append) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7149,7 +7149,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7161,7 +7161,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 arg = IR_OPERAND(0 + IR_CALL_HAS_SELF(ir_word));
                 self = nos;
                 assert(oparg == 1);
-                PyObject *self_o = PyValue_AsKnownObjectBorrow(self);
+                PyObject *self_o = _PyValue_AsKnownObjectBorrowPointer(self);
                 if (!LOCK_OBJECT(self_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7206,7 +7206,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -7284,7 +7284,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -7361,7 +7361,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -7400,7 +7400,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CALL_METHOD_DESCRIPTOR_NOARGS
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 assert(oparg == 1 || (call_state & CALL_SELF_PRESENT));
                 STAT_INC(CALL, hit);
@@ -7451,7 +7451,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -7490,7 +7490,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CALL_METHOD_DESCRIPTOR_O
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
@@ -7610,7 +7610,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7625,7 +7625,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_FUNCTION_EXACT_ARGS
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -7637,7 +7637,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_STACK_SPACE
             {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
@@ -7719,7 +7719,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7794,7 +7794,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (callable_o != (PyObject *)&PyUnicode_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7860,7 +7860,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (callable_o != (PyObject *)&PyTuple_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7926,7 +7926,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 if (callable_o != (PyObject *)&PyType_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7970,7 +7970,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
+            PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (!matches) {
@@ -8005,7 +8005,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
+            PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (!matches) {
@@ -8375,11 +8375,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     JUMP_TO_PREDICTED(COMPARE_OP_JUMP);
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     JUMP_TO_PREDICTED(COMPARE_OP_JUMP);
@@ -8388,11 +8388,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     JUMP_TO_PREDICTED(COMPARE_OP_JUMP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     JUMP_TO_PREDICTED(COMPARE_OP_JUMP);
@@ -8404,8 +8404,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)right;
                 left = nos;
                 (void)left;
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 STAT_INC(COMPARE_OP, hit);
                 int eq = _PyUnicode_Equal(left_o, right_o);
                 assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
@@ -8422,14 +8422,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = r;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_B);
             }
             // _POP_TOP_UNICODE
             {
                 value = l;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_A);
             }
             // _JUMP_IF_COND
@@ -8476,12 +8476,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8491,12 +8491,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8509,8 +8509,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 (void)right;
                 left = nos;
                 (void)left;
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 STAT_INC(COMPARE_OP, hit);
                 int eq = _PyUnicode_Equal(left_o, right_o);
                 assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
@@ -8527,14 +8527,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = r;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_C);
             }
             // _POP_TOP_UNICODE
             {
                 value = l;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
@@ -8575,12 +8575,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_ANY_DICT
             {
                 tos = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyAnyDict_CheckExact(o)) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
@@ -8592,7 +8592,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 right = tos;
                 (void)right;
                 left = IR_VIEW(IR_B(ir_word));
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
                 int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
@@ -8654,11 +8654,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_ANY_DICT
             {
                 tos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyAnyDict_CheckExact(o)) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
@@ -8669,7 +8669,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 right = tos;
                 (void)right;
                 left = IR_VIEW(IR_A(ir_word));
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
                 int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
@@ -8737,11 +8737,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_ANY_SET
             {
                 tos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyAnySet_CheckExact(o)) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
@@ -8752,7 +8752,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 right = tos;
                 (void)right;
                 left = IR_VIEW(IR_A(ir_word));
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
                 int res;
@@ -8828,12 +8828,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_ANY_SET
             {
                 tos = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyAnySet_CheckExact(o)) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
@@ -8845,7 +8845,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 right = tos;
                 (void)right;
                 left = IR_VIEW(IR_B(ir_word));
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
                 int res;
@@ -9040,7 +9040,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
+                PyGenObject *gen = (PyGenObject *)_PyValue_AsKnownObjectBorrowPointer(iter);
                 if (Py_TYPE(gen) != &PyGen_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
@@ -9101,7 +9101,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (Py_TYPE(iter_o) != &PyList_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
@@ -9121,7 +9121,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 #ifdef Py_GIL_DISABLED
 
                 #else
-                PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
                 if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
@@ -9137,7 +9137,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _ITER_NEXT_LIST
             {
-                PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
                 next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
@@ -9170,7 +9170,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                _PyRangeIterObject *r = (_PyRangeIterObject *)_PyValue_AsKnownObjectBorrowPointer(iter);
                 if (Py_TYPE(r) != &PyRangeIter_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
@@ -9186,7 +9186,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _ITER_JUMP_RANGE
             {
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                _PyRangeIterObject *r = (_PyRangeIterObject *)_PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
                 #ifdef Py_GIL_DISABLED
                 assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
@@ -9203,7 +9203,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _ITER_NEXT_RANGE
             {
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                _PyRangeIterObject *r = (_PyRangeIterObject *)_PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
                 #ifdef Py_GIL_DISABLED
                 assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
@@ -9246,7 +9246,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (Py_TYPE(iter_o) != &PyTuple_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
@@ -9256,7 +9256,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _ITER_JUMP_TUPLE
             {
-                PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 STAT_INC(FOR_ITER, hit);
@@ -9272,7 +9272,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _ITER_NEXT_TUPLE
             {
-                PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
@@ -9317,7 +9317,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -9373,7 +9373,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(iterable));
                 if (tp->tp_iter != PyObject_SelfIter) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
@@ -9408,7 +9408,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(iterable));
                 if (tp->_tp_iteritem == NULL) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
@@ -9574,7 +9574,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 JUMPBY(0);
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
-                PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+                PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
                 assert(exc && PyExceptionInstance_Check(exc));
                 int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
                 if (matches) {
@@ -9625,7 +9625,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(receiver));
-            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+            PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
             PyValue held = IR_TAKEN(value, ir_own_D);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
@@ -10555,12 +10555,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t class_version = fb->class_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -10618,7 +10618,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_BUILTIN_METACLASS
             {
                 owner = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -10633,7 +10633,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (Py_TYPE(owner_o) != &PyType_Type) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -10643,7 +10643,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _CHECK_ATTR_CLASS
             {
                 uint32_t class_version = fb->class_version;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -10707,12 +10707,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -10723,7 +10723,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _CHECK_ATTR_CLASS
             {
                 uint32_t class_version = fb->class_version;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -10780,12 +10780,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -10874,12 +10874,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -10889,7 +10889,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_MANAGED_OBJECT_HAS_VALUES
             {
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
@@ -10901,7 +10901,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_INSTANCE_VALUE
             {
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
                 PyValueBorrow found = PyValue_Borrow(*value_ptr);
                 if (PyValue_IsNull(found)) {
@@ -10950,12 +10950,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -10966,7 +10966,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _CHECK_ATTR_METHOD_LAZY_DICT
             {
                 uint32_t dictoffset = fb->dictoffset;
-                char *ptr = ((char *)PyValue_AsKnownObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
+                char *ptr = ((char *)_PyValue_AsKnownObjectBorrowPointer(owner)) + MANAGED_DICT_OFFSET + dictoffset;
                 PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
                 if (dict != NULL) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11016,12 +11016,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11033,7 +11033,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
-                assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
+                assert(Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
                 assert(_PyType_HasFeature(
@@ -11072,12 +11072,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11087,7 +11087,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_MANAGED_OBJECT_HAS_VALUES
             {
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
@@ -11209,12 +11209,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11226,7 +11226,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 _PyValueGuarded class_value = fb->class_value;
                 assert((oparg & 1) == 0);
-                assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
+                assert(Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
                 PyValueBorrow found = _PyValueGuarded_Load(class_value);
                 assert(!PyValue_IsNull(found));
@@ -11261,12 +11261,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11276,7 +11276,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _CHECK_MANAGED_OBJECT_HAS_VALUES
             {
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
@@ -11323,12 +11323,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11413,19 +11413,19 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 uint32_t shape = fb->shape;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                if (_PyObject_Shape(_PyValue_AsKnownObjectBorrowPointer(owner)) != shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -11434,7 +11434,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -11475,19 +11475,19 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 uint32_t shape = fb->shape;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                if (_PyObject_Shape(_PyValue_AsKnownObjectBorrowPointer(owner)) != shape) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -11496,7 +11496,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -11537,13 +11537,13 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 uint32_t shape = fb->shape;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, PyValue_AsKnownObjectBorrow(owner));
+                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -11554,7 +11554,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -11596,13 +11596,13 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 uint32_t shape = fb->shape;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, PyValue_AsKnownObjectBorrow(owner));
+                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -11613,7 +11613,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);
+                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -11652,12 +11652,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11668,7 +11668,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_SLOT
             {
                 uint32_t index = fb->index;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValueBorrow value =
                 PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
                 if (PyValue_IsNull(value)) {
@@ -11717,12 +11717,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11733,7 +11733,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_ATTR_WITH_HINT
             {
                 uint32_t hint = fb->hint;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
                 if (dict == NULL) {
@@ -12292,8 +12292,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_SUPER_ATTR));
                     JUMP_TO_PREDICTED(LOAD_SUPER_ATTR);
                 }
-                PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
+                PyObject *global_super = _PyValue_AsKnownObjectBorrowPointer(global_super_st);
+                PyObject *class = _PyValue_AsKnownObjectBorrowPointer(class_st);
                 assert(oparg & 1);
                 if (global_super != (PyObject *)&PySuper_Type) {
                     UPDATE_MISS_STATS(LOAD_SUPER_ATTR);
@@ -12309,7 +12309,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOAD_SUPER_ATTR_METHOD
             {
                 self_st = window[2];
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
+                PyObject *class = _PyValue_AsKnownObjectBorrowPointer(class_st);
                 STAT_INC(LOAD_SUPER_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
@@ -12469,12 +12469,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
@@ -12638,12 +12638,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_LIST
             {
                 tos = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -12654,7 +12654,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = tos;
                 (void)value;
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
@@ -12746,12 +12746,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -12761,7 +12761,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
@@ -12770,7 +12770,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = v;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_A);
             }
             // _POP_JUMP_IF_FALSE
@@ -12902,12 +12902,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
@@ -13071,12 +13071,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_LIST
             {
                 tos = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -13087,7 +13087,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = tos;
                 (void)value;
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
@@ -13179,12 +13179,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_TOS_UNICODE
             {
                 value = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -13194,7 +13194,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
@@ -13203,7 +13203,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = v;
                 (void)value;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 (void)(ir_own_A);
             }
             // _POP_JUMP_IF_TRUE
@@ -13473,7 +13473,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyAsyncGenASend_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
@@ -13484,7 +13484,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 v = window[2];
                 null_in = window[1];
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
                 _PyStatusValue sent = _PyValue_Send(iter_o, v);
                 PySendResult what = (PySendResult)sent.status;
@@ -13539,7 +13539,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
                 }
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyAsyncGenASend_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
@@ -13549,7 +13549,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 v = window[2];
                 null_in = window[1];
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
                 _PyStatusValue sent = _PyValue_Send(iter_o, v);
                 PySendResult what = (PySendResult)sent.status;
@@ -13777,7 +13777,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -13843,7 +13843,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -13907,7 +13907,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 v = window[2];
                 null_or_index = window[1];
                 assert(PyValue_IsObject(receiver));
-                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+                PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -14054,12 +14054,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _LOCK_OBJECT
             {
                 value = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                if (!LOCK_OBJECT(PyValue_AsKnownObjectBorrow(value))) {
+                if (!LOCK_OBJECT(_PyValue_AsKnownObjectBorrowPointer(value))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -14070,7 +14070,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = value;
                 (void)owner;
                 uint32_t type_version = fb->type_version;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(type_version != 0);
                 PyTypeObject *tp = Py_TYPE(owner_o);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
@@ -14084,7 +14084,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _GUARD_DORV_NO_DICT
             {
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
                 if (_PyObject_GetManagedDict(owner_o) ||
@@ -14101,7 +14101,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
                 PyValue old_value = *value_ptr;
@@ -14161,12 +14161,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -14177,7 +14177,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_SHAPE
             {
                 uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                if (_PyObject_Shape(_PyValue_AsKnownObjectBorrowPointer(owner)) != shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -14187,7 +14187,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
@@ -14222,12 +14222,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -14238,7 +14238,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_SHAPE
             {
                 uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                if (_PyObject_Shape(_PyValue_AsKnownObjectBorrowPointer(owner)) != shape) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -14249,7 +14249,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
@@ -14285,12 +14285,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -14302,7 +14302,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t index = fb->index;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (!LOCK_OBJECT(owner_o)) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
@@ -14344,12 +14344,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 owner = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -14361,7 +14361,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t hint = fb->hint;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
                 PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
                 if (dict == NULL) {
@@ -14517,12 +14517,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_DICT_STORE_SUBSCRIPT
             {
                 nos = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -14540,7 +14540,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 dict_st = nos;
                 (void)dict_st;
                 value = IR_VIEW(IR_C(ir_word));
-                PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
+                PyObject *dict = _PyValue_AsKnownObjectBorrowPointer(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
                 STAT_INC(STORE_SUBSCR, hit);
                 int err = _PyDict_SetValue((PyDictObject *)dict, sub, value);
@@ -14593,12 +14593,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _GUARD_NOS_LIST
             {
                 nos = IR_VIEW(IR_A(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -14612,7 +14612,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 list_st = nos;
                 (void)list_st;
                 value = IR_VIEW(IR_C(ir_word));
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+                PyObject *list = _PyValue_AsKnownObjectBorrowPointer(list_st);
                 assert(PyList_CheckExact(list));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (!LOCK_OBJECT(list)) {
@@ -14714,7 +14714,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(TO_BOOL);
@@ -14824,7 +14824,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
@@ -14834,7 +14834,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _TO_BOOL_LIST
             {
                 value = tos;
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
@@ -14894,7 +14894,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
@@ -14904,7 +14904,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
@@ -14912,7 +14912,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _POP_TOP_UNICODE
             {
                 value = v;
-                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
                 _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
@@ -15065,7 +15065,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -15076,7 +15076,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 seq = tos;
                 values = &window[0];
-                PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
                 assert(PyList_CheckExact(seq_o));
                 if (!LOCK_OBJECT(seq_o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
@@ -15133,7 +15133,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyTuple_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -15144,7 +15144,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 seq = tos;
                 values = &window[0];
-                PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != oparg) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
@@ -15193,7 +15193,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PyTuple_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -15204,7 +15204,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 seq = tos;
                 assert(oparg == 2);
-                PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != 2) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);

@@ -841,6 +841,7 @@ makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_
         .stacksize = maxdepth,
 
         .exceptiontable = a->a_except_table,
+        .select_returns = 1,
     };
 
     if (_PyCompile_ConstCacheMergeOne(const_cache, &localsplusnames) < 0) {

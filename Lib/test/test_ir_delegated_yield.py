@@ -25,6 +25,13 @@ def ordinary_name(name):
             + plus + flags)
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class DelegatedYieldTests(unittest.TestCase):
     def assert_admitted(self, words, *, slots=6, bindings=()):
         # These images exercise admission and cold plan construction only.

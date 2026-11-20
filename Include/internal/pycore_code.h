@@ -154,6 +154,12 @@ struct _PyCodeConstructor {
 
     /* used by the eval loop */
     PyObject *exceptiontable;
+
+    /* The compiler sets this: the constructor proves which returns leave
+     * no scratch owner and selects their empty form. The proof is part of
+     * compilation and its result is serialized, so a code object built from
+     * marshal or the public constructor keeps the words it is given. */
+    int select_returns;
 };
 
 // Using an "arguments struct" like this is helpful for maintainability

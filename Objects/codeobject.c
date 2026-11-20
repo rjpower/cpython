@@ -3882,22 +3882,22 @@ validate_normal_transfers(struct _PyCodeConstructor *con, PyObject **normalized)
     return result;
 }
 
-int
-_PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
+/* The semantic image of an admitted code object. Public zero-stack images
+ * reserve one physical scratch home. Keep that same domain in the proof; a
+ * differently shaped static image has no certificate rather than silently
+ * discarding its physical tail. Returns 0 for no image. */
+static int
+code_semantic_image(PyCodeObject *co, semantic_image *image)
 {
-    *plan = NULL;
     int nl = co->co_nlocalsplus;
     int scratch = Py_MAX(co->co_stacksize, 1);
     int limit = _PyFrame_NumSlotsForCodeObject(co);
-    /* Public zero-stack images reserve one physical scratch home. Keep that
-     * same domain in the builder; a differently shaped static image has no
-     * certificate rather than silently discarding its physical tail. */
     if (nl < 0 || nl > IR_MAX_SLOTS || scratch > IR_MAX_SLOTS - nl ||
         limit != nl + scratch)
     {
         return 0;
     }
-    semantic_image image = {
+    *image = (semantic_image){
         .words = _PyCode_WORDS(co),
         .n = (int)Py_SIZE(co),
         .nl = nl,
@@ -3906,7 +3906,61 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
         .nfb = co->co_nfeedback,
         .semantic = _PyIRSemantic_Stored(co->co_exceptiontable),
     };
+    return 1;
+}
+
+int
+_PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
+{
+    *plan = NULL;
+    semantic_image image;
+    if (!code_semantic_image(co, &image)) {
+        return 0;
+    }
     return normal_transfer_proof(&image, plan, NULL);
+}
+
+void
+_PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan)
+{
+    // Zero-row plans are shared and static
+    if (plan != NULL && plan->nsites != 0) {
+        PyMem_Free((void *)plan);
+    }
+}
+
+int
+_PyCode_AllCreatedEmpty(PyCodeObject *co)
+{
+    // The census is cheap; the proof is not, and few codes create generators
+    int created = 0;
+    for (Py_ssize_t i = 0; i < Py_SIZE(co) && !created;
+         i += _PyIR_WordLength(_PyCode_WORDS(co)[i]))
+    {
+        created = semantic_has_created_copy(
+            _PyIR_FormatOf(IR_HANDLER(_PyCode_WORDS(co)[i])));
+    }
+    if (!created) {
+        return 0;
+    }
+    const _PyIRCodePlan *plan;
+    if (_PyCode_BuildSemanticPlan(co, &plan) < 0) {
+        return -1;
+    }
+    int empty = plan != NULL && (plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY);
+    _PyCode_FreeSemanticPlan(plan);
+    return empty;
+}
+
+int
+_PyCode_SelectEmptyReturns(PyCodeObject *co, PyObject **words)
+{
+    *words = NULL;
+    semantic_image image;
+    if (!code_semantic_image(co, &image)) {
+        return 0;
+    }
+    return normal_transfer_proof(&image, NULL, words);
 }
 
 static int
@@ -3952,10 +4006,17 @@ validate_semantic_image(struct _PyCodeConstructor *con)
     struct _PyCodeConstructor checked = *con;
     checked.code = words;
     PyObject *normalized = NULL;
+    /* These proofs re-derive the compiler's output, for hand-built code and
+     * corrupt .pyc files: they cost several times the rest of construction.
+     * Only the compiler's selection of empty returns is needed to run. */
+    int validate = _PyInterpreterState_GET()->opt_config.validate_code;
     if (validate_semantic_and_position_maps(&checked) < 0 ||
-        validate_completion_words(&checked) < 0 || validate_virtual_kwargs(&checked) < 0 ||
+        (validate && validate_completion_words(&checked) < 0) ||
+        validate_virtual_kwargs(&checked) < 0 ||
         validate_generator_boundaries(&checked) < 0 ||
-        validate_normal_transfers(&checked, &normalized) < 0)
+        ((validate || con->select_returns) &&
+         validate_normal_transfers(&checked,
+             con->select_returns ? &normalized : NULL) < 0))
     {
         Py_DECREF(words);
         return NULL;

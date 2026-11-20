@@ -14,6 +14,13 @@ def routes(code):
     return code, construct(code), code.replace(), marshal.loads(marshal.dumps(code))
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class SuperCallTransportTests(unittest.TestCase):
     def make_method(self):
         class Base:

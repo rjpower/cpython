@@ -55,6 +55,13 @@ def argument_functions(count):
     return namespace
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class CallRoleTests(unittest.TestCase):
     def assert_admitted(self, words, **geometry):
         code = make_code(words, **geometry)

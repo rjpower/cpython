@@ -1253,6 +1253,12 @@ class ConstSlotsTest(unittest.TestCase):
     """Inline scalar and immortal constants that an operand reads live in
     hidden slots, at most eight to a code object."""
 
+    def setUp(self):
+        # Some tests construct malformed images, which release builds only
+        # reject on request.
+        from test.support.ir_semantics import code_validation
+        self.enterContext(code_validation())
+
     @staticmethod
     def loop(n):
         total = 0

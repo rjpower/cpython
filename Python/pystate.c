@@ -590,6 +590,11 @@ init_interpreter(PyInterpreterState *interp,
     }
     interp->_code_object_generation = 0;
     interp->opt_config.specialization_enabled = !is_env_enabled("PYTHON_SPECIALIZATION_OFF");
+#ifndef NDEBUG
+    interp->opt_config.validate_code = true;
+#else
+    interp->opt_config.validate_code = is_env_enabled("PYTHON_VALIDATE_CODE");
+#endif
     if (interp != &runtime->_main_interpreter) {
         /* Fix the self-referential, statically initialized fields. */
         interp->dtoa = (struct _dtoa_state)_dtoa_state_INIT(interp);

@@ -859,10 +859,12 @@ make_exec(PyCodeObject *co)
         }
         exec->const_image = values;
     }
-    if (_PyCode_BuildSemanticPlan(co, &exec->semantic_plan) < 0) {
+    int created_empty = _PyCode_AllCreatedEmpty(co);
+    if (created_empty < 0) {
         _PyMem_NoScanFree(exec);
         return NULL;
     }
+    exec->all_created_empty = (uint8_t)created_empty;
     /* The slot-class flags are a cache of the fields and nlocalsplus,
      * which handlers test in the word instead of loading nlocalsplus. */
     const _PyIRWord *source = _PyCode_WORDS(co);
@@ -953,10 +955,6 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
-    if (exec->semantic_plan != NULL &&
-        exec->semantic_plan->nsites != 0) {
-        PyMem_Free((void *)exec->semantic_plan);
-    }
     _PyMem_NoScanFree(exec);
 }
 
@@ -970,10 +968,6 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
     if (exec->const_image != NULL) {
         res += (size_t)exec->nconst * sizeof(PyValue);
-    }
-    if (exec->semantic_plan != NULL &&
-        exec->semantic_plan->nsites != 0) {
-        res += _PyIR_PlanSize(exec->semantic_plan);
     }
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
@@ -991,7 +985,8 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
 }
 
 uint8_t
-_PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
+_PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason,
+                       const _PyIRCodePlan *plan)
 {
     assert(reason <= _PyIR_RETIRE_STAGED_FAILURE);
     if (reason != _PyIR_RETIRE_NORMAL_RETURN || frame->f_executable == NULL) {
@@ -999,8 +994,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     }
     PyCodeObject *co = frame->f_executable;
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
-    if (exec == NULL || exec->semantic_plan == NULL ||
-        frame->ir_words != exec->words)
+    if (exec == NULL || plan == NULL || frame->ir_words != exec->words)
     {
         return _PyIR_SHADOW_UNCOVERED;
     }
@@ -1019,7 +1013,6 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason)
     {
         return _PyIR_SHADOW_UNCOVERED;
     }
-    const _PyIRCodePlan *plan = exec->semantic_plan;
     if (!(plan->flags & _PyIR_PLAN_ALL_RETURNS)) {
         uint32_t low = 0, high = plan->nsites;
         while (low < high) {

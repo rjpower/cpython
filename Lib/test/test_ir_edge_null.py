@@ -13,6 +13,13 @@ from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import TransferAdmissionTests, make_code
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class EdgeNullTests(unittest.TestCase):
     assert_rejected = TransferAdmissionTests.assert_rejected
 

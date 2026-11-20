@@ -7,6 +7,8 @@ import struct
 import types
 import unittest
 
+import _testinternalcapi
+
 from test.support.bytecode_helper import encode_words, shift_for_discard_slot
 from test.test_ir_admission import construct
 
@@ -33,10 +35,20 @@ template_code = (lambda: undefined).__code__
 
 
 def make_code(words, *, slots=4, locals=(), consts=(None,)):
-    return template_code.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
+    code = template_code.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
                             co_linetable=b"", co_exceptiontable=b"",
                             co_fbinit=struct.pack("<I", 2), co_consts=consts,
                             co_nlocals=len(locals), co_varnames=locals)
+    # The compiler selects the empty returns; constructors keep the words
+    # they are given.
+    return code.replace(co_code=_testinternalcapi.select_empty_returns(code))
+
+
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
 
 
 class TransferAdmissionTests(unittest.TestCase):

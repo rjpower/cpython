@@ -16,9 +16,9 @@ Branch `pyjit/handlers81` from checkpoint78 `99a04733128`; builds
 | Step | Content (handlers81 §6) | State |
 | --- | --- | --- |
 | H0 | Shape tool `Tools/pyjit/handler_shape.py`; checkpoint78 baseline | done, `ea164548495`; handler bodies are 55–69% of kernel instructions |
-| H1a | Canonical by construction; no publication at stores | started |
-| H1b | No `phase_state` in handlers; GC scans all slots | started on sibling `pyjit/handlers81-h1b`; root merges after H1a |
-| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | frame retirement and root deletion (H2f) started on sibling `pyjit/handlers81-h2f`; the generator core follows the H1 merge |
+| H1a | Canonical by construction; no publication at stores | done, `ef2efa83c95`..`3f6cb5e89aa`; kernels −1.8 to −4.9% alone |
+| H1b | No `phase_state` in handlers; GC scans all slots | done; the field and all lifecycle bits are deleted; kernels −1.6 to −2.4% alone |
+| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | H2f done (retirement overhead 166 → 3 instructions per call, as upstream). H1a + H1b + H2f merged at `8e8bc061894`: kernels −4.1 to −8.3%, hot-set fast path −3.8%; full suites running. H2 core (generator rules, discard slot) started |
 | H3 | Bridge records and canaries out of handlers | |
 | H4 | One computed-goto evaluator; tail-call backend deleted | |
 | H5 | Calls80 steps 1, 2a–2c, 3 written in the new shape | |

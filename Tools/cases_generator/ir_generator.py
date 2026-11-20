@@ -7057,10 +7057,11 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.handler_format = None
         emitter.execution_variant = None
         emitter.shared_binary_op = False
+    handlers = handler_instructions(analysis)
     for twin, (base, _) in EDGE_TWINS.items():
-        if base not in outlined_names:
+        if twin in handlers and base not in outlined_names:
             raise analysis_error(f"the base {base} of {twin} is not outlined",
-                                 analysis.instructions[twin].where)
+                                 handlers[twin].where)
     return functions + twin_functions, deopt_heads
 
 

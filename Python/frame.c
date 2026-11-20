@@ -246,6 +246,15 @@ clear_slots(_PyInterpreterFrame *frame, int n)
     Py_CLEAR(frame->f_locals);
 }
 
+static inline void
+clear_discard_slot(_PyInterpreterFrame *frame)
+{
+    PyValue *slot = frame->base + _PyFrame_DiscardSlot(frame);
+    PyValue ref = *slot;
+    *slot = PyValue_NULL;
+    PyValue_XCLOSE(ref);
+}
+
 void
 _PyFrame_ClearLocals(_PyInterpreterFrame *frame)
 {
@@ -267,6 +276,10 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
         f->f_line_next = -1;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
+            // The frame object keeps the locals, but nothing reads the
+            // discard slot: release its value now, or a traceback would keep
+            // a discarded result (and what it refers to) alive
+            clear_discard_slot(frame);
             take_ownership(f, frame);
             Py_DECREF(f);
             return;

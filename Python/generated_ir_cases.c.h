@@ -576,7 +576,7 @@ ir_run_CALL_INTRINSIC_2(
             value2_st = IR_VIEW(IR_B(ir_word));
             assert(oparg <= MAX_INTRINSIC_2);
             ir_own_B = IR_DETACH(ir_word, B, value2_st);
-            PyValue held2 = IR_TAKEN_REQUIRED(value2_st, ir_own_B);
+            PyValue held2 = IR_TAKEN(value2_st, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, value1_st);
             PyValue held1 = IR_TAKEN_REQUIRED(value1_st, ir_own_C);
             if (oparg == INTRINSIC_GETATTR) {

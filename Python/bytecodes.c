@@ -1340,7 +1340,7 @@ dummy_func(
 
         outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        outlined inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
+        outlined inst(CALL_INTRINSIC_2, (value2_st:nullable, value1_st -- res)) {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken before the calls, which can run code
             PyValue held2 = TAKE(value2_st);

@@ -928,29 +928,31 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         self.assertInBytecode(f, 'LOAD_FAST_CHECK')
         self.assertNotInBytecode(f, 'LOAD_FAST')
 
+    # These use [x] rather than print(x): a call names its argument slots in
+    # its operand words, so only a consumer such as BUILD_LIST still loads.
     def test_load_fast_known_because_parameter(self):
         def f1(x):
-            print(x)
+            [x]
         self.assertInBytecode(f1, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f1, 'LOAD_FAST_CHECK')
 
         def f2(*, x):
-            print(x)
+            [x]
         self.assertInBytecode(f2, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f2, 'LOAD_FAST_CHECK')
 
         def f3(*args):
-            print(args)
+            [args]
         self.assertInBytecode(f3, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f3, 'LOAD_FAST_CHECK')
 
         def f4(**kwargs):
-            print(kwargs)
+            [kwargs]
         self.assertInBytecode(f4, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f4, 'LOAD_FAST_CHECK')
 
         def f5(x=0):
-            print(x)
+            [x]
         self.assertInBytecode(f5, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f5, 'LOAD_FAST_CHECK')
 
@@ -958,8 +960,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f():
             if condition():
                 x = 1
-            print(x)
-            print(x)
+            [x]
+            [x]
         self.assertInBytecode(f, 'LOAD_FAST_CHECK')
         self.assertInBytecode(f, 'LOAD_FAST_BORROW')
 
@@ -969,7 +971,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
                 x = 1
             else:
                 x = 2
-            print(x)
+            [x]
         self.assertInBytecode(f, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK')
 
@@ -1008,11 +1010,11 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             a60 = a61 = a62 = a63 = a64 = a65 = a66 = a67 = a68 = a69 = 1
             a70 = a71 = a72 = a73 = a74 = a75 = a76 = a77 = a78 = a79 = 1
             del a72, a73
-            print(a73)
-            print(a70, a71, a72, a73)
+            [a73]
+            [a70, a71, a72, a73]
             while True:
-                print(a00, a01, a62, a63)
-                print(a64, a65, a78, a79)
+                [a00, a01, a62, a63]
+                [a64, a65, a78, a79]
 
         self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a00")
         self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a01")

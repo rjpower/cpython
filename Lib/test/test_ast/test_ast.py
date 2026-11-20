@@ -26,6 +26,7 @@ except ImportError:
 
 from test import support
 from test.support import os_helper
+from test.support.bytecode_helper import constant_slot_reads
 from test.support import (skip_emscripten_stack_overflow,
                           skip_wasi_stack_overflow,
                           skip_if_unlimited_stack_size, skip_if_huge_c_stack)
@@ -2837,14 +2838,20 @@ class ConstantTests(unittest.TestCase):
         self.assertEqual(ast.get_docstring(tree), 'docstring')
 
     def get_load_const(self, tree):
-        # Compile to bytecode, disassemble and get parameter of LOAD_CONST
-        # and LOAD_COMMON_CONSTANT instructions
+        # Compile to bytecode, disassemble and get the constants that the
+        # code reads: the parameter of LOAD_CONST and LOAD_COMMON_CONSTANT
+        # instructions, and the constants of the constant slots that an
+        # instruction reads, in order.
         co = compile(tree, '<string>', 'exec')
+        slot_reads = {}
+        for instr, value in constant_slot_reads(co):
+            slot_reads.setdefault(instr.offset, []).append(value)
         consts = []
         for instr in dis.get_instructions(co):
             if instr.opcode in dis.hasconst or \
                     instr.opname == 'LOAD_COMMON_CONSTANT':
                 consts.append(instr.argval)
+            consts.extend(slot_reads.get(instr.offset, ()))
         return consts
 
     @support.cpython_only

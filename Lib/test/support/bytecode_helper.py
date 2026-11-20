@@ -71,6 +71,26 @@ def shift_for_discard_slot(words, nlocals):
         shifted.append((handler, *fields))
     return shifted
 
+def constant_slot_reads(x):
+    """Yield (instruction, value) for each constant that an instruction of x
+    reads from a constant slot.
+
+    The code's co_constslots pairs a frame slot (a hidden CO_FAST_CONST
+    local, pre-filled at frame creation) with an index into co_consts.
+    An instruction reads the slot when it is in Instruction.srcs.
+    """
+    co = dis._get_code_object(x)
+    table = co.co_constslots
+    slots = {}
+    for off in range(0, len(table), 8):
+        slot = int.from_bytes(table[off:off + 4], 'little')
+        index = int.from_bytes(table[off + 4:off + 8], 'little')
+        slots[slot] = co.co_consts[index]
+    for instr in dis.get_instructions(x):
+        for src in instr.srcs:
+            if src in slots:
+                yield instr, slots[src]
+
 class BytecodeTestCase(unittest.TestCase):
     """Custom assertion methods for inspecting bytecode."""
 
@@ -79,13 +99,45 @@ class BytecodeTestCase(unittest.TestCase):
         dis.dis(co, file=s)
         return s.getvalue()
 
-    def assertInBytecode(self, x, opname, argval=_UNSPECIFIED):
-        """Returns instr if opname is found, otherwise throws AssertionError"""
+    # A constant slot read stands for the load of its constant that the
+    # earlier forms of the IR emitted.
+    CONSTANT_LOADS = ('LOAD_CONST', 'LOAD_SMALL_INT', 'LOAD_COMMON_CONSTANT')
+
+    def matching_instructions(self, x, opname, argval=_UNSPECIFIED):
+        """Yield the instructions of x that are opname with argval, and for
+        a constant load opname, the instructions reading a constant slot
+        whose constant is argval (same type and value)."""
         self.assertIn(opname, dis.opmap)
         for instr in dis.get_instructions(x):
             if instr.opname == opname:
                 if argval is _UNSPECIFIED or instr.argval == argval:
-                    return instr
+                    yield instr
+        if opname not in self.CONSTANT_LOADS:
+            return
+        for instr, value in constant_slot_reads(x):
+            if not self.loadable_as(opname, value):
+                continue
+            if (argval is _UNSPECIFIED
+                    or (type(value) is type(argval) and value == argval)):
+                yield instr
+
+    def loadable_as(self, opname, value):
+        """Whether the load opname could have produced value."""
+        if opname == 'LOAD_SMALL_INT':
+            return type(value) is int and 0 <= value <= 255
+        if opname == 'LOAD_COMMON_CONSTANT':
+            return any(type(c) is type(value) and c == value
+                       for c in dis._common_constants)
+        return True
+
+    def assertInBytecode(self, x, opname, argval=_UNSPECIFIED):
+        """Returns instr if opname is found, otherwise throws AssertionError.
+
+        For LOAD_CONST, LOAD_SMALL_INT and LOAD_COMMON_CONSTANT, an
+        instruction that reads a constant slot holding argval also counts;
+        the instruction returned is then the reader."""
+        for instr in self.matching_instructions(x, opname, argval):
+            return instr
         disassembly = self.get_disassembly_as_string(x)
         if argval is _UNSPECIFIED:
             msg = '%s not found in bytecode:\n%s' % (opname, disassembly)
@@ -95,18 +147,15 @@ class BytecodeTestCase(unittest.TestCase):
         self.fail(msg)
 
     def assertNotInBytecode(self, x, opname, argval=_UNSPECIFIED):
-        """Throws AssertionError if opname is found"""
-        self.assertIn(opname, dis.opmap)
-        for instr in dis.get_instructions(x):
-            if instr.opname == opname:
-                disassembly = self.get_disassembly_as_string(x)
-                if argval is _UNSPECIFIED:
-                    msg = '%s occurs in bytecode:\n%s' % (opname, disassembly)
-                    self.fail(msg)
-                elif instr.argval == argval:
-                    msg = '(%s,%r) occurs in bytecode:\n%s'
-                    msg = msg % (opname, argval, disassembly)
-                    self.fail(msg)
+        """Throws AssertionError if opname is found (see assertInBytecode)"""
+        for instr in self.matching_instructions(x, opname, argval):
+            disassembly = self.get_disassembly_as_string(x)
+            if argval is _UNSPECIFIED:
+                msg = '%s occurs in bytecode:\n%s' % (opname, disassembly)
+            else:
+                msg = '(%s,%r) occurs in bytecode:\n%s'
+                msg = msg % (opname, argval, disassembly)
+            self.fail(msg)
 
 class CompilationStepTestCase(unittest.TestCase):
 

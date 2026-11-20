@@ -66,8 +66,13 @@ What these rounds established:
   computed-goto function. A compile probe of 336 labels kept a 40-byte frame,
   no canary and one dispatch jump per site. Estimated −8 to −17% of
   upstream's instructions per kernel before calls80. **In progress**
-  (approved 2026-11-19, no performance gate): steps H0–H4 on
-  `pyjit/handlers81`, then calls80 in the new shape as H5. The
+  (approved 2026-11-19, no performance gate): H0–H4 have landed on
+  `pyjit/handlers81`, with calls80 steps 1 and 2a merged (`600b4237187`).
+  Kernels there run 9.8–15.8% fewer instructions than checkpoint78; against
+  upstream, richards runs 3.5% fewer, raytrace 1.9% more, and deltablue,
+  coroutines and deepcopy_memo 9–17% more. H4's evaluator stays within
+  ±2.2% of H3; GCC's register-allocator limit now bounds its size. Steps
+  2b/2c and 3 are in progress. The
   [active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
   tracks the steps.
 - **A complete value-slot table**, kept in step with every object-slot write,

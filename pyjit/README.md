@@ -11,7 +11,7 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-19):** the
+**Current work (2026-11-20):** the
 [handlers81](design/proposals/handlers81.md) rollout, then
 [operand-encoded calls](design/proposals/operand-calls80.md), on
 `pyjit/handlers81` from checkpoint78. The

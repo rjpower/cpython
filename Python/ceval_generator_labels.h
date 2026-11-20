@@ -9,6 +9,37 @@
  *
  * This file is included in ir_evaluate(), after its handlers. */
 
+/* The labels leave through two shared blocks, so that the evaluator has one
+ * dispatch for them: gen_dispatch runs the word at next_instr, and
+ * gen_stepped runs what a step returned. */
+#define GEN_STEP_JUMP(NAME, F, IP, V) \
+    do { \
+        ir_gen_transfer = ir_##NAME(tstate, (F), (IP), (V).bits); \
+        goto LABEL_gen_stepped; \
+    } while (0)
+#define GEN_STEP_EFFECT(REMAINING, IP, V) \
+    do { \
+        ir_gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+                                                 (REMAINING)); \
+        goto LABEL_gen_stepped; \
+    } while (0)
+
+LABEL(gen_dispatch)
+{
+    int opcode;
+    DISPATCH();
+}
+
+LABEL(gen_stepped)
+{
+    frame = ir_gen_transfer.frame;
+    next_instr = ir_gen_transfer.next;
+    if (next_instr == NULL) {
+        goto LABEL_outlined_exit;
+    }
+    goto LABEL_gen_dispatch;
+}
+
 /* The value passes up from the SEND at next_instr, whose YIELD follows it,
  * through every delegating frame above: each level suspends in its YIELD and
  * hands the value to the SEND that resumed it, until the resumer is not one
@@ -26,8 +57,7 @@ LABEL(gen_yield)
             frame->base[IR_B(word)] = result;
             _PyValue_CheckTemp(result);
             next_instr = yield;
-            int opcode;
-            DISPATCH();
+            goto LABEL_gen_dispatch;
         }
         INSTRUCTION_STATS(YIELD_DELEGATED);
         frame->instr_ptr = yield + 1;
@@ -51,8 +81,7 @@ LABEL(gen_yield)
     next_instr = frame->return_pc;
     if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
     LLTRACE_RESUME_FRAME();
-    int opcode;
-    DISPATCH();
+    goto LABEL_gen_dispatch;
 }
 
 /* The generator that frame has just entered, with its debit done, resumes
@@ -76,12 +105,12 @@ LABEL(gen_resume)
             break;
         }
         if (!thread_plain || !generator_frame_is_plain(frame)) {
-            IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
+            GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
         next_instr = resume;
         IR_SKIP_RESUME();
         if (next_instr == resume) {
-            IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
+            GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
         if (kind == GEN_RESUME_STORE) {
             _PyIRWord store = *next_instr;
@@ -89,7 +118,7 @@ LABEL(gen_resume)
             PyValue old = frame->base[destination];
             if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
                     ? PyValue_AsKnownObjectBorrow(old) : NULL)) {
-                IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, next_instr, value);
+                GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, next_instr, value);
             }
             INSTRUCTION_STATS(STORE_FAST);
             frame->base[destination] = value;
@@ -99,8 +128,7 @@ LABEL(gen_resume)
             (void)closed;
             frame->instr_ptr = next_instr;
             ++next_instr;
-            int opcode;
-            DISPATCH();
+            goto LABEL_gen_dispatch;
         }
         _PyIRWord jump = *next_instr;
         assert(IR_HANDLER(jump) == JUMP_BACKWARD_NO_INTERRUPT);
@@ -109,13 +137,13 @@ LABEL(gen_resume)
         PyValue receiver = frame->base[IR_B(*next_instr)];
         if (generator_resume_targets[IR_HANDLER(*next_instr)] != GEN_SEND_INPUT ||
             !PyValue_IsObject(receiver) || tstate->py_recursion_remaining <= 1) {
-            IR_GEN_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
+            GEN_STEP_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
         }
         PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
         if ((Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) ||
             (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED &&
              !PyValue_IsNone(value)) || !gen_try_set_executing(gen)) {
-            IR_GEN_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
+            GEN_STEP_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
         }
         INSTRUCTION_STATS(SEND_GEN);
         STAT_INC(SEND, hit);
@@ -136,8 +164,7 @@ LABEL(gen_resume)
     IR_SKIP_RESUME();
     DTRACE_FUNCTION_ENTRY();
     LLTRACE_RESUME_FRAME();
-    int opcode;
-    DISPATCH();
+    goto LABEL_gen_dispatch;
 }
 
 /* The generator frame ir_gen_dying has returned ir_gen_value to frame, which
@@ -167,7 +194,7 @@ LABEL(gen_return)
         (frame->pending_redirect ||
          (kind != 0 && (frame->instr_ptr != site ||
                         generator_control_generation(frame) != generation)))) {
-        IR_GEN_JUMP(GEN_REDIRECT_EFFECT, frame, frame->instr_ptr, value);
+        GEN_STEP_JUMP(GEN_REDIRECT_EFFECT, frame, frame->instr_ptr, value);
     }
     if (kind == GEN_COMPLETE_FOR_ITER && generator_transfer_is_plain(tstate, frame)) {
         /* The iterator is exhausted: its window is released after the
@@ -185,8 +212,7 @@ LABEL(gen_return)
         PyValue_XCLOSE(value);
         next_instr = frame->instr_ptr;
         LLTRACE_RESUME_FRAME();
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     if (kind == 0 || kind == GEN_COMPLETE_FOR_ITER) {
         /* A FOR that must be observed, a nonadmitted SEND or an interpreter
@@ -197,8 +223,7 @@ LABEL(gen_return)
             PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
         }
         LLTRACE_RESUME_FRAME();
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     ir_gen_value = value;
     next_instr = site;
@@ -211,14 +236,14 @@ LABEL(gen_return)
  * the consumer of the word says.
  *
  * Sequential tests matter: one alias's decrement can make the next alias
- * final. */
+ * final, so the inputs close one at a time, from the last. */
 #define GEN_CLOSE_INPUT(K) \
     do { \
         PyValue input = frame->base[base + (K)]; \
         if (!_PyValue_TryXCloseNoReentry(input) && \
             !((K) == 0 && PyValue_RefcountOnObject(input) && \
               _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))) { \
-            IR_GEN_EFFECT((K) + 1, next_instr, result); \
+            GEN_STEP_EFFECT((K) + 1, next_instr, result); \
         } \
         frame->base[base + (K)] = PyValue_NULL; \
     } while (0)
@@ -231,7 +256,7 @@ LABEL(gen_complete)
     bool throwing = (kind & GEN_THROWING) != 0;
     int base = IR_B(source_word);
     if (!generator_transfer_is_plain(tstate, frame)) {
-        IR_GEN_EFFECT(throwing ? 4 : 3, next_instr, result);
+        GEN_STEP_EFFECT(throwing ? 4 : 3, next_instr, result);
     }
     if (throwing) {
         GEN_CLOSE_INPUT(3);
@@ -245,7 +270,7 @@ LABEL(gen_complete)
     case GEN_COMPLETE_DISCARD:
     case GEN_COMPLETE_POP_TOP: {
         if (!_PyValue_TryXCloseNoReentry(result)) {
-            IR_GEN_EFFECT(0, next_instr, result);
+            GEN_STEP_EFFECT(0, next_instr, result);
         }
         next_instr = exit;
         frame->instr_ptr = frame->return_pc = next_instr;
@@ -253,8 +278,7 @@ LABEL(gen_complete)
             INSTRUCTION_STATS(POP_TOP);
             ++next_instr;
         }
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     case GEN_COMPLETE_HOME: {
         int destination = IR_A(source_word);
@@ -263,8 +287,7 @@ LABEL(gen_complete)
         _PyValue_CheckTemp(result);
         next_instr = exit;
         frame->instr_ptr = frame->return_pc = next_instr;
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     case GEN_COMPLETE_STORE:
     case GEN_COMPLETE_STORE_FAST: {
@@ -273,7 +296,7 @@ LABEL(gen_complete)
         PyValue old = frame->base[destination];
         if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
                 ? PyValue_AsKnownObjectBorrow(old) : NULL)) {
-            IR_GEN_EFFECT(0, next_instr, result);
+            GEN_STEP_EFFECT(0, next_instr, result);
         }
         if (explicit_store) { INSTRUCTION_STATS(STORE_FAST); }
         frame->base[destination] = result;
@@ -283,8 +306,7 @@ LABEL(gen_complete)
         (void)closed;
         frame->instr_ptr = frame->return_pc = exit;
         next_instr = exit + (explicit_store ? 1 : 0);
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     default: {
         /* The consumer is the RETURN: this frame returns the value in turn.
@@ -305,8 +327,7 @@ LABEL(gen_complete)
         next_instr = frame->return_pc;
         if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
         LLTRACE_RESUME_FRAME();
-        int opcode;
-        DISPATCH();
+        goto LABEL_gen_dispatch;
     }
     }
 }

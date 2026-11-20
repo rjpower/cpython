@@ -2541,9 +2541,8 @@ static inline uint8_t
 generator_site_kind(_PyInterpreterFrame *frame, _PyInstr *site,
                     const uint8_t *table)
 {
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return 0;
-    }
+    /* The word of an interpreter entry frame is the trampoline's, which no
+     * table names and no monitor wraps. */
     int handler = IR_HANDLER(*site);
     uint8_t kind = table[handler];
     if (kind == 0 && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
@@ -2834,6 +2833,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
      * (Python/ceval_generator_labels.h) */
     PyValue ir_gen_value;
     _PyInterpreterFrame *ir_gen_dying;
+    _PyIRTransfer ir_gen_transfer;
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif

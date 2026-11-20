@@ -1552,6 +1552,89 @@ call_publish_result(_PyInterpreterFrame *frame, const _PyIRWord *head,
     return displaced;
 }
 
+/* call_publish_result for the calls with at most four operands (the self slot
+ * included), which are all in the first operand word: no loop, no call.  The
+ * result is stored, every temporary operand and the callable is detached from
+ * its home, and only then are the detached owners closed, in reverse order, so
+ * that a finalizer sees the frame as the call left it. */
+static inline Py_ALWAYS_INLINE PyValue
+call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
+{
+    _PyIRWord word = *head;
+    unsigned int n = IR_C(word);
+    if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
+        return call_publish_result(frame, head, result);
+    }
+    _PyIRWord ops = head[1];
+    PyValue *slots = _PyFrame_Slots(frame);
+    uint32_t dst = IR_A(word);
+    PyValue displaced = slots[dst];
+    _PyValue_CheckHome(result);
+    slots[dst] = result;
+    PyValue o0 = PyValue_NULL, o1 = PyValue_NULL, o2 = PyValue_NULL,
+            o3 = PyValue_NULL, oc = PyValue_NULL;
+#define CALL_PUBLISH_TAKE(K) \
+    if (n > (K)) { \
+        uint32_t home = (uint32_t)((ops >> (16 + 12 * (K))) & IR_FIELD_MAX); \
+        if (home != dst && !(ops & (IR_F_LOCAL_A << (K)))) { \
+            o##K = slots[home]; \
+            slots[home] = PyValue_NULL; \
+        } \
+    }
+    CALL_PUBLISH_TAKE(0)
+    CALL_PUBLISH_TAKE(1)
+    CALL_PUBLISH_TAKE(2)
+    CALL_PUBLISH_TAKE(3)
+#undef CALL_PUBLISH_TAKE
+    uint32_t callable = IR_B(word);
+    if (callable != dst && !(word & IR_F_LOCAL_B)) {
+        oc = slots[callable];
+        slots[callable] = PyValue_NULL;
+    }
+    PyValue_XCLOSE(o3);
+    PyValue_XCLOSE(o2);
+    PyValue_XCLOSE(o1);
+    PyValue_XCLOSE(o0);
+    PyValue_XCLOSE(oc);
+    return displaced;
+}
+
+/* The native vectorcall of a call, on its operands as they stand in their
+ * homes: they are borrowed for the call, as a temporary cannot change and a
+ * local's old value survives a write through its frame's proxy.  The caller
+ * publishes the result, which releases the temporaries.  The arguments follow
+ * the self slot, which is NULL at run time for a class attribute that is not
+ * a method. */
+static Py_NO_INLINE PyValue
+call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
+            const _PyIRWord *head, PyValue callable)
+{
+    _PyIRWord word = *head;
+    PyValue *slots = _PyFrame_Slots(frame);
+    int operands = (int)IR_C(word);
+    int first = (word & IR_F_NO_SELF) == 0 &&
+        PyValue_IsNull(slots[_PyIR_CallOperand(head, 0)]);
+    int nargs = operands - first;
+    PyValue small[8];
+    PyValue *args = small;
+    if (nargs > 8) {
+        args = PyMem_Malloc((size_t)nargs * sizeof(PyValue));
+        if (args == NULL) {
+            PyErr_NoMemory();
+            return PyValue_NULL;
+        }
+    }
+    for (int i = 0; i < nargs; i++) {
+        args[i] = slots[_PyIR_CallOperand(head, first + i)];
+    }
+    PyValue result = _PyValue_VectorcallTstate(tstate, callable, args,
+                                               (size_t)nargs, NULL);
+    if (args != small) {
+        PyMem_Free(args);
+    }
+    return result;
+}
+
 /* Release the callable operand of a call, a temporary that the call owns. */
 static inline void
 call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
@@ -1561,6 +1644,29 @@ call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
         PyValue owner = *home;
         *home = PyValue_NULL;
         PyValue_XCLOSE(owner);
+    }
+}
+
+/* The arguments of a call with more than four operands, which the operand
+ * words after the first hold: arguments[0..] takes the operands from skip
+ * on; a local is counted, a temporary moves. */
+static Py_NO_INLINE void
+call_fill_more(PyValue *slots, const _PyIRWord *head, int skip,
+               PyValue *arguments)
+{
+    int n = (int)IR_C(*head);
+    for (int k = skip; k < n; k++) {
+        _PyIRWord ops = head[1 + k / IR_OPERANDS_PER_WORD];
+        int s = k % IR_OPERANDS_PER_WORD;
+        PyValue *home = &slots[(ops >> (16 + 12 * s)) & IR_FIELD_MAX];
+        PyValue value = *home;
+        if (ops & (IR_F_LOCAL_A << s)) {
+            value = PyValue_DUP(value);
+        }
+        else {
+            *home = PyValue_NULL;
+        }
+        *arguments++ = value;
     }
 }
 
@@ -1574,9 +1680,10 @@ call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
 static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 const _PyIRWord *head, PyValue callable, PyValue self,
-                int expanded)
+                int call_state)
 {
     _PyIRWord word = *head;
+    int expanded = (call_state & CALL_EXPANDED) != 0;
     PyValue function;
     if (expanded) {
         function = PyValue_DUP(callable);
@@ -1596,13 +1703,44 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (expanded) {
         *arguments++ = PyValue_DUP(self);
     }
-    int first = 0;
-    if (!(word & IR_F_NO_SELF) &&
-        PyValue_IsNull(_PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)])) {
-        first = 1;
+    PyValue *slots = _PyFrame_Slots(frame);
+    int n = (int)IR_C(word);
+    // The self operand is NULL at run time for a class attribute that is
+    // not a method: the arguments follow its slot
+    // (the method of a bound-method operand replaced a self that was NULL)
+    int skip = (word & IR_F_NO_SELF) == 0 &&
+        (expanded || !(call_state & CALL_SELF_PRESENT));
+    if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
+        call_fill_more(slots, head, skip, arguments);
     }
-    for (int k = first, n = (int)IR_C(word); k < n; k++) {
-        *arguments++ = call_operand_take(frame, head, k);
+    else {
+        // All the operands are in the first operand word: a local is
+        // counted, a temporary moves
+        _PyIRWord ops = head[1];
+        uint64_t fields = ops >> 16;
+        unsigned int locals = (unsigned int)(ops >> 9) & 15;
+        if (skip) {
+            fields >>= 12;
+            locals >>= 1;
+            n--;
+        }
+#define CALL_FILL(K) \
+        if (n > (K)) { \
+            PyValue *home = &slots[(fields >> (12 * (K))) & IR_FIELD_MAX]; \
+            PyValue value = *home; \
+            if (locals & (1u << (K))) { \
+                value = PyValue_DUP(value); \
+            } \
+            else { \
+                *home = PyValue_NULL; \
+            } \
+            arguments[K] = value; \
+        }
+        CALL_FILL(0)
+        CALL_FILL(1)
+        CALL_FILL(2)
+        CALL_FILL(3)
+#undef CALL_FILL
     }
     if (expanded) {
         call_release_callable(frame, word);
@@ -2103,9 +2241,15 @@ static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_transaction_run_ex(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
-static _PyCallResult call_run_guarded(
+static _PyCallResult call_bind_direct(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, const _PyFbCall *);
+static _PyCallResult call_bind_keywords(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, const _PyFbCall *);
+static _PyCallResult call_bind_exact(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *);
+static _PyCallResult call_run_guarded_miss(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *,
-    _PyCallTransactionKind, const _PyFbCall *, int);
+    _PyCallTransactionKind, int);
 
 typedef struct {
     PyThreadState *tstate;
@@ -4414,7 +4558,7 @@ call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
      * start. */
     int owning = 0;
     if (kind != CALL_TRANSACTION_EX &&
-        !(flags & (CALL_INSTRUMENTED | CALL_PREPARED | CALL_VIEW_OWNING))) {
+        !(flags & (CALL_INSTRUMENTED | CALL_VIEW_OWNING))) {
         PyValue function = _PyFrame_Slots(frame)[
             IR_B(FT_ATOMIC_LOAD_UINT64_RELAXED(*current))];
         owning = PyValue_IsObject(function) &&
@@ -4555,10 +4699,27 @@ call_is_simple_native(_PyInterpreterFrame *frame, _PyInstr *current,
         call_slot_operands(word, kind) <= CALL_VIEW_SMALL;
 }
 
+/* Whether the callable operand of the call at current is a plain function */
+static inline int
+call_callable_is_function(_PyInterpreterFrame *frame, _PyInstr *current)
+{
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
+    PyValue callable = _PyFrame_Slots(frame)[IR_B(word)];
+    return PyValue_IsObject(callable) &&
+        Py_IS_TYPE(PyValue_AsKnownObjectBorrow(callable), &PyFunction_Type);
+}
+
 static Py_NO_INLINE _PyCallResult
 call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             _PyInstr *current, int flags)
 {
+    if (!(flags & (CALL_INSTRUMENTED | CALL_PREPARED)) &&
+        call_callable_is_function(frame, current)) {
+        _PyCallResult result = call_bind_exact(tstate, frame, current);
+        if (result.status <= 0) {
+            return result;
+        }
+    }
     if (call_is_simple_native(frame, current, CALL_TRANSACTION_VECTOR, flags)) {
         return call_run_native(tstate, frame, current,
                                CALL_TRANSACTION_VECTOR, flags);
@@ -4567,43 +4728,95 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 CALL_TRANSACTION_VECTOR, flags);
 }
 
-/* The checked prefix proves the function version and standard provider.
- * Return 1 before effects on a miss; no transaction record exists on a hit. */
-/* Out of line: the keyword staging array is a local that its callees
- * address, which would be the handler's */
-static _PyCallResult
-call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       PyValue *homes, int destination, int argument_count,
-                       _PyCallTransactionKind kind, const _PyFbCall *binding,
-                       int roles)
+/* Move or count operands first, first + 1, ... of the call at head into
+ * dest: a local is counted, a temporary moves out of its home. */
+static inline Py_ALWAYS_INLINE void
+call_take_operands(PyValue *slots, const _PyIRWord *head, int first, int count,
+                   PyValue *dest)
+{
+    for (int k = first; k < first + count; k++) {
+        _PyIRWord ops = head[1 + k / IR_OPERANDS_PER_WORD];
+        int s = k % IR_OPERANDS_PER_WORD;
+        PyValue *home = &slots[(ops >> (16 + 12 * s)) & IR_FIELD_MAX];
+        PyValue value = *home;
+        if (ops & (IR_F_LOCAL_A << s)) {
+            value = PyValue_DUP(value);
+        }
+        else {
+            *home = PyValue_NULL;
+        }
+        *dest++ = value;
+    }
+}
+
+/* Push the frame of a call to a plain Python function, filling it from the
+ * call's operands: the exact continuation of the generic CALL and of the
+ * guarded calls (CALL_PY_GENERAL, CALL_KW_PY).  The cached binding plan, if
+ * the handler has one (binding), names the keyword destinations and the
+ * defaults; without it the call must fit the function exactly (positional
+ * arguments, defaults, an empty *args).  Every test precedes the first move:
+ * nothing is read twice and nothing is copied first, so on a miss (status 1)
+ * the operands are untouched and the caller runs the call generically.  A
+ * hit leaves the child current. */
+static inline Py_ALWAYS_INLINE _PyCallResult
+call_bind_python_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *current, _PyCallTransactionKind kind,
+                      const _PyFbCall *binding)
 {
 #ifdef Py_GIL_DISABLED
     return (_PyCallResult){1, NULL};
 #else
-    if (kind == CALL_TRANSACTION_KEYWORDS &&
-        (binding->binding_flags & _Py_CALL_BIND_KEYWORDS))
-    {
-        int kwcount = (binding->binding_flags & _Py_CALL_BIND_KEYWORD_COUNT_MASK)
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
+    PyValue *slots = _PyFrame_Slots(frame);
+    PyValue callable = slots[IR_B(word)];
+    if (!PyValue_IsObject(callable) || IS_PEP523_HOOKED(tstate)) {
+        return (_PyCallResult){1, NULL};
+    }
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+    if (Py_TYPE(func) != &PyFunction_Type ||
+        func->vectorcall != _PyFunction_Vectorcall) {
+        return (_PyCallResult){1, NULL};
+    }
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (code->_co_exec == NULL ||
+        !_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+        return (_PyCallResult){1, NULL};
+    }
+    int operands = call_slot_operands(word, kind);
+    // The self operand is NULL at run time for a class attribute that is
+    // not a method: the arguments follow its slot
+    int skip = (word & IR_F_NO_SELF) == 0 &&
+        PyValue_IsNull(slots[_PyIR_CallOperand(current, 0)]);
+    int has_self = (word & IR_F_NO_SELF) == 0 && !skip;
+    int supplied = operands - skip;    // the self, if any, is the first
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    Py_ssize_t first_default = code->co_argcount - ndefaults;
+    int flags = code->co_flags;
+    PyObject *names = NULL;
+    int positional = supplied;
+    int kwcount = 0;
+    int kwargs_slot = IR_NO_DST;
+    int virtual_kwargs = 0;
+    if (kind == CALL_TRANSACTION_KEYWORDS) {
+        if (binding == NULL || !(binding->binding_flags & _Py_CALL_BIND_KEYWORDS)) {
+            return (_PyCallResult){1, NULL};
+        }
+        kwcount = (binding->binding_flags & _Py_CALL_BIND_KEYWORD_COUNT_MASK)
             >> _Py_CALL_BIND_KEYWORD_COUNT_SHIFT;
-        PyFunctionObject *func = (PyFunctionObject *)
-            PyValue_AsKnownObjectBorrow(homes[0]);
-        PyCodeObject *code = (PyCodeObject *)func->func_code;
-        int has_self = (roles & CALL_SELF_PRESENT) != 0;
-        int offset = has_self ? 1 : 2;
-        int positional = argument_count + has_self - kwcount;
-        PyValueBorrow names_value = PyValue_Borrow(homes[argument_count + 2]);
+        positional = supplied - kwcount;
+        PyValueBorrow names_value = PyTuple_GET_VALUE(
+            _PyFrame_GetCode(frame)->co_consts,
+            _PyIR_CallOperand(current, (int)IR_C(word) - 1));
         if (kwcount < 1 || kwcount > _Py_CALL_BIND_KEYWORD_CAPACITY ||
             has_self != !!(binding->binding_flags & _Py_CALL_BIND_SELF) ||
             positional < 0 || positional > code->co_argcount ||
             !PyValue_IsObject(names_value) ||
-            !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names_value)) ||
-            func->vectorcall != _PyFunction_Vectorcall ||
-            code->_co_exec == NULL ||
-            !_PyThreadState_HasStackSpace(tstate, code->co_framesize))
+            !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names_value)))
         {
             return (_PyCallResult){1, NULL};
         }
-        PyObject *names = PyValue_AsKnownObjectBorrow(names_value);
+        names = PyValue_AsKnownObjectBorrow(names_value);
         if (PyTuple_GET_SIZE(names) != kwcount) {
             return (_PyCallResult){1, NULL};
         }
@@ -4625,12 +4838,8 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 }
             }
         }
-
         /* Functions created from the same code share a version. Read their
          * current default shape before relying on the cached coverage proof. */
-        PyObject *defaults = func->func_defaults;
-        Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-        Py_ssize_t first_default = code->co_argcount - ndefaults;
         if (ndefaults > UINT16_MAX || first_default - positional > kwcount) {
             return (_PyCallResult){1, NULL};
         }
@@ -4645,20 +4854,53 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 return (_PyCallResult){1, NULL};
             }
         }
+    }
+    else if (binding != NULL) {
+        if (!(binding->binding_flags & _Py_CALL_BIND_DIRECT) ||
+            supplied != binding->binding.positional.bound_count) {
+            return (_PyCallResult){1, NULL};
+        }
+        if (supplied < code->co_argcount &&
+            (ndefaults > UINT16_MAX || supplied < first_default ||
+             binding->binding.positional.default_start != supplied - first_default)) {
+            /* A same-code function can share this version but have a
+             * different defaults tuple. Validate the cached offset. */
+            return (_PyCallResult){1, NULL};
+        }
+        kwargs_slot = binding->binding.positional.kwargs_slot;
+        virtual_kwargs = (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) != 0;
+    }
+    else if (!(flags & CO_OPTIMIZED) || code->co_kwonlyargcount ||
+             (flags & CO_VARKEYWORDS) || supplied > code->co_argcount ||
+             supplied < first_default) {
+        return (_PyCallResult){1, NULL};
+    }
+    PyObject *kwargs = NULL;
+    if (kwargs_slot != IR_NO_DST && !virtual_kwargs) {
+        /* Empty-dict allocation schedules GC; it does not run Python before
+         * the complete child is published. */
+        kwargs = PyDict_New();
+        if (kwargs == NULL) {
+            return (_PyCallResult){-1, NULL};
+        }
+    }
 
-        /* All guards precede this transfer. The child is complete before it
-         * becomes current: nothing fails, calls back or releases. */
-        PyValue names_owner = homes[argument_count + 2];
-        homes[argument_count + 2] = PyValue_NULL;
-        PyValue function = homes[0];
-        homes[0] = PyValue_NULL;
-        _PyInterpreterFrame *child = _PyFrame_PushUnchecked(
-            tstate, function, frame);
-        _PyFrame_MoveArgs(child, homes + offset, positional);
+    /* All tests precede this transfer. The child is complete before it
+     * becomes current: nothing fails, calls back or releases. */
+    PyValue function;
+    if (word & IR_F_LOCAL_B) {
+        function = PyValue_DUP(callable);
+    }
+    else {
+        function = callable;
+        slots[IR_B(word)] = PyValue_NULL;
+    }
+    _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, frame);
+    call_take_operands(slots, current, skip, positional, child->base);
+    if (kind == CALL_TRANSACTION_KEYWORDS) {
         for (int i = 0; i < kwcount; i++) {
-            PyValue *home = &homes[offset + positional + i];
-            child->base[binding->binding.keyword_dest[i]] = *home;
-            *home = PyValue_NULL;
+            call_take_operands(slots, current, skip + positional + i, 1,
+                               &child->base[binding->binding.keyword_dest[i]]);
         }
         for (int i = positional; i < code->co_argcount; i++) {
             if (PyValue_IsNull(child->base[i])) {
@@ -4667,80 +4909,70 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     _PyTuple_ITEMS(defaults)[i - first_default]);
             }
         }
-        frame->return_slot = (uint16_t)destination;
-        frame->return_pc = call_return_pc(frame->instr_ptr);
-        tstate->current_frame = child;
         CALL_STAT_INC(keyword_plan_hits);
-        /* Exact strings in an exact tuple cannot invoke Python finalizers. */
-        PyValue_CLOSE(names_owner);
-        return (_PyCallResult){0, child};
     }
-    if (kind == CALL_TRANSACTION_VECTOR &&
-        (binding->binding_flags & _Py_CALL_BIND_DIRECT))
-    {
-        PyFunctionObject *func = (PyFunctionObject *)
-            PyValue_AsKnownObjectBorrow(homes[0]);
-        PyCodeObject *code = (PyCodeObject *)func->func_code;
-        int offset = roles & CALL_SELF_PRESENT ? 1 : 2;
-        int supplied = argument_count + 2 - offset;
-        if (supplied == binding->binding.positional.bound_count && code->_co_exec != NULL &&
-            _PyThreadState_HasStackSpace(tstate, code->co_framesize))
-        {
-            if (supplied < code->co_argcount) {
-                /* A same-code function can share this version but have a
-                 * different defaults tuple. Validate the cached offset. */
-                PyObject *defaults = func->func_defaults;
-                Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-                Py_ssize_t first_default = code->co_argcount - ndefaults;
-                if (ndefaults > UINT16_MAX || supplied < first_default ||
-                    binding->binding.positional.default_start != supplied - first_default)
-                {
-                    return (_PyCallResult){1, NULL};
-                }
+    else {
+        for (int i = supplied; i < code->co_argcount; i++) {
+            child->base[i] = PyValue_XDUP(
+                _PyTuple_ITEMS(defaults)[i - first_default]);
+        }
+        int extra = code->co_argcount;
+        if (binding != NULL ? (binding->binding_flags & _Py_CALL_BIND_VARARGS)
+                            : (flags & CO_VARARGS)) {
+            child->base[extra++] =
+                (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+        }
+        if (kwargs_slot != IR_NO_DST) {
+            if (virtual_kwargs) {
+                child->pending_kwargs = kwargs_slot;
             }
-            PyObject *kwargs = NULL;
-            if (binding->binding.positional.kwargs_slot != IR_NO_DST &&
-                !(binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS))
-            {
-                /* Empty-dict allocation schedules GC; it does not run
-                 * Python before the complete child is published. */
-                kwargs = PyDict_New();
-                if (kwargs == NULL) {
-                    return (_PyCallResult){-1, NULL};
-                }
+            else {
+                child->base[kwargs_slot] = PyValue_FromObjectSteal(kwargs);
             }
-            PyValue function = homes[0];
-            homes[0] = PyValue_NULL;
-            _PyInterpreterFrame *child = _PyFrame_PushUnchecked(
-                tstate, function, frame);
-            _PyFrame_MoveArgs(child, homes + offset, supplied);
-            if (supplied < code->co_argcount) {
-                PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
-                for (int i = supplied; i < code->co_argcount; i++) {
-                    child->base[i] = PyValue_XDUP(
-                        defaults[binding->binding.positional.default_start + i - supplied]);
-                }
-            }
-            if (binding->binding_flags & _Py_CALL_BIND_VARARGS) {
-                child->base[code->co_argcount] =
-                    (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
-            }
-            if (binding->binding.positional.kwargs_slot != IR_NO_DST) {
-                if (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) {
-                    child->pending_kwargs = binding->binding.positional.kwargs_slot;
-                }
-                else {
-                    child->base[binding->binding.positional.kwargs_slot] = PyValue_FromObjectSteal(kwargs);
-                }
-            }
-            frame->return_slot = (uint16_t)destination;
-            frame->return_pc = call_return_pc(frame->instr_ptr);
-            tstate->current_frame = child;
-            return (_PyCallResult){0, child};
         }
     }
-    return (_PyCallResult){1, NULL};
+    frame->return_slot = (uint16_t)IR_A(word);
+    frame->return_pc = call_return_pc(current);
+    tstate->current_frame = child;
+    return (_PyCallResult){0, child};
 #endif
+}
+
+/* One entry per plan, so that the plan's tests are decided at compile time:
+ * a binding's positional plan, its keyword plan, and the generic CALL's
+ * exact fit. */
+static Py_NO_INLINE _PyCallResult
+call_bind_direct(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *current, const _PyFbCall *binding)
+{
+    return call_bind_python_impl(tstate, frame, current,
+                                 CALL_TRANSACTION_VECTOR, binding);
+}
+
+static Py_NO_INLINE _PyCallResult
+call_bind_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *current, const _PyFbCall *binding)
+{
+    return call_bind_python_impl(tstate, frame, current,
+                                 CALL_TRANSACTION_KEYWORDS, binding);
+}
+
+static Py_NO_INLINE _PyCallResult
+call_bind_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                _PyInstr *current)
+{
+    return call_bind_python_impl(tstate, frame, current,
+                                 CALL_TRANSACTION_VECTOR, NULL);
+}
+
+/* A guarded call whose binding plan missed had no effect: run it generically
+ * on its operands. */
+static Py_NO_INLINE _PyCallResult
+call_run_guarded_miss(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *current, _PyCallTransactionKind kind, int flags)
+{
+    return call_transaction_run(tstate, frame, current, kind,
+                                flags | CALL_PREPARED);
 }
 
 static Py_NO_INLINE _PyCallResult
@@ -4761,36 +4993,6 @@ call_transaction_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     return call_transaction_run(tstate, frame, current,
                                 CALL_TRANSACTION_EX, flags);
-}
-
-/* A call whose callable the handler's guards proved a Python function of the
- * checked version: bind it from the feedback entry, or run the call
- * generically on the operands (the guards had no effect). */
-static Py_NO_INLINE _PyCallResult
-call_run_guarded(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 _PyInstr *current, _PyCallTransactionKind kind,
-                 const _PyFbCall *binding, int flags)
-{
-    _PyCallView view;
-    if (!call_view_open(&view, frame, current, kind, 1)) {
-        return (_PyCallResult){-1, NULL};
-    }
-    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
-    _PyCallResult result = call_bind_known_python(
-        tstate, frame, view.homes, (int)IR_A(word),
-        call_view_oparg(word, kind), kind, binding,
-        PyValue_IsNull(view.homes[1]) ? 0 : CALL_SELF_PRESENT);
-    if (result.status > 0) {
-        _PyCallTransaction call = call_transaction_init(
-            tstate, frame, current, &view, kind,
-            flags | CALL_PREPARED | CALL_VIEW_OWNING);
-        _PyInterpreterFrame *child;
-        int status = call_transaction_invoke(&call, &child);
-        call_view_disown(&call);
-        result = (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
-    }
-    call_view_close(&view);
-    return result;
 }
 
 Py_NO_INLINE PyObject *

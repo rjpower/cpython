@@ -3124,7 +3124,7 @@ class IRStack(Stack):
             # is closed.
             self.home_node = None
             if self.final:
-                expression = f"ir_old = call_publish_result(frame, this_instr, {var.name})"
+                expression = f"ir_old = call_publish(frame, this_instr, {var.name})"
                 self.dst_stores.append(expression)
                 out.emit(f"{expression};\n")
             elif self.error_exit and var.name in lay.call_results:
@@ -4180,8 +4180,15 @@ class IREmitter(Emitter):
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
         if run_override:
-            self.emit(f"_PyCallResult call_result = call_run_guarded(tstate, frame, "
-                      f"this_instr, {self.call_kind}, fb, {self.call_flags} | call_state);\n")
+            # The cached binding plan fills the child from the operands; a
+            # miss had no effect, and the call runs generically
+            bind = ("call_bind_keywords" if self.call_kind == "CALL_TRANSACTION_KEYWORDS"
+                    else "call_bind_direct")
+            self.emit(f"_PyCallResult call_result = {bind}(tstate, frame, this_instr, fb);\n")
+            self.emit("if (call_result.status > 0) {\n")
+            self.emit(f"call_result = call_run_guarded_miss(tstate, frame, this_instr, "
+                      f"{self.call_kind}, {self.call_flags} | call_state);\n")
+            self.emit("}\n")
         else:
             self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
                       f"this_instr, {self.call_flags} | call_state);\n")

@@ -625,15 +625,15 @@ class TestIRCases(unittest.TestCase):
 
         output = generate(source)
         # The guarded call is one helper, which binds the known function from
-        # the feedback entry, or runs the call generically
+        # the feedback entry and the operands, or runs the call generically
         body = self.handler(output, "CALL_PY_GENERAL")
-        self.assertIn("call_run_guarded(tstate, frame, this_instr, "
-                      "CALL_TRANSACTION_VECTOR, fb, ", body)
+        self.assertIn("call_bind_direct(tstate, frame, this_instr, fb)", body)
+        self.assertIn("call_run_guarded_miss(", body)
         self.assertIn("if (call_result.status < 0)", body)
         self.assertNotIn("call_transaction_run_vector(", body)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
         self.assertIn("call_transaction_run_vector(", other)
-        self.assertNotIn("call_run_guarded(", other)
+        self.assertNotIn("call_bind_direct(", other)
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
@@ -674,13 +674,13 @@ class TestIRCases(unittest.TestCase):
 
         output = generate(source)
         body = self.handler(output, "CALL_KW_PY")
-        self.assertIn("call_run_guarded(tstate, frame, this_instr, "
-                      "CALL_TRANSACTION_KEYWORDS, fb, ", body)
+        self.assertIn("call_bind_keywords(tstate, frame, this_instr, fb)", body)
+        self.assertIn("call_run_guarded_miss(", body)
         self.assertIn("if (call_result.status < 0)", body)
         self.assertNotIn("call_transaction_run_keywords(", body)
         for name in ("CALL_KW_BOUND_METHOD", "INSTRUMENTED_CALL_KW"):
             with self.subTest(name=name):
-                self.assertNotIn("call_run_guarded(", self.handler(output, name))
+                self.assertNotIn("call_bind_keywords(", self.handler(output, name))
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION_KW +",
@@ -3880,7 +3880,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
             self.assertFalse(properties.sync_sp)
 
     def test_prelude_and_actual_destination_terminal_paths(self):
-        for name in ("CALL", "CALL_NON_PY_GENERAL",
+        for name in ("CALL",
                      "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL",
                      "CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
                      "CALL_FUNCTION_EX", "CALL_EX_NON_PY_GENERAL", "CALL_EX_PY",
@@ -3892,7 +3892,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 # keeps no transaction of its own
                 self.assertNotIn("call_transaction_begin(", body)
                 invoke = min(body.index(run) for run in (
-                    "call_transaction_run_", "call_run_guarded(") if run in body)
+                    "call_transaction_run_", "call_bind_") if run in body)
                 for preparation in ("_Py_Specialize_Call",
                                     "call_transaction_expand_method(",
                                     "call_transaction_prepare_tuple(",

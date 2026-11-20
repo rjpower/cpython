@@ -4325,7 +4325,13 @@ dummy_func(
         }
 
         inline_ok op(_CALL_NON_PY_GENERAL, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_NON_PY_GENERAL) =
@@ -4387,8 +4393,7 @@ dummy_func(
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
             STAT_INC(CALL, hit);
             _PyInterpreterFrame *pushed_frame = call_push_exact(
-                tstate, frame, this_instr, callable, self_or_null,
-                (call_state & CALL_EXPANDED) != 0);
+                tstate, frame, this_instr, callable, self_or_null, call_state);
             INPUTS_DEAD();
             new_frame = PyValue_Wrap(pushed_frame);
         }
@@ -4585,11 +4590,17 @@ dummy_func(
             EXIT_IF(tp->tp_vectorcall == NULL);
         }
 
-        // The vectorcalls of the builtin and method-descriptor forms run
-        // through the call transaction, which builds the window of the call
-        // out of line.
+        // The vectorcalls of the builtin and method-descriptor forms read
+        // their operands, borrowed from their homes, in call_vector(); the
+        // handler publishes the result and releases the temporaries.
         inline_ok op(_CALL_BUILTIN_CLASS, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_BUILTIN_CLASS) =
@@ -4648,7 +4659,14 @@ dummy_func(
         }
 
         inline_ok op(_CALL_BUILTIN_FAST, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            /* Builtin METH_FASTCALL functions, without keywords */
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_BUILTIN_FAST) =
@@ -4667,7 +4685,14 @@ dummy_func(
         }
 
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_BUILTIN_FAST_WITH_KEYWORDS) =
@@ -4836,7 +4861,14 @@ dummy_func(
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) =
@@ -4904,7 +4936,14 @@ dummy_func(
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- res)) {
-            IR_INVOKE_CALL();
+            
+            STAT_INC(CALL, hit);
+            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            if (PyValue_IsNull(result)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = result;
         }
 
         macro(CALL_METHOD_DESCRIPTOR_FAST) =

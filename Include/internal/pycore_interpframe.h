@@ -696,7 +696,7 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
  * the child of a call never shares the slots of its caller.
  * Must be guarded by _PyThreadState_HasStackSpace()
  * Consumes reference to func. */
-static inline _PyInterpreterFrame *
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);

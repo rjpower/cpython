@@ -1,4 +1,12 @@
-"""Real call homes across preparation, native cleanup and Python binding."""
+"""Ownership of a generic call's operands across preparation, a native callee,
+Python binding and monitoring.
+
+A call reads its operands from their homes.  A native callee borrows them, so
+they stay in their homes (visible to the collector and to the callee) until
+the result is published.  A Python callee takes them from their homes before
+the binding that can fail consumes them.  What preparation produces (the
+tuple of a CALL_FUNCTION_EX) is held by the call, not by a home.
+"""
 
 import gc
 import sys
@@ -23,7 +31,7 @@ def call_state(code):
     return state
 
 
-class NativeCallTransactionTests(unittest.TestCase):
+class CallOperandOwnershipTests(unittest.TestCase):
     def test_exact_tuple_preparation_all_routes(self):
         def plain(target, arguments):
             return target(*arguments)
@@ -38,7 +46,7 @@ class NativeCallTransactionTests(unittest.TestCase):
         cases = ((plain, {}), (keywords, {"label": "kept"}))
         for template, expected_keywords in cases:
             for code in routes(template.__code__):
-                self.assertTrue(call_rows(code)[0][0].startswith("CALL_EX"))
+                self.assertTrue(call_rows(code)[0][0].startswith("CALL_FUNCTION_EX"))
                 invoke = types.FunctionType(code, {})
                 for arguments in ((), (payload, 1, -0.0)):
                     with self.subTest(keywords=expected_keywords,
@@ -254,8 +262,8 @@ class NativeCallTransactionTests(unittest.TestCase):
         self.assertEqual(driver(), 2147483647)
         self.assertEqual(events, ["iter", "retire"])
         state, = states
-        # The final tuple is the call's own by now, and no home holds the
-        # iterable that was retired
+        # The call holds the final tuple itself, and took the iterable from
+        # its home before it closed it
         self.assertNotIsInstance(state[6][state[3] + 2], Arguments)
 
     def test_folded_destination_published_before_retirement(self):
@@ -298,14 +306,14 @@ class NativeCallTransactionTests(unittest.TestCase):
                 states.append(call_state(code))
                 sys.monitoring.set_local_events(tool, code, 0)
 
-        sys.monitoring.use_tool_id(tool, "native-call-transaction")
+        sys.monitoring.use_tool_id(tool, "native-call-operands")
         try:
             sys.monitoring.register_callback(tool, sys.monitoring.events.CALL, monitor)
             sys.monitoring.set_local_events(tool, driver.__code__, sys.monitoring.events.CALL)
             self.assertEqual(driver(), 2147483647)
             self.assertEqual(len(states), 1)
             state, = states
-            # The window of the instruction: callable, no self, the argument
+            # The operands of the instruction: callable, no self, the argument
             self.assertEqual(state[4], 3)
         finally:
             sys.monitoring.set_local_events(tool, driver.__code__, 0)
@@ -340,10 +348,16 @@ class NativeCallTransactionTests(unittest.TestCase):
         try:
             self.assertEqual(driver(), ("selected", value))
             self.assertTrue(states)
-            # The operands moved into the call before the binding ran, and
-            # the call kept one code for the whole binding
+            # The operands stay in their homes while the binding runs (the
+            # callee holds its own counts), and the call kept one code for
+            # the whole binding
             for state in states:
                 self.assertEqual(state[4], 4)
+                _, _, _, base, _, _, values, present, _ = state
+                for home in (base, base + 2, base + 3):
+                    self.assertTrue(present & (1 << home))
+                self.assertIs(values[base], target)
+                self.assertEqual(values[base + 3], kwargs)
         finally:
             target.__code__ = selected
 
@@ -371,6 +385,149 @@ class NativeCallTransactionTests(unittest.TestCase):
         self.assertIs(caught.exception, marker)
         self.assertTrue(states)
         self.assertEqual(bodies, [])
+
+
+    def test_native_callee_sees_operands_in_their_homes(self):
+        # The callable and the arguments are borrowed from their homes for
+        # the whole native call: the callee and the collector see them there
+        states = []
+        payload = object()
+
+        class Value:
+            def visit(self):
+                states.append(call_state(driver.__code__))
+
+            def __repr__(self):
+                return "value"
+
+        def make():
+            return Value()
+
+        def driver():
+            return _testclinic.OwnerProbe(make())
+
+        self.assertEqual(driver(), "value")
+        state, = states
+        _, _, _, base, count, _, values, present, _ = state
+        self.assertEqual(count, 3)
+        self.assertIs(values[base], _testclinic.OwnerProbe)
+        self.assertIsInstance(values[base + 2], Value)
+        self.assertTrue(present & (1 << base))
+        self.assertTrue(present & (1 << (base + 2)))
+
+    def test_expanded_method_operand_stays_until_published(self):
+        # A bound method without a self operand is its function and its
+        # receiver, which the method operand keeps alive: the home holds the
+        # method itself during a native callee, and releases it once
+        states = []
+
+        class Value:
+            def visit(self):
+                states.append(call_state(driver.__code__))
+
+            def __repr__(self):
+                return "value"
+
+        def method():
+            return types.MethodType(_testclinic.OwnerProbe, Value())
+
+        def driver():
+            return method()()
+
+        before = sys.getrefcount(Value)
+        for _ in range(3):
+            self.assertEqual(driver(), "value")
+        self.assertEqual(len(states), 3)
+        for state in states:
+            _, _, _, base, _, _, values, present, _ = state
+            self.assertTrue(present & (1 << base))
+            self.assertIsInstance(values[base], types.MethodType)
+        del state, values
+        states.clear()
+        gc.collect()
+        self.assertEqual(sys.getrefcount(Value), before)
+
+    def test_errors_release_operands_once(self):
+        # A call that fails after reading its operands, in a Python callee's
+        # binding or in a native callee, leaves each owner released exactly
+        # once, for every kind of call and for a bound method
+        class Payload:
+            pass
+
+        def exact(a):
+            return a
+
+        class Holder:
+            def method(self, a):
+                return a
+
+        def plain(fn, p):
+            return fn(p, p)
+
+        def keywords(fn, p):
+            return fn(p, extra=p)
+
+        def star(fn, p):
+            return fn(*(p, p))
+
+        def star_keywords(fn, p):
+            return fn(*(p,), extra=p)
+
+        payload = Payload()
+        callables = (exact, Holder().method, len, Holder)
+        for template in (plain, keywords, star, star_keywords):
+            for code in routes(template.__code__):
+                invoke = types.FunctionType(code, {})
+                for fn in callables:
+                    with self.subTest(route=template.__name__, callee=fn):
+                        for _ in range(2):  # the second run is warm
+                            before = (sys.getrefcount(payload),
+                                      sys.getrefcount(fn))
+                            with self.assertRaises(TypeError):
+                                invoke(fn, payload)
+                            gc.collect()
+                            self.assertEqual((sys.getrefcount(payload),
+                                              sys.getrefcount(fn)), before)
+
+    def test_raising_event_callback_releases_operands_once(self):
+        # A CALL event callback that raises, or that disables itself, leaves
+        # the operands owned by their homes: the call neither ran nor leaked
+        def template(fn, p):
+            return fn(p, key=p)
+
+        def target(first, key):
+            return first, key
+
+        payload = object()
+        tool = sys.monitoring.DEBUGGER_ID
+        for code in routes(template.__code__):
+            for raising in (True, False):
+                def monitor(current, offset, function, first):
+                    if raising:
+                        raise KeyError("event")
+                    return sys.monitoring.DISABLE
+
+                sys.monitoring.use_tool_id(tool, "call-operand-events")
+                try:
+                    sys.monitoring.register_callback(
+                        tool, sys.monitoring.events.CALL, monitor)
+                    sys.monitoring.set_local_events(
+                        tool, code, sys.monitoring.events.CALL)
+                    invoke = types.FunctionType(code, {})
+                    before = sys.getrefcount(payload)
+                    if raising:
+                        with self.assertRaises(KeyError):
+                            invoke(target, payload)
+                    else:
+                        self.assertEqual(invoke(target, payload),
+                                         (payload, payload))
+                    gc.collect()
+                    self.assertEqual(sys.getrefcount(payload), before)
+                finally:
+                    sys.monitoring.set_local_events(tool, code, 0)
+                    sys.monitoring.register_callback(
+                        tool, sys.monitoring.events.CALL, None)
+                    sys.monitoring.free_tool_id(tool)
 
 
 if __name__ == "__main__":

@@ -2387,7 +2387,9 @@ def names_return_slot(inst: Instruction) -> bool:
     slot dst names.  A generator's frame also hands each value it yields to
     that slot, and its return value at the end of a FOR_ITER."""
     tokens = uop_tokens(inst)
+    # _PyEval_CreateInitFrame takes the return slot from the call's own word
     return ("IR_SUSPEND_DELEGATED" in tokens or
+            "_PyEval_CreateInitFrame" in tokens or
             "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens)
 
 

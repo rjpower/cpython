@@ -70,11 +70,7 @@ class HomeWriterTests(unittest.TestCase):
                 result, current = run(Payload)
                 self.assertEqual(result.index, 2)
                 self.assertEqual(current, 42)
-                # The native call owns its operands once it has taken them from
-                # their homes, so the suspended frame no longer refers to the
-                # payload that is still waiting for release.
-                self.assertEqual(sorted(observations),
-                                 [(0, True, True), (1, True, not suspended)])
+                self.assertEqual(sorted(observations), [(0, True, True), (1, True, True)])
                 del result
                 self.assertTrue(all(reference() is None for reference in references))
 

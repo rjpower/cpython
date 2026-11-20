@@ -6011,11 +6011,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)call_state;
             uint32_t call_feedback = IR_D(ir_word);
             (void)call_feedback;
-            if (IR_IS_LOCAL_FIELD(ir_word, A)) {
-                UPDATE_MISS_STATS(CALL);
-                assert(_PyOpcode_Deopt[opcode] == (CALL));
-                JUMP_TO_PREDICTED(CALL);
-            }
             PyValue callable;
             PyValue self_or_null;
             PyValue init;

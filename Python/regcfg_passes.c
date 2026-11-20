@@ -806,106 +806,90 @@ _PyRegPass_TruthFold(_PyRegCfg *cfg)
 /* Constant slots (G6).
  *
  * An inline scalar constant (small or inline int, inline float, None, True,
- * False) that an op inside a loop reads through a field that may name a
- * local becomes a hidden local, filled when the frame is pushed
- * (CO_FAST_CONST, _PyFrame_FillConstSlots()): the load goes, as a load of a
- * local does under copy propagation, and the reader names the slot.  The
+ * False) or an immortal one that a register operand reads through a field
+ * that may name a local becomes a hidden local, filled when the frame is
+ * pushed (CO_FAST_CONST, _PyFrame_Initialize()): the load goes, as a load of
+ * a local does under copy propagation, and the reader names the slot.  The
  * same conditions apply as there, less the rules about writes: nobody writes
- * a constant slot.  Window inputs, constants outside loops and every other
- * constant keep their loads.
+ * a constant slot.  So a `return None` or an `n - 1` names a slot wherever
+ * it is, in a loop or not.  A code object has at most CONST_SLOTS_MAX
+ * constant slots, given in order of static use; window inputs and every
+ * other constant keep their loads.
  *
  * The slots sit between the cells and the free variables, so the free
  * variables and everything above them move up, and so do the opargs that
  * name them.  The pass runs after compaction, which the caller repeats. */
+
+#define CONST_SLOTS_MAX 8
 
 typedef struct {
     int load;               // the op of the load
     int reader;
     int reader_k;
     uintptr_t bits;         // the constant
-    int index;              // in consts, or -1 for a small int not in it
-    int oparg;              // of a LOAD_SMALL_INT
+    PyValueBorrow value;
+    int index;              // in consts, or -1 for a value not in it
 } const_fold;
 
-/* The loop blocks: those from the target of a backward jump to the block
- * of the jump. */
-static uint8_t *
-loop_blocks(const _PyRegCfg *cfg, int *any)
-{
-    uint8_t *in_loop = PyMem_Calloc(Py_MAX(cfg->nblocks, 1), 1);
-    if (in_loop == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    *any = 0;
-    for (int b = 0; b < cfg->nblocks; b++) {
-        const _PyRegBlock *blk = &cfg->blocks[b];
-        if (!blk->reachable) {
-            continue;
-        }
-        for (int i = blk->start; i < blk->end; i++) {
-            const _PyRegOp *op = &cfg->ops[i];
-            if (op->opcode == _PyReg_DEAD || op->target < 0
-                || (_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags & _PyIR_NAMES_TARGET)
-                || op->target > b)
-            {
-                continue;
-            }
-            for (int t = op->target; t <= b; t++) {
-                in_loop[t] = 1;
-            }
-            *any = 1;
-        }
-    }
-    return in_loop;
-}
-
-/* Whether value is None, True or False */
+/* Whether value may live in a constant slot: it needs no count, being an
+ * inline scalar or an immortal object, so that the frame's slot holds it as
+ * it is. */
 static int
-is_singleton(PyValueBorrow value)
+slot_value(PyValueBorrow value)
 {
-    if (!PyValue_IsObject(value)) {
-        return 0;
-    }
-    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
-    return obj == Py_None || obj == Py_True || obj == Py_False;
+    return !PyValue_IsNull(value) && !PyValue_RefcountOnObject(value);
 }
 
 /* Whether load is a load of a constant that can live in a slot, and if so
- * its bits and its index in consts (-1 if a small int is not there). */
+ * its value, bits and its index in consts (-1 if consts lacks it).  The
+ * common constants are those that marshal can write back into consts. */
 static int
-const_of_load(const _PyRegOp *load, PyObject *consts, uintptr_t *bits,
-              int *index)
+const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
+              uintptr_t *bits, int *index)
 {
-    if (load->opcode == LOAD_SMALL_INT) {
-        *bits = _PyValue_Identity(PyValue_FromInlineInt(load->oparg));
-        *index = -1;
-        // An equal entry may exist
-        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(consts); i++) {
-            if (_PyValue_Identity(PyList_GET_VALUE(consts, i)) == *bits) {
-                *index = (int)i;
-                break;
-            }
+    if (load->opcode == LOAD_CONST) {
+        if (load->oparg >= PyList_GET_SIZE(consts)) {
+            return 0;
         }
+        *value = PyList_GET_VALUE(consts, load->oparg);
+        if (!slot_value(*value)) {
+            return 0;
+        }
+        *bits = _PyValue_Identity(*value);
+        *index = load->oparg;
         return 1;
     }
-    if (load->opcode != LOAD_CONST || load->oparg >= PyList_GET_SIZE(consts)) {
-        return 0;
+    if (load->opcode == LOAD_SMALL_INT) {
+        *value = PyValue_Borrow(PyValue_FromInlineInt(load->oparg));
     }
-    PyValueBorrow value = PyList_GET_VALUE(consts, load->oparg);
-    if (!PyValue_IsInlineInt(value) && !PyValue_IsInlineFloat(value)
-        && !is_singleton(value))
+    else if (load->opcode == LOAD_COMMON_CONSTANT
+             && (load->oparg == CONSTANT_NONE || load->oparg == CONSTANT_TRUE
+                 || load->oparg == CONSTANT_FALSE
+                 || load->oparg == CONSTANT_MINUS_ONE
+                 || load->oparg == CONSTANT_EMPTY_STR
+                 || load->oparg == CONSTANT_EMPTY_TUPLE))
     {
+        *value = PyValue_Borrow(
+            _PyInterpreterState_GET()->common_consts[load->oparg]);
+    }
+    else {
         return 0;
     }
-    *bits = _PyValue_Identity(value);
-    *index = load->oparg;
+    *bits = _PyValue_Identity(*value);
+    *index = -1;
+    // An equal entry may exist
+    for (Py_ssize_t i = 0; i < PyList_GET_SIZE(consts); i++) {
+        if (_PyValue_Identity(PyList_GET_VALUE(consts, i)) == *bits) {
+            *index = (int)i;
+            break;
+        }
+    }
     return 1;
 }
 
 static int
-find_const_folds(_PyRegCfg *cfg, PyObject *consts, const uint8_t *in_loop,
-                 const_fold **folds, int *nfolds)
+find_const_folds(_PyRegCfg *cfg, PyObject *consts, const_fold **folds,
+                 int *nfolds)
 {
     pending_load *pend = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(pending_load));
     *folds = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(const_fold));
@@ -952,20 +936,19 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const uint8_t *in_loop,
                         f->load = (int)(load - cfg->ops);
                         f->reader = i;
                         f->reader_k = k;
-                        uintptr_t bits;
-                        const_of_load(load, consts, &bits, &f->index);
-                        f->bits = bits;
-                        f->oparg = load->oparg;
+                        const_of_load(load, consts, &f->value, &f->bits,
+                                      &f->index);
                     }
                 }
             }
             npend = n;
+            PyValueBorrow value;
             uintptr_t bits;
             int index;
-            if (in_loop[b] && (op->opcode == LOAD_CONST
-                               || op->opcode == LOAD_SMALL_INT)
+            if ((op->opcode == LOAD_CONST || op->opcode == LOAD_SMALL_INT
+                 || op->opcode == LOAD_COMMON_CONSTANT)
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
-                && const_of_load(op, consts, &bits, &index))
+                && const_of_load(op, consts, &value, &bits, &index))
             {
                 pend[npend].load = op;
                 pend[npend].reg = _PyReg_OUT(cfg, op)[0];
@@ -1026,34 +1009,30 @@ _PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree)
 int
 _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
 {
-    int any;
-    uint8_t *in_loop = loop_blocks(cfg, &any);
-    if (in_loop == NULL) {
-        return ERROR;
-    }
     const_fold *folds = NULL;
     int nfolds = 0;
     int nconst = 0;
     uintptr_t *keys = NULL;
     int *key_index = NULL;
+    PyValueBorrow *key_value = NULL;
     int *fold_slot = NULL;
-    if (!any) {
-        goto done;
-    }
-    if (find_const_folds(cfg, consts, in_loop, &folds, &nfolds) < 0) {
-        PyMem_Free(in_loop);
+    if (find_const_folds(cfg, consts, &folds, &nfolds) < 0) {
         return ERROR;
     }
     // One slot per distinct constant, in order of use, while the frame fits
     keys = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(uintptr_t));
     key_index = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
+    key_value = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(PyValueBorrow));
     fold_slot = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
-    if (keys == NULL || key_index == NULL || fold_slot == NULL) {
+    if (keys == NULL || key_index == NULL || key_value == NULL
+        || fold_slot == NULL)
+    {
         PyErr_NoMemory();
         goto error;
     }
     // less the discard slot
     int room = IR_MAX_SLOTS - 1 - cfg->nlocalsplus - cfg->ntemps;
+    room = Py_MIN(room, CONST_SLOTS_MAX);
     for (int f = 0; f < nfolds; f++) {
         int j;
         for (j = 0; j < nconst && keys[j] != folds[f].bits; j++) {
@@ -1065,6 +1044,7 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
             }
             keys[nconst] = folds[f].bits;
             key_index[nconst] = folds[f].index;
+            key_value[nconst] = folds[f].value;
             nconst++;
         }
         fold_slot[f] = j;
@@ -1072,19 +1052,12 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
     if (nconst == 0) {
         goto done;
     }
-    // A small int that consts lacks gets an entry
+    // A value that consts lacks gets an entry
     for (int j = 0; j < nconst; j++) {
         if (key_index[j] >= 0) {
             continue;
         }
-        int oparg = -1;
-        for (int f = 0; f < nfolds; f++) {
-            if (fold_slot[f] == j) {
-                oparg = folds[f].oparg;
-                break;
-            }
-        }
-        if (PyList_AppendValue(consts, PyValue_FromInlineInt(oparg)) < 0) {
+        if (PyList_AppendValue(consts, key_value[j]) < 0) {
             goto error;
         }
         key_index[j] = (int)PyList_GET_SIZE(consts) - 1;
@@ -1116,17 +1089,17 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
     }
     memcpy(cfg->const_index, key_index, nconst * sizeof(int));
 done:
-    PyMem_Free(in_loop);
     PyMem_Free(folds);
     PyMem_Free(keys);
     PyMem_Free(key_index);
+    PyMem_Free(key_value);
     PyMem_Free(fold_slot);
     return nconst;
 error:
-    PyMem_Free(in_loop);
     PyMem_Free(folds);
     PyMem_Free(keys);
     PyMem_Free(key_index);
+    PyMem_Free(key_value);
     PyMem_Free(fold_slot);
     return ERROR;
 }

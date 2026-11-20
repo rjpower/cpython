@@ -204,11 +204,15 @@ class VerifierTests(unittest.TestCase):
 
     def verify_pymem_array(self):
         # The conservative scan can find a stale copy of the object's
-        # address, left by an earlier object at the same address, in a live
-        # C stack frame.  Keep each object, so that every attempt uses a new
-        # address.
+        # address, left by an earlier object at the same address, in memory
+        # that it scans: a C stack frame or a PyMem block.  How many freed
+        # addresses still have such a copy depends on the layout of the C
+        # stack and the heap, which any change to the compiled interpreter
+        # moves.  Keep each object, so that every attempt uses a new address
+        # and runs out of the stale ones.  A verifier that never reports the
+        # hole fails every attempt.
         kept = []
-        for attempt in range(5):
+        for attempt in range(40):
             holes, obj = _testinternalcapi.gc_verify_with_pymem_array(make_str)
             kept.append(obj)
             if [h[1] for h in holes] == [id(obj)]:

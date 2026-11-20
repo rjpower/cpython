@@ -693,7 +693,7 @@ def _stack_items(text):
     for item in text.split(","):
         item = item.strip()
         if item and "/" not in item:    # not a cache entry
-            m = re.fullmatch(r"(\w+)\s*(?:\[(.*)\])?", item)
+            m = re.fullmatch(r"(\w+)\s*(?:\[(.*)\])?(?::\s*nullable)?", item)
             result.append((m.group(1), m.group(2)))
     return result
 

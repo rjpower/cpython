@@ -1897,8 +1897,8 @@ class Frame(object):
         '''Innermost Python frame of the activation run by this
         _PyEval_EvalFrameLoop frame.
 
-        The handlers of the tail-calling interpreter run the Python frames, so
-        the loop's own "frame" local goes stale.  Each loop keeps a local
+        The evaluator, ir_evaluate(), runs the Python frames, so the loop's
+        own "frame" local goes stale.  Each loop keeps a local
         "activation" record, linked from the thread state (innermost first)
         through eval_activation / previous.  The innermost Python frame of the
         newest activation is tstate->current_frame; the innermost frame of an

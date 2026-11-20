@@ -283,6 +283,8 @@ def read_names(spec):
     opcode-ids:FILE  `#define NAME 123` lines (Include/opcode_ids.h).
     macro:FILE       the `#define HANDLERS(X) X(A) X(B) ...` list, in order.
     labels:FILE      `[N] = &&L_NAME` initialisers of the probe's table.
+    ir-targets:FILE  `[N] = &&TARGET_NAME` initialisers of `opcode_targets`
+                     in Python/ir_targets.h (the generator tables are skipped).
     """
     kind, _, path = spec.partition(':')
     text = open(path).read()
@@ -300,6 +302,10 @@ def read_names(spec):
     elif kind == 'labels':
         for num, name in re.findall(r'\[(\d+)\]\s*=\s*&&L_(\w+)', text):
             names[int(num)] = name
+    elif kind == 'ir-targets':
+        body = text.split('opcode_targets[')[1].split('};')[0]
+        for num, name in re.findall(r'\[(\d+)\]\s*=\s*&&TARGET_(\w+)', body):
+            names.setdefault(int(num), name)
     else:
         sys.exit(f'unknown --names kind {kind!r}')
     return names
@@ -655,10 +661,11 @@ def main():
                     help='tc: handler function prefix')
     ap.add_argument('--function', default='_PyEval_EvalFrameDefault',
                     help='cg: the evaluator function')
-    ap.add_argument('--table-symbol', default=r'opcode_targets_table(\.\d+)?|targets(\.\d+)?',
+    ap.add_argument('--table-symbol',
+                    default=r'opcode_targets_table(\.\d+)?|opcode_targets(\.\d+)?|targets(\.\d+)?',
                     help='cg: regex for the label-address table symbol')
     ap.add_argument('--names', help='cg: index->name source, '
-                    'opcode-ids:FILE | macro:FILE | labels:FILE')
+                    'opcode-ids:FILE | macro:FILE | labels:FILE | ir-targets:FILE')
     ap.add_argument('--hot-kcat', nargs='*', default=DEFAULT_KCAT,
                     help='kernel symbol files that define the hot set')
     ap.add_argument('--hot-fraction', type=float, default=0.9)

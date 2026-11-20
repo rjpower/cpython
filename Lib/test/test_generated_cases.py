@@ -1048,7 +1048,7 @@ class TestIRCases(unittest.TestCase):
             end = handler.index("}\n", start)
             arm = handler[start:end]
             self.assertIn("IR_DETACH(ir_word, B, iterable)", arm)
-            self.assertIn("iter = IR_TAKEN(iterable, ir_own_B)", arm)
+            self.assertIn("iter = IR_TAKEN_REQUIRED(iterable, ir_own_B)", arm)
             self.assertNotIn("_PyEval_GetAwaitable", arm)
             self.assertNotIn("PyValue_FromObjectSteal", arm)
             self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
@@ -1358,8 +1358,8 @@ class TestIRCases(unittest.TestCase):
             left = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(left));
             assert(PyValue_IsObject(right));
-            PyObject *l = PyValue_AsKnownObjectBorrow(left);
-            PyObject *r = PyValue_AsKnownObjectBorrow(right);
+            PyObject *l = _PyValue_AsKnownObjectBorrowPointer(left);
+            PyObject *r = _PyValue_AsKnownObjectBorrowPointer(right);
             PyObject *o = spam_call(l, r);
             ir_own_C = IR_DETACH(ir_word, C, right);
             ir_own_B = IR_DETACH(ir_word, B, left);
@@ -1481,12 +1481,12 @@ class TestIRCases(unittest.TestCase):
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
         self.assertIn("ir_own_B = IR_DETACH(ir_word, B, value);\n"
-                      "            res = IR_TAKEN(value, ir_own_B);",
+                      "            res = IR_TAKEN_REQUIRED(value, ir_own_B);",
                       self.handler(output, "OP_HELD"))
-        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN(value, ir_own_B))",
+        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(value, ir_own_B))",
                       self.handler(output, "OP_STEAL"))
         alias = self.handler(output, "OP_ALIAS")
-        self.assertIn("res = IR_TAKEN(value, ir_own_B);", alias)
+        self.assertIn("res = IR_TAKEN_POINTER(value, ir_own_B);", alias)
         self.assertEqual(alias.count("IR_DETACH("), 2)
         self.assertNotIn("TAKE(", output.replace("IR_TAKEN(", ""))
         self.assertNotIn("OWNER(", output)
@@ -1523,8 +1523,29 @@ class TestIRCases(unittest.TestCase):
             "ir_own_B = IR_DETACH(ir_word, B, copy);")
         self.assertLess(output.index("// _FIRST"), consume)
         self.assertLess(consume, output.index("// _SECOND"))
-        self.assertIn("res = IR_TAKEN(copy, ir_own_B);", output)
+        self.assertIn("res = IR_TAKEN_REQUIRED(copy, ir_own_B);", output)
         self.assertIn("PyValueBorrow copy;", output)
+
+    def test_taken_view_form_follows_nullable_and_pointer_facts(self):
+        # A taken input tests for NULL only when the instruction declares it
+        # nullable, and tests for an inline value only when no assert or
+        # guard shows that it is an object
+        input = """
+        inst(OP_NULLABLE, (value:nullable -- res)) {
+            res = TAKE(value);
+        }
+        inst(OP_REQUIRED, (value -- res)) {
+            res = TAKE(value);
+        }
+        inst(OP_OBJECT, (value -- res)) {
+            assert(PyValue_IsObject(value));
+            res = TAKE(value);
+        }
+    """
+        output = self.ir_output(input)
+        self.assertIn("res = IR_TAKEN(value, ir_own_B);", self.handler(output, "OP_NULLABLE"))
+        self.assertIn("res = IR_TAKEN_REQUIRED(value, ir_own_B);", self.handler(output, "OP_REQUIRED"))
+        self.assertIn("res = IR_TAKEN_POINTER(value, ir_own_B);", self.handler(output, "OP_OBJECT"))
 
     def test_no_addressable_locals(self):
         # The lint: no uop or label body takes the address of a local it
@@ -1733,7 +1754,7 @@ class TestIRCases(unittest.TestCase):
             res = PyValue_None;
         }
     """), "OP")
-        self.assertLess(output.index("PyValue held = IR_TAKEN(value, ir_own_B);"),
+        self.assertLess(output.index("PyValue held = IR_TAKEN_POINTER(value, ir_own_B);"),
                         output.index("spam_call("))
         # The designator and the arguments of the call are read before it
         # runs, and a number read from the object does not dangle
@@ -1766,7 +1787,7 @@ class TestIRCases(unittest.TestCase):
         for name in ("OP", "OP_POINTER", "OP_FIELD"):
             with self.subTest(name=name):
                 self.assertEqual(formats[name].borrow_mask, 1)
-        self.assertIn("res = SPAM(spam_call(PyValue_AsKnownObjectBorrow(value)));",
+        self.assertIn("res = SPAM(spam_call(_PyValue_AsKnownObjectBorrowPointer(value)));",
                       self.handler(self.ir_output(input), "OP"))
 
     def test_owner_taken_once(self):
@@ -1810,7 +1831,7 @@ class TestIRCases(unittest.TestCase):
             }
         }
     """), "OP")
-        self.assertIn("res = IR_TAKEN(value, ir_own_B);", output)
+        self.assertIn("res = IR_TAKEN_POINTER(value, ir_own_B);", output)
         self.assertIn("_PyValue_XCLOSE_POINTER(ir_own_B);", output)
         # The take kills every view and copy of the input: one is not read
         # after it, and none needs DEAD()
@@ -1834,7 +1855,7 @@ class TestIRCases(unittest.TestCase):
         for rest in ("", "DEAD(value);"):
             with self.subTest(rest=rest):
                 output = self.handler(self.ir_output(copy % rest), "OP")
-                self.assertIn("res = IR_TAKEN(copy, ir_own_B);", output)
+                self.assertIn("res = IR_TAKEN_REQUIRED(copy, ir_own_B);", output)
 
     def test_exit_after_take_refused(self):
         # A deopt or exit goes to an instruction that reads the inputs from
@@ -1910,7 +1931,7 @@ class TestIRCases(unittest.TestCase):
             res = held;
         }
     """), "OP")
-        self.assertLess(output.index("PyValue held = IR_TAKEN(value, ir_own_B);"),
+        self.assertLess(output.index("PyValue held = IR_TAKEN_REQUIRED(value, ir_own_B);"),
                         output.index("PyValue_CLOSE(held);"))
         self.assertLess(output.index("PyValue_CLOSE(held);"),
                         output.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);"))
@@ -2091,7 +2112,7 @@ class TestIRCases(unittest.TestCase):
                                ir_generator.OBJECT_READERS | {"SPAM_TakeRef"}):
             self.assertEqual(self.formats(input)["OP_OBJECT_TARGET"].borrow_mask, 0b11)
         output = self.handler(self.ir_output(input), "OP_OBJECT_TARGET")
-        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN(item, ir_own_B))", output)
+        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(item, ir_own_B))", output)
 
     def test_consumed_inputs(self):
         # A handler takes the inputs that it consumes: the slot of a
@@ -2331,10 +2352,10 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn("ir_obj_", handler)
             self.assertNotIn("_PyValueTemps", handler)
         op = self.handler(output, "OP")
-        self.assertIn("PyObject *v_o = PyValue_AsKnownObjectBorrow(v);", op)
-        self.assertIn("PyValue kept = IR_TAKEN(v, ir_own_B);", op)
+        self.assertIn("PyObject *v_o = _PyValue_AsKnownObjectBorrowPointer(v);", op)
+        self.assertIn("PyValue kept = IR_TAKEN_POINTER(v, ir_own_B);", op)
         owned = self.handler(output, "OP_OWNED")
-        self.assertIn("SPAM(PyValue_AsKnownObjectBorrow(v));", owned)
+        self.assertIn("SPAM(_PyValue_AsKnownObjectBorrowPointer(v));", owned)
         self.assertIn("_PyValue_AsPyObjectStealPointer(v)", owned)
         # A conversion without the assert is refused
         with self.assertRaisesRegex(SyntaxError, "may be an inline value"):
@@ -2520,7 +2541,7 @@ class TestIRCases(unittest.TestCase):
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(owner));
-                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -2553,7 +2574,7 @@ class TestIRCases(unittest.TestCase):
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 assert(PyValue_IsObject(owner));
-                if (Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version) {
+                if (Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_version_tag != type_version) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -2562,7 +2583,7 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 assert(PyValue_IsObject(owner));
-                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -3723,7 +3744,10 @@ class TestShapeReadMetadata(unittest.TestCase):
         return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name])
 
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
-        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "Python/bytecodes.c").read_text()
+        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(char *entries")
+        macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
                 name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
@@ -3731,8 +3755,13 @@ class TestShapeReadMetadata(unittest.TestCase):
                     handler, effects = self.shape_read_handler(source, name)
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
-                        self.assertIn("shape_read_offset(_PyFrame_Exec(frame)->feedback, fb,", handler)
-                        self.assertNotIn("shape_read_offset(frame->ir_feedback", handler)
+                        # The handler passes the entries of the frame's
+                        # feedback bank; the function steps back over the
+                        # block header to the poly tables
+                        self.assertIn("shape_read_offset(frame->ir_feedback, fb,", handler)
+                        self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
+                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", macros)
+                        self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +
                                   ("ir_shape_offset" if poly else "fb->offset") + ";", handler)

@@ -44,6 +44,16 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
 }
 
 void
+_PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
+{
+    const uint32_t *table = _PyCode_CONSTSLOTS(code);
+    for (int i = 0; i < code->co_nconstslots; i++) {
+        frame->base[table[2 * i]] =
+            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
+    }
+}
+
+void
 _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
     assert(frame->pending_redirect);

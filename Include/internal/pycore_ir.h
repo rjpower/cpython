@@ -650,9 +650,17 @@ typedef struct _PyCodeExec {
     char *entries;          // feedback entry 0, or NULL if no instruction
                             // has an entry
     const _PyIRCodePlan *semantic_plan;
-    uint32_t nwords;
-    uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
+    /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
+     * them from const_first.  const_image holds the PyValue of each, to be
+     * copied into the slots of a new frame, or is NULL if some constant is
+     * mortal (as after code.replace(co_consts=...)): a frame then counts
+     * the constants it holds (_PyFrame_FillConstSlots()). */
+    const PyValue *const_image;
+    uint32_t nwords;
+    uint16_t const_first;
+    uint16_t nconst;
+    uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,

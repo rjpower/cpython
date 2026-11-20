@@ -4174,7 +4174,7 @@ class IREmitter(Emitter):
     def refresh_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
         self.out.start_line()
-        self.emit("if (call_transaction_refresh(tstate, frame, this_instr) < 0) {\n")
+        self.emit("if (call_refresh(tstate, frame, this_instr) < 0) {\n")
         self.reader_error()
         self.emit("}\n")
         self.call_reload(inst)
@@ -6747,7 +6747,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 f"{name}: a {kind} call with inputs {count}", inst.where)
         emitter.call_argc = "oparg" if inst.properties.oparg else "0"
         emitter.call_kind = kind
-        emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_transaction_run_vector",
+        emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_run_vector",
                             "CALL_TRANSACTION_KEYWORDS": "call_transaction_run_keywords",
                             "CALL_TRANSACTION_EX": "call_transaction_run_ex"}[kind]
         flags = []

@@ -6232,7 +6232,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
-                    tstate, frame, this_instr, callable, self_or_null, call_state);
+                    tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -7670,7 +7670,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
-                    tstate, frame, this_instr, callable, self_or_null, call_state);
+                    tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT

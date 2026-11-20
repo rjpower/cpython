@@ -760,7 +760,9 @@ static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
+    /* The callers' guards have shown that func is a function. */
+    PyFunctionObject *func_obj =
+        (PyFunctionObject *)_PyValue_AsKnownObjectBorrowPointer(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));

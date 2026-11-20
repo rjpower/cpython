@@ -4422,7 +4422,7 @@ dummy_func(
         pure op(_INIT_CALL_PY_EXACT_ARGS, (callable, self_or_null, args[oparg] -- new_frame)) {
             STAT_INC(CALL, hit);
             _PyInterpreterFrame *pushed_frame = call_push_exact(
-                tstate, frame, this_instr, callable, self_or_null, call_state);
+                tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
             INPUTS_DEAD();
             new_frame = PyValue_Wrap(pushed_frame);
         }

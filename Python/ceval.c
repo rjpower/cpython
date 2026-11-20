@@ -1799,18 +1799,18 @@ _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
  * argument is the receiver, and the method operand is released. */
 static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                const _PyIRWord *head, PyValue callable, PyValue self,
-                int call_state)
+                const _PyIRWord *head, _PyIRWord word, PyValue callable,
+                PyValue self, int call_state)
 {
-    _PyIRWord word = *head;
     int expanded = (call_state & CALL_EXPANDED) != 0;
+    PyValue *slots = _PyFrame_Slots(frame);
     PyValue function;
     if (expanded) {
         function = PyValue_DUP(callable);
     }
     else {
-        PyValue *home = &_PyFrame_Slots(frame)[IR_B(word)];
-        if (word & IR_F_LOCAL_B) {
+        PyValue *home = &slots[IR_B(word)];
+        if (Py_UNLIKELY(word & IR_F_LOCAL_B)) {
             function = PyValue_DUP(*home);
         }
         else {
@@ -1823,7 +1823,6 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (expanded) {
         *arguments++ = PyValue_DUP(self);
     }
-    PyValue *slots = _PyFrame_Slots(frame);
     int n = (int)IR_C(word);
     // The self operand is NULL at run time for a class attribute that is
     // not a method: the arguments follow its slot
@@ -1839,7 +1838,7 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyIRWord ops = head[1];
         uint64_t fields = ops >> 16;
         unsigned int locals = (unsigned int)(ops >> 9) & 15;
-        if (skip) {
+        if (Py_UNLIKELY(skip)) {
             fields >>= 12;
             locals >>= 1;
             n--;

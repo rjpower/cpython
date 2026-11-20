@@ -33,19 +33,20 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         output = self.generate("""
         inst(LOAD_ATTR, (class_value/4, owner -- attr)) {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
         """)
         self.assertIn("_PyValueGuarded class_value = fb->class_value;", output)
         self.assertNotIn("PyObject *class_value", output)
         self.assertNotIn("PyValueBorrow class_value", output)
-        acquire = output.index("attr = IR_CANONICAL_HOME_DUP(found);")
-        publish = output.index("IR_STORE_TEMP_DST(")
-        retire = output.index("retire_published_values(")
-        self.assertLess(acquire, publish)
-        self.assertLess(publish, retire)
+        acquire = output.index("attr = PyValue_XDUP(found);")
+        detach = output.index("IR_DETACH(")
+        store = output.index("IR_STORE_DST(")
+        close = output.index("PyValue_XCLOSE(ir_own_")
+        self.assertLess(acquire, detach)
+        self.assertLess(detach, store)
+        self.assertLess(store, close)
 
     def test_guarded_operand_rejects_wrong_width(self):
         for size in (1, 2):
@@ -58,19 +59,17 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                     }}
                     """)
 
-    def test_family_head_result_retirement_has_reloadable_instruction(self):
+    def test_family_head_has_no_retirement_reload(self):
         source = """
         inst(OP, (class_value/4, owner -- attr)) {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
         inst(OP_SPECIALIZED, (class_value/4, owner -- attr)) {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
         family(OP, 4) = { OP_SPECIALIZED };
         """
@@ -79,10 +78,9 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         start = output.index("TARGET(OP) {")
         end = output.find("TARGET(", start + 1)
         handler = output[start:end]
-        self.assertIn("_PyIRWord* this_instr = next_instr - 1;", handler)
-        self.assertNotIn("_PyIRWord* const this_instr", handler)
-        retire = handler.index("retire_published_values(")
-        self.assertIn("this_instr = frame->instr_ptr;", handler[retire:])
+        self.assertIn("_PyIRWord* const this_instr = next_instr - 1;", handler)
+        self.assertNotIn("this_instr = frame->instr_ptr;", handler)
+        self.assertNotIn("retire_published_values(", handler)
 
     def test_guarded_operand_rejects_wrong_feedback_type(self):
         with self.assertRaisesRegex(SyntaxError, "requires attribute feedback"):
@@ -93,7 +91,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
             }
             """)
 
-    def test_real_handler_acquires_and_publishes_before_retirement(self):
+    def test_real_handler_acquires_stores_then_closes(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         output = self.generate(source, runtime=True)
@@ -106,18 +104,16 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 handler = output[start:end]
                 guard = handler.index("tp_version_tag")
                 load = handler.index("_PyValueGuarded_Load(class_value)")
-                acquire = handler.index("attr = IR_CANONICAL_HOME_DUP(found)")
-                publish = handler.index("IR_STORE_TEMP_DST(")
-                retire = handler.index("retire_published_values(")
+                acquire = handler.index("attr = PyValue_XDUP(found)")
+                detach = handler.index("IR_DETACH(ir_word, B, owner)")
+                store = handler.index("IR_STORE_DST(ir_word, A, attr)")
+                close = handler.index("_PyValue_XCLOSE_POINTER(ir_own_B)")
                 self.assertLess(guard, load)
                 self.assertLess(load, acquire)
-                self.assertLess(acquire, publish)
-                self.assertLess(publish, retire)
-                self.assertIn("IR_STORE_DST(ir_word, A, attr)", handler[retire:])
-                self.assertIn("if (retire_failed < 0)", handler[retire:])
-                self.assertIn("_PyIRWord* this_instr = next_instr;", handler)
-                self.assertNotIn("_PyIRWord* const this_instr", handler)
-                self.assertIn("this_instr = frame->instr_ptr;", handler[retire:])
+                self.assertLess(acquire, detach)
+                self.assertLess(detach, store)
+                self.assertLess(store, close)
+                self.assertNotIn("retire_published_values(", handler)
                 self.assertNotIn("PyObject *class_value", handler)
                 if name.startswith("LOAD_ATTR_CLASS"):
                     self.assertIn("class_version = fb->class_version", handler)
@@ -147,7 +143,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                                  versions + [(6, 4, "class_value")])
                 self.assertEqual(formats[name].fb_layout, "_PyFbAttr")
                 self.assertEqual(contracts[name].result_phase,
-                                 ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
+                                 ir_generator.RESULT_PHASE_NONE)
 
     def test_classmethod_guards_capture_before_pair_acquisition(self):
         source = (Path(__file__).resolve().parents[2] /

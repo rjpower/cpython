@@ -265,15 +265,18 @@ class OperandModeGeneratorTests(unittest.TestCase):
         self.assertNotIn("IR_CONSUME_INPUT", body)
         self.assertIn("attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);", body)
         self.assertIn("ir_own_B = PyValue_NULL;", body)
-        publication = "IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);"
-        self.assertLess(body.index("attr = shape_read_dup("), body.index(publication))
-        self.assertLess(body.index(publication), body.index("retire_published_values("))
+        read = body.index("attr = shape_read_dup(")
+        store = body.index("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);")
+        close = body.index("_XCLOSE_POINTER(ir_own_B);")
+        self.assertLess(read, store)
+        self.assertLess(store, close)
+        self.assertNotIn("retire_published_values(", body)
         helpers = (Path(test_tools.basepath) / "Python" / "ceval_macros.h").read_text()
         read = helpers.split("shape_read_dup(PyObject *owner, uint32_t offset)", 1)[1]
         read = read.split("\n}", 1)[0]
         self.assertIn("PyValue_Borrow(*(PyValue *)((char *)owner + offset))", read)
         self.assertIn("assert(!PyValue_IsNull(found));", read)
-        self.assertIn("return IR_CANONICAL_HOME_DUP(found);", read)
+        self.assertIn("return PyValue_XDUP(found);", read)
         self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)
 
     def test_synthetic_instruction_without_specialization_family(self):

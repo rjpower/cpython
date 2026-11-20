@@ -250,24 +250,13 @@ class ContractTests(unittest.TestCase):
         self.assertTrue({'SEND', 'SEND_GEN', 'FOR_ITER', 'FOR_ITER_GEN',
                          'INSTRUMENTED_FOR_ITER'} <= selected)
 
-    def test_result_publication_phase(self):
-        phase = _opcode.IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE
-        for name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE",
-                     "LOAD_ATTR_SHAPE", "LOAD_ATTR_MODULE",
-                     "LOAD_ATTR_WITH_HINT", "LOAD_ATTR"):
-            with self.subTest(handler=name):
-                self.assertEqual(BY_NAME[name].result_phase, phase)
-        self.assertEqual(BY_NAME["STORE_ATTR"].result_phase,
-                         _opcode.IR_RESULT_PHASE_NONE)
-        self.assertEqual(BY_NAME["NOP"].result_phase,
-                         _opcode.IR_RESULT_PHASE_NONE)
+    def test_no_result_publication_phase(self):
+        # A handler stores its result in its place in the upstream order,
+        # not in a phase before a retirement: no handler names one
         for name, row in BY_NAME.items():
             with self.subTest(handler=name):
-                self.assertIn(row.result_phase,
-                              (_opcode.IR_RESULT_PHASE_NONE, phase))
-                if row.result_phase == phase:
-                    self.assertTrue(row.flags & _opcode.IR_STORE_DST)
-                    self.assertIn(_opcode.IR_ROLE_DST, row.roles)
+                self.assertEqual(row.result_phase,
+                                 _opcode.IR_RESULT_PHASE_NONE)
 
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)

@@ -48,10 +48,11 @@ class CanonicalElementTests(unittest.TestCase):
                 with self.subTest(kind=kind, record=record):
                     body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT", record)
                     self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
-                    self.assertIn("IR_STORE_TEMP_DST(ir_word, A, res);", body)
                     self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
                     self.assertNotIn("_PyValue_Publish", body)
-                    self.assertLess(body.index("IR_STORE_TEMP_DST("),
+                    # The result is stored before the dying container is
+                    # released
+                    self.assertLess(body.index("IR_STORE_DST("),
                                     body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
                     self.assertLess(body.index("index >= Py"), body.index("PyValue_XDUP(Py"))
         renamed = source.replace("BINARY_OP_SUBSCR_LIST_INT", "RENAMED_ELEMENT")

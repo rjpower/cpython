@@ -4348,7 +4348,7 @@ dummy_func(
             /* Releasing the method operand must not run code between the
              * guards and the push: a weakref callback on it could change the
              * function. Such a method takes the generic path, which releases
-             * it before it reads the function. */
+             * it once the callee's frame is current. */
             EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
         }
 

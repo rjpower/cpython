@@ -375,13 +375,13 @@ class TestIRCases(unittest.TestCase):
                                           emitter, out, record)
             body = output.getvalue()
             update = body.index("null_or_index = PyValue_TagIndex(index);")
-            publish = body.index("IR_PUBLISH_TEMP(window[1], null_or_index);", update)
+            publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
             clear = body.index("window[2] = PyValue_NULL;", publish)
             transfer = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD", clear)
             self.assertLess(update, publish)
             self.assertLess(publish, clear)
             self.assertLess(clear, transfer)
-            self.assertNotIn("IR_PUBLISH_TEMP(window[2], next);", body)
+            self.assertNotIn("IR_SET_TEMP(window[2], next);", body)
             self.assertNotIn("IR_MOVE_TO_DST", body)
 
     def test_generator_provider_result_precedes_sent_input_effect(self):
@@ -558,16 +558,17 @@ class TestIRCases(unittest.TestCase):
 
         body = self.handler(generate(source), "BINARY_OP_SUBSCR_DICT")
         provider = body.index("_PyDict_TryGetFirstProbeValue")
-        consume = body.index("IR_CONSUME_INPUT", provider)
-        publish = body.index("IR_STORE_TEMP_DST", consume)
-        key = body.index("_PyValue_CloseMayReenter(ir_leaf_key)", publish)
-        dictionary = body.index("_PyValue_CloseMayReenter(ir_leaf_dict)", key)
-        dispatch = body.index("DISPATCH();", dictionary)
-        slow = body.index("value_subscript(held_dict, held_sub)", dispatch)
-        self.assertLess(provider, consume)
+        detach = body.index("IR_DETACH(ir_word, B, dict_st)", provider)
+        store = body.index("IR_STORE_DST(ir_word, A, ir_leaf_result);", detach)
+        key = body.index("PyValue_XCLOSE(ir_leaf_key)", store)
+        dictionary = body.index("PyValue_XCLOSE(ir_leaf_dict)", key)
+        old = body.index("PyValue_XCLOSE(ir_old);", dictionary)
+        dispatch = body.index("DISPATCH();", old)
+        slow = body.index("value_subscript(dict_st, sub_st)", dispatch)
+        self.assertLess(provider, detach)
         self.assertLess(dispatch, slow)
         self.assertNotIn("value_reader_complete", body[provider:dispatch])
-        self.assertLess(body.index("IR_STORE_DST", dictionary), dispatch)
+        self.assertLess(slow, body.index("IR_STORE_DST(ir_word, A, res);", slow))
 
         marker = "IR_TRY_DICT_FIRST_PROBE();"
         guard = "DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);"
@@ -815,7 +816,10 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("this_instr, prev_instr, ir_observer_next, "
                       "PY_MONITORING_EVENT_BRANCH_RIGHT, 0", output)
         self.assertLess(output.index("frame->return_pc ="), callback)
-        self.assertLess(callback, output.index("PyValue_XCLOSE(ir_observer_input_0)"))
+        # The deferred close comes after the last detach and before the callback
+        self.assertLess(output.index("held = PyValue_NULL;"),
+                        output.index("PyValue_XCLOSE(ir_close1)"))
+        self.assertLess(output.index("PyValue_XCLOSE(ir_close1)"), callback)
         analysis = self.analyze(iterator)
         formats = ir_generator.compute_formats(analysis)
         self.assertEqual(ir_generator.observer_outcomes(
@@ -1037,8 +1041,8 @@ class TestIRCases(unittest.TestCase):
                 start = handler.index("if (coro_awaitable_can_transfer(iterable))")
                 end = handler.index("}\n", start)
                 arm = handler[start:end]
-                self.assertIn("IR_CONSUME_INPUT(ir_word, B, iterable)", arm)
-                self.assertIn("iter = IR_TAKE(iterable, ir_own_B)", arm)
+                self.assertIn("IR_DETACH(ir_word, B, iterable)", arm)
+                self.assertIn("iter = IR_TAKEN(iterable, ir_own_B)", arm)
                 self.assertNotIn("_PyEval_GetAwaitable", arm)
                 self.assertNotIn("PyValue_FromObjectSteal", arm)
                 self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
@@ -1235,15 +1239,17 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
                 handler = self.handler(output.getvalue(), name)
-                self.assertIn("IR_PUBLISH_TEMP(window[", handler)
+                self.assertIn("IR_SET_TEMP(window[", handler)
                 self.assertNotIn("IR_MOVE_TO_DST", handler)
         for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR"):
             with self.subTest(name=name):
                 self.assertEqual(contracts[name].output_kind,
                                  "_PyIR_OUTPUT_WINDOW_DST_FIRST")
                 handler = self.handler(output.getvalue(), name)
-                self.assertIn("IR_PUBLISH_TEMP(window[1]", handler)
-                self.assertIn("IR_MOVE_TO_DST_OR_DISCARD", handler)
+                self.assertIn("IR_SET_TEMP(window[0], attr);", handler)
+                self.assertIn("IR_MOVE_TO_DST(ir_word, A, window[0]);", handler)
+                self.assertLess(handler.index("IR_MOVE_TO_DST("),
+                                handler.index("PyValue_XCLOSE(ir_old);"))
                 self.assertEqual(formats[name].dst_offset, 0)
         self.assertEqual(contracts["CALL"].output_kind,
                          "_PyIR_OUTPUT_WINDOW_DST_FIRST")
@@ -1304,339 +1310,6 @@ class TestIRCases(unittest.TestCase):
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 
-    def test_retirement_flush_reuses_published_temporary(self):
-        for name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_MODULE",
-                     "LOAD_ATTR_WITH_HINT", "LOAD_ATTR_SHAPE"):
-            with self.subTest(name=name):
-                input = f"""
-                op(_ATTR, (owner -- attr)) {{
-                    attr = PyValue_DUP(owner);
-                    PyValue receiver = OWNER(owner);
-                    IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-                }}
-                op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {{
-                    if (oparg & 1) {{
-                        null[0] = PyValue_NULL;
-                    }}
-                }}
-                macro({name}) = _ATTR + _PUSH_NULL_CONDITIONAL;
-                """
-                analysis = self.analyze(input)
-                self.assertTrue(analysis.instructions[name].properties.sync_sp)
-                formats = ir_generator.compute_formats(analysis)
-                contract = ir_generator.handler_contracts(analysis, formats)[name]
-                self.assertEqual(
-                    contract.result_phase,
-                    ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
-                out = io.StringIO()
-                ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-                handler = self.handler(out.getvalue(), name)
-                store = "IR_STORE_TEMP_DST(ir_word, A, attr);"
-                retire = handler.index("retire_published_values(")
-                self.assertEqual(handler.count(store), 1)
-                self.assertLess(handler.index(store), retire)
-                self.assertIn(
-                    "((IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL)",
-                              handler[retire:])
-                self.assertIn("null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);", handler[retire:])
-                self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
-                self.assertIn("if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {\n"
-                              "                IR_STORE_DST(ir_word, A, attr);",
-                              handler[retire:])
-                self.assertIn("finish_displaced_local(", handler[retire:])
-
-    def test_canonical_home_publication(self):
-        source = """
-        op(_ATTR, (owner -- attr)) {
-            PyValueBorrow found = PyValue_Borrow(owner);
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {
-            if (oparg & 1) {
-                null[0] = PyValue_NULL;
-            }
-        }
-        macro(LOAD_ATTR_SHAPE) = _ATTR + _PUSH_NULL_CONDITIONAL;
-        """
-        handler = self.handler(self.ir_output(source), "LOAD_ATTR_SHAPE")
-        direct = "IR_STORE_TEMP_DST(ir_word, A, attr);"
-        retire = handler.index("retire_published_values(")
-        failure = handler.index("if (retire_failed < 0)", retire)
-        local = handler.index("IR_STORE_DST(ir_word, A, attr);", failure)
-        self.assertEqual(handler.count(direct), 1)
-        self.assertLess(handler.index(direct), retire)
-        self.assertIn("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1)", handler[failure:local])
-        self.assertIn("if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST)", handler[failure:local])
-        self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
-
-    def test_canonical_home_declaration_rejections(self):
-        template = """
-        inst(OP, (owner -- attr)) {{
-            PyValueBorrow found = PyValue_Borrow(owner);
-            {assignment}
-            {extra}
-            PyValue receiver = OWNER(owner);
-            {marker}
-        }}
-        """
-        cases = (
-            ("other = IR_CANONICAL_HOME_DUP(found);", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found);", "IR_CANONICAL_HOME_DUP(found);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("if (oparg) { attr = IR_CANONICAL_HOME_DUP(found); }", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found);", "", "IR_RETIRE_PUBLISHED(receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found);", "attr = PyValue_DUP(owner);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found);", "mutate(&attr);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found);", "escape(attr);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-            ("attr = IR_CANONICAL_HOME_DUP(found + 1);", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
-        )
-        for assignment, extra, marker in cases:
-            with self.subTest(assignment=assignment, extra=extra, marker=marker):
-                with self.assertRaises(SyntaxError):
-                    self.ir_output(template.format(assignment=assignment,
-                                                   extra=extra, marker=marker))
-
-    def test_retirement_publication_rejects_wrong_output(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- other, attr)) {
-            other = PyValue_DUP(owner);
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"published result attr is not the scalar ROLE_DST"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_conditional_marker(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            if (flag) {
-                IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-            }
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"result marker must be a top-level final statement"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_conditional_result_assignment(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            if (flag) {
-                attr = PyValue_DUP(owner);
-            }
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"one unconditional top-level assignment"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_consumed_result(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue_CLOSE(attr);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"result attr is used before receiver retirement"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_comma_consumed_result(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner), PyValue_CLOSE(attr);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"result assignment must bind attr only once"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_conditional_expression_assignment(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            flag ? (attr = PyValue_DUP(owner)) : PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"one unconditional top-level assignment"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_reassigned_receiver(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            receiver = PyValue_DUP(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"unmodified top-level OWNER\(\) result"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_duplicate_marker(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"duplicate result publication declaration"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_result_address(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue *result = &attr;
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"address of a handler local"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_suffix_escape(self):
-        input = """
-        op(_ATTR, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        op(_ESCAPE, ( -- )) {
-            PyObject *result = spam_call();
-        }
-        macro(LOAD_ATTR_SHAPE) = _ATTR + _ESCAPE;
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"publication suffix has an effect boundary"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_suffix_read(self):
-        input = """
-        op(_ATTR, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        op(_PASS_ATTR, (attr -- attr)) {
-            (void)0;
-        }
-        macro(LOAD_ATTR_SHAPE) = _ATTR + _PASS_ATTR;
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"publication suffix reads the declared result"):
-            self.ir_output(input)
-
-    def test_retirement_publication_rejects_suffix_alias_read(self):
-        input = """
-        op(_ATTR, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
-        }
-        op(_READ, ( -- )) {
-            PyValue alias = PyValue_DUP(attr);
-        }
-        macro(LOAD_ATTR_SHAPE) = _ATTR + _READ;
-        """
-        with self.assertRaisesRegex(
-                SyntaxError, r"publication suffix references result attr"):
-            self.ir_output(input)
-
-    def test_generic_attribute_reader_phase(self):
-        input = """
-        inst(LOAD_ATTR, (owner -- attr)) {
-            PyValue receiver = TAKE(owner);
-            PyValue pending = PyValue_NULL;
-            PyValue pending_self = PyValue_NULL;
-            int method = 0;
-            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
-            attr = pending;
-        }
-        """
-        analysis = self.analyze(input)
-        formats = ir_generator.compute_formats(analysis)
-        contract = ir_generator.handler_contracts(analysis, formats)["LOAD_ATTR"]
-        self.assertEqual(
-            contract.result_phase,
-            ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
-
-    def test_generic_reader_allows_abort_cleanup(self):
-        input = """
-        inst(LOAD_ATTR, (owner -- attr)) {
-            PyValue receiver = TAKE(owner);
-            PyValue pending = PyValue_NULL;
-            PyValue pending_self = PyValue_NULL;
-            int method = 0;
-            if (PyValue_IsNull(pending)) {
-                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
-            }
-            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
-            attr = pending;
-        }
-        """
-        analysis = self.analyze(input)
-        formats = ir_generator.compute_formats(analysis)
-        contract = ir_generator.handler_contracts(analysis, formats)["LOAD_ATTR"]
-        self.assertEqual(
-            contract.result_phase,
-            ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
-
-    def test_generic_reader_rejects_consumed_inputs(self):
-        prefix = """
-        inst(LOAD_ATTR, (owner -- attr)) {
-            PyValue receiver = TAKE(owner);
-            PyValue pending = PyValue_NULL;
-            PyValue pending_self = PyValue_NULL;
-            int method = 0;
-            %s
-            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
-            attr = pending;
-        }
-        """
-        phase_error = r"generic completion consumes, mutates, or addresses"
-        cases = (
-            ("PyValue_CLOSE(receiver);", "receiver release", phase_error),
-            ("PyValue_CLOSE(pending);", "pending release", phase_error),
-            ("PyValue_CLOSE(pending_self);", "pending-self release", phase_error),
-            ("value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);",
-             "reader close", phase_error),
-            ("PyValue_AsKnownObjectSteal(receiver);", "view take", phase_error),
-            ("if (flag) { PyValue_CLOSE(receiver); }", "conditional release",
-             phase_error),
-            ("for (; PyValue_IsNull(TAKE(receiver)); ) { }", "loop-header take",
-             phase_error),
-            ("receiver.bits = 0;", "member mutation", phase_error),
-            ("pending += receiver;", "compound mutation", phase_error),
-            ("consume(&pending);", "address escape",
-             r"address of a handler local"),
-        )
-        for cleanup, name, diagnostic in cases:
-            with self.subTest(name=name):
-                with self.assertRaisesRegex(
-                        SyntaxError, diagnostic):
-                    self.ir_output(prefix % cleanup)
-
     def test_register_style(self):
         # Inputs that are only used as objects are read through their fields
         # and may be borrowed locals.  (The result of a call that runs no
@@ -1664,8 +1337,8 @@ class TestIRCases(unittest.TestCase):
             _PyValueTemps value_owners;
             value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -1700,21 +1373,18 @@ class TestIRCases(unittest.TestCase):
             PyObject *l = ir_obj_left;
             PyObject *r = ir_obj_right;
             PyObject *o = spam_call(l, r);
-            ir_own_C = IR_CONSUME_INPUT(ir_word, C, right);
-            PyValue_XCLOSE(ir_own_C);
-            ir_own_B = IR_CONSUME_INPUT(ir_word, B, left);
-            PyValue_XCLOSE(ir_own_B);
+            ir_own_C = IR_DETACH(ir_word, C, right);
+            ir_own_B = IR_DETACH(ir_word, B, left);
             if (o == NULL) {
+                PyValue_XCLOSE(ir_own_C);
+                PyValue_XCLOSE(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
+            PyValue_XCLOSE(ir_own_C);
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
@@ -1809,19 +1479,22 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("PyValueBorrow value;", close)
         self.assertIn("PyValue ir_own_A = PyValue_NULL;", close)
         self.assertIn("value = IR_VIEW(IR_A(ir_word));", close)
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(ir_word, A, value);\n"
-                      "            PyValue_XCLOSE(ir_own_A);", close)
+        # The effect reads the view, then the owner is detached and closed
+        self.assertLess(close.index("SPAM("),
+                        close.index("ir_own_A = IR_DETACH(ir_word, A, value);"))
+        self.assertLess(close.index("ir_own_A = IR_DETACH(ir_word, A, value);"),
+                        close.index("PyValue_XCLOSE(ir_own_A);"))
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
-        self.assertIn("ir_own_B = IR_CONSUME_INPUT(ir_word, B, value);\n"
-                      "            res = IR_TAKE(value, ir_own_B);",
+        self.assertIn("ir_own_B = IR_DETACH(ir_word, B, value);\n"
+                      "            res = IR_TAKEN(value, ir_own_B);",
                       self.handler(output, "OP_HELD"))
-        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKE(value, ir_own_B))",
+        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKEN(value, ir_own_B))",
                       self.handler(output, "OP_STEAL"))
         alias = self.handler(output, "OP_ALIAS")
-        self.assertIn("res = IR_TAKE(value, ir_own_B);", alias)
-        self.assertEqual(alias.count("IR_CONSUME_INPUT"), 2)
-        self.assertNotIn("TAKE(", output.replace("IR_TAKE(", ""))
+        self.assertIn("res = IR_TAKEN(value, ir_own_B);", alias)
+        self.assertEqual(alias.count("IR_DETACH("), 2)
+        self.assertNotIn("TAKE(", output.replace("IR_TAKEN(", ""))
         self.assertNotIn("OWNER(", output)
 
     def test_view_stored_refused(self):
@@ -1851,12 +1524,12 @@ class TestIRCases(unittest.TestCase):
         macro(OP) = _FIRST + _SECOND;
     """
         output = self.handler(self.ir_output(input), "OP")
-        self.assertEqual(output.count("IR_CONSUME_INPUT"), 1)
+        self.assertEqual(output.count("IR_DETACH("), 1)
         consume = output.index(
-            "ir_own_B = IR_CONSUME_INPUT(ir_word, B, copy);")
+            "ir_own_B = IR_DETACH(ir_word, B, copy);")
         self.assertLess(output.index("// _FIRST"), consume)
         self.assertLess(consume, output.index("// _SECOND"))
-        self.assertIn("res = IR_TAKE(copy, ir_own_B);", output)
+        self.assertIn("res = IR_TAKEN(copy, ir_own_B);", output)
         self.assertIn("PyValueBorrow copy;", output)
 
     def test_no_addressable_locals(self):
@@ -1960,11 +1633,13 @@ class TestIRCases(unittest.TestCase):
         }
     """
         output = self.handler(self.ir_output(input), "OP")
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(ir_word, A, value);\n"
+        self.assertIn("ir_own_A = IR_DETACH(ir_word, A, value);\n"
                       "            PyValue held = ir_own_A;", output)
-        self.assertIn("retire_published_values(", output)
-        # By value (R-a): the retired owner is dead after the call
-        self.assertIn(", held, PyValue_NULL, PyValue_NULL);", output)
+        # The retired owner is closed, once, after the detach
+        self.assertEqual(output.count("PyValue_XCLOSE(ir_close1);"), 1)
+        self.assertLess(output.index("IR_DETACH("),
+                        output.index("PyValue_XCLOSE(ir_close1);"))
+        self.assertNotIn("retire_published_values", output)
         self.assertNotIn("&held", output)
         gap = """
         inst(OP, (value -- )) {
@@ -2067,7 +1742,7 @@ class TestIRCases(unittest.TestCase):
             res = PyValue_None;
         }
     """), "OP")
-        self.assertLess(output.index("PyValue held = IR_TAKE(value, ir_own_B);"),
+        self.assertLess(output.index("PyValue held = IR_TAKEN(value, ir_own_B);"),
                         output.index("spam_call("))
         # The designator and the arguments of the call are read before it
         # runs, and a number read from the object does not dangle
@@ -2125,8 +1800,9 @@ class TestIRCases(unittest.TestCase):
         # DECREF_INPUTS releases no input that a take killed
         output = self.handler(self.ir_output(double % ("res", "DECREF_INPUTS();")),
                               "OP")
+        self.assertNotIn("XCLOSE(ir_own_B)", output)
         self.assertEqual(output.count("ir_own_B"),
-                         output.count("ir_own_B = IR_CONSUME_INPUT") + 3)
+                         output.count("ir_own_B = IR_DETACH") + 3)
         # Exclusive branches spend it once each
         output = self.handler(self.ir_output("""
         inst(OP, (value -- res)) {
@@ -2139,7 +1815,7 @@ class TestIRCases(unittest.TestCase):
             }
         }
     """), "OP")
-        self.assertIn("res = IR_TAKE(value, ir_own_B);", output)
+        self.assertIn("res = IR_TAKEN(value, ir_own_B);", output)
         self.assertIn("PyValue_XCLOSE(ir_own_B);", output)
         # The take kills every view and copy of the input: one is not read
         # after it, and none needs DEAD()
@@ -2163,7 +1839,7 @@ class TestIRCases(unittest.TestCase):
         for rest in ("", "DEAD(value);"):
             with self.subTest(rest=rest):
                 output = self.handler(self.ir_output(copy % rest), "OP")
-                self.assertIn("res = IR_TAKE(copy, ir_own_B);", output)
+                self.assertIn("res = IR_TAKEN(copy, ir_own_B);", output)
 
     def test_exit_after_take_refused(self):
         # A deopt or exit goes to an instruction that reads the inputs from
@@ -2238,7 +1914,7 @@ class TestIRCases(unittest.TestCase):
             res = held;
         }
     """), "OP")
-        self.assertLess(output.index("PyValue held = IR_TAKE(value, ir_own_B);"),
+        self.assertLess(output.index("PyValue held = IR_TAKEN(value, ir_own_B);"),
                         output.index("PyValue_CLOSE(held);"))
         self.assertLess(output.index("PyValue_CLOSE(held);"),
                         output.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);"))
@@ -2447,7 +2123,7 @@ class TestIRCases(unittest.TestCase):
                                ir_generator.OBJECT_READERS | {"SPAM_TakeRef"}):
             self.assertEqual(self.formats(input)["OP_OBJECT_TARGET"].borrow_mask, 0b11)
         output = self.handler(self.ir_output(input), "OP_OBJECT_TARGET")
-        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKE(item, ir_own_B))", output)
+        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKEN(item, ir_own_B))", output)
 
     def test_inplace_inputs_temps_object(self):
         # _PyValueTemps_Object(temps, name) gives the object of name, uncounted
@@ -2507,13 +2183,18 @@ class TestIRCases(unittest.TestCase):
                          [ir_generator.ROLE_NONE, ir_generator.ROLE_NONE])
         output = self.ir_output(input)
         store = self.handler(output, "STORE")
-        # A view's release is its owner's: the value of a temporary, which
-        # the consume adopts, and NULL for a local
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(ir_word, A, owner);\n"
-                      "            PyValue_XCLOSE(ir_own_A);", store)
-        self.assertIn("ir_own_B = IR_CONSUME_INPUT(ir_word, B, value);\n"
-                      "            PyValue_XCLOSE(ir_own_B);", store)
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(ir_word, A, cond);",
+        # The inputs are read in place; the effect comes first, then the
+        # detach of each dying input, which gives the owner of a temporary
+        # and NULL for a local, and the release of what was detached
+        effect = store.index("SPAM(")
+        detach_owner = store.index("ir_own_A = IR_DETACH(ir_word, A, owner);")
+        detach_value = store.index("ir_own_B = IR_DETACH(ir_word, B, value);")
+        close_owner = store.index("PyValue_XCLOSE(ir_own_A);")
+        close_value = store.index("PyValue_XCLOSE(ir_own_B);")
+        self.assertLess(effect, min(detach_owner, detach_value))
+        self.assertLess(max(detach_owner, detach_value),
+                        min(close_owner, close_value))
+        self.assertIn("ir_own_A = IR_DETACH(ir_word, A, cond);",
                       self.handler(output, "BRANCH"))
         self.assertNotIn("stack_pointer", output)
 
@@ -2558,7 +2239,7 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);",
                       self.handler(output, "ALIAS"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
-        self.assertIn("assert(!IR_IS_LOCAL_FIELD(ir_word, A) && IR_A(ir_word) != IR_NO_DST);",
+        self.assertIn("assert(!IR_IS_LOCAL_FIELD(ir_word, A));",
                       self.handler(output, "PAIR"))
 
     def test_scalar_conditional_array_has_no_empty_home(self):
@@ -2618,8 +2299,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -2631,16 +2312,13 @@ class TestIRCases(unittest.TestCase):
             callable = window[0];
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
-            IR_PUBLISH_TEMP(window[0], res);
-            IR_MOVE_TO_DST_OR_DISCARD(ir_word, A, window[0]);
-            if (!PyValue_IsNull(ir_displaced)) {
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
+            IR_SET_TEMP(window[0], res);
+            IR_MOVE_TO_DST(ir_word, A, window[0]);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
+
+
     """
         self.run_ir_test(input, output)
         fmt = self.formats(input)["OP"]
@@ -2712,7 +2390,7 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("ir_obj_v = _PyValueTemps_Box(value_temps, v);", op)
         self.assertIn("ir_obj_v = PyValue_AsKnownObjectBorrow(v);", op)
         self.assertIn("PyObject *v_o = ir_obj_v;", op)
-        self.assertIn("PyValue kept = IR_TAKE(v, ir_own_B);", op)
+        self.assertIn("PyValue kept = IR_TAKEN(v, ir_own_B);", op)
         self.assertNotIn("PyValue_Box(", output)
         # An owned input: the condition reads the local, and a steal of an
         # inline value gives a count of the box
@@ -2880,8 +2558,8 @@ class TestIRCases(unittest.TestCase):
             _PyValueTemps value_owners;
             value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -2912,16 +2590,11 @@ class TestIRCases(unittest.TestCase):
                 }
                 PyObject *o = ir_obj_owner;
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(ir_word, B, owner);
-                PyValue_XCLOSE(ir_own_B);
+                ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                if (finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
+            PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
@@ -2935,8 +2608,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -2963,16 +2636,11 @@ class TestIRCases(unittest.TestCase):
             {
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(ir_word, B, owner);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
+                ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
@@ -3006,8 +2674,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
             int oparg = IR_FB_ARG(fb, IR_D(ir_word));
             (void)oparg;
@@ -3024,12 +2692,7 @@ class TestIRCases(unittest.TestCase):
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
             IR_STORE_DST(ir_word, A, res);
-            if (!PyValue_IsNull(ir_displaced)) {
-                if (finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                    next_instr = frame->instr_ptr + 1;
-                    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-                }
-            }
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
     """
@@ -3197,53 +2860,6 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
-
-    def test_binary_events_follow_actual_owner_commits(self):
-        source = "\ninst(OP, (left, right -- result)) { IR_BINARY_READER(left, right, result); }\n"
-        analysis = self.analyze(source)
-        formats = ir_generator.compute_formats(analysis)
-        contract = ir_generator.handler_contracts(analysis, formats)["OP"]
-        events = contract.ownership_events
-        self.assertEqual([(e.kind.removeprefix("_PyIR_OWNER_"), e.src)
-                          for e in events], [
-            ("READ", 0), ("TAKE", 0), ("READ", 1), ("TAKE", 1),
-            ("ERROR_BRANCH", 0), ("FRESH", 0),
-            ("NORMAL_EXIT", 0), ("RESTORE", 0),
-            ("RESTORE", 1), ("ERROR_EXIT", 0)])
-        self.assertEqual(events[4].dst, 7)
-        self.assertEqual(formats["OP"].borrow_mask, 3)
-        output = self.handler(self.ir_output(source), "OP")
-        take_left = output.index("PyValue ir_binary_left = IR_TAKE")
-        take_right = output.index("PyValue ir_binary_right = IR_TAKE")
-        provider = output.index("_PyValue_BinaryOps[oparg]")
-        self.assertLess(take_left, take_right)
-        self.assertLess(take_right, provider)
-        self.assertNotIn("phase_state", output)
-        # Opaque body edits cannot retain this positive recipe merely because
-        # the marker, name and IO are still present.
-        for body, reason in (
-                ("opaque(frame); IR_BINARY_READER(left, right, result);",
-                 "view 'left' is read after a call.*\\(S7\\)"),
-                ("IR_BINARY_READER(right, left, result);", "checked binary IO contract"),
-                ("if (oparg) { IR_BINARY_READER(left, right, result); }",
-                 "checked binary IO contract")):
-            with self.subTest(body=body):
-                with self.assertRaisesRegex(SyntaxError, reason):
-                    self.ir_output("\ninst(OP, (left, right -- result)) { " + body + " }\n")
-
-    def test_binary_recipe_requires_complete_real_specializer(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["BINARY_OP"]
-        fmt = ir_generator.compute_formats(analysis)["BINARY_OP"]
-        self.assertTrue(ir_generator.binary_reader_contract(inst, fmt))
-        prefix = [part for part in inst.parts if isinstance(part, analyzer.Uop)][0]
-        extra = self.analyze("\ninst(OP, (--)) { *slots = PyValue_NULL; }\n")
-        prefix.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
-        try:
-            self.assertFalse(ir_generator.binary_reader_contract(inst, fmt))
-        finally:
-            prefix.body.body.pop()
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
         source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
@@ -3681,10 +3297,12 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn("_PyValueTemps value_owners", output)
             call = output.index(f"{helper}(values, oparg)")
             vacate = output.index("IR_CLEAR_SLOTS", call)
-            publish = output.index("IR_PUBLISH_TEMP", vacate)
+            publish = output.index("IR_SET_TEMP", vacate)
+            release = output.index("PyValue_XCLOSE(ir_old);", publish)
             self.assertLess(call, vacate)
             self.assertLess(vacate, publish)
-            self.assertNotIn("finish_", output[call:publish])
+            self.assertLess(publish, release)
+            self.assertNotIn("finish_", output[call:release])
 
     def test_home_operations_lower_through_actual_storage(self):
         output = self.ir_output("""

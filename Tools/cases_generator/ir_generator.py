@@ -5405,7 +5405,7 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("void *ir_completed_target = generator_outcome_target("
+            self.emit("_PyIRGenStep *ir_completed_target = generator_outcome_target("
                       "frame, this_instr, generator_completed_targets);\n")
             self.emit("assert(ir_completed_target != NULL);\n")
             self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
@@ -5515,7 +5515,7 @@ class IREmitter(Emitter):
             self.emit("--tstate->py_recursion_remaining;\n")
             self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
             self.emit("if (ir_resume_site > frame->ir_words) {\n")
-            self.emit("void *ir_resume_target = "
+            self.emit("_PyIRGenStep *ir_resume_target = "
                       "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
             self.emit("if (ir_resume_target != NULL) {\n")
             self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, "
@@ -6883,11 +6883,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
 
 
 # What an outlined body cannot contain: a jump into the evaluator (other than
-# the call fallback inside the body), a generator transfer, or state that only
-# the evaluator has.
+# the call fallback inside the body), or state that only the evaluator has.
 OUTLINE_BLOCKERS = re.compile(
-    r"\bgoto\s+(?!call_transaction_fallback_)|IR_GEN_|IR_TRY_NATIVE_YIELD|"
-    r"JUMP_TO_LABEL|lastopcode|_targets\b|ir_gen_remaining|ir_binary_op")
+    r"\bgoto\s+(?!call_transaction_fallback_)|JUMP_TO_LABEL|lastopcode|"
+    r"ir_binary_op")
 DEOPT_TARGET = re.compile(r"\bJUMP_TO_PREDICTED\((\w+)\)")
 
 
@@ -8481,17 +8480,20 @@ def num_handlers(analysis: Analysis) -> int:
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
-    """The label-address tables of the evaluator: the dispatch table and the
-    generator transfer tables.  ir_evaluate() includes this file at its
-    start, so the tables are local to it and the addresses are of its labels."""
+    """The tables of the evaluator.  Python/ceval_generator.h includes this
+    file at file scope with IR_GEN_TABLES defined, for the generator transfer
+    tables, which name the step that a word's handler transfers to.
+    ir_evaluate() includes it at its start without, for the dispatch table,
+    which is local to it and has the addresses of its labels."""
     ids = handler_ids(analysis)
     formats = compute_formats(analysis)
     n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     boundaries = generator_boundaries(analysis)
+    out.emit("#ifdef IR_GEN_TABLES\n")
     for column in ("Yielded", "Completed", "Resume"):
-        out.emit(f"static void *const generator_{column.lower()}_targets[{n}] = {{\n")
+        out.emit(f"static _PyIRGenStep *const generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
                 continue
@@ -8512,9 +8514,9 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
-                out.emit(f"[{ids[name]}] = &&TARGET_{target},\n")
+                out.emit(f"[{ids[name]}] = ir_{target},\n")
         out.emit("};\n")
-    out.emit("\n")
+    out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
     # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
@@ -8525,6 +8527,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("};\n")
     out.emit(f"static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n")
     out.emit('              "dispatch covers every id that IR_HANDLER yields");\n')
+    out.emit("#endif\n")
 
 
 def generate_ir_from_files(filenames: list[str], outfilename: str,

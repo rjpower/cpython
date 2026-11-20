@@ -2091,15 +2091,15 @@ generator_control_generation(_PyInterpreterFrame *frame)
 /* Ordinary outcomes need one dispatch-table-shaped lookup. A transparent
  * monitor keeps the same word fields but resolves its source only here, on
  * the actual observation path. */
-static inline void *
+static inline _PyIRGenStep *
 generator_outcome_target(_PyInterpreterFrame *frame, _PyInstr *site,
-                         void *const *targets)
+                         _PyIRGenStep *const *targets)
 {
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
         return NULL;
     }
     int handler = IR_HANDLER(*site);
-    void *target = targets[handler];
+    _PyIRGenStep *target = targets[handler];
     if (target == NULL && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
         target = targets[_PyIR_RealHandler(frame, site)];
     }
@@ -2240,6 +2240,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return (_PyIRTransfer){frame, NULL}; \
     } while (0)
 #pragma push_macro("IR_OBSERVE_EDGE")
+#pragma push_macro("IR_STEP_DONE")
+#undef IR_STEP_DONE
+#define IR_STEP_DONE(STEP) return (STEP)
 #pragma push_macro("IR_REPORT_EDGE")
 #undef IR_REPORT_EDGE
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
@@ -2326,6 +2329,8 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyIRTransfer){frame, this_instr};
 }
 
+#include "ceval_generator.h"
+
 #define IR_OUTLINED_FUNCTIONS
 #include "generated_ir_cases.c.h"
 #undef IR_OUTLINED_FUNCTIONS
@@ -2336,6 +2341,7 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
+#pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
 
 /* The evaluator: every handler and label of the interpreter in one
@@ -2354,8 +2360,6 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     /* The operation that the generic BINARY_OP handlers pass to their shared
      * body, which is not live across a dispatch. */
     int ir_binary_op;
-    /* The send inputs that GEN_COMPLETE_EFFECT finds still in their homes */
-    int ir_gen_remaining;
     /* What PROCESS_ERROR_AT passes to process_error */
     _PyInstr *ir_error_origin;
     uint32_t ir_error_entry;
@@ -2372,7 +2376,6 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
      * it is optimised for size and its closes stay out of line. */
     goto *&&LABEL_start_frame;
 
-#include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 
     /* The shared tail of PROCESS_ERROR_AT */

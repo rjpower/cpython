@@ -1,19 +1,59 @@
-/* Generator transfer entries: the private labels of the evaluator,
- * ir_evaluate() in Python/ceval.c, which includes this file and the
- * generated handlers inside the function.  Their helpers are above it.
+/* The generator transfer steps (rule 13).  A step takes the value that it
+ * transfers as the word of its call, and returns the frame and next word to
+ * run, or no word for an exit that the activation describes
+ * (Python/ceval.c, outlined_exit).  The evaluator calls a step and
+ * dispatches its result: no step jumps into the evaluator.  The steps call
+ * one another to continue a transfer, and the tables of
+ * Python/ir_targets.h name the step that a word's handler transfers to.
  *
- * Private entries carry a value rather than a word. Ordinary dispatch first
- * reloads the word and needs its own local handler index. */
-#define GENERATOR_DISPATCH() \
-    do { \
-        int opcode; \
-        DISPATCH(); \
-    } while (0)
+ * This file is included once, with the exits of the outlined handlers. */
+#define GENERATOR_DISPATCH() DISPATCH()
+#define GEN_STEP(NAME) \
+    static Py_NO_INLINE _PyIRTransfer \
+    ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
+              _PyInstr *next_instr, _PyIRWord ir_word)
 
-/* ir_gen_remaining counts the send inputs still in their homes, from the
+GEN_STEP(GEN_COMPLETE_DISCARD);
+GEN_STEP(GEN_COMPLETE_HOME);
+GEN_STEP(GEN_COMPLETE_POP_TOP);
+GEN_STEP(GEN_COMPLETE_RETURN);
+GEN_STEP(GEN_COMPLETE_STORE);
+GEN_STEP(GEN_COMPLETE_STORE_FAST);
+GEN_STEP(GEN_ENTRY_EFFECT);
+GEN_STEP(GEN_REDIRECT_EFFECT);
+GEN_STEP(GEN_RESUME_EFFECT);
+GEN_STEP(GEN_RESUME_SEND);
+GEN_STEP(GEN_RESUME_STORE);
+GEN_STEP(GEN_RETURN);
+GEN_STEP(GEN_RETURN_PARENT);
+GEN_STEP(GEN_RETURN_RETIRED);
+GEN_STEP(GEN_RETURN_ROUTE);
+GEN_STEP(GEN_SEND_INPUT);
+GEN_STEP(GEN_SEND_INPUT_HOME);
+GEN_STEP(GEN_SEND_YIELD);
+GEN_STEP(GEN_THROW_COMPLETE_DISCARD);
+GEN_STEP(GEN_THROW_COMPLETE_HOME);
+GEN_STEP(GEN_THROW_COMPLETE_POP_TOP);
+GEN_STEP(GEN_THROW_COMPLETE_RETURN);
+GEN_STEP(GEN_THROW_COMPLETE_STORE);
+GEN_STEP(GEN_THROW_COMPLETE_STORE_FAST);
+GEN_STEP(GEN_YIELD_INPUT_EFFECT);
+static Py_NO_INLINE _PyIRTransfer
+ir_GEN_COMPLETE_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *next_instr, _PyIRWord ir_word,
+                       int remaining_count);
+
+#define IR_GEN_TABLES
+#include "ir_targets.h"
+#undef IR_GEN_TABLES
+
+/* remaining_count counts the send inputs still in their homes, from the
  * base up.  Only this effect entry decodes the source outcome. Earlier successful closes
  * have consumed their owners and NULLed their homes. */
-TARGET(GEN_COMPLETE_EFFECT)
+static Py_NO_INLINE _PyIRTransfer
+ir_GEN_COMPLETE_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *next_instr, _PyIRWord ir_word,
+                       int remaining_count)
 {
     PyValue result = generator_payload(ir_word);
     _PyInstr *site = next_instr;
@@ -25,7 +65,6 @@ TARGET(GEN_COMPLETE_EFFECT)
     int destination = IR_A(source_word);
     _PyInstr *exit = throwing ? frame->ir_words + IR_CD(source_word)
                              : site + 1 + IR_DS(source_word);
-    int remaining_count = ir_gen_remaining;
     assert(remaining_count >= 0 && remaining_count <= count);
     if (frame->pending_redirect || frame->instr_ptr != site) {
         generator_publish_redirected(tstate, frame, result);
@@ -86,14 +125,14 @@ TARGET(GEN_COMPLETE_EFFECT)
     ((THROW) ? frame->ir_words + IR_CD(source_word) : next_instr + 1 + IR_DS(source_word))
 
 #define GENERATOR_COMPLETE_RETURN(NAME, THROW) \
-TARGET(NAME) \
+GEN_STEP(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     IR_GEN_JUMP(GEN_RETURN, frame, next_instr, result); \
 }
 #define GENERATOR_COMPLETE_HOME(NAME, THROW) \
-TARGET(NAME) \
+GEN_STEP(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     int destination = IR_A(source_word); \
@@ -105,7 +144,7 @@ TARGET(NAME) \
     GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_STORE(NAME, THROW, EXPLICIT) \
-TARGET(NAME) \
+GEN_STEP(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     _PyInstr *consumer = GENERATOR_COMPLETED_EXIT(THROW); \
@@ -126,7 +165,7 @@ TARGET(NAME) \
     GENERATOR_DISPATCH(); \
 }
 #define GENERATOR_COMPLETE_DISCARD(NAME, THROW, EXPLICIT) \
-TARGET(NAME) \
+GEN_STEP(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     if (!_PyValue_TryXCloseNoReentry(result)) { \
@@ -157,7 +196,7 @@ GENERATOR_COMPLETE_DISCARD(GEN_THROW_COMPLETE_POP_TOP, true, true)
 #undef GENERATOR_RETIRE_SEND_INPUTS
 #undef GENERATOR_CLOSE_INPUT
 
-TARGET(GEN_SEND_YIELD)
+GEN_STEP(GEN_SEND_YIELD)
 {
     PyValue result = generator_payload(ir_word);
     _PyInstr *yield = next_instr + 1;
@@ -183,7 +222,7 @@ TARGET(GEN_SEND_YIELD)
     suspended->previous = NULL;
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
-    void *target = generator_outcome_target(
+    _PyIRGenStep *target = generator_outcome_target(
         frame, frame->instr_ptr, generator_yielded_targets);
     if (target != NULL && !frame->pending_redirect) {
         IR_GEN_JUMP_TO(target, frame, frame->instr_ptr, result);
@@ -197,7 +236,7 @@ TARGET(GEN_SEND_YIELD)
 /* Provider success commits the yielded edge before retiring a final sent
  * input. The result becomes the next YIELD's real input, so callbacks can
  * redirect that continuation without any old-home retake afterward. */
-TARGET(GEN_YIELD_INPUT_EFFECT)
+GEN_STEP(GEN_YIELD_INPUT_EFFECT)
 {
     PyValue result = generator_payload(ir_word);
     int home = IR_B(*next_instr) + 2;
@@ -213,7 +252,7 @@ TARGET(GEN_YIELD_INPUT_EFFECT)
 
 /* A private resumed input is not an ordinary handler ABI. Generic providers
  * and effects receive it once in their authoritative input home. */
-TARGET(GEN_SEND_INPUT_HOME)
+GEN_STEP(GEN_SEND_INPUT_HOME)
 {
     PyValue result = generator_payload(ir_word);
     int home = IR_B(*next_instr) + 2;
@@ -225,7 +264,7 @@ TARGET(GEN_SEND_INPUT_HOME)
 
 /* The child link is committed, but its recursion debit has not happened.
  * The incoming owner stays in C while error construction allocates. */
-TARGET(GEN_ENTRY_EFFECT)
+GEN_STEP(GEN_ENTRY_EFFECT)
 {
     PyValue value = generator_payload(ir_word);
     if (_Py_EnterRecursivePy(tstate)) {
@@ -236,7 +275,7 @@ TARGET(GEN_ENTRY_EFFECT)
                 frame->instr_ptr, value);
 }
 
-TARGET(GEN_RESUME_EFFECT)
+GEN_STEP(GEN_RESUME_EFFECT)
 {
     _PyInstr *source = frame->instr_ptr;
     uint64_t generation = generator_control_generation(frame);
@@ -251,7 +290,7 @@ TARGET(GEN_RESUME_EFFECT)
     GENERATOR_DISPATCH();
 }
 
-TARGET(GEN_RESUME_SEND)
+GEN_STEP(GEN_RESUME_SEND)
 {
     PyValue value = generator_payload(ir_word);
     _PyInstr *resume = next_instr;
@@ -266,12 +305,12 @@ TARGET(GEN_RESUME_SEND)
     assert(IR_HANDLER(jump) == JUMP_BACKWARD_NO_INTERRUPT);
     INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
     next_instr = frame->ir_words + IR_CD(jump);
-    void *target = generator_resume_targets[IR_HANDLER(*next_instr)];
+    _PyIRGenStep *target = generator_resume_targets[IR_HANDLER(*next_instr)];
     assert(target != NULL);
     IR_GEN_JUMP_TO(target, frame, next_instr, value);
 }
 
-TARGET(GEN_RESUME_STORE)
+GEN_STEP(GEN_RESUME_STORE)
 {
     PyValue value = generator_payload(ir_word);
     _PyInstr *resume = next_instr;
@@ -300,7 +339,7 @@ TARGET(GEN_RESUME_STORE)
     GENERATOR_DISPATCH();
 }
 
-TARGET(GEN_SEND_INPUT)
+GEN_STEP(GEN_SEND_INPUT)
 {
     PyValue value = generator_payload(ir_word);
     _PyIRWord word = *next_instr;
@@ -329,7 +368,7 @@ TARGET(GEN_SEND_INPUT)
     --tstate->py_recursion_remaining;
     next_instr = frame->instr_ptr;
     if (next_instr > frame->ir_words) {
-        void *target = generator_resume_targets[IR_HANDLER(next_instr[-1])];
+        _PyIRGenStep *target = generator_resume_targets[IR_HANDLER(next_instr[-1])];
         if (target != NULL) {
             IR_GEN_JUMP_TO(target, frame, next_instr, value);
         }
@@ -337,7 +376,7 @@ TARGET(GEN_SEND_INPUT)
     IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, next_instr, value);
 }
 
-TARGET(GEN_REDIRECT_EFFECT)
+GEN_STEP(GEN_REDIRECT_EFFECT)
 {
     generator_publish_redirected(tstate, frame, generator_payload(ir_word));
     frame = tstate->current_frame;
@@ -346,7 +385,7 @@ TARGET(GEN_REDIRECT_EFFECT)
     GENERATOR_DISPATCH();
 }
 
-TARGET(GEN_RETURN_PARENT)
+GEN_STEP(GEN_RETURN_PARENT)
 {
     PyValue value = generator_payload(ir_word);
     if (frame->owner != FRAME_OWNED_BY_INTERPRETER) {
@@ -354,7 +393,7 @@ TARGET(GEN_RETURN_PARENT)
             IR_GEN_JUMP(GEN_REDIRECT_EFFECT, frame,
                         frame->instr_ptr, value);
         }
-        void *target = generator_outcome_target(
+        _PyIRGenStep *target = generator_outcome_target(
             frame, frame->instr_ptr, generator_completed_targets);
         if (target != NULL) {
             IR_GEN_JUMP_TO(target, frame, frame->instr_ptr, value);
@@ -372,7 +411,7 @@ TARGET(GEN_RETURN_PARENT)
 
 /* Source RETURN has already counted, debited and unlinked the child. Keep
  * generator routing and its legacy fallback out of the shared RETURN body. */
-TARGET(GEN_RETURN_ROUTE)
+GEN_STEP(GEN_RETURN_ROUTE)
 {
     PyValue value = generator_payload(ir_word);
     _PyInterpreterFrame *dying = frame;
@@ -397,7 +436,7 @@ TARGET(GEN_RETURN_ROUTE)
  * Retire it as upstream does, with the result held in C, then route the
  * result to the parent. Finalizers run during the retirement can redirect
  * the parent; a changed pc or control generation is taken as a redirect. */
-TARGET(GEN_RETURN_RETIRED)
+GEN_STEP(GEN_RETURN_RETIRED)
 {
     PyValue value = generator_payload(ir_word);
     _PyInterpreterFrame *dying = frame;
@@ -427,7 +466,7 @@ TARGET(GEN_RETURN_RETIRED)
 
 /* The already-validated RETURN consumes the payload without an A home. The
  * generator decision is the same source decision as ordinary RETURN. */
-TARGET(GEN_RETURN)
+GEN_STEP(GEN_RETURN)
 {
     PyValue value = generator_payload(ir_word);
     frame->instr_ptr = next_instr;
@@ -455,3 +494,4 @@ TARGET(GEN_RETURN)
 }
 
 #undef GENERATOR_DISPATCH
+#undef GEN_STEP

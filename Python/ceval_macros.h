@@ -73,44 +73,38 @@
 #define TARGET(op) TARGET_##op:
 #define LABEL(name) LABEL_##name:
 
-/* The private generator targets (Python/ceval_generator.h) take the value
- * that they transfer in ir_word, and set the other state before they run:
- * IR_GEN_JUMP() to a target by name, IR_GEN_JUMP_TO() to the address that
- * generator_outcome_target() or a generator_*_targets table gave.  The
- * arguments are evaluated before the state changes, as they were when they
- * were call arguments. */
-#define IR_GEN_SET(F, IP, V) \
+/* The generator transfer steps (Python/ceval_generator.h, rule 13) are
+ * functions that take the value that they transfer as their word.  A handler
+ * calls one with IR_GEN_JUMP() by name, or with IR_GEN_JUMP_TO() by the
+ * function that generator_outcome_target() or a generator_*_targets table
+ * gave, and runs the frame and word that it returns.  The arguments are
+ * evaluated before the call, as they were when they set the state.  The
+ * steps use the same macros to continue a transfer, which then return what
+ * the next step returns. */
+#define IR_STEP_DONE(STEP) \
     do { \
-        _PyInterpreterFrame *ir_gen_frame = (F); \
-        _PyInstr *ir_gen_next = (IP); \
-        PyValue ir_gen_value = (V); \
-        frame = ir_gen_frame; \
-        next_instr = ir_gen_next; \
-        ir_word = ir_gen_value.bits; \
+        _PyIRTransfer ir_t = (STEP); \
+        frame = ir_t.frame; \
+        next_instr = ir_t.next; \
+        if (next_instr == NULL) { \
+            goto LABEL_outlined_exit; \
+        } \
+        int opcode; \
+        DISPATCH(); \
     } while (0)
 #define IR_GEN_JUMP(NAME, F, IP, V) \
-    do { \
-        IR_GEN_SET(F, IP, V); \
-        goto TARGET_##NAME; \
-    } while (0)
-/* GEN_COMPLETE_EFFECT takes the count of send inputs that are still in their
- * homes in ir_gen_remaining, which no dispatch carries. */
+    IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), (V).bits))
+/* GEN_COMPLETE_EFFECT also takes the count of send inputs that are still in
+ * their homes. */
 #define IR_GEN_EFFECT(REMAINING, IP, V) \
-    do { \
-        ir_gen_remaining = (REMAINING); \
-        IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, IP, V); \
-    } while (0)
-#define IR_GEN_JUMP_TO(TARGET_ADDRESS, F, IP, V) \
-    do { \
-        void *ir_gen_target = (TARGET_ADDRESS); \
-        IR_GEN_SET(F, IP, V); \
-        goto *ir_gen_target; \
-    } while (0)
+    IR_STEP_DONE(ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, (REMAINING)))
+#define IR_GEN_JUMP_TO(STEP, F, IP, V) \
+    IR_STEP_DONE((STEP)(tstate, (F), (IP), (V).bits))
 
 #define IR_TRY_NATIVE_YIELD(V) \
     do { \
         if (frame->owner != FRAME_OWNED_BY_INTERPRETER) { \
-            void *ir_yield_target = generator_outcome_target( \
+            _PyIRGenStep *ir_yield_target = generator_outcome_target( \
                 frame, frame->instr_ptr, generator_yielded_targets); \
             if (ir_yield_target != NULL && !frame->pending_redirect) { \
                 assert(_PyValue_IsHome(V)); \

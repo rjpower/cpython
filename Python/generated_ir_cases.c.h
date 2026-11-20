@@ -8834,7 +8834,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
-                void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                 assert(ir_completed_target != NULL);
                 IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
             }
@@ -14353,7 +14353,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = sent.value;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                         assert(ir_completed_target != NULL);
                         IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
                     }
@@ -14508,7 +14508,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     --tstate->py_recursion_remaining;
                     _PyInstr *ir_resume_site = frame->instr_ptr;
                     if (ir_resume_site > frame->ir_words) {
-                        void *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                        _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
                         if (ir_resume_target != NULL) {
                             IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
                         }
@@ -14643,7 +14643,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PyValue completed = PyValue_None;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                         assert(ir_completed_target != NULL);
                         IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
                     }
@@ -14721,7 +14721,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         --tstate->py_recursion_remaining;
                         _PyInstr *ir_resume_site = frame->instr_ptr;
                         if (ir_resume_site > frame->ir_words) {
-                            void *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                            _PyIRGenStep *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
                             if (ir_resume_target != NULL) {
                                 IR_GEN_JUMP_TO(ir_resume_target, frame, ir_resume_site, ir_resume_input);
                             }
@@ -14747,7 +14747,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                             assert(ir_completed_target != NULL);
                             IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
                         }
@@ -14763,7 +14763,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                         PyValue completed = sent.value;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            _PyIRGenStep *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                             assert(ir_completed_target != NULL);
                             IR_GEN_JUMP_TO(ir_completed_target, frame, this_instr, ir_completed);
                         }
